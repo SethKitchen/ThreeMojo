@@ -165,6 +165,7 @@ def coverage_loop_labels() -> String:
         + '"qualification":"qualification.json",'
         + '"raw_suffix":".raw.txt","out_suffix":".out",'
         + '"reduced_suffix":".txt.gz",'
+        + '"mojo_env":"MOJO","mojo_bin":".venv/bin/mojo",'
         + '"options":{"root":"--root","build":"--build","compiler":"--compiler",'
         + '"flags":"--flags","mojo":"--mojo","suites":"--suites",'
         + '"sources":"--sources","out":"--out","err":"--err",'
@@ -173,5 +174,8 @@ def coverage_loop_labels() -> String:
         + '"separator":"--"}},'
         + '"profile":{"call":"call","return":"return","full":"full","typed":"typed",'
         + '"pending":"pending","active":"active","closed":"closed",'
-        + '"generated":"generated_receipt","full_count":1,"typed_count":1}}'
+        + '"generated":"generated_receipt","full_count":1,"typed_count":1},'
+        + '"fields":{"root_inputs":"root_inputs","execution":"execution",'
+        + '"suites":"suites","cache":"cache","mojo":"mojo",'
+        + '"capture_cache":"capture_cache"}}'
     )

@@ -45,6 +45,7 @@ def _loop_labels():
     import os
     import subprocess
     root = Path(__file__).resolve().parents[1]
+    # This one lookup starts the label record. Later lookups use that record.
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     result = subprocess.run(
         ['sh', str(root / 'tools' / 'tool.sh'), mojo,
@@ -64,6 +65,12 @@ def _commands():
     return _loop_labels()['commands']
 
 
+def _mojo_binary():
+    """Return the Mojo executable from the environment or the local pin."""
+    commands = _commands()
+    return os.environ.get(commands['mojo_env'], str(ROOT / commands['mojo_bin']))
+
+
 _LOOP_DRIVERS = None
 
 
@@ -75,7 +82,7 @@ def _loop_drivers():
     import os
     import subprocess
     root = Path(__file__).resolve().parents[1]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    mojo = _mojo_binary()
     result = subprocess.run(
         ['sh', str(root / 'tools' / 'tool.sh'), mojo,
          'carla_coverage_loop_drivers'],
@@ -235,7 +242,7 @@ def line_of(fragment):
     import os
     import subprocess
     root = Path(__file__).resolve().parents[1]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    mojo = _mojo_binary()
     result = subprocess.run(
         ['sh', str(root / 'tools' / 'tool.sh'), mojo,
          'carla_coverage_loop_line', fragment],
@@ -262,7 +269,7 @@ def capture_result(result, stem, envelope, command):
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[1]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    mojo = _mojo_binary()
     payload = result.stderr.encode() if isinstance(result.stderr, str) else result.stderr
     with tempfile.TemporaryDirectory(prefix='reduce-capture-') as directory:
         source = Path(directory) / 'stderr.txt'
@@ -301,7 +308,7 @@ def diagnostic_manifest(masked, module, lines):
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[1]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    mojo = _mojo_binary()
     with tempfile.TemporaryDirectory(prefix='diagnostic-manifest-') as directory:
         path = Path(directory) / 'manifest.txt'
         path.write_bytes(masked)
@@ -331,13 +338,15 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
     expected = proofs.read_receipt(stage / _commands()['receipt'])['receipt']
     admission = _loop_labels()['admission']
     profile = _loop_labels()['profile']
-    require(proofs.maintained_inputs(root, exclude=stage) == expected['root_inputs'],
+    fields = _loop_labels()['fields']
+    require(proofs.maintained_inputs(root, exclude=stage) == expected[fields['root_inputs']],
             admission['fixture'])
     if mutable_source is not None:
         require(root != ROOT.resolve() and not root.is_relative_to(ROOT.resolve()),
                 admission['writable'])
-    settings = {'mojo': [mojo], 'suites': expected['execution']['suites'],
-                'capture_cache': proofs._expand_path(expected['execution']['cache'], root, stage)}
+    execution = expected[fields['execution']]
+    settings = {fields['mojo']: [mojo], fields['suites']: execution[fields['suites']],
+                fields['capture_cache']: proofs._expand_path(execution[fields['cache']], root, stage)}
     def derive():
         return proofs.build_receipt(root, stage, compiler, flags, **settings)
     @contextlib.contextmanager
@@ -501,7 +510,7 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
     faults = mutation['faults']
     completed = []
     for fault in faults:
-        require(proofs.maintained_inputs(root, exclude=stage) == expected['root_inputs'],
+        require(proofs.maintained_inputs(root, exclude=stage) == expected[fields['root_inputs']],
                 mutation['restored_before'])
         proofs.check_capture_inputs({'receipt': expected}, root, stage)
         restored, fired, caught = [], [], []
@@ -566,7 +575,7 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
                 target = stage/include_name
                 raw = target.read_bytes()
                 target.unlink()
-                target.symlink_to(stage/expected['execution']['suites'][0])
+                target.symlink_to(stage / execution[fields['suites']][0])
                 def restore_link():
                     target.unlink()
                     with target.open('xb') as stream:
@@ -632,7 +641,7 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
             for restore in reversed(restored):
                 restore()
         completed.append(fault)
-    require(proofs.maintained_inputs(root, exclude=stage) == expected['root_inputs'],
+    require(proofs.maintained_inputs(root, exclude=stage) == expected[fields['root_inputs']],
             mutation['fixture_restored'])
     proofs.check_capture_inputs({'receipt': expected}, root, stage)
     print(_loop_labels()['refusals_print'], ', '.join(completed), flush=True)
@@ -671,7 +680,7 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     options = _commands()['options']
-    parser.add_argument(options['mojo'], default=str(ROOT / '.venv/bin/mojo'))
+    parser.add_argument(options['mojo'], default=_mojo_binary())
     parser.add_argument(options['output'], type=Path)
     args = parser.parse_args()
     mojo = str(Path(args.mojo).resolve())

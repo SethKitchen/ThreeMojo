@@ -80,6 +80,11 @@ def test_coverage_loop_qualification_labels_stay_reviewed() raises:
     assert_equal(doc.text(doc.at(profile, "full")), "full")
     assert_equal(doc.text(doc.at(profile, "generated")), "generated_receipt")
     assert_equal(doc.text(doc.at(profile, "full_count")), "1")
+    assert_equal(doc.text(doc.at(commands, "mojo_env")), "MOJO")
+    assert_equal(doc.text(doc.at(commands, "mojo_bin")), ".venv/bin/mojo")
+    var fields = doc.at(doc.root, "fields")
+    assert_equal(doc.text(doc.at(fields, "root_inputs")), "root_inputs")
+    assert_equal(doc.text(doc.at(fields, "capture_cache")), "capture_cache")
     assert_equal(
         doc.text(doc.at(doc.root, "pass_line")),
         (
