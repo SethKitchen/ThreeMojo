@@ -10,7 +10,7 @@ unchanged.
 """
 
 from tools._json_tools import quote_ascii
-from tools._python_json import MISSING, PY_BOOL, PY_STR, PyJson
+from tools._python_json import MISSING, PY_BOOL, PY_LIST, PY_STR, PyJson
 
 
 def _emit(doc: PyJson, node: Int) raises -> String:
@@ -31,6 +31,17 @@ def _emit(doc: PyJson, node: Int) raises -> String:
         return "true" if doc.flag(node) else "false"
     if kind == PY_STR:
         return quote_ascii(doc.text(node))
+    if kind == PY_LIST:
+        var listed = String("[")
+        var listed_count = doc.length(node)
+        var listed_index = 0
+        while listed_index < listed_count:
+            if listed_index > 0:
+                listed += ","
+            listed += _emit(doc, doc.item(node, listed_index))
+            listed_index += 1
+        listed += "]"
+        return listed
     var out = String("{")
     var count = doc.length(node)
     var index = 0
@@ -43,6 +54,42 @@ def _emit(doc: PyJson, node: Int) raises -> String:
         index += 1
     out += "}"
     return out
+
+
+def _extend_one(
+    mut doc: PyJson, path: String, edge: Int, steps: Int
+) raises -> Int:
+    """Return one edge decision.
+
+    Args:
+        doc: The document that owns `edge` and `steps`.
+        path: The module path.
+        edge: The stored edge object.
+        steps: The reviewed view steps.
+
+    Returns:
+        A decision object. `extend` is false when `path` has no step.
+
+    Raises:
+        Error: The step is missing a required digest.
+    """
+    var found = doc.get(steps, path)
+    var result = doc.new_dict()
+    if found == MISSING:
+        doc.set(result, "extend", doc.new_bool(False))
+        return result
+    var copied = doc.copy_node(edge)
+    doc.set(
+        copied, "after_sha256", doc.copy_node(doc.at(found, "after_sha256"))
+    )
+    doc.set(
+        copied,
+        "after_token_sha256",
+        doc.copy_node(doc.at(found, "after_token_sha256")),
+    )
+    doc.set(result, "extend", doc.new_bool(True))
+    doc.set(result, "edge", copied)
+    return result
 
 
 def extend_runtime_edge(payload: String) raises -> String:
@@ -59,20 +106,36 @@ def extend_runtime_edge(payload: String) raises -> String:
         Error: The step is missing a required digest.
     """
     var doc = PyJson.parse(payload)
-    var found = doc.get(
-        doc.at(doc.root, "steps"), doc.text(doc.at(doc.root, "path"))
-    )
-    var result = doc.new_dict()
-    if found == MISSING:
-        doc.set(result, "extend", doc.new_bool(False))
-        return _emit(doc, result)
-    var edge = doc.copy_node(doc.at(doc.root, "edge"))
-    doc.set(edge, "after_sha256", doc.copy_node(doc.at(found, "after_sha256")))
-    doc.set(
-        edge,
-        "after_token_sha256",
-        doc.copy_node(doc.at(found, "after_token_sha256")),
-    )
-    doc.set(result, "extend", doc.new_bool(True))
-    doc.set(result, "edge", edge)
-    return _emit(doc, result)
+    var path = doc.text(doc.at(doc.root, "path"))
+    var edge = doc.at(doc.root, "edge")
+    var steps = doc.at(doc.root, "steps")
+    var decision = _extend_one(doc, path, edge, steps)
+    return _emit(doc, decision)
+
+
+def extend_runtime_edges(payload: String) raises -> String:
+    """Return the edge decision for each path.
+
+    Args:
+        payload: JSON with `steps` and `items`. Each item has `path` and
+            `edge`.
+
+    Returns:
+        A JSON list of decisions, in item order.
+
+    Raises:
+        Error: A step is missing a required digest.
+    """
+    var doc = PyJson.parse(payload)
+    var steps = doc.at(doc.root, "steps")
+    var items = doc.at(doc.root, "items")
+    var rows = doc.new_list()
+    var count = doc.length(items)
+    var index = 0
+    while index < count:
+        var item = doc.item(items, index)
+        var path = doc.text(doc.at(item, "path"))
+        var edge = doc.at(item, "edge")
+        doc.append(rows, _extend_one(doc, path, edge, steps))
+        index += 1
+    return _emit(doc, rows)

@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_equal
 
-from tools._runtime_edge import extend_runtime_edge
+from tools._runtime_edge import extend_runtime_edge, extend_runtime_edges
 
 
 def test_a_missing_view_step_leaves_the_edge() raises:
@@ -40,6 +40,20 @@ def test_a_view_step_replaces_the_after_digests() raises:
         ),
         '{"extend":true,"edge":{"before_sha256":"b","after_sha256":"new",'
         + '"after_token_sha256":"new-token"}}',
+    )
+
+
+def test_runtime_edges_keep_their_order() raises:
+    """A missing step stays false, and the next step extends its edge."""
+    assert_equal(
+        extend_runtime_edges(
+            '{"steps":{"cameras.mojo":{"after_sha256":"new",'
+            + '"after_token_sha256":"new-token"}},"items":['
+            + '{"path":"missing.mojo","edge":{"after_sha256":"old"}},'
+            + '{"path":"cameras.mojo","edge":{"before_sha256":"b"}}]}'
+        ),
+        '[{"extend":false},{"extend":true,"edge":{"before_sha256":"b",'
+        + '"after_sha256":"new","after_token_sha256":"new-token"}}]',
     )
 
 

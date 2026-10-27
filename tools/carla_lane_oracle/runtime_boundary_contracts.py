@@ -229,18 +229,17 @@ def _gate_steps(names):
         _run(['--steps', str(folder)])
 
 
-def _extended_edge(path, edge, steps):
+def _extended_query(payload):
     import os
     import subprocess
     import tempfile
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps(
-        {'path': path, 'edge': edge, 'steps': steps}, separators=(',', ':'))
+    text = json.dumps(payload, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='runtime-edge-') as directory:
         record = Path(directory) / 'edge.json'
-        record.write_text(payload)
+        record.write_text(text)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_runtime_edge',
              str(record)],
@@ -251,6 +250,20 @@ def _extended_edge(path, edge, steps):
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
     return json.loads(result.stdout)
+
+
+def _extended_edge(path, edge, steps):
+    return _extended_query({'path': path, 'edge': edge, 'steps': steps})
+
+
+def _extended_edges(items, steps):
+    """Return the edge decision for each path."""
+    if not items:
+        return []
+    return _extended_query({
+        'steps': steps,
+        'items': [{'path': path, 'edge': edge} for path, edge in items],
+    })
 
 
 def _gate_extend(step, edge, path):
@@ -338,11 +351,13 @@ def verify(root, *, _operation=None):
         import runtime_view_contracts as view
     steps = view.steps(root, _operation=_operation)
     _gate_steps(steps)
+    pairs = []
+    for path in _modules():
+        pairs.append((path, record['edges'][path]))
+    decisions = _extended_edges(pairs, steps)
     edges = {}
     checked = []
-    for path in _modules():
-        edge = record['edges'][path]
-        decision = _extended_edge(path, edge, steps)
+    for (path, edge), decision in zip(pairs, decisions):
         if decision['extend']:
             # A later reviewed step starts exactly where this edge ends.
             step = steps[path]

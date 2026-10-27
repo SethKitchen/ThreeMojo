@@ -3,18 +3,19 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md
 
-"""Extend one runtime-boundary edge from a reviewed view step.
+"""Extend runtime-boundary edges from reviewed view steps.
 
     carla_runtime_edge PATH
 
-`PATH` is JSON with `path`, `edge`, and `steps`. The program prints the
-decision.
+`PATH` is one edge or several edges that share `steps`. One edge prints
+its decision. Several edges print those decisions in order.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._runtime_edge import extend_runtime_edge
+from tools._python_json import MISSING, PyJson
+from tools._runtime_edge import extend_runtime_edge, extend_runtime_edges
 
 
 def _usage():
@@ -24,16 +25,21 @@ def _usage():
 
 
 def main() raises:
-    """Extend one runtime-boundary edge.
+    """Extend the runtime-boundary edges.
 
     Raises:
-        Error: The command is invalid, or the step is incomplete.
+        Error: The command is invalid, or a step is incomplete.
     """
     var arguments = argv()
     if len(arguments) != 2:
         _usage()
     try:
-        print(extend_runtime_edge(Path(arguments[1]).read_text()), end="")
+        var text = Path(arguments[1]).read_text()
+        var doc = PyJson.parse(text)
+        if doc.get(doc.root, "items") == MISSING:
+            print(extend_runtime_edge(text), end="")
+        else:
+            print(extend_runtime_edges(text), end="")
     except error:
         print(String(error), file=stderr)
         exit(1)
