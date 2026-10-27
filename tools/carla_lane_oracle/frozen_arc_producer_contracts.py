@@ -315,7 +315,8 @@ def verify_runtime_pin_successor(root, prior_digest):
     else:
         import coverage_invariant_contracts as invariant
     payload = invariant.predecessor_pins(root, source.PINS)
-    _gate_digest(payload, record['runtime_pins_after_sha256'], 'after')
+    labels = _frozen_labels()
+    _gate_digest(payload, record['runtime_pins_after_sha256'], labels['after'])
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
     transitions = record['runtime_token_successors']
     _gate_places(transitions, pins)
@@ -324,14 +325,14 @@ def verify_runtime_pin_successor(root, prior_digest):
     else:
         import ideal_projection
     edited = [{
-        'pointer': ['groups', item['group'], item['path']],
+        'pointer': [labels['groups'], item['group'], item['path']],
         'before': item['before'],
     } for item in transitions]
     text = ideal_projection.apply_pin_transitions(pins, edited)
     pins.clear()
     pins.update(json.loads(text))
     predecessor = invariant._indent_json(pins)
-    _gate_digest(predecessor, prior_digest, 'before')
+    _gate_digest(predecessor, prior_digest, labels['before'])
 
 
 def _declaration(text, name, owner):
@@ -406,21 +407,46 @@ def _runtime_pin_decision(payload):
     return result.stdout.strip()
 
 
+_FROZEN_LABELS = None
+
+
+def _frozen_labels():
+    """Return the frozen runtime-pin labels and the public message."""
+    global _FROZEN_LABELS
+    if _FROZEN_LABELS is not None:
+        return _FROZEN_LABELS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_pin_labels'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _FROZEN_LABELS = json.loads(result.stdout)
+    return _FROZEN_LABELS
+
+
 def _relabel_runtime_pin(error, operation_present):
     """Return whether this failure becomes the public runtime-pin diagnostic."""
-    message = ('full-audit cleanup successor: unchanged premise, record or fixture changed: '
-               'tools/carla_lane_oracle/runtime-source-pins.json')
+    labels = _frozen_labels()
+    message = labels['premise']
     try:
         payload = json.dumps({
-            'stage': 'error',
+            'stage': labels['stage_error'],
             'operation': operation_present,
             'exact_value_error': type(error) is ValueError,
             'error_args': list(error.args),
-            'expected_error': 'unreviewed complete successor: ' + message,
+            'expected_error': labels['expected_error_prefix'] + message,
         }, separators=(',', ':'))
     except (TypeError, ValueError):
         return False
-    if _runtime_pin_decision(payload) != 'cause':
+    if _runtime_pin_decision(payload) != labels['decision_cause']:
         return False
     cause = error.__cause__
     if __package__:
@@ -429,14 +455,14 @@ def _relabel_runtime_pin(error, operation_present):
         import full_audit_cleanup_contracts as full_audit
     try:
         payload = json.dumps({
-            'stage': 'cause',
+            'stage': labels['stage_cause'],
             'exact_contract_error': type(cause) is full_audit.ContractError,
             'cause_args': None if cause is None else list(cause.args),
             'expected_cause': message,
         }, separators=(',', ':'))
     except (TypeError, ValueError):
         return False
-    return _runtime_pin_decision(payload) == 'relabel'
+    return _runtime_pin_decision(payload) == labels['decision_relabel']
 
 
 def verify(root, *, _operation=None):
@@ -451,8 +477,8 @@ def verify(root, *, _operation=None):
         # rejects the same fixed input. Never relabel private operation faults.
         if not _relabel_runtime_pin(error, _operation is not None):
             raise
-        raise ValueError('frozen ARC producer contract: unreviewed runtime pin successor') from error
-    _gate_digest(guard_payload, record['guard_pins_unchanged_sha256'], 'guard')
+        raise ValueError(_frozen_labels()['public']) from error
+    _gate_digest(guard_payload, record['guard_pins_unchanged_sha256'], _frozen_labels()['guard'])
     _ensure_paths()
     _gate_token(_typed_source.historical_text(root, SOURCE_PATH, _observe_text(
         root, SOURCE_PATH, (root/SOURCE_PATH).read_text(), _operation=_operation), _operation=_operation),
@@ -470,7 +496,8 @@ def verify(root, *, _operation=None):
 
 
 def _runtime_pin_predecessor(payload, record, prior_digest):
-    _gate_digest(payload, record['runtime_pins_after_sha256'], 'after')
+    labels = _frozen_labels()
+    _gate_digest(payload, record['runtime_pins_after_sha256'], labels['after'])
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
     transitions = record['runtime_token_successors']
     _gate_places(transitions, pins)
@@ -479,7 +506,7 @@ def _runtime_pin_predecessor(payload, record, prior_digest):
     else:
         import ideal_projection
     edited = [{
-        'pointer': ['groups', item['group'], item['path']],
+        'pointer': [labels['groups'], item['group'], item['path']],
         'before': item['before'],
     } for item in transitions]
     text = ideal_projection.apply_pin_transitions(pins, edited)
@@ -490,7 +517,7 @@ def _runtime_pin_predecessor(payload, record, prior_digest):
     else:
         import coverage_invariant_contracts as invariant
     predecessor = invariant._indent_json(pins)
-    _gate_digest(predecessor, prior_digest, 'before')
+    _gate_digest(predecessor, prior_digest, labels['before'])
     return predecessor
 
 

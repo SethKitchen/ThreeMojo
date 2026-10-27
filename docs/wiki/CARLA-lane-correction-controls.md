@@ -62,6 +62,8 @@ It keeps the consumer import scope before the first definition.
 
 It keeps the frozen-arc source and the polynomial and road paths.
 
+It keeps the frozen runtime-pin labels and the public successor message.
+
 It writes each frozen runtime pin back to its historical value.
 
 It writes that restored pin with two-space indentation.
