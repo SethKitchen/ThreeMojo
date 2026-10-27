@@ -170,6 +170,8 @@ A changed graph is refused.
 
 It keeps the reviewed Sum2 helper and caller texts.
 
+It keeps the four Sum2 module names and the five caller comparisons.
+
 It returns the Sum2 result counts after those caller checks.
 
 One comparison refuses a changed caller graph.

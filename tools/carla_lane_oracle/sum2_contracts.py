@@ -59,6 +59,30 @@ def _checkpoints():
     return json.loads(result.stdout)
 
 
+_SUM2_PLAN = None
+
+
+def _sum2_plan():
+    """Return the Sum2 module names, caller comparisons, and helper map."""
+    global _SUM2_PLAN
+    if _SUM2_PLAN is not None:
+        return _SUM2_PLAN
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sum2_plan'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _SUM2_PLAN = json.loads(result.stdout)
+    return _SUM2_PLAN
+
+
 def require(condition, message):
     if not condition:
         raise ValueError(message)
@@ -177,7 +201,8 @@ def verify(root, *, _operation=None):
         from . import check_sampled_values as c
     else:
         import check_sampled_values as c
-    names = ('curve_sum2', 'lane_geometry', 'curve_bounds', 'spiral_roundoff_proof')
+    plan = _sum2_plan()
+    names = tuple(plan['modules'])
     texts = {name: _typed_source.historical_text(root, root / ('extensions/carla/' + name + '.mojo'), source._observe_text(root, (root / ('extensions/carla/' + name + '.mojo')).relative_to(root).as_posix(), (root / ('extensions/carla/' + name + '.mojo')).read_text(), _operation=_operation), _operation=_operation)
              for name in names}
     guard_result = guards.verify(root, _operation=_operation)
@@ -194,29 +219,21 @@ def verify(root, *, _operation=None):
     # decorators. Separately relate the unchanged arithmetic leaf/recurrence
     # to the initial station-reviewed declarations using actual token spans.
     checkpoints = _checkpoints()
-    _graph_equal(
-        declaration(texts['curve_sum2'], '_sum2_update'), '_sum2_update',
-        checkpoints['helper'], '_sum2_update', 'Sum2 recurrence changed')
-    _graph_equal(
-        declaration(texts['curve_sum2'], '_sum2_error_checked'),
-        '_sum2_error_checked', checkpoints['helper'], '_sum2_error',
-        'Sum2 checked arithmetic leaf changed', '_sum2_error')
-    _graph_equal(
-        texts['lane_geometry'], '_lane_spiral', checkpoints['scalar'], '_lane_spiral',
-        'Sum2 complete caller graph changed: _lane_spiral',
-        drop_first=True, expect_first='_require_sum2_environment()')
-    for module, name, expected in (
-            ('spiral_roundoff_proof', '_sum2_envelope_error', checkpoints['envelope']),
-            ('spiral_roundoff_proof', '_try_spiral_roundoff_envelope', checkpoints['eligibility'])):
+    for item in plan['graphs']:
+        if 'slice' in item:
+            left = declaration(texts[item['module']], item['slice'])
+        else:
+            left = texts[item['module']]
         _graph_equal(
-            texts[module], name, expected, name,
-            'Sum2 complete caller graph changed: ' + name)
+            left, item['left_name'], checkpoints[item['checkpoint']],
+            item['right_name'], item['message'],
+            item['rename'] if 'rename' in item else '',
+            drop_first=item['drop_first'] if 'drop_first' in item else False,
+            expect_first=item['expect_first'] if 'expect_first' in item else '')
     # Require the exact direct import inventory and reject all shadow forms.
+    helpers = plan['helpers']
     _sum2_import_gate('--helpers', {
-        'lane': texts['lane_geometry'],
-        'bounds': texts['curve_bounds'],
-        'roundoff': texts['spiral_roundoff_proof'],
-    })
+        key: texts[helpers[key]] for key in helpers})
     pins = json.loads(_typed_source.historical_text(root, root / 'tools/carla_lane_oracle/spiral-moment-pins.json', source._observe_text(root, (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').relative_to(root).as_posix(), (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').read_text(), _operation=_operation), _operation=_operation))
     interval = _typed_source.historical_text(root, root / 'extensions/carla/curve_interval.mojo', source._observe_text(root, (root / 'extensions/carla/curve_interval.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_interval.mojo').read_text(), _operation=_operation), _operation=_operation)
     try:
