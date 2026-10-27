@@ -233,44 +233,21 @@ def selected_block(text, begin, end):
     return normalized_block(text[start:stop])
 
 
-def literal_from_tokens(tokens, description):
-    # A single decimal number token with an optional unary sign. Joining
-    # arbitrary adjacent tokens would accept malformed two-number spellings.
-    require((len(tokens) == 1 and tokens[0][0] == 'NUMBER') or
-            (len(tokens) == 2 and tokens[0] in (('OP', '+'), ('OP', '-'))
-             and tokens[1][0] == 'NUMBER'), 'unsupported ' + description)
-    literal = ''.join(word for kind, word in tokens)
-    require(re.fullmatch(r'[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?', literal)
-            is not None, 'unsupported ' + description)
-    return literal
+def _constant_error(error, name):
+    message = str(error)
+    if message in ('unsupported top-level source routing',
+                   'incomplete top-level source routing'):
+        message = 'malformed constant declaration: ' + name
+    raise CheckError(message) from error
 
 
 def parse_array(text, name, size):
     # Match the complete top-level logical declaration, never a bracketed
     # prefix inside a conditional, concatenation, string or executable suffix.
     try:
-        statements = ideal_projection.module_statements(text)
+        literals = ideal_projection.array_literals(text, name, size)
     except ValueError as error:
-        raise CheckError('malformed constant declaration: ' + name) from error
-    matches = [statement for statement in statements
-               if statement[:2] == [('NAME', 'comptime'), ('NAME', name)]]
-    require(len(matches) == 1, 'missing or ambiguous constant array: ' + name)
-    declaration = matches[0]
-    header = [('NAME', 'comptime'), ('NAME', name), ('OP', ':'), ('NAME', 'Array'),
-              ('OP', '['), ('NAME', 'Float64'), ('OP', ','), ('NUMBER', str(size)),
-              ('OP', ']'), ('OP', '='), ('OP', '[')]
-    require(declaration[:len(header)] == header and declaration[-1] == ('OP', ']'),
-            'unsupported complete constant-array declaration: ' + name)
-    literals, entry = [], []
-    for token in declaration[len(header):-1]:
-        if token == ('OP', ','):
-            literals.append(literal_from_tokens(entry, 'constant literal: ' + name))
-            entry = []
-        else:
-            entry.append(token)
-    if entry:
-        literals.append(literal_from_tokens(entry, 'constant literal: ' + name))
-    require(len(literals) == size, 'wrong constant-array shape: ' + name)
+        _constant_error(error, name)
     return [decimal_word(literal) for literal in literals]
 
 
@@ -303,16 +280,10 @@ def verify_inputs(root):
         require(record['path'] == 'extensions/carla/curve_trig.mojo',
                 'wrong scalar pin path: ' + name)
         text = _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))
-        declarations = ideal_projection.module_statements(text)
-        matches = [statement for statement in declarations
-                   if statement[:2] == [('NAME', 'comptime'), ('NAME', name)]]
-        require(len(matches) == 1, 'missing or ambiguous scalar: ' + name)
-        declaration = matches[0]
-        prefix = [('NAME', 'comptime'), ('NAME', name), ('OP', '='),
-                  ('NAME', 'Float64'), ('OP', '(')]
-        require(declaration[:len(prefix)] == prefix and declaration[-1] == ('OP', ')'),
-                'unsupported complete scalar declaration: ' + name)
-        literal = literal_from_tokens(declaration[len(prefix):-1], 'scalar literal: ' + name)
+        try:
+            literal = ideal_projection.scalar_literal(text, name)
+        except ValueError as error:
+            _constant_error(error, name)
         require(hexword(decimal_word(literal)) == record['word'],
                 'stored scalar word changed: ' + name)
     blocks = {}

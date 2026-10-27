@@ -12,6 +12,7 @@ from std.pathlib import Path
 from tests._python_tokens import (
     declaration_place,
     declaration_text,
+    constant_literals_json,
     function_slice,
     replace_token_fragment,
     ideal_function_source,
@@ -156,6 +157,33 @@ def test_a_top_level_function_slice_stops_at_the_next_def() raises:
         _ = function_slice(source + "def first():\n    return 0\n", "first")
     with assert_raises(contains="missing or ambiguous function: absent"):
         _ = function_slice(source, "absent")
+
+
+def test_a_constant_array_literal_list_is_exact() raises:
+    """One signed decimal array keeps its source spelling."""
+    var source = String(
+        '"""comptime _GL_NODES: Array[Float64, 2] = [9.0, 9.0]"""\n'
+        + "comptime _GL_NODES: Array[Float64, 2] = [1.0, -2.5]\n"
+    )
+    assert_equal(
+        constant_literals_json(source, "_GL_NODES", "array", 2),
+        '["1.0","-2.5"]',
+    )
+    with assert_raises(contains="unsupported constant literal: _GL_NODES"):
+        _ = constant_literals_json(
+            "comptime _GL_NODES: Array[Float64, 1] = [1 .0]\n",
+            "_GL_NODES",
+            "array",
+            1,
+        )
+    with assert_raises(contains="missing or ambiguous scalar: _PHASE_LIMIT"):
+        _ = constant_literals_json(
+            "comptime _PHASE_LIMIT = Float64(1.0)\n"
+            + "comptime _PHASE_LIMIT = Float64(2.0)\n",
+            "_PHASE_LIMIT",
+            "scalar",
+            0,
+        )
 
 
 def test_one_executable_fragment_is_replaced() raises:

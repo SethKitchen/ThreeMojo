@@ -8,9 +8,7 @@ and does not claim to parse or certify arbitrary Mojo programs.
 """
 import ast
 import copy
-import io
 import json
-import tokenize
 
 LEGACY_SHA256 = '270a3cde3b012388ee8fcb6a4ecc59d837d1583f6c406f942ff98fdccd9f5733'
 PROJECTED_SHA256 = 'f0f94e038fd4a783b3ed400ffd32801ca0c3bdc54980e2c408d44f50211b9e06'
@@ -311,6 +309,43 @@ def _module_statements(text):
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
     return json.loads(result.stdout)
+
+
+def _constant_literals(text, name, kind, size=None):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='constant-literals-') as directory:
+        source = Path(directory) / 'source.mojo'
+        source.write_text(text)
+        command = ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+                   'carla_cleanup_gate', '--literals', str(source),
+                   '--name', name, '--kind', kind]
+        if size is not None:
+            command.extend(['--size', str(size)])
+        result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
+def array_literals(text, name, size):
+    """Return the source spellings of one complete constant array."""
+    return _constant_literals(text, name, 'array', size)
+
+
+def scalar_literal(text, name):
+    """Return the source spelling of one complete scalar constant."""
+    values = _constant_literals(text, name, 'scalar')
+    if len(values) != 1:
+        raise ValueError('missing or ambiguous scalar: ' + name)
+    return values[0]
 
 
 def module_statements(text):

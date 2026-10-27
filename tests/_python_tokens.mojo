@@ -1665,6 +1665,285 @@ def python_syntax_json(source: String) raises -> String:
     return doc.dumps()
 
 
+def _decimal_literal(text: String) -> Bool:
+    """Return whether `text` is one decimal literal.
+
+    Args:
+        text: The joined token text.
+
+    Returns:
+        True when the text matches the stored-constant spelling.
+    """
+    var data = text.as_bytes()
+    var index = 0
+    if len(data) == 0:
+        return False
+    if data[0] == 43 or data[0] == 45:
+        index = 1
+    if index >= len(data):
+        return False
+    if data[index] == 46:
+        index += 1
+        var start = index
+        while index < len(data) and data[index] >= 48 and data[index] <= 57:
+            index += 1
+        if index == start:
+            return False
+    else:
+        if data[index] < 48 or data[index] > 57:
+            return False
+        while index < len(data) and data[index] >= 48 and data[index] <= 57:
+            index += 1
+        if index < len(data) and data[index] == 46:
+            index += 1
+            while index < len(data) and data[index] >= 48 and data[index] <= 57:
+                index += 1
+    if index < len(data) and (data[index] == 101 or data[index] == 69):
+        index += 1
+        if index < len(data) and (data[index] == 43 or data[index] == 45):
+            index += 1
+        var exponent = index
+        while index < len(data) and data[index] >= 48 and data[index] <= 57:
+            index += 1
+        if index == exponent:
+            return False
+    return index == len(data)
+
+
+def _statement_token(
+    doc: PyJson, statement: Int, index: Int, mut kind: String, mut text: String
+) raises:
+    """Read one `[kind, text]` pair.
+
+    Args:
+        doc: The statement document.
+        statement: The statement list.
+        index: The pair position.
+        kind: The token kind name.
+        text: The token text.
+
+    Raises:
+        Error: The pair is not a two-string list.
+    """
+    var pair = doc.item(statement, index)
+    kind = doc.text(doc.item(pair, 0))
+    text = doc.text(doc.item(pair, 1))
+
+
+def _joined_literal(
+    doc: PyJson, statement: Int, start: Int, end: Int, description: String
+) raises -> String:
+    """Return one signed decimal token span.
+
+    Args:
+        doc: The statement document.
+        statement: The statement list.
+        start: The first token.
+        end: The token after the span.
+        description: The failure name.
+
+    Returns:
+        The joined literal.
+
+    Raises:
+        Error: The span is not one decimal literal.
+    """
+    var count = end - start
+    var kind = String("")
+    var text = String("")
+    var accepted = False
+    if count == 1:
+        _statement_token(doc, statement, start, kind, text)
+        accepted = kind == "NUMBER"
+    elif count == 2:
+        _statement_token(doc, statement, start, kind, text)
+        var second_kind = String("")
+        var second_text = String("")
+        _statement_token(doc, statement, start + 1, second_kind, second_text)
+        accepted = (
+            kind == "OP"
+            and (text == "+" or text == "-")
+            and second_kind == "NUMBER"
+        )
+        text += second_text
+    if not accepted or not _decimal_literal(text):
+        raise Error("unsupported " + description)
+    return text
+
+
+def constant_literals_json(
+    source: String, name: String, kind: String, size: Int
+) raises -> String:
+    """Return the decimal literals of one top-level constant.
+
+    Args:
+        source: Mojo source.
+        name: The constant name.
+        kind: `array` or `scalar`.
+        size: The array length. Scalar declarations ignore it.
+
+    Returns:
+        A JSON list of literal spellings.
+
+    Raises:
+        Error: The declaration is missing, ambiguous, or not one decimal list.
+    """
+    var raw = module_statements_json(source)
+    var doc = PyJson.parse(raw)
+    var matches = List[Int]()
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        var statement = doc.item(doc.root, index)
+        if doc.length(statement) >= 2:
+            var first_kind = String("")
+            var first_text = String("")
+            var second_kind = String("")
+            var second_text = String("")
+            _statement_token(doc, statement, 0, first_kind, first_text)
+            _statement_token(doc, statement, 1, second_kind, second_text)
+            if (
+                first_kind == "NAME"
+                and first_text == "comptime"
+                and second_kind == "NAME"
+                and second_text == name
+            ):
+                matches.append(index)
+        index += 1
+    var out = PyJson()
+    var rows = out.new_list()
+    if kind == "array":
+        if len(matches) != 1:
+            raise Error("missing or ambiguous constant array: " + name)
+        var statement = doc.item(doc.root, matches[0])
+        var length = doc.length(statement)
+        var header = List[String]()
+        header.append("NAME")
+        header.append("comptime")
+        header.append("NAME")
+        header.append(name)
+        header.append("OP")
+        header.append(":")
+        header.append("NAME")
+        header.append("Array")
+        header.append("OP")
+        header.append("[")
+        header.append("NAME")
+        header.append("Float64")
+        header.append("OP")
+        header.append(",")
+        header.append("NUMBER")
+        header.append(String(size))
+        header.append("OP")
+        header.append("]")
+        header.append("OP")
+        header.append("=")
+        header.append("OP")
+        header.append("[")
+        var same = length >= 12
+        var cursor = 0
+        while same and cursor < 11:
+            var token_kind = String("")
+            var token_text = String("")
+            _statement_token(doc, statement, cursor, token_kind, token_text)
+            if (
+                token_kind != header[cursor * 2]
+                or token_text != header[cursor * 2 + 1]
+            ):
+                same = False
+            cursor += 1
+        var last_kind = String("")
+        var last_text = String("")
+        if same:
+            _statement_token(doc, statement, length - 1, last_kind, last_text)
+            same = last_kind == "OP" and last_text == "]"
+        if not same:
+            raise Error(
+                "unsupported complete constant-array declaration: " + name
+            )
+        var description = "constant literal: " + name
+        var entry = 11
+        var literal_count = 0
+        var token = 11
+        while token < length - 1:
+            var token_kind = String("")
+            var token_text = String("")
+            _statement_token(doc, statement, token, token_kind, token_text)
+            if token_kind == "OP" and token_text == ",":
+                out.append(
+                    rows,
+                    out.new_str(
+                        _joined_literal(
+                            doc, statement, entry, token, description
+                        )
+                    ),
+                )
+                literal_count += 1
+                entry = token + 1
+            token += 1
+        if entry < length - 1:
+            out.append(
+                rows,
+                out.new_str(
+                    _joined_literal(
+                        doc, statement, entry, length - 1, description
+                    )
+                ),
+            )
+            literal_count += 1
+        if literal_count != size:
+            raise Error("wrong constant-array shape: " + name)
+    else:
+        if len(matches) != 1:
+            raise Error("missing or ambiguous scalar: " + name)
+        var statement = doc.item(doc.root, matches[0])
+        var length = doc.length(statement)
+        var expected = List[String]()
+        expected.append("NAME")
+        expected.append("comptime")
+        expected.append("NAME")
+        expected.append(name)
+        expected.append("OP")
+        expected.append("=")
+        expected.append("NAME")
+        expected.append("Float64")
+        expected.append("OP")
+        expected.append("(")
+        var same = length >= 6
+        var cursor = 0
+        while same and cursor < 5:
+            var token_kind = String("")
+            var token_text = String("")
+            _statement_token(doc, statement, cursor, token_kind, token_text)
+            if (
+                token_kind != expected[cursor * 2]
+                or token_text != expected[cursor * 2 + 1]
+            ):
+                same = False
+            cursor += 1
+        var last_kind = String("")
+        var last_text = String("")
+        if same:
+            _statement_token(doc, statement, length - 1, last_kind, last_text)
+            same = last_kind == "OP" and last_text == ")"
+        if not same:
+            raise Error("unsupported complete scalar declaration: " + name)
+        out.append(
+            rows,
+            out.new_str(
+                _joined_literal(
+                    doc,
+                    statement,
+                    5,
+                    length - 1,
+                    "scalar literal: " + name,
+                )
+            ),
+        )
+    out.root = rows
+    return out.dumps()
+
+
 def module_statements_json(source: String) raises -> String:
     """Return the top-level statements, without the module docstring.
 

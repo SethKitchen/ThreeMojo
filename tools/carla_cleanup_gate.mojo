@@ -23,6 +23,8 @@
     carla_cleanup_gate --syntax PATH
     carla_cleanup_gate --slice PATH --name NAME
     carla_cleanup_gate --fragment DIR
+    carla_cleanup_gate --literals PATH --name NAME --kind array --size N
+    carla_cleanup_gate --literals PATH --name NAME --kind scalar
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -35,6 +37,7 @@ from std.sys import argv, exit, stderr
 from tests._python_tokens import (
     declaration_place,
     ideal_function_source,
+    constant_literals_json,
     function_slice,
     replace_token_fragment,
     python_syntax_json,
@@ -441,6 +444,8 @@ def _usage():
             " | --routing PATH --constants PATH"
             " | --ideal PATH --name NAME | --syntax PATH"
             " | --slice PATH --name NAME | --fragment DIR"
+            " | --literals PATH --name NAME --kind array --size N"
+            " | --literals PATH --name NAME --kind scalar"
         ),
         file=stderr,
     )
@@ -478,6 +483,8 @@ def main() raises:
     var syntax = String("")
     var slice_path = String("")
     var fragment = String("")
+    var literals = String("")
+    var literal_size = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -508,6 +515,8 @@ def main() raises:
             or word == "--syntax"
             or word == "--slice"
             or word == "--fragment"
+            or word == "--literals"
+            or word == "--size"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -562,6 +571,10 @@ def main() raises:
                 slice_path = value
             elif word == "--fragment":
                 fragment = value
+            elif word == "--literals":
+                literals = value
+            elif word == "--size":
+                literal_size = value
             else:
                 _usage()
             index += 2
@@ -578,8 +591,16 @@ def main() raises:
         modes += 1
     if (
         words.byte_length() > 0
-        or kind.byte_length() > 0
         or label.byte_length() > 0
+        or kind == "trig"
+        or kind == "geometry"
+    ):
+        modes += 1
+    if (
+        literals.byte_length() > 0
+        or literal_size.byte_length() > 0
+        or kind == "array"
+        or kind == "scalar"
     ):
         modes += 1
     if premises.byte_length() > 0:
@@ -593,6 +614,7 @@ def main() raises:
         and bounds.byte_length() == 0
         and ideal.byte_length() == 0
         and slice_path.byte_length() == 0
+        and literals.byte_length() == 0
         and (decl_name.byte_length() > 0 or len(owners) > 0)
     ):
         modes += 1
@@ -626,8 +648,10 @@ def main() raises:
         label.byte_length() == 0 or (kind != "trig" and kind != "geometry")
     ):
         _usage()
-    if words.byte_length() == 0 and (
-        kind.byte_length() > 0 or label.byte_length() > 0
+    if (
+        words.byte_length() == 0
+        and literals.byte_length() == 0
+        and (kind.byte_length() > 0 or label.byte_length() > 0)
     ):
         _usage()
     if (
@@ -635,6 +659,7 @@ def main() raises:
         and bounds.byte_length() == 0
         and ideal.byte_length() == 0
         and slice_path.byte_length() == 0
+        and literals.byte_length() == 0
         and (decl_name.byte_length() > 0 or len(owners) > 0)
     ):
         _usage()
@@ -643,6 +668,7 @@ def main() raises:
         or bounds.byte_length() > 0
         or ideal.byte_length() > 0
         or slice_path.byte_length() > 0
+        or literals.byte_length() > 0
     ) and decl_name.byte_length() == 0:
         _usage()
     try:
@@ -655,6 +681,32 @@ def main() raises:
                 ),
                 end="",
             )
+            return
+        if literals.byte_length() > 0:
+            if kind == "array":
+                var size = 0
+                try:
+                    size = Int(literal_size)
+                except error:
+                    _ = String(error)
+                    _usage()
+                if size < 0 or literal_size.byte_length() == 0:
+                    _usage()
+                print(
+                    constant_literals_json(
+                        Path(literals).read_text(), decl_name, kind, size
+                    ),
+                    end="",
+                )
+            elif kind == "scalar" and literal_size.byte_length() == 0:
+                print(
+                    constant_literals_json(
+                        Path(literals).read_text(), decl_name, kind, 0
+                    ),
+                    end="",
+                )
+            else:
+                _usage()
             return
         if fragment.byte_length() > 0:
             print(
