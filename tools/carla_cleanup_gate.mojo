@@ -22,6 +22,7 @@
     carla_cleanup_gate --ideal PATH --name NAME
     carla_cleanup_gate --syntax PATH
     carla_cleanup_gate --slice PATH --name NAME
+    carla_cleanup_gate --fragment DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -35,6 +36,7 @@ from tests._python_tokens import (
     declaration_place,
     ideal_function_source,
     function_slice,
+    replace_token_fragment,
     python_syntax_json,
     declaration_text,
     stored_float_array,
@@ -438,7 +440,7 @@ def _usage():
             " | --statements PATH | --starts PATH"
             " | --routing PATH --constants PATH"
             " | --ideal PATH --name NAME | --syntax PATH"
-            " | --slice PATH --name NAME"
+            " | --slice PATH --name NAME | --fragment DIR"
         ),
         file=stderr,
     )
@@ -475,6 +477,7 @@ def main() raises:
     var ideal = String("")
     var syntax = String("")
     var slice_path = String("")
+    var fragment = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -504,6 +507,7 @@ def main() raises:
             or word == "--ideal"
             or word == "--syntax"
             or word == "--slice"
+            or word == "--fragment"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -556,6 +560,8 @@ def main() raises:
                 syntax = value
             elif word == "--slice":
                 slice_path = value
+            elif word == "--fragment":
+                fragment = value
             else:
                 _usage()
             index += 2
@@ -595,6 +601,8 @@ def main() raises:
     if syntax.byte_length() > 0:
         modes += 1
     if slice_path.byte_length() > 0:
+        modes += 1
+    if fragment.byte_length() > 0:
         modes += 1
     if significant.byte_length() > 0:
         modes += 1
@@ -644,6 +652,16 @@ def main() raises:
             print(
                 module_routing_json(
                     Path(routing).read_text(), Path(constants).read_text()
+                ),
+                end="",
+            )
+            return
+        if fragment.byte_length() > 0:
+            print(
+                replace_token_fragment(
+                    Path(fragment + "/source.text").read_text(),
+                    Path(fragment + "/before.text").read_text(),
+                    Path(fragment + "/after.text").read_text(),
                 ),
                 end="",
             )

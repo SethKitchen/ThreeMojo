@@ -13,6 +13,7 @@ from tests._python_tokens import (
     declaration_place,
     declaration_text,
     function_slice,
+    replace_token_fragment,
     ideal_function_source,
     python_syntax_json,
     significant_json,
@@ -155,6 +156,27 @@ def test_a_top_level_function_slice_stops_at_the_next_def() raises:
         _ = function_slice(source + "def first():\n    return 0\n", "first")
     with assert_raises(contains="missing or ambiguous function: absent"):
         _ = function_slice(source, "absent")
+
+
+def test_one_executable_fragment_is_replaced() raises:
+    """A comment does not hide the executable assignment."""
+    var source = String(
+        "def f():\n"
+        + "    # terms += center_work\n"
+        + "    terms += center_work\n"
+        + "    return terms\n"
+    )
+    assert_equal(
+        replace_token_fragment(source, "terms += center_work", "terms += 0"),
+        "def f():\n"
+        + "    # terms += center_work\n"
+        + "    terms += 0\n"
+        + "    return terms\n",
+    )
+    with assert_raises(
+        contains="missing or ambiguous executable mutation fragment: terms += 0"
+    ):
+        _ = replace_token_fragment(source, "terms += 0", "terms += 1")
 
 
 def test_a_generic_declaration_becomes_python_source() raises:

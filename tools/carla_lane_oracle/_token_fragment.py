@@ -1,9 +1,6 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Replace one executable token fragment without following a comment decoy."""
-import tokenize
-
-import source_contracts as sources
 
 
 def replace_token_fragment(source, before, after):
@@ -13,28 +10,23 @@ def replace_token_fragment(source, before, after):
     and whitespace cannot redirect the mutation to a textual decoy. No pin or
     semantic assertion is weakened by this test-fixture normalization.
     """
-    ignored = {tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE, tokenize.INDENT,
-               tokenize.DEDENT, tokenize.ENDMARKER}
-
-    def executable(text):
-        result = [token for token in sources.tokens(text) if token.type not in ignored]
-        # The formatter may add a final comma when it wraps call arguments.
-        # This is mutation-location matching only, never a production gate.
-        return [token for index, token in enumerate(result)
-                if not (token.string == ',' and index + 1 < len(result)
-                        and result[index + 1].string in (')', ']'))]
-
-    actual = executable(source)
-    wanted = [(token.type, token.string) for token in executable(before)]
-    values = [(token.type, token.string) for token in actual]
-    matches = [i for i in range(len(actual)) if values[i:i + len(wanted)] == wanted]
-    if len(matches) != 1:
-        raise AssertionError('missing or ambiguous executable mutation fragment: ' + before)
-    lines = source.splitlines(keepends=True)
-    offsets = [0]
-    for line in lines:
-        offsets.append(offsets[-1] + len(line))
-    first, last = actual[matches[0]], actual[matches[0] + len(wanted) - 1]
-    start = offsets[first.start[0] - 1] + first.start[1]
-    end = offsets[last.end[0] - 1] + last.end[1]
-    return source[:start] + after.lstrip(' \t') + source[end:]
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='token-fragment-') as directory:
+        folder = Path(directory)
+        (folder / 'source.text').write_text(source)
+        (folder / 'before.text').write_text(before)
+        (folder / 'after.text').write_text(after)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--fragment', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line for line in result.stderr.splitlines()
+                 if 'Crashpad' not in line]
+        raise AssertionError('\n'.join(lines))
+    return result.stdout

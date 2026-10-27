@@ -25,9 +25,15 @@ def _push(
     mut kinds: List[Int],
     mut texts: List[String],
     mut lines: List[Int],
+    mut start_cols: List[Int],
+    mut end_lines: List[Int],
+    mut end_cols: List[Int],
     kind: Int,
     var text: String,
     line: Int,
+    start_col: Int,
+    end_line: Int,
+    end_col: Int,
 ):
     """Append one token.
 
@@ -35,13 +41,22 @@ def _push(
         kinds: The token kinds.
         texts: The token texts, in the same order.
         lines: The 1-based line of each token.
+        start_cols: The 0-based start column of each token.
+        end_lines: The 1-based end line of each token.
+        end_cols: The 0-based end column of each token.
         kind: The Python token number.
         text: The token text.
         line: The 1-based line of this token.
+        start_col: The 0-based start column.
+        end_line: The 1-based end line.
+        end_col: The 0-based end column.
     """
     kinds.append(kind)
     texts.append(text^)
     lines.append(line)
+    start_cols.append(start_col)
+    end_lines.append(end_line)
+    end_cols.append(end_col)
 
 
 def _tokenize(
@@ -62,7 +77,12 @@ def _tokenize(
             unclosed bracket.
     """
     var lines = List[Int]()
-    _tokenize_lines(source, kinds, texts, lines)
+    var start_cols = List[Int]()
+    var end_lines = List[Int]()
+    var end_cols = List[Int]()
+    _tokenize_lines(
+        source, kinds, texts, lines, start_cols, end_lines, end_cols
+    )
 
 
 def _tokenize_lines(
@@ -70,14 +90,20 @@ def _tokenize_lines(
     mut kinds: List[Int],
     mut texts: List[String],
     mut lines: List[Int],
+    mut start_cols: List[Int],
+    mut end_lines: List[Int],
+    mut end_cols: List[Int],
 ) raises:
-    """Tokenize `source` and record each token's 1-based line.
+    """Tokenize `source` and record each token's line and column.
 
     Args:
         source: Mojo source that uses spaces and ASCII quotes.
         kinds: The token kinds, replaced by this call.
         texts: The token texts, replaced by this call.
-        lines: The 1-based line of each token, replaced by this call.
+        lines: The 1-based start line of each token, replaced by this call.
+        start_cols: The 0-based start column of each token, replaced by this call.
+        end_lines: The 1-based end line of each token, replaced by this call.
+        end_cols: The 0-based end column of each token, replaced by this call.
 
     Raises:
         Error: The source has an unclosed string, a bad indent, or an
@@ -105,12 +131,38 @@ def _tokenize_lines(
         if depth == 0 and not blank:
             if column > levels[len(levels) - 1]:
                 var spaces = String(text[byte=line_start:index])
-                _push(kinds, texts, lines, _INDENT, spaces^, line_no)
+                _push(
+                    kinds,
+                    texts,
+                    lines,
+                    start_cols,
+                    end_lines,
+                    end_cols,
+                    _INDENT,
+                    spaces^,
+                    line_no,
+                    0,
+                    line_no,
+                    index - line_start,
+                )
                 levels.append(column)
             else:
                 while column < levels[len(levels) - 1]:
                     _ = levels.pop()
-                    _push(kinds, texts, lines, _DEDENT, String(), line_no)
+                    _push(
+                        kinds,
+                        texts,
+                        lines,
+                        start_cols,
+                        end_lines,
+                        end_cols,
+                        _DEDENT,
+                        String(),
+                        line_no,
+                        0,
+                        line_no,
+                        0,
+                    )
                 if column != levels[len(levels) - 1]:
                     raise Error("invalid source tokens: bad indent")
         while index < len(data):
@@ -123,6 +175,7 @@ def _tokenize_lines(
             if byte == 10:
                 index += 1
                 line_no += 1
+                line_start = index
                 continue
             if byte == 35 and depth == 0:
                 while index < len(data) and data[index] != 10:
@@ -132,6 +185,7 @@ def _tokenize_lines(
                 var quote = byte
                 var mark = index
                 var string_line = line_no
+                var string_col = mark - line_start
                 index += 1
                 var triple = (
                     index + 1 < len(data)
@@ -160,11 +214,25 @@ def _tokenize_lines(
                         raise Error("invalid source tokens: unclosed string")
                     if data[index] == 10:
                         line_no += 1
+                        line_start = index + 1
                     index += 1
                 if not closed:
                     raise Error("invalid source tokens: unclosed string")
                 var literal = String(text[byte=mark:index])
-                _push(kinds, texts, lines, _STRING, literal^, string_line)
+                _push(
+                    kinds,
+                    texts,
+                    lines,
+                    start_cols,
+                    end_lines,
+                    end_cols,
+                    _STRING,
+                    literal^,
+                    string_line,
+                    string_col,
+                    line_no,
+                    index - line_start,
+                )
                 continue
             var name_start = (
                 (byte >= 65 and byte <= 90)
@@ -186,7 +254,20 @@ def _tokenize_lines(
                         break
                     index += 1
                 var name = String(text[byte=mark:index])
-                _push(kinds, texts, lines, _NAME, name^, line_no)
+                _push(
+                    kinds,
+                    texts,
+                    lines,
+                    start_cols,
+                    end_lines,
+                    end_cols,
+                    _NAME,
+                    name^,
+                    line_no,
+                    mark - line_start,
+                    line_no,
+                    index - line_start,
+                )
                 continue
             var number_start = (byte >= 48 and byte <= 57) or (
                 byte == 46
@@ -241,9 +322,15 @@ def _tokenize_lines(
                                     kinds,
                                     texts,
                                     lines,
+                                    start_cols,
+                                    end_lines,
+                                    end_cols,
                                     _NUMBER,
                                     prefixed^,
                                     line_no,
+                                    mark - line_start,
+                                    line_no,
+                                    index - line_start,
                                 )
                                 continue
                 if (
@@ -281,7 +368,20 @@ def _tokenize_lines(
                         ):
                             index += 1
                 var number = String(text[byte=mark:index])
-                _push(kinds, texts, lines, _NUMBER, number^, line_no)
+                _push(
+                    kinds,
+                    texts,
+                    lines,
+                    start_cols,
+                    end_lines,
+                    end_cols,
+                    _NUMBER,
+                    number^,
+                    line_no,
+                    mark - line_start,
+                    line_no,
+                    index - line_start,
+                )
                 continue
             var three = String()
             if index + 2 < len(data):
@@ -293,7 +393,21 @@ def _tokenize_lines(
                 or three == ">>="
                 or three == "..."
             ):
-                _push(kinds, texts, lines, _OP, three^, line_no)
+                var op_col = index - line_start
+                _push(
+                    kinds,
+                    texts,
+                    lines,
+                    start_cols,
+                    end_lines,
+                    end_cols,
+                    _OP,
+                    three^,
+                    line_no,
+                    op_col,
+                    line_no,
+                    op_col + 3,
+                )
                 index += 3
                 continue
             var two = String()
@@ -318,7 +432,21 @@ def _tokenize_lines(
                 or two == "//"
                 or two == "**"
             ):
-                _push(kinds, texts, lines, _OP, two^, line_no)
+                var op_col = index - line_start
+                _push(
+                    kinds,
+                    texts,
+                    lines,
+                    start_cols,
+                    end_lines,
+                    end_cols,
+                    _OP,
+                    two^,
+                    line_no,
+                    op_col,
+                    line_no,
+                    op_col + 2,
+                )
                 index += 2
                 continue
             if byte == 40 or byte == 91 or byte == 123:
@@ -328,18 +456,266 @@ def _tokenize_lines(
                 if depth < 0:
                     raise Error("invalid source tokens: extra closer")
             var operator = String(chr(Int(byte)))
-            _push(kinds, texts, lines, _OP, operator^, line_no)
+            var op_col = index - line_start
+            _push(
+                kinds,
+                texts,
+                lines,
+                start_cols,
+                end_lines,
+                end_cols,
+                _OP,
+                operator^,
+                line_no,
+                op_col,
+                line_no,
+                op_col + 1,
+            )
             index += 1
         if index < len(data) and data[index] == 10:
             if depth == 0 and not blank:
-                _push(kinds, texts, lines, _NEWLINE, String("\n"), line_no)
+                var newline_col = index - line_start
+                _push(
+                    kinds,
+                    texts,
+                    lines,
+                    start_cols,
+                    end_lines,
+                    end_cols,
+                    _NEWLINE,
+                    String("\n"),
+                    line_no,
+                    newline_col,
+                    line_no,
+                    newline_col + 1,
+                )
             index += 1
             line_no += 1
     if depth != 0:
         raise Error("invalid source tokens: unclosed bracket")
     while len(levels) > 1:
         _ = levels.pop()
-        _push(kinds, texts, lines, _DEDENT, String(), line_no)
+        _push(
+            kinds,
+            texts,
+            lines,
+            start_cols,
+            end_lines,
+            end_cols,
+            _DEDENT,
+            String(),
+            line_no,
+            0,
+            line_no,
+            0,
+        )
+
+
+def _keep_executable(
+    mut kinds: List[Int],
+    mut texts: List[String],
+    mut start_lines: List[Int],
+    mut start_cols: List[Int],
+    mut end_lines: List[Int],
+    mut end_cols: List[Int],
+    read_kinds: List[Int],
+    read_texts: List[String],
+    read_lines: List[Int],
+    read_start_cols: List[Int],
+    read_end_lines: List[Int],
+    read_end_cols: List[Int],
+):
+    """Keep executable tokens and drop a comma before a closer.
+
+    Args:
+        kinds: The kept kinds.
+        texts: The kept texts.
+        start_lines: The kept start lines.
+        start_cols: The kept start columns.
+        end_lines: The kept end lines.
+        end_cols: The kept end columns.
+        read_kinds: The tokenizer kinds.
+        read_texts: The tokenizer texts.
+        read_lines: The tokenizer start lines.
+        read_start_cols: The tokenizer start columns.
+        read_end_lines: The tokenizer end lines.
+        read_end_cols: The tokenizer end columns.
+    """
+    var kept_kinds = List[Int]()
+    var kept_texts = List[String]()
+    var kept_lines = List[Int]()
+    var kept_start_cols = List[Int]()
+    var kept_end_lines = List[Int]()
+    var kept_end_cols = List[Int]()
+    var index = 0
+    while index < len(read_kinds):
+        var kind = read_kinds[index]
+        if kind != _NEWLINE and kind != _INDENT and kind != _DEDENT:
+            kept_kinds.append(kind)
+            kept_texts.append(read_texts[index])
+            kept_lines.append(read_lines[index])
+            kept_start_cols.append(read_start_cols[index])
+            kept_end_lines.append(read_end_lines[index])
+            kept_end_cols.append(read_end_cols[index])
+        index += 1
+    index = 0
+    while index < len(kept_kinds):
+        var comma = (
+            kept_texts[index] == ","
+            and index + 1 < len(kept_kinds)
+            and (kept_texts[index + 1] == ")" or kept_texts[index + 1] == "]")
+        )
+        if not comma:
+            kinds.append(kept_kinds[index])
+            texts.append(kept_texts[index])
+            start_lines.append(kept_lines[index])
+            start_cols.append(kept_start_cols[index])
+            end_lines.append(kept_end_lines[index])
+            end_cols.append(kept_end_cols[index])
+        index += 1
+
+
+def _leading_space_count(text: String) -> Int:
+    """Return the number of leading spaces and tabs.
+
+    Args:
+        text: The replacement text.
+
+    Returns:
+        The byte count of the leading space and tab prefix.
+    """
+    var data = text.as_bytes()
+    var index = 0
+    while index < len(data) and (data[index] == 32 or data[index] == 9):
+        index += 1
+    return index
+
+
+def replace_token_fragment(
+    source: String, before: String, after: String
+) raises -> String:
+    """Replace one executable token fragment.
+
+    Comments and a formatter's trailing comma cannot move the match.
+
+    Args:
+        source: The original source.
+        before: The fragment to find.
+        after: The replacement. Leading spaces and tabs are removed.
+
+    Returns:
+        The source with that one fragment replaced.
+
+    Raises:
+        Error: The fragment is missing or occurs more than once.
+    """
+    var source_kinds = List[Int]()
+    var source_texts = List[String]()
+    var source_lines = List[Int]()
+    var source_start_cols = List[Int]()
+    var source_end_lines = List[Int]()
+    var source_end_cols = List[Int]()
+    _tokenize_lines(
+        source,
+        source_kinds,
+        source_texts,
+        source_lines,
+        source_start_cols,
+        source_end_lines,
+        source_end_cols,
+    )
+    var before_kinds = List[Int]()
+    var before_texts = List[String]()
+    var before_lines = List[Int]()
+    var before_start_cols = List[Int]()
+    var before_end_lines = List[Int]()
+    var before_end_cols = List[Int]()
+    _tokenize_lines(
+        before,
+        before_kinds,
+        before_texts,
+        before_lines,
+        before_start_cols,
+        before_end_lines,
+        before_end_cols,
+    )
+    var kinds = List[Int]()
+    var texts = List[String]()
+    var start_lines = List[Int]()
+    var start_cols = List[Int]()
+    var end_lines = List[Int]()
+    var end_cols = List[Int]()
+    _keep_executable(
+        kinds,
+        texts,
+        start_lines,
+        start_cols,
+        end_lines,
+        end_cols,
+        source_kinds,
+        source_texts,
+        source_lines,
+        source_start_cols,
+        source_end_lines,
+        source_end_cols,
+    )
+    var wanted_kinds = List[Int]()
+    var wanted_texts = List[String]()
+    var ignored_lines = List[Int]()
+    var ignored_start_cols = List[Int]()
+    var ignored_end_lines = List[Int]()
+    var ignored_end_cols = List[Int]()
+    _keep_executable(
+        wanted_kinds,
+        wanted_texts,
+        ignored_lines,
+        ignored_start_cols,
+        ignored_end_lines,
+        ignored_end_cols,
+        before_kinds,
+        before_texts,
+        before_lines,
+        before_start_cols,
+        before_end_lines,
+        before_end_cols,
+    )
+    var matches = List[Int]()
+    var start = 0
+    while start + len(wanted_kinds) <= len(kinds) and len(wanted_kinds) > 0:
+        var same = True
+        var cursor = 0
+        while same and cursor < len(wanted_kinds):
+            if (
+                kinds[start + cursor] != wanted_kinds[cursor]
+                or texts[start + cursor] != wanted_texts[cursor]
+            ):
+                same = False
+            cursor += 1
+        if same:
+            matches.append(start)
+        start += 1
+    if len(matches) != 1:
+        raise Error(
+            "missing or ambiguous executable mutation fragment: " + before
+        )
+    var first = matches[0]
+    var last = first + len(wanted_kinds) - 1
+    var offsets = List[Int]()
+    offsets.append(0)
+    var data = source.as_bytes()
+    var index = 0
+    while index < len(data):
+        if data[index] == 10:
+            offsets.append(index + 1)
+        index += 1
+    var start_at = offsets[start_lines[first] - 1] + start_cols[first]
+    var end_at = offsets[end_lines[last] - 1] + end_cols[last]
+    var skip = _leading_space_count(after)
+    return (
+        String(source[byte=:start_at])
+        + String(after[byte=skip:])
+        + String(source[byte=end_at:])
+    )
 
 
 def significant_json(source: String) raises -> String:
@@ -621,7 +997,18 @@ def declaration_place(
     var kinds = List[Int]()
     var texts = List[String]()
     var lines = List[Int]()
-    _tokenize_lines(source, kinds, texts, lines)
+    var start_cols = List[Int]()
+    var token_end_lines = List[Int]()
+    var end_cols = List[Int]()
+    _tokenize_lines(
+        source,
+        kinds,
+        texts,
+        lines,
+        start_cols,
+        token_end_lines,
+        end_cols,
+    )
     var scope_kinds = List[String]()
     var scope_names = List[String]()
     var pending_kind = String("")
@@ -1440,8 +1827,19 @@ def top_level_starts_json(source: String) raises -> String:
     var kinds = List[Int]()
     var texts = List[String]()
     var lines = List[Int]()
+    var start_cols = List[Int]()
+    var token_end_lines = List[Int]()
+    var end_cols = List[Int]()
     try:
-        _tokenize_lines(source, kinds, texts, lines)
+        _tokenize_lines(
+            source,
+            kinds,
+            texts,
+            lines,
+            start_cols,
+            token_end_lines,
+            end_cols,
+        )
     except error:
         _ = String(error)
         raise Error("unsupported source-boundary tokens")

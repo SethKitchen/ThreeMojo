@@ -68,6 +68,8 @@ The Sum2, optional-runtime, and heading checks parse declarations through that s
 
 It slices one top-level function for the heading check.
 
+It replaces one executable token fragment for the cleanup mutation tests.
+
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.
