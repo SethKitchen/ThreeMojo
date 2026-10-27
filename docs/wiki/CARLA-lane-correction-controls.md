@@ -300,6 +300,8 @@ It checks every rounded node sum in one check.
 
 It checks the ideal half projection in one call.
 
+It checks the stored-half tail before the projection.
+
 It keeps the moment dependency record and the check messages.
 
 It keeps the moment report names and the pass line.

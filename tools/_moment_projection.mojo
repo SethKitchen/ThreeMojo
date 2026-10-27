@@ -15,8 +15,10 @@ from tests._python_tokens import (
     selected_block,
     stored_half_tail,
 )
+from tools._json_tools import quote_ascii
+from tools._moment_pin_shape import require_projection_result
 from tools._projection_result import projection_result, require_source_text
-from tools._python_json import PyJson
+from tools._python_json import MISSING, PyJson, dumps_canonical
 from tools.carla_ideal_gate import ideal_digest, ideal_digests
 
 
@@ -38,25 +40,59 @@ def _require_text(text: String, message: String) raises:
     require_source_text(doc.dumps())
 
 
+def _projection_pins(doc: PyJson, pins: Int, result_text: String) raises:
+    """Require the pinned projection fields to match the result.
+
+    Args:
+        doc: The payload document.
+        pins: The ideal-projection object.
+        result_text: The reviewed projection record.
+
+    Raises:
+        Error: A result pin differs, or a result field is absent.
+    """
+    var result = PyJson.parse(result_text)
+    var subset = String("{")
+    var count = result.length(result.root)
+    var index = 0
+    while index < count:
+        var key = result.key(result.root, index)
+        if index > 0:
+            subset += ","
+        subset += quote_ascii(key)
+        subset += ":"
+        subset += dumps_canonical(doc, doc.at(pins, key))
+        index += 1
+    subset += "}"
+    require_projection_result(
+        '{"projection":' + subset + ',"result":' + result_text + "}"
+    )
+
+
 def moment_projection(payload: String) raises -> String:
     """Check one ideal half projection.
 
     Args:
-        payload: A JSON object with `legacy`, `current`, and `helper`.
-            `legacy` is the pinned spiral. `current` is the live spiral.
-            `helper` is the stored-half source.
+        payload: A JSON object with `legacy` and `current`. `helper` is
+            the stored-half source. `interval` selects that source from
+            the interval module instead. `pins` compares the result.
 
     Returns:
         The reviewed projection record.
 
     Raises:
-        Error: The legacy source, the helper, the live spiral, or the
-            projected graph changed.
+        Error: The stored-half tail, the legacy source, the helper, the
+            live spiral, the projected graph, or a result pin changed.
     """
     var doc = PyJson.parse(payload)
     var legacy = doc.text(doc.at(doc.root, "legacy"))
     var current = doc.text(doc.at(doc.root, "current"))
-    var helper = doc.text(doc.at(doc.root, "helper"))
+    var interval = doc.get(doc.root, "interval")
+    var helper: String
+    if interval == MISSING:
+        helper = doc.text(doc.at(doc.root, "helper"))
+    else:
+        helper = stored_half_tail(doc.text(interval))
     ideal_digest(legacy.as_bytes(), "legacy")
     _require_text(helper, "ideal helper declaration or decorator changed")
     check_stored_half(helper)
@@ -65,9 +101,13 @@ def moment_projection(payload: String) raises -> String:
     ideal_current_matches(current, left_dump)
     ideal_digest(left_dump.as_bytes(), "projected")
     var digests = PyJson.parse(ideal_digests())
-    return projection_result(
+    var record = projection_result(
         digests.text(digests.at(digests.root, "projected"))
     )
+    var pins = doc.get(doc.root, "pins")
+    if pins != MISSING:
+        _projection_pins(doc, pins, record)
+    return record
 
 
 def moment_sum2_projection(payload: String) raises -> String:

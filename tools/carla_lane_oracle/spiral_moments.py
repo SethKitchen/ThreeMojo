@@ -690,22 +690,19 @@ def verify_inputs(root):
     _dependencies()
     interval = _typed_source.historical_text(root, root / DEPENDENCIES['paths'][0], (root / DEPENDENCIES['paths'][0]).read_text(encoding='utf-8'))
     try:
-        helper = ideal_projection.stored_half_tail(interval)
-    except ValueError as error:
-        raise CheckError(str(error)) from error
-    try:
-        result = _moment_projection({
+        _moment_projection({
             'legacy': projection['legacy_normalized_source'],
             'current': blocks[_moment_plan()['spiral_block']],
-            'helper': helper,
+            'interval': interval,
+            'pins': projection,
         })
     except ValueError as error:
-        raise CheckError(messages['projection'] + str(error)) from error
-    try:
-        ideal_projection.require_projection_result(
-            {key: projection[key] for key in result}, result)
-    except ValueError as error:
-        raise CheckError(str(error)) from error
+        message = str(error)
+        if message in (
+                'missing or ambiguous stored-half declaration',
+                'wrong ideal-projection result pins'):
+            raise CheckError(message) from error
+        raise CheckError(messages['projection'] + message) from error
     # Diagnose this record's own projection obligations before the cache-key
     # successor rechecks its immutable historical hash. Keep the complete
     # interval/helper dependency check above, and all transitive checks here.
