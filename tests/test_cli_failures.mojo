@@ -17,6 +17,8 @@ def test_checker_failure_prefixes_stay_reviewed() raises:
     assert_equal(doc.text(doc.at(doc.root, "moments")), "FAIL: ")
     assert_equal(doc.text(doc.at(doc.root, "sampled")), "FAIL:")
     assert_equal(doc.text(doc.at(doc.root, "runtime")), "FAIL:")
+    assert_equal(doc.text(doc.at(doc.root, "key")), "KeyError: ")
+    assert_equal(doc.text(doc.at(doc.root, "word")), "spiral moment word: ")
 
 
 def main() raises:

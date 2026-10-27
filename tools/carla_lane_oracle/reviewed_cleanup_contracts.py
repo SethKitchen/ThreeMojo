@@ -503,7 +503,7 @@ def verify(root, *, _operation=None):
                     import full_audit_cleanup_contracts as full_audit
                 text = full_audit.reviewed_text(root, path, text, **operation_args)
             except (ValueError, OSError) as error:
-                raise ValueError('reviewed cleanup source contract: ' + labels['unreviewed'] + path) from error
+                raise ValueError(_contract_prefixes()['cleanup'] + labels['unreviewed'] + path) from error
         pairs.append((text, transition['after_token_sha256'],
                       labels['unreviewed'] + path))
     if pairs:

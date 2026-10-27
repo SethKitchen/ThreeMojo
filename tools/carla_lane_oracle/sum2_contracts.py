@@ -188,6 +188,30 @@ def _require_function(text, name):
         raise ValueError(message)
 
 
+_CLI_FAILURES = None
+
+
+def _cli_failures():
+    """Return the checker failure prefixes."""
+    global _CLI_FAILURES
+    if _CLI_FAILURES is not None:
+        return _CLI_FAILURES
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cli_failures'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _CLI_FAILURES = json.loads(result.stdout)
+    return _CLI_FAILURES
+
+
 def _sum2_result(projection, guard):
     """Return the Sum2 correspondence result in historical field order."""
     import ast
@@ -212,7 +236,7 @@ def _sum2_result(projection, guard):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        prefix = 'KeyError: '
+        prefix = _cli_failures()['key']
         if message.startswith(prefix):
             raise KeyError(ast.literal_eval(message[len(prefix):])) from None
         raise ValueError(message)

@@ -406,7 +406,7 @@ def decimal_words(literals):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        prefix = 'spiral moment word: '
+        prefix = _cli_failures()['word']
         if message.startswith(prefix):
             message = message[len(prefix):]
         raise ValueError(message)
@@ -637,7 +637,7 @@ def fraction_texts(words):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        prefix = 'spiral moment word: '
+        prefix = _cli_failures()['word']
         if message.startswith(prefix):
             message = message[len(prefix):]
         raise ValueError(message)
@@ -741,7 +741,7 @@ def moment_meta(payload, root, projection, dependencies, routing, blocks):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        prefix = 'KeyError: '
+        prefix = _cli_failures()['key']
         if message.startswith(prefix):
             raise KeyError(ast.literal_eval(message[len(prefix):])) from None
         raise ValueError(message)
@@ -876,6 +876,31 @@ def _contract_prefixes():
         raise ValueError(message)
     _CONTRACT_PREFIXES = json.loads(result.stdout)
     return _CONTRACT_PREFIXES
+
+
+_CLI_FAILURES = None
+
+
+def _cli_failures():
+    """Return the checker failure prefixes."""
+    global _CLI_FAILURES
+    if _CLI_FAILURES is not None:
+        return _CLI_FAILURES
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cli_failures'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _CLI_FAILURES = json.loads(result.stdout)
+    return _CLI_FAILURES
 
 
 def scalar_literal(text, name):

@@ -13,6 +13,13 @@ def cli_failures() -> String:
     """Return the checker failure prefixes.
 
     Returns:
-        JSON with the moment, sampled, and runtime prefixes.
+        JSON with the moment, sampled, and runtime prefixes, the KeyError
+        mark, and the moment-word prefix.
     """
-    return '{"moments":"FAIL: ",' + '"sampled":"FAIL:",' + '"runtime":"FAIL:"}'
+    return (
+        '{"moments":"FAIL: ",'
+        + '"sampled":"FAIL:",'
+        + '"runtime":"FAIL:",'
+        + '"key":"KeyError: ",'
+        + '"word":"spiral moment word: "}'
+    )

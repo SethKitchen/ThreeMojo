@@ -270,6 +270,8 @@ It keeps the moment report names and the pass line.
 
 It keeps the moment failure prefix.
 
+It keeps the KeyError mark and the moment-word prefix.
+
 It writes the canonical stored-moment table source.
 
 It returns one normalized source block between two markers.

@@ -497,7 +497,7 @@ def _sampled_result(root, shared, modules, primitive, sources, successors):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        prefix = 'KeyError: '
+        prefix = _cli_failures()['key']
         if message.startswith(prefix):
             raise KeyError(ast.literal_eval(message[len(prefix):])) from None
         raise ValueError(message)
