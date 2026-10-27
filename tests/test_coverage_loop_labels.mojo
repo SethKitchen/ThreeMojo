@@ -49,6 +49,16 @@ def test_coverage_loop_qualification_labels_stay_reviewed() raises:
     assert_equal(doc.length(faults), 15)
     assert_equal(doc.text(doc.item(faults, 0)), "source")
     assert_equal(doc.text(doc.item(faults, 14)), "nested-owner")
+    assert_equal(doc.text(doc.at(mutation, "unreviewed")), "unreviewed")
+    assert_equal(doc.text(doc.at(mutation, "seed_change")), " changed")
+    assert_equal(doc.text(doc.at(mutation, "origin_suffix")), ".cov-origin")
+    assert_equal(doc.text(doc.at(mutation, "foreign_root")), "foreign")
+    assert_equal(
+        doc.text(doc.at(mutation, "foreign")),
+        "Foreign current owner context was accepted",
+    )
+    assert_equal(doc.text(doc.at(mutation, "open_mode")), "xb")
+    assert_equal(doc.text(doc.at(mutation, "frame_seed")), "_receipt_seed")
     assert_equal(
         doc.text(doc.at(mutation, "source")),
         "extensions/carla/curve_rounded_arc.mojo",
@@ -61,6 +71,9 @@ def test_coverage_loop_qualification_labels_stay_reviewed() raises:
     )
     assert_equal(doc.text(doc.item(doc.at(admission, "steps"), 0)), "scaled")
     assert_equal(doc.text(doc.item(doc.at(admission, "steps"), 1)), "render")
+    assert_equal(doc.text(doc.at(admission, "render_prefix")), "render/")
+    assert_equal(doc.text(doc.at(admission, "mojo_suffix")), ".mojo")
+    assert_equal(doc.text(doc.at(doc.root, "theorem_count")), "6")
     assert_equal(doc.text(doc.at(doc.root, "runtime_seconds")), "5")
     assert_equal(doc.text(doc.at(doc.root, "integration_seconds")), "180")
     var commands = doc.at(doc.root, "commands")
@@ -82,6 +95,9 @@ def test_coverage_loop_qualification_labels_stay_reviewed() raises:
     assert_equal(doc.text(doc.at(profile, "full_count")), "1")
     assert_equal(doc.text(doc.at(commands, "mojo_env")), "MOJO")
     assert_equal(doc.text(doc.at(commands, "mojo_bin")), ".venv/bin/mojo")
+    assert_equal(
+        doc.text(doc.at(commands, "oracle")), "tools/carla_lane_oracle"
+    )
     var fields = doc.at(doc.root, "fields")
     assert_equal(doc.text(doc.at(fields, "root_inputs")), "root_inputs")
     assert_equal(doc.text(doc.at(fields, "capture_cache")), "capture_cache")

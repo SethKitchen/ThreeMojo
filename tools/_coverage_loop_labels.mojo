@@ -6,7 +6,7 @@
 """Name the coverage-loop qualification labels.
 
 The live captures still run in the checker. These texts only name the
-expected receipts and the pass line.
+expected receipts, the control tokens, and the pass line.
 """
 
 
@@ -14,8 +14,8 @@ def coverage_loop_labels() -> String:
     """Return the coverage-loop qualification labels.
 
     Returns:
-        JSON with the dependency names, the expected receipts, and the
-        pass line.
+        JSON with the dependency names, the expected receipts, the
+        control tokens, and the pass line.
     """
     return (
         '{"dependencies":["core/__init__.mojo","core/search.mojo","core/binary.mojo"],'
@@ -118,6 +118,11 @@ def coverage_loop_labels() -> String:
         ' owner: ",'
         + '"fixture_restored":"Current source mutation controls did not restore'
         ' the fixture",'
+        + '"unreviewed":"unreviewed","frame_self":"self",'
+        + '"frame_operation":"_operation","frame_seed":"_receipt_seed",'
+        + '"seed_flag":"flags","seed_change":"'
+        ' changed","foreign_root":"foreign",'
+        + '"origin_suffix":".cov-origin","open_mode":"xb",'
         + '"blank":"0000000000000000000000000000000000000000000000000000000000000000"},'
         + '"admission":{"fixture":"Owner fixture differs from the genuine'
         ' producer source image",'
@@ -150,9 +155,11 @@ def coverage_loop_labels() -> String:
         + '"bound":"Invalid compiler/integration bound",'
         + '"fixture_identity":"Fixture identity is not unique: ",'
         + '"diagnostic":"Diagnostic loop identity is missing",'
-        + '"failed_capture":"Cannot record a failed native capture"},'
+        + '"failed_capture":"Cannot record a failed native capture",'
+        + '"render_prefix":"render/","mojo_suffix":".mojo"},'
         + '"runtime_seconds":5,'
         + '"integration_seconds":180,'
+        + '"theorem_count":6,'
         + '"commands":{"shell":"sh","tool":"tools/tool.sh",'
         + '"coverage_io":"coverage_io","seal":"coverage_loop_seal",'
         + '"begin":"coverage_loop_begin","verify":"verify","mask":"mask",'
@@ -166,6 +173,7 @@ def coverage_loop_labels() -> String:
         + '"raw_suffix":".raw.txt","out_suffix":".out",'
         + '"reduced_suffix":".txt.gz",'
         + '"mojo_env":"MOJO","mojo_bin":".venv/bin/mojo",'
+        + '"oracle":"tools/carla_lane_oracle",'
         + '"options":{"root":"--root","build":"--build","compiler":"--compiler",'
         + '"flags":"--flags","mojo":"--mojo","suites":"--suites",'
         + '"sources":"--sources","out":"--out","err":"--err",'

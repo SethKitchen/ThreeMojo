@@ -1811,6 +1811,39 @@ class NativeCheckerBoundaryTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 native_check.copy_native_tool_dependencies(source, target)
 
+    def test_owner_callbacks_read_the_event_record(self):
+        import ast
+        tree = ast.parse(Path(native_check.__file__).read_text())
+        owner = next(node for node in tree.body
+                     if isinstance(node, ast.FunctionDef)
+                     and node.name == 'check_generated_receipt_owner')
+        nested = [node.name for node in ast.walk(owner)
+                  if isinstance(node, ast.FunctionDef)]
+        self.assertNotIn('profile', nested)
+        self.assertEqual(nested.count('watch'), 2)
+        labels = native_check._loop_labels()
+        self.assertEqual(labels['theorem_count'], 6)
+        self.assertEqual(labels['admission']['steps'], ['scaled', 'render'])
+        self.assertEqual(labels['admission']['render_prefix'], 'render/')
+        self.assertEqual(labels['admission']['mojo_suffix'], '.mojo')
+        self.assertEqual(labels['conditioned']['steps'], ['active', 'refused', 'sticky'])
+        mutation = labels['mutation']
+        self.assertEqual(mutation['unreviewed'], 'unreviewed')
+        self.assertEqual(mutation['seed_flag'], 'flags')
+        self.assertEqual(mutation['seed_change'], ' changed')
+        self.assertEqual(mutation['foreign_root'], 'foreign')
+        self.assertEqual(mutation['foreign'], 'Foreign current owner context was accepted')
+        self.assertEqual(mutation['origin_suffix'], '.cov-origin')
+        self.assertEqual(mutation['open_mode'], 'xb')
+        self.assertEqual(mutation['frame_self'], 'self')
+        self.assertEqual(mutation['frame_operation'], '_operation')
+        self.assertEqual(mutation['frame_seed'], '_receipt_seed')
+        self.assertEqual(labels['commands']['oracle'], 'tools/carla_lane_oracle')
+        faults = mutation['faults']
+        self.assertEqual(len(faults), 15)
+        self.assertTrue(faults[1].startswith(faults[0]))
+        self.assertNotEqual(faults[7], faults[0])
+
     def test_runtime_alarm_is_first_and_stays_armed(self):
         body = native_check.PRODUCTION_DRIVER.split('def main() raises:\n', 1)[1]
         self.assertTrue(body.startswith('    assert_equal(external_call["alarm", UInt32](UInt32(5)), UInt32(0))\n'))
