@@ -7,7 +7,10 @@
 
 from std.testing import TestSuite, assert_equal
 
-from tools._lane_predecessor import accept_lane_predecessor
+from tools._lane_predecessor import (
+    accept_lane_predecessor,
+    selected_lane_minimum,
+)
 
 
 def _payload(
@@ -115,6 +118,36 @@ def test_a_changed_lane_predecessor_is_refused() raises:
             _payload(
                 "[]", "lane.mojo", "_run", "def _run():\\n    pass\\n", "[]"
             )
+        ),
+        "false",
+    )
+
+
+def test_the_rounded_lane_minimum_is_selected() raises:
+    """Only the empty-owner rounded lane minimum is selected."""
+    assert_equal(
+        selected_lane_minimum(
+            '{"path":"extensions/carla/lane_refinement.mojo",'
+            + '"name":"_rounded_axis_lane_minimum","owner":[]}'
+        ),
+        "true",
+    )
+    assert_equal(
+        selected_lane_minimum(
+            '{"path":"other.mojo","name":"_rounded_axis_lane_minimum","owner":[]}'
+        ),
+        "false",
+    )
+    assert_equal(
+        selected_lane_minimum(
+            '{"path":"extensions/carla/lane_refinement.mojo","name":"_other","owner":[]}'
+        ),
+        "false",
+    )
+    assert_equal(
+        selected_lane_minimum(
+            '{"path":"extensions/carla/lane_refinement.mojo",'
+            + '"name":"_rounded_axis_lane_minimum","owner":["Box"]}'
         ),
         "false",
     )

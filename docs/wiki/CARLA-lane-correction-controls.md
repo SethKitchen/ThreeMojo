@@ -38,6 +38,8 @@ It restores one selection function inside its line span.
 
 It translates universal newlines before that lane text comparison.
 
+It selects the rounded lane minimum before restoring a changed declaration.
+
 It keeps the consumer import scope before the first definition.
 
 `tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record, the producer functions, and the arc layout.

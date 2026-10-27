@@ -49,3 +49,30 @@ def accept_lane_predecessor(payload: String) raises -> String:
             return "false"
         index += 1
     return "false"
+
+
+def selected_lane_minimum(payload: String) raises -> String:
+    """Return whether this declaration is the rounded lane minimum.
+
+    Args:
+        payload: JSON with `path`, `name`, and `owner`.
+
+    Returns:
+        `true` when the path is `extensions/carla/lane_refinement.mojo`,
+        the name is `_rounded_axis_lane_minimum`, and `owner` is empty.
+        Otherwise `false`.
+
+    Raises:
+        Error: A field is absent.
+    """
+    var doc = PyJson.parse(payload)
+    var path = doc.text(doc.at(doc.root, "path"))
+    var name = doc.text(doc.at(doc.root, "name"))
+    var owner = doc.at(doc.root, "owner")
+    if (
+        path == "extensions/carla/lane_refinement.mojo"
+        and name == "_rounded_axis_lane_minimum"
+        and doc.length(owner) == 0
+    ):
+        return "true"
+    return "false"

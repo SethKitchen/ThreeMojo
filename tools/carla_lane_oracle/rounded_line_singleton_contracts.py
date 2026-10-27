@@ -154,13 +154,47 @@ def read_record(root):
     return json.loads(payload, object_pairs_hook=source.unique_keys)
 
 
+def _same_text(actual, expected):
+    if __package__:
+        from . import ideal_projection
+    else:
+        import ideal_projection
+    return ideal_projection.texts_match(actual, expected)
+
+
+def _selected_minimum(path, name, owner):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({
+        'path': path, 'name': name, 'owner': list(owner),
+    }, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='lane-minimum-') as directory:
+        record = Path(directory) / 'minimum.json'
+        record.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_lane_predecessor', '--minimum', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout.strip() == 'true'
+
+
 def _reviewed_text(root, path, record):
     text = _typed_source.historical_text(root, root/path, (root/path).read_text())
-    if path != 'extensions/carla/curve_rounded_line.mojo':
+    if not _same_text(path, 'extensions/carla/curve_rounded_line.mojo'):
         return text
     current_doc, recorded_doc = _significant_documents([
         text, record['modules'][path]['source']])
-    if current_doc == recorded_doc:
+    if _same_text(current_doc, recorded_doc):
         return text
     if __package__:
         from . import rounded_line_selector_contracts as successor
@@ -270,7 +304,7 @@ def verify_premises(root):
     module_docs = _significant_documents(
         [text for _, actual, source, _ in checked for text in (actual, source)])
     for index, (path, actual, _, token) in enumerate(checked):
-        if module_docs[index * 2] != module_docs[index * 2 + 1]:
+        if not _same_text(module_docs[index * 2], module_docs[index * 2 + 1]):
             _verify_dependency(path, actual, token)
     prepared = []
     for path, expected in record['import_scopes'].items():
@@ -278,7 +312,7 @@ def verify_premises(root):
         actual = _import_scope(text)
         if path == 'extensions/carla/lane_refinement.mojo':
             current_doc, recorded_doc = _significant_documents([actual, expected])
-            if current_doc != recorded_doc:
+            if not _same_text(current_doc, recorded_doc):
                 # Only a changed consumed scope requests complete current admission.
                 text = full_audit.reviewed_text(root, path, text)
                 actual = _import_scope(text)
@@ -291,14 +325,13 @@ def verify_premises(root):
             for index, (_, _, label) in enumerate(prepared)])
     prepared = []
     for item in record['declarations']:
-        selected = (item['path'], item['name'], tuple(item['owner'])) == (
-            'extensions/carla/lane_refinement.mojo', '_rounded_axis_lane_minimum', ())
+        selected = _selected_minimum(item['path'], item['name'], tuple(item['owner']))
         text = _lane_text(root) if selected else _typed_source.historical_text(root, root/item['path'], (root/item['path']).read_text())
         actual = _declaration(text, item['name'], tuple(item['owner']))
         if selected:
             current_doc, recorded_doc = _significant_documents([
                 actual, item['source']])
-            if current_doc != recorded_doc:
+            if not _same_text(current_doc, recorded_doc):
                 text = full_audit.reviewed_text(root, item['path'], text)
                 actual = _declaration(text, item['name'], tuple(item['owner']))
         prepared.append((actual, item['source'],
