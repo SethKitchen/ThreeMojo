@@ -379,7 +379,9 @@ def verify(root, *, _operation=None):
     for path, transition in record['sources'].items():
         text = accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
         if (path == 'extensions/carla/junction_bounds.mojo'
-                and ideal_projection.token_sha256(text) != transition['after_token_sha256']):
+                and not ideal_projection.texts_match(
+                    ideal_projection.token_sha256(text),
+                    transition['after_token_sha256'])):
             try:
                 if __package__:
                     from . import full_audit_cleanup_contracts as full_audit

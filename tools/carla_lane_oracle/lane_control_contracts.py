@@ -166,7 +166,12 @@ def verify(root, *, _operation=None):
     _gate(raw)
     record = json.loads(raw)
     current = _typed_source.historical_text(root, record['module'], _observe_text(root, record['module'], (root / record['module']).read_text(), _operation=_operation), _operation=_operation)
-    if _token_sha256(current) != _token_sha256(record['after_source']):
+    if __package__:
+        from . import ideal_projection
+    else:
+        import ideal_projection
+    if not ideal_projection.texts_match(
+            _token_sha256(current), _token_sha256(record['after_source'])):
         if __package__:
             from . import lane_order_contracts as order
         else:

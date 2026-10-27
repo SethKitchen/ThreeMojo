@@ -902,6 +902,31 @@ def require_same_text(actual, expected, message):
     })
 
 
+def texts_match(actual, expected):
+    """Return whether two texts are the same string."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps(
+        {'actual': actual, 'expected': expected}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='texts-match-') as directory:
+        path = Path(directory) / 'texts.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_source',
+             '--match', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout.strip() == 'true'
+
+
 def normalized_block(text):
     """Drop comments and blank lines from one source block."""
     import os

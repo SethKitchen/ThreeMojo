@@ -190,8 +190,14 @@ def verify(root, *, _operation=None):
             record = read_record(root)
             (predecessor_pin_pair(root) if _operation is None else
              _predecessor_pin_pair(root, _operation=_operation))
+            if __package__:
+                from . import ideal_projection
+            else:
+                import ideal_projection
             for path, item in record['sources'].items():
-                matches = source.token_sha256(_typed_source.historical_text(root, path, full_audit._observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)) == item['after_token_sha256']
+                matches = ideal_projection.texts_match(
+                    source.token_sha256(_typed_source.historical_text(root, path, full_audit._observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)),
+                    item['after_token_sha256'])
                 if not matches:
                     if __package__:
                         from . import coverage_followup_contracts as followup

@@ -86,7 +86,8 @@ def _producer_text(root, path, *, _operation=None):
     else:
         import ideal_projection
     if (path == 'extensions/carla/spiral_grouped_roundoff_proof.mojo'
-            and ideal_projection.token_sha256(text) != EXPECTED[path]):
+            and not ideal_projection.texts_match(
+                ideal_projection.token_sha256(text), EXPECTED[path])):
         if __package__:
             from . import grouped_y_finiteness_contracts as grouped_y
         else:
