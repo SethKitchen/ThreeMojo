@@ -26,7 +26,9 @@ def test_a_clean_package_is_kept() raises:
     _mkdir(directory + "/unreal")
     Path(directory + "/unreal/note.txt").write_text("ok")
     Path(directory + "/data.bin").write_text("/Game/secret")
-    Path(directory + "/Town.GLTF").write_text("/Game/not-scanned")
+    # A different stem: on a case-insensitive volume, as macOS uses by
+    # default, `Town.GLTF` is the same file as `town.gltf`.
+    Path(directory + "/Scene.GLTF").write_text("/Game/not-scanned")
     assert_equal(refusal(directory), "")
     assert_equal(refusal(directory + "/missing"), "")
     _ = run_program(["rm", "-rf", directory], 10)

@@ -18,12 +18,11 @@ from std.math import isinf, isnan
 from std.os import getenv, setenv
 from std.sys import argv, exit, stderr
 
-from tools._owned_process import ExecPlan
+from tools._owned_process import ExecPlan, python_monotonic
 from tools._python_float import parse_float, python_repr
 
 comptime DEADLINE_ENV = "THREEMOJO_COVERAGE_DEADLINE"
 comptime ITIMER_REAL = 0
-comptime CLOCK_MONOTONIC = 1
 
 
 def run_group(seconds: Float64, command: List[String]) raises:
@@ -62,12 +61,8 @@ def run_group(seconds: Float64, command: List[String]) raises:
 
 
 def _monotonic() -> Float64:
-    """Return seconds from `CLOCK_MONOTONIC`, as `time.monotonic` does."""
-    var now = List[Int64](length=2, fill=0)
-    _ = external_call["clock_gettime", Int32](
-        Int32(CLOCK_MONOTONIC), now.unsafe_ptr().unsafe_bitcast[NoneType]()
-    )
-    return Float64(Int(now[0])) + Float64(Int(now[1])) / 1000000000.0
+    """Return seconds from the clock that `time.monotonic` reads."""
+    return python_monotonic()
 
 
 def _arm(seconds: Float64):

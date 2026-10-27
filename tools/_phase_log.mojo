@@ -27,6 +27,7 @@ from tools._owned_process import (
     errno,
     o_nofollow,
     open_at,
+    python_monotonic,
     set_cloexec,
     strerror,
 )
@@ -94,11 +95,7 @@ def _utc() -> String:
 
 def _monotonic() -> Float64:
     """Return `time.monotonic()` in seconds."""
-    var sample = List[Int64](length=2, fill=0)
-    _ = external_call["clock_gettime", Int32](
-        Int32(1), sample.unsafe_ptr().unsafe_bitcast[NoneType]()
-    )
-    return Float64(Int(sample[0])) + Float64(Int(sample[1])) / 1000000000.0
+    return python_monotonic()
 
 
 def _json_number(value: Float64) -> String:

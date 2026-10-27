@@ -670,15 +670,23 @@ def _tree_stopped(root: String, status: Int, want: Int) raises:
         + "status, want = int(sys.argv[2]), int(sys.argv[3])\n"
         + "if status != want:\n"
         + "    raise SystemExit('status %s' % status)\n"
+        # A killed orphan can stay a zombie until init reaps it. macOS
+        # answers kill(pid, 0) for a zombie and has no /proc, so wait.
+        + "import time\n"
         + "def stopped(pid):\n"
-        + "    try:\n"
-        + "        os.kill(pid, 0)\n"
-        + "    except ProcessLookupError:\n"
-        + "        return True\n"
-        + "    stat = pathlib.Path('/proc') / str(pid) / 'stat'\n"
-        + "    if not stat.exists():\n"
-        + "        return False\n"
-        + "    return stat.read_text().rpartition(') ')[2].startswith('Z ')\n"
+        + "    limit = time.monotonic() + 2\n"
+        + "    while True:\n"
+        + "        try:\n"
+        + "            os.kill(pid, 0)\n"
+        + "        except ProcessLookupError:\n"
+        + "            return True\n"
+        + "        stat = pathlib.Path('/proc') / str(pid) / 'stat'\n"
+        + "        if stat.exists() and stat.read_text().rpartition(') ')[2]"
+        + ".startswith('Z '):\n"
+        + "            return True\n"
+        + "        if time.monotonic() >= limit:\n"
+        + "            return False\n"
+        + "        time.sleep(0.01)\n"
         + "for role in ('child', 'grandchild'):\n"
         + "    path = root / (role + '.pid')\n"
         + "    if not path.exists():\n"
@@ -751,8 +759,11 @@ def test_a_signal_during_startup_stops_the_command() raises:
             + "python3 -c 'import time; print(time.monotonic())' >"
             ' "$dir/started"; '
             + "n=0; while true; do "
-            + 'exe=$(readlink "/proc/$pid/exe" 2>/dev/null || true); '
-            + 'case "$exe" in ""|*/*sh|*/*bash|*/*dash) ;; *) break ;; esac; '
+            # macOS has no /proc, so `ps` names the program there.
+            + 'exe=$(readlink "/proc/$pid/exe" 2>/dev/null'
+            + ' || ps -o comm= -p "$pid" 2>/dev/null || true); '
+            + 'case "$exe" in ""|sh|-sh|bash|dash|*/*sh|*/*bash|*/*dash) ;;'
+            + " *) break ;; esac; "
             + 'n=$((n+1)); if [ "$n" -gt 400 ]; then echo not-started; exit 4;'
             " fi; "
             + "sleep 0.01; done; "
@@ -978,10 +989,14 @@ def _long_output(prefix: String) -> String:
     Args:
         prefix: The shell variable that receives the deep directory.
     """
+    # The limit is PATH_MAX, less the 7 bytes of `.XXXXXX`: 4096 on Linux,
+    # 1024 on macOS. The physical path keeps a `/var` link on macOS from
+    # adding bytes when the kernel follows it.
     return (
-        "cur=$(mktemp -d); "
+        'cur=$(cd "$(mktemp -d)" && pwd -P); '
         + prefix
-        + "=$cur; name=test_fixture.phases.jsonl; target=4089; "
+        + "=$cur; name=test_fixture.phases.jsonl; "
+        + 'target=$(($(getconf PATH_MAX "$cur") - 7)); '
         + "while true; do rest=$((target - ${#cur} - 1 - ${#name})); "
         + 'if [ "$rest" -le 0 ]; then break; fi; n=$rest; '
         + 'if [ "$n" -gt 200 ]; then n=200; fi; '

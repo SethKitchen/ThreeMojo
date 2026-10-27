@@ -966,7 +966,9 @@ def package_megabytes(byte_count: Int) -> String:
     var buffer = List[UInt8](length=64, fill=0)
     var format = "%.1f"
     var value = Float64(byte_count) / 1000000.0
-    _ = external_call["snprintf", c_int](
+    # `snprintf` takes the value through `...`. Apple Silicon passes a
+    # variadic argument on the stack, so the call must say which are fixed.
+    _ = external_call["snprintf", c_int, num_fixed_args=3](
         buffer.unsafe_ptr(),
         Int(64),
         format.as_c_string_span().ptr(),

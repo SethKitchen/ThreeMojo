@@ -78,6 +78,7 @@ from tools._owned_process import (
     make_pipe,
     mask_how_set,
     open_at,
+    python_monotonic,
     signal_group,
     spawn,
     strerror,
@@ -124,12 +125,8 @@ def _usage() -> String:
 
 
 def _now() -> Float64:
-    """Return `CLOCK_MONOTONIC` in seconds."""
-    var sample = List[Int64](length=2, fill=0)
-    _ = external_call["clock_gettime", Int32](
-        Int32(1), sample.unsafe_ptr().unsafe_bitcast[NoneType]()
-    )
-    return Float64(Int(sample[0])) + Float64(Int(sample[1])) / 1000000000.0
+    """Return Python's `time.monotonic()` in seconds."""
+    return python_monotonic()
 
 
 def _tenth(value: Float64) -> String:

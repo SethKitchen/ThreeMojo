@@ -8,6 +8,7 @@
 from std.ffi import c_int, external_call
 from std.os import setenv, unsetenv
 from std.pathlib import Path
+from std.sys import CompilationTarget
 from std.tempfile import mkdtemp
 from std.testing import TestSuite, assert_equal, assert_true
 
@@ -460,7 +461,12 @@ def test_no_launch_cannot_claim_a_complete_trace() raises:
             _common(root, identity[0], identity[1]),
         )
         _require(ran, 1)
-        assert_true(ran.errors.find("supervised capture pipe") >= 0)
+        # The private hit profile refuses another system first, with the
+        # same exception class, before it looks at the pipe.
+        comptime if CompilationTarget.is_linux():
+            assert_true(ran.errors.find("supervised capture pipe") >= 0)
+        else:
+            assert_true(ran.errors.find("supports Linux only") >= 0)
         assert_equal(
             _phases(phases),
             "capture_header,diagnostics_incomplete,adapter_finish",
@@ -532,6 +538,28 @@ def test_exact_hits_record_the_helper_before_the_build() raises:
             + "; status=$?; wait; exit $status"
         )
         var ran = run_program(["sh", "-c", script], 40.0, merge_errors=False)
+        comptime if not CompilationTarget.is_linux():
+            # The helper and its pipe identity are Linux only. Elsewhere the
+            # profile refuses before it builds the helper, so the trace has
+            # no launch request and does not claim to be complete.
+            var refusal = Path(root + "/err.txt").read_text()
+            assert_equal(ran.status, 1)
+            assert_true(refusal.find("supports Linux only") >= 0)
+            assert_equal(
+                _phases(phases),
+                "capture_header,diagnostics_incomplete,adapter_finish",
+            )
+            var refused = PyJson.parse(_lines(phases)[2])
+            assert_equal(
+                refused.text(refused.at(refused.root, "exception")),
+                "ValueError",
+            )
+            assert_true(
+                not refused.flag(
+                    refused.at(refused.root, "diagnostics_complete")
+                )
+            )
+            return
         if ran.status != 0:
             var err = ""
             if Path(root + "/err.txt").exists():

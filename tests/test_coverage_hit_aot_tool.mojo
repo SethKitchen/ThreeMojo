@@ -6,6 +6,7 @@
 """A compiled coverage profile builds the suite and keeps its source name."""
 
 from std.pathlib import Path
+from std.sys import CompilationTarget
 from std.tempfile import mkdtemp
 from std.testing import TestSuite, assert_equal, assert_true
 
@@ -180,7 +181,10 @@ def test_exact_hits_need_a_capture_pipe() raises:
             root + "/mark",
         )
         assert_equal(ran.status, 1)
-        assert_true(ran.errors.find("supervised capture pipe") >= 0)
+        comptime if CompilationTarget.is_linux():
+            assert_true(ran.errors.find("supervised capture pipe") >= 0)
+        else:
+            assert_true(ran.errors.find("supports Linux only") >= 0)
     finally:
         _cleanup(root)
 

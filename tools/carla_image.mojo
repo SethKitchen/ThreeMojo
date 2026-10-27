@@ -255,16 +255,17 @@ def _search_jpeg() raises -> String:
     var home = getenv("HOME", "")
     if home != "":
         for version in range(9, 15):
-            folders.append(
+            _append_pillow_site(
+                folders,
                 home
                 + "/.local/lib/python3."
                 + String(version)
-                + "/site-packages/pillow.libs"
+                + "/site-packages",
             )
-    folders.append(
-        ".venv-carla-export/lib/python3.12/site-packages/pillow.libs"
+    _append_pillow_site(
+        folders, ".venv-carla-export/lib/python3.12/site-packages"
     )
-    folders.append(".venv/lib/python3.12/site-packages/pillow.libs")
+    _append_pillow_site(folders, ".venv/lib/python3.12/site-packages")
     _append_env_pillow_libs(folders)
     for index in range(len(folders)):
         var folder = folders[index]
@@ -305,16 +306,24 @@ def _append_env_pillow_libs(mut folders: List[String]):
 
 
 def _append_pillow_root(mut folders: List[String], root: String):
-    """Add `pillow.libs` under one Python prefix."""
+    """Add Pillow's library folders under one Python prefix."""
     if root.byte_length() == 0:
         return
     for version in range(9, 15):
-        folders.append(
-            root
-            + "/lib/python3."
-            + String(version)
-            + "/site-packages/pillow.libs"
+        _append_pillow_site(
+            folders,
+            root + "/lib/python3." + String(version) + "/site-packages",
         )
+
+
+def _append_pillow_site(mut folders: List[String], site: String):
+    """Add Pillow's library folders under one `site-packages` folder.
+
+    Linux wheels keep the libraries in `pillow.libs`. macOS wheels keep
+    them in `PIL/.dylibs`, for example `libjpeg.62.4.0.dylib`.
+    """
+    folders.append(site + "/pillow.libs")
+    folders.append(site + "/PIL/.dylibs")
 
 
 def _pointer(address: Int) -> OpaquePointer[MutAnyOrigin]:

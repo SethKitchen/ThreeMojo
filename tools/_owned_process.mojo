@@ -164,6 +164,27 @@ def c_bytes(text: String) -> List[UInt8]:
     return out^
 
 
+def python_monotonic() -> Float64:
+    """Return the clock that Python's `time.monotonic()` reads.
+
+    Coverage deadlines pass between Python and Mojo programs, so both must
+    read one clock. Linux reads `CLOCK_MONOTONIC`, which is 1 there. macOS
+    has no clock 1: `clock_gettime` fails and leaves zero. Python reads
+    `mach_absolute_time()` there, which is `CLOCK_UPTIME_RAW`, clock 8.
+
+    Returns:
+        The seconds.
+    """
+    var clock = Int32(1)
+    comptime if CompilationTarget.is_macos():
+        clock = Int32(8)
+    var sample = List[Int64](length=2, fill=0)
+    _ = external_call["clock_gettime", Int32](
+        clock, sample.unsafe_ptr().unsafe_bitcast[NoneType]()
+    )
+    return Float64(Int(sample[0])) + Float64(Int(sample[1])) / 1000000000.0
+
+
 def monotonic_seconds() -> Float64:
     """Return a monotonic clock reading in seconds.
 

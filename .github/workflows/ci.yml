@@ -519,10 +519,15 @@ jobs:
       - name: Install Xvfb
         run: brew install xorg-server
 
-      # Town image tests compare with NumPy 2.3.5 and Pillow 12.3.0.
+      # Town image tests compare with NumPy 2.3.5 and Pillow 12.3.0. The
+      # suites run `python3` from PATH, so the packages go into a venv that
+      # is put on PATH, as on Linux. `uv pip install --python python3`
+      # selected ./.venv, which is not on PATH.
       - name: Install NumPy and Pillow
         run: |
-          uv pip install --python python3 --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0" "fast-simplification==0.1.11"
+          python3 -m venv "$RUNNER_TEMP/image-python"
+          "$RUNNER_TEMP/image-python/bin/pip" install --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0" "fast-simplification==0.1.11"
+          echo "$RUNNER_TEMP/image-python/bin" >> "$GITHUB_PATH"
 
       # Serialize outer compiler processes to limit oversubscription while
       # preserving every check and the per-test time limit.
