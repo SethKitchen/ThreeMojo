@@ -3,15 +3,17 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md
 
-"""Check the accepted successor record and its component digests.
+"""Check the accepted successor record and its pin digests.
 
     carla_accepted_gate --migration PATH [--prior PATH] [--components DIR]
+    carla_accepted_gate --bytes PATH --sha HEX --kind after|before --label TEXT
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
 An absent prior skips the followup digest and the component set.
 A prior without a component directory checks the followup digest and the
 component set. It does not read component files.
+The bytes command checks one pin digest.
 """
 
 from std.pathlib import Path
@@ -228,12 +230,37 @@ def accepted_record(
     _require_components(doc, component_dir)
 
 
+def accepted_digest(
+    payload: Span[UInt8, _],
+    expected: String,
+    kind: String,
+    label: String,
+) raises:
+    """Require one pin digest.
+
+    Args:
+        payload: The pin bytes.
+        expected: The required SHA-256 hex digest.
+        kind: `after` for the active pin, `before` for the reconstruction.
+        label: The pin filename. Used when the active pin changed.
+
+    Raises:
+        Error: The digest changed.
+    """
+    if sha256_hex(payload) == expected:
+        return
+    if kind == "before":
+        _fail("historical pins failed reconstruction")
+    _fail("unreviewed runtime pin successor: " + label)
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_accepted_gate --migration PATH [--prior PATH]"
-            " [--components DIR]"
+            " [--components DIR] | --bytes PATH --sha HEX --kind after|before"
+            " --label TEXT"
         ),
         file=stderr,
     )
@@ -249,11 +276,23 @@ def main() raises:
     var migration = String("")
     var prior = String("")
     var components = String("")
+    var payload = String("")
+    var digest = String("")
+    var kind = String("")
+    var label = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
-        if word == "--migration" or word == "--prior" or word == "--components":
+        if (
+            word == "--migration"
+            or word == "--prior"
+            or word == "--components"
+            or word == "--bytes"
+            or word == "--sha"
+            or word == "--kind"
+            or word == "--label"
+        ):
             if index + 1 >= len(arguments):
                 _usage()
             var value = arguments[index + 1]
@@ -261,16 +300,46 @@ def main() raises:
                 migration = value
             elif word == "--prior":
                 prior = value
-            else:
+            elif word == "--components":
                 components = value
+            elif word == "--bytes":
+                payload = value
+            elif word == "--sha":
+                digest = value
+            elif word == "--kind":
+                kind = value
+            else:
+                label = value
             index += 2
             continue
         _usage()
-    if migration.byte_length() == 0:
+    var modes = 0
+    if migration.byte_length() > 0:
+        modes += 1
+    if payload.byte_length() > 0:
+        modes += 1
+    if modes != 1:
+        _usage()
+    if payload.byte_length() > 0 and (
+        prior.byte_length() > 0
+        or components.byte_length() > 0
+        or digest.byte_length() == 0
+        or label.byte_length() == 0
+        or (kind != "after" and kind != "before")
+    ):
+        _usage()
+    if migration.byte_length() > 0 and (
+        digest.byte_length() > 0
+        or kind.byte_length() > 0
+        or label.byte_length() > 0
+    ):
         _usage()
     if components.byte_length() > 0 and prior.byte_length() == 0:
         _usage()
     try:
+        if payload.byte_length() > 0:
+            accepted_digest(Path(payload).read_bytes(), digest, kind, label)
+            return
         if prior.byte_length() == 0:
             accepted_record(
                 Path(migration).read_bytes(), String("").as_bytes(), "", False

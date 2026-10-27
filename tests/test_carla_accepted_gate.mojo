@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_accepted_gate import accepted_record
+from tools.carla_accepted_gate import accepted_digest, accepted_record
 
 
 def test_a_changed_record_is_refused() raises:
@@ -16,6 +16,34 @@ def test_a_changed_record_is_refused() raises:
         contains="accepted source successor: unreviewed migration record"
     ):
         accepted_record(String("").as_bytes(), String("").as_bytes(), "", False)
+
+
+def test_a_changed_pin_is_refused() raises:
+    """A different active pin digest fails closed."""
+    with assert_raises(
+        contains=(
+            "accepted source successor: unreviewed runtime pin successor:"
+            " runtime-source-pins.json"
+        )
+    ):
+        accepted_digest(
+            String("nope").as_bytes(), "00", "after", "runtime-source-pins.json"
+        )
+
+
+def test_a_changed_pin_reconstruction_is_refused() raises:
+    """A different reconstructed pin digest fails closed."""
+    with assert_raises(
+        contains=(
+            "accepted source successor: historical pins failed reconstruction"
+        )
+    ):
+        accepted_digest(
+            String("nope").as_bytes(),
+            "00",
+            "before",
+            "runtime-source-pins.json",
+        )
 
 
 def main() raises:
