@@ -301,23 +301,43 @@ def verify_premises(root, *, _operation=None):
                          (root/SOURCE_PATHS[1]).read_text(), _operation=_operation), _operation=_operation)
     junction = _typed_source.historical_text(root, SOURCE_PATHS[2], _observe_text(root, SOURCE_PATHS[2],
                          (root/SOURCE_PATHS[2]).read_text(), _operation=_operation), _operation=_operation)
-    line_context = _declaration(line, '_rounded_line_axis_context', ())
-    arc_context = _declaration(arc, '_rounded_arc_context', ())
-    bounds = _declaration(arc, 'bounds', ('_RoundedBox',))
-    center = _declaration(arc, 'center', ('_RoundedArc',))
-    outward = _declaration(junction, '_outward_float', ())
-    _cleanup_premises({
-        'line': line_context,
-        'arc': arc_context,
-        'bounds': bounds,
-        'center': center,
-        'outward': outward,
-    })
+    texts = (line, arc, junction)
+    premises = {}
+    for item in _cleanup_declarations()['declarations']:
+        premises[item['key']] = _declaration(
+            texts[item['source']], item['name'], tuple(item['owner']))
+    _cleanup_premises(premises)
 
 
 
 # Only the two explicit reviewed constant sets have a stored-word contract.
 # Every other token, including indentation and statement boundaries, stays bound.
+_CLEANUP_DECLARATIONS = None
+
+
+def _cleanup_declarations():
+    """Return the cleanup declarations, the junction path, and the label."""
+    global _CLEANUP_DECLARATIONS
+    if _CLEANUP_DECLARATIONS is not None:
+        return _CLEANUP_DECLARATIONS
+    import json
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_declarations'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _CLEANUP_DECLARATIONS = json.loads(result.stdout)
+    return _CLEANUP_DECLARATIONS
+
+
 _DEPENDENCY_PINS = None
 
 
@@ -416,10 +436,11 @@ def verify(root, *, _operation=None):
     record = read_record(root)
     _, guard_payload = frozen._verified_pin_pair(root, record['runtime_pins_after_sha256'], **operation_args)
     _gate_digest(guard_payload, record['guard_pins_after_sha256'])
+    labels = _cleanup_declarations()
     pairs = []
     for path, transition in record['sources'].items():
         text = accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
-        if (path == 'extensions/carla/junction_bounds.mojo'
+        if (path == labels['junction']
                 and not ideal_projection.texts_match(
                     ideal_projection.token_sha256(text),
                     transition['after_token_sha256'])):
@@ -430,9 +451,9 @@ def verify(root, *, _operation=None):
                     import full_audit_cleanup_contracts as full_audit
                 text = full_audit.reviewed_text(root, path, text, **operation_args)
             except (ValueError, OSError) as error:
-                raise ValueError('reviewed cleanup source contract: unreviewed complete successor: ' + path) from error
+                raise ValueError('reviewed cleanup source contract: ' + labels['unreviewed'] + path) from error
         pairs.append((text, transition['after_token_sha256'],
-                      'unreviewed complete successor: ' + path))
+                      labels['unreviewed'] + path))
     if pairs:
         _gate_tokens(pairs)
     for path, expected in record['premise_dependencies'].items():

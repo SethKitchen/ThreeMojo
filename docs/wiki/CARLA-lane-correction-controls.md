@@ -108,6 +108,8 @@ It keeps the fourteen extra cleanup inputs.
 
 It keeps the trig and geometry dependency paths and tokens.
 
+It keeps the five premise declarations and the junction path.
+
 The singleton, frozen ARC, dispatch, raw-cut, and optional-runtime contracts use that declaration text.
 
 It also builds the significant token lists for the singleton, frozen ARC, dispatch, raw-cut, and selection contracts.
