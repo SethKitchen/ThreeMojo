@@ -330,6 +330,8 @@ It projects the union helper from its return.
 
 It projects the sampled reference dispatcher.
 
+It projects the lane value dispatcher.
+
 Mojo checks the live sampled module graphs.
 The trig module keeps its reviewed syntax graph.
 The interval module keeps its reviewed syntax graph.

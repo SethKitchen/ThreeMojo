@@ -11,6 +11,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 from tools._process import run_program
 from tests._python_tokens import (
     project_constant_heading,
+    project_lane_value,
     project_reference_value,
     project_union_value,
     sampled_top_level,
@@ -343,6 +344,42 @@ def test_reference_projection_drops_the_three_kind_branches() raises:
         raise Error("kind branch remained")
     with assert_raises(contains="complete reference dispatcher layout changed"):
         _ = project_reference_value("def demo():\n    return 1\n")
+
+
+def test_lane_projection_wraps_the_arc_and_line_branches() raises:
+    """The proof refusal and capture branch are removed."""
+    var source = String("def old[capture: Bool](road: Road):\n")
+    var index = 0
+    while index < 24:
+        var label = String(index)
+        if index < 10:
+            label = "0" + label
+        if index == 16 or index == 17:
+            source += "    if marker_" + label + ":\n        return 1\n"
+        else:
+            source += "    return marker_" + label + "\n"
+        index += 1
+    var projected = project_lane_value(source)
+    if projected.find("def _lane_value_bound_impl[") < 0:
+        raise Error("lane signature missing")
+    if projected.find("if all_geometry:") < 0:
+        raise Error("geometry guard missing")
+    if projected.find("_reference_sampled_value") < 0:
+        raise Error("sampled call missing")
+    if (
+        projected.find("marker_01") < 0
+        or projected.find("marker_16") < 0
+        or projected.find("marker_22") < 0
+    ):
+        raise Error("kept lane statement missing")
+    if (
+        projected.find("marker_00") >= 0
+        or projected.find("marker_15") >= 0
+        or projected.find("marker_18") >= 0
+    ):
+        raise Error("removed lane statement remained")
+    with assert_raises(contains="complete lane dispatcher layout changed"):
+        _ = project_lane_value("def demo():\n    return 1\n")
 
 
 def main() raises:

@@ -403,9 +403,6 @@ def verify(root):
             copied._mojo_source = renamed
             return copied
 
-        def declaration(source):
-            return syntax_tree(source).body[0]
-
         old = reference('curve_bounds.mojo', '_union_points')
         require(old._mojo_body_roles == ['return'], 'union complete body shape changed')
         expected['_union_value_points'] = unique_function(syntax_tree(_sampled_text(
@@ -465,11 +462,6 @@ def verify(root):
                         _without_derivatives(full[2]))
             return _lane_value_bound_impl[True](road, section, lane, low, high)
     '''
-        lane = declaration('''def _lane_value_bound_impl[all_geometry: Bool](
-            road: Road, section: Int, lane: Int, low: Float64, high: Float64,
-        ) raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
-            var translation = Vector3(0, 0, 0)
-    ''')
         old = reference('curve_bounds.mojo', '_lane_jet_model_proof')
         # This private value-only specialization has no cached proof argument.
         # Remove only the exact new refusal branch whose proof condition is false
@@ -477,7 +469,6 @@ def verify(root):
         require(_sampled_text('--body-dump', old._mojo_source, index=0) == dump(ast.parse("""if proof and not _sum2_supported_environment():
         return _unknown_value_point()
     """).body[0]), 'cached-proof environment refusal changed or moved')
-        old.body.pop(0)
         require(old._mojo_body_roles[1:] == [
             'assign:geometry_at', 'assign:elevation_at', 'assign:offset_at',
             'if:geometry_at < 0 or elevation_at < 0 or offset_at < 0',
@@ -503,13 +494,8 @@ def verify(root):
         # claim that the proof branch is value-independent. Whole reference
         # modules bind every removed proof statement and its dependencies.
         # 21..22: original trig and final output are retained, without slicing.
-        lane.body += old.body[:14]
-        lane.body += [ast.If(test=ast.Name(id='all_geometry', ctx=ast.Load()),
-                            body=old.body[15:17], orelse=[])]
-        lane.body += ast.parse('''point = _reference_sampled_value(
-            record.geometry, _stored_difference(s, _ValueJet.constant(record.s)), translation)
-    ''').body + old.body[21:]
-        expected['_lane_value_bound_impl'] = lane
+        expected['_lane_value_bound_impl'] = unique_function(syntax_tree(_sampled_text(
+            '--project-lane', old._mojo_source)), '_lane_value_bound_impl')
         _sampled_text('--top-level', target, ','.join(sorted(expected)))
         for name, source in expected.items():
             wanted = (unique_function(syntax_tree(source), name)

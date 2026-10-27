@@ -1970,6 +1970,138 @@ def project_reference_value(source: String) raises -> String:
     return signature
 
 
+def _indent_block(text: String) -> String:
+    """Indent every line of `text` by four spaces.
+
+    Args:
+        text: Source lines.
+
+    Returns:
+        The indented text.
+    """
+    var out = String("")
+    var data = text.as_bytes()
+    var index = 0
+    var line_start = True
+    while index < len(data):
+        var byte = data[index]
+        if line_start and byte != 10:
+            out += "    "
+        out += chr(Int(byte))
+        line_start = byte == 10
+        index += 1
+    return out
+
+
+def project_lane_value(source: String) raises -> String:
+    """Project one renamed lane proof onto the value-only dispatcher.
+
+    Args:
+        source: The renamed `_lane_jet_model_proof` declaration.
+
+    Returns:
+        The value-only signature, the kept record setup, the arc and line
+        branches under `all_geometry`, the sampled call, and the final output.
+
+    Raises:
+        Error: The body does not have the twenty-four reviewed statements.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    var lines = List[Int]()
+    var start_cols = List[Int]()
+    var end_lines = List[Int]()
+    var end_cols = List[Int]()
+    _tokenize_lines(
+        source, kinds, texts, lines, start_cols, end_lines, end_cols
+    )
+    var depth = 0
+    var colon = -1
+    var seen_def = False
+    var index = 0
+    while index < len(kinds):
+        var text = texts[index]
+        if text == "(" or text == "[" or text == "{":
+            depth += 1
+        elif text == ")" or text == "]" or text == "}":
+            if depth > 0:
+                depth -= 1
+        elif kinds[index] == _NAME and text == "def":
+            seen_def = True
+        elif kinds[index] == _OP and text == ":" and depth == 0 and seen_def:
+            colon = index
+            break
+        index += 1
+    if colon < 0:
+        raise Error("complete lane dispatcher layout changed")
+    var starts = List[Int]()
+    var firsts = List[String]()
+    var indent = 0
+    var bracket = 0
+    var in_statement = False
+    var nested = False
+    index = colon + 1
+    while index < len(kinds):
+        var kind = kinds[index]
+        var text = texts[index]
+        if kind == _INDENT:
+            indent += 1
+            if in_statement:
+                nested = True
+        elif kind == _DEDENT:
+            indent -= 1
+        elif text == "(" or text == "[" or text == "{":
+            bracket += 1
+        elif text == ")" or text == "]" or text == "}":
+            if bracket > 0:
+                bracket -= 1
+        elif (
+            kind == _NEWLINE
+            and bracket == 0
+            and indent == 1
+            and in_statement
+            and not nested
+        ):
+            var nxt = index + 1
+            if nxt >= len(kinds) or kinds[nxt] != _INDENT:
+                in_statement = False
+        elif (
+            indent == 1
+            and bracket == 0
+            and kind != _NEWLINE
+            and kind != _INDENT
+            and kind != _DEDENT
+        ):
+            if nested and (text == "elif" or text == "else"):
+                nested = False
+            elif not in_statement or nested:
+                starts.append(_byte_at(source, lines[index], 0))
+                firsts.append(text)
+                in_statement = True
+                nested = False
+        index += 1
+    if len(starts) != 24 or len(firsts) != 24:
+        raise Error("complete lane dispatcher layout changed")
+    if firsts[16] != "if" or firsts[17] != "if":
+        raise Error("complete lane dispatcher layout changed")
+    var signature = String(
+        "def _lane_value_bound_impl[all_geometry: Bool](\n    road: Road,"
+        " section: Int, lane: Int, low: Float64, high: Float64,\n) raises ->"
+        " Tuple[_ValueJet, _ValueJet, _ValueJet]:\n    var translation ="
+        " Vector3(0, 0, 0)\n"
+    )
+    var limit = len(source.as_bytes())
+    signature += String(source[byte = starts[1] : starts[15]])
+    signature += "    if all_geometry:\n"
+    signature += _indent_block(String(source[byte = starts[16] : starts[18]]))
+    signature += String(
+        "    point = _reference_sampled_value(\n        record.geometry,"
+        " _stored_difference(s, _ValueJet.constant(record.s)), translation)\n"
+    )
+    signature += String(source[byte = starts[22] : limit])
+    return signature
+
+
 def _name_byte(byte: UInt8) -> Bool:
     """Return whether `byte` can appear inside an identifier.
 
