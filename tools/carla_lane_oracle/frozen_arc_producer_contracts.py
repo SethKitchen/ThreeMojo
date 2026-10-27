@@ -294,7 +294,7 @@ def verify_runtime_pin_successor(root, prior_digest):
     text = ideal_projection.apply_pin_transitions(pins, edited)
     pins.clear()
     pins.update(json.loads(text))
-    predecessor = (json.dumps(pins, indent=2)+'\n').encode()
+    predecessor = invariant._indent_json(pins)
     _gate_digest(predecessor, prior_digest, 'before')
 
 
@@ -448,7 +448,11 @@ def _runtime_pin_predecessor(payload, record, prior_digest):
     text = ideal_projection.apply_pin_transitions(pins, edited)
     pins.clear()
     pins.update(json.loads(text))
-    predecessor = (json.dumps(pins, indent=2)+'\n').encode()
+    if __package__:
+        from . import coverage_invariant_contracts as invariant
+    else:
+        import coverage_invariant_contracts as invariant
+    predecessor = invariant._indent_json(pins)
     _gate_digest(predecessor, prior_digest, 'before')
     return predecessor
 

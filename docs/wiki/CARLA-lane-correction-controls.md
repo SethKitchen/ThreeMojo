@@ -48,6 +48,8 @@ It keeps the consumer import scope before the first definition.
 
 It writes each frozen runtime pin back to its historical value.
 
+It writes that restored pin with two-space indentation.
+
 It relabels one runtime pin failure when the cause is the reviewed contract error.
 
 `tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the pin digests, the ordered pin pair, and the pin placements.
@@ -171,6 +173,8 @@ It writes those packed bytes from the hexadecimal payload.
 It checks the derived payload size and the three pin-file digests.
 
 It builds the report meta from the payload, the projection, and the pin digests.
+
+It writes the moment report and the coefficient file with two-space indentation.
 
 It checks the stored array names, word counts, and output paths.
 

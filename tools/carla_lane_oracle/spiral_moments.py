@@ -552,13 +552,17 @@ def main(argv=None):
                          root / source_contracts.PINS, root / sum2_guard_contracts.PINS] + [root / path for path in DEPENDENCIES['paths']] + [root / record['path']
                          for group in ('arrays', 'scalars', 'blocks', 'routing')
                          for record in pins[group].values()]
-            products = {'spiral-moment-report.json': (json.dumps(report, indent=2) + '\n').encode()}
+            if __package__:
+                from . import coverage_invariant_contracts as invariant
+            else:
+                import coverage_invariant_contracts as invariant
+            products = {'spiral-moment-report.json': invariant._indent_json(report)}
             if args.generate:
                 products.update({
                     DATA.name: generate_source(rows),
                     'spiral_moment_words.be64': ideal_projection.payload_bytes(
                         _moment_payload(rows)['be64']),
-                    'spiral_moment_exact_coefficients.json': (json.dumps({'counts': rows}, indent=2) + '\n').encode(),
+                    'spiral_moment_exact_coefficients.json': invariant._indent_json({'counts': rows}),
                 })
             _moment_guard('--output', {
                 'destinations': [str((output / name).resolve()) for name in products],
