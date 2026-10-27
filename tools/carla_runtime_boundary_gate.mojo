@@ -277,6 +277,25 @@ def boundary_extend(
         _fail("runtime view step does not extend the edge: " + path)
 
 
+def runtime_boundary_modules() raises -> String:
+    """Return the four runtime-boundary module paths.
+
+    Returns:
+        A JSON list in reviewed order.
+
+    Raises:
+        Error: The list cannot be written.
+    """
+    var doc = PyJson()
+    var names = doc.new_list()
+    var index = 0
+    while index < 4:
+        doc.append(names, doc.new_str(_module(index)))
+        index += 1
+    doc.root = names
+    return doc.dumps()
+
+
 def _usage():
     """Print the command usage and stop."""
     print(

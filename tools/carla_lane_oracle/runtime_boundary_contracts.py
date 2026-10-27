@@ -27,8 +27,6 @@ else:
 
 MIGRATION = 'tools/carla_lane_oracle/runtime-boundary-successor.json'
 MIGRATION_SHA256 = '992854b1191bd365fca3e5e8d3a7fc751ac2eb3196b33684e04ebad833baab00'
-MODULES = ('extensions/carla/cameras.mojo', 'extensions/carla/lane_invasion.mojo',
-           'extensions/carla/sensor_manager.mojo', 'extensions/carla/world.mojo')
 FIXTURES = tuple(f'tests/compile_fail/carla_{name}.mojo' for name in (
     'event_camera_time_rejects_float32_duration', 'event_camera_time_rejects_length',
     'event_camera_time_rejects_raw_float64', 'lane_invasion_time_rejects_float32_duration',
@@ -37,7 +35,32 @@ FIXTURES = tuple(f'tests/compile_fail/carla_{name}.mojo' for name in (
     'light_search_distance_rejects_raw_float64'))
 TESTS = ('tests/test_carla_sensors.mojo', 'tests/test_carla_sensors_world.mojo',
          'tests/test_carla_world_signals.mojo', *FIXTURES)
-PROTECTED_INPUTS = (MIGRATION, *MODULES, *TESTS)
+
+
+def _modules():
+    """Return the four runtime-boundary module paths in reviewed order."""
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_runtime_boundary_modules'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return tuple(json.loads(result.stdout))
+
+
+def __getattr__(name):
+    if name == 'MODULES':
+        return _modules()
+    if name == 'PROTECTED_INPUTS':
+        return (MIGRATION, *_modules(), *TESTS)
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def _check_operation(root, operation):
@@ -186,7 +209,7 @@ def verify(root, *, _operation=None):
     steps = view.steps(root, _operation=_operation)
     _gate_steps(steps)
     edges = {}
-    for path in MODULES:
+    for path in _modules():
         edge = record['edges'][path]
         decision = _extended_edge(path, edge, steps)
         if decision['extend']:
