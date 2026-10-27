@@ -221,43 +221,69 @@ def translated(text):
     return text
 
 
+_SYNTAX_WORDS = None
+
+
+def _syntax_words():
+    """Return the sampled syntax keywords and the generic messages."""
+    global _SYNTAX_WORDS
+    if _SYNTAX_WORDS is not None:
+        return _SYNTAX_WORDS
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sampled_syntax_words'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    _SYNTAX_WORDS = json.loads(result.stdout)
+    return _SYNTAX_WORDS
+
+
 def _python_syntax_tree(text):
     # Keywords are removed lexically, never from string literals. Native
     # structs map to Python classes only for AST inspection; their generic
     # parameters, traits, fields, types, decorators and statements stay bound.
+    words = _syntax_words()
+    keywords = set(words['keywords'])
     tokens = []
     for item in tokenize.generate_tokens(io.StringIO(text).readline):
-        if item.type == tokenize.NAME and item.string in ('var', 'mut', 'out', 'ref', 'comptime', 'raises'):
+        if item.type == tokenize.NAME and item.string in keywords:
             continue
-        word = 'class' if item.type == tokenize.NAME and item.string == 'struct' else item.string
+        word = words['class_word'] if item.type == tokenize.NAME and item.string == words['struct_word'] else item.string
         tokens.append((item.type, word))
     # Represent Mojo type-parameter declarations as bound lexical metadata,
     # rather than requiring Python3.12's unrelated generic-function grammar.
     metadata = {}
     index = 0
     while index + 2 < len(tokens):
-        if (tokens[index][0] == tokenize.NAME and tokens[index][1] in ('def', 'class')
+        if (tokens[index][0] == tokenize.NAME and tokens[index][1] in (words['def_word'], words['class_word'])
                 and tokens[index + 1][0] == tokenize.NAME and tokens[index + 2][1] == '['):
             depth = 1
             end = index + 3
             while end < len(tokens) and depth:
                 depth += (tokens[end][1] == '[') - (tokens[end][1] == ']')
                 end += 1
-            require(depth == 0, 'unclosed Mojo generic declaration')
+            require(depth == 0, words['unclosed'])
             items = [(tokenize.tok_name[t], value) for t, value in tokens[index + 3:end - 1]
                      if t not in (tokenize.NL, tokenize.COMMENT)]
             if items and items[-1][1] == ',':
                 items.pop()
             key = (tokens[index][1], tokens[index + 1][1])
-            require(key not in metadata, 'ambiguous generic declaration')
+            require(key not in metadata, words['ambiguous'])
             metadata[key] = items
             del tokens[index + 2:end]
         index += 1
     tree = ast.parse(tokenize.untokenize(tokens))
     for (kind, name), parameters in metadata.items():
-        node_type = ast.FunctionDef if kind == 'def' else ast.ClassDef
+        node_type = ast.FunctionDef if kind == words['def_word'] else ast.ClassDef
         matches = [n for n in ast.walk(tree) if isinstance(n, node_type) and n.name == name]
-        require(len(matches) == 1, 'ambiguous parsed generic declaration')
+        require(len(matches) == 1, words['parsed'])
         matches[0]._mojo_type_parameters = parameters
     return tree
 
@@ -280,8 +306,8 @@ def _syntax_prepare(text):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        if message in ('unclosed Mojo generic declaration',
-                       'ambiguous generic declaration'):
+        words = _syntax_words()
+        if message in (words['unclosed'], words['ambiguous']):
             raise CheckError(message)
         return None
     try:
@@ -305,9 +331,10 @@ def syntax_tree(text):
         return _python_syntax_tree(text)
     for key, parameters in generics:
         kind, name = key
-        node_type = ast.FunctionDef if kind == 'def' else ast.ClassDef
+        words = _syntax_words()
+        node_type = ast.FunctionDef if kind == words['def_word'] else ast.ClassDef
         matches = [n for n in ast.walk(tree) if isinstance(n, node_type) and n.name == name]
-        require(len(matches) == 1, 'ambiguous parsed generic declaration')
+        require(len(matches) == 1, words['parsed'])
         matches[0]._mojo_type_parameters = [tuple(item) for item in parameters]
     return tree
 
