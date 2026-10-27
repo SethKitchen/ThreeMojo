@@ -44,7 +44,7 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.
 
-`tools/carla_runtime_boundary_gate.mojo` checks the runtime-boundary record and its bound tests.
+`tools/carla_runtime_boundary_gate.mojo` checks the runtime-boundary record, its bound tests, and the view-step edges.
 
 `tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record and the admission token.
 

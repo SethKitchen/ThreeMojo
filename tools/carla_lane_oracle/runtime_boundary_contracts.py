@@ -101,6 +101,25 @@ def _gate_bytes(payload, digest, token, label):
         _run(arguments)
 
 
+def _gate_steps(names):
+    import json
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory(prefix='boundary-steps-') as directory:
+        folder = Path(directory)
+        (folder / 'labels.json').write_text(json.dumps(list(names)))
+        _run(['--steps', str(folder)])
+
+
+def _gate_extend(step, edge, path):
+    _run([
+        '--extend', '--path', path,
+        '--step-sha', step['before_sha256'], '--edge-sha', edge['after_sha256'],
+        '--step-token', step['before_token_sha256'],
+        '--edge-token', edge['after_token_sha256'],
+    ])
+
+
 def verify(root, *, _operation=None):
     """Verify live ledger endpoints; return the original historical edges.
 
@@ -117,16 +136,14 @@ def verify(root, *, _operation=None):
     else:
         import runtime_view_contracts as view
     steps = view.steps(root, _operation=_operation)
-    require(set(steps) <= set(MODULES), 'runtime view step outside the boundary scope')
+    _gate_steps(steps)
     edges = {}
     for path in MODULES:
         edge = record['edges'][path]
         if path in steps:
             # A later reviewed step starts exactly where this edge ends.
             step = steps[path]
-            require(step['before_sha256'] == edge['after_sha256']
-                    and step['before_token_sha256'] == edge['after_token_sha256'],
-                    'runtime view step does not extend the edge: ' + path)
+            _gate_extend(step, edge, path)
             edge = {**edge, 'after_sha256': step['after_sha256'],
                     'after_token_sha256': step['after_token_sha256']}
         current = ledger.endpoint(root, path, edge, _operation=_operation)

@@ -7,6 +7,8 @@
 
     carla_runtime_boundary_gate --migration PATH
     carla_runtime_boundary_gate --bytes PATH --sha HEX [--token HEX] --label TEXT
+    carla_runtime_boundary_gate --steps DIR
+    carla_runtime_boundary_gate --extend --path TEXT --step-sha HEX --edge-sha HEX --step-token HEX --edge-token HEX
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -20,6 +22,7 @@ from tools._python_json import (
     MISSING,
     PY_DICT,
     PY_INT,
+    PY_LIST,
     PY_STR,
     PyJson,
     py_equal,
@@ -213,12 +216,75 @@ def runtime_boundary_bytes(
         _fail(label)
 
 
+def _known_module(name: String) -> Bool:
+    """Return whether the path is one reviewed boundary module.
+
+    Args:
+        name: The step path.
+
+    Returns:
+        True for one of the four reviewed modules.
+    """
+    var index = 0
+    while index < 4:
+        if name == _module(index):
+            return True
+        index += 1
+    return False
+
+
+def boundary_steps(directory: String) raises:
+    """Require every view-step path to be a reviewed module.
+
+    Args:
+        directory: A directory whose `labels.json` is a list of paths.
+
+    Raises:
+        Error: A path is outside the boundary, or the list cannot be read.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("runtime view step outside the boundary scope")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var name = doc.text(doc.item(doc.root, index))
+        if not _known_module(name):
+            _fail("runtime view step outside the boundary scope")
+        index += 1
+
+
+def boundary_extend(
+    step_sha: String,
+    edge_sha: String,
+    step_token: String,
+    edge_token: String,
+    path: String,
+) raises:
+    """Require a view step to start where the edge ends.
+
+    Args:
+        step_sha: The step's before digest.
+        edge_sha: The edge's after digest.
+        step_token: The step's before token digest.
+        edge_token: The edge's after token digest.
+        path: The module path, used in the failure text.
+
+    Raises:
+        Error: The step does not extend the edge.
+    """
+    if step_sha != edge_sha or step_token != edge_token:
+        _fail("runtime view step does not extend the edge: " + path)
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_runtime_boundary_gate --migration PATH"
             " | --bytes PATH --sha HEX [--token HEX] --label TEXT"
+            " | --steps DIR | --extend --path TEXT --step-sha HEX"
+            " --edge-sha HEX --step-token HEX --edge-token HEX"
         ),
         file=stderr,
     )
@@ -236,16 +302,33 @@ def main() raises:
     var digest = String("")
     var token = String("")
     var label = String("")
+    var steps = String("")
+    var extend = False
+    var module_path = String("")
+    var step_sha = String("")
+    var edge_sha = String("")
+    var step_token = String("")
+    var edge_token = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
+        if word == "--extend":
+            extend = True
+            index += 1
+            continue
         if (
             word == "--migration"
             or word == "--bytes"
             or word == "--sha"
             or word == "--token"
             or word == "--label"
+            or word == "--steps"
+            or word == "--path"
+            or word == "--step-sha"
+            or word == "--edge-sha"
+            or word == "--step-token"
+            or word == "--edge-token"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -258,18 +341,55 @@ def main() raises:
                 digest = value
             elif word == "--token":
                 token = value
-            else:
+            elif word == "--label":
                 label = value
+            elif word == "--steps":
+                steps = value
+            elif word == "--path":
+                module_path = value
+            elif word == "--step-sha":
+                step_sha = value
+            elif word == "--edge-sha":
+                edge_sha = value
+            elif word == "--step-token":
+                step_token = value
+            else:
+                edge_token = value
             index += 2
             continue
         _usage()
-    if (migration.byte_length() == 0) == (payload.byte_length() == 0):
+    var modes = 0
+    if migration.byte_length() > 0:
+        modes += 1
+    if payload.byte_length() > 0:
+        modes += 1
+    if steps.byte_length() > 0:
+        modes += 1
+    if extend:
+        modes += 1
+    if modes != 1:
         _usage()
     if payload.byte_length() > 0 and (
         digest.byte_length() == 0 or label.byte_length() == 0
     ):
         _usage()
+    if extend and (
+        module_path.byte_length() == 0
+        or step_sha.byte_length() == 0
+        or edge_sha.byte_length() == 0
+        or step_token.byte_length() == 0
+        or edge_token.byte_length() == 0
+    ):
+        _usage()
     try:
+        if steps.byte_length() > 0:
+            boundary_steps(steps)
+            return
+        if extend:
+            boundary_extend(
+                step_sha, edge_sha, step_token, edge_token, module_path
+            )
+            return
         if migration.byte_length() > 0:
             runtime_boundary_record(Path(migration).read_bytes())
         else:
