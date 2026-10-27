@@ -8,6 +8,7 @@
     carla_cleanup_gate --migration PATH [--previous PATH]
     carla_cleanup_gate --bytes PATH --sha HEX
     carla_cleanup_gate --sha-of PATH
+    carla_cleanup_gate --sha-texts PATH
     carla_cleanup_gate --token-sha PATH
     carla_cleanup_gate --tokens DIR
     carla_cleanup_gate --words PATH --kind trig|geometry --label PATH
@@ -222,6 +223,31 @@ def cleanup_sha(payload: Span[UInt8, _]) -> String:
         The lowercase hex digest.
     """
     return sha256_hex(payload)
+
+
+def sha256_texts_json(payload: String) raises -> String:
+    """Return the SHA-256 digest of each text.
+
+    Args:
+        payload: A JSON list of source texts.
+
+    Returns:
+        A JSON list of lowercase hex digests, in the same order.
+
+    Raises:
+        Error: The payload is not a list of strings.
+    """
+    var doc = PyJson.parse(payload)
+    var count = doc.length(doc.root)
+    var out = PyJson()
+    var rows = out.new_list()
+    var index = 0
+    while index < count:
+        var text = doc.text(doc.item(doc.root, index))
+        out.append(rows, out.new_str(sha256_hex(text.as_bytes())))
+        index += 1
+    out.root = rows
+    return out.dumps()
 
 
 def cleanup_digest(payload: Span[UInt8, _], expected: String) raises:
@@ -500,7 +526,8 @@ def _usage():
     print(
         (
             "usage: carla_cleanup_gate --migration PATH [--previous PATH] |"
-            " --bytes PATH --sha HEX | --sha-of PATH | --token-sha PATH |"
+            " --bytes PATH --sha HEX | --sha-of PATH | --sha-texts PATH |"
+            " --token-sha PATH |"
             " --tokens DIR | --words PATH --kind trig|geometry --label PATH |"
             " --premises DIR | --declaration PATH --name NAME [--owner NAME] |"
             " --bounds PATH --name NAME [--owner NAME] | --significant-json DIR"
@@ -530,6 +557,7 @@ def main() raises:
     var payload = String("")
     var digest = String("")
     var sha_of = String("")
+    var sha_texts = String("")
     var token_sha = String("")
     var tokens = String("")
     var words = String("")
@@ -573,6 +601,7 @@ def main() raises:
             or word == "--bytes"
             or word == "--sha"
             or word == "--sha-of"
+            or word == "--sha-texts"
             or word == "--token-sha"
             or word == "--tokens"
             or word == "--words"
@@ -620,6 +649,8 @@ def main() raises:
                 digest = value
             elif word == "--sha-of":
                 sha_of = value
+            elif word == "--sha-texts":
+                sha_texts = value
             elif word == "--token-sha":
                 token_sha = value
             elif word == "--tokens":
@@ -697,6 +728,8 @@ def main() raises:
     if payload.byte_length() > 0:
         modes += 1
     if sha_of.byte_length() > 0:
+        modes += 1
+    if sha_texts.byte_length() > 0:
         modes += 1
     if token_sha.byte_length() > 0:
         modes += 1
@@ -970,6 +1003,9 @@ def main() raises:
             return
         if sha_of.byte_length() > 0:
             print(cleanup_sha(Path(sha_of).read_bytes()))
+            return
+        if sha_texts.byte_length() > 0:
+            print(sha256_texts_json(Path(sha_texts).read_text()), end="")
             return
         if payload.byte_length() > 0:
             cleanup_digest(Path(payload).read_bytes(), digest)

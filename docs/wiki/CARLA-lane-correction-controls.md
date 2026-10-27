@@ -78,6 +78,8 @@ It rounds one plus each stored node before the moment rows.
 
 It reads the exact fraction of each stored binary64 word.
 
+It returns the SHA-256 digest of each reviewed source text.
+
 It derives the stored moment rows in exact arithmetic.
 
 It checks the stored moment table against the derived words.

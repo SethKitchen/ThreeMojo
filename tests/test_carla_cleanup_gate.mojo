@@ -36,6 +36,7 @@ from tools.carla_cleanup_gate import (
     cleanup_digest,
     cleanup_record,
     cleanup_sha,
+    sha256_texts_json,
     cleanup_premises,
     cleanup_tokens,
     cleanup_words,
@@ -475,6 +476,14 @@ def test_the_token_digest_matches_cpython() raises:
     assert_equal(
         token_sha256("def first():\n    return 1\n"),
         "28885cd8303bb65249ae7f3f82d218953cc86334e26246f61262bd8c61fe613a",
+    )
+
+
+def test_text_digests_match_sha256() raises:
+    """Each text digest matches SHA-256 of its UTF-8 bytes."""
+    assert_equal(
+        sha256_texts_json('["abc",""]'),
+        '["ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad","e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"]',
     )
 
 
