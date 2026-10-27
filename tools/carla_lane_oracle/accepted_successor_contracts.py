@@ -6,7 +6,6 @@ if __package__:
 else:
     import source_contracts as _typed_source
 
-import hashlib
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 if __package__:
@@ -115,6 +114,33 @@ def _gate_digest(payload, expected, kind, label):
         raise ValueError(message)
 
 
+def _gate_sources(pairs):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='accepted-sources-') as directory:
+        folder = Path(directory)
+        labels = []
+        for index, (text, token, module, module_sha, path) in enumerate(pairs):
+            (folder / f'{index}.text').write_text(text)
+            (folder / f'{index}.module').write_text(module)
+            labels.append({'path': path, 'token': token, 'module_sha': module_sha})
+        (folder / 'labels.json').write_text(json.dumps(labels))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_accepted_gate',
+             '--sources', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
@@ -137,11 +163,12 @@ def _verify_current(root, *, _operation=None):
         _check_operation(root, _operation)
     record = read_record(root)
     operation_args = {} if _operation is None else {'_operation': _operation}
+    pairs = []
     for path, item in record['sources'].items():
-        require(source.token_sha256(_typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)) == item['after_token_sha256'],
-                'unreviewed complete successor: ' + path)
-        require(hashlib.sha256(item['before_complete_module'].encode()).hexdigest()
-                == item['before_sha256'], 'historical module changed: ' + path)
+        text = _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
+        pairs.append((text, item['after_token_sha256'], item['before_complete_module'], item['before_sha256'], path))
+    if pairs:
+        _gate_sources(pairs)
     if __package__:
         from . import rounded_line_selector_contracts as line
         from . import distance_validation_contracts as distance
@@ -217,11 +244,12 @@ def _verify_current_for_pin_pair(root, *, _operation=None):
     record = read_record(root)
     operation_args = {} if _operation is None else {'_operation': _operation}
     try:
+        pairs = []
         for path, item in record['sources'].items():
-            require(source.token_sha256(_typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)) == item['after_token_sha256'],
-                    'unreviewed complete successor: ' + path)
-            require(hashlib.sha256(item['before_complete_module'].encode()).hexdigest()
-                    == item['before_sha256'], 'historical module changed: ' + path)
+            text = _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
+            pairs.append((text, item['after_token_sha256'], item['before_complete_module'], item['before_sha256'], path))
+        if pairs:
+            _gate_sources(pairs)
     except ValueError as error:
         raise ValueError(
             'unreviewed complete successor: ' + str(error)) from error
