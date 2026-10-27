@@ -751,6 +751,154 @@ def declaration_place(
     return DeclarationPlace(result, first_line, last_line)
 
 
+def declaration_routing(source: String) raises -> String:
+    """Return the declaration routing JSON, without function suites.
+
+    Args:
+        source: Mojo source.
+
+    Returns:
+        The canonical routing document.
+
+    Raises:
+        Error: A scope is unmatched or the routing does not finish.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var doc = PyJson()
+    var rows = doc.new_list()
+    var scope_kinds = List[String]()
+    var scope_names = List[String]()
+    var scope_starts = List[Int]()
+    var scope_counts = List[Int]()
+    var block_words = List[String]()
+    var pending_kind = String("")
+    var pending_name = String("")
+    var pending_words = List[String]()
+    var has_pending = False
+    var pending_block = False
+    var statement_kinds = List[Int]()
+    var statement_texts = List[String]()
+    var index = 0
+    while index < len(kinds):
+        var kind = kinds[index]
+        if kind == _INDENT:
+            if not has_pending:
+                scope_kinds.append("block")
+                scope_names.append("")
+                scope_starts.append(len(block_words))
+                scope_counts.append(0)
+            elif pending_block:
+                scope_kinds.append("block")
+                scope_names.append("")
+                scope_starts.append(len(block_words))
+                scope_counts.append(len(pending_words))
+                var word = 0
+                while word < len(pending_words):
+                    block_words.append(pending_words[word])
+                    word += 1
+            else:
+                scope_kinds.append(pending_kind)
+                scope_names.append(pending_name)
+                scope_starts.append(0)
+                scope_counts.append(0)
+            has_pending = False
+            pending_block = False
+            pending_words.clear()
+        elif kind == _DEDENT:
+            if len(scope_kinds) == 0:
+                raise Error("unmatched routing scope")
+            var count = scope_counts.pop()
+            _ = scope_starts.pop()
+            _ = scope_kinds.pop()
+            _ = scope_names.pop()
+            var left = len(block_words) - count
+            while len(block_words) > left:
+                _ = block_words.pop()
+            has_pending = False
+            pending_block = False
+            pending_words.clear()
+        elif kind == _NEWLINE:
+            if len(statement_kinds) > 0:
+                var inside_def = False
+                var scope_index = 0
+                while scope_index < len(scope_kinds):
+                    if scope_kinds[scope_index] == "def":
+                        inside_def = True
+                    scope_index += 1
+                if not inside_def:
+                    var scopes = doc.new_list()
+                    var scope = 0
+                    while scope < len(scope_kinds):
+                        var pair = doc.new_list()
+                        doc.append(pair, doc.new_str(scope_kinds[scope]))
+                        if scope_kinds[scope] == "block":
+                            var payload = doc.new_list()
+                            var word = 0
+                            while word < scope_counts[scope]:
+                                doc.append(
+                                    payload,
+                                    doc.new_str(
+                                        block_words[scope_starts[scope] + word]
+                                    ),
+                                )
+                                word += 1
+                            doc.append(pair, payload)
+                        else:
+                            doc.append(pair, doc.new_str(scope_names[scope]))
+                        doc.append(scopes, pair)
+                        scope += 1
+                    var statement = doc.new_list()
+                    var token = 0
+                    while token < len(statement_kinds):
+                        var pair = doc.new_list()
+                        doc.append(pair, doc.new_int(statement_kinds[token]))
+                        doc.append(pair, doc.new_str(statement_texts[token]))
+                        doc.append(statement, pair)
+                        token += 1
+                    var row = doc.new_list()
+                    doc.append(row, scopes)
+                    doc.append(row, statement)
+                    doc.append(rows, row)
+                var last = statement_texts[len(statement_texts) - 1]
+                if last == ":":
+                    var first = statement_texts[0]
+                    if len(statement_texts) >= 2 and (
+                        first == "def"
+                        or first == "struct"
+                        or first == "trait"
+                        or first == "class"
+                    ):
+                        pending_kind = first
+                        pending_name = statement_texts[1]
+                        pending_block = False
+                        has_pending = True
+                        pending_words.clear()
+                    else:
+                        pending_block = True
+                        has_pending = True
+                        pending_words.clear()
+                        var word = 0
+                        while word < len(statement_texts):
+                            pending_words.append(statement_texts[word])
+                            word += 1
+                else:
+                    has_pending = False
+                    pending_block = False
+                    pending_words.clear()
+            statement_kinds.clear()
+            statement_texts.clear()
+        else:
+            statement_kinds.append(kind)
+            statement_texts.append(texts[index])
+        index += 1
+    if len(statement_kinds) > 0 or len(scope_kinds) > 0:
+        raise Error("incomplete declaration routing")
+    doc.root = rows
+    return doc.dumps()
+
+
 def token_words(source: String) raises -> List[String]:
     """Return the token texts, without layout tokens.
 

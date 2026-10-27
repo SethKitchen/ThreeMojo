@@ -12,6 +12,7 @@
     carla_frozen_arc_gate --places DIR
     carla_frozen_arc_gate --functions DIR
     carla_frozen_arc_gate --layout PATH --stored PATH
+    carla_frozen_arc_gate --routing PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -21,7 +22,7 @@ An absent previous file checks only the migration record.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tests._python_tokens import token_sha256
+from tests._python_tokens import declaration_routing, token_sha256
 from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PY_STR, PyJson
 from tools._sha256 import sha256_hex
 
@@ -283,7 +284,7 @@ def _usage():
             " | --bytes PATH --sha HEX --kind after|before|guard"
             " | --source PATH --token HEX | --prior HEX --cleanup HEX"
             " | --places DIR | --functions DIR"
-            " | --layout PATH --stored PATH"
+            " | --layout PATH --stored PATH | --routing PATH"
         ),
         file=stderr,
     )
@@ -309,6 +310,7 @@ def main() raises:
     var functions = String("")
     var layout = String("")
     var stored = String("")
+    var routing = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -327,6 +329,7 @@ def main() raises:
             or word == "--functions"
             or word == "--layout"
             or word == "--stored"
+            or word == "--routing"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -355,8 +358,10 @@ def main() raises:
                 functions = value
             elif word == "--layout":
                 layout = value
-            else:
+            elif word == "--stored":
                 stored = value
+            else:
+                routing = value
             index += 2
             continue
         _usage()
@@ -375,6 +380,8 @@ def main() raises:
         modes += 1
     if layout.byte_length() > 0 or stored.byte_length() > 0:
         modes += 1
+    if routing.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if (layout.byte_length() == 0) != (stored.byte_length() == 0):
@@ -391,6 +398,9 @@ def main() raises:
     if previous.byte_length() > 0 and migration.byte_length() == 0:
         _usage()
     try:
+        if routing.byte_length() > 0:
+            print(declaration_routing(Path(routing).read_text()), end="")
+            return
         if layout.byte_length() > 0:
             frozen_arc_layout(
                 Path(layout).read_text(), Path(stored).read_text()

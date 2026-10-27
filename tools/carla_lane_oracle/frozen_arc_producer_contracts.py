@@ -216,6 +216,28 @@ def _gate_functions(pairs):
         raise ValueError(message)
 
 
+def _routing(text):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='frozen-routing-') as directory:
+        source = Path(directory) / 'source.mojo'
+        source.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
+             '--routing', str(source)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def _gate_layout(actual, expected):
     import os
     import subprocess
@@ -296,10 +318,6 @@ def verify_premises(root, *, _operation=None):
         _check_operation(root, _operation)
     # This scoped check deliberately does not inspect the complete-file hash.
     # Mutation controls invoke it directly to test producer and Box obligations.
-    if __package__:
-        from . import sum2_guard_contracts as guard
-    else:
-        import sum2_guard_contracts as guard
     record = read_record(root)
     prepared = []
     for item in record['function_sources']:
@@ -316,7 +334,7 @@ def verify_premises(root, *, _operation=None):
     arc = _typed_source.historical_text(root, 'extensions/carla/curve_rounded_arc.mojo', _observe_text(root, 'extensions/carla/curve_rounded_arc.mojo',
                         (root/'extensions/carla/curve_rounded_arc.mojo').read_text(),
                         _operation=_operation), _operation=_operation)
-    _gate_layout(guard.declaration_routing(arc), record['rounded_arc_routing'])
+    _gate_layout(_routing(arc), record['rounded_arc_routing'])
     return len(record['function_sources'])
 
 

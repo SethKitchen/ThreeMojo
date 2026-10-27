@@ -7,8 +7,9 @@
 
 from std.os import makedirs
 from std.pathlib import Path
-from std.testing import TestSuite, assert_raises
+from std.testing import TestSuite, assert_equal, assert_raises
 
+from tests._python_tokens import declaration_routing
 from tools.carla_frozen_arc_gate import (
     frozen_arc_digest,
     frozen_arc_functions,
@@ -18,6 +19,14 @@ from tools.carla_frozen_arc_gate import (
     frozen_arc_record,
     frozen_arc_token,
 )
+
+
+def test_a_function_suite_is_omitted_from_routing() raises:
+    """A function body is not part of the declaration routing."""
+    assert_equal(
+        declaration_routing("def first():\n    return 1\n"),
+        '[[[],[[1,"def"],[1,"first"],[55,"("],[55,")"],[55,":"]]]]',
+    )
 
 
 def test_a_changed_record_is_refused() raises:
