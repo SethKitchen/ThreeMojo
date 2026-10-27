@@ -8,6 +8,7 @@
     carla_dispatch_gate --migration PATH
     carla_dispatch_gate --bytes PATH --sha HEX --label TEXT
     carla_dispatch_gate --tokens DIR
+    carla_dispatch_gate --edge HEX --expected HEX
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -133,12 +134,27 @@ def dispatch_tokens(directory: String) raises:
         index += 1
 
 
+def dispatch_edge(recorded: String, expected: String) raises:
+    """Require the raw predecessor token to match the caller.
+
+    Args:
+        recorded: The raw-cut record's before token.
+        expected: The token the caller already holds.
+
+    Raises:
+        Error: The tokens differ.
+    """
+    if recorded != expected:
+        _fail("raw predecessor edge mismatch")
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_dispatch_gate --migration PATH"
             " | --bytes PATH --sha HEX --label TEXT | --tokens DIR"
+            " | --edge HEX --expected HEX"
         ),
         file=stderr,
     )
@@ -156,6 +172,8 @@ def main() raises:
     var digest = String("")
     var label = String("")
     var tokens = String("")
+    var edge = String("")
+    var expected = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -166,6 +184,8 @@ def main() raises:
             or word == "--sha"
             or word == "--label"
             or word == "--tokens"
+            or word == "--edge"
+            or word == "--expected"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -178,8 +198,12 @@ def main() raises:
                 digest = value
             elif word == "--label":
                 label = value
-            else:
+            elif word == "--tokens":
                 tokens = value
+            elif word == "--edge":
+                edge = value
+            else:
+                expected = value
             index += 2
             continue
         _usage()
@@ -190,13 +214,20 @@ def main() raises:
         modes += 1
     if tokens.byte_length() > 0:
         modes += 1
+    if edge.byte_length() > 0 or expected.byte_length() > 0:
+        modes += 1
     if modes != 1:
+        _usage()
+    if (edge.byte_length() == 0) != (expected.byte_length() == 0):
         _usage()
     if payload.byte_length() > 0 and (
         digest.byte_length() == 0 or label.byte_length() == 0
     ):
         _usage()
     try:
+        if edge.byte_length() > 0:
+            dispatch_edge(edge, expected)
+            return
         if tokens.byte_length() > 0:
             dispatch_tokens(tokens)
             return

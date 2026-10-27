@@ -10,6 +10,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools.carla_dispatch_gate import (
+    dispatch_edge,
     dispatch_pin,
     dispatch_record,
     dispatch_tokens,
@@ -50,6 +51,16 @@ def test_a_changed_reference_token_is_refused() raises:
         )
     ):
         dispatch_tokens(directory)
+
+
+def test_a_mismatched_predecessor_edge_is_refused() raises:
+    """A raw predecessor token that differs from the caller fails closed."""
+    with assert_raises(
+        contains=(
+            "curve support/dispatch contract: raw predecessor edge mismatch"
+        )
+    ):
+        dispatch_edge("aa", "bb")
 
 
 def main() raises:

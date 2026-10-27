@@ -36,7 +36,7 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the frozen digest, the component records, and the pin digests.
 
-`tools/carla_dispatch_gate.mojo` checks the curve support and dispatch migration digest, its source set, the historical pin digests, and the reference tokens.
+`tools/carla_dispatch_gate.mojo` checks the curve support and dispatch record, its pin digests, its reference tokens, and the predecessor edge.
 
 `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the stored-word digest, and the successor tokens.
 

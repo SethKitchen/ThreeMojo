@@ -73,6 +73,23 @@ def _gate(payload):
         raise ValueError(message)
 
 
+def _gate_edge(recorded, expected):
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_gate',
+         '--edge', recorded, '--expected', expected],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
@@ -94,7 +111,7 @@ def reviewed_source(root, path, expected, *, _operation=None):
     else:
         import raw_cut_inverse_contracts as raw
     record = raw.verify(root, **({} if _operation is None else {'_operation': _operation}))
-    require(record['before_token_sha256'] == expected, 'raw predecessor edge mismatch')
+    _gate_edge(record['before_token_sha256'], expected)
     return record['before_source']
 
 def _gate_tokens(pairs):
