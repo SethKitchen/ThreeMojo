@@ -449,6 +449,30 @@ def _sampled_result(root, shared, modules, primitive, sources, successors):
     return json.loads(result.stdout)
 
 
+_SAMPLED_CLOSURE = None
+
+
+def _sampled_closure():
+    """Return the sampled reference names and the closure groups."""
+    global _SAMPLED_CLOSURE
+    if _SAMPLED_CLOSURE is not None:
+        return _SAMPLED_CLOSURE
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sampled_closure'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    _SAMPLED_CLOSURE = json.loads(result.stdout)
+    return _SAMPLED_CLOSURE
+
+
 _PROJECTION_RECIPE = None
 
 
@@ -583,26 +607,27 @@ def verify(root):
                 import ideal_projection
             graphs = _graph_pins()
             reference_graphs = graphs['reference']
+            closure = _sampled_closure()
             ideal_projection.moment_guard('--names', {
                 'names': list(reference_graphs),
-                'expected': ['curve_bounds.mojo', 'curve_trig.mojo',
-                             'curve_interval.mojo'],
-                'message': 'wrong reference-module closure',
+                'expected': list(closure['reference_names']),
+                'message': closure['closure'],
             })
         except ValueError as error:
             raise CheckError(str(error)) from error
+        closure = _sampled_closure()
         for filename, expected_hash in reference_graphs.items():
             reference_graph = (dump(reviewed_reference_tree(texts[filename], root, _operation=_operation))
-                               if filename == 'curve_bounds.mojo' else graph(texts[filename]))
+                               if filename == closure['reviewed'] else graph(texts[filename]))
             actual = hashlib.sha256(reference_graph.encode()).hexdigest()
             require(actual == expected_hash, 'reference module changed; renewed review required: ' + filename)
-        require(primitive_graph(texts['curve_interval.mojo']) == graphs['primitive'],
-                'Jet primitive graph changed; renewed derivative-independence review required')
+        require(primitive_graph(texts[closure['primitive']]) == graphs['primitive'],
+                closure['primitive_message'])
         # Complete stored helper/interval closure and lexical qualifiers are
         # independent of the unchanged primitive-class AST hash.
         try:
-            verify_group(root, 'stored_arithmetic', _operation=_operation)
-            verify_group(root, 'canonical_accumulation', _operation=_operation)
+            for group in closure['groups']:
+                verify_group(root, group, _operation=_operation)
             try:
                 import sum2_contracts
             except ModuleNotFoundError:
@@ -610,9 +635,9 @@ def verify(root):
             sum2_contracts.verify(root, _operation=_operation)
         except ValueError as error:
             raise CheckError(str(error)) from error
-        _sampled_text('--helper-fields', texts['curve_interval.mojo'])
+        _sampled_text('--helper-fields', texts[closure['primitive']])
         target_tree = syntax_tree(target)
-        reference_trees = {'curve_bounds.mojo': reviewed_reference_tree(bounds, root, _operation=_operation), 'curve_trig.mojo': syntax_tree(trig)}
+        reference_trees = {closure['reviewed']: reviewed_reference_tree(bounds, root, _operation=_operation), closure['syntax']: syntax_tree(trig)}
         for key, expected_hash in graphs['shared'].items():
             filename, name = key.split(':', 1)
             node = unique_function(reference_trees[filename], name)
