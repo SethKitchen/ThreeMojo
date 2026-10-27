@@ -1988,6 +1988,55 @@ def verify_moment_table(source: String, words_json: String) raises -> String:
     return parsed
 
 
+def moment_payload_json(words_json: String) raises -> String:
+    """Return the big-endian payload and the canonical source digest.
+
+    Args:
+        words_json: A JSON list of 2816 `0x` words, low then high.
+
+    Returns:
+        JSON with `be64` hex, `be64_sha256`, `byte_count`, and
+        `source_sha256`.
+
+    Raises:
+        Error: The list is not 2816 hexadecimal words.
+    """
+    var doc = PyJson.parse(words_json)
+    if doc.length(doc.root) != 2816:
+        raise Error("malformed moment source word")
+    var packed = List[UInt8]()
+    var index = 0
+    while index < 2816:
+        var text = doc.text(doc.item(doc.root, index))
+        if not _moment_word(text):
+            raise Error("malformed moment source word")
+        var word = _moment_value(text)
+        var shift = 56
+        while shift >= 0:
+            packed.append(UInt8(Int((word >> UInt64(shift)) & 0xFF)))
+            shift -= 8
+        index += 1
+    var digits = "0123456789abcdef"
+    var be64 = String("")
+    var byte_index = 0
+    while byte_index < len(packed):
+        var byte = Int(packed[byte_index])
+        be64 += String(digits[byte = byte >> 4 : (byte >> 4) + 1])
+        be64 += String(digits[byte = byte & 15 : (byte & 15) + 1])
+        byte_index += 1
+    var source = moment_source(words_json)
+    var out = PyJson()
+    var payload = out.new_dict()
+    out.set(payload, "be64", out.new_str(be64))
+    out.set(payload, "be64_sha256", out.new_str(sha256_hex(Span(packed))))
+    out.set(payload, "byte_count", out.new_int(len(packed)))
+    out.set(
+        payload, "source_sha256", out.new_str(sha256_hex(source.as_bytes()))
+    )
+    out.root = payload
+    return out.dumps()
+
+
 def normalized_block(source: String) -> String:
     """Drop comments and blank lines, and keep the remaining indentation.
 

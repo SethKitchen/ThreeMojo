@@ -27,6 +27,7 @@
     carla_cleanup_gate --normalize PATH
     carla_cleanup_gate --table PATH --count N
     carla_cleanup_gate --moment-source PATH
+    carla_cleanup_gate --moment-payload PATH
     carla_cleanup_gate --verify-table DIR
     carla_cleanup_gate --block DIR
     carla_cleanup_gate --strip-try PATH
@@ -48,6 +49,7 @@ from tests._python_tokens import (
     ideal_function_source,
     constant_literals_json,
     function_slice,
+    moment_payload_json,
     moment_source,
     moment_words_json,
     verify_moment_table,
@@ -506,6 +508,7 @@ def _usage():
             " | --routing PATH --constants PATH | --ideal PATH --name NAME |"
             " --syntax PATH | --slice PATH --name NAME | --fragment DIR |"
             " --normalize PATH | --table PATH --count N | --moment-source PATH"
+            " | --moment-payload PATH"
             " | --verify-table DIR"
             " | --block DIR | --strip-try PATH | --pin-rows PATH"
             " | --decimal PATH | --literals PATH --name NAME"
@@ -552,6 +555,7 @@ def main() raises:
     var table = String("")
     var table_count = String("")
     var moment_source_path = String("")
+    var moment_payload = String("")
     var verify_table = String("")
     var block = String("")
     var strip_try = String("")
@@ -594,6 +598,7 @@ def main() raises:
             or word == "--table"
             or word == "--count"
             or word == "--moment-source"
+            or word == "--moment-payload"
             or word == "--verify-table"
             or word == "--block"
             or word == "--strip-try"
@@ -665,6 +670,8 @@ def main() raises:
                 table_count = value
             elif word == "--moment-source":
                 moment_source_path = value
+            elif word == "--moment-payload":
+                moment_payload = value
             elif word == "--verify-table":
                 verify_table = value
             elif word == "--block":
@@ -737,6 +744,8 @@ def main() raises:
     if table.byte_length() > 0 or table_count.byte_length() > 0:
         modes += 1
     if moment_source_path.byte_length() > 0:
+        modes += 1
+    if moment_payload.byte_length() > 0:
         modes += 1
     if verify_table.byte_length() > 0:
         modes += 1
@@ -855,6 +864,12 @@ def main() raises:
         if moment_source_path.byte_length() > 0:
             print(
                 moment_source(Path(moment_source_path).read_text()),
+                end="",
+            )
+            return
+        if moment_payload.byte_length() > 0:
+            print(
+                moment_payload_json(Path(moment_payload).read_text()),
                 end="",
             )
             return

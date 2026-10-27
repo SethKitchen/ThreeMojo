@@ -80,6 +80,8 @@ It derives the stored moment rows in exact arithmetic.
 
 It checks the stored moment table against the derived words.
 
+It packs the derived moment words into big-endian payload bytes.
+
 It drops comments and blank lines from one source block.
 
 It reads the stored moment words from the generated table.

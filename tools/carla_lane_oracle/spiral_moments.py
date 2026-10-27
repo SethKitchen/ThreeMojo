@@ -23,7 +23,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import struct
 import sys
 
 sys.dont_write_bytecode = True
@@ -385,15 +384,25 @@ def derive_coefficients(constants):
         raise CheckError(str(error)) from error
 
 
-def words_from_rows(rows):
-    return [int(word, 16) for row in rows for side in ('cosine', 'sine')
+def _coefficient_words(rows):
+    return [word for row in rows for side in ('cosine', 'sine')
             for coefficient in row[side] for word in coefficient['words']]
+
+
+def words_from_rows(rows):
+    return [int(word, 16) for word in _coefficient_words(rows)]
+
+
+def _moment_payload(rows):
+    try:
+        return ideal_projection.moment_payload(_coefficient_words(rows))
+    except ValueError as error:
+        raise CheckError(str(error)) from error
 
 
 def generate_source(rows):
     # Match the Mojo formatter: one array element per line.
-    words = [word for row in rows for side in ('cosine', 'sine')
-             for coefficient in row[side] for word in coefficient['words']]
+    words = _coefficient_words(rows)
     try:
         text = ideal_projection.moment_source(words)
     except ValueError as error:
@@ -418,21 +427,22 @@ def verify_table(data, rows):
         text = data.decode('utf-8')
     except UnicodeDecodeError as error:
         raise CheckError('table is not UTF-8') from error
-    spellings = [word for row in rows for side in ('cosine', 'sine')
-                 for coefficient in row[side] for word in coefficient['words']]
     try:
-        return ideal_projection.verify_moment_table(text, spellings)
+        return ideal_projection.verify_moment_table(text, _coefficient_words(rows))
     except ValueError as error:
         raise CheckError(str(error)) from error
 
 
 def make_report(root, rows, pins):
-    packed = b''.join(struct.pack('>Q', word) for word in words_from_rows(rows))
+    payload = _moment_payload(rows)
+    require(payload['byte_count'] == WORD_COUNT * 8, 'wrong derived table shape')
     return {
         'scope': 'fixed-count quadrant-zero ideal stored-polynomial coefficients and tight endpoints only',
-        'counts': 64, 'coefficients': 1408, 'words': WORD_COUNT, 'payload_bytes': len(packed),
+        'counts': 64, 'coefficients': 1408, 'words': WORD_COUNT,
+        'payload_bytes': payload['byte_count'],
         'zeroth_moment': str(F(1) + F(3, 1 << 55)),
-        'source_sha256': digest(generate_source(rows)), 'words_be64_sha256': digest(packed),
+        'source_sha256': payload['source_sha256'],
+        'words_be64_sha256': payload['be64_sha256'],
         'pin_file_sha256': digest(_typed_source.historical_bytes(root, root / PINS, (root / PINS).read_bytes())),
         'dependency_pin_file_sha256': digest(_typed_source.historical_bytes(root, root / source_contracts.PINS, (root / source_contracts.PINS).read_bytes())),
         'environment_guard_pin_sha256': digest(_typed_source.historical_bytes(root, root / sum2_guard_contracts.PINS, (root / sum2_guard_contracts.PINS).read_bytes())),
@@ -480,7 +490,8 @@ def main(argv=None):
             if args.generate:
                 products.update({
                     DATA.name: generate_source(rows),
-                    'spiral_moment_words.be64': b''.join(struct.pack('>Q', word) for word in words_from_rows(rows)),
+                    'spiral_moment_words.be64': bytes.fromhex(
+                        _moment_payload(rows)['be64']),
                     'spiral_moment_exact_coefficients.json': (json.dumps({'counts': rows}, indent=2) + '\n').encode(),
                 })
             for name in products:
