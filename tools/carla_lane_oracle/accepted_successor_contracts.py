@@ -309,6 +309,28 @@ def _read_current_pair_pin(root, filename, *, _operation=None):
     return payload
 
 
+def _gate_pair(names):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='accepted-pair-') as directory:
+        folder = Path(directory)
+        (folder / 'labels.json').write_text(json.dumps(list(names)))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_accepted_gate',
+             '--pair', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def predecessor_pin_pair(root):
     """Qualify once and reconstruct the fixed runtime/guard predecessor pair.
 
@@ -322,7 +344,7 @@ def predecessor_pin_pair(root):
     """
     record, observed_current_admission = _verify_current_for_pin_pair(root)
     filenames = ('runtime-source-pins.json', 'sum2-guard-pins.json')
-    require(tuple(record['pin_files']) == filenames, 'wrong fixed ordered pin pair')
+    _gate_pair(record['pin_files'])
     runtime_name, guard_name = filenames
     if observed_current_admission:
         if __package__:
@@ -368,7 +390,7 @@ def _predecessor_pin_pair(root, *, _operation=None):
         return predecessor_pin_pair(root)
     record, observed_current_admission = _verify_current_for_pin_pair(root, _operation=_operation)
     filenames = ('runtime-source-pins.json', 'sum2-guard-pins.json')
-    require(tuple(record['pin_files']) == filenames, 'wrong fixed ordered pin pair')
+    _gate_pair(record['pin_files'])
     runtime_name, guard_name = filenames
     if observed_current_admission:
         if __package__:

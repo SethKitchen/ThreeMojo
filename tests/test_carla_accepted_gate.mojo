@@ -12,6 +12,7 @@ from std.testing import TestSuite, assert_raises
 from tests._python_tokens import token_sha256
 from tools.carla_accepted_gate import (
     accepted_digest,
+    accepted_pair,
     accepted_record,
     accepted_sources,
 )
@@ -90,6 +91,19 @@ def test_a_changed_historical_module_is_refused() raises:
         )
     ):
         accepted_sources(directory)
+
+
+def test_a_reordered_pin_pair_is_refused() raises:
+    """A pin-file order other than runtime then guard fails closed."""
+    var directory = "/tmp/accepted-pair-test"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/labels.json").write_text(
+        '["sum2-guard-pins.json","runtime-source-pins.json"]'
+    )
+    with assert_raises(
+        contains="accepted source successor: wrong fixed ordered pin pair"
+    ):
+        accepted_pair(directory)
 
 
 def main() raises:

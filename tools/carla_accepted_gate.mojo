@@ -8,6 +8,7 @@
     carla_accepted_gate --migration PATH [--prior PATH] [--components DIR]
     carla_accepted_gate --bytes PATH --sha HEX --kind after|before --label TEXT
     carla_accepted_gate --sources DIR
+    carla_accepted_gate --pair DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -288,13 +289,32 @@ def accepted_sources(directory: String) raises:
         index += 1
 
 
+def accepted_pair(directory: String) raises:
+    """Require the fixed runtime then guard pin order.
+
+    Args:
+        directory: A directory whose `labels.json` is the pin-file names in order.
+
+    Raises:
+        Error: The names are not the reviewed pair, or the list cannot be read.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if (
+        doc.kind(doc.root) != PY_LIST
+        or doc.length(doc.root) != 2
+        or doc.text(doc.item(doc.root, 0)) != "runtime-source-pins.json"
+        or doc.text(doc.item(doc.root, 1)) != "sum2-guard-pins.json"
+    ):
+        _fail("wrong fixed ordered pin pair")
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_accepted_gate --migration PATH [--prior PATH]"
             " [--components DIR] | --bytes PATH --sha HEX --kind after|before"
-            " --label TEXT | --sources DIR"
+            " --label TEXT | --sources DIR | --pair DIR"
         ),
         file=stderr,
     )
@@ -315,6 +335,7 @@ def main() raises:
     var kind = String("")
     var label = String("")
     var sources = String("")
+    var pair = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -328,6 +349,7 @@ def main() raises:
             or word == "--kind"
             or word == "--label"
             or word == "--sources"
+            or word == "--pair"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -346,8 +368,10 @@ def main() raises:
                 kind = value
             elif word == "--label":
                 label = value
-            else:
+            elif word == "--sources":
                 sources = value
+            else:
+                pair = value
             index += 2
             continue
         _usage()
@@ -357,6 +381,8 @@ def main() raises:
     if payload.byte_length() > 0:
         modes += 1
     if sources.byte_length() > 0:
+        modes += 1
+    if pair.byte_length() > 0:
         modes += 1
     if modes != 1:
         _usage()
@@ -377,6 +403,18 @@ def main() raises:
         or digest.byte_length() > 0
         or kind.byte_length() > 0
         or label.byte_length() > 0
+        or pair.byte_length() > 0
+    ):
+        _usage()
+    if pair.byte_length() > 0 and (
+        migration.byte_length() > 0
+        or prior.byte_length() > 0
+        or components.byte_length() > 0
+        or payload.byte_length() > 0
+        or digest.byte_length() > 0
+        or kind.byte_length() > 0
+        or label.byte_length() > 0
+        or sources.byte_length() > 0
     ):
         _usage()
     if migration.byte_length() > 0 and (
@@ -388,6 +426,9 @@ def main() raises:
     if components.byte_length() > 0 and prior.byte_length() == 0:
         _usage()
     try:
+        if pair.byte_length() > 0:
+            accepted_pair(pair)
+            return
         if sources.byte_length() > 0:
             accepted_sources(sources)
             return
