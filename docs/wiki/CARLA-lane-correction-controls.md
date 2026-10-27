@@ -42,6 +42,8 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest and its source digests.
 
+`tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.
+
 ## Lane poses
 
 The pose follows the derivative of the actual lane-center expression.
