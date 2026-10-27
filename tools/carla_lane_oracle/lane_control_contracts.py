@@ -114,6 +114,31 @@ def _token_sha256(text):
     return result.stdout.strip()
 
 
+def _declarations(items):
+    """Return the declaration texts in the requested order."""
+    import os
+    import subprocess
+    import tempfile
+    if not items:
+        return []
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(items, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='lane-declarations-') as directory:
+        path = Path(directory) / 'declarations.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_declarations',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _gate(payload):
     import os
     import subprocess
@@ -231,25 +256,39 @@ def verify(root, *, _operation=None):
 
     labels = _lane_labels()
     pairs = [(current, record['after_source'], labels['successor'])]
+    requests = []
+    frozen_expected = []
     for item in record['declarations']:
         name = item['name']
-        pairs.append((_declaration(record['before_source'], name, ()), item['before'],
-                      labels['before']))
-        pairs.append((_declaration(current, name, ()), item['after'],
-                      labels['after']))
+        requests.append({'source': record['before_source'], 'name': name, 'owner': []})
+        requests.append({'source': current, 'name': name, 'owner': []})
         test = _typed_source.historical_text(root, 'tests/test_carla_lane_control_successor.mojo', _observe_text(root, 'tests/test_carla_lane_control_successor.mojo',
                              (root / 'tests/test_carla_lane_control_successor.mojo').read_text(),
                              _operation=_operation), _operation=_operation)
         reference = labels['reference'] + name
-        frozen = _declaration(test, reference, ())
-        expected = _replace_first(
+        requests.append({'source': test, 'name': reference, 'owner': []})
+        frozen_expected.append(_replace_first(
             item['before'],
             labels['definition'] + name + labels['call'],
-            labels['definition'] + reference + labels['call'])
-        pairs.append((frozen, expected, labels['frozen']))
+            labels['definition'] + reference + labels['call']))
+    premise_items = []
     for item in record['premises']:
-        actual = _declaration(_typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root / item['path']).read_text(), _operation=_operation), _operation=_operation), item['name'], ())
-        pairs.append((actual, item['source'], labels['premise'] + item['name']))
+        premise_items.append(item)
+        requests.append({
+            'source': _typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root / item['path']).read_text(), _operation=_operation), _operation=_operation),
+            'name': item['name'],
+            'owner': [],
+        })
+    declared = _declarations(requests)
+    cursor = 0
+    for index, item in enumerate(record['declarations']):
+        pairs.append((declared[cursor], item['before'], labels['before']))
+        pairs.append((declared[cursor + 1], item['after'], labels['after']))
+        pairs.append((declared[cursor + 2], frozen_expected[index], labels['frozen']))
+        cursor += 3
+    for item in premise_items:
+        pairs.append((declared[cursor], item['source'], labels['premise'] + item['name']))
+        cursor += 1
     for rel, expected in record['producer_modules'].items():
         pairs.append((_typed_source.historical_text(root, rel, _observe_text(root, rel, (root / rel).read_text(), _operation=_operation), _operation=_operation), expected,
                       labels['producer'] + rel))

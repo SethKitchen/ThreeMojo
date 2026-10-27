@@ -318,6 +318,8 @@ It reads the current pin value at each coverage transition and writes the histor
 
 It returns the kept-token digest and declaration text for the lane-control and Sum2 checks.
 
+It reads every lane-control declaration in one check.
+
 The cleanup, dispatch, selection, grouped-table, and lane-control checks use that digest.
 
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
