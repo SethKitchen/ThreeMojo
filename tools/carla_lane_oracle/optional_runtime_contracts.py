@@ -290,8 +290,31 @@ def executable_names(text):
     return frozenset(_lexical_directory('--names', [text])[0])
 
 
+def _observed_consumers(items):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps([{'path': path, 'text': text} for path, text in items],
+                         separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='optional-consumers-') as directory:
+        path = Path(directory) / 'consumers.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_optional_consumers', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def verify_no_containing_model_consumers(root, *, _operation=None):
-    helper = 'extensions/carla/curve_objective_model.mojo'
     chosen = []
     for path in sorted(root.rglob('*.mojo')):
         relative = path.relative_to(root)
@@ -302,16 +325,7 @@ def verify_no_containing_model_consumers(root, *, _operation=None):
         if not any(name in text for name in MODEL_NAMES | REMOVED_SEARCH_NAMES):
             continue
         chosen.append((relative.as_posix(), text))
-    lists = _lexical_directory('--names', [text for _, text in chosen])
-    for (relative, _), names_list in zip(chosen, lists):
-        names = frozenset(names_list)
-        if relative != helper:
-            require(not (names & MODEL_NAMES),
-                    'containing-objective model production consumer reintroduced: '
-                    + relative)
-        if relative == 'extensions/carla/lane_refinement.mojo':
-            require(not (names & REMOVED_SEARCH_NAMES),
-                    'containing-objective model search state reintroduced')
+    _observed_consumers(chosen)
 
 
 def verify_fresh_producer(run):

@@ -16,6 +16,8 @@ from std.pathlib import Path
 
 from tests._python_tokens import _tokenize
 
+from tools._python_json import PyJson
+
 
 comptime _NAME = 1
 comptime _HELPER = "extensions/carla/curve_objective_model.mojo"
@@ -230,6 +232,50 @@ def _executable(text: String, mut model: Bool, mut removed: Bool) raises:
         index += 1
 
 
+def _check_text(path: String, text: String) raises:
+    """Require one observed module to keep the reviewed names out.
+
+    Args:
+        path: The module path relative to the repository root.
+        text: The observed source.
+
+    Raises:
+        Error: The module names the model or restores search state.
+    """
+    if not _mentioned(text):
+        return
+    var model = False
+    var removed = False
+    _executable(text, model, removed)
+    if path != _HELPER and model:
+        _fail(
+            "containing-objective model production consumer reintroduced: "
+            + path
+        )
+    if path == _LANE and removed:
+        _fail("containing-objective model search state reintroduced")
+
+
+def require_observed_consumers(payload: String) raises:
+    """Require observed modules to keep the reviewed names out.
+
+    Args:
+        payload: A JSON list of `path` and `text` objects, in scan order.
+
+    Raises:
+        Error: A module names the model or restores search state.
+    """
+    var doc = PyJson.parse(payload)
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        var item = doc.item(doc.root, index)
+        _check_text(
+            doc.text(doc.at(item, "path")), doc.text(doc.at(item, "text"))
+        )
+        index += 1
+
+
 def containing_model_consumers(root: String) raises:
     """Require the reviewed production absence.
 
@@ -251,16 +297,5 @@ def containing_model_consumers(root: String) raises:
     while index < len(ordered):
         var path = ordered[index]
         var text = Path(base + "/" + path).read_text()
-        if _mentioned(text):
-            var model = False
-            var removed = False
-            _executable(text, model, removed)
-            if path != _HELPER and model:
-                _fail(
-                    "containing-objective model production consumer"
-                    " reintroduced: "
-                    + path
-                )
-            if path == _LANE and removed:
-                _fail("containing-objective model search state reintroduced")
+        _check_text(path, text)
         index += 1

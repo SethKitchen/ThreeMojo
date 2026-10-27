@@ -9,7 +9,10 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools._process import run_program
-from tools._optional_model_consumers import containing_model_consumers
+from tools._optional_model_consumers import (
+    containing_model_consumers,
+    require_observed_consumers,
+)
 
 
 def _make(root: String, relative: String, text: String) raises:
@@ -98,6 +101,39 @@ def test_a_reintroduced_containing_model_consumer_is_refused() raises:
         )
     ):
         containing_model_consumers(search)
+
+
+def test_observed_consumers_use_the_supplied_text() raises:
+    """The observed list is checked in order, including an empty list."""
+    require_observed_consumers("[]")
+    require_observed_consumers(
+        '[{"path":"extensions/carla/curve_objective_model.mojo","text":'
+        + '"def _try_objective_model():\\n    pass\\n"},'
+        + '{"path":"extensions/carla/note.mojo","text":'
+        + '"def show():\\n    var label = 1\\n"}]'
+    )
+    with assert_raises(
+        contains=(
+            "optional runtime contract: containing-objective model production "
+            "consumer reintroduced: extensions/carla/extra.mojo"
+        )
+    ):
+        require_observed_consumers(
+            '[{"path":"extensions/carla/note.mojo","text":"def show():\\n   '
+            ' pass\\n"},'
+            + '{"path":"extensions/carla/extra.mojo","text":'
+            + '"def use():\\n    var model = _try_objective_model\\n"}]'
+        )
+    with assert_raises(
+        contains=(
+            "optional runtime contract: containing-objective model search "
+            "state reintroduced"
+        )
+    ):
+        require_observed_consumers(
+            '[{"path":"extensions/carla/lane_refinement.mojo","text":'
+            + '"def _run():\\n    var cached_model = None\\n"}]'
+        )
 
 
 def main() raises:
