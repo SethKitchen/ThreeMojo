@@ -72,6 +72,8 @@ It compares each premise text before the predecessor fallback.
 
 It selects the Map seed or the lane predecessor after that comparison.
 
+It keeps the two dispatch sources and the five protected paths.
+
 `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the trig and geometry stored words, and the successor tokens.
 
 It admits trig and geometry word changes only for their reviewed token.

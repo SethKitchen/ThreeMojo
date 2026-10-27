@@ -171,6 +171,53 @@ def dispatch_graphs(directory: String) raises:
         index += 1
 
 
+def _protected_name(index: Int) -> String:
+    """Return one protected dependency path.
+
+    Args:
+        index: The path position, from 0 through 4.
+
+    Returns:
+        The repository path.
+    """
+    if index == 0:
+        return "extensions/carla/curve_interval.mojo"
+    if index == 1:
+        return "extensions/carla/curve_sum2.mojo"
+    if index == 2:
+        return "extensions/carla/curve_bounds.mojo"
+    if index == 3:
+        return "extensions/carla/map.mojo"
+    return "extensions/carla/lane_refinement.mojo"
+
+
+def dispatch_paths() raises -> String:
+    """Return the dispatch sources and the protected dependency paths.
+
+    Returns:
+        JSON with `sources` and `protected` in reviewed order.
+
+    Raises:
+        Error: The lists cannot be written.
+    """
+    var doc = PyJson()
+    var spec = doc.new_dict()
+    var sources = doc.new_list()
+    var index = 0
+    while index < 2:
+        doc.append(sources, doc.new_str(_source_name(index)))
+        index += 1
+    doc.set(spec, "sources", sources)
+    var protected = doc.new_list()
+    index = 0
+    while index < 5:
+        doc.append(protected, doc.new_str(_protected_name(index)))
+        index += 1
+    doc.set(spec, "protected", protected)
+    doc.root = spec
+    return doc.dumps()
+
+
 def _usage():
     """Print the command usage and stop."""
     print(

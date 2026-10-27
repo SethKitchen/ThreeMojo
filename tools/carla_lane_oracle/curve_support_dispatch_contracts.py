@@ -22,11 +22,38 @@ else:
 
 MIGRATION = 'tools/carla_lane_oracle/curve-support-dispatch-migration.json'
 MIGRATION_SHA256 = '1a6d7794bf0869a1e717685e556d8400e075ab97917ce8d855da6bd61c3ee19f'
-SOURCE_PATHS = tuple('extensions/carla/' + name + '.mojo' for name in
-                     ('curve_minimizer_support', 'curve_sample_dispatch'))
-PROTECTED_INPUTS = (MIGRATION, *SOURCE_PATHS, 'extensions/carla/curve_interval.mojo',
-                    'extensions/carla/curve_sum2.mojo', 'extensions/carla/curve_bounds.mojo',
-                    'extensions/carla/map.mojo', 'extensions/carla/lane_refinement.mojo')
+_PATHS = None
+
+
+def _paths():
+    """Return the dispatch sources and the protected dependency paths."""
+    global _PATHS
+    if _PATHS is not None:
+        return _PATHS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_paths'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _PATHS = json.loads(result.stdout)
+    return _PATHS
+
+
+def __getattr__(name):
+    if name == 'SOURCE_PATHS':
+        return tuple(_paths()['sources'])
+    if name == 'PROTECTED_INPUTS':
+        data = _paths()
+        return (MIGRATION, *data['sources'], *data['protected'])
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def _check_operation(root, operation):
