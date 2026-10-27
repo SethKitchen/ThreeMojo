@@ -56,26 +56,6 @@ SHARED_GRAPHS = {
     "curve_bounds.mojo:_lane_jet_model_proof": "17eea195f5bcd6e90781bbc3370f16e5404b67620aad1807b24101ceaebd7218",
     "curve_bounds.mojo:_reference_jet_capture": "0ebd93d524b35c30cdd27fabc23dd40f1a53241477b0689c37b07b18bce5ad05"
 }
-NAMES = {
-    '_polynomial_jet': '_polynomial_value',
-    '_unknown_point': '_unknown_value_point',
-    '_geometry_distance': '_value_geometry_distance',
-    '_sample_blend_jet': '_sample_blend_value',
-    '_sample_jet': '_sample_value',
-    '_atan_branch': '_atan_value_branch',
-    '_atan_jet': '_atan_value',
-    '_atan2_jet': '_atan2_value',
-    '_jet_polynomial': '_expression_polynomial',
-    '_uncertain': '_uncertain_value',
-    '_Jet': '_ValueJet',
-    '_sinc_jet': '_sinc_value',
-    '_sincos_jet': '_sincos_expression',
-    '_arc_offset_jet': '_arc_offset_value',
-    '_constant_sincos_jet': '_constant_sincos_value',
-    '_union_points': '_union_value_points',
-}
-COPIES = ('_atan_branch', '_atan_jet', '_atan2_jet', '_polynomial_jet',
-          '_unknown_point', '_geometry_distance', '_sample_blend_jet', '_sample_jet')
 IMPORTS = '''from extensions.carla.curve_interval import (
     _stored_difference,
     _stored_half,
@@ -188,20 +168,39 @@ def _sampled_text(mode, text, name='', index=None, replacement=None):
     return result.stdout
 
 
+def _copy_plan():
+    """Return the sampled copy order and the rename map."""
+    import json
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sampled_copies'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    return json.loads(result.stdout)
+
+
 def translated(text):
     # Replace NAME tokens at original offsets, preserving fragment indentation
     # and every string literal. This also handles renamed identifiers of
     # different lengths without reconstructing partial source statements.
+    names = _copy_plan()['names']
     lines = text.splitlines(keepends=True)
     offsets = [0]
     for line in lines:
         offsets.append(offsets[-1] + len(line))
     changes = []
     for item in tokenize.generate_tokens(io.StringIO(text).readline):
-        if item.type == tokenize.NAME and item.string in NAMES:
+        if item.type == tokenize.NAME and item.string in names:
             start = offsets[item.start[0]-1] + item.start[1]
             end = offsets[item.end[0]-1] + item.end[1]
-            changes.append((start, end, NAMES[item.string]))
+            changes.append((start, end, names[item.string]))
     for start, end, word in reversed(changes):
         text = text[:start] + word + text[end:]
     return text
@@ -500,7 +499,9 @@ def verify(root):
             raise CheckError(str(error)) from error
         _sampled_text('--value-imports', target)
         expected = {}
-        for name in COPIES:
+        plan = _copy_plan()
+        names = plan['names']
+        for name in plan['copies']:
             old = _sampled_text(
                 '--extract', trig if name.startswith('_atan') else bounds, name)
             new = _sampled_text('--rename', old)
@@ -509,7 +510,7 @@ def verify(root):
                 for field in ('first', 'second'):
                     new = _sampled_text('--drop-intersection', new, field)
             filename = 'curve_trig.mojo' if name.startswith('_atan') else 'curve_bounds.mojo'
-            expected[NAMES[name]] = _sampled_text('--decorators', texts[filename], name) + new
+            expected[names[name]] = _sampled_text('--decorators', texts[filename], name) + new
         expected.update(_sampled_declarations())
         # Project complete parsed declarations, never raw prefix/tail slices.
         def renamed_source(filename, name):
@@ -532,7 +533,7 @@ def verify(root):
 
         for name, filename in (('_sinc_jet', 'curve_trig.mojo'),
                                ('_arc_offset_jet', 'curve_bounds.mojo')):
-            expected[NAMES[name]] = with_decorators(
+            expected[names[name]] = with_decorators(
                 filename, name, renamed_source(filename, name))
 
         constant = renamed_source('curve_trig.mojo', '_constant_sincos_jet')

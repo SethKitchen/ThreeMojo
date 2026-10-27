@@ -111,6 +111,7 @@ An extra helper or a changed body is refused.
 
 Mojo checks the sampled value copies.
 Ten helpers match their renamed jet sources.
+It names the eight copied helpers and their sampled names.
 The blend copy drops two derivative intersections.
 A renamed helper or a changed copy is refused.
 
