@@ -40,6 +40,8 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record and the winner-sign digest.
 
+`tools/carla_lane_control_gate.mojo` checks the lane-control migration digest and its source digests.
+
 ## Lane poses
 
 The pose follows the derivative of the actual lane-center expression.

@@ -9,7 +9,6 @@ if __package__:
     from . import source_contracts as source
 else:
     import source_contracts as source
-import hashlib
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 from pathlib import Path
@@ -50,6 +49,26 @@ def require(ok, message):
         raise RuntimeError(message)
 
 
+def _gate(payload):
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='lane-control-gate-') as directory:
+        record = Path(directory) / 'migration.json'
+        record.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_control_gate',
+             '--migration', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise RuntimeError(message)
+
+
 def verify(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
@@ -57,14 +76,8 @@ def verify(root, *, _operation=None):
     operation_args = {} if _operation is None else {'_operation': _operation}
     path = root / 'tools/carla_lane_oracle/lane-control-migration.json'
     raw = _typed_source.historical_bytes(root, path, path.read_bytes(), _operation=_operation)
-    require(hashlib.sha256(raw).hexdigest() == RECORD_SHA256,
-            'lane-control migration record changed')
+    _gate(raw)
     record = json.loads(raw)
-    require(hashlib.sha256(record['before_source'].encode()).hexdigest()
-            == record['before_sha256'] == PREDECESSOR_SHA256,
-            'lane-control predecessor changed')
-    require(hashlib.sha256(record['after_source'].encode()).hexdigest()
-            == record['after_sha256'], 'lane-control successor record changed')
     current = _typed_source.historical_text(root, record['module'], _observe_text(root, record['module'], (root / record['module']).read_text(), _operation=_operation), _operation=_operation)
     if token_sha256(current) != token_sha256(record['after_source']):
         if __package__:
