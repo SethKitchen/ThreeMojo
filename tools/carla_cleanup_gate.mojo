@@ -9,6 +9,7 @@
     carla_cleanup_gate --bytes PATH --sha HEX
     carla_cleanup_gate --sha-of PATH
     carla_cleanup_gate --tokens DIR
+    carla_cleanup_gate --words PATH --kind trig|geometry --label PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -18,13 +19,24 @@ An absent previous file checks only the migration record.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tests._python_tokens import token_sha256
+from tests._python_tokens import (
+    stored_float_array,
+    stored_scalar,
+    stored_word_sha256,
+    token_sha256,
+)
 from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PY_STR, PyJson
 from tools._sha256 import sha256_hex
 
 
 comptime _MIGRATION_SHA256 = (
     "01753344fe01d885eb3bbaf253815bca01816c57c09b6e7cc1c3a233808b42a9"
+)
+comptime _TRIG_WORD = (
+    "f2337e89e88234a7a275e1be6398d672abd05210e5b37098e2e3bd39212c3807"
+)
+comptime _GEOMETRY_WORD = (
+    "fb42552072a0166ca3ca94016b39ba98a6645e4091751e4b5b67e199139e96f0"
 )
 
 
@@ -178,6 +190,89 @@ def cleanup_digest(payload: Span[UInt8, _], expected: String) raises:
         _fail("unreviewed dependency pin successor: sum2-guard-pins.json")
 
 
+def _check_stored(source: String, name: String, size: Int) raises:
+    """Require one stored declaration before its word digest is compared.
+
+    Args:
+        source: The module text.
+        name: The constant name.
+        size: The array length, or 0 for one scalar.
+
+    Raises:
+        Error: The declaration is missing, repeated, or not one decimal.
+    """
+    try:
+        if size == 0:
+            var value = stored_scalar(source, name)
+            var rendered = String(value)
+            if rendered.byte_length() < 0:
+                _fail("unsupported complete stored-word scalar: " + name)
+        else:
+            var values = stored_float_array(source, name, size)
+            if len(values) != size:
+                _fail(
+                    "unsupported complete constant-array declaration: " + name
+                )
+    except error:
+        var message = String(error)
+        if message.startswith("reviewed cleanup source contract:"):
+            raise error
+        if (
+            message.startswith("missing or ambiguous")
+            or message == "Missing or ambiguous selector constant"
+        ):
+            _fail("missing or ambiguous stored-word declaration: " + name)
+        if size == 0:
+            _fail("unsupported complete stored-word scalar: " + name)
+        _fail("unsupported complete constant-array declaration: " + name)
+
+
+def cleanup_words(source: String, kind: String, label: String) raises:
+    """Require the trig or geometry stored-word digest.
+
+    Args:
+        source: The module text.
+        kind: `trig` or `geometry`.
+        label: The module path named in a mismatch.
+
+    Raises:
+        Error: The words changed, or a stored declaration cannot be read.
+    """
+    var arrays = List[String]()
+    var sizes = List[Int]()
+    var scalars = List[String]()
+    var expected = String("")
+    if kind == "trig":
+        _check_stored(source, "_COS_COEFFICIENTS", 11)
+        _check_stored(source, "_HALF_PI_HIGH", 0)
+        _check_stored(source, "_HALF_PI_LOW", 0)
+        _check_stored(source, "_INV_HALF_PI", 0)
+        _check_stored(source, "_PHASE_LIMIT", 0)
+        _check_stored(source, "_SIN_COEFFICIENTS", 11)
+        arrays.append("_COS_COEFFICIENTS")
+        arrays.append("_SIN_COEFFICIENTS")
+        sizes.append(11)
+        sizes.append(11)
+        scalars.append("_PHASE_LIMIT")
+        scalars.append("_INV_HALF_PI")
+        scalars.append("_HALF_PI_HIGH")
+        scalars.append("_HALF_PI_LOW")
+        expected = _TRIG_WORD
+    elif kind == "geometry":
+        _check_stored(source, "_GL_NODES", 5)
+        _check_stored(source, "_GL_WEIGHTS", 5)
+        arrays.append("_GL_NODES")
+        arrays.append("_GL_WEIGHTS")
+        sizes.append(5)
+        sizes.append(5)
+        expected = _GEOMETRY_WORD
+    else:
+        _fail("unreviewed stored-word kind")
+    var digest = stored_word_sha256(source, arrays, sizes, scalars)
+    if digest != expected:
+        _fail("unchanged premise dependency changed: " + label)
+
+
 def cleanup_tokens(directory: String) raises:
     """Require each successor text to have its recorded token digest.
 
@@ -208,6 +303,7 @@ def _usage():
         (
             "usage: carla_cleanup_gate --migration PATH [--previous PATH]"
             " | --bytes PATH --sha HEX | --sha-of PATH | --tokens DIR"
+            " | --words PATH --kind trig|geometry --label PATH"
         ),
         file=stderr,
     )
@@ -226,6 +322,9 @@ def main() raises:
     var digest = String("")
     var sha_of = String("")
     var tokens = String("")
+    var words = String("")
+    var kind = String("")
+    var label = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -237,6 +336,9 @@ def main() raises:
             or word == "--sha"
             or word == "--sha-of"
             or word == "--tokens"
+            or word == "--words"
+            or word == "--kind"
+            or word == "--label"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -251,8 +353,14 @@ def main() raises:
                 digest = value
             elif word == "--sha-of":
                 sha_of = value
-            else:
+            elif word == "--tokens":
                 tokens = value
+            elif word == "--words":
+                words = value
+            elif word == "--kind":
+                kind = value
+            else:
+                label = value
             index += 2
             continue
         _usage()
@@ -265,13 +373,30 @@ def main() raises:
         modes += 1
     if tokens.byte_length() > 0:
         modes += 1
+    if (
+        words.byte_length() > 0
+        or kind.byte_length() > 0
+        or label.byte_length() > 0
+    ):
+        modes += 1
     if modes != 1:
         _usage()
     if previous.byte_length() > 0 and migration.byte_length() == 0:
         _usage()
     if payload.byte_length() > 0 and digest.byte_length() == 0:
         _usage()
+    if words.byte_length() > 0 and (
+        label.byte_length() == 0 or (kind != "trig" and kind != "geometry")
+    ):
+        _usage()
+    if words.byte_length() == 0 and (
+        kind.byte_length() > 0 or label.byte_length() > 0
+    ):
+        _usage()
     try:
+        if words.byte_length() > 0:
+            cleanup_words(Path(words).read_text(), kind, label)
+            return
         if tokens.byte_length() > 0:
             cleanup_tokens(tokens)
             return

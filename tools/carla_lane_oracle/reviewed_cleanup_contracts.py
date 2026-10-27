@@ -271,78 +271,29 @@ def verify_premises(root, *, _operation=None):
 # Every other token, including indentation and statement boundaries, stays bound.
 TRIG_PATH = 'extensions/carla/curve_trig.mojo'
 TRIG_TOKEN_SHA256 = '523d5700201b957152eaa79ae6cce9ca8cb9a2a0098d5b105584667360a6de7f'
-TRIG_WORD_SHA256 = 'f2337e89e88234a7a275e1be6398d672abd05210e5b37098e2e3bd39212c3807'
-
-
-def _stored_word_sha256(text, arrays, scalars):
-    if __package__:
-        from . import spiral_moments as moments
-    else:
-        import spiral_moments as moments
-    declarations = moments.ideal_projection.module_statements(text)
-    canonical = {}
-    for name in sorted(set(arrays) | scalars):
-        matches = [item for item in declarations
-                   if item[:2] == [('NAME', 'comptime'), ('NAME', name)]]
-        require(len(matches) == 1, 'missing or ambiguous stored-word declaration: ' + name)
-        if name in arrays:
-            words = moments.parse_array(text, name, arrays[name])
-        else:
-            declaration = matches[0]
-            prefix = [('NAME', 'comptime'), ('NAME', name), ('OP', '='),
-                      ('NAME', 'Float64'), ('OP', '(')]
-            require(declaration[:len(prefix)] == prefix and declaration[-1] == ('OP', ')'),
-                    'unsupported complete stored-word scalar: ' + name)
-            literal = moments.literal_from_tokens(declaration[len(prefix):-1],
-                                                   'scalar literal: ' + name)
-            words = [moments.decimal_word(literal)]
-        canonical[name] = [(tokenize.NAME, 'STORED_WORD_DECLARATION'),
-                           (tokenize.NAME, name),
-                           (tokenize.STRING, json.dumps(words))]
-    kept, statement, depth = [], [], 0
-    for item in source.tokens(text):
-        if item.type in (tokenize.COMMENT, tokenize.NL, tokenize.ENDMARKER):
-            continue
-        if item.type == tokenize.INDENT:
-            depth += 1
-        elif item.type == tokenize.DEDENT:
-            depth -= 1
-        if item.type == tokenize.NEWLINE:
-            # Declaration matching is restricted to real top-level statements.
-            # A module declaration after a function shares this logical line
-            # with DEDENT tokens. Preserve those structural tokens verbatim.
-            leading = 0
-            while leading < len(statement) and statement[leading][0] == tokenize.DEDENT:
-                leading += 1
-            declaration = statement[leading:]
-            if (depth == 0 and len(declaration) >= 2
-                    and declaration[0] == (tokenize.NAME, 'comptime')
-                    and declaration[1][0] == tokenize.NAME
-                    and declaration[1][1] in canonical):
-                statement = statement[:leading] + canonical[declaration[1][1]]
-            kept.extend(statement)
-            kept.append((item.type, item.string))
-            statement = []
-        else:
-            statement.append((item.type, item.string))
-    kept.extend(statement)
-    return _sha256(json.dumps(kept, separators=(',', ':')).encode())
-
-
-
-def trig_word_sha256(text):
-    return _stored_word_sha256(text,
-        {'_COS_COEFFICIENTS': 11, '_SIN_COEFFICIENTS': 11},
-        {'_PHASE_LIMIT', '_INV_HALF_PI', '_HALF_PI_HIGH', '_HALF_PI_LOW'})
-
-
 GEOMETRY_PATH = 'extensions/carla/geometry.mojo'
 GEOMETRY_TOKEN_SHA256 = 'a1979bd37d0ea725f452e0a0a269c7aaef3cda485b291e8fe79b49b35850adcb'
-GEOMETRY_WORD_SHA256 = 'fb42552072a0166ca3ca94016b39ba98a6645e4091751e4b5b67e199139e96f0'
 
 
-def geometry_word_sha256(text):
-    return _stored_word_sha256(text, {'_GL_NODES': 5, '_GL_WEIGHTS': 5}, set())
+def _gate_words(text, kind, label):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='cleanup-words-') as directory:
+        target = Path(directory) / 'source.mojo'
+        target.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--words', str(target), '--kind', kind, '--label', label],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
 
 
 def verify_dependency(path, text, expected):
@@ -351,12 +302,12 @@ def verify_dependency(path, text, expected):
     # A fixed whole-module fingerprint admits only equivalent stored words.
     # Historical pins remain unchanged; other dependencies retain exact tokens.
     if path == TRIG_PATH and expected == TRIG_TOKEN_SHA256:
-        matches = trig_word_sha256(text) == TRIG_WORD_SHA256
-    elif path == GEOMETRY_PATH and expected == GEOMETRY_TOKEN_SHA256:
-        matches = geometry_word_sha256(text) == GEOMETRY_WORD_SHA256
-    else:
-        matches = False
-    require(matches, 'unchanged premise dependency changed: ' + path)
+        _gate_words(text, 'trig', path)
+        return
+    if path == GEOMETRY_PATH and expected == GEOMETRY_TOKEN_SHA256:
+        _gate_words(text, 'geometry', path)
+        return
+    require(False, 'unchanged premise dependency changed: ' + path)
 
 
 def verify(root, *, _operation=None):

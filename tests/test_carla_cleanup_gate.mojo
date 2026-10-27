@@ -14,6 +14,7 @@ from tools.carla_cleanup_gate import (
     cleanup_record,
     cleanup_sha,
     cleanup_tokens,
+    cleanup_words,
 )
 
 
@@ -51,6 +52,37 @@ def test_a_changed_successor_token_is_refused() raises:
         )
     ):
         cleanup_tokens(directory)
+
+
+def test_a_missing_stored_word_is_refused() raises:
+    """A geometry module without its stored arrays fails closed."""
+    with assert_raises(
+        contains=(
+            "reviewed cleanup source contract: missing or ambiguous"
+            " stored-word declaration: _GL_NODES"
+        )
+    ):
+        cleanup_words(
+            "def empty():\n    pass\n",
+            "geometry",
+            "extensions/carla/geometry.mojo",
+        )
+
+
+def test_a_changed_stored_word_is_refused() raises:
+    """Geometry arrays of zeros are not the reviewed words."""
+    var source = String(
+        "comptime _GL_NODES: Array[Float64, 5] = [0.0, 0.0, 0.0, 0.0, 0.0]\n"
+        + "comptime _GL_WEIGHTS: Array[Float64, 5] = [0.0, 0.0, 0.0, 0.0,"
+        " 0.0]\n"
+    )
+    with assert_raises(
+        contains=(
+            "reviewed cleanup source contract: unchanged premise dependency"
+            " changed: extensions/carla/geometry.mojo"
+        )
+    ):
+        cleanup_words(source, "geometry", "extensions/carla/geometry.mojo")
 
 
 def test_the_stored_word_digest_matches_sha256() raises:
