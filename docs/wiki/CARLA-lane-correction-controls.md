@@ -136,6 +136,8 @@ It packs the derived moment words into big-endian payload bytes.
 
 It checks the derived payload size and the three pin-file digests.
 
+It checks the stored array names, word counts, and output paths.
+
 It drops comments and blank lines from one source block.
 
 It reads the stored moment words from the generated table.

@@ -249,6 +249,13 @@ def parse_array(text, name, size):
     return _rounded_words(literals)
 
 
+def _moment_guard(mode, payload):
+    try:
+        ideal_projection.moment_guard(mode, payload)
+    except ValueError as error:
+        raise CheckError(str(error)) from error
+
+
 def _require_moment_pins(pins):
     spec = {
         'arrays': {name: {'path': path, 'size': size}
@@ -284,15 +291,19 @@ def verify_inputs(root):
         flat_words.extend(words)
         flat_names.append(name)
     texts = _fraction_texts(flat_words)
-    require(len(texts) == len(flat_words), 'invalid UInt64 word')
+    _moment_guard('--count', {
+        'left': len(texts), 'right': len(flat_words),
+        'message': 'invalid UInt64 word'})
     cursor = 0
     for name in flat_names:
         size = len(stored_words[name])
         constants[name] = [F(text) for text in texts[cursor:cursor + size]]
         cursor += size
-    require(set(constants) == {'_GL_NODES', '_GL_WEIGHTS',
-                               '_COS_COEFFICIENTS', '_SIN_COEFFICIENTS'},
-            'wrong constant-array set')
+    _moment_guard('--names', {
+        'names': list(constants),
+        'expected': ['_GL_NODES', '_GL_WEIGHTS', '_COS_COEFFICIENTS',
+                     '_SIN_COEFFICIENTS'],
+        'message': 'wrong constant-array set'})
     constants['_words'] = stored_words
     scalar_names = []
     scalar_literals = []
@@ -307,7 +318,9 @@ def verify_inputs(root):
         scalar_literals.append(literal)
         scalar_records.append(record)
     scalar_words = _rounded_words(scalar_literals)
-    require(len(scalar_words) == len(scalar_names), 'binary64 overflow')
+    _moment_guard('--count', {
+        'left': len(scalar_words), 'right': len(scalar_names),
+        'message': 'binary64 overflow'})
     for name, record, word in zip(scalar_names, scalar_records, scalar_words):
         _require_stored_words([word], [record['word']],
                               'stored scalar word changed: ' + name)
@@ -530,10 +543,10 @@ def main(argv=None):
                         _moment_payload(rows)['be64']),
                     'spiral_moment_exact_coefficients.json': (json.dumps({'counts': rows}, indent=2) + '\n').encode(),
                 })
-            for name in products:
-                destination = (output / name).resolve()
-                require(destination not in [path.resolve() for path in protected],
-                        'generation cannot overwrite repository source; use a separate output directory')
+            _moment_guard('--output', {
+                'destinations': [str((output / name).resolve()) for name in products],
+                'protected': [str(path.resolve()) for path in protected],
+            })
             output.mkdir(parents=True, exist_ok=True)
             for name, data in products.items():
                 (output / name).write_bytes(data)

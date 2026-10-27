@@ -605,6 +605,29 @@ def moment_report(meta, blobs):
     return result.stdout
 
 
+def moment_guard(mode, payload):
+    """Require one stored-moment count, name set, or output path guard."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-guard-') as directory:
+        path = Path(directory) / 'guard.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_guards',
+             mode, str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def declaration(text, name, owner=()):
     """Return one declaration selected by the cleanup gate."""
     import os
