@@ -10,6 +10,7 @@ from std.testing import TestSuite, assert_equal
 from tools._lane_predecessor import (
     accept_lane_predecessor,
     selected_lane_minimum,
+    selected_lane_minima,
 )
 
 
@@ -150,6 +151,19 @@ def test_the_rounded_lane_minimum_is_selected() raises:
             + '"name":"_rounded_axis_lane_minimum","owner":["Box"]}'
         ),
         "false",
+    )
+
+
+def test_lane_minima_keep_their_order() raises:
+    """Each declaration keeps its own minimum decision."""
+    assert_equal(
+        selected_lane_minima(
+            '[{"path":"extensions/carla/lane_refinement.mojo",'
+            + '"name":"_rounded_axis_lane_minimum","owner":[]},'
+            + '{"path":"other.mojo","name":"_rounded_axis_lane_minimum",'
+            + '"owner":[]}]'
+        ),
+        '["true","false"]',
     )
 
 

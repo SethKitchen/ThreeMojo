@@ -239,7 +239,10 @@ def _texts_match_all(pairs):
     return ideal_projection.texts_match_all(pairs)
 
 
-def _selected_minimum(path, name, owner):
+def _selected_minima(items):
+    """Return whether each declaration is the rounded lane minimum."""
+    if not items:
+        return []
     import json
     import os
     import subprocess
@@ -247,9 +250,10 @@ def _selected_minimum(path, name, owner):
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps({
-        'path': path, 'name': name, 'owner': list(owner),
-    }, separators=(',', ':'))
+    payload = json.dumps([
+        {'path': path, 'name': name, 'owner': list(owner)}
+        for path, name, owner in items
+    ], separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='lane-minimum-') as directory:
         record = Path(directory) / 'minimum.json'
         record.write_text(payload)
@@ -262,7 +266,7 @@ def _selected_minimum(path, name, owner):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return result.stdout.strip() == 'true'
+    return [flag == 'true' for flag in json.loads(result.stdout)]
 
 
 _SINGLETON_PATHS = None
@@ -472,9 +476,13 @@ def verify_premises(root):
         _gate_graphs([
             (scope_docs[index * 2], scope_docs[index * 2 + 1], label)
             for index, (_, _, label) in enumerate(prepared)])
-    loaded = []
+    minimum_items = []
     for item in record['declarations']:
-        selected = _selected_minimum(item['path'], item['name'], tuple(item['owner']))
+        minimum_items.append((item, tuple(item['owner'])))
+    selected_flags = _selected_minima([
+        (item['path'], item['name'], owner) for item, owner in minimum_items])
+    loaded = []
+    for (item, _owner), selected in zip(minimum_items, selected_flags):
         text = _lane_text(root) if selected else _typed_source.historical_text(root, root/item['path'], (root/item['path']).read_text())
         loaded.append((item, selected, text))
     declared = _declarations([{

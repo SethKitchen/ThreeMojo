@@ -51,6 +51,33 @@ def accept_lane_predecessor(payload: String) raises -> String:
     return "false"
 
 
+def _is_minimum(doc: PyJson, node: Int) raises -> String:
+    """Return whether one declaration is the rounded lane minimum.
+
+    Args:
+        doc: The parsed document.
+        node: One declaration object.
+
+    Returns:
+        `true` when the path is `extensions/carla/lane_refinement.mojo`,
+        the name is `_rounded_axis_lane_minimum`, and `owner` is empty.
+        Otherwise `false`.
+
+    Raises:
+        Error: A field is absent.
+    """
+    var path = doc.text(doc.at(node, "path"))
+    var name = doc.text(doc.at(node, "name"))
+    var owner = doc.at(node, "owner")
+    if (
+        path == "extensions/carla/lane_refinement.mojo"
+        and name == "_rounded_axis_lane_minimum"
+        and doc.length(owner) == 0
+    ):
+        return "true"
+    return "false"
+
+
 def selected_lane_minimum(payload: String) raises -> String:
     """Return whether this declaration is the rounded lane minimum.
 
@@ -66,13 +93,30 @@ def selected_lane_minimum(payload: String) raises -> String:
         Error: A field is absent.
     """
     var doc = PyJson.parse(payload)
-    var path = doc.text(doc.at(doc.root, "path"))
-    var name = doc.text(doc.at(doc.root, "name"))
-    var owner = doc.at(doc.root, "owner")
-    if (
-        path == "extensions/carla/lane_refinement.mojo"
-        and name == "_rounded_axis_lane_minimum"
-        and doc.length(owner) == 0
-    ):
-        return "true"
-    return "false"
+    return _is_minimum(doc, doc.root)
+
+
+def selected_lane_minima(payload: String) raises -> String:
+    """Return whether each declaration is the rounded lane minimum.
+
+    Args:
+        payload: A JSON list. Each item has `path`, `name`, and `owner`.
+
+    Returns:
+        A JSON list of `true` or `false`, in the same order.
+
+    Raises:
+        Error: A field is absent.
+    """
+    var doc = PyJson.parse(payload)
+    var out = PyJson()
+    var rows = out.new_list()
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        out.append(
+            rows, out.new_str(_is_minimum(doc, doc.item(doc.root, index)))
+        )
+        index += 1
+    out.root = rows
+    return out.dumps()

@@ -9,7 +9,8 @@
     carla_lane_predecessor --minimum PATH
 
 `PATH` is the predecessor JSON. `--minimum` reads `path`, `name`, and
-`owner`. The program prints `true` or `false`.
+`owner`. One declaration prints `true` or `false`. A list prints those
+flags in order.
 """
 
 from std.pathlib import Path
@@ -18,7 +19,9 @@ from std.sys import argv, exit, stderr
 from tools._lane_predecessor import (
     accept_lane_predecessor,
     selected_lane_minimum,
+    selected_lane_minima,
 )
+from tools._python_json import PY_LIST, PyJson
 
 
 def _usage():
@@ -46,7 +49,11 @@ def main() raises:
     try:
         var text = Path(path).read_text()
         if minimum:
-            print(selected_lane_minimum(text), end="")
+            var doc = PyJson.parse(text)
+            if doc.kind(doc.root) == PY_LIST:
+                print(selected_lane_minima(text), end="")
+            else:
+                print(selected_lane_minimum(text), end="")
         else:
             print(accept_lane_predecessor(text), end="")
     except error:

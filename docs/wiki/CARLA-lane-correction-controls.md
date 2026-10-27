@@ -72,6 +72,8 @@ It translates universal newlines before that lane text comparison.
 
 It selects the rounded lane minimum before restoring a changed declaration.
 
+It selects every rounded lane minimum in one check.
+
 It reads every rounded LINE declaration in one check.
 
 It compares every rounded LINE module text in one check.
