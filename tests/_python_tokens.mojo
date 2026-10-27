@@ -982,6 +982,88 @@ def module_statements_json(source: String) raises -> String:
     return doc.dumps()
 
 
+def module_routing_json(source: String, constants: String) raises -> String:
+    """Return top-level statements with stored-word bodies masked.
+
+    Args:
+        source: Mojo source.
+        constants: A JSON list of comptime names whose right-hand sides are masked.
+
+    Returns:
+        The canonical routing document.
+
+    Raises:
+        Error: The source routing is unsupported, or a masked declaration has
+            no equals sign.
+    """
+    var statements = PyJson.parse(module_statements_json(source))
+    var names = PyJson.parse(constants)
+    var doc = PyJson()
+    var rows = doc.new_list()
+    var count = statements.length(statements.root)
+    var index = 0
+    while index < count:
+        var statement = statements.item(statements.root, index)
+        var length = statements.length(statement)
+        var const_name = String("")
+        var equals = -1
+        if length > 3:
+            var first = statements.item(statement, 0)
+            var second = statements.item(statement, 1)
+            if (
+                statements.text(statements.item(first, 0)) == "NAME"
+                and statements.text(statements.item(first, 1)) == "comptime"
+            ):
+                const_name = statements.text(statements.item(second, 1))
+                var name_index = 0
+                var named = False
+                while name_index < names.length(names.root):
+                    if (
+                        names.text(names.item(names.root, name_index))
+                        == const_name
+                    ):
+                        named = True
+                    name_index += 1
+                if named:
+                    var token = 0
+                    while token < length:
+                        var pair = statements.item(statement, token)
+                        if (
+                            statements.text(statements.item(pair, 0)) == "OP"
+                            and statements.text(statements.item(pair, 1)) == "="
+                        ):
+                            equals = token
+                            break
+                        token += 1
+                    if equals < 0:
+                        raise Error("('OP', '=') is not in list")
+        var out = doc.new_list()
+        var limit = length
+        if equals >= 0:
+            limit = equals + 1
+        var token = 0
+        while token < limit:
+            var pair = statements.item(statement, token)
+            var copied = doc.new_list()
+            doc.append(
+                copied, doc.new_str(statements.text(statements.item(pair, 0)))
+            )
+            doc.append(
+                copied, doc.new_str(statements.text(statements.item(pair, 1)))
+            )
+            doc.append(out, copied)
+            token += 1
+        if equals >= 0:
+            var stored = doc.new_list()
+            doc.append(stored, doc.new_str("STORED_WORDS"))
+            doc.append(stored, doc.new_str(const_name))
+            doc.append(out, stored)
+        doc.append(rows, out)
+        index += 1
+    doc.root = rows
+    return doc.dumps()
+
+
 def top_level_starts_json(source: String) raises -> String:
     """Return the lines of top-level `def`, `from`, and `@` tokens.
 

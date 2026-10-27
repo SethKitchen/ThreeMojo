@@ -13,6 +13,7 @@ from tests._python_tokens import (
     declaration_place,
     declaration_text,
     significant_json,
+    module_routing_json,
     module_statements_json,
     token_names,
     top_level_starts_json,
@@ -104,6 +105,17 @@ def test_a_nested_def_is_not_a_top_level_start() raises:
         + "from a import b\n"
     )
     assert_equal(top_level_starts_json(source), "[[1,0],[4,0]]")
+
+
+def test_a_stored_word_routing_masks_the_right_hand_side() raises:
+    """A named comptime declaration keeps only the tokens through equals."""
+    var source = "comptime _GL_NODES: Array[Float64, 5] = [0.0]\n"
+    assert_equal(
+        module_routing_json(source, '["_GL_NODES"]'),
+        '[[["NAME","comptime"],["NAME","_GL_NODES"],["OP",":"],'
+        + '["NAME","Array"],["OP","["],["NAME","Float64"],["OP",","],'
+        + '["NUMBER","5"],["OP","]"],["OP","="],["STORED_WORDS","_GL_NODES"]]]',
+    )
 
 
 def test_a_module_docstring_is_not_a_top_level_statement() raises:

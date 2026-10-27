@@ -326,13 +326,28 @@ def module_statements(text):
 def module_routing(text, word_constants=()):
     # Called only after complete logical literal declarations and stored words
     # have been checked. Never use a prefix-only literal match before masking.
-    statements = module_statements(text)
-    for index, statement in enumerate(statements):
-        if (len(statement) > 3 and statement[0] == ('NAME', 'comptime')
-                and statement[1][1] in word_constants):
-            equals = statement.index(('OP', '='))
-            statements[index] = statement[:equals+1] + [('STORED_WORDS', statement[1][1])]
-    return json.dumps(statements, separators=(',', ':'), ensure_ascii=True)
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='module-routing-') as directory:
+        folder = Path(directory)
+        source = folder / 'source.mojo'
+        source.write_text(text)
+        (folder / 'constants.json').write_text(json.dumps(sorted(word_constants)))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--routing', str(source), '--constants', str(folder / 'constants.json')],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
 
 
 def _top_level_source_starts(text):

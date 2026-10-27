@@ -18,6 +18,7 @@
     carla_cleanup_gate --moves PATH
     carla_cleanup_gate --statements PATH
     carla_cleanup_gate --starts PATH
+    carla_cleanup_gate --routing PATH --constants PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -34,6 +35,7 @@ from tests._python_tokens import (
     stored_scalar,
     significant_json,
     stored_word_sha256,
+    module_routing_json,
     module_statements_json,
     top_level_starts_json,
     token_names,
@@ -428,6 +430,7 @@ def _usage():
             " | --bounds PATH --name NAME [--owner NAME]"
             " | --significant-json DIR | --names DIR | --moves PATH"
             " | --statements PATH | --starts PATH"
+            " | --routing PATH --constants PATH"
         ),
         file=stderr,
     )
@@ -459,6 +462,8 @@ def main() raises:
     var moves = String("")
     var statements = String("")
     var starts = String("")
+    var routing = String("")
+    var constants = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -483,6 +488,8 @@ def main() raises:
             or word == "--moves"
             or word == "--statements"
             or word == "--starts"
+            or word == "--routing"
+            or word == "--constants"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -523,8 +530,12 @@ def main() raises:
                 moves = value
             elif word == "--statements":
                 statements = value
-            else:
+            elif word == "--starts":
                 starts = value
+            elif word == "--routing":
+                routing = value
+            else:
+                constants = value
             index += 2
             continue
         _usage()
@@ -565,6 +576,8 @@ def main() raises:
         modes += 1
     if starts.byte_length() > 0:
         modes += 1
+    if routing.byte_length() > 0 or constants.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if previous.byte_length() > 0 and migration.byte_length() == 0:
@@ -590,6 +603,16 @@ def main() raises:
     ) and decl_name.byte_length() == 0:
         _usage()
     try:
+        if (routing.byte_length() == 0) != (constants.byte_length() == 0):
+            _usage()
+        if routing.byte_length() > 0:
+            print(
+                module_routing_json(
+                    Path(routing).read_text(), Path(constants).read_text()
+                ),
+                end="",
+            )
+            return
         if starts.byte_length() > 0:
             print(top_level_starts_json(Path(starts).read_text()), end="")
             return
