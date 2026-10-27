@@ -28,17 +28,36 @@ def require(condition, message):
         raise ValueError('raw cut inverse contract: ' + message)
 
 
+def _gate(migration, module=None):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='raw-cut-gate-') as directory:
+        folder = Path(directory)
+        record_path = folder / 'migration.json'
+        record_path.write_bytes(migration)
+        arguments = ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+                     'carla_raw_cut_gate', '--migration', str(record_path)]
+        if module is not None:
+            module_path = folder / 'module.mojo'
+            module_path.write_text(module)
+            arguments.extend(['--module', str(module_path)])
+        result = subprocess.run(arguments, capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
-    require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256,
-            'unreviewed migration record')
-    record = json.loads(payload, object_pairs_hook=source.unique_keys)
-    require(record['schema'] == 1 and record['path'] == SOURCE_PATH,
-            'wrong successor source or schema')
-    require(source.token_sha256(record['before_source']) == record['before_token_sha256']
-            and source.token_sha256(record['after_source']) == record['after_token_sha256'],
-            'recorded source/token mismatch')
-    return record
+    _gate(payload)
+    read_record.payload = payload
+    return json.loads(payload, object_pairs_hook=source.unique_keys)
 
 
 def verify_premises(root, *, _operation=None):
@@ -106,7 +125,6 @@ def verify(root, *, _operation=None):
     if _operation is not None:
         text = full_audit._observe_text(root, SOURCE_PATH, text, _operation=_operation)
     text = _typed_source.historical_text(root, SOURCE_PATH, text, _operation=_operation)
-    require(source.token_sha256(text) == record['after_token_sha256'],
-            'complete raw inverse successor changed')
+    _gate(read_record.payload, text)
     verify_premises(root, _operation=_operation)
     return record
