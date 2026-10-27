@@ -36,6 +36,8 @@ It restores one selection function inside its line span.
 
 `tools/carla_singleton_gate.mojo` checks the rounded LINE singleton record, the lane text token, the consumer graphs, and the selector path.
 
+It translates universal newlines before that lane text comparison.
+
 It keeps the consumer import scope before the first definition.
 
 `tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record, the producer functions, and the arc layout.

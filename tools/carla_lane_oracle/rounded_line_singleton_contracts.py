@@ -11,7 +11,6 @@ else:
     import source_contracts as _typed_source
 
 # #333 explicit historical provenance views; current inputs remain operation-owned.
-import io
 import json
 if __package__:
     from . import source_contracts as source
@@ -205,13 +204,34 @@ def _import_scope(text):
     return result.stdout
 
 
+def _universal_newlines(text):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='universal-newlines-') as directory:
+        path = Path(directory) / 'text.txt'
+        path.write_bytes(text.encode('utf-8'))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_universal_newlines', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def _lane_text(root):
     """Compare actual text/byte views without imposing a historical file pin."""
     path = root/'extensions/carla/lane_refinement.mojo'
     text = path.read_text()
     physical = path.read_bytes()
-    with io.TextIOWrapper(io.BytesIO(physical), encoding='utf-8', newline=None) as reader:
-        decoded = reader.read()
+    decoded = _universal_newlines(physical.decode('utf-8'))
     _gate_views(text, decoded)
     return _typed_source.historical_text(root, path, physical.decode('utf-8'))
 
