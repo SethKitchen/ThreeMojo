@@ -300,12 +300,14 @@ def _reviewed_text(root, path, record):
     return current['before_source']
 
 
-def _verify_dependency(path, text, expected):
+def _verify_dependencies(items):
+    if not items:
+        return
     if __package__:
         from . import reviewed_cleanup_contracts as words
     else:
         import reviewed_cleanup_contracts as words
-    words.verify_dependency(path, text, expected)
+    words.verify_dependencies(items)
 
 
 def _import_scope(text):
@@ -422,9 +424,11 @@ def verify_premises(root):
         checked.append((path, actual, item['source'], item['token_sha256']))
     module_docs = _significant_documents(
         [text for _, actual, source, _ in checked for text in (actual, source)])
+    pending = []
     for index, (path, actual, _, token) in enumerate(checked):
         if not _same_text(module_docs[index * 2], module_docs[index * 2 + 1]):
-            _verify_dependency(path, actual, token)
+            pending.append((path, actual, token))
+    _verify_dependencies(pending)
     prepared = []
     labels = _singleton_paths()
     for path, expected in record['import_scopes'].items():
@@ -475,7 +479,10 @@ def verify_premises(root):
 
 def verify(root):
     record = read_record(root)
+    dependencies = []
     for path, item in record['modules'].items():
-        _verify_dependency(path, _reviewed_text(root, path, record), item['token_sha256'])
+        dependencies.append((
+            path, _reviewed_text(root, path, record), item['token_sha256']))
+    _verify_dependencies(dependencies)
     verify_premises(root)
     return record

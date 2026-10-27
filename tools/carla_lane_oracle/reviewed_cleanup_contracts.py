@@ -505,7 +505,7 @@ def _gate_words(text, kind, label):
         raise ValueError(message)
 
 
-def _dependency_choice(text, expected, path):
+def _dependency_query(payload):
     import json
     import os
     import subprocess
@@ -513,19 +513,10 @@ def _dependency_choice(text, expected, path):
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    pins = _dependency_pins()
-    payload = json.dumps({
-        'text': text,
-        'expected': expected,
-        'path': path,
-        'trig_path': pins['trig_path'],
-        'trig_token': pins['trig_token'],
-        'geometry_path': pins['geometry_path'],
-        'geometry_token': pins['geometry_token'],
-    }, separators=(',', ':'))
+    text = json.dumps(payload, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='dependency-words-') as directory:
         record = Path(directory) / 'choice.json'
-        record.write_text(payload)
+        record.write_text(text)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo,
              'carla_dependency_words', str(record)],
@@ -538,15 +529,56 @@ def _dependency_choice(text, expected, path):
     return result.stdout.strip()
 
 
+def _dependency_fields(path, text, expected, pins):
+    return {
+        'text': text,
+        'expected': expected,
+        'path': path,
+        'trig_path': pins['trig_path'],
+        'trig_token': pins['trig_token'],
+        'geometry_path': pins['geometry_path'],
+        'geometry_token': pins['geometry_token'],
+    }
+
+
+def _dependency_choice(text, expected, path):
+    pins = _dependency_pins()
+    return _dependency_query(_dependency_fields(path, text, expected, pins))
+
+
+def _dependency_choices(items):
+    if not items:
+        return []
+    import json
+    pins = _dependency_pins()
+    return json.loads(_dependency_query([
+        _dependency_fields(path, text, expected, pins)
+        for path, text, expected in items]))
+
+
+def _apply_word_choice(path, text, choice, pins):
+    if choice == pins['trig_choice']:
+        _gate_words(text, pins['trig_choice'], path)
+    elif choice == pins['geometry_choice']:
+        _gate_words(text, pins['geometry_choice'], path)
+
+
+def verify_dependencies(items):
+    """Choose every dependency word check, then run the selected checks."""
+    if not items:
+        return
+    choices = _dependency_choices(items)
+    pins = _dependency_pins()
+    for (path, text, _expected), choice in zip(items, choices):
+        _apply_word_choice(path, text, choice, pins)
+
+
 def verify_dependency(path, text, expected):
     # A fixed whole-module fingerprint admits only equivalent stored words.
     # Historical pins remain unchanged; other dependencies retain exact tokens.
     pins = _dependency_pins()
     choice = _dependency_choice(text, expected, path)
-    if choice == pins['trig_choice']:
-        _gate_words(text, pins['trig_choice'], path)
-    elif choice == pins['geometry_choice']:
-        _gate_words(text, pins['geometry_choice'], path)
+    _apply_word_choice(path, text, choice, pins)
 
 
 def verify(root, *, _operation=None):
@@ -575,10 +607,12 @@ def verify(root, *, _operation=None):
                       labels['unreviewed'] + path))
     if pairs:
         _gate_tokens(pairs)
+    dependencies = []
     for path, expected in record['premise_dependencies'].items():
-        verify_dependency(path, _typed_source.historical_text(root, path, _observe_text(
+        dependencies.append((path, _typed_source.historical_text(root, path, _observe_text(
             root, path, (root/path).read_text(), _operation=_operation), _operation=_operation),
-            expected['token_sha256'])
+            expected['token_sha256']))
+    verify_dependencies(dependencies)
     verify_premises(root, **operation_args)
     frozen.verify(root, **operation_args)
     if _operation is None:

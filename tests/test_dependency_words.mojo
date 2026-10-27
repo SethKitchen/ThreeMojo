@@ -8,7 +8,10 @@
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._python_tokens import token_sha256
-from tools._dependency_words import dependency_word_choice
+from tools._dependency_words import (
+    dependency_word_choice,
+    dependency_word_choices,
+)
 
 
 def _payload(
@@ -89,6 +92,34 @@ def test_an_unreviewed_dependency_change_is_refused() raises:
     ):
         _ = dependency_word_choice(
             _payload("changed", "other-token", "geometry.mojo")
+        )
+
+
+def test_dependency_word_lists_keep_their_order() raises:
+    """Each dependency keeps its own word check."""
+    assert_equal(
+        dependency_word_choices(
+            "["
+            + _payload("same", "same", "other.mojo")
+            + ","
+            + _payload("changed", "trig-token", "trig.mojo")
+            + ","
+            + _payload("changed", "geometry-token", "geometry.mojo")
+            + "]"
+        ),
+        '["match","trig","geometry"]',
+    )
+
+
+def test_a_later_unreviewed_dependency_is_refused() raises:
+    """A later changed token keeps its message."""
+    with assert_raises(contains="changed: other.mojo"):
+        _ = dependency_word_choices(
+            "["
+            + _payload("same", "same", "other.mojo")
+            + ","
+            + _payload("changed", "other-token", "other.mojo")
+            + "]"
         )
 
 

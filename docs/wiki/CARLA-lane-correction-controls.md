@@ -144,6 +144,8 @@ It admits trig and geometry word changes only for their reviewed token.
 
 It hashes a premise dependency before choosing its word check.
 
+It chooses every premise dependency word check in one check.
+
 It selects each reviewed declaration and checks that each premise fragment occurs once, in order.
 
 It keeps the five reviewed premise fragment lists.

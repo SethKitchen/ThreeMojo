@@ -610,10 +610,12 @@ def verify(root, *, _operation=None):
         from . import reviewed_cleanup_contracts as cleanup
     else:
         import reviewed_cleanup_contracts as cleanup
+    dependencies = []
     for path, expected in record['premise_dependencies'].items():
-        cleanup.verify_dependency(path, _typed_source.historical_text(root, path, _observe_text(
+        dependencies.append((path, _typed_source.historical_text(root, path, _observe_text(
             root, path, (root/path).read_text(), _operation=_operation), _operation=_operation),
-            expected['token_sha256'])
+            expected['token_sha256']))
+    cleanup.verify_dependencies(dependencies)
     verify_premises(root, **operation_args)
     return record
 
