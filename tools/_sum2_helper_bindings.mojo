@@ -14,8 +14,10 @@ from tests._python_tokens import (
     _binding_shadow,
     _direct_imports_json,
     _tokenize,
+    function_slice,
 )
 from tools._python_json import PyJson
+from tools._sum2_plan import sum2_plan
 
 
 comptime _NAME = 1
@@ -784,3 +786,31 @@ def sum2_half_import_checks(bounds: String, interval: String) raises:
     _binding_shadow(
         interval, "_stored_half", "extensions.carla.curve_interval", True
     )
+
+
+def sum2_import_batch(payload: String) raises:
+    """Check the helper imports, the stored-half function, and the half import.
+
+    Args:
+        payload: JSON with `texts` and `interval`. `texts` maps each module
+            stem to its source.
+
+    Raises:
+        Error: An import changed, a helper is shadowed, or `_stored_half`
+            is missing.
+    """
+    var doc = PyJson.parse(payload)
+    var texts = doc.at(doc.root, "texts")
+    var plan = PyJson.parse(sum2_plan())
+    var helpers = plan.at(plan.root, "helpers")
+    sum2_helper_import_checks(
+        doc.text(doc.at(texts, plan.text(plan.at(helpers, "lane")))),
+        doc.text(doc.at(texts, plan.text(plan.at(helpers, "bounds")))),
+        doc.text(doc.at(texts, plan.text(plan.at(helpers, "roundoff")))),
+    )
+    var interval = doc.text(doc.at(doc.root, "interval"))
+    _ = function_slice(interval, plan.text(plan.at(plan.root, "stored_half")))
+    var bounds_name = plan.text(
+        plan.at(helpers, plan.text(plan.at(plan.root, "half_key")))
+    )
+    sum2_half_import_checks(doc.text(doc.at(texts, bounds_name)), interval)

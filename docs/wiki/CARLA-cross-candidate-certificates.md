@@ -186,6 +186,8 @@ It keeps the four Sum2 module names and the five caller comparisons.
 
 It keeps the five Sum2 caller graphs in one comparison.
 
+It keeps the Sum2 helper imports and the stored-half function in one check.
+
 It keeps the roundoff predecessor and the stored-half name.
 
 It keeps the ideal spiral block markers.
