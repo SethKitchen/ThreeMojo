@@ -201,22 +201,48 @@ def _dispatch_query(mode, payload):
     return result.stdout.strip()
 
 
+_DISPATCH_LABELS = None
+
+
+def _dispatch_labels():
+    """Return the dispatch path, choice names, and premise messages."""
+    global _DISPATCH_LABELS
+    if _DISPATCH_LABELS is not None:
+        return _DISPATCH_LABELS
+    import json
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_labels'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _DISPATCH_LABELS = json.loads(result.stdout)
+    return _DISPATCH_LABELS
+
+
 def reviewed_source(root, path, expected, *, _operation=None):
     """Compose the exact raw inverse theorem with this retained outer proof."""
     if _operation is not None:
         _check_operation(root, _operation)
     text = _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
+    labels = _dispatch_labels()
     choice = _dispatch_query('--choice', {
         'token': ideal_projection.token_sha256(text),
         'expected': expected,
         'path': path,
-        'dispatch_path': 'extensions/carla/curve_sample_dispatch.mojo',
+        'dispatch_path': labels['dispatch_path'],
     })
-    if choice == 'current':
+    if choice == labels['current']:
         return text
-    if choice != 'restore':
-        raise ValueError(
-            'curve support/dispatch contract: unreviewed source successor: ' + path)
+    if choice != labels['restore']:
+        raise ValueError(labels['unreviewed'] + path)
     if __package__:
         from . import raw_cut_inverse_contracts as raw
     else:
@@ -308,13 +334,14 @@ def verify_premises(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
     record = read_record(root)
+    labels = _dispatch_labels()
     operation_args = {} if _operation is None else {'_operation': _operation}
     prepared = []
     for path, item in record['sources'].items():
         prepared.append((
             reviewed_source(root, path, item['after_token_sha256'], **operation_args),
             item['after_source'],
-            'successor operations changed: ' + path))
+            labels['successor_operations'] + path))
     if prepared:
         docs = _significant_documents(
             [text for actual, expected, _ in prepared for text in (actual, expected)])
@@ -326,7 +353,7 @@ def verify_premises(root, *, _operation=None):
         prepared.append((
             _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation),
             item['source'],
-            'interval/environment premise changed: ' + path))
+            labels['premise_modules'] + path))
     if prepared:
         docs = _significant_documents(
             [text for actual, expected, _ in prepared for text in (actual, expected)])
@@ -342,7 +369,7 @@ def verify_premises(root, *, _operation=None):
             'actual': current_doc, 'expected': recorded_doc}) == 'true'
         fallback = _premise_fallback(
             matched, item['path'], item['name'], tuple(item['owner']))
-        if fallback == 'seed':
+        if fallback == labels['seed']:
             try:
                 if __package__:
                     from . import seed_count_contracts as seed_count
@@ -355,8 +382,8 @@ def verify_premises(root, *, _operation=None):
                 matched = _dispatch_query('--match', {
                     'actual': current_doc, 'expected': recorded_doc}) == 'true'
             except (ValueError, OSError) as error:
-                require(False, 'reviewed Map caller premise changed: ' + str(error))
-        if fallback == 'lane':
+                require(False, labels['seed_message'] + str(error))
+        if fallback == labels['lane']:
             try:
                 if __package__:
                     from . import lane_control_contracts as lane
@@ -365,13 +392,13 @@ def verify_premises(root, *, _operation=None):
                 matched = lane.accepts_predecessor(root, item['path'], item['name'],
                                                   tuple(item['owner']), item['source'], **operation_args)
             except RuntimeError as error:
-                require(False, 'reviewed lane caller premise changed: ' + str(error))
-        require(matched, 'index or guarded caller premise changed: ' + item['name'])
+                require(False, labels['lane_message'] + str(error))
+        require(matched, labels['premise_function'] + item['name'])
     pairs = []
     for item in record['reference_functions']:
         actual = _declaration(_typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation), item['name'], ())
         pairs.append((actual, item['token_sha256'],
-                      'native predecessor reference changed: ' + item['name']))
+                      labels['reference'] + item['name']))
     if pairs:
         _gate_tokens(pairs)
     return record
@@ -381,11 +408,12 @@ def verify(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
     record = read_record(root)
+    labels = _dispatch_labels()
     operation_args = {} if _operation is None else {'_operation': _operation}
     pairs = []
     for path, item in record['sources'].items():
         pairs.append((reviewed_source(root,path,item['after_token_sha256'], **operation_args),
-                      item['after_token_sha256'], 'complete successor changed: ' + path))
+                      item['after_token_sha256'], labels['complete'] + path))
     if pairs:
         _gate_tokens(pairs)
     verify_premises(root, **operation_args)
