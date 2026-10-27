@@ -16,6 +16,7 @@ from tests._python_tokens import (
     project_reference_value,
     project_union_value,
     sampled_top_level,
+    strip_try_only_refusal,
 )
 from tests._python_expr import (
     body_role_json,
@@ -397,6 +398,31 @@ def test_decorator_lines_stay_above_their_function() raises:
     )
     with assert_raises(contains="missing or ambiguous function"):
         _ = decorator_prefix(source, "absent")
+
+
+def test_try_only_refusal_is_removed_from_the_proof() raises:
+    """The reuse parameter and its elif branch are deleted together."""
+    var source = (
+        "def _lane_jet_model_proof(\n"
+        "    ideal_translation: Bool = False,\n"
+        "    require_reuse: Bool = False,\n"
+        "):\n"
+        "    if reused:\n"
+        "        point = reused.value()\n"
+        "    elif require_reuse:\n"
+        "        return _unknown_point()\n"
+        "    else:\n"
+        "        point = fallback()\n"
+    )
+    var projected = strip_try_only_refusal(source)
+    if projected.find("require_reuse") >= 0:
+        raise Error("try-only parameter remained")
+    if projected.find("fallback()") < 0 or projected.find("if reused:") < 0:
+        raise Error("fallback branch missing")
+    with assert_raises(contains="try-only refusal changed"):
+        _ = strip_try_only_refusal(
+            "def _lane_jet_model_proof():\n    return 1\n"
+        )
 
 
 def main() raises:

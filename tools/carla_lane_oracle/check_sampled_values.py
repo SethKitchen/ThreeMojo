@@ -286,7 +286,6 @@ def reviewed_reference_tree(text, root=ROOT, *, _operation=None):
         text = full_audit.reviewed_text(root, 'extensions/carla/curve_bounds.mojo', text, _operation=_operation)
     except (ValueError, OSError) as error:
         raise CheckError('reference module changed; renewed review required: curve_bounds.mojo: ' + str(error)) from error
-    tree = syntax_tree(text)
     # The reviewed no-counter-alias successor changes only optional admission.
     # Reconstruct its exact historical helper before the original projection;
     # every original reference graph digest remains unchanged.
@@ -298,31 +297,18 @@ def reviewed_reference_tree(text, root=ROOT, *, _operation=None):
         previous = budget.historical_function(text, root=root)
     except ValueError as error:
         raise CheckError('reference module changed; renewed review required: curve_bounds.mojo: ' + str(error)) from error
+    try:
+        try:
+            from ideal_projection import _try_only_gate
+        except ModuleNotFoundError:
+            from tools.carla_lane_oracle.ideal_projection import _try_only_gate
+        _try_only_gate(text)
+    except ValueError as error:
+        raise CheckError(str(error)) from error
+    tree = syntax_tree(_sampled_text('--strip-try-only', text))
     current = unique_function(tree, '_try_lane_envelope_capture')
     historical = unique_function(syntax_tree(previous), '_try_lane_envelope_capture')
     tree.body[tree.body.index(current)] = historical
-    node = unique_function(tree, '_lane_jet_model_proof')
-    require(dump(node.args.args[-1]) == dump(ast.arg(
-        arg='require_reuse', annotation=ast.Name(id='Bool', ctx=ast.Load()))),
-        'try-only parameter changed')
-    require(dump(node.args.defaults[-1]) == dump(ast.Constant(value=False)),
-            'try-only default must preserve historical callers')
-    matches = [item for item in node.body if isinstance(item, ast.If)
-               and dump(item.test) == dump(ast.Name(id='reused', ctx=ast.Load()))]
-    require(len(matches) == 1 and len(matches[0].orelse) == 1
-            and isinstance(matches[0].orelse[0], ast.If),
-            'try-only refusal missing from reuse/fallback edge')
-    branch = matches[0].orelse[0]
-    expected = ast.parse('if require_reuse: return _unknown_point()').body[0]
-    require(dump(branch.test) == dump(expected.test)
-            and dump(branch.body) == dump(expected.body) and bool(branch.orelse),
-            'try-only refusal changed')
-    require(sum(isinstance(item, ast.Name) and item.id == 'require_reuse'
-                for item in ast.walk(node)) == 1,
-            'try-only flag has an unreviewed use')
-    matches[0].orelse = branch.orelse
-    node.args.args.pop()
-    node.args.defaults.pop()
     return tree
 
 

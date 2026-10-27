@@ -2197,6 +2197,174 @@ def decorator_prefix(source: String, name: String) raises -> String:
     return String(source[byte = starts[first] : starts[found]])
 
 
+def _line_end(source: String, start: Int) -> Int:
+    """Return the byte after the line that begins at `start`.
+
+    Args:
+        source: The original source.
+        start: The first byte of the line.
+
+    Returns:
+        The byte after that line's newline, or the end of the source.
+    """
+    var data = source.as_bytes()
+    var index = start
+    while index < len(data) and data[index] != 10:
+        index += 1
+    if index < len(data):
+        return index + 1
+    return len(data)
+
+
+def strip_try_only_refusal(source: String) raises -> String:
+    """Remove the reviewed try-only parameter and its refusal branch.
+
+    Args:
+        source: Mojo source that contains `_lane_jet_model_proof`.
+
+    Returns:
+        The source without `require_reuse` and without its `elif` branch.
+
+    Raises:
+        Error: The function is missing or the refusal is not the reviewed shape.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    var lines = List[Int]()
+    var start_cols = List[Int]()
+    var end_lines = List[Int]()
+    var end_cols = List[Int]()
+    _tokenize_lines(
+        source, kinds, texts, lines, start_cols, end_lines, end_cols
+    )
+    var starts = List[Int]()
+    var names = List[String]()
+    var indent = 0
+    var bracket = 0
+    var in_statement = False
+    var nested = False
+    var index = 0
+    while index < len(kinds):
+        var kind = kinds[index]
+        var text = texts[index]
+        if kind == _INDENT:
+            indent += 1
+            if in_statement:
+                nested = True
+        elif kind == _DEDENT:
+            indent -= 1
+        elif text == "(" or text == "[" or text == "{":
+            bracket += 1
+        elif text == ")" or text == "]" or text == "}":
+            if bracket > 0:
+                bracket -= 1
+        elif (
+            kind == _NEWLINE
+            and bracket == 0
+            and indent == 0
+            and in_statement
+            and not nested
+        ):
+            var nxt = index + 1
+            if nxt >= len(kinds) or kinds[nxt] != _INDENT:
+                in_statement = False
+        elif (
+            indent == 0
+            and bracket == 0
+            and kind != _NEWLINE
+            and kind != _INDENT
+            and kind != _DEDENT
+        ):
+            if nested and (text == "elif" or text == "else"):
+                nested = False
+            elif not in_statement or nested:
+                var function_name = String("")
+                if (
+                    text == "def"
+                    and index + 1 < len(kinds)
+                    and kinds[index + 1] == _NAME
+                ):
+                    function_name = texts[index + 1]
+                starts.append(_byte_at(source, lines[index], 0))
+                names.append(function_name)
+                in_statement = True
+                nested = False
+        index += 1
+    var found = -1
+    var hits = 0
+    var cursor = 0
+    while cursor < len(names):
+        if names[cursor] == "_lane_jet_model_proof":
+            hits += 1
+            found = cursor
+        cursor += 1
+    if hits != 1:
+        raise Error("missing or ambiguous function: _lane_jet_model_proof")
+    var limit = len(source.as_bytes())
+    var func_end = limit
+    if found + 1 < len(starts):
+        func_end = starts[found + 1]
+    var param_at = -1
+    var elif_at = -1
+    var else_at = -1
+    var elif_indent = -1
+    indent = 0
+    index = 0
+    while index < len(kinds):
+        var kind = kinds[index]
+        var text = texts[index]
+        var at = _byte_at(source, lines[index], 0)
+        if at < starts[found] or at >= func_end:
+            if kind == _INDENT:
+                indent += 1
+            elif kind == _DEDENT:
+                indent -= 1
+            index += 1
+            continue
+        if kind == _INDENT:
+            indent += 1
+        elif kind == _DEDENT:
+            indent -= 1
+        elif (
+            text == "require_reuse"
+            and index + 4 < len(kinds)
+            and texts[index + 1] == ":"
+            and texts[index + 2] == "Bool"
+            and texts[index + 3] == "="
+            and texts[index + 4] == "False"
+        ):
+            param_at = at
+        elif (
+            kind == _NAME
+            and text == "elif"
+            and index + 1 < len(kinds)
+            and texts[index + 1] == "require_reuse"
+        ):
+            elif_at = at
+            elif_indent = indent
+        elif (
+            elif_at >= 0
+            and else_at < 0
+            and indent == elif_indent
+            and text == "else"
+        ):
+            else_at = at
+        index += 1
+    if param_at < 0 or elif_at < 0 or else_at < 0 or else_at <= elif_at:
+        raise Error("try-only refusal changed")
+    var param_end = _line_end(source, param_at)
+    var out = String("")
+    if else_at > param_end:
+        out += String(source[byte=0:param_at])
+        out += String(source[byte=param_end:elif_at])
+        out += String(source[byte=else_at:limit])
+    else:
+        out += String(source[byte=0:elif_at])
+        out += String(source[byte=else_at:param_at])
+        out += String(source[byte=param_end:limit])
+    return out
+
+
 def _name_byte(byte: UInt8) -> Bool:
     """Return whether `byte` can appear inside an identifier.
 

@@ -17,6 +17,7 @@
     carla_sampled_text --project-reference PATH
     carla_sampled_text --project-lane PATH
     carla_sampled_text --decorators PATH --name NAME
+    carla_sampled_text --strip-try-only PATH
 
 The extract mode prints one top-level function. The rename mode prints the
 declaration with sampled identifiers renamed. The drop mode removes the first
@@ -28,6 +29,7 @@ heading. The project-union mode prints the value-only union signature.
 The project-reference mode prints the sampled dispatcher.
 The project-lane mode prints the value-only lane dispatcher.
 The decorators mode prints the lines above one function.
+The strip-try-only mode removes the reviewed reuse refusal.
 The caller supplies the source.
 """
 
@@ -42,6 +44,7 @@ from tests._python_expr import (
 from tests._python_tokens import (
     project_constant_heading,
     decorator_prefix,
+    strip_try_only_refusal,
     project_lane_value,
     project_reference_value,
     project_union_value,
@@ -68,7 +71,7 @@ def _usage():
             " PATH --index N | --top-level PATH --name NAMES |"
             " --project-constant PATH | --project-union PATH |"
             " --project-reference PATH | --project-lane PATH | --decorators"
-            " PATH --name NAME"
+            " PATH --name NAME | --strip-try-only PATH"
         ),
         file=stderr,
     )
@@ -96,6 +99,7 @@ def main() raises:
     var project_reference = String("")
     var project_lane = String("")
     var decorators = String("")
+    var strip_try_only = String("")
     var name = String("")
     var index_text = String("")
     var arguments = argv()
@@ -118,6 +122,7 @@ def main() raises:
             or word == "--project-reference"
             or word == "--project-lane"
             or word == "--decorators"
+            or word == "--strip-try-only"
             or word == "--index"
             or word == "--name"
         ):
@@ -154,6 +159,8 @@ def main() raises:
                 project_lane = value
             elif word == "--decorators":
                 decorators = value
+            elif word == "--strip-try-only":
+                strip_try_only = value
             elif word == "--index":
                 index_text = value
             else:
@@ -191,6 +198,8 @@ def main() raises:
     if project_lane.byte_length() > 0:
         modes += 1
     if decorators.byte_length() > 0:
+        modes += 1
+    if strip_try_only.byte_length() > 0:
         modes += 1
     if modes != 1:
         _usage()
@@ -297,6 +306,12 @@ def main() raises:
             return
         if decorators.byte_length() > 0:
             print(decorator_prefix(Path(decorators).read_text(), name), end="")
+            return
+        if strip_try_only.byte_length() > 0:
+            print(
+                strip_try_only_refusal(Path(strip_try_only).read_text()),
+                end="",
+            )
             return
         print(rename_sampled_identifiers(Path(rename).read_text()), end="")
     except error:
