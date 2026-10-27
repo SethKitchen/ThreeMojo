@@ -54,6 +54,8 @@ It lists the executable names checked by the optional-runtime contract.
 
 It removes an argument move sigil before that contract parses a function body.
 
+It returns the top-level statements used by the spiral-moment and selection contracts.
+
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.

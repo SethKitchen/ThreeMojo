@@ -899,6 +899,89 @@ def declaration_routing(source: String) raises -> String:
     return doc.dumps()
 
 
+def _token_name(kind: Int) -> String:
+    """Return the Python token name for one kept kind.
+
+    Args:
+        kind: The Python token number.
+
+    Returns:
+        `NAME`, `NUMBER`, `STRING`, or `OP`.
+    """
+    if kind == _NAME:
+        return "NAME"
+    if kind == _NUMBER:
+        return "NUMBER"
+    if kind == _STRING:
+        return "STRING"
+    return "OP"
+
+
+def module_statements_json(source: String) raises -> String:
+    """Return the top-level statements, without the module docstring.
+
+    Args:
+        source: Mojo source.
+
+    Returns:
+        The canonical JSON list of `[kind name, text]` statements.
+
+    Raises:
+        Error: The source routing is unsupported or incomplete.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    try:
+        _tokenize(source, kinds, texts)
+    except error:
+        _ = String(error)
+        raise Error("unsupported top-level source routing")
+    var doc = PyJson()
+    var rows = doc.new_list()
+    var statement_kinds = List[Int]()
+    var statement_texts = List[String]()
+    var depth = 0
+    var saw_statement = False
+    var index = 0
+    while index < len(kinds):
+        var kind = kinds[index]
+        if kind == _INDENT:
+            depth += 1
+        elif kind == _DEDENT:
+            depth -= 1
+        elif kind == _NEWLINE:
+            if len(statement_kinds) > 0:
+                var docstring = (
+                    not saw_statement
+                    and len(statement_kinds) == 1
+                    and statement_kinds[0] == _STRING
+                )
+                if not docstring:
+                    var statement = doc.new_list()
+                    var token = 0
+                    while token < len(statement_kinds):
+                        var pair = doc.new_list()
+                        doc.append(
+                            pair,
+                            doc.new_str(_token_name(statement_kinds[token])),
+                        )
+                        doc.append(pair, doc.new_str(statement_texts[token]))
+                        doc.append(statement, pair)
+                        token += 1
+                    doc.append(rows, statement)
+                saw_statement = True
+                statement_kinds.clear()
+                statement_texts.clear()
+        elif depth == 0:
+            statement_kinds.append(kind)
+            statement_texts.append(texts[index])
+        index += 1
+    if len(statement_kinds) > 0 or depth != 0:
+        raise Error("incomplete top-level source routing")
+    doc.root = rows
+    return doc.dumps()
+
+
 def token_words(source: String) raises -> List[String]:
     """Return the token texts, without layout tokens.
 

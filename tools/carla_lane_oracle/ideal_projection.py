@@ -287,6 +287,29 @@ def verify_projection(legacy, current, helper_text):
             'sum2_environment_guards': 1}
 
 
+def _module_statements(text):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='module-statements-') as directory:
+        source = Path(directory) / 'source.mojo'
+        source.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--statements', str(source)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def module_statements(text):
     """Keep the complete top-level routing, declarations and decorators.
 
@@ -296,27 +319,8 @@ def module_statements(text):
     logical statement, including any conditional/concatenation/suffix after
     an array literal, is returned before any constant-RHS masking occurs.
     """
-    statements, statement, depth = [], [], 0
-    try:
-        for token in tokenize.generate_tokens(io.StringIO(text).readline):
-            if token.type == tokenize.INDENT:
-                depth += 1
-            elif token.type == tokenize.DEDENT:
-                depth -= 1
-            elif token.type == tokenize.NEWLINE:
-                if statement:
-                    if not statements and len(statement) == 1 and statement[0][0] == 'STRING':
-                        pass
-                    else:
-                        statements.append(statement)
-                    statement = []
-            elif depth == 0 and token.type not in (tokenize.COMMENT, tokenize.NL,
-                                                   tokenize.ENDMARKER, tokenize.ENCODING):
-                statement.append((tokenize.tok_name[token.type], token.string))
-    except (tokenize.TokenError, IndentationError, ValueError) as error:
-        raise ValueError('unsupported top-level source routing') from error
-    require(not statement and depth == 0, 'incomplete top-level source routing')
-    return statements
+    return [[(kind, word) for kind, word in statement]
+            for statement in _module_statements(text)]
 
 
 def module_routing(text, word_constants=()):

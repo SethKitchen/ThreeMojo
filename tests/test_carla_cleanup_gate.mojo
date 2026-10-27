@@ -13,6 +13,7 @@ from tests._python_tokens import (
     declaration_place,
     declaration_text,
     significant_json,
+    module_statements_json,
     token_names,
     without_move_sigils,
 )
@@ -91,6 +92,15 @@ def test_a_changed_stored_word_is_refused() raises:
         )
     ):
         cleanup_words(source, "geometry", "extensions/carla/geometry.mojo")
+
+
+def test_a_module_docstring_is_not_a_top_level_statement() raises:
+    """The opening module string is omitted from the statement list."""
+    var source = String('"""Module."""\n' + "def first():\n" + "    return 1\n")
+    assert_equal(
+        module_statements_json(source),
+        '[[["NAME","def"],["NAME","first"],["OP","("],["OP",")"],["OP",":"]]]',
+    )
 
 
 def test_argument_move_sigils_are_removed() raises:
