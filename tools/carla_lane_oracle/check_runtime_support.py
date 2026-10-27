@@ -17,6 +17,36 @@ import optional_runtime_contracts
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def _runtime_result(root, groups, successors, heading, optional, sum2):
+    """Return the runtime-support result in historical field order."""
+    import ast
+    import os
+    import subprocess
+    import tempfile
+    payload = json.dumps({
+        'root': root, 'groups': groups, 'successors': successors,
+        'heading': heading, 'optional': optional, 'sum2': sum2,
+    }, separators=(',', ':'))
+    repo = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='runtime-support-result-') as directory:
+        path = Path(directory) / 'result.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(repo / 'tools' / 'tool.sh'), mojo,
+             'carla_runtime_support_result', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = 'KeyError: '
+        if message.startswith(prefix):
+            raise KeyError(ast.literal_eval(message[len(prefix):])) from None
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 @lexical_memo_scope()
 def verify(root):
     import full_audit_cleanup_contracts as audit
@@ -29,14 +59,8 @@ def verify(root):
         current_edges = audit.typed_successor_edges(root, _operation=_operation)
         if owns:
             _operation.finish(root)
-        return {'status': 'PASS', 'scope':
-            'Current source-integrity and explicit typed/conditioned successors; '
-            'old source comparisons retain historical provenance only. '
-            'Native execution, performance and coverage are separate requirements',
-            'repo_root': str(root.resolve()), 'groups': groups,
-            'typed_boundary_successors': current_edges,
-            'heading_correspondence': heading, 'optional_runtime': optional,
-            'sum2_correspondence': sum2}
+        return _runtime_result(
+            str(root.resolve()), groups, current_edges, heading, optional, sum2)
     finally:
         if owns:
             _operation.close()

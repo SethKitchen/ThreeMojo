@@ -126,6 +126,8 @@ It compares the fresh heading graph with each stored consumer.
 
 It returns the heading consumer count after that comparison.
 
+It returns the runtime-support result after the heading, optional-runtime, and Sum2 checks.
+
 It compares the projected ideal spiral with the historical half-rate form.
 
 It checks the ideal spiral declaration before projecting it.
