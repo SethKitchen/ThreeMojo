@@ -182,6 +182,29 @@ def _verify_dependency(path, text, expected):
     words.verify_dependency(path, text, expected)
 
 
+def _import_scope(text):
+    """Return the consumer prefix before the first definition."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='import-scope-') as directory:
+        path = Path(directory) / 'source.mojo'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--import-scope', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def _lane_text(root):
     """Compare actual text/byte views without imposing a historical file pin."""
     path = root/'extensions/carla/lane_refinement.mojo'
@@ -232,13 +255,13 @@ def verify_premises(root):
     prepared = []
     for path, expected in record['import_scopes'].items():
         text = _lane_text(root) if path == 'extensions/carla/lane_refinement.mojo' else _typed_source.historical_text(root, root/path, (root/path).read_text())
-        actual = text.split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
+        actual = _import_scope(text)
         if path == 'extensions/carla/lane_refinement.mojo':
             current_doc, recorded_doc = _significant_documents([actual, expected])
             if current_doc != recorded_doc:
                 # Only a changed consumed scope requests complete current admission.
                 text = full_audit.reviewed_text(root, path, text)
-                actual = text.split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
+                actual = _import_scope(text)
         prepared.append((actual, expected, 'consumer import scope changed: ' + path))
     if prepared:
         scope_docs = _significant_documents(

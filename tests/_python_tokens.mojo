@@ -2207,6 +2207,59 @@ def binding_shadow_payload(payload: String) raises:
     )
 
 
+def _find_byte(source: String, needle: String) -> Int:
+    """Return the byte index of `needle`, or `-1` when it is absent.
+
+    Args:
+        source: The text to search.
+        needle: The ASCII text to find.
+
+    Returns:
+        The first byte index, or `-1`.
+    """
+    var data = source.as_bytes()
+    var wanted = needle.as_bytes()
+    if len(wanted) == 0 or len(wanted) > len(data):
+        return -1
+    var index = 0
+    while index + len(wanted) <= len(data):
+        var same = True
+        var cursor = 0
+        while cursor < len(wanted):
+            if data[index + cursor] != wanted[cursor]:
+                same = False
+            cursor += 1
+        if same:
+            return index
+        index += 1
+    return -1
+
+
+def import_scope_prefix(source: String) -> String:
+    """Return the module prefix before the first definition.
+
+    Args:
+        source: One Mojo module.
+
+    Returns:
+        The text before the earliest newline plus `def `, `@`, or `struct `.
+        The whole module is returned when none of those markers is present.
+    """
+    var def_at = _find_byte(source, "\ndef ")
+    var decorator_at = _find_byte(source, "\n@")
+    var struct_at = _find_byte(source, "\nstruct ")
+    var cut = -1
+    if def_at >= 0:
+        cut = def_at
+    if decorator_at >= 0 and (cut < 0 or decorator_at < cut):
+        cut = decorator_at
+    if struct_at >= 0 and (cut < 0 or struct_at < cut):
+        cut = struct_at
+    if cut < 0:
+        return source
+    return String(source[byte=0:cut])
+
+
 def _starts_at(source: String, index: Int, prefix: String) -> Bool:
     """Return whether `source` has `prefix` at a byte index.
 

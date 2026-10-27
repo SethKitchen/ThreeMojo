@@ -34,6 +34,7 @@
     carla_cleanup_gate --statement-dump PATH
     carla_cleanup_gate --fragment-count PATH
     carla_cleanup_gate --try-only PATH
+    carla_cleanup_gate --import-scope PATH
     carla_cleanup_gate --syntax PATH
     carla_cleanup_gate --slice PATH --name NAME
     carla_cleanup_gate --fragment DIR
@@ -76,6 +77,7 @@ from tests._python_tokens import (
     project_sum2_source,
     function_slice,
     try_only_refusal,
+    import_scope_prefix,
     moment_payload_json,
     moment_source,
     moment_words_json,
@@ -562,7 +564,7 @@ def _usage():
             " --project-sum2 PATH | --commute-legacy PATH | --binding PATH |"
             " --imports PATH | --heading PATH | --function-dump PATH |"
             " --plain-dump PATH | --sum2-dump PATH | --statement-dump PATH |"
-            " --fragment-count PATH | --try-only PATH |"
+            " --fragment-count PATH | --try-only PATH | --import-scope PATH |"
             " --syntax PATH |"
             " --slice PATH --name NAME | --fragment DIR | --normalize PATH |"
             " --table PATH --count N | --moment-source PATH | --moment-payload"
@@ -617,6 +619,7 @@ def main() raises:
     var statement_path = String("")
     var fragment_count_path = String("")
     var try_only = String("")
+    var import_scope = String("")
     var syntax = String("")
     var slice_path = String("")
     var fragment = String("")
@@ -673,6 +676,7 @@ def main() raises:
             or word == "--statement-dump"
             or word == "--fragment-count"
             or word == "--try-only"
+            or word == "--import-scope"
             or word == "--syntax"
             or word == "--slice"
             or word == "--fragment"
@@ -764,6 +768,8 @@ def main() raises:
                 fragment_count_path = value
             elif word == "--try-only":
                 try_only = value
+            elif word == "--import-scope":
+                import_scope = value
             elif word == "--syntax":
                 syntax = value
             elif word == "--slice":
@@ -866,6 +872,8 @@ def main() raises:
     if fragment_count_path.byte_length() > 0:
         modes += 1
     if try_only.byte_length() > 0:
+        modes += 1
+    if import_scope.byte_length() > 0:
         modes += 1
     if syntax.byte_length() > 0:
         modes += 1
@@ -1098,6 +1106,9 @@ def main() raises:
             return
         if try_only.byte_length() > 0:
             try_only_refusal(Path(try_only).read_text())
+            return
+        if import_scope.byte_length() > 0:
+            print(import_scope_prefix(Path(import_scope).read_text()), end="")
             return
         if starts.byte_length() > 0:
             print(top_level_starts_json(Path(starts).read_text()), end="")

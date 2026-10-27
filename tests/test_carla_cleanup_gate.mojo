@@ -21,6 +21,7 @@ from tests._python_tokens import (
     constant_literals_json,
     function_slice,
     try_only_refusal,
+    import_scope_prefix,
     moment_source,
     moment_words_json,
     normalized_block,
@@ -537,6 +538,23 @@ def test_an_if_expression_and_annotation_match_cpython() raises:
             " Tuple[Int, Int]\n    x: Int = 1\n"
         ),
         '["FunctionDef",[["name","f"],["args",["arguments",[["posonlyargs",[]],["args",[]],["kwonlyargs",[]],["kw_defaults",[]],["defaults",[]]]]],["body",[["Assign",[["targets",[["Name",[["id","fixed"],["ctx",["Store",[]]]]]]],["value",["IfExp",[["test",["Name",[["id","goal"],["ctx",["Load",[]]]]]],["body",["Constant",[["value",26]]]],["orelse",["Constant",[["value",20]]]]]]]]],["AnnAssign",[["target",["Name",[["id","point_domain"],["ctx",["Store",[]]]]]],["annotation",["Subscript",[["value",["Name",[["id","Tuple"],["ctx",["Load",[]]]]]],["slice",["Tuple",[["elts",[["Name",[["id","Int"],["ctx",["Load",[]]]]],["Name",[["id","Int"],["ctx",["Load",[]]]]]]],["ctx",["Load",[]]]]]],["ctx",["Load",[]]]]]],["simple",1]]],["AnnAssign",[["target",["Name",[["id","x"],["ctx",["Store",[]]]]]],["annotation",["Name",[["id","Int"],["ctx",["Load",[]]]]]],["value",["Constant",[["value",1]]]],["simple",1]]]]],["decorator_list",[]]]]',
+    )
+
+
+def test_the_import_scope_stops_before_the_first_definition() raises:
+    """The consumer prefix stops at the earliest definition marker."""
+    assert_equal(
+        import_scope_prefix("header\n@dec\ndef foo():\n    pass\n"), "header"
+    )
+    assert_equal(
+        import_scope_prefix(
+            "header\nstruct Foo:\n    pass\ndef bar():\n    pass\n"
+        ),
+        "header",
+    )
+    assert_equal(import_scope_prefix("only header\n"), "only header\n")
+    assert_equal(
+        import_scope_prefix("def foo():\n    pass\n"), "def foo():\n    pass\n"
     )
 
 
