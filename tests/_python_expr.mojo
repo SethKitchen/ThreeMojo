@@ -39,6 +39,13 @@ comptime _E_TUPLE = 12
 comptime _E_LIST = 13
 comptime _E_KW = 14
 comptime _E_CMP = 15
+comptime _E_FUNC = 16
+comptime _E_ARGS = 17
+comptime _E_ARG = 18
+comptime _E_ASSIGN = 19
+comptime _E_AUG = 20
+comptime _E_WHILE = 21
+comptime _E_RETURN = 22
 
 
 struct _Parser:
@@ -462,11 +469,134 @@ struct _Parser:
 
     def _parse_subscript(mut self, value: Int) raises -> Int:
         self.index += 1
-        var slice = self._parse_expr()
+        var first = self._parse_expr()
+        if self._is_op(","):
+            var elts = self._empty()
+            elts.append(first)
+            while self._is_op(","):
+                self.index += 1
+                if self._is_op("]"):
+                    break
+                elts.append(self._parse_expr())
+            var count = len(elts)
+            first = self._add(_E_TUPLE, "", -1, -1, elts^, count, 0)
         if not self._is_op("]"):
             return self._fail()
         self.index += 1
-        return self._add(_E_SUB, "", value, slice, self._empty(), 0, 0)
+        return self._add(_E_SUB, "", value, first, self._empty(), 0, 0)
+
+    def _parse_parameters(mut self) raises -> Int:
+        self.index += 1
+        var args = self._empty()
+        if not self._is_op(")"):
+            while True:
+                if self._kind_at() != _NAME:
+                    return self._fail()
+                var name = self._text_at()
+                self.index += 1
+                var annotation = -1
+                if self._is_op(":"):
+                    self.index += 1
+                    annotation = self._parse_expr()
+                if self._is_op("="):
+                    return self._fail()
+                args.append(
+                    self._add(_E_ARG, name, annotation, -1, self._empty(), 0, 0)
+                )
+                if self._is_op(","):
+                    self.index += 1
+                    if self._is_op(")"):
+                        break
+                    continue
+                break
+        if not self._is_op(")"):
+            return self._fail()
+        self.index += 1
+        var count = len(args)
+        return self._add(_E_ARGS, "", -1, -1, args^, count, 0)
+
+    def _parse_statement(mut self) raises -> Int:
+        if self._is_name("while"):
+            self.index += 1
+            var test = self._parse_expr()
+            if not self._is_op(":"):
+                return self._fail()
+            self.index += 1
+            if self._kind_at() != _NEWLINE:
+                return self._fail()
+            self.index += 1
+            var body = self._parse_body()
+            var count = len(body)
+            return self._add(_E_WHILE, "", test, -1, body^, count, 0)
+        if self._is_name("return"):
+            self.index += 1
+            var value = -1
+            if (
+                not self._done()
+                and self._kind_at() != _NEWLINE
+                and self._kind_at() != _DEDENT
+            ):
+                value = self._parse_expr()
+            return self._add(_E_RETURN, "", value, -1, self._empty(), 0, 0)
+        if self._kind_at() == _NAME and self._next_op("="):
+            var name = self._text_at()
+            self.index += 2
+            var target = self._add(_E_NAME, name, 1, -1, self._empty(), 0, 0)
+            var value = self._parse_expr()
+            return self._add(_E_ASSIGN, "", target, value, self._empty(), 0, 0)
+        if self._kind_at() == _NAME and self._next_op("+="):
+            var name = self._text_at()
+            self.index += 2
+            var target = self._add(_E_NAME, name, 1, -1, self._empty(), 0, 0)
+            var value = self._parse_expr()
+            return self._add(_E_AUG, "Add", target, value, self._empty(), 0, 0)
+        return self._fail()
+
+    def _parse_body(mut self) raises -> List[Int]:
+        if self._kind_at() != _INDENT:
+            raise Error("heading correspondence: unsupported expression")
+        self.index += 1
+        var stmts = self._empty()
+        while not self._done() and self._kind_at() != _DEDENT:
+            if self._kind_at() == _NEWLINE:
+                self.index += 1
+                continue
+            stmts.append(self._parse_statement())
+            if self._kind_at() == _NEWLINE:
+                self.index += 1
+        if self._kind_at() == _DEDENT:
+            self.index += 1
+        return stmts^
+
+    def _parse_function(mut self, typed: Bool) raises -> Int:
+        while self._kind_at() == _NEWLINE:
+            self.index += 1
+        if not self._is_name("def"):
+            return self._fail()
+        self.index += 1
+        if self._kind_at() != _NAME:
+            return self._fail()
+        var name = self._text_at()
+        self.index += 1
+        if not self._is_op("("):
+            return self._fail()
+        var args = self._parse_parameters()
+        var returns = -1
+        if self._is_op("->"):
+            self.index += 1
+            returns = self._parse_expr()
+        if not self._is_op(":"):
+            return self._fail()
+        self.index += 1
+        if self._kind_at() != _NEWLINE:
+            return self._fail()
+        self.index += 1
+        var body = self._parse_body()
+        var count = len(body)
+        var flag = 0
+        if typed:
+            flag = 1
+        return self._add(_E_FUNC, name, args, returns, body^, count, flag)
 
     def _skip_statement(mut self):
         var depth = 0
@@ -697,6 +827,102 @@ struct _Parser:
                 self._pair(doc, "value", self._json(doc, self.left[node])),
             )
             return self._typed(doc, "keyword", fields)
+        if kind == _E_FUNC:
+            var fields = doc.new_list()
+            doc.append(
+                fields, self._pair(doc, "name", doc.new_str(self.label[node]))
+            )
+            doc.append(
+                fields,
+                self._pair(doc, "args", self._json(doc, self.left[node])),
+            )
+            doc.append(
+                fields, self._pair(doc, "body", self._arg_list(doc, node))
+            )
+            doc.append(
+                fields, self._pair(doc, "decorator_list", doc.new_list())
+            )
+            if self.right[node] >= 0:
+                doc.append(
+                    fields,
+                    self._pair(
+                        doc, "returns", self._json(doc, self.right[node])
+                    ),
+                )
+            if self.nkw[node] == 1:
+                doc.append(
+                    fields,
+                    self._pair(
+                        doc, "mojo_type_parameters", self._type_params(doc)
+                    ),
+                )
+            return self._typed(doc, "FunctionDef", fields)
+        if kind == _E_ARGS:
+            var fields = doc.new_list()
+            doc.append(fields, self._pair(doc, "posonlyargs", doc.new_list()))
+            doc.append(
+                fields, self._pair(doc, "args", self._arg_list(doc, node))
+            )
+            doc.append(fields, self._pair(doc, "kwonlyargs", doc.new_list()))
+            doc.append(fields, self._pair(doc, "kw_defaults", doc.new_list()))
+            doc.append(fields, self._pair(doc, "defaults", doc.new_list()))
+            return self._typed(doc, "arguments", fields)
+        if kind == _E_ARG:
+            var fields = doc.new_list()
+            doc.append(
+                fields, self._pair(doc, "arg", doc.new_str(self.label[node]))
+            )
+            if self.left[node] >= 0:
+                doc.append(
+                    fields,
+                    self._pair(
+                        doc, "annotation", self._json(doc, self.left[node])
+                    ),
+                )
+            return self._typed(doc, "arg", fields)
+        if kind == _E_ASSIGN:
+            var targets = doc.new_list()
+            doc.append(targets, self._json(doc, self.left[node]))
+            var fields = doc.new_list()
+            doc.append(fields, self._pair(doc, "targets", targets))
+            doc.append(
+                fields,
+                self._pair(doc, "value", self._json(doc, self.right[node])),
+            )
+            return self._typed(doc, "Assign", fields)
+        if kind == _E_AUG:
+            var fields = doc.new_list()
+            doc.append(
+                fields,
+                self._pair(doc, "target", self._json(doc, self.left[node])),
+            )
+            doc.append(
+                fields, self._pair(doc, "op", self._bare(doc, self.label[node]))
+            )
+            doc.append(
+                fields,
+                self._pair(doc, "value", self._json(doc, self.right[node])),
+            )
+            return self._typed(doc, "AugAssign", fields)
+        if kind == _E_WHILE:
+            var fields = doc.new_list()
+            doc.append(
+                fields,
+                self._pair(doc, "test", self._json(doc, self.left[node])),
+            )
+            doc.append(
+                fields, self._pair(doc, "body", self._arg_list(doc, node))
+            )
+            doc.append(fields, self._pair(doc, "orelse", doc.new_list()))
+            return self._typed(doc, "While", fields)
+        if kind == _E_RETURN:
+            var fields = doc.new_list()
+            if self.left[node] >= 0:
+                doc.append(
+                    fields,
+                    self._pair(doc, "value", self._json(doc, self.left[node])),
+                )
+            return self._typed(doc, "Return", fields)
         if kind == _E_CMP:
             var fields = doc.new_list()
             doc.append(
@@ -714,7 +940,10 @@ struct _Parser:
     def _name_fields(self, mut doc: PyJson, node: Int) -> Int:
         var fields = doc.new_list()
         doc.append(fields, self._pair(doc, "id", doc.new_str(self.label[node])))
-        doc.append(fields, self._pair(doc, "ctx", self._load(doc)))
+        var ctx_name = "Load"
+        if self.left[node] == 1:
+            ctx_name = "Store"
+        doc.append(fields, self._pair(doc, "ctx", self._bare(doc, ctx_name)))
         return fields
 
     def _typed(self, mut doc: PyJson, name: String, fields: Int) -> Int:
@@ -731,6 +960,19 @@ struct _Parser:
 
     def _load(self, mut doc: PyJson) -> Int:
         return self._bare(doc, "Load")
+
+    def _type_param(self, mut doc: PyJson, kind: String, text: String) -> Int:
+        var pair = doc.new_list()
+        doc.append(pair, doc.new_str(kind))
+        doc.append(pair, doc.new_str(text))
+        return pair
+
+    def _type_params(self, mut doc: PyJson) -> Int:
+        var rows = doc.new_list()
+        doc.append(rows, self._type_param(doc, "NAME", "derivatives"))
+        doc.append(rows, self._type_param(doc, "OP", ":"))
+        doc.append(rows, self._type_param(doc, "NAME", "Bool"))
+        return rows
 
     def _bare(self, mut doc: PyJson, name: String) -> Int:
         var node = doc.new_list()
@@ -851,6 +1093,28 @@ def expression_dump(source: String) raises -> String:
     """
     var parser = _parser(source)
     var node = parser._parse_expr()
+    while not parser._done():
+        var kind = parser._kind_at()
+        if kind != _NEWLINE and kind != _DEDENT and kind != _INDENT:
+            raise Error("heading correspondence: unsupported expression")
+        parser.index += 1
+    return parser._dump(node)
+
+
+def function_dump(source: String) raises -> String:
+    """Return the normalized dump of one function, including its generic mark.
+
+    Args:
+        source: A Python function.
+
+    Returns:
+        The dump, with the reviewed `derivatives: Bool` generic attached.
+
+    Raises:
+        Error: The function is missing or uses an unsupported statement.
+    """
+    var parser = _parser(source)
+    var node = parser._parse_function(True)
     while not parser._done():
         var kind = parser._kind_at()
         if kind != _NEWLINE and kind != _DEDENT and kind != _INDENT:

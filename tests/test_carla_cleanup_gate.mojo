@@ -9,7 +9,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from std.os import makedirs
 from std.pathlib import Path
-from tests._python_expr import expression_dump
+from tests._python_expr import expression_dump, function_dump
 from tests._python_tokens import (
     declaration_place,
     declaration_text,
@@ -486,6 +486,19 @@ def test_text_digests_match_sha256() raises:
     assert_equal(
         sha256_texts_json('["abc",""]'),
         '["ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad","e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"]',
+    )
+
+
+def test_a_function_dump_matches_cpython() raises:
+    """One function dump matches CPython, including the generic mark."""
+    var source = (
+        "def f(geometry: RoadGeometry, d: _JetExpression[derivatives]) ->"
+        " Tuple[Int, Int]:\n"
+    )
+    source += "    x = 1\n    while x < 2:\n        x += 1\n    return (x, d)\n"
+    assert_equal(
+        function_dump(source),
+        '["FunctionDef",[["name","f"],["args",["arguments",[["posonlyargs",[]],["args",[["arg",[["arg","geometry"],["annotation",["Name",[["id","RoadGeometry"],["ctx",["Load",[]]]]]]]],["arg",[["arg","d"],["annotation",["Subscript",[["value",["Name",[["id","_JetExpression"],["ctx",["Load",[]]]]]],["slice",["Name",[["id","derivatives"],["ctx",["Load",[]]]]]],["ctx",["Load",[]]]]]]]]]],["kwonlyargs",[]],["kw_defaults",[]],["defaults",[]]]]],["body",[["Assign",[["targets",[["Name",[["id","x"],["ctx",["Store",[]]]]]]],["value",["Constant",[["value",1]]]]]],["While",[["test",["Compare",[["left",["Name",[["id","x"],["ctx",["Load",[]]]]]],["ops",[["Lt",[]]]],["comparators",[["Constant",[["value",2]]]]]]]],["body",[["AugAssign",[["target",["Name",[["id","x"],["ctx",["Store",[]]]]]],["op",["Add",[]]],["value",["Constant",[["value",1]]]]]]]],["orelse",[]]]],["Return",[["value",["Tuple",[["elts",[["Name",[["id","x"],["ctx",["Load",[]]]]],["Name",[["id","d"],["ctx",["Load",[]]]]]]],["ctx",["Load",[]]]]]]]]]],["decorator_list",[]],["returns",["Subscript",[["value",["Name",[["id","Tuple"],["ctx",["Load",[]]]]]],["slice",["Tuple",[["elts",[["Name",[["id","Int"],["ctx",["Load",[]]]]],["Name",[["id","Int"],["ctx",["Load",[]]]]]]],["ctx",["Load",[]]]]]],["ctx",["Load",[]]]]]],["mojo_type_parameters",[["NAME","derivatives"],["OP",":"],["NAME","Bool"]]]]]',
     )
 
 

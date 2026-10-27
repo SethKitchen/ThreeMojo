@@ -170,6 +170,29 @@ def binding_shadow(text, name, allowed_module='', allow_definition=False):
         raise ValueError(message)
 
 
+def _projected_dump(text):
+    """Return the normalized dump of one projected function."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='function-dump-') as directory:
+        path = Path(directory) / 'source.mojo'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--function-dump', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def project_sum2_text(text):
     """Return the projected spiral source and its stored-half arguments."""
     import os
@@ -342,10 +365,9 @@ def verify_projection(legacy, current, helper_text):
     _gate(legacy.encode(), 'legacy')
     verify_helper_projection(helper_text)
     legacy_half = commute_legacy_text(legacy)
-    left = ast.parse(legacy_half['source']).body[0]
-    left._mojo_type_parameters = [
-        ('NAME', 'derivatives'), ('OP', ':'), ('NAME', 'Bool')]
-    require(left.name == '_spiral_expression', 'changed ideal generic declaration')
+    left_dump = _projected_dump(legacy_half['source'])
+    require(json.loads(left_dump)[1][0][1] == '_spiral_expression',
+            'changed ideal generic declaration')
     require(legacy_half['count'] == 2,
             'expected exactly two historical rate-half commutations')
     # A caller inspecting a complete module supplies its unique actual AST
@@ -358,16 +380,17 @@ def verify_projection(legacy, current, helper_text):
             'changed ideal generic declaration')
     if isinstance(current, str):
         projected = project_sum2_text(current)
-        right = ast.parse(projected['source']).body[0]
-        right._mojo_type_parameters = current_tree._mojo_type_parameters
         arguments = projected['arguments']
+        right_dump = _projected_dump(projected['source'])
     else:
         project = ProjectHalf()
         right = project.visit(project_sum2(current_tree))
+        right._mojo_type_parameters = current_tree._mojo_type_parameters
         arguments = project.arguments
+        right_dump = dump(right)
     require(arguments == CALL_ARGUMENTS, 'expected exactly five reviewed stored-half calls')
-    require(dump(left) == dump(right), 'ideal expression differs beyond reviewed half projection')
-    projected_bytes = dump(left).encode()
+    require(left_dump == right_dump, 'ideal expression differs beyond reviewed half projection')
+    projected_bytes = left_dump.encode()
     _gate(projected_bytes, 'projected')
     projected = PROJECTED_SHA256
     return {'helper_projections': len(arguments), 'rate_half_commutations': legacy_half['count'],

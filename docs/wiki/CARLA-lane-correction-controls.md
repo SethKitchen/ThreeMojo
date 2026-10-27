@@ -94,6 +94,8 @@ It reads each top-level helper import in source order.
 
 It compares the fresh heading graph with each stored consumer.
 
+It compares the projected ideal spiral with the historical half-rate form.
+
 It derives the stored moment rows in exact arithmetic.
 
 It checks the stored moment table against the derived words.
