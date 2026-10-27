@@ -18,6 +18,7 @@
     carla_sampled_text --project-lane PATH
     carla_sampled_text --decorators PATH --name NAME
     carla_sampled_text --strip-try-only PATH
+    carla_sampled_text --replace-function PATH --name NAME --with PATH
 
 The extract mode prints one top-level function. The rename mode prints the
 declaration with sampled identifiers renamed. The drop mode removes the first
@@ -30,6 +31,7 @@ The project-reference mode prints the sampled dispatcher.
 The project-lane mode prints the value-only lane dispatcher.
 The decorators mode prints the lines above one function.
 The strip-try-only mode removes the reviewed reuse refusal.
+The replace-function mode substitutes one complete function.
 The caller supplies the source.
 """
 
@@ -44,6 +46,7 @@ from tests._python_expr import (
 from tests._python_tokens import (
     project_constant_heading,
     decorator_prefix,
+    replace_function,
     strip_try_only_refusal,
     project_lane_value,
     project_reference_value,
@@ -71,7 +74,8 @@ def _usage():
             " PATH --index N | --top-level PATH --name NAMES |"
             " --project-constant PATH | --project-union PATH |"
             " --project-reference PATH | --project-lane PATH | --decorators"
-            " PATH --name NAME | --strip-try-only PATH"
+            " PATH --name NAME | --strip-try-only PATH | --replace-function"
+            " PATH --name NAME --with PATH"
         ),
         file=stderr,
     )
@@ -100,6 +104,8 @@ def main() raises:
     var project_lane = String("")
     var decorators = String("")
     var strip_try_only = String("")
+    var replace_path = String("")
+    var with_path = String("")
     var name = String("")
     var index_text = String("")
     var arguments = argv()
@@ -123,6 +129,8 @@ def main() raises:
             or word == "--project-lane"
             or word == "--decorators"
             or word == "--strip-try-only"
+            or word == "--replace-function"
+            or word == "--with"
             or word == "--index"
             or word == "--name"
         ):
@@ -161,6 +169,10 @@ def main() raises:
                 decorators = value
             elif word == "--strip-try-only":
                 strip_try_only = value
+            elif word == "--replace-function":
+                replace_path = value
+            elif word == "--with":
+                with_path = value
             elif word == "--index":
                 index_text = value
             else:
@@ -201,6 +213,8 @@ def main() raises:
         modes += 1
     if strip_try_only.byte_length() > 0:
         modes += 1
+    if replace_path.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if (
@@ -208,6 +222,7 @@ def main() raises:
         or drop.byte_length() > 0
         or top_level.byte_length() > 0
         or decorators.byte_length() > 0
+        or replace_path.byte_length() > 0
     ) and name.byte_length() == 0:
         _usage()
     if rename.byte_length() > 0 and name.byte_length() > 0:
@@ -221,6 +236,10 @@ def main() raises:
     if project_reference.byte_length() > 0 and name.byte_length() > 0:
         _usage()
     if project_lane.byte_length() > 0 and name.byte_length() > 0:
+        _usage()
+    if replace_path.byte_length() > 0 and with_path.byte_length() == 0:
+        _usage()
+    if replace_path.byte_length() == 0 and with_path.byte_length() > 0:
         _usage()
     if (
         body_dump.byte_length() > 0 or return_elts.byte_length() > 0
@@ -310,6 +329,16 @@ def main() raises:
         if strip_try_only.byte_length() > 0:
             print(
                 strip_try_only_refusal(Path(strip_try_only).read_text()),
+                end="",
+            )
+            return
+        if replace_path.byte_length() > 0:
+            print(
+                replace_function(
+                    Path(replace_path).read_text(),
+                    name,
+                    Path(with_path).read_text(),
+                ),
                 end="",
             )
             return

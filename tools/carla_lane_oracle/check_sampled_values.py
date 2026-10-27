@@ -138,7 +138,7 @@ def function(text, name):
     return text[match.start():match.end()+end.start() if end else len(text)]
 
 
-def _sampled_text(mode, text, name='', index=None):
+def _sampled_text(mode, text, name='', index=None, replacement=None):
     """Slice, rename, or dump one declaration with the Mojo text gate."""
     import os
     import subprocess
@@ -154,6 +154,10 @@ def _sampled_text(mode, text, name='', index=None):
             command.extend(['--name', name])
         if index is not None:
             command.extend(['--index', str(index)])
+        if replacement is not None:
+            repl = Path(directory) / 'replacement.mojo'
+            repl.write_text(replacement)
+            command.extend(['--with', str(repl)])
         result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -305,10 +309,9 @@ def reviewed_reference_tree(text, root=ROOT, *, _operation=None):
         _try_only_gate(text)
     except ValueError as error:
         raise CheckError(str(error)) from error
-    tree = syntax_tree(_sampled_text('--strip-try-only', text))
-    current = unique_function(tree, '_try_lane_envelope_capture')
-    historical = unique_function(syntax_tree(previous), '_try_lane_envelope_capture')
-    tree.body[tree.body.index(current)] = historical
+    tree = syntax_tree(_sampled_text(
+        '--replace-function', _sampled_text('--strip-try-only', text),
+        '_try_lane_envelope_capture', replacement=previous))
     return tree
 
 

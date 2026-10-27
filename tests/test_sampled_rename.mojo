@@ -16,6 +16,7 @@ from tests._python_tokens import (
     project_reference_value,
     project_union_value,
     sampled_top_level,
+    replace_function,
     strip_try_only_refusal,
 )
 from tests._python_expr import (
@@ -423,6 +424,29 @@ def test_try_only_refusal_is_removed_from_the_proof() raises:
         _ = strip_try_only_refusal(
             "def _lane_jet_model_proof():\n    return 1\n"
         )
+
+
+def test_one_function_is_replaced_without_moving_its_neighbors() raises:
+    """A historical helper replaces one function and leaves the others."""
+    var source = (
+        "def keep():\n    return 1\n"
+        "@old\n"
+        "def _try_lane_envelope_capture():\n    return old\n"
+        "def after():\n    return 2\n"
+    )
+    var projected = replace_function(
+        source,
+        "_try_lane_envelope_capture",
+        "def _try_lane_envelope_capture():\n    return historical\n",
+    )
+    if projected.find("return historical") < 0:
+        raise Error("historical helper missing")
+    if projected.find("return old") >= 0 or projected.find("@old") >= 0:
+        raise Error("old helper remained")
+    if projected.find("def keep()") < 0 or projected.find("def after()") < 0:
+        raise Error("neighbor function missing")
+    with assert_raises(contains="missing or ambiguous function"):
+        _ = replace_function(source, "absent", "def absent():\n    return 1\n")
 
 
 def main() raises:
