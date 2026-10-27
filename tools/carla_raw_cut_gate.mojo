@@ -6,6 +6,7 @@
 """Check the raw-cut inverse record and its module token.
 
     carla_raw_cut_gate --migration PATH [--module PATH]
+    carla_raw_cut_gate --predecessor PATH --sha HEX
 
 The program checks the texts it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -87,37 +88,78 @@ def raw_cut_record(migration: Span[UInt8, _], module: String) raises:
         _fail("complete raw inverse successor changed")
 
 
+def raw_cut_digest(payload: Span[UInt8, _], expected: String) raises:
+    """Require the historical predecessor migration digest.
+
+    Args:
+        payload: The predecessor migration bytes.
+        expected: The required SHA-256 hex digest.
+
+    Raises:
+        Error: The digest changed.
+    """
+    if sha256_hex(payload) != expected:
+        raise Error(
+            "raw cut inverse contract: historical predecessor record changed"
+        )
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
-        "usage: carla_raw_cut_gate --migration PATH [--module PATH]",
+        (
+            "usage: carla_raw_cut_gate --migration PATH [--module PATH]"
+            " | --predecessor PATH --sha HEX"
+        ),
         file=stderr,
     )
     exit(2)
 
 
 def main() raises:
-    """Check the raw-cut record and print nothing on success."""
+    """Check the raw-cut record and print nothing on success.
+
+    Raises:
+        Error: The command is invalid.
+    """
     var migration = String("")
     var module = String("")
+    var predecessor = String("")
+    var digest = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
-        if word == "--migration" or word == "--module":
+        if (
+            word == "--migration"
+            or word == "--module"
+            or word == "--predecessor"
+            or word == "--sha"
+        ):
             if index + 1 >= len(arguments):
                 _usage()
             var value = arguments[index + 1]
             if word == "--migration":
                 migration = value
-            else:
+            elif word == "--module":
                 module = value
+            elif word == "--predecessor":
+                predecessor = value
+            else:
+                digest = value
             index += 2
             continue
         _usage()
-    if migration.byte_length() == 0:
+    if (migration.byte_length() == 0) == (predecessor.byte_length() == 0):
+        _usage()
+    if predecessor.byte_length() > 0 and (
+        digest.byte_length() == 0 or module.byte_length() > 0
+    ):
         _usage()
     try:
+        if predecessor.byte_length() > 0:
+            raw_cut_digest(Path(predecessor).read_bytes(), digest)
+            return
         var text = String("")
         if module.byte_length() > 0:
             text = Path(module).read_text()

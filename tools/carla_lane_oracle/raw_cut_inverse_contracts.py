@@ -6,7 +6,6 @@ if __package__:
     from . import source_contracts as _typed_source
 else:
     import source_contracts as _typed_source
-import hashlib
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 if __package__:
@@ -53,6 +52,27 @@ def _gate(migration, module=None):
         raise ValueError(message)
 
 
+def _gate_predecessor(payload, expected):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='raw-cut-predecessor-') as directory:
+        target = Path(directory) / 'predecessor.json'
+        target.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_raw_cut_gate',
+             '--predecessor', str(target), '--sha', expected],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
@@ -87,8 +107,7 @@ def verify_premises(root, *, _operation=None):
     require(guard.significant(environment) ==
             guard.significant(record['environment_source']), 'environment guard premise changed')
     predecessor_payload = _typed_source.historical_bytes(root, root/'tools/carla_lane_oracle/curve-support-dispatch-migration.json', (root/'tools/carla_lane_oracle/curve-support-dispatch-migration.json').read_bytes(), _operation=_operation)
-    require(hashlib.sha256(predecessor_payload).hexdigest() ==
-            record['predecessor_migration_sha256'], 'historical predecessor record changed')
+    _gate_predecessor(predecessor_payload, record['predecessor_migration_sha256'])
     predecessor_text = (root/'tools/carla_lane_oracle/curve-support-dispatch-migration.json').read_text()
     if _operation is not None:
         predecessor_text = full_audit._observe_text(root, 'tools/carla_lane_oracle/curve-support-dispatch-migration.json', predecessor_text, _operation=_operation, _checked_raw=predecessor_payload)

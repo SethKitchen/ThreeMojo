@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_raw_cut_gate import raw_cut_record
+from tools.carla_raw_cut_gate import raw_cut_digest, raw_cut_record
 
 
 def test_a_changed_record_is_refused() raises:
@@ -16,6 +16,16 @@ def test_a_changed_record_is_refused() raises:
         contains="raw cut inverse contract: unreviewed migration record"
     ):
         raw_cut_record(String("").as_bytes(), "")
+
+
+def test_a_changed_predecessor_is_refused() raises:
+    """Bytes that are not the recorded predecessor fail closed."""
+    with assert_raises(
+        contains=(
+            "raw cut inverse contract: historical predecessor record changed"
+        )
+    ):
+        raw_cut_digest(String("nope").as_bytes(), "00")
 
 
 def main() raises:
