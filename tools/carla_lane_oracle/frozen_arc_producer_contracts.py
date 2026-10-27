@@ -191,6 +191,30 @@ def _gate_functions(pairs):
         raise ValueError(message)
 
 
+def _gate_layout(actual, expected):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='frozen-layout-') as directory:
+        folder = Path(directory)
+        left = folder / 'layout.txt'
+        right = folder / 'stored.txt'
+        left.write_text(actual)
+        right.write_text(expected)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
+             '--layout', str(left), '--stored', str(right)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
@@ -238,8 +262,7 @@ def verify_premises(root, *, _operation=None):
     arc = _typed_source.historical_text(root, 'extensions/carla/curve_rounded_arc.mojo', _observe_text(root, 'extensions/carla/curve_rounded_arc.mojo',
                         (root/'extensions/carla/curve_rounded_arc.mojo').read_text(),
                         _operation=_operation), _operation=_operation)
-    require(guard.declaration_routing(arc) == record['rounded_arc_routing'],
-            'RoundedArc/Box field layout, imports, or declaration owners changed')
+    _gate_layout(guard.declaration_routing(arc), record['rounded_arc_routing'])
     return len(record['function_sources'])
 
 

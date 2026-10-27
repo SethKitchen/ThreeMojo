@@ -11,6 +11,7 @@
     carla_frozen_arc_gate --prior HEX --cleanup HEX
     carla_frozen_arc_gate --places DIR
     carla_frozen_arc_gate --functions DIR
+    carla_frozen_arc_gate --layout PATH --stored PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -257,6 +258,23 @@ def frozen_arc_functions(directory: String) raises:
         index += 1
 
 
+def frozen_arc_layout(actual: String, stored: String) raises:
+    """Require the RoundedArc declaration routing to match the record.
+
+    Args:
+        actual: The routing text of the live arc source.
+        stored: The routing text stored in the producer record.
+
+    Raises:
+        Error: The routing changed.
+    """
+    if actual != stored:
+        _fail(
+            "RoundedArc/Box field layout, imports, or declaration owners"
+            " changed"
+        )
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -265,6 +283,7 @@ def _usage():
             " | --bytes PATH --sha HEX --kind after|before|guard"
             " | --source PATH --token HEX | --prior HEX --cleanup HEX"
             " | --places DIR | --functions DIR"
+            " | --layout PATH --stored PATH"
         ),
         file=stderr,
     )
@@ -288,6 +307,8 @@ def main() raises:
     var cleanup = String("")
     var places = String("")
     var functions = String("")
+    var layout = String("")
+    var stored = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -304,6 +325,8 @@ def main() raises:
             or word == "--cleanup"
             or word == "--places"
             or word == "--functions"
+            or word == "--layout"
+            or word == "--stored"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -328,8 +351,12 @@ def main() raises:
                 cleanup = value
             elif word == "--places":
                 places = value
-            else:
+            elif word == "--functions":
                 functions = value
+            elif word == "--layout":
+                layout = value
+            else:
+                stored = value
             index += 2
             continue
         _usage()
@@ -346,7 +373,11 @@ def main() raises:
         modes += 1
     if functions.byte_length() > 0:
         modes += 1
+    if layout.byte_length() > 0 or stored.byte_length() > 0:
+        modes += 1
     if modes != 1:
+        _usage()
+    if (layout.byte_length() == 0) != (stored.byte_length() == 0):
         _usage()
     if (prior.byte_length() == 0) != (cleanup.byte_length() == 0):
         _usage()
@@ -360,6 +391,11 @@ def main() raises:
     if previous.byte_length() > 0 and migration.byte_length() == 0:
         _usage()
     try:
+        if layout.byte_length() > 0:
+            frozen_arc_layout(
+                Path(layout).read_text(), Path(stored).read_text()
+            )
+            return
         if functions.byte_length() > 0:
             frozen_arc_functions(functions)
             return
