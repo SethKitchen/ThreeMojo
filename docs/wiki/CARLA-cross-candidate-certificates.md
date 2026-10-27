@@ -111,6 +111,8 @@ An extra helper or a changed body is refused.
 
 It keeps the reference, primitive, and shared graph digests.
 
+It keeps the four sampled input modules.
+
 Mojo checks the sampled value copies.
 Ten helpers match their renamed jet sources.
 It names the eight copied helpers and their sampled names.

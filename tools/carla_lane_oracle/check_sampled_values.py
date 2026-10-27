@@ -146,6 +146,24 @@ def _sampled_text(mode, text, name='', index=None, replacement=None):
     return result.stdout
 
 
+def _input_modules():
+    """Return the four sampled input modules in reviewed order."""
+    import json
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sampled_input_modules'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    return json.loads(result.stdout)
+
+
 def _graph_pins():
     """Return the reference, primitive, and shared graph digests."""
     import json
@@ -439,11 +457,10 @@ def verify(root):
         import full_audit_cleanup_contracts as audit
     _operation, owns = audit._operation_enter(root, 'sampled')
     try:
-        paths = {name: root/'extensions/carla'/name for name in
-                 ('curve_bounds.mojo', 'curve_trig.mojo', 'curve_interval.mojo', 'lane_value_bounds.mojo')}
+        modules = _input_modules()
+        paths = {name: root/'extensions/carla'/name for name in modules}
         texts = {name: _typed_source.historical_text(root, path, _typed_source._observe_text(root, (path).relative_to(root).as_posix(), path.read_text(), _operation=_operation), _operation=_operation) for name, path in paths.items()}
-        bounds, trig, target = (texts[name] for name in
-                                ('curve_bounds.mojo', 'curve_trig.mojo', 'lane_value_bounds.mojo'))
+        bounds, trig, target = texts[modules[0]], texts[modules[1]], texts[modules[3]]
         # Deliberately conservative closure: imports, aliases, all helper setup,
         # branch dispatch and every shared operation in all three reference
         # modules are bound. Any dependency change needs renewed source review.
