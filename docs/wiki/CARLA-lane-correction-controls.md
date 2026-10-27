@@ -34,6 +34,8 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record and the cleanup digest.
 
+`tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the frozen digest, and the component records.
+
 ## Lane poses
 
 The pose follows the derivative of the actual lane-center expression.
