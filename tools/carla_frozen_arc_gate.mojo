@@ -6,6 +6,7 @@
 """Check the frozen ARC producer record.
 
     carla_frozen_arc_gate --migration PATH [--previous PATH]
+    carla_frozen_arc_gate --bytes PATH --sha HEX --kind after|before|guard
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -104,10 +105,35 @@ def frozen_arc_record(
     _require_previous(doc, previous)
 
 
+def frozen_arc_digest(
+    payload: Span[UInt8, _], expected: String, kind: String
+) raises:
+    """Require one frozen ARC pin digest.
+
+    Args:
+        payload: The pin bytes.
+        expected: The required SHA-256 hex digest.
+        kind: `after` for the active runtime pin, `before` for the reconstruction, or `guard` for the unchanged guard pin.
+
+    Raises:
+        Error: The digest changed.
+    """
+    if sha256_hex(payload) == expected:
+        return
+    if kind == "after":
+        _fail("unreviewed runtime pin successor")
+    if kind == "before":
+        _fail("runtime predecessor reconstruction failed")
+    _fail("guard pin lineage changed")
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
-        "usage: carla_frozen_arc_gate --migration PATH [--previous PATH]",
+        (
+            "usage: carla_frozen_arc_gate --migration PATH [--previous PATH]"
+            " | --bytes PATH --sha HEX --kind after|before|guard"
+        ),
         file=stderr,
     )
     exit(2)
@@ -121,24 +147,49 @@ def main() raises:
     """
     var migration = String("")
     var previous = String("")
+    var payload = String("")
+    var digest = String("")
+    var kind = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
-        if word == "--migration" or word == "--previous":
+        if (
+            word == "--migration"
+            or word == "--previous"
+            or word == "--bytes"
+            or word == "--sha"
+            or word == "--kind"
+        ):
             if index + 1 >= len(arguments):
                 _usage()
             var value = arguments[index + 1]
             if word == "--migration":
                 migration = value
-            else:
+            elif word == "--previous":
                 previous = value
+            elif word == "--bytes":
+                payload = value
+            elif word == "--sha":
+                digest = value
+            else:
+                kind = value
             index += 2
             continue
         _usage()
-    if migration.byte_length() == 0:
+    if (migration.byte_length() == 0) == (payload.byte_length() == 0):
+        _usage()
+    if payload.byte_length() > 0 and (
+        digest.byte_length() == 0
+        or (kind != "after" and kind != "before" and kind != "guard")
+    ):
+        _usage()
+    if previous.byte_length() > 0 and migration.byte_length() == 0:
         _usage()
     try:
+        if payload.byte_length() > 0:
+            frozen_arc_digest(Path(payload).read_bytes(), digest, kind)
+            return
         if previous.byte_length() == 0:
             frozen_arc_record(
                 Path(migration).read_bytes(), String("").as_bytes(), False

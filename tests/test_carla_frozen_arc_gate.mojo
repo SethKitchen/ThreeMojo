@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_frozen_arc_gate import frozen_arc_record
+from tools.carla_frozen_arc_gate import frozen_arc_digest, frozen_arc_record
 
 
 def test_a_changed_record_is_refused() raises:
@@ -16,6 +16,14 @@ def test_a_changed_record_is_refused() raises:
         contains="frozen ARC producer contract: unreviewed migration record"
     ):
         frozen_arc_record(String("").as_bytes(), String("").as_bytes(), False)
+
+
+def test_a_changed_guard_pin_is_refused() raises:
+    """A different guard-pin digest fails closed."""
+    with assert_raises(
+        contains="frozen ARC producer contract: guard pin lineage changed"
+    ):
+        frozen_arc_digest(String("nope").as_bytes(), "00", "guard")
 
 
 def main() raises:

@@ -11,7 +11,6 @@ if __package__:
 else:
     import source_contracts as _typed_source
 
-import hashlib
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 
@@ -77,6 +76,27 @@ def _gate(migration, previous=None):
         raise ValueError(message)
 
 
+def _gate_digest(payload, expected, kind):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='frozen-arc-digest-') as directory:
+        target = Path(directory) / 'pin'
+        target.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
+             '--bytes', str(target), '--sha', expected, '--kind', kind],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
@@ -95,8 +115,7 @@ def verify_runtime_pin_successor(root, prior_digest):
     else:
         import coverage_invariant_contracts as invariant
     payload = invariant.predecessor_pins(root, source.PINS)
-    require(hashlib.sha256(payload).hexdigest() == record['runtime_pins_after_sha256'],
-            'unreviewed runtime pin successor')
+    _gate_digest(payload, record['runtime_pins_after_sha256'], 'after')
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
     transitions = record['runtime_token_successors']
     require(len(transitions) == 3 and
@@ -109,8 +128,7 @@ def verify_runtime_pin_successor(root, prior_digest):
                 'runtime successor token mismatch')
         pins['groups'][item['group']][item['path']] = item['before']
     predecessor = (json.dumps(pins, indent=2)+'\n').encode()
-    require(hashlib.sha256(predecessor).hexdigest() == prior_digest,
-            'runtime predecessor reconstruction failed')
+    _gate_digest(predecessor, prior_digest, 'before')
 
 
 def verify_premises(root, *, _operation=None):
@@ -160,8 +178,7 @@ def verify(root, *, _operation=None):
         if type(cause) is not full_audit.ContractError or cause.args != (message,):
             raise
         raise ValueError('frozen ARC producer contract: unreviewed runtime pin successor') from error
-    require(hashlib.sha256(guard_payload).hexdigest() ==
-            record['guard_pins_unchanged_sha256'], 'guard pin lineage changed')
+    _gate_digest(guard_payload, record['guard_pins_unchanged_sha256'], 'guard')
     require(source.token_sha256(_typed_source.historical_text(root, SOURCE_PATH, _observe_text(
         root, SOURCE_PATH, (root/SOURCE_PATH).read_text(), _operation=_operation), _operation=_operation)) ==
             record['source_successor']['after_token_sha256'],
@@ -179,8 +196,7 @@ def verify(root, *, _operation=None):
 
 
 def _runtime_pin_predecessor(payload, record, prior_digest):
-    require(hashlib.sha256(payload).hexdigest() == record['runtime_pins_after_sha256'],
-            'unreviewed runtime pin successor')
+    _gate_digest(payload, record['runtime_pins_after_sha256'], 'after')
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
     transitions = record['runtime_token_successors']
     require(len(transitions) == 3 and
@@ -193,8 +209,7 @@ def _runtime_pin_predecessor(payload, record, prior_digest):
                 'runtime successor token mismatch')
         pins['groups'][item['group']][item['path']] = item['before']
     predecessor = (json.dumps(pins, indent=2)+'\n').encode()
-    require(hashlib.sha256(predecessor).hexdigest() == prior_digest,
-            'runtime predecessor reconstruction failed')
+    _gate_digest(predecessor, prior_digest, 'before')
     return predecessor
 
 
