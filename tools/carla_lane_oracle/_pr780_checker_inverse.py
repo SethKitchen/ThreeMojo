@@ -10,7 +10,7 @@ never replaces a production observation or grants a source admission.
 import hashlib
 import json
 
-EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c542b70755f8db3539c89216b6656db379d2d6c54',
+EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'e7f70c3bd674b81810d23fa002cb8e6cfd111c411e2aca30bfd3d83ef03ece72',
                              'before_sha256': '21e3a9637a69c6abbf27e9c8dd193a1addf7ed8537dd8f2734c35ff1a468304d',
                              'edits': ((45,
                                         49,
@@ -330,16 +330,9 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                          'density dependency successor '
                                          "endpoints')\n",
                                          '    return dependencies\n')),
-                                       (1297,
-                                        1318,
-                                        ('    filename = '
-                                         "Path(__file__).resolve().parent/'carla_lane_oracle/pr760_arithmetic_stage.py'\n",
-                                         '    '
-                                         'cleanup.require(Path(stage.__file__).resolve() '
-                                         '== filename,\n',
-                                         "                    'density inverse "
-                                         "executing origin changed')\n",
-                                         '    compiled = compile(raw, '
+                                       (1300,
+                                        1315,
+                                        ('    compiled = compile(raw, '
                                          "str(filename), 'exec', "
                                          'dont_inherit=True, '
                                          'optimize=sys.flags.optimize)\n',
@@ -353,19 +346,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                          'cleanup._compiled_defaults(raw)\n',
                                          '    for name, expected in '
                                          'cleanup._compiled_functions(raw, '
-                                         'str(filename)).items():\n',
-                                         "        if name.startswith('<'):\n",
-                                         '            continue\n',
-                                         '        live = getattr(stage, name, '
-                                         'None)\n'),
-                                        ('    filename = '
-                                         "Path(__file__).resolve().parent/'carla_lane_oracle/pr760_arithmetic_stage.py'\n",
-                                         '    '
-                                         'cleanup.require(Path(stage.__file__).resolve() '
-                                         '== filename,\n',
-                                         "                    'density inverse "
-                                         "executing origin changed')\n",
-                                         '    # Import already compiled this '
+                                         'str(filename)).items():\n'),
+                                        ('    # Import already compiled this '
                                          'source and compared it with the '
                                          'executing\n',
                                          '    # module. The same bytes and the '
@@ -401,11 +383,7 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                          '        defaults = '
                                          'cleanup._compiled_defaults(raw)\n',
                                          '    for name, expected in '
-                                         'functions.items():\n',
-                                         "        if name.startswith('<'):\n",
-                                         '            continue\n',
-                                         '        live = getattr(stage, name, '
-                                         'None)\n')),
+                                         'functions.items():\n')),
                                        (1340,
                                         1358,
                                         ('        snapshots = {}\n',),
@@ -700,93 +678,7 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                          "    return ['@ROOT@/tools/tool.sh', "
                                          "*compiler, 'coverage_hit_aot',\n",
                                          "            '--profile', profile, "
-                                         "'--root', '@BUILD@',\n")),
-                                       (2618,
-                                        2635,
-                                        ("        'execution': "
-                                         'execution_contract(root, build, '
-                                         'inputs, mojo=mojo,\n',
-                                         '                                        '
-                                         'capture_cache=capture_cache, '
-                                         'suites=suites)}\n',
-                                         '    cleanup = None\n',
-                                         '    if '
-                                         "importlib.util.find_spec('carla_lane_oracle') "
-                                         'is None:\n',
-                                         '        # Standalone plain receipts '
-                                         'need no CARLA semantic authority. A '
-                                         'known\n',
-                                         '        # reviewed source may never '
-                                         'silently become a plain-only '
-                                         'receipt.\n',
-                                         '        reviewed_modules = '
-                                         '(set(REVIEWED_LOOP_RULES)\n',
-                                         '                            | '
-                                         '{row[0] for row in '
-                                         'GUARDED_LOOP_RULES}\n',
-                                         '                            | '
-                                         "{'renderers/renderer', "
-                                         "'extensions/carla/map',\n",
-                                         '                               '
-                                         "DENSITY_SOURCE.removesuffix('.mojo')})\n",
-                                         '        if reviewed_modules & '
-                                         "{name.removesuffix('.mojo') for name "
-                                         "in generation['modules']}:\n",
-                                         '            raise '
-                                         "ValueError('Reviewed loop authority "
-                                         "is unavailable')\n",
-                                         '    else:\n',
-                                         '        # A present but broken '
-                                         'authority installation is an error, '
-                                         'not fallback.\n',
-                                         '        from carla_lane_oracle '
-                                         'import full_audit_cleanup_contracts '
-                                         'as cleanup\n',
-                                         '    _plain_seed = '
-                                         'canonical(_receipt_seed) if cleanup '
-                                         'is None else None\n'),
-                                        ("        'execution': "
-                                         'execution_contract(root, build, '
-                                         'inputs, mojo=mojo,\n',
-                                         '                                        '
-                                         'capture_cache=capture_cache, '
-                                         'suites=suites)}\n',
-                                         '    cleanup = None\n',
-                                         '    # Standalone plain receipts need '
-                                         'no CARLA semantic authority. A '
-                                         'known\n',
-                                         '    # reviewed source may never '
-                                         'silently become a plain-only '
-                                         'receipt.\n',
-                                         '    reviewed_modules = '
-                                         '(set(REVIEWED_LOOP_RULES)\n',
-                                         '                        | {row[0] '
-                                         'for row in GUARDED_LOOP_RULES}\n',
-                                         '                        | '
-                                         "{'renderers/renderer', "
-                                         "'extensions/carla/map',\n",
-                                         '                           '
-                                         "DENSITY_SOURCE.removesuffix('.mojo')})\n",
-                                         '    needs_authority = '
-                                         'bool(reviewed_modules & {\n',
-                                         "        name.removesuffix('.mojo') "
-                                         'for name in '
-                                         "generation['modules']})\n",
-                                         '    if needs_authority and '
-                                         "importlib.util.find_spec('carla_lane_oracle') "
-                                         'is None:\n',
-                                         "        raise ValueError('Reviewed "
-                                         "loop authority is unavailable')\n",
-                                         '    if needs_authority:\n',
-                                         '        # A present but broken '
-                                         'authority installation is an error, '
-                                         'not fallback.\n',
-                                         '        from carla_lane_oracle '
-                                         'import full_audit_cleanup_contracts '
-                                         'as cleanup\n',
-                                         '    _plain_seed = '
-                                         'canonical(_receipt_seed) if cleanup '
-                                         'is None else None\n')))},
+                                         "'--root', '@BUILD@',\n")))},
  'full_audit_cleanup_contracts.py': {'after_sha256': '0076eb3bee2fde345949f15025574681e07bc4f35c46b6f533882c5ba9316c20',
                                      'before_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
                                      'edits': ((11,
@@ -1943,7 +1835,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '441a80e05625bf06476c2669f902e329c48d3b4f179e1c8ff296a25d8ea87072':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '7b7c9b983dd538643b634436f3e7a7be2ed0d07c1a8127090ea3db1b78d49c4f':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)
