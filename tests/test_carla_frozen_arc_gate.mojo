@@ -11,6 +11,7 @@ from std.testing import TestSuite, assert_raises
 
 from tools.carla_frozen_arc_gate import (
     frozen_arc_digest,
+    frozen_arc_functions,
     frozen_arc_places,
     frozen_arc_prior,
     frozen_arc_record,
@@ -68,6 +69,22 @@ def test_a_wrong_runtime_placement_is_refused() raises:
         )
     ):
         frozen_arc_places(directory)
+
+
+def test_a_changed_producer_function_is_refused() raises:
+    """A producer function whose token list changed fails closed."""
+    var directory = "/tmp/frozen-functions-test"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/labels.json").write_text(
+        '[{"name":"center","actual":"[]","expected":"[[1,\\"def\\"]]"}]'
+    )
+    with assert_raises(
+        contains=(
+            "frozen ARC producer contract: complete producer/Box function"
+            " changed: center"
+        )
+    ):
+        frozen_arc_functions(directory)
 
 
 def main() raises:

@@ -32,7 +32,7 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_singleton_gate.mojo` checks the rounded LINE singleton migration digest, its schema, and the lane text token.
 
-`tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record, the pin digests, the successor token, and the runtime placements.
+`tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record, the runtime placements, and the producer functions.
 
 `tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the pin digests, the ordered pin pair, and the pin placements.
 

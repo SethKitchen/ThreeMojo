@@ -165,6 +165,32 @@ def _gate_places(transitions, pins):
         raise ValueError(message)
 
 
+def _gate_functions(pairs):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    def canon(value):
+        return json.dumps([[item[0], item[1]] for item in value], separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    rows = [{'name': name, 'actual': canon(actual), 'expected': canon(expected)}
+            for actual, expected, name in pairs]
+    with tempfile.TemporaryDirectory(prefix='frozen-functions-') as directory:
+        folder = Path(directory)
+        (folder / 'labels.json').write_text(json.dumps(rows))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
+             '--functions', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
@@ -202,12 +228,13 @@ def verify_premises(root, *, _operation=None):
     else:
         import sum2_guard_contracts as guard
     record = read_record(root)
+    pairs = []
     for item in record['function_sources']:
         actual = guard.declaration(_typed_source.historical_text(root, item['path'], _observe_text(
             root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation),
                                    item['name'], tuple(item['owner']))
-        require(guard.significant(actual) == guard.significant(item['source']),
-                'complete producer/Box function changed: ' + item['name'])
+        pairs.append((guard.significant(actual), guard.significant(item['source']), item['name']))
+    _gate_functions(pairs)
     arc = _typed_source.historical_text(root, 'extensions/carla/curve_rounded_arc.mojo', _observe_text(root, 'extensions/carla/curve_rounded_arc.mojo',
                         (root/'extensions/carla/curve_rounded_arc.mojo').read_text(),
                         _operation=_operation), _operation=_operation)

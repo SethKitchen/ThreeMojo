@@ -10,6 +10,7 @@
     carla_frozen_arc_gate --source PATH --token HEX
     carla_frozen_arc_gate --prior HEX --cleanup HEX
     carla_frozen_arc_gate --places DIR
+    carla_frozen_arc_gate --functions DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -234,6 +235,28 @@ def frozen_arc_places(directory: String) raises:
         index += 1
 
 
+def frozen_arc_functions(directory: String) raises:
+    """Require each producer function token list to match its record.
+
+    Args:
+        directory: A directory whose `labels.json` lists the functions in order.
+
+    Raises:
+        Error: A function token list changed, or the list cannot be read.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("complete producer/Box function changed")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var row = doc.item(doc.root, index)
+        var name = doc.text(doc.at(row, "name"))
+        if doc.text(doc.at(row, "actual")) != doc.text(doc.at(row, "expected")):
+            _fail("complete producer/Box function changed: " + name)
+        index += 1
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -241,7 +264,7 @@ def _usage():
             "usage: carla_frozen_arc_gate --migration PATH [--previous PATH]"
             " | --bytes PATH --sha HEX --kind after|before|guard"
             " | --source PATH --token HEX | --prior HEX --cleanup HEX"
-            " | --places DIR"
+            " | --places DIR | --functions DIR"
         ),
         file=stderr,
     )
@@ -264,6 +287,7 @@ def main() raises:
     var prior = String("")
     var cleanup = String("")
     var places = String("")
+    var functions = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -279,6 +303,7 @@ def main() raises:
             or word == "--prior"
             or word == "--cleanup"
             or word == "--places"
+            or word == "--functions"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -301,8 +326,10 @@ def main() raises:
                 prior = value
             elif word == "--cleanup":
                 cleanup = value
-            else:
+            elif word == "--places":
                 places = value
+            else:
+                functions = value
             index += 2
             continue
         _usage()
@@ -316,6 +343,8 @@ def main() raises:
     if prior.byte_length() > 0 or cleanup.byte_length() > 0:
         modes += 1
     if places.byte_length() > 0:
+        modes += 1
+    if functions.byte_length() > 0:
         modes += 1
     if modes != 1:
         _usage()
@@ -331,6 +360,9 @@ def main() raises:
     if previous.byte_length() > 0 and migration.byte_length() == 0:
         _usage()
     try:
+        if functions.byte_length() > 0:
+            frozen_arc_functions(functions)
+            return
         if places.byte_length() > 0:
             frozen_arc_places(places)
             return
