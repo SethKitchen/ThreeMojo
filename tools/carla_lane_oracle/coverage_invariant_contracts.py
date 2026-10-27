@@ -56,11 +56,10 @@ def _gate(migration, prior=None, components=None):
             if components is not None:
                 component_dir = folder / 'components'
                 component_dir.mkdir()
+                _require_component_names(
+                    component_dir, [name for name, _payload in components])
                 for name, payload in components:
-                    target = component_dir / name
-                    if target.parent != component_dir:
-                        raise ValueError('coverage invariant successor: component record changed: ' + name)
-                    target.write_bytes(payload)
+                    (component_dir / name).write_bytes(payload)
                 arguments.extend(['--components', str(component_dir)])
         result = subprocess.run(arguments, capture_output=True, text=True)
     if result.returncode != 0:
@@ -162,9 +161,44 @@ def _apply_transitions(pins, transitions):
     pins.update(updated)
 
 
+def _component_tool(mode, payload):
+    """Run one component-path mode and return its stdout."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='component-path-') as directory:
+        path = Path(directory) / 'payload'
+        path.write_bytes(payload.encode('utf-8'))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_component_path',
+             mode, str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
+def _require_component_names(directory, names):
+    """Require every component name to stay inside `directory`."""
+    _component_tool('--confine', json.dumps(
+        {'directory': str(directory), 'names': list(names)},
+        separators=(',', ':')))
+
+
+def _path_basename(text):
+    """Return the text after the last `/`."""
+    return _component_tool('--base', text)
+
+
 def predecessor_pins(root, filename):
     """Verify active bytes, reverse every admitted edit, verify historical bytes."""
-    filename = str(filename).split('/')[-1]
+    filename = _path_basename(str(filename))
     record = read_record(root)['pin_files'][filename]
     if __package__:
         from . import coverage_followup_contracts as followup

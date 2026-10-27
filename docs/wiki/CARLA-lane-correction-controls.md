@@ -50,6 +50,10 @@ It writes each frozen runtime pin back to its historical value.
 
 `tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the pin digests, the ordered pin pair, and the pin placements.
 
+It keeps a component name inside its directory.
+
+It uses the last path part as the pin file name.
+
 It compares each successor token digest before the predecessor fallback.
 
 `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch record, the predecessor edge, and the operation graphs.
