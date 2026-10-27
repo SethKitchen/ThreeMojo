@@ -220,6 +220,8 @@ It keeps the ten optional-runtime declaration groups.
 
 It keeps one semantic declaration without move sigils.
 
+It binds every semantic declaration in one group together.
+
 It checks the followup room, the recheck room, and the node fee.
 
 Mojo skips hidden and non-production paths, then keeps a file whose text contains a watched name.

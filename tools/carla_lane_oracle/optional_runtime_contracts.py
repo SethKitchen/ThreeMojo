@@ -150,6 +150,34 @@ def _semantic_declaration(text, name):
     return result.stdout
 
 
+def _semantic_declarations(items):
+    """Return the moved declarations for one group."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(items, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='semantic-declarations-') as directory:
+        path = Path(directory) / 'declarations.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_semantic_declarations', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        contract = _runtime_contract()
+        if message == contract['move']:
+            message = contract['prefix'] + message
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 class _RuntimeFunction:
     """One moved helper declaration checked by the Mojo fragment gate."""
 
@@ -489,9 +517,20 @@ def _run_semantic_steps(root, steps, operation):
     """Bind each declaration, then check that group's edges."""
     nodes = {}
     for step in steps:
+        loaded = []
         for item in step['bind']:
-            nodes[item['key']] = body(
-                root, item['module'], item['name'], _operation=operation)
+            module = item['module']
+            text = _typed_source.historical_text(root, root / ('extensions/carla/' + module + '.mojo'), source._observe_text(root, (root / ('extensions/carla/' + module + '.mojo')).relative_to(root).as_posix(), (root / ('extensions/carla/' + module + '.mojo')).read_text(), _operation=operation), _operation=operation)
+            loaded.append((item, text))
+        declared = {}
+        if loaded:
+            declared = _semantic_declarations([{
+                'key': item['key'],
+                'name': item['name'],
+                'source': text,
+            } for item, text in loaded])
+        for item, _text in loaded:
+            nodes[item['key']] = _RuntimeFunction(item['name'], declared[item['key']])
         for item in step['bind']:
             node = nodes[item['key']]
             label = item['label'] if 'label' in item else node._runtime_name
