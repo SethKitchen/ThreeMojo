@@ -170,6 +170,8 @@ The cleanup, dispatch, selection, grouped-table, and lane-control checks use tha
 
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
 
+It accepts one historical lane declaration when the owner is empty and the token matches.
+
 It renames the first frozen lane declaration.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.

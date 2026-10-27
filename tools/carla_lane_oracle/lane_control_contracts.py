@@ -202,12 +202,35 @@ def accepts_predecessor(root, path, name, owner, expected_source, *, _operation=
     if _operation is not None:
         _check_operation(root, _operation)
     record = verify(root, **({} if _operation is None else {'_operation': _operation}))
-    if owner:
-        return False
-    for item in record['declarations']:
-        if path == item['path'] and name == item['name']:
-            return _token_sha256(expected_source) == _token_sha256(item['before'])
-    return False
+    import json
+    import os
+    import subprocess
+    import tempfile
+    payload = json.dumps({
+        'owner': list(owner),
+        'path': path,
+        'name': name,
+        'expected': expected_source,
+        'declarations': [
+            {'path': item['path'], 'name': item['name'], 'before': item['before']}
+            for item in record['declarations']
+        ],
+    }, separators=(',', ':'))
+    root_path = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root_path / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='lane-predecessor-') as directory:
+        record_path = Path(directory) / 'predecessor.json'
+        record_path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root_path / 'tools' / 'tool.sh'), mojo,
+             'carla_lane_predecessor', str(record_path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout.strip() == 'true'
 
 
 if __name__ == '__main__':
