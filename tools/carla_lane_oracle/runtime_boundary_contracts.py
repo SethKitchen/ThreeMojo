@@ -15,7 +15,6 @@ if __package__:
 else:
     import source_contracts as _typed_source
 
-import hashlib
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 
@@ -65,6 +64,43 @@ def require(value, message):
         raise ValueError('reviewed runtime boundary successor: ' + message)
 
 
+def _run(arguments):
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_runtime_boundary_gate', *arguments],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
+def _gate_record(payload):
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory(prefix='runtime-boundary-gate-') as directory:
+        record = Path(directory) / 'migration.json'
+        record.write_bytes(payload)
+        _run(['--migration', str(record)])
+
+
+def _gate_bytes(payload, digest, token, label):
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory(prefix='runtime-boundary-gate-') as directory:
+        target = Path(directory) / 'payload'
+        target.write_bytes(payload)
+        arguments = ['--bytes', str(target), '--sha', digest, '--label', label]
+        if token is not None:
+            arguments.extend(['--token', token])
+        _run(arguments)
+
+
 def verify(root, *, _operation=None):
     """Verify live ledger endpoints; return the original historical edges.
 
@@ -74,12 +110,8 @@ def verify(root, *, _operation=None):
         _check_operation(root, _operation)
     raw = _typed_source.historical_bytes(root, MIGRATION, _observe_bytes(root, MIGRATION, (root/MIGRATION).read_bytes(),
                          _operation=_operation), _operation=_operation)
-    require(hashlib.sha256(raw).hexdigest() == MIGRATION_SHA256, 'unreviewed exact edge')
+    _gate_record(raw)
     record = json.loads(raw, object_pairs_hook=source.unique_keys)
-    require(type(record['schema']) is int and record['schema'] == 1
-            and record['issue'] == 333 and set(record['edges']) == set(MODULES),
-            'unexpected successor scope')
-    require(set(record['correctness_tests']) == set(TESTS), 'unexpected correctness test set')
     if __package__:
         from . import runtime_view_contracts as view
     else:
@@ -89,9 +121,6 @@ def verify(root, *, _operation=None):
     edges = {}
     for path in MODULES:
         edge = record['edges'][path]
-        require(set(edge) == {'before_sha256', 'after_sha256', 'before_token_sha256',
-                              'after_token_sha256'}
-                and edge['before_sha256'] != edge['after_sha256'], 'malformed edge: ' + path)
         if path in steps:
             # A later reviewed step starts exactly where this edge ends.
             step = steps[path]
@@ -103,12 +132,11 @@ def verify(root, *, _operation=None):
         current = ledger.endpoint(root, path, edge, _operation=_operation)
         actual = _typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
                                 _operation=_operation), _operation=_operation)
-        require(hashlib.sha256(actual).hexdigest() == current['after_sha256']
-                and source.token_sha256(actual.decode('utf-8')) == current['after_token_sha256'],
-                'unreviewed runtime boundary consumer: ' + path)
+        _gate_bytes(actual, current['after_sha256'], current['after_token_sha256'],
+                    'unreviewed runtime boundary consumer: ' + path)
         edges[path] = {'path': path, **edge}
     for path, expected in record['correctness_tests'].items():
-        require(hashlib.sha256(_typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
-                                             _operation=_operation), _operation=_operation)).hexdigest() == expected,
-                'bound runtime boundary test changed: ' + path)
+        _gate_bytes(_typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
+                                             _operation=_operation), _operation=_operation),
+                    expected, None, 'bound runtime boundary test changed: ' + path)
     return edges

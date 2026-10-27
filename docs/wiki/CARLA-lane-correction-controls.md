@@ -44,6 +44,8 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.
 
+`tools/carla_runtime_boundary_gate.mojo` checks the runtime-boundary record and its bound tests.
+
 ## Lane poses
 
 The pose follows the derivative of the actual lane-center expression.
