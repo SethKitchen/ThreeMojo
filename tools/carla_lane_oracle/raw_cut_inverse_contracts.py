@@ -52,6 +52,27 @@ def _gate(migration, module=None):
         raise ValueError(message)
 
 
+def _gate_fixture(text, expected):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='raw-cut-fixture-') as directory:
+        target = Path(directory) / 'fixture.mojo'
+        target.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_raw_cut_gate',
+             '--fixture', str(target), '--token', expected],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def _gate_predecessor(payload, expected):
     import os
     import subprocess
@@ -120,8 +141,7 @@ def verify_premises(root, *, _operation=None):
     if _operation is not None:
         fixture = full_audit._observe_text(root, 'tests/test_carla_raw_cut_successor.mojo', fixture, _operation=_operation)
     fixture = _typed_source.historical_text(root, 'tests/test_carla_raw_cut_successor.mojo', fixture, _operation=_operation)
-    require(source.token_sha256(fixture) ==
-            record['native_fixture_token_sha256'], 'independent exact-word native fixture changed')
+    _gate_fixture(fixture, record['native_fixture_token_sha256'])
     reference = (root/'tests/test_carla_support_dispatch_successor.mojo').read_text()
     if _operation is not None:
         reference = full_audit._observe_text(root, 'tests/test_carla_support_dispatch_successor.mojo', reference, _operation=_operation)

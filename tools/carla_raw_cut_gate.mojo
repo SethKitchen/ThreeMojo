@@ -7,6 +7,7 @@
 
     carla_raw_cut_gate --migration PATH [--module PATH]
     carla_raw_cut_gate --predecessor PATH --sha HEX
+    carla_raw_cut_gate --fixture PATH --token HEX
 
 The program checks the texts it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -104,12 +105,26 @@ def raw_cut_digest(payload: Span[UInt8, _], expected: String) raises:
         )
 
 
+def raw_cut_fixture(text: String, expected: String) raises:
+    """Require the native fixture token digest.
+
+    Args:
+        text: The fixture source.
+        expected: The required token digest.
+
+    Raises:
+        Error: The token digest changed.
+    """
+    if token_sha256(text) != expected:
+        _fail("independent exact-word native fixture changed")
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_raw_cut_gate --migration PATH [--module PATH]"
-            " | --predecessor PATH --sha HEX"
+            " | --predecessor PATH --sha HEX | --fixture PATH --token HEX"
         ),
         file=stderr,
     )
@@ -126,6 +141,8 @@ def main() raises:
     var module = String("")
     var predecessor = String("")
     var digest = String("")
+    var fixture = String("")
+    var token = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -135,6 +152,8 @@ def main() raises:
             or word == "--module"
             or word == "--predecessor"
             or word == "--sha"
+            or word == "--fixture"
+            or word == "--token"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -145,18 +164,40 @@ def main() raises:
                 module = value
             elif word == "--predecessor":
                 predecessor = value
-            else:
+            elif word == "--sha":
                 digest = value
+            elif word == "--fixture":
+                fixture = value
+            else:
+                token = value
             index += 2
             continue
         _usage()
-    if (migration.byte_length() == 0) == (predecessor.byte_length() == 0):
+    var modes = 0
+    if migration.byte_length() > 0:
+        modes += 1
+    if predecessor.byte_length() > 0:
+        modes += 1
+    if fixture.byte_length() > 0:
+        modes += 1
+    if modes != 1:
         _usage()
     if predecessor.byte_length() > 0 and (
         digest.byte_length() == 0 or module.byte_length() > 0
     ):
         _usage()
+    if fixture.byte_length() > 0 and (
+        token.byte_length() == 0
+        or migration.byte_length() > 0
+        or module.byte_length() > 0
+        or predecessor.byte_length() > 0
+        or digest.byte_length() > 0
+    ):
+        _usage()
     try:
+        if fixture.byte_length() > 0:
+            raw_cut_fixture(Path(fixture).read_text(), token)
+            return
         if predecessor.byte_length() > 0:
             raw_cut_digest(Path(predecessor).read_bytes(), digest)
             return

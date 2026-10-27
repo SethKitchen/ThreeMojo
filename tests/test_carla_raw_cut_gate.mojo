@@ -7,7 +7,11 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_raw_cut_gate import raw_cut_digest, raw_cut_record
+from tools.carla_raw_cut_gate import (
+    raw_cut_digest,
+    raw_cut_fixture,
+    raw_cut_record,
+)
 
 
 def test_a_changed_record_is_refused() raises:
@@ -26,6 +30,17 @@ def test_a_changed_predecessor_is_refused() raises:
         )
     ):
         raw_cut_digest(String("nope").as_bytes(), "00")
+
+
+def test_a_changed_fixture_token_is_refused() raises:
+    """A fixture that does not have the recorded token digest fails closed."""
+    with assert_raises(
+        contains=(
+            "raw cut inverse contract: independent exact-word native fixture"
+            " changed"
+        )
+    ):
+        raw_cut_fixture("def changed():\n    pass\n", "00")
 
 
 def main() raises:
