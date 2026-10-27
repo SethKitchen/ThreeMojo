@@ -18,6 +18,7 @@ from tests._python_tokens import (
     moment_words_json,
     normalized_block,
     selected_block,
+    pin_transition_rows,
     strip_try_only_routing,
     replace_token_fragment,
     ideal_function_source,
@@ -209,6 +210,20 @@ def test_a_moment_table_keeps_its_hex_words() raises:
         _ = moment_words_json(
             source.replace("Array[UInt64, 2]", "Array[UInt64, 1]"), 2
         )
+
+
+def test_a_repeated_pin_pointer_is_marked() raises:
+    """The second use of one pointer is a duplicate and has no value."""
+    var payload = String(
+        '{"pins":{"groups":{"g":{"a":"AFTER"}}},"transitions":['
+        + '{"pointer":["groups","g","a"],"before":"BEFORE","after":"AFTER"},'
+        + '{"pointer":["groups","g","a"],"before":"BEFORE","after":"AFTER"}]}'
+    )
+    assert_equal(
+        pin_transition_rows(payload),
+        '[{"actual":"AFTER","duplicate":false,"expected":"AFTER"},'
+        + '{"actual":"","duplicate":true,"expected":"AFTER"}]',
+    )
 
 
 def test_the_try_only_parameter_is_removed() raises:

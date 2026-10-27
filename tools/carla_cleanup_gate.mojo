@@ -29,6 +29,7 @@
     carla_cleanup_gate --moment-source PATH
     carla_cleanup_gate --block DIR
     carla_cleanup_gate --strip-try PATH
+    carla_cleanup_gate --pin-rows PATH
     carla_cleanup_gate --literals PATH --name NAME --kind array --size N
     carla_cleanup_gate --literals PATH --name NAME --kind scalar
 
@@ -49,6 +50,7 @@ from tests._python_tokens import (
     moment_words_json,
     normalized_block,
     selected_block,
+    pin_transition_rows,
     strip_try_only_routing,
     replace_token_fragment,
     python_syntax_json,
@@ -453,7 +455,8 @@ def _usage():
             " | --routing PATH --constants PATH | --ideal PATH --name NAME |"
             " --syntax PATH | --slice PATH --name NAME | --fragment DIR |"
             " --normalize PATH | --table PATH --count N | --moment-source PATH"
-            " | --block DIR | --strip-try PATH | --literals PATH --name NAME"
+            " | --block DIR | --strip-try PATH | --pin-rows PATH"
+            " | --literals PATH --name NAME"
             " --kind array --size N | --literals PATH --name NAME --kind scalar"
         ),
         file=stderr,
@@ -499,6 +502,7 @@ def main() raises:
     var moment_source_path = String("")
     var block = String("")
     var strip_try = String("")
+    var pin_rows = String("")
     var literals = String("")
     var literal_size = String("")
     var arguments = argv()
@@ -538,6 +542,7 @@ def main() raises:
             or word == "--moment-source"
             or word == "--block"
             or word == "--strip-try"
+            or word == "--pin-rows"
             or word == "--literals"
             or word == "--size"
         ):
@@ -608,6 +613,8 @@ def main() raises:
                 block = value
             elif word == "--strip-try":
                 strip_try = value
+            elif word == "--pin-rows":
+                pin_rows = value
             elif word == "--literals":
                 literals = value
             elif word == "--size":
@@ -674,6 +681,8 @@ def main() raises:
     if block.byte_length() > 0:
         modes += 1
     if strip_try.byte_length() > 0:
+        modes += 1
+    if pin_rows.byte_length() > 0:
         modes += 1
     if significant.byte_length() > 0:
         modes += 1
@@ -756,6 +765,9 @@ def main() raises:
                 )
             else:
                 _usage()
+            return
+        if pin_rows.byte_length() > 0:
+            print(pin_transition_rows(Path(pin_rows).read_text()), end="")
             return
         if strip_try.byte_length() > 0:
             print(

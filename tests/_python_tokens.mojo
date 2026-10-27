@@ -2181,6 +2181,96 @@ def strip_try_only_routing(routing_json: String) raises -> String:
     return doc.dumps()
 
 
+def _pointer_key(doc: PyJson, pointer: Int) raises -> String:
+    """Join one pointer into a single lookup key.
+
+    Args:
+        doc: The transition document.
+        pointer: The pointer list.
+
+    Returns:
+        The parts separated by newlines.
+
+    Raises:
+        Error: A pointer part is not a string.
+    """
+    var key = String("")
+    var count = doc.length(pointer)
+    var index = 0
+    while index < count:
+        if index > 0:
+            key += "\n"
+        key += doc.text(doc.item(pointer, index))
+        index += 1
+    return key
+
+
+def _pointer_value(doc: PyJson, pins: Int, pointer: Int) raises -> String:
+    """Return the string at one pin pointer.
+
+    Args:
+        doc: The transition document.
+        pins: The pin document.
+        pointer: The pointer list.
+
+    Returns:
+        The current string at that pointer.
+
+    Raises:
+        Error: A pointer key is absent.
+    """
+    var node = pins
+    var count = doc.length(pointer)
+    var index = 0
+    while index < count:
+        node = doc.at(node, doc.text(doc.item(pointer, index)))
+        index += 1
+    return doc.text(node)
+
+
+def pin_transition_rows(payload: String) raises -> String:
+    """Return the current value at each coverage pin transition.
+
+    Args:
+        payload: JSON with `pins` and `transitions`.
+
+    Returns:
+        A JSON list of duplicate, actual, and expected rows.
+
+    Raises:
+        Error: A pointer key is absent.
+    """
+    var doc = PyJson.parse(payload)
+    var pins = doc.at(doc.root, "pins")
+    var transitions = doc.at(doc.root, "transitions")
+    var rows = doc.new_list()
+    var seen = List[String]()
+    var count = doc.length(transitions)
+    var index = 0
+    while index < count:
+        var change = doc.item(transitions, index)
+        var pointer = doc.at(change, "pointer")
+        var key = _pointer_key(doc, pointer)
+        var duplicate = False
+        var seen_index = 0
+        while seen_index < len(seen):
+            if seen[seen_index] == key:
+                duplicate = True
+            seen_index += 1
+        var actual = String("")
+        if not duplicate:
+            actual = _pointer_value(doc, pins, pointer)
+            seen.append(key)
+        var row = doc.new_dict()
+        doc.set(row, "duplicate", doc.new_bool(duplicate))
+        doc.set(row, "actual", doc.new_str(actual))
+        doc.set(row, "expected", doc.new_str(doc.text(doc.at(change, "after"))))
+        doc.append(rows, row)
+        index += 1
+    doc.root = rows
+    return doc.dumps()
+
+
 def selected_block(source: String, begin: String, end: String) raises -> String:
     """Return one normalized source block between two markers.
 

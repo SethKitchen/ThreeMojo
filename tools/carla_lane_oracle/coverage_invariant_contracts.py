@@ -151,20 +151,11 @@ def _gate_places(rows):
 
 
 def _apply_transitions(pins, transitions):
-    rows = []
-    seen = set()
-    for change in transitions:
-        pointer = tuple(change['pointer'])
-        duplicate = pointer in seen
-        actual = ''
-        if not duplicate:
-            ref = pins
-            for part in pointer[:-1]:
-                ref = ref[part]
-            actual = ref[pointer[-1]]
-            seen.add(pointer)
-        rows.append({'duplicate': duplicate, 'actual': actual,
-                     'expected': change['after']})
+    if __package__:
+        from . import ideal_projection
+    else:
+        import ideal_projection
+    rows = ideal_projection.pin_transition_rows(pins, transitions)
     _gate_places(rows)
     for change in transitions:
         pointer = tuple(change['pointer'])

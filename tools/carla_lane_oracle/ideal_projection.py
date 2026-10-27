@@ -335,6 +335,31 @@ def _constant_literals(text, name, kind, size=None):
     return json.loads(result.stdout)
 
 
+def pin_transition_rows(pins, transitions):
+    """Return the current value at each coverage pin transition."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps(
+        {'pins': pins, 'transitions': transitions}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='pin-rows-') as directory:
+        path = Path(directory) / 'payload.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--pin-rows', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def declaration(text, name, owner=()):
     """Return one declaration selected by the cleanup gate."""
     import os
