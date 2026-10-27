@@ -109,6 +109,9 @@ comptime _WINDOW = 1024
 comptime _BYPASS = 16384
 comptime _DEADLINE = "THREEMOJO_COVERAGE_DEADLINE"
 comptime _PHASE = "THREEMOJO_COVERAGE_PHASES"
+# The loop-proof seal rederives the receipt over the whole repository,
+# which takes minutes, and `finish-report` rederives it twice.
+comptime _SEAL_SECONDS = 3600.0
 
 
 def _usage() -> String:
@@ -2589,7 +2592,7 @@ def _report(arguments: List[String]) raises -> Int:
         prepare.append("--")
         for word in command:
             prepare.append(word)
-        var ready = run_program(prepare, 180.0, merge_errors=False)
+        var ready = run_program(prepare, _SEAL_SECONDS, merge_errors=False)
         if ready.output.byte_length() > 0:
             print(ready.output, end="")
         if ready.status != 0:
@@ -2633,7 +2636,7 @@ def _report(arguments: List[String]) raises -> Int:
             finish.append("--suites")
             for suite in suites:
                 finish.append(suite)
-        var checked = run_program(finish, 180.0, merge_errors=False)
+        var checked = run_program(finish, _SEAL_SECONDS, merge_errors=False)
         var slash = manifest.rfind("/")
         if slash > 0:
             _ = run_program(["rm", "-rf", String(manifest[byte=:slash])], 30.0)
