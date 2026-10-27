@@ -10,10 +10,7 @@ if __package__:
 else:
     import source_contracts as source
 from pathlib import Path
-import hashlib
 # #333 explicit historical provenance views; current inputs remain operation-owned.
-import math
-import struct
 
 if __package__:
     from .source_contracts import token_sha256
@@ -27,22 +24,28 @@ EXPECTED='0e42c79e3bbda283c32886e50ad8b1acd614f651f1d258f4ea4b5e4e0e139299'
 def verify_text(module, geometry):
     # Exact complete module binding includes imports, both materializations,
     # every use/write of local arrays, environment guard and error/work graph.
-    if token_sha256(module)!=TOKEN_SHA256:
-        raise ValueError('Reviewed grouped consumer graph changed')
-    if __package__:
-        from .spiral_moments import parse_array
-    else:
-        from spiral_moments import parse_array
-    arrays={}
-    for name in ('_GL_NODES','_GL_WEIGHTS'):
-        words = parse_array(geometry, name, 5)
-        values = [struct.unpack('>d', struct.pack('>Q', word))[0] for word in words]
-        arrays[name]=values
-    w=arrays['_GL_WEIGHTS'];n=arrays['_GL_NODES']
-    if not(w[0]==w[4] and w[1]==w[3]):raise ValueError('Weight symmetry changed')
-    if not all(math.isfinite(x) and 0<x<=1 for x in w):raise ValueError('Invalid stored weight')
-    if not all(math.isfinite(x) and -1<x<1 for x in n):raise ValueError('Invalid stored node')
-    return {'status':'PASS','consumer_sha256':EXPECTED,'runtime_arithmetic':'unchanged after impossible table refusals','coverage_waiver':False}
+    import json
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='grouped-gate-') as directory:
+        folder = Path(directory)
+        module_path = folder / 'module.mojo'
+        geometry_path = folder / 'geometry.mojo'
+        module_path.write_text(module)
+        geometry_path.write_text(geometry)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_grouped_gate',
+             '--module', str(module_path), '--geometry', str(geometry_path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
 
 def verify(root, *, _operation=None):
     root=Path(root)
