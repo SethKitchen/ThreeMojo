@@ -162,7 +162,8 @@ def run_program(
             + 'kill "$w" 2>/dev/null; wait "$w" 2>/dev/null\n'
             + "printf '%d' \"$rc\"\n"
         )
-        var reported = run("sh -c " + shell_quote(script))
+        # `run` already starts the script with `sh -c`.
+        var reported = run(script)
         var status = Int(reported)
         var bytes = Path(output).read_bytes()
         var error_text = String()
