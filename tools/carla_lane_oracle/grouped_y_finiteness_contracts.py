@@ -125,6 +125,30 @@ def _gate_sources(record, before, after, before_sha, after_sha):
     ])
 
 
+def _gate_identity(before, after, before_token, after_token):
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='y-identity-') as directory:
+        folder = Path(directory)
+        before_path = folder / 'before.mojo'
+        after_path = folder / 'after.mojo'
+        before_path.write_text(before)
+        after_path.write_text(after)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_y_gate',
+             '--before-text', str(before_path), '--after-text', str(after_path),
+             '--before-token', before_token, '--after-token', after_token],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def predecessor_text(root, path, *, _operation=None):
     """Verify all actual Y premises before restoring its exact prior module."""
 # #333 explicit historical provenance views; current inputs remain operation-owned.
@@ -151,9 +175,5 @@ def predecessor_text(root, path, *, _operation=None):
     if not isinstance(before, str) or not isinstance(after, str):
         raise ValueError('Grouped Y record must contain complete source text')
     _gate_sources(payload, before.encode(), after.encode(), record['predecessor_file_sha256'], record['successor_file_sha256'])
-    if (record['predecessor_token_sha256'] != PREDECESSOR_TOKEN_SHA256
-            or source_contracts.token_sha256(before) != PREDECESSOR_TOKEN_SHA256
-            or record['successor_token_sha256'] != EXPECTED[MODULE]
-            or source_contracts.token_sha256(after) != EXPECTED[MODULE]):
-        raise ValueError('Grouped Y predecessor/successor token identity changed')
+    _gate_identity(before, after, record['predecessor_token_sha256'], record['successor_token_sha256'])
     return before

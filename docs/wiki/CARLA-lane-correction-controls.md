@@ -20,7 +20,7 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_grouped_gate.mojo` checks the grouped-table token digest and the stored node and weight bounds.
 
-`tools/carla_y_gate.mojo` checks the five Y-finiteness token digests and the successor record digests.
+`tools/carla_y_gate.mojo` checks the five Y-finiteness token digests, the successor record digests, and the module token identity.
 
 `tools/carla_speed_gate.mojo` checks the speed-parser record, its module token, and its correctness tests.
 

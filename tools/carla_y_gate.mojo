@@ -36,6 +36,9 @@ comptime _SUM2 = (
 comptime _RECORD_SHA256 = (
     "4b72cd07de22d61d70c7aa489e566cd25468189b6a60b5e105fa26ea726e6853"
 )
+comptime _PREDECESSOR_TOKEN = (
+    "a8f3beca23c8d6a84d01f5eebecb0a01cd2102aad4e226ed6a782722733a86b7"
+)
 comptime _PASS = (
     '{"status":"PASS","maximum_accumulator_exponent":947,'
     + '"origin_error_refusal_unchanged":true,"y_call_and_writes_retained":true}'
@@ -122,12 +125,39 @@ def y_successor(
         raise Error("Grouped Y complete-module byte identity changed")
 
 
+def y_identity(
+    before: String,
+    after: String,
+    before_token: String,
+    after_token: String,
+) raises:
+    """Require the recorded module tokens to match the reviewed digests.
+
+    Args:
+        before: The predecessor module source.
+        after: The successor module source.
+        before_token: The token recorded for the predecessor.
+        after_token: The token recorded for the successor.
+
+    Raises:
+        Error: A recorded token or a module token changed.
+    """
+    if (
+        before_token != _PREDECESSOR_TOKEN
+        or token_sha256(before) != _PREDECESSOR_TOKEN
+        or after_token != _GROUPED
+        or token_sha256(after) != _GROUPED
+    ):
+        raise Error("Grouped Y predecessor/successor token identity changed")
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_y_gate --grouped PATH --interval PATH --trig PATH"
-            " --geometry PATH --sum2 PATH"
+            " --geometry PATH --sum2 PATH | --before-text PATH --after-text"
+            " PATH --before-token HEX --after-token HEX"
         ),
         file=stderr,
     )
@@ -150,6 +180,10 @@ def main() raises:
     var after = String("")
     var before_sha = String("")
     var after_sha = String("")
+    var before_text = String("")
+    var after_text = String("")
+    var before_token = String("")
+    var after_token = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -165,6 +199,10 @@ def main() raises:
             or word == "--after"
             or word == "--before-sha"
             or word == "--after-sha"
+            or word == "--before-text"
+            or word == "--after-text"
+            or word == "--before-token"
+            or word == "--after-token"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -187,11 +225,54 @@ def main() raises:
                 after = value
             elif word == "--before-sha":
                 before_sha = value
-            else:
+            elif word == "--after-sha":
                 after_sha = value
+            elif word == "--before-text":
+                before_text = value
+            elif word == "--after-text":
+                after_text = value
+            elif word == "--before-token":
+                before_token = value
+            else:
+                after_token = value
             index += 2
             continue
         _usage()
+    var identity = (
+        before_text.byte_length() > 0
+        or after_text.byte_length() > 0
+        or before_token.byte_length() > 0
+        or after_token.byte_length() > 0
+    )
+    if identity:
+        if (
+            before_text.byte_length() == 0
+            or after_text.byte_length() == 0
+            or before_token.byte_length() == 0
+            or after_token.byte_length() == 0
+            or record.byte_length() > 0
+            or grouped.byte_length() > 0
+            or interval.byte_length() > 0
+            or trig.byte_length() > 0
+            or geometry.byte_length() > 0
+            or sum2.byte_length() > 0
+            or before.byte_length() > 0
+            or after.byte_length() > 0
+            or before_sha.byte_length() > 0
+            or after_sha.byte_length() > 0
+        ):
+            _usage()
+        try:
+            y_identity(
+                Path(before_text).read_text(),
+                Path(after_text).read_text(),
+                before_token,
+                after_token,
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var sources = (
         before.byte_length() > 0
         or after.byte_length() > 0

@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_y_gate import y_finiteness, y_successor
+from tools.carla_y_gate import y_finiteness, y_identity, y_successor
 
 
 def test_a_changed_module_is_refused() raises:
@@ -37,6 +37,19 @@ def test_a_changed_successor_record_is_refused() raises:
             "",
             "",
             False,
+        )
+
+
+def test_a_changed_module_token_is_refused() raises:
+    """A module token that is not the reviewed digest fails closed."""
+    with assert_raises(
+        contains="Grouped Y predecessor/successor token identity changed"
+    ):
+        y_identity(
+            "def changed():\n    pass\n",
+            "def changed():\n    pass\n",
+            "00",
+            "00",
         )
 
 
