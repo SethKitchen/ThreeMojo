@@ -543,34 +543,25 @@ def _project_batch(bounds, trig):
 def _project_sampled(bounds, trig, texts, names, copies):
     """Project the reviewed helpers, using Python only for the syntax texts."""
     recipe = _projection_recipe()
-    expected = _project_batch(bounds, trig)
+    record = _project_batch(bounds, trig)
+    expected = record['helpers']
     for name in copies:
         require(names[name] in expected, _sampled_closure()['step'])
     # Project complete parsed declarations, never raw prefix/tail slices.
     # Remove precisely the three complete non-sampled branches of the reference
     # capture. The new leading guard rejects those kinds; the independent broad
     # wrapper provides the full-Jet SPIRAL bridge. All 12 statements are
-    # accounted for.
-
-    def renamed_source(filename, name):
-        return _sampled_text(
-            '--rename', _sampled_text('--extract', texts[filename], name))
-
-    def with_decorators(filename, original, text):
-        return _sampled_text('--decorators', texts[filename], original) + text
-
+    # accounted for. The statement dumps come from Mojo. Python parses the
+    # reviewed source texts and requires the dumps to match.
+    del texts
     for step in recipe['steps']:
         kind = step['kind']
         if kind == 'project' or kind == 'rename':
             continue
         elif kind == 'constant':
-            constant = renamed_source(step['module'], step['name'])
-            _sampled_text('--check-roles', constant, step['role'])
-            require(_sampled_text(
-                '--body-dump', constant, index=step['constructor_index']) == dump(ast.parse(
-                    step['constructor']).body[0]), step['constructor_message'])
-            elements = json.loads(_sampled_text(
-                '--return-pair', constant, index=step['pair_index']))
+            require(record['constant']['dump'] == dump(ast.parse(
+                step['constructor']).body[0]), step['constructor_message'])
+            elements = json.loads(record['constant']['pair'])
             field = step['field']
             for index, _item in enumerate(elements):
                 required = ast.parse(
@@ -578,20 +569,14 @@ def _project_sampled(bounds, trig, texts, names, copies):
                 require(elements[index] == dump(required), step['field_message'])
             # Only derivative constructor fields change. Coefficient enclosure,
             # exact-zero scalar error, result ordering and guards are retained.
-            expected[step['target']] = with_decorators(
-                step['module'], step['name'], _sampled_text(step['mode'], constant))
         elif kind == 'lane':
-            old = renamed_source(step['module'], step['name'])
             # This private value-only specialization has no cached proof argument.
             # Remove only the exact new refusal branch whose proof condition is false
             # for that route. The full cached-proof caller remains separately bound.
-            require(_sampled_text(
-                '--body-dump', old, index=step['refusal_index']) == dump(ast.parse(
-                    step['refusal']).body[0]), step['refusal_message'])
-            _sampled_text('--check-roles', old, step['role'])
-            require(_sampled_text(
-                '--body-dump', old, index=step['capture_index']) == dump(ast.parse(
-                    step['capture']).body[0]), step['capture_message'])
+            require(record['lane']['refusal'] == dump(ast.parse(
+                step['refusal']).body[0]), step['refusal_message'])
+            require(record['lane']['capture'] == dump(ast.parse(
+                step['capture']).body[0]), step['capture_message'])
             # 0..13: all record checks/width traversal/elevation setup are retained.
             # 14: the exact capture-only assignments above are deleted.
             # 15..16: complete ARC/LINE branches move under all_geometry, in order.
@@ -601,7 +586,6 @@ def _project_sampled(bounds, trig, texts, names, copies):
             # claim that the proof branch is value-independent. Whole reference
             # modules bind every removed proof statement and its dependencies.
             # 21..22: original trig and final output are retained, without slicing.
-            expected[step['target']] = _sampled_text(step['mode'], old)
         else:
             raise CheckError(_sampled_closure()['step'])
     return expected

@@ -7,8 +7,8 @@
 
     carla_sampled_projection PATH
 
-PATH is JSON with `bounds` and `trig` source texts. The command prints the
-projected helpers. It omits the constant heading and the lane capture.
+PATH is JSON with `bounds` and `trig` source texts. The command prints
+the projected helpers and the constant and lane statement dumps.
 """
 
 from std.pathlib import Path

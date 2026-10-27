@@ -6,12 +6,20 @@
 """Project the copied sampled helpers and the value dispatchers.
 
 Python still compares the constant heading and the lane capture with its
-own syntax tree. This pass writes every other reviewed helper.
+own syntax tree. This pass writes those helpers and the statement dumps
+the comparison uses.
 """
 
-from tests._python_expr import require_sampled_roles
+from tests._python_expr import (
+    body_statement_json,
+    require_return_pair,
+    require_sampled_roles,
+    sampled_lane_dumps,
+)
 from tests._python_tokens import (
     decorator_prefix_json,
+    project_constant_heading,
+    project_lane_value,
     project_reference_value,
     project_union_value,
 )
@@ -155,8 +163,10 @@ def project_reviewed_helpers(bounds: String, trig: String) raises -> String:
         trig: The current `curve_trig.mojo` source.
 
     Returns:
-        JSON object. Each key is a sampled helper name and each value is
-        its projected source. Constant and lane helpers are absent.
+        JSON with `helpers`, `constant`, and `lane`. `helpers` maps each
+        sampled name to its projected source. `constant` holds the
+        constructor dump and the return-pair dumps. `lane` holds the
+        refusal dump and the capture dump.
 
     Raises:
         Error: A helper, a role list, or a projection step changed.
@@ -219,6 +229,10 @@ def project_reviewed_helpers(bounds: String, trig: String) raises -> String:
             ),
         )
         declaration_index += 1
+    var constant = out.new_dict()
+    var lane = out.new_dict()
+    var saw_constant = False
+    var saw_lane = False
     var steps = recipe.at(recipe.root, "steps")
     var step_count = recipe.length(steps)
     var step_index = 0
@@ -264,8 +278,73 @@ def project_reviewed_helpers(bounds: String, trig: String) raises -> String:
                     out.new_str(decorated + _renamed(source, old_name)),
                 )
                 pair_index += 1
-        elif kind != "constant" and kind != "lane":
+        elif kind == "constant" or kind == "lane":
+            var module = recipe.text(recipe.at(step, "module"))
+            var helper = recipe.text(recipe.at(step, "name"))
+            var old = _renamed(
+                _module_source(module, bounds_name, bounds, trig_name, trig),
+                helper,
+            )
+            var target = recipe.text(recipe.at(step, "target"))
+            if kind == "constant":
+                require_sampled_roles(old, recipe.text(recipe.at(step, "role")))
+                var dump_index = Int(
+                    recipe.text(recipe.at(step, "constructor_index"))
+                )
+                var pair_index = Int(recipe.text(recipe.at(step, "pair_index")))
+                out.set(
+                    constant,
+                    "dump",
+                    out.new_str(body_statement_json(old, dump_index)),
+                )
+                out.set(
+                    constant,
+                    "pair",
+                    out.new_str(require_return_pair(old, pair_index)),
+                )
+                out.set(
+                    result,
+                    target,
+                    out.new_str(
+                        _module_prefix(
+                            bounds_decorators,
+                            trig_decorators,
+                            module,
+                            trig_name,
+                            helper,
+                        )
+                        + project_constant_heading(old)
+                    ),
+                )
+                saw_constant = True
+            else:
+                var dumps = PyJson.parse(
+                    sampled_lane_dumps(
+                        old,
+                        Int(recipe.text(recipe.at(step, "refusal_index"))),
+                        Int(recipe.text(recipe.at(step, "capture_index"))),
+                    )
+                )
+                out.set(
+                    lane,
+                    "refusal",
+                    out.new_str(dumps.text(dumps.item(dumps.root, 0))),
+                )
+                out.set(
+                    lane,
+                    "capture",
+                    out.new_str(dumps.text(dumps.item(dumps.root, 1))),
+                )
+                out.set(result, target, out.new_str(project_lane_value(old)))
+                saw_lane = True
+        else:
             _fail()
         step_index += 1
-    out.root = result
+    if not saw_constant or not saw_lane:
+        _fail()
+    var envelope = out.new_dict()
+    out.set(envelope, "helpers", result)
+    out.set(envelope, "constant", constant)
+    out.set(envelope, "lane", lane)
+    out.root = envelope
     return out.dumps()

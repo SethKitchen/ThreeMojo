@@ -1837,6 +1837,66 @@ def require_sampled_roles(source: String, kind: String) raises:
     raise Error("unknown sampled role layout")
 
 
+def sampled_lane_dumps(
+    source: String, refusal: Int, capture: Int
+) raises -> String:
+    """Check the lane roles and return two statement dumps.
+
+    Args:
+        source: The renamed lane proof.
+        refusal: The body index of the proof refusal.
+        capture: The body index of the capture assignments.
+
+    Returns:
+        A JSON list of the refusal dump and the capture dump.
+
+    Raises:
+        Error: The role list changed, or a statement index is outside the
+            body.
+    """
+    var node = 0
+    var parser = _prepare_function(source, node)
+    var roles = PyJson()
+    var rows = roles.new_list()
+    var count = parser.narg[node]
+    var start = parser.at[node]
+    var index = 0
+    while index < count:
+        roles.append(
+            rows, roles.new_str(parser._role(parser.extra[start + index]))
+        )
+        index += 1
+    roles.root = rows
+    _match_roles(
+        roles,
+        1,
+        (
+            "assign:geometry_at|assign:elevation_at|assign:offset_at|if:geometry_at"
+            " < 0 or elevation_at < 0 or offset_at <"
+            " 0|if:info_index(road.info.geometries, high) != geometry_at or"
+            " info_index(road.info.elevations, high) != elevation_at or"
+            " info_index(road.info.lane_offsets, high) !="
+            " offset_at|assign:s|assign:offset|assign:lanes|assign:lane_id|assign:negative|assign:sign|if:lane_id.value"
+            " != 0|assign:offset|assign:record|if:capture|if:record.geometry.kind"
+            " == ARC|if:record.geometry.kind == LINE|annotate:reused|if:not"
+            " capture|annotate:point|if:reused|assign:trig|return"
+        ),
+        "complete lane dispatcher layout changed",
+    )
+    var out = PyJson()
+    var dumps = out.new_list()
+    out.append(
+        dumps,
+        out.new_str(parser._dump(_body_statement(parser, node, refusal))),
+    )
+    out.append(
+        dumps,
+        out.new_str(parser._dump(_body_statement(parser, node, capture))),
+    )
+    out.root = dumps
+    return out.dumps()
+
+
 def body_statement_json(source: String, index: Int) raises -> String:
     """Return the normalized dump of one function-body statement.
 
