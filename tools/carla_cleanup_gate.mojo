@@ -69,7 +69,7 @@ from tests._python_expr import (
     fragment_count,
 )
 from tests._python_tokens import (
-    declaration_place,
+    declaration_bounds_json,
     ideal_function_source,
     constant_literals_json,
     check_stored_half,
@@ -1197,11 +1197,12 @@ def main() raises:
             significant_documents(significant)
             return
         if bounds.byte_length() > 0:
-            var place = declaration_place(
-                Path(bounds).read_text(), decl_name, owners
+            print(
+                declaration_bounds_json(
+                    Path(bounds).read_text(), decl_name, owners
+                ),
+                end="",
             )
-            print(String(place.first) + " " + String(place.last))
-            print(place.text, end="")
             return
         if declaration.byte_length() > 0:
             print(

@@ -1025,6 +1025,34 @@ def declaration_text(
     return place.text
 
 
+def declaration_bounds_json(
+    source: String, name: String, owners: List[String]
+) raises -> String:
+    """Return one declaration and the source lines it occupies.
+
+    Args:
+        source: Mojo source.
+        name: The function name.
+        owners: The enclosing struct names, from the outside inward.
+
+    Returns:
+        JSON with `text`, `first`, and `last`. `first` is the first source
+        line. `last` is the line after the declaration. Both start at 0.
+
+    Raises:
+        Error: The function is missing, repeated, owned by another scope,
+            or has no indented body.
+    """
+    var place = declaration_place(source, name, owners)
+    var out = PyJson()
+    var root = out.new_dict()
+    out.set(root, "text", out.new_str(place.text))
+    out.set(root, "first", out.new_int(place.first))
+    out.set(root, "last", out.new_int(place.last))
+    out.root = root
+    return out.dumps()
+
+
 def declaration_place(
     source: String, name: String, owners: List[String]
 ) raises -> DeclarationPlace:

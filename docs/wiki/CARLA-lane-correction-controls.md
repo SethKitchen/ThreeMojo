@@ -24,6 +24,8 @@ It restores one selection function inside its line span.
 
 `tools/carla_grouped_gate.mojo` checks the grouped-table token digest and the stored node and weight bounds.
 
+It compares that grouped-table token digest before the predecessor fallback.
+
 `tools/carla_y_gate.mojo` checks the five Y-finiteness token digests, the successor record digests, and the module token identity.
 
 `tools/carla_speed_gate.mojo` checks the speed-parser record, its module token, and its correctness tests.
@@ -199,6 +201,10 @@ It extends an edge when a reviewed view step starts at that edge.
 `tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record and the admission token.
 
 `tools/carla_selection_record_gate.mojo` checks the selection predecessor record and the restored token.
+
+It reads the declaration line span before restoring that function.
+
+It chooses the grouped roundoff envelope name from the module path.
 
 `tools/carla_ideal_gate.mojo` checks the historical ideal source digest and the projected graph digest.
 

@@ -184,6 +184,7 @@ def _significant_documents(texts):
 
 
 def _declaration_bounds(text, name, owner):
+    import json
     import os
     import subprocess
     import tempfile
@@ -204,9 +205,8 @@ def _declaration_bounds(text, name, owner):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    header, _, body = result.stdout.partition('\n')
-    first, last = header.split()
-    return body, int(first), int(last)
+    record = json.loads(result.stdout)
+    return record['text'], record['first'], record['last']
 
 
 def _replace_span(text, first, last, replacement):
@@ -233,6 +233,24 @@ def _replace_span(text, first, last, replacement):
     return result.stdout
 
 
+def _envelope_name(path):
+    """Return the reviewed roundoff envelope for one module path."""
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_roundoff_name',
+         path],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout.strip()
+
+
 def predecessor_text(root, path, *, _operation=None):
     """Verify both actual producers before reconstructing one legacy module."""
 # #333 explicit historical provenance views; current inputs remain operation-owned.
@@ -257,8 +275,7 @@ def predecessor_text(root, path, *, _operation=None):
         'message': 'Wrong selection predecessor module',
     })
     item=record['modules'][path]
-    name=('_try_spiral_grouped_roundoff_envelope' if path.endswith('/spiral_grouped_roundoff_proof.mojo')
-          else '_try_spiral_roundoff_envelope')
+    name=_envelope_name(path)
     text=_producer_text(root,path, _operation=_operation)
     body, first, last = _declaration_bounds(text, name, ())
     current_doc, recorded_doc = _significant_documents([
