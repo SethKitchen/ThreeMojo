@@ -310,6 +310,33 @@ def reviewed_reference_tree(text, root=ROOT, *, _operation=None):
     return tree
 
 
+def _source_digests(blobs):
+    """Return SHA-256 hex digests of observed bytes, in order."""
+    import os
+    import subprocess
+    import tempfile
+    framed = b''.join(
+        str(len(raw)).encode('ascii') + b'\n' + raw for raw in blobs)
+    repo = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='sampled-source-sha-') as directory:
+        path = Path(directory) / 'frame.bin'
+        path.write_bytes(framed)
+        result = subprocess.run(
+            ['sh', str(repo / 'tools' / 'tool.sh'), mojo,
+             'carla_source_sha256', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    digests = json.loads(result.stdout)
+    if len(digests) != len(blobs):
+        raise ValueError('sampled source frame changed')
+    return digests
+
+
 def _sampled_result(root, shared, modules, primitive, sources, successors):
     """Return the sampled-value result in historical field order."""
     import ast
@@ -505,9 +532,12 @@ def verify(root):
             require(dump(wanted) == dump(actual),
                     'sampled helper diverged: ' + name)
         current_edges = audit.typed_successor_edges(root, _operation=_operation)
-        physical_sources = {name: hashlib.sha256(audit._observe_bytes(root,
-            path.relative_to(root).as_posix(), path.read_bytes(), _operation=_operation)).hexdigest()
-            for name, path in paths.items()}
+        observed = [audit._observe_bytes(
+            root, path.relative_to(root).as_posix(), path.read_bytes(),
+            _operation=_operation) for path in paths.values()]
+        digests = _source_digests(observed)
+        physical_sources = {
+            name: digest for name, digest in zip(paths, digests)}
         if owns:
             _operation.finish(root)
         return _sampled_result(
