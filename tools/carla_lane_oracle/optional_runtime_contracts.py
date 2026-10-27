@@ -60,9 +60,36 @@ def __getattr__(name):
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
+_RUNTIME_CONTRACT = None
+
+
+def _runtime_contract():
+    """Return the optional-runtime contract messages."""
+    global _RUNTIME_CONTRACT
+    if _RUNTIME_CONTRACT is not None:
+        return _RUNTIME_CONTRACT
+    import json
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+         'carla_optional_runtime_messages'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _RUNTIME_CONTRACT = json.loads(result.stdout)
+    return _RUNTIME_CONTRACT
+
+
 def require(condition, message):
     if not condition:
-        raise ValueError('optional runtime contract: ' + message)
+        raise ValueError(_runtime_contract()['prefix'] + message)
 
 
 def body(root, module, name, *, _operation=None):
@@ -139,8 +166,9 @@ def _without_moves(text):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        if message == 'unsupported move-token placement':
-            message = 'optional runtime contract: ' + message
+        contract = _runtime_contract()
+        if message == contract['move']:
+            message = contract['prefix'] + message
         raise ValueError(message)
     return result.stdout
 
@@ -185,8 +213,9 @@ def _fragment_checks(items):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        if message.startswith('invalid checker fragment:'):
-            message = 'optional runtime contract: ' + message
+        contract = _runtime_contract()
+        if message.startswith(contract['fragment']):
+            message = contract['prefix'] + message
         raise ValueError(message)
 
 
@@ -229,8 +258,9 @@ def sequence(node, text, label):
 
 
 def _fresh_item(node):
-    fragment = 'if not _sum2_supported_environment():\n    return None'
-    label = 'fresh invocation guard missing or moved: ' + node.name
+    contract = _runtime_contract()
+    fragment = contract['fresh_fragment']
+    label = contract['fresh_label'] + node.name
     return _node_edge(node, 'first', fragment, node.name, message=label)
 
 
@@ -298,7 +328,7 @@ def _production_paths(roots, paths):
         raise ValueError(message)
     flags = json.loads(result.stdout)
     if len(flags) != len(paths):
-        raise ValueError('optional runtime contract: production path set changed')
+        raise ValueError(_runtime_contract()['paths'])
     return flags
 
 
@@ -354,7 +384,7 @@ def _model_mentions(names, texts):
         raise ValueError(message)
     flags = json.loads(result.stdout)
     if len(flags) != len(texts):
-        raise ValueError('optional runtime contract: model name set changed')
+        raise ValueError(_runtime_contract()['models'])
     return flags
 
 
@@ -399,14 +429,15 @@ def _search_edges(source, name, mode):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        if message.startswith('invalid checker fragment:'):
-            message = 'optional runtime contract: ' + message
+        contract = _runtime_contract()
+        if message.startswith(contract['fragment']):
+            message = contract['prefix'] + message
         raise ValueError(message)
 
 
 def verify_fresh_producer(run):
     _search_edges(
-        _runtime_source(run, 'one original search frontier loop'),
+        _runtime_source(run, _runtime_contract()['frontier']),
         run._runtime_name, 'fresh')
 
 
@@ -417,7 +448,7 @@ def verify_search_semantics(run):
     Historical AST fixtures can exercise diagnostics but grant no source edge.
     """
     _search_edges(
-        _runtime_source(run, 'one original search frontier loop'),
+        _runtime_source(run, _runtime_contract()['frontier']),
         run._runtime_name, 'search')
 
 
@@ -445,8 +476,9 @@ def _semantic_edges(group, nodes):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        if message.startswith('invalid checker fragment:'):
-            message = 'optional runtime contract: ' + message
+        contract = _runtime_contract()
+        if message.startswith(contract['fragment']):
+            message = contract['prefix'] + message
         raise ValueError(message)
 
 

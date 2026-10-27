@@ -208,6 +208,8 @@ It keeps the five optional-runtime module names.
 
 It keeps the lane-search function name.
 
+It keeps the optional-runtime contract messages.
+
 It keeps the ten optional-runtime declaration groups.
 
 It checks the followup room, the recheck room, and the node fee.
