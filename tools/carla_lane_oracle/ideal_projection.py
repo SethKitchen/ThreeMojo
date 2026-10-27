@@ -108,6 +108,29 @@ class CommuteLegacyRateHalf(ast.NodeTransformer):
         return node
 
 
+def project_sum2_text(text):
+    """Return the projected spiral source with reviewed Sum2 auxiliaries removed."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='project-sum2-') as directory:
+        path = Path(directory) / 'source.mojo'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--project-sum2', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def check_stored_half(text):
     """Require the stored-half helper to keep its reviewed result uses."""
     import os
@@ -265,7 +288,12 @@ def verify_projection(legacy, current, helper_text):
             getattr(current_tree, '_mojo_type_parameters', None) ==
             [('NAME', 'derivatives'), ('OP', ':'), ('NAME', 'Bool')],
             'changed ideal generic declaration')
-    right = project_sum2(current_tree)
+    if isinstance(current, str):
+        projected_source = project_sum2_text(current)
+        right = ast.parse(projected_source).body[0]
+        right._mojo_type_parameters = current_tree._mojo_type_parameters
+    else:
+        right = project_sum2(current_tree)
     commute, project = CommuteLegacyRateHalf(), ProjectHalf()
     left, right = commute.visit(left), project.visit(right)
     require(commute.count == 2, 'expected exactly two historical rate-half commutations')

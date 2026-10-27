@@ -31,9 +31,9 @@ import json
 from pathlib import Path
 
 if __package__:
-    from .ideal_projection import declaration, verify_projection
+    from .ideal_projection import declaration, selected_block, verify_projection
 else:
-    from ideal_projection import declaration, verify_projection
+    from ideal_projection import declaration, selected_block, verify_projection
 
 
 def _syntax_tree(text):
@@ -416,8 +416,10 @@ def verify(root, *, _operation=None):
                 == [('_stored_half', None)], 'stored-half direct import changed')
     verify_binding(trees['curve_bounds'], '_stored_half', allowed_import=half_imports[0])
     verify_binding(interval_tree, '_stored_half', allowed_definition=half)
-    projection = verify_projection(pins['ideal_projection']['legacy_normalized_source'],
-        c.unique_function(trees['curve_bounds'], '_spiral_expression'),
+    projection = verify_projection(
+        pins['ideal_projection']['legacy_normalized_source'],
+        selected_block(
+            texts['curve_bounds'], 'def _spiral_expression[', 'def _sample_index('),
         interval[interval.index('def _stored_half['):])
     return {'status': 'PASS', 'recurrence_operations': 6, 'correction_additions': 1,
             'scalar_axes': 2, 'initialization': 'positive zero',

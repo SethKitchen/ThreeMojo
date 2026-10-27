@@ -1710,6 +1710,113 @@ def _call_argument(data: Span[UInt8, _], index: Int) -> Bool:
     return data[cursor - 1] == 40 or data[cursor - 1] == 44
 
 
+comptime _SUM2_IDEAL = """def _spiral_expression ( geometry : RoadGeometry , d : _JetExpression [ derivatives ] , pieces : Int , translation : Vector3 , ) -> Tuple [ _JetExpression [ derivatives ] , _JetExpression [ derivatives ] , _JetExpression [ derivatives ] , ] :
+    Expression = _JetExpression [ derivatives ]
+    if not _sum2_supported_environment ( ) :
+        unknown = Expression ( _Interval . whole ( ) , _Interval . whole ( ) , _Interval . whole ( ) , inf [ DType . float64 ] ( ) , )
+        return ( unknown , unknown , unknown )
+    k0 = Expression . constant ( geometry . curvature_start )
+    rate = Expression . constant ( ( geometry . curvature_end - geometry . curvature_start ) / geometry . length )
+    step = d / Expression . constant ( Float64 ( pieces ) )
+    nodes = materialize [ _GL_NODES ] ( )
+    weights = materialize [ _GL_WEIGHTS ] ( )
+    x = Expression . constant ( 0.0 )
+    y = Expression . constant ( 0.0 )
+    x_magnitude = _Interval . point ( 0.0 )
+    y_magnitude = _Interval . point ( 0.0 )
+    x_inherited = _Interval . point ( 0.0 )
+    y_inherited = _Interval . point ( 0.0 )
+    piece = 0
+    while piece < pieces :
+        start = step * Expression . constant ( Float64 ( piece ) )
+        i = 0
+        while i < 5 :
+            t = start + _stored_half ( step ) * Expression . constant ( 1.0 + nodes [ i ] )
+            theta = Expression . constant ( geometry . heading ) + t * ( k0 + _stored_half ( rate ) * t )
+            trig = _sincos_expression ( theta )
+            term_x = ( _stored_half ( step ) * Expression . constant ( weights [ i ] ) * trig [ 1 ] )
+            term_y = ( _stored_half ( step ) * Expression . constant ( weights [ i ] ) * trig [ 0 ] )
+            x = x + term_x
+            y = y + term_y
+            x_magnitude = x_magnitude + _Interval . point ( term_x . rounded_value ( ) . magnitude ( ) )
+            y_magnitude = y_magnitude + _Interval . point ( term_y . rounded_value ( ) . magnitude ( ) )
+            x_inherited = x_inherited + _Interval . point ( term_x . error )
+            y_inherited = y_inherited + _Interval . point ( term_y . error )
+            i += 1
+        piece += 1
+    x . error = _sum2_error_checked ( x_magnitude . high , x_inherited . high , 5 * pieces )
+    y . error = _sum2_error_checked ( y_magnitude . high , y_inherited . high , 5 * pieces )
+    heading = Expression . constant ( geometry . heading ) + d * ( k0 + _stored_half ( rate ) * d )
+    return ( ( Expression . constant ( geometry . x ) - Expression . constant ( Float64 ( translation . x ) ) ) + x , ( Expression . constant ( geometry . y ) + Expression . constant ( Float64 ( translation . y ) ) ) + y , heading , )
+"""
+
+comptime _SUM2_PROJECTED = """def _spiral_expression ( geometry : RoadGeometry , d : _JetExpression [ derivatives ] , pieces : Int , translation : Vector3 , ) -> Tuple [ _JetExpression [ derivatives ] , _JetExpression [ derivatives ] , _JetExpression [ derivatives ] , ] :
+    Expression = _JetExpression [ derivatives ]
+    k0 = Expression . constant ( geometry . curvature_start )
+    rate = Expression . constant ( ( geometry . curvature_end - geometry . curvature_start ) / geometry . length )
+    step = d / Expression . constant ( Float64 ( pieces ) )
+    nodes = materialize [ _GL_NODES ] ( )
+    weights = materialize [ _GL_WEIGHTS ] ( )
+    x = Expression . constant ( 0.0 )
+    y = Expression . constant ( 0.0 )
+    piece = 0
+    while piece < pieces :
+        start = step * Expression . constant ( Float64 ( piece ) )
+        i = 0
+        while i < 5 :
+            t = start + _stored_half ( step ) * Expression . constant ( 1.0 + nodes [ i ] )
+            theta = Expression . constant ( geometry . heading ) + t * ( k0 + _stored_half ( rate ) * t )
+            trig = _sincos_expression ( theta )
+            x = x + ( _stored_half ( step ) * Expression . constant ( weights [ i ] ) * trig [ 1 ] )
+            y = y + ( _stored_half ( step ) * Expression . constant ( weights [ i ] ) * trig [ 0 ] )
+            i += 1
+        piece += 1
+    heading = Expression . constant ( geometry . heading ) + d * ( k0 + _stored_half ( rate ) * d )
+    return ( ( Expression . constant ( geometry . x ) - Expression . constant ( Float64 ( translation . x ) ) ) + x , ( Expression . constant ( geometry . y ) + Expression . constant ( Float64 ( translation . y ) ) ) + y , heading , )
+"""
+
+
+def _without_leading_newline(text: String) -> String:
+    """Drop one leading newline from an embedded source string.
+
+    Args:
+        text: A source constant.
+
+    Returns:
+        `text` without a first newline, when it has one.
+    """
+    var data = text.as_bytes()
+    var start = 0
+    if len(data) > 0 and data[0] == 10:
+        start = 1
+    var out = String("")
+    var index = start
+    while index < len(data):
+        out += chr(Int(data[index]))
+        index += 1
+    return out
+
+
+def project_sum2_source(source: String) raises -> String:
+    """Return the ideal spiral with the reviewed Sum2 auxiliaries removed.
+
+    Args:
+        source: Mojo source that contains `def _spiral_expression[`.
+
+    Returns:
+        Source Python's parser accepts as the projected function.
+
+    Raises:
+        Error: The declaration is not the reviewed Sum2 ideal layout.
+    """
+    var normalized = ideal_function_source(source, "_spiral_expression")
+    var expected = _without_leading_newline(_SUM2_IDEAL)
+    var projected = _without_leading_newline(_SUM2_PROJECTED)
+    if normalized != expected:
+        raise Error("Sum2 complete ideal statement layout changed")
+    return projected
+
+
 def _starts_at(source: String, index: Int, prefix: String) -> Bool:
     """Return whether `source` has `prefix` at a byte index.
 
