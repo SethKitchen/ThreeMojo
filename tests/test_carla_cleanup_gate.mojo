@@ -7,7 +7,14 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_cleanup_gate import cleanup_digest, cleanup_record, cleanup_sha
+from std.os import makedirs
+from std.pathlib import Path
+from tools.carla_cleanup_gate import (
+    cleanup_digest,
+    cleanup_record,
+    cleanup_sha,
+    cleanup_tokens,
+)
 
 
 def test_a_changed_record_is_refused() raises:
@@ -27,6 +34,23 @@ def test_a_changed_guard_pin_is_refused() raises:
         )
     ):
         cleanup_digest(String("nope").as_bytes(), "00")
+
+
+def test_a_changed_successor_token_is_refused() raises:
+    """A text that does not have the recorded token digest fails closed."""
+    var directory = "/tmp/cleanup-token-test"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/labels.json").write_text(
+        '[{"label":"unreviewed complete successor: module.mojo","token":"00"}]'
+    )
+    Path(directory + "/0.text").write_text("def changed():\n    pass\n")
+    with assert_raises(
+        contains=(
+            "reviewed cleanup source contract: unreviewed complete successor:"
+            " module.mojo"
+        )
+    ):
+        cleanup_tokens(directory)
 
 
 def test_the_stored_word_digest_matches_sha256() raises:

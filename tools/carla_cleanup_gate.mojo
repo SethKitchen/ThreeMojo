@@ -8,6 +8,7 @@
     carla_cleanup_gate --migration PATH [--previous PATH]
     carla_cleanup_gate --bytes PATH --sha HEX
     carla_cleanup_gate --sha-of PATH
+    carla_cleanup_gate --tokens DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -17,7 +18,8 @@ An absent previous file checks only the migration record.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_json import MISSING, PY_DICT, PY_INT, PY_STR, PyJson
+from tests._python_tokens import token_sha256
+from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PY_STR, PyJson
 from tools._sha256 import sha256_hex
 
 
@@ -176,12 +178,36 @@ def cleanup_digest(payload: Span[UInt8, _], expected: String) raises:
         _fail("unreviewed dependency pin successor: sum2-guard-pins.json")
 
 
+def cleanup_tokens(directory: String) raises:
+    """Require each successor text to have its recorded token digest.
+
+    Args:
+        directory: A directory with `labels.json` and `N.text` files.
+
+    Raises:
+        Error: A token digest changed, or the directory cannot be read.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("unreviewed complete successor")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var row = doc.item(doc.root, index)
+        var label = doc.text(doc.at(row, "label"))
+        var expected = doc.text(doc.at(row, "token"))
+        var text = Path(directory + "/" + String(index) + ".text").read_text()
+        if token_sha256(text) != expected:
+            _fail(label)
+        index += 1
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_cleanup_gate --migration PATH [--previous PATH]"
-            " | --bytes PATH --sha HEX | --sha-of PATH"
+            " | --bytes PATH --sha HEX | --sha-of PATH | --tokens DIR"
         ),
         file=stderr,
     )
@@ -199,6 +225,7 @@ def main() raises:
     var payload = String("")
     var digest = String("")
     var sha_of = String("")
+    var tokens = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -209,6 +236,7 @@ def main() raises:
             or word == "--bytes"
             or word == "--sha"
             or word == "--sha-of"
+            or word == "--tokens"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -221,8 +249,10 @@ def main() raises:
                 payload = value
             elif word == "--sha":
                 digest = value
-            else:
+            elif word == "--sha-of":
                 sha_of = value
+            else:
+                tokens = value
             index += 2
             continue
         _usage()
@@ -233,6 +263,8 @@ def main() raises:
         modes += 1
     if sha_of.byte_length() > 0:
         modes += 1
+    if tokens.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if previous.byte_length() > 0 and migration.byte_length() == 0:
@@ -240,6 +272,9 @@ def main() raises:
     if payload.byte_length() > 0 and digest.byte_length() == 0:
         _usage()
     try:
+        if tokens.byte_length() > 0:
+            cleanup_tokens(tokens)
+            return
         if sha_of.byte_length() > 0:
             print(cleanup_sha(Path(sha_of).read_bytes()))
             return

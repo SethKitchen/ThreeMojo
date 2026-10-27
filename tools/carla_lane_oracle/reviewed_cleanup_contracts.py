@@ -109,6 +109,32 @@ def _gate(migration, previous=None):
         raise ValueError(message)
 
 
+def _gate_tokens(pairs):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='cleanup-tokens-') as directory:
+        folder = Path(directory)
+        labels = []
+        for index, (text, token, label) in enumerate(pairs):
+            (folder / f'{index}.text').write_text(text)
+            labels.append({'label': label, 'token': token})
+        (folder / 'labels.json').write_text(json.dumps(labels))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--tokens', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def _sha256(payload):
     import os
     import subprocess
@@ -340,6 +366,7 @@ def verify(root, *, _operation=None):
     record = read_record(root)
     _, guard_payload = frozen._verified_pin_pair(root, record['runtime_pins_after_sha256'], **operation_args)
     _gate_digest(guard_payload, record['guard_pins_after_sha256'])
+    pairs = []
     for path, transition in record['sources'].items():
         text = accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
         if (path == 'extensions/carla/junction_bounds.mojo'
@@ -352,8 +379,10 @@ def verify(root, *, _operation=None):
                 text = full_audit.reviewed_text(root, path, text, **operation_args)
             except (ValueError, OSError) as error:
                 raise ValueError('reviewed cleanup source contract: unreviewed complete successor: ' + path) from error
-        require(source.token_sha256(text) == transition['after_token_sha256'],
-                'unreviewed complete successor: ' + path)
+        pairs.append((text, transition['after_token_sha256'],
+                      'unreviewed complete successor: ' + path))
+    if pairs:
+        _gate_tokens(pairs)
     for path, expected in record['premise_dependencies'].items():
         verify_dependency(path, _typed_source.historical_text(root, path, _observe_text(
             root, path, (root/path).read_text(), _operation=_operation), _operation=_operation),
