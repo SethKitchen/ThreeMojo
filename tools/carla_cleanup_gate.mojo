@@ -379,6 +379,31 @@ def cleanup_words(source: String, kind: String, label: String) raises:
         _fail("unchanged premise dependency changed: " + label)
 
 
+def cleanup_words_all(payload: String) raises:
+    """Require each trig or geometry stored-word digest.
+
+    Args:
+        payload: A JSON list. Each item has `text`, `kind`, and `label`.
+
+    Raises:
+        Error: A word list changed, a declaration cannot be read, or the
+            payload is not a JSON list.
+    """
+    var doc = PyJson.parse(payload)
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("malformed word list")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var item = doc.item(doc.root, index)
+        cleanup_words(
+            doc.text(doc.at(item, "text")),
+            doc.text(doc.at(item, "kind")),
+            doc.text(doc.at(item, "label")),
+        )
+        index += 1
+
+
 def significant_documents(directory: String) raises:
     """Print the significant-token JSON for each numbered source.
 

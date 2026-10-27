@@ -70,6 +70,7 @@ from tools.carla_cleanup_gate import (
     cleanup_premises,
     cleanup_tokens,
     cleanup_words,
+    cleanup_words_all,
 )
 
 
@@ -121,6 +122,21 @@ def test_a_missing_stored_word_is_refused() raises:
             "def empty():\n    pass\n",
             "geometry",
             "extensions/carla/geometry.mojo",
+        )
+
+
+def test_stored_word_lists_stop_at_the_first_failure() raises:
+    """The first missing geometry declaration keeps its message."""
+    with assert_raises(
+        contains=(
+            "reviewed cleanup source contract: missing or ambiguous"
+            " stored-word declaration: _GL_NODES"
+        )
+    ):
+        cleanup_words_all(
+            '[{"text":"def empty():\\n    pass\\n","kind":"geometry",'
+            + '"label":"one.mojo"},{"text":"def empty():\\n    pass\\n",'
+            + '"kind":"nope","label":"two.mojo"}]'
         )
 
 

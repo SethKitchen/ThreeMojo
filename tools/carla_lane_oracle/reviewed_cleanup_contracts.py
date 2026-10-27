@@ -485,18 +485,30 @@ def _dependency_pins():
 
 
 def _gate_words(text, kind, label):
+    _gate_words_all([(text, kind, label)])
+
+
+def _gate_words_all(items):
+    """Require every selected stored-word list."""
+    if not items:
+        return
+    import json
     import os
     import subprocess
     import tempfile
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps([
+        {'text': text, 'kind': kind, 'label': label}
+        for text, kind, label in items
+    ], separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='cleanup-words-') as directory:
-        target = Path(directory) / 'source.mojo'
-        target.write_text(text)
+        record = Path(directory) / 'words.json'
+        record.write_text(payload)
         result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--words', str(target), '--kind', kind, '--label', label],
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_words',
+             str(record)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -569,8 +581,11 @@ def verify_dependencies(items):
         return
     choices = _dependency_choices(items)
     pins = _dependency_pins()
+    selected = []
     for (path, text, _expected), choice in zip(items, choices):
-        _apply_word_choice(path, text, choice, pins)
+        if choice == pins['trig_choice'] or choice == pins['geometry_choice']:
+            selected.append((text, choice, path))
+    _gate_words_all(selected)
 
 
 def verify_dependency(path, text, expected):
