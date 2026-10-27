@@ -9,6 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._process import run_program
+from tests._python_tokens import sampled_top_level
 from tests._python_expr import (
     body_role_json,
     body_statement_json,
@@ -232,6 +233,38 @@ def test_a_body_statement_dump_matches_cpython_shape() raises:
     doc.root = rows
     assert_equal(return_elements_json(source, 2), doc.dumps())
     assert_equal(return_elements_json("def demo():\n    return 1\n", 0), "null")
+
+
+def test_top_level_helpers_reject_an_extra_name_or_statement() raises:
+    """Helper names are a set, and only imports, functions, and strings pass."""
+    var source = (
+        '"""doc"""\nfrom a import b\n@decorator\ndef one():\n    return 1\n'
+        "def two():\n    return 2\n"
+    )
+    sampled_top_level(source, "two,one")
+    with assert_raises(contains="missing or extra sampled helper"):
+        sampled_top_level(source, "one")
+    with assert_raises(contains="missing or extra sampled helper"):
+        sampled_top_level(
+            source + "def three():\n    x = 1\n",
+            "one,two",
+        )
+    with assert_raises(
+        contains="unexpected top-level execution in sampled graph"
+    ):
+        sampled_top_level(source + "x = 1\n", "one,two")
+    var live = Path("extensions/carla/lane_value_bounds.mojo").read_text()
+    sampled_top_level(
+        live,
+        (
+            "_arc_offset_value,_atan2_value,_atan_value,_atan_value_branch,"
+            "_constant_sincos_value,_lane_value_bound,_lane_value_bound_impl,"
+            "_polynomial_value,_reference_sampled_value,_sample_blend_value,"
+            "_sample_value,_sampled_lane_value_bound,_sinc_value,"
+            "_uncertain_value,_union_value_points,_unknown_value_point,"
+            "_value_geometry_distance"
+        ),
+    )
 
 
 def main() raises:

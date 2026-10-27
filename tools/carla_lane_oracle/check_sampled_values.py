@@ -523,12 +523,7 @@ def verify(root):
             record.geometry, _stored_difference(s, _ValueJet.constant(record.s)), translation)
     ''').body + old.body[21:]
         expected['_lane_value_bound_impl'] = lane
-        functions = {n.name for n in target_tree.body if isinstance(n, ast.FunctionDef)}
-        require(functions == set(expected), 'missing or extra sampled helper')
-        for node in target_tree.body:
-            require(isinstance(node, (ast.ImportFrom, ast.FunctionDef)) or
-                    (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)),
-                    'unexpected top-level execution in sampled graph')
+        _sampled_text('--top-level', target, ','.join(sorted(expected)))
         for name, source in expected.items():
             wanted = (unique_function(syntax_tree(source), name)
                       if isinstance(source, str) else source)

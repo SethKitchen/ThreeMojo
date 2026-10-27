@@ -3992,6 +3992,164 @@ def constant_literals_json(
     return out.dumps()
 
 
+def _contains_name(names: List[String], name: String) -> Bool:
+    """Return whether `names` already holds `name`.
+
+    Args:
+        names: The names collected so far.
+        name: The candidate.
+
+    Returns:
+        True when `name` is present.
+    """
+    var index = 0
+    while index < len(names):
+        if names[index] == name:
+            return True
+        index += 1
+    return False
+
+
+def _append_unique(mut names: List[String], name: String):
+    """Append `name` when it is not already present.
+
+    Args:
+        names: The collected names.
+        name: The candidate.
+    """
+    if not _contains_name(names, name):
+        names.append(name)
+
+
+def _comma_names(text: String) -> List[String]:
+    """Split a comma-separated name list, dropping empty pieces.
+
+    Args:
+        text: Names separated by commas.
+
+    Returns:
+        The unique names, in first-seen order.
+    """
+    var names = List[String]()
+    var piece = String("")
+    var data = text.as_bytes()
+    var index = 0
+    while index < len(data):
+        var byte = data[index]
+        if byte == 44:
+            if piece.byte_length() > 0:
+                _append_unique(names, piece)
+            piece = String("")
+        else:
+            piece += chr(Int(byte))
+        index += 1
+    if piece.byte_length() > 0:
+        _append_unique(names, piece)
+    return names^
+
+
+def _string_statement(kinds: List[Int], texts: List[String]) -> Bool:
+    """Return whether a statement is only a string constant.
+
+    Args:
+        kinds: The statement's token kinds.
+        texts: The statement's token texts.
+
+    Returns:
+        True for one or more strings, including a parenthesis pair without a comma.
+    """
+    var strings = 0
+    var depth = 0
+    var index = 0
+    while index < len(kinds):
+        var text = texts[index]
+        if kinds[index] == _STRING:
+            strings += 1
+        elif text == "(":
+            depth += 1
+        elif text == ")":
+            depth -= 1
+            if depth < 0:
+                return False
+        else:
+            return False
+        index += 1
+    return strings > 0 and depth == 0
+
+
+def sampled_top_level(source: String, expected_names: String) raises:
+    """Check one sampled module's top-level statements and helper names.
+
+    Args:
+        source: Mojo source for the sampled value module.
+        expected_names: Comma-separated function names.
+
+    Returns:
+        None. The names and statement kinds match.
+
+    Raises:
+        Error: A helper is missing or extra, or a statement is not an import,
+            a function, or a string.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var statement_kinds = List[Int]()
+    var statement_texts = List[String]()
+    var names = List[String]()
+    var depth = 0
+    var bad = False
+    var decorator = False
+    var index = 0
+    while index < len(kinds):
+        var kind = kinds[index]
+        if kind == _INDENT:
+            depth += 1
+        elif kind == _DEDENT:
+            depth -= 1
+        elif kind == _NEWLINE:
+            if len(statement_kinds) > 0:
+                var first_kind = statement_kinds[0]
+                var first = String(statement_texts[0])
+                if first_kind == _OP and first == "@":
+                    decorator = True
+                elif first_kind == _NAME and first == "def":
+                    decorator = False
+                    if len(statement_kinds) < 2 or statement_kinds[1] != _NAME:
+                        bad = True
+                    else:
+                        _append_unique(names, String(statement_texts[1]))
+                elif (
+                    first_kind == _NAME and first == "from" and not decorator
+                ) or (
+                    not decorator
+                    and _string_statement(statement_kinds, statement_texts)
+                ):
+                    decorator = False
+                else:
+                    decorator = False
+                    bad = True
+                statement_kinds.clear()
+                statement_texts.clear()
+        elif depth == 0:
+            statement_kinds.append(kind)
+            statement_texts.append(texts[index])
+        index += 1
+    if len(statement_kinds) > 0 or depth != 0 or decorator:
+        bad = True
+    var expected = _comma_names(expected_names)
+    var same = len(names) == len(expected)
+    var cursor = 0
+    while same and cursor < len(names):
+        if not _contains_name(expected, names[cursor]):
+            same = False
+        cursor += 1
+    if not same:
+        raise Error("missing or extra sampled helper")
+    if bad:
+        raise Error("unexpected top-level execution in sampled graph")
+
+
 def module_statements_json(source: String) raises -> String:
     """Return the top-level statements, without the module docstring.
 

@@ -11,12 +11,14 @@
     carla_sampled_text --body-roles PATH
     carla_sampled_text --body-dump PATH --index N
     carla_sampled_text --return-elts PATH --index N
+    carla_sampled_text --top-level PATH --name NAMES
 
 The extract mode prints one top-level function. The rename mode prints the
 declaration with sampled identifiers renamed. The drop mode removes the first
 derivative intersection. The body-roles mode prints JSON statement roles.
 The body-dump mode prints one statement dump. The return-elts mode prints
-JSON dumps of a returned tuple, or null. The caller supplies the source.
+JSON dumps of a returned tuple, or null. The top-level mode checks helper
+names and statement kinds. The caller supplies the source.
 """
 
 from std.pathlib import Path
@@ -27,6 +29,7 @@ from tests._python_expr import (
     body_statement_json,
     return_elements_json,
 )
+from tests._python_tokens import sampled_top_level
 from tools._sampled_jet_gate import stored_helper_fields
 from tools._sampled_value_gate import (
     drop_derivative_intersection,
@@ -45,7 +48,7 @@ def _usage():
             " PATH | --drop-intersection PATH --name first|second |"
             " --helper-fields PATH | --value-fields PATH | --value-imports PATH"
             " | --body-roles PATH | --body-dump PATH --index N | --return-elts"
-            " PATH --index N"
+            " PATH --index N | --top-level PATH --name NAMES"
         ),
         file=stderr,
     )
@@ -67,6 +70,7 @@ def main() raises:
     var body_roles = String("")
     var body_dump = String("")
     var return_elts = String("")
+    var top_level = String("")
     var name = String("")
     var index_text = String("")
     var arguments = argv()
@@ -83,6 +87,7 @@ def main() raises:
             or word == "--body-roles"
             or word == "--body-dump"
             or word == "--return-elts"
+            or word == "--top-level"
             or word == "--index"
             or word == "--name"
         ):
@@ -107,6 +112,8 @@ def main() raises:
                 body_dump = value
             elif word == "--return-elts":
                 return_elts = value
+            elif word == "--top-level":
+                top_level = value
             elif word == "--index":
                 index_text = value
             else:
@@ -133,10 +140,14 @@ def main() raises:
         modes += 1
     if return_elts.byte_length() > 0:
         modes += 1
+    if top_level.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if (
-        extract.byte_length() > 0 or drop.byte_length() > 0
+        extract.byte_length() > 0
+        or drop.byte_length() > 0
+        or top_level.byte_length() > 0
     ) and name.byte_length() == 0:
         _usage()
     if rename.byte_length() > 0 and name.byte_length() > 0:
@@ -203,6 +214,9 @@ def main() raises:
                 ),
                 end="",
             )
+            return
+        if top_level.byte_length() > 0:
+            sampled_top_level(Path(top_level).read_text(), name)
             return
         print(rename_sampled_identifiers(Path(rename).read_text()), end="")
     except error:

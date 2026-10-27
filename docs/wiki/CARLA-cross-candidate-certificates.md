@@ -322,6 +322,8 @@ It checks the statement roles of four sampled declarations.
 
 It checks the heading constructor, its projection, and two lane proof statements.
 
+It checks the sampled helper names and top-level statements.
+
 Mojo checks the live sampled module graphs.
 The trig module keeps its reviewed syntax graph.
 The interval module keeps its reviewed syntax graph.
