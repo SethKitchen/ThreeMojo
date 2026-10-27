@@ -285,14 +285,23 @@ def verify_binding(text, name, allowed_module='', allow_definition=False):
         raise ValueError(str(error)) from error
 
 
-def _graph_dump(text, name, rename=''):
-    """Return one function dump from the cleanup gate."""
+def _graph_dump(text, name, rename='', *, drop_first=False):
+    """Return one function dump from the cleanup gate.
+
+    `rename` replaces the function name in that dump. `drop_first` removes
+    the first body statement and returns that statement dump, then the rest.
+    """
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps({'source': text, 'name': name}, separators=(',', ':'))
+    payload = {'source': text, 'name': name}
+    if rename:
+        payload['rename'] = rename
+    if drop_first:
+        payload['drop_first'] = True
+    payload = json.dumps(payload, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='sum2-dump-') as directory:
         path = Path(directory) / 'payload.json'
         path.write_text(payload)
@@ -305,12 +314,10 @@ def _graph_dump(text, name, rename=''):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    dump = result.stdout
-    if rename:
-        parsed = json.loads(dump)
-        parsed[1][0][1] = rename
-        dump = json.dumps(parsed, separators=(',', ':'))
-    return dump
+    if drop_first:
+        parts = json.loads(result.stdout)
+        return parts['first'], parts['rest']
+    return result.stdout
 
 
 def _statement_dump(text):
@@ -356,13 +363,6 @@ def _require_function(text, name):
         raise ValueError(message)
 
 
-def _without_first(dump):
-    parsed = json.loads(dump)
-    body = next(value for key, value in parsed[1] if key == 'body')
-    first = json.dumps(body.pop(0), separators=(',', ':'))
-    return first, json.dumps(parsed, separators=(',', ':'))
-
-
 def verify(root, *, _operation=None):
     # Lazy import avoids a checker-module cycle; no source is executed.
     if __package__:
@@ -396,10 +396,11 @@ def verify(root, *, _operation=None):
             ('lane_geometry', '_lane_spiral', SCALAR),
             ('spiral_roundoff_proof', '_sum2_envelope_error', ENVELOPE),
             ('spiral_roundoff_proof', '_try_spiral_roundoff_envelope', ELIGIBILITY)):
-        actual = _graph_dump(texts[module], name)
         if name == '_lane_spiral':
-            first, actual = _without_first(actual)
+            first, actual = _graph_dump(texts[module], name, drop_first=True)
             require(first == sentinel, 'scalar environment check moved')
+        else:
+            actual = _graph_dump(texts[module], name)
         require(actual == _graph_dump(expected, name),
                 'Sum2 complete caller graph changed: ' + name)
     # Require the exact direct import inventory and reject all shadow forms.

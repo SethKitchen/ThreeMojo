@@ -22,7 +22,7 @@ from tests._python_tokens import (
     syntax_tree_source,
 )
 from tools._python_float import parse_float
-from tools._python_json import PY_LIST, PY_STR, PyJson, py_equal
+from tools._python_json import MISSING, PY_LIST, PY_STR, PyJson, py_equal
 
 
 comptime _E_NAME = 1
@@ -1870,26 +1870,101 @@ def _decorator_prefix(source: String, sliced: String) -> String:
     return prefix + sliced
 
 
+def _plain_parts(
+    source: String, rename: String, drop_first: Bool
+) raises -> String:
+    """Dump one function, with an optional rename and dropped first statement.
+
+    Args:
+        source: Python function source.
+        rename: The replacement name. Empty keeps the parsed name.
+        drop_first: True to remove the first body statement.
+
+    Returns:
+        The function dump, or JSON `first` and `rest` when `drop_first` is
+        true.
+
+    Raises:
+        Error: The function is missing, the body is empty, or a statement
+            uses an unsupported form.
+    """
+    var parser = _parser(source)
+    var node = parser._parse_function(False)
+    while not parser._done():
+        var kind = parser._kind_at()
+        if kind != _NEWLINE and kind != _DEDENT and kind != _INDENT:
+            raise Error("heading correspondence: unsupported expression")
+        parser.index += 1
+    if rename != "":
+        parser.label[node] = rename
+    if not drop_first:
+        return parser._dump(node)
+    if parser.narg[node] < 1:
+        raise Error("sampled body role: unsupported statement")
+    var first_at = parser.at[node]
+    var first = parser._dump(parser.extra[first_at])
+    parser.at[node] = first_at + 1
+    var count = parser.narg[node]
+    parser.narg[node] = count - 1
+    return _part_json(first, parser._dump(node))
+
+
+def _part_json(first: String, rest: String) raises -> String:
+    """Return the two dumps as one JSON object.
+
+    Args:
+        first: The removed statement dump.
+        rest: The function dump without that statement.
+
+    Returns:
+        JSON with `first` and `rest`.
+
+    Raises:
+        Error: The JSON writer fails.
+    """
+    var doc = PyJson()
+    var root = doc.new_dict()
+    doc.set(root, "first", doc.new_str(first))
+    doc.set(root, "rest", doc.new_str(rest))
+    doc.root = root
+    return doc.dumps()
+
+
 def sum2_graph_dump(payload: String) raises -> String:
     """Return one Sum2 function dump from a JSON document.
 
     Args:
-        payload: JSON with `source` and `name`.
+        payload: JSON with `source` and `name`. Optional `rename` replaces
+            the function name. Optional `drop_first` removes the first body
+            statement and returns JSON with `first` and `rest`.
 
     Returns:
-        The normalized dump without a generic mark.
+        The normalized dump without a generic mark, or the two-part JSON
+        when `drop_first` is true.
 
     Raises:
-        Error: The function is missing or uses an unsupported statement.
+        Error: The function is missing, the body is empty, or a statement
+            uses an unsupported form.
     """
     var doc = PyJson.parse(payload)
     var source = doc.text(doc.at(doc.root, "source"))
     var name = doc.text(doc.at(doc.root, "name"))
+    var rename = String("")
+    var rename_node = doc.get(doc.root, "rename")
+    if rename_node != MISSING:
+        rename = doc.text(rename_node)
+    var drop_first = False
+    var drop_node = doc.get(doc.root, "drop_first")
+    if drop_node != MISSING:
+        drop_first = doc.flag(drop_node)
     var syntax = python_syntax_json(
         _decorator_prefix(source, function_slice(source, name))
     )
     var parsed = PyJson.parse(syntax)
-    return plain_function_dump(parsed.text(parsed.at(parsed.root, "source")))
+    var text = parsed.text(parsed.at(parsed.root, "source"))
+    if rename == "" and not drop_first:
+        return plain_function_dump(text)
+    return _plain_parts(text, rename, drop_first)
 
 
 def _forbid_attribute(

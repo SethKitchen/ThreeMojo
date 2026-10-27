@@ -14,7 +14,9 @@ from tests._python_expr import (
     function_dump,
     plain_function_dump,
     statement_dump,
+    sum2_graph_dump,
 )
+from tools._python_json import PyJson
 from tests._python_tokens import (
     declaration_place,
     declaration_text,
@@ -512,6 +514,74 @@ def test_a_function_dump_matches_cpython() raises:
     assert_equal(
         function_dump(source),
         '["FunctionDef",[["name","f"],["args",["arguments",[["posonlyargs",[]],["args",[["arg",[["arg","geometry"],["annotation",["Name",[["id","RoadGeometry"],["ctx",["Load",[]]]]]]]],["arg",[["arg","d"],["annotation",["Subscript",[["value",["Name",[["id","_JetExpression"],["ctx",["Load",[]]]]]],["slice",["Name",[["id","derivatives"],["ctx",["Load",[]]]]]],["ctx",["Load",[]]]]]]]]]],["kwonlyargs",[]],["kw_defaults",[]],["defaults",[]]]]],["body",[["Assign",[["targets",[["Name",[["id","x"],["ctx",["Store",[]]]]]]],["value",["Constant",[["value",1]]]]]],["While",[["test",["Compare",[["left",["Name",[["id","x"],["ctx",["Load",[]]]]]],["ops",[["Lt",[]]]],["comparators",[["Constant",[["value",2]]]]]]]],["body",[["AugAssign",[["target",["Name",[["id","x"],["ctx",["Store",[]]]]]],["op",["Add",[]]],["value",["Constant",[["value",1]]]]]]]],["orelse",[]]]],["Return",[["value",["Tuple",[["elts",[["Name",[["id","x"],["ctx",["Load",[]]]]],["Name",[["id","d"],["ctx",["Load",[]]]]]]],["ctx",["Load",[]]]]]]]]]],["decorator_list",[]],["returns",["Subscript",[["value",["Name",[["id","Tuple"],["ctx",["Load",[]]]]]],["slice",["Tuple",[["elts",[["Name",[["id","Int"],["ctx",["Load",[]]]]],["Name",[["id","Int"],["ctx",["Load",[]]]]]]],["ctx",["Load",[]]]]]],["ctx",["Load",[]]]]]],["mojo_type_parameters",[["NAME","derivatives"],["OP",":"],["NAME","Bool"]]]]]',
+    )
+
+
+def _sum2_payload(
+    source: String, name: String, rename: String, drop_first: Bool
+) raises -> String:
+    """Return one Sum2 dump request.
+
+    Args:
+        source: The module text.
+        name: The function name.
+        rename: The replacement name. Empty keeps the parsed name.
+        drop_first: True to remove the first body statement.
+
+    Returns:
+        The JSON payload.
+
+    Raises:
+        Error: The JSON writer fails.
+    """
+    var doc = PyJson()
+    var root = doc.new_dict()
+    doc.set(root, "source", doc.new_str(source))
+    doc.set(root, "name", doc.new_str(name))
+    if rename != "":
+        doc.set(root, "rename", doc.new_str(rename))
+    if drop_first:
+        doc.set(root, "drop_first", doc.new_bool(True))
+    doc.root = root
+    return doc.dumps()
+
+
+def test_the_checked_leaf_name_is_replaced_before_the_dump() raises:
+    """The leaf dump uses the reviewed name without a later JSON edit."""
+    var source = "def _sum2_error_checked():\n    return 1\n"
+    var dump = sum2_graph_dump(
+        _sum2_payload(source, "_sum2_error_checked", "_sum2_error", False)
+    )
+    assert_equal(
+        dump, plain_function_dump("def _sum2_error():\n    return 1\n")
+    )
+
+
+def test_the_scalar_environment_call_is_split_off() raises:
+    """The first body statement leaves before the remaining dump."""
+    var source = (
+        "def _lane_spiral() raises -> Int:\n"
+        "    _require_sum2_environment()\n"
+        "    return 1\n"
+    )
+    var parts = PyJson.parse(
+        sum2_graph_dump(_sum2_payload(source, "_lane_spiral", "", True))
+    )
+    assert_equal(
+        parts.text(parts.at(parts.root, "first")),
+        statement_dump("_require_sum2_environment()\n"),
+    )
+    assert_equal(
+        parts.text(parts.at(parts.root, "rest")),
+        plain_function_dump("def _lane_spiral() -> Int:\n    return 1\n"),
+    )
+    var decorated = "@no_inline\ndef f():\n    x = 1\n    return x\n"
+    var kept = PyJson.parse(
+        sum2_graph_dump(_sum2_payload(decorated, "f", "", True))
+    )
+    assert_equal(
+        kept.text(kept.at(kept.root, "rest")),
+        plain_function_dump("@no_inline\ndef f():\n    return x\n"),
     )
 
 

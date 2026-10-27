@@ -148,6 +148,7 @@ A changed graph or a stored-half edit is refused.
 Mojo checks the reviewed Sum2 caller graphs.
 The recurrence and the checked leaf match the arithmetic checkpoint.
 The scalar spiral keeps the environment call and the reviewed body.
+It drops that call before the body comparison.
 The envelope and the roundoff predecessor match their checkpoints.
 A changed graph is refused.
 
