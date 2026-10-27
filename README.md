@@ -257,7 +257,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Ideal projection digests](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_ideal_gate.mojo` checks the historical ideal source digest and the projected graph digest [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Accepted successor record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_accepted_gate.mojo` checks the accepted successor record, the pin digests, the successor tokens, and the ordered pin pair [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Accepted successor record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_accepted_gate.mojo` checks the accepted successor record, the pin digests, the ordered pin pair, and the pin placements [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Neutral CARLA texture plan](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_texture_plan.mojo` names a neutral texture and chooses its fitted size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

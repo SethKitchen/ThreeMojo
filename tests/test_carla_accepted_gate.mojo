@@ -13,6 +13,7 @@ from tests._python_tokens import token_sha256
 from tools.carla_accepted_gate import (
     accepted_digest,
     accepted_pair,
+    accepted_places,
     accepted_record,
     accepted_sources,
 )
@@ -104,6 +105,20 @@ def test_a_reordered_pin_pair_is_refused() raises:
         contains="accepted source successor: wrong fixed ordered pin pair"
     ):
         accepted_pair(directory)
+
+
+def test_a_repeated_pin_placement_is_refused() raises:
+    """A repeated pointer fails closed before later values are checked."""
+    var directory = "/tmp/accepted-places-test"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/labels.json").write_text(
+        '[{"duplicate":false,"actual":"aa","expected":"aa"},'
+        + '{"duplicate":true,"actual":"","expected":"bb"}]'
+    )
+    with assert_raises(
+        contains="accepted source successor: duplicate pin placement"
+    ):
+        accepted_places(directory)
 
 
 def main() raises:

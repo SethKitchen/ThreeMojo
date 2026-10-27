@@ -52,7 +52,7 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_ideal_gate.mojo` checks the historical ideal source digest and the projected graph digest.
 
-`tools/carla_accepted_gate.mojo` checks the accepted successor record, the pin digests, the successor tokens, and the ordered pin pair.
+`tools/carla_accepted_gate.mojo` checks the accepted successor record, the pin digests, the ordered pin pair, and the pin placements.
 
 ## Lane poses
 
