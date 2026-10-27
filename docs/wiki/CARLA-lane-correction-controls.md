@@ -40,11 +40,15 @@ It keeps the consumer import scope before the first definition.
 
 `tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record, the producer functions, and the arc layout.
 
+It writes each frozen runtime pin back to its historical value.
+
 `tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the pin digests, the ordered pin pair, and the pin placements.
 
 `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch record, the predecessor edge, and the operation graphs.
 
 `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the trig and geometry stored words, and the successor tokens.
+
+It admits trig and geometry word changes only for their reviewed token.
 
 It selects each reviewed declaration and checks that each premise fragment occurs once, in order.
 

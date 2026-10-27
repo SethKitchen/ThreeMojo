@@ -283,8 +283,17 @@ def verify_runtime_pin_successor(root, prior_digest):
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
     transitions = record['runtime_token_successors']
     _gate_places(transitions, pins)
-    for item in transitions:
-        pins['groups'][item['group']][item['path']] = item['before']
+    if __package__:
+        from . import ideal_projection
+    else:
+        import ideal_projection
+    edited = [{
+        'pointer': ['groups', item['group'], item['path']],
+        'before': item['before'],
+    } for item in transitions]
+    text = ideal_projection.apply_pin_transitions(pins, edited)
+    pins.clear()
+    pins.update(json.loads(text))
     predecessor = (json.dumps(pins, indent=2)+'\n').encode()
     _gate_digest(predecessor, prior_digest, 'before')
 
@@ -382,8 +391,17 @@ def _runtime_pin_predecessor(payload, record, prior_digest):
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
     transitions = record['runtime_token_successors']
     _gate_places(transitions, pins)
-    for item in transitions:
-        pins['groups'][item['group']][item['path']] = item['before']
+    if __package__:
+        from . import ideal_projection
+    else:
+        import ideal_projection
+    edited = [{
+        'pointer': ['groups', item['group'], item['path']],
+        'before': item['before'],
+    } for item in transitions]
+    text = ideal_projection.apply_pin_transitions(pins, edited)
+    pins.clear()
+    pins.update(json.loads(text))
     predecessor = (json.dumps(pins, indent=2)+'\n').encode()
     _gate_digest(predecessor, prior_digest, 'before')
     return predecessor

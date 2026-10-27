@@ -326,18 +326,46 @@ def _gate_words(text, kind, label):
         raise ValueError(message)
 
 
+def _dependency_choice(token, expected, path):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({
+        'token': token,
+        'expected': expected,
+        'path': path,
+        'trig_path': TRIG_PATH,
+        'trig_token': TRIG_TOKEN_SHA256,
+        'geometry_path': GEOMETRY_PATH,
+        'geometry_token': GEOMETRY_TOKEN_SHA256,
+    }, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='dependency-words-') as directory:
+        record = Path(directory) / 'choice.json'
+        record.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_dependency_words', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout.strip()
+
+
 def verify_dependency(path, text, expected):
-    if ideal_projection.token_sha256(text) == expected:
-        return
     # A fixed whole-module fingerprint admits only equivalent stored words.
     # Historical pins remain unchanged; other dependencies retain exact tokens.
-    if path == TRIG_PATH and expected == TRIG_TOKEN_SHA256:
+    choice = _dependency_choice(ideal_projection.token_sha256(text), expected, path)
+    if choice == 'trig':
         _gate_words(text, 'trig', path)
-        return
-    if path == GEOMETRY_PATH and expected == GEOMETRY_TOKEN_SHA256:
+    elif choice == 'geometry':
         _gate_words(text, 'geometry', path)
-        return
-    require(False, 'unchanged premise dependency changed: ' + path)
 
 
 def verify(root, *, _operation=None):
