@@ -111,6 +111,30 @@ def _gate_steps(names):
         _run(['--steps', str(folder)])
 
 
+def _extended_edge(path, edge, steps):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps(
+        {'path': path, 'edge': edge, 'steps': steps}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='runtime-edge-') as directory:
+        record = Path(directory) / 'edge.json'
+        record.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_runtime_edge',
+             str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _gate_extend(step, edge, path):
     _run([
         '--extend', '--path', path,
@@ -140,12 +164,12 @@ def verify(root, *, _operation=None):
     edges = {}
     for path in MODULES:
         edge = record['edges'][path]
-        if path in steps:
+        decision = _extended_edge(path, edge, steps)
+        if decision['extend']:
             # A later reviewed step starts exactly where this edge ends.
             step = steps[path]
             _gate_extend(step, edge, path)
-            edge = {**edge, 'after_sha256': step['after_sha256'],
-                    'after_token_sha256': step['after_token_sha256']}
+            edge = decision['edge']
         current = ledger.endpoint(root, path, edge, _operation=_operation)
         actual = _typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
                                 _operation=_operation), _operation=_operation)

@@ -184,6 +184,8 @@ It renames the first frozen lane declaration.
 
 `tools/carla_runtime_boundary_gate.mojo` checks the runtime-boundary record, its bound tests, and the view-step edges.
 
+It extends an edge when a reviewed view step starts at that edge.
+
 `tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record and the admission token.
 
 `tools/carla_selection_record_gate.mojo` checks the selection predecessor record and the restored token.
