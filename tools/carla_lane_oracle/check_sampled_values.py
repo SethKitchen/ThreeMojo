@@ -189,7 +189,7 @@ def translated(text):
     return text
 
 
-def syntax_tree(text):
+def _python_syntax_tree(text):
     # Keywords are removed lexically, never from string literals. Native
     # structs map to Python classes only for AST inspection; their generic
     # parameters, traits, fields, types, decorators and statements stay bound.
@@ -227,6 +227,56 @@ def syntax_tree(text):
         matches = [n for n in ast.walk(tree) if isinstance(n, node_type) and n.name == name]
         require(len(matches) == 1, 'ambiguous parsed generic declaration')
         matches[0]._mojo_type_parameters = parameters
+    return tree
+
+
+def _syntax_prepare(text):
+    """Return parser source and generic rows from the Mojo syntax gate."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='sampled-syntax-') as directory:
+        path = Path(directory) / 'source.mojo'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--syntax', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        if message in ('unclosed Mojo generic declaration',
+                       'ambiguous generic declaration'):
+            raise CheckError(message)
+        return None
+    try:
+        data = json.loads(result.stdout)
+        return data['source'], data['generics']
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return None
+
+
+def syntax_tree(text):
+    # Keywords are removed lexically, never from string literals. Native
+    # structs map to Python classes only for AST inspection; their generic
+    # parameters, traits, fields, types, decorators and statements stay bound.
+    prepared = _syntax_prepare(text)
+    if prepared is None:
+        return _python_syntax_tree(text)
+    source, generics = prepared
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return _python_syntax_tree(text)
+    for key, parameters in generics:
+        kind, name = key
+        node_type = ast.FunctionDef if kind == 'def' else ast.ClassDef
+        matches = [n for n in ast.walk(tree) if isinstance(n, node_type) and n.name == name]
+        require(len(matches) == 1, 'ambiguous parsed generic declaration')
+        matches[0]._mojo_type_parameters = [tuple(item) for item in parameters]
     return tree
 
 

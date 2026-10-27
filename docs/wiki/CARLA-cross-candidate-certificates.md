@@ -367,6 +367,7 @@ The trig module keeps its reviewed syntax graph.
 The interval module keeps its reviewed syntax graph.
 The jet class keeps its reviewed primitive graph.
 A changed graph is refused.
+Mojo prepares that syntax tree before the Python parser.
 
 Mojo checks the live curve-bounds reference graph.
 The count-loop source keeps the reviewed envelope successor.
