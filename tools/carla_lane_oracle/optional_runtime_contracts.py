@@ -172,10 +172,47 @@ def body_from_source(text, name):
     # The historical AST adapter has no lane-search move arguments. Remove
     # only postfix move sigils before argument delimiters for this semantic
     # view; complete lexical contracts separately retain every move token.
-    return sampled.unique_function(_syntax_tree(_without_moves(source)), name)
+    moved = _without_moves(source)
+    node = sampled.unique_function(_syntax_tree(moved), name)
+    node._runtime_source = moved
+    node._runtime_name = name
+    return node
+
+
+def _fragment_count(source, name, kind, fragment, label):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({
+        'source': source, 'name': name, 'kind': kind, 'fragment': fragment,
+        'label': label,
+    }, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='fragment-count-') as directory:
+        path = Path(directory) / 'payload.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--fragment-count', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        if message.startswith('invalid checker fragment:'):
+            raise ValueError('optional runtime contract: ' + message)
+        raise ValueError(message)
+    return int(result.stdout)
 
 
 def contains(node, text, label, count=1):
+    source = getattr(node, '_runtime_source', None)
+    if source is not None:
+        require(_fragment_count(source, node._runtime_name, 'contains', text, label) == count, label)
+        return
     expected = _syntax_tree(text).body
     require(len(expected) == 1, 'invalid checker fragment: ' + label)
     wanted = sampled.dump(expected[0])
@@ -184,6 +221,10 @@ def contains(node, text, label, count=1):
 
 
 def expression(node, text, label, count=1):
+    source = getattr(node, '_runtime_source', None)
+    if source is not None:
+        require(_fragment_count(source, node._runtime_name, 'expression', text, label) == count, label)
+        return
     wanted = sampled.dump(ast.parse(text, mode='eval').body)
     require(sum(sampled.dump(item) == wanted for item in ast.walk(node)) == count,
             label)
@@ -192,6 +233,10 @@ def expression(node, text, label, count=1):
 
 def sequence(node, text, label):
     """Bind adjacent statements in one suite, without textual sentinels."""
+    source = getattr(node, '_runtime_source', None)
+    if source is not None:
+        require(_fragment_count(source, node._runtime_name, 'sequence', text, label) == 1, label)
+        return
     wanted = [sampled.dump(item) for item in _syntax_tree(text).body]
     matches = 0
     for owner in ast.walk(node):

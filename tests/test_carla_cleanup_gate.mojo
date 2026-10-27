@@ -514,6 +514,16 @@ def test_an_if_and_for_dump_matches_cpython() raises:
     )
 
 
+def test_an_if_expression_and_annotation_match_cpython() raises:
+    """An if-expression and an annotation dump match CPython."""
+    assert_equal(
+        plain_function_dump(
+            "def f():\n    fixed = 26 if goal else 20\n    point_domain: Tuple[Int, Int]\n    x: Int = 1\n"
+        ),
+        '["FunctionDef",[["name","f"],["args",["arguments",[["posonlyargs",[]],["args",[]],["kwonlyargs",[]],["kw_defaults",[]],["defaults",[]]]]],["body",[["Assign",[["targets",[["Name",[["id","fixed"],["ctx",["Store",[]]]]]]],["value",["IfExp",[["test",["Name",[["id","goal"],["ctx",["Load",[]]]]]],["body",["Constant",[["value",26]]]],["orelse",["Constant",[["value",20]]]]]]]]],["AnnAssign",[["target",["Name",[["id","point_domain"],["ctx",["Store",[]]]]]],["annotation",["Subscript",[["value",["Name",[["id","Tuple"],["ctx",["Load",[]]]]]],["slice",["Tuple",[["elts",[["Name",[["id","Int"],["ctx",["Load",[]]]]],["Name",[["id","Int"],["ctx",["Load",[]]]]]]],["ctx",["Load",[]]]]]],["ctx",["Load",[]]]]]],["simple",1]]],["AnnAssign",[["target",["Name",[["id","x"],["ctx",["Store",[]]]]]],["annotation",["Name",[["id","Int"],["ctx",["Load",[]]]]]],["value",["Constant",[["value",1]]]],["simple",1]]]]],["decorator_list",[]]]]',
+    )
+
+
 def test_an_expression_dump_matches_cpython() raises:
     """One expression dump matches CPython's normalized AST."""
     assert_equal(

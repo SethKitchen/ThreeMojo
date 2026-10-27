@@ -98,6 +98,8 @@ It compares the projected ideal spiral with the historical half-rate form.
 
 It compares the Sum2 recurrence, leaf, and caller graphs.
 
+It counts one stored statement or expression in a runtime helper.
+
 It derives the stored moment rows in exact arithmetic.
 
 It checks the stored moment table against the derived words.

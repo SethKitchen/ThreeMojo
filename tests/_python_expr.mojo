@@ -21,7 +21,7 @@ from tests._python_tokens import (
     python_syntax_json,
 )
 from tools._python_float import parse_float
-from tools._python_json import PyJson
+from tools._python_json import PY_LIST, PyJson, py_equal
 
 
 comptime _E_NAME = 1
@@ -51,6 +51,8 @@ comptime _E_FOR = 24
 comptime _E_EXPR = 25
 comptime _E_RAISE = 26
 comptime _E_STR = 27
+comptime _E_IFEXP = 28
+comptime _E_ANN = 29
 
 
 struct _Parser:
@@ -157,7 +159,18 @@ struct _Parser:
         return ""
 
     def _parse_expr(mut self) raises -> Int:
-        return self._parse_or()
+        var body = self._parse_or()
+        if not self._is_name("if"):
+            return body
+        self.index += 1
+        var test = self._parse_or()
+        if not self._is_name("else"):
+            return self._fail()
+        self.index += 1
+        var orelse = self._parse_expr()
+        var extra = self._empty()
+        extra.append(orelse)
+        return self._add(_E_IFEXP, "", test, body, extra^, 1, 0)
 
     def _parse_or(mut self) raises -> Int:
         var left = self._parse_and()
@@ -554,6 +567,23 @@ struct _Parser:
             ):
                 value = self._parse_expr()
             return self._add(_E_RETURN, "", value, -1, self._empty(), 0, 0)
+        if self._kind_at() == _NAME and self._next_op(":"):
+            var name = self._text_at()
+            self.index += 2
+            var annotation = self._parse_expr()
+            var value = -1
+            if self._is_op("="):
+                self.index += 1
+                value = self._parse_expr()
+            var target = self._add(_E_NAME, name, 1, -1, self._empty(), 0, 0)
+            var extra = self._empty()
+            var present = 0
+            if value >= 0:
+                extra.append(value)
+                present = 1
+            return self._add(
+                _E_ANN, "", target, annotation, extra^, 0, 0, present
+            )
         if self._kind_at() == _NAME and self._next_op("="):
             var name = self._text_at()
             self.index += 2
@@ -665,6 +695,18 @@ struct _Parser:
                 self.index += 1
         if self._kind_at() == _DEDENT:
             self.index += 1
+        return stmts^
+
+    def _parse_statements(mut self) raises -> List[Int]:
+        var stmts = self._empty()
+        while not self._done():
+            var kind = self._kind_at()
+            if kind == _NEWLINE or kind == _INDENT or kind == _DEDENT:
+                self.index += 1
+                continue
+            stmts.append(self._parse_statement())
+            if self._kind_at() == _NEWLINE:
+                self.index += 1
         return stmts^
 
     def _parse_function(mut self, typed: Bool) raises -> Int:
@@ -1058,6 +1100,44 @@ struct _Parser:
                     ),
                 )
             return self._typed(doc, "arg", fields)
+        if kind == _E_IFEXP:
+            var fields = doc.new_list()
+            doc.append(
+                fields,
+                self._pair(doc, "test", self._json(doc, self.left[node])),
+            )
+            doc.append(
+                fields,
+                self._pair(doc, "body", self._json(doc, self.right[node])),
+            )
+            doc.append(
+                fields,
+                self._pair(
+                    doc, "orelse", self._json(doc, self.extra[self.at[node]])
+                ),
+            )
+            return self._typed(doc, "IfExp", fields)
+        if kind == _E_ANN:
+            var fields = doc.new_list()
+            doc.append(
+                fields,
+                self._pair(doc, "target", self._json(doc, self.left[node])),
+            )
+            doc.append(
+                fields,
+                self._pair(
+                    doc, "annotation", self._json(doc, self.right[node])
+                ),
+            )
+            if self.mark[node] == 1:
+                doc.append(
+                    fields,
+                    self._pair(
+                        doc, "value", self._json(doc, self.extra[self.at[node]])
+                    ),
+                )
+            doc.append(fields, self._pair(doc, "simple", doc.new_int(1)))
+            return self._typed(doc, "AnnAssign", fields)
         if kind == _E_ASSIGN:
             var targets = doc.new_list()
             doc.append(targets, self._json(doc, self.left[node]))
@@ -1396,6 +1476,121 @@ def sum2_graph_dump(payload: String) raises -> String:
     )
     var parsed = PyJson.parse(syntax)
     return plain_function_dump(parsed.text(parsed.at(parsed.root, "source")))
+
+
+def _count_nodes(
+    doc: PyJson, node: Int, wanted: PyJson, target: Int
+) raises -> Int:
+    var count = 0
+    if py_equal(doc, node, wanted, target):
+        count = 1
+    if doc.kind(node) == PY_LIST:
+        var index = 0
+        var size = doc.length(node)
+        while index < size:
+            count += _count_nodes(doc, doc.item(node, index), wanted, target)
+            index += 1
+    return count
+
+
+def _count_sequences(
+    doc: PyJson, node: Int, wanted: PyJson, target: Int
+) raises -> Int:
+    var matches = 0
+    if doc.kind(node) == PY_LIST:
+        var size = doc.length(node)
+        var width = wanted.length(target)
+        if width > 0 and size >= width:
+            var start = 0
+            while start + width <= size:
+                var same = True
+                var cursor = 0
+                while cursor < width:
+                    if not py_equal(
+                        doc,
+                        doc.item(node, start + cursor),
+                        wanted,
+                        wanted.item(target, cursor),
+                    ):
+                        same = False
+                        break
+                    cursor += 1
+                if same:
+                    matches += 1
+                start += 1
+        var child = 0
+        while child < size:
+            matches += _count_sequences(
+                doc, doc.item(node, child), wanted, target
+            )
+            child += 1
+    return matches
+
+
+def _fragment_statements(fragment: String) raises -> String:
+    var syntax = python_syntax_json(fragment)
+    var parsed = PyJson.parse(syntax)
+    var parser = _parser(parsed.text(parsed.at(parsed.root, "source")))
+    var stmts = parser._parse_statements()
+    var doc = PyJson()
+    var rows = doc.new_list()
+    var index = 0
+    while index < len(stmts):
+        doc.append(rows, parser._json(doc, stmts[index]))
+        index += 1
+    doc.root = rows
+    return doc.dumps()
+
+
+def fragment_count(payload: String) raises -> String:
+    """Count one statement, expression, or statement sequence.
+
+    Args:
+        payload: JSON with `source`, `name`, `kind`, `fragment`, and `label`.
+            `kind` is `contains`, `expression`, or `sequence`.
+
+    Returns:
+        The decimal count of matches.
+
+    Raises:
+        Error: The fragment is not one statement, or the source cannot be read.
+    """
+    var doc = PyJson.parse(payload)
+    var source = doc.text(doc.at(doc.root, "source"))
+    var name = doc.text(doc.at(doc.root, "name"))
+    var kind = doc.text(doc.at(doc.root, "kind"))
+    var fragment = doc.text(doc.at(doc.root, "fragment"))
+    var label = doc.text(doc.at(doc.root, "label"))
+    var body = source
+    try:
+        body = _decorator_prefix(source, function_slice(source, name))
+    except error:
+        body = source
+    var syntax = python_syntax_json(body)
+    var parsed = PyJson.parse(syntax)
+    var parser = _parser(parsed.text(parsed.at(parsed.root, "source")))
+    var function_doc = PyJson.parse(parser._dump(parser._parse_function(False)))
+    var count = 0
+    if kind == "expression":
+        var wanted = PyJson.parse(expression_dump(fragment))
+        count = _count_nodes(
+            function_doc, function_doc.root, wanted, wanted.root
+        )
+    elif kind == "contains" or kind == "sequence":
+        var rows = PyJson.parse(_fragment_statements(fragment))
+        if kind == "contains" and rows.length(rows.root) != 1:
+            raise Error("invalid checker fragment: " + label)
+        if kind == "contains":
+            count = _count_nodes(
+                function_doc, function_doc.root, rows, rows.item(rows.root, 0)
+            )
+        else:
+            count = _count_sequences(
+                function_doc, function_doc.root, rows, rows.root
+            )
+    else:
+        raise Error("invalid checker fragment: " + label)
+    return String(count)
 
 
 def assignment_dump(source: String, name: String) raises -> String:
