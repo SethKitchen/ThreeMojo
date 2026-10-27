@@ -160,6 +160,8 @@ It writes those packed bytes from the hexadecimal payload.
 
 It checks the derived payload size and the three pin-file digests.
 
+It builds the report meta from the payload, the projection, and the pin digests.
+
 It checks the stored array names, word counts, and output paths.
 
 It drops comments and blank lines from one source block.

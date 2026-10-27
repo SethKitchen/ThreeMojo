@@ -506,22 +506,9 @@ def verify_table(data, rows):
 def make_report(root, rows, pins):
     payload = _moment_payload(rows)
     projection = pins['ideal_projection']
-    meta = {
-        'byte_count': payload['byte_count'],
-        'source_sha256': payload['source_sha256'],
-        'be64_sha256': payload['be64_sha256'],
-        'root': str(root.resolve()),
-        'ideal_half_projection': {
-            'helper_projections': projection['helper_projections'],
-            'rate_half_commutations': projection['rate_half_commutations'],
-            'projected_ast_sha256': projection['projected_ast_sha256'],
-        },
-        'dependency_scope': DEPENDENCIES,
-        'routing_sha256': {
-            name: record['sha256'] for name, record in pins['routing'].items()},
-        'source_block_sha256': {
-            name: record['sha256'] for name, record in pins['blocks'].items()},
-    }
+    meta = ideal_projection.moment_meta(
+        payload, str(root.resolve()), projection, DEPENDENCIES,
+        pins['routing'], pins['blocks'])
     blobs = [
         _typed_source.historical_bytes(root, root / PINS, (root / PINS).read_bytes()),
         _typed_source.historical_bytes(

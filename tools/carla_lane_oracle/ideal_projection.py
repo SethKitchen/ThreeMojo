@@ -689,6 +689,37 @@ def payload_bytes(text):
         return dest.read_bytes()
 
 
+def moment_meta(payload, root, projection, dependencies, routing, blocks):
+    """Return the stored-moment report meta in historical field order."""
+    import ast
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root_dir = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root_dir / '.venv' / 'bin' / 'mojo'))
+    body = json.dumps({
+        'payload': payload, 'root': root, 'projection': projection,
+        'dependencies': dependencies, 'routing': routing, 'blocks': blocks,
+    }, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-meta-') as directory:
+        path = Path(directory) / 'meta.json'
+        path.write_text(body)
+        result = subprocess.run(
+            ['sh', str(root_dir / 'tools' / 'tool.sh'), mojo,
+             'carla_moment_meta', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = 'KeyError: '
+        if message.startswith(prefix):
+            raise KeyError(ast.literal_eval(message[len(prefix):])) from None
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def moment_report(meta, blobs):
     """Return the stored-moment report for one payload and its pin files."""
     import os

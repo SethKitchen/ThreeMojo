@@ -174,3 +174,70 @@ def moment_report(meta: String, pins: List[List[UInt8]]) raises -> String:
     doc.append(omitted, doc.new_str("query correctness/performance"))
     doc.set(report, "not_certified", omitted)
     return _dump(doc, report)
+
+
+def _copy_sha(mut doc: PyJson, source: Int, dest: Int) raises:
+    """Copy each record's `sha256` into `dest`, in stored key order.
+
+    Args:
+        doc: The document that holds both objects.
+        source: The pin group, keyed by record name.
+        dest: The digest object being built.
+
+    Raises:
+        Error: A record has no `sha256`. The text is Python's `KeyError`.
+    """
+    var count = doc.length(source)
+    var index = 0
+    while index < count:
+        var name = doc.key(source, index)
+        var record = doc.value(source, index)
+        var digest = doc.at(record, "sha256")
+        var copied = doc.copy_node(digest)
+        doc.set(dest, name, copied)
+        index += 1
+
+
+def moment_meta(payload: String) raises -> String:
+    """Return the stored-moment report meta.
+
+    Args:
+        payload: JSON with `payload`, `root`, `projection`, `dependencies`,
+            `routing`, and `blocks`. `routing` and `blocks` keep their key
+            order. Each record contributes its `sha256`.
+
+    Returns:
+        Compact JSON for the report meta, in historical field order.
+
+    Raises:
+        Error: A required field is missing. The text is Python's `KeyError`.
+    """
+    var doc = PyJson.parse(payload)
+    var source = doc.at(doc.root, "payload")
+    var projection = doc.at(doc.root, "projection")
+    var meta = doc.new_dict()
+    var byte_count = doc.copy_node(doc.at(source, "byte_count"))
+    doc.set(meta, "byte_count", byte_count)
+    var source_sha = doc.copy_node(doc.at(source, "source_sha256"))
+    doc.set(meta, "source_sha256", source_sha)
+    var be64_sha = doc.copy_node(doc.at(source, "be64_sha256"))
+    doc.set(meta, "be64_sha256", be64_sha)
+    var root = doc.copy_node(doc.at(doc.root, "root"))
+    doc.set(meta, "root", root)
+    var half = doc.new_dict()
+    var helpers = doc.copy_node(doc.at(projection, "helper_projections"))
+    doc.set(half, "helper_projections", helpers)
+    var rates = doc.copy_node(doc.at(projection, "rate_half_commutations"))
+    doc.set(half, "rate_half_commutations", rates)
+    var projected = doc.copy_node(doc.at(projection, "projected_ast_sha256"))
+    doc.set(half, "projected_ast_sha256", projected)
+    doc.set(meta, "ideal_half_projection", half)
+    var dependencies = doc.copy_node(doc.at(doc.root, "dependencies"))
+    doc.set(meta, "dependency_scope", dependencies)
+    var routing = doc.new_dict()
+    _copy_sha(doc, doc.at(doc.root, "routing"), routing)
+    doc.set(meta, "routing_sha256", routing)
+    var blocks = doc.new_dict()
+    _copy_sha(doc, doc.at(doc.root, "blocks"), blocks)
+    doc.set(meta, "source_block_sha256", blocks)
+    return _dump(doc, meta)
