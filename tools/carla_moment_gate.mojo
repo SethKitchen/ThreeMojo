@@ -129,6 +129,22 @@ def moment_finiteness(
     return _PASS
 
 
+def moment_sources() -> String:
+    """Return the moment proof path, the interval path, and their tokens.
+
+    Returns:
+        JSON with `module`, `interval`, `module_token`, and `interval_token`.
+    """
+    return (
+        '{"module":"extensions/carla/spiral_moment_proof.mojo","interval":'
+        + '"extensions/carla/curve_interval.mojo","module_token":"'
+        + _MODULE
+        + '","interval_token":"'
+        + _INTERVAL
+        + '"}'
+    )
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -143,7 +159,11 @@ def _usage():
 
 
 def main() raises:
-    """Check four source files, or print rows, node sums, or fractions."""
+    """Check four source files, or print rows, node sums, or fractions.
+
+    Raises:
+        Error: The command is invalid, or a moment check fails.
+    """
     var module = String("")
     var interval = String("")
     var geometry = String("")

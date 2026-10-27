@@ -18,6 +18,8 @@ constant bits. Their README lists the four commands and report directory.
 
 It keeps the spiral-domain proof path.
 
+It keeps the moment proof path and the interval path.
+
 `tools/carla_selection_gate.mojo` checks the selection-producer token digests and the phase-constant bounds.
 
 It keeps the two selection producer digests.

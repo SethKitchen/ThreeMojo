@@ -16,10 +16,53 @@ if __package__:
 else:
     import source_contracts
 
-MODULE='extensions/carla/spiral_moment_proof.mojo'
-INTERVAL='extensions/carla/curve_interval.mojo'
-EXPECTED='9001f34d01c28de8dcf85af0bec9d9b9409ef8d56e083bfc25d6342c375f80d1'
-EXPECTED_INTERVAL='e2e87c519ed45fb4ec77d9a54aad08406461b17805287874c9b05ddb6bf49b11'
+_SOURCES = None
+
+
+def _sources():
+    """Return the moment proof path, the interval path, and their tokens."""
+    global _SOURCES
+    if _SOURCES is not None:
+        return _SOURCES
+    import json
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_sources'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _SOURCES = json.loads(result.stdout)
+    return _SOURCES
+
+
+def _ensure_sources():
+    """Bind the moment paths and tokens before a source read."""
+    global MODULE, INTERVAL, EXPECTED, EXPECTED_INTERVAL
+    data = _sources()
+    MODULE = data['module']
+    INTERVAL = data['interval']
+    EXPECTED = data['module_token']
+    EXPECTED_INTERVAL = data['interval_token']
+
+
+def __getattr__(name):
+    if name in ('MODULE', 'INTERVAL', 'EXPECTED', 'EXPECTED_INTERVAL'):
+        _ensure_sources()
+    if name == 'MODULE':
+        return MODULE
+    if name == 'INTERVAL':
+        return INTERVAL
+    if name == 'EXPECTED':
+        return EXPECTED
+    if name == 'EXPECTED_INTERVAL':
+        return EXPECTED_INTERVAL
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 def verify_text(module, interval, geometry, trig):
     import json
@@ -51,6 +94,7 @@ def verify_text(module, interval, geometry, trig):
     return json.loads(result.stdout)
 
 def verify(root, *, _operation=None):
+    _ensure_sources()
     root=Path(root)
     if _operation is not None:
         if __package__:
