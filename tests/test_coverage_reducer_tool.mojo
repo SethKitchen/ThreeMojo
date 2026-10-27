@@ -275,6 +275,14 @@ def test_a_bad_branch_writes_nothing_and_repeats_stay_bounded() raises:
 def test_a_capture_keeps_reduced_records_and_a_signal_status() raises:
     """Repeated probes are stored once, and SIGTERM is 128 plus the signal."""
     var mojo = tool_mojo()
+    # The Makefile builds this before the suite. The literals name the tool.
+    var built = run_program(
+        ["sh", "tools/tool.sh", mojo, "--build", "coverage_io"],
+        60.0,
+        merge_errors=False,
+    )
+    if built.status != 0:
+        raise Error(built.errors)
     var ran = run_program(
         [
             "sh",

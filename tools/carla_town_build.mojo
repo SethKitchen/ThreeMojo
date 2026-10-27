@@ -16,12 +16,14 @@ A repeated build of the same inputs writes the same bytes.
 
 from std.ffi import c_int, external_call
 from std.os import getenv, listdir, makedirs
-from std.os.path import isdir, islink
+from std.os.path import exists, isdir, islink
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 from std.tempfile import mkdtemp
 
+from tools._imports import sorted_strings
 from tools._process import _remove_tree, run_program
+from tools._sha256 import Sha256
 from tools._python_float import parse_float, python_repr
 from tools._python_json import (
     MISSING,
@@ -345,6 +347,179 @@ struct _Library:
         return index.text(node)
 
 
+def _town_key(
+    town: String,
+    max_size: Int,
+    tile: Float64,
+    raw: String,
+    layout: String,
+    maps: String,
+) raises -> String:
+    """Return the content key of one town's inputs.
+
+    Args:
+        town: The town name.
+        max_size: The texture limit, in pixels.
+        tile: The tile width, in meters.
+        raw: The mesh and material directory.
+        layout: The layout directory.
+        maps: The map directory.
+
+    Returns:
+        The SHA-256 hex digest of those inputs.
+
+    Raises:
+        Error: If an input file cannot be read.
+    """
+    var hasher = Sha256()
+    hasher.update(Span(town.as_bytes()))
+    hasher.update(Span(String(max_size).as_bytes()))
+    hasher.update(Span(python_repr(tile).as_bytes()))
+    _hash_file(hasher, layout + "/" + town + ".jsonl")
+    _hash_file(hasher, maps + "/" + town + ".xodr")
+    _hash_dir(hasher, raw)
+    return hasher^.hexdigest()
+
+
+def _hash_file(mut hasher: Sha256, path: String) raises:
+    """Mix one file's bytes into `hasher`.
+
+    Args:
+        hasher: The running digest.
+        path: The file.
+
+    Raises:
+        Error: If the file cannot be read.
+    """
+    hasher.update(Span(String(path).as_bytes()))
+    hasher.update(Span(Path(path).read_bytes()))
+
+
+def _hash_dir(mut hasher: Sha256, directory: String) raises:
+    """Mix a directory tree into `hasher`, in sorted name order.
+
+    Args:
+        hasher: The running digest.
+        directory: The directory.
+
+    Raises:
+        Error: If a file cannot be read.
+    """
+    var found = List[String]()
+    for name in listdir(directory):
+        found.append(name)
+    var names = sorted_strings(found^)
+    for name in names:
+        var path = directory + "/" + name
+        hasher.update(Span(String(name).as_bytes()))
+        if islink(path):
+            hasher.update(Span(Path(path).read_bytes()))
+        elif isdir(path):
+            hasher.update(Span(String("/").as_bytes()))
+            _hash_dir(hasher, path)
+        else:
+            hasher.update(Span(Path(path).read_bytes()))
+
+
+def _copy_dir(source: String, destination: String) raises:
+    """Copy a directory tree of regular files.
+
+    Args:
+        source: The existing directory.
+        destination: The new directory.
+
+    Raises:
+        Error: If a file cannot be copied.
+    """
+    makedirs(destination, exist_ok=True)
+    for name in listdir(source):
+        var src = source + "/" + name
+        var dst = destination + "/" + name
+        if isdir(src) and not islink(src):
+            _copy_dir(src, dst)
+        else:
+            _copy_file(src, dst)
+
+
+def _remembered_town(
+    town: String,
+    max_size: Int,
+    tile: Float64,
+    raw: String,
+    layout: String,
+    maps: String,
+    out_root: String,
+) raises -> String:
+    """Return a previous package when the inputs are unchanged.
+
+    Args:
+        town: The town name.
+        max_size: The texture limit, in pixels.
+        tile: The tile width, in meters.
+        raw: The mesh and material directory.
+        layout: The layout directory.
+        maps: The map directory.
+        out_root: The directory that receives the package.
+
+    Returns:
+        The saved summary, or an empty string when this is the first build.
+
+    Raises:
+        Error: If the saved package cannot be copied.
+    """
+    var key = _town_key(town, max_size, tile, raw, layout, maps)
+    var cache = ".cache/town-package/" + key
+    if not exists(cache + "/result.txt") or islink(cache):
+        return ""
+    var out_dir = out_root + "/carla.town." + _lower_ascii(town)
+    var removed = run_program(["rm", "-rf", out_dir], 30.0)
+    if removed.status != 0:
+        raise Error(removed.output)
+    _copy_dir(cache + "/tree", out_dir)
+    return Path(cache + "/result.txt").read_text()
+
+
+def _remember_town(
+    town: String,
+    max_size: Int,
+    tile: Float64,
+    raw: String,
+    layout: String,
+    maps: String,
+    out_dir: String,
+    result: String,
+):
+    """Save one finished package for a later identical build.
+
+    Args:
+        town: The town name.
+        max_size: The texture limit, in pixels.
+        tile: The tile width, in meters.
+        raw: The mesh and material directory.
+        layout: The layout directory.
+        maps: The map directory.
+        out_dir: The package directory.
+        result: The summary text.
+    """
+    try:
+        var key = _town_key(town, max_size, tile, raw, layout, maps)
+        var cache = ".cache/town-package/" + key
+        if exists(cache + "/result.txt"):
+            return
+        var partial = cache + ".partial"
+        var removed = run_program(["rm", "-rf", partial], 30.0)
+        if removed.status != 0:
+            return
+        _copy_dir(out_dir, partial + "/tree")
+        Path(partial + "/result.txt").write_text(result)
+        _ = run_program(["mkdir", "-p", ".cache/town-package"], 30.0)
+        var moved = run_program(["mv", "-f", partial, cache], 30.0)
+        if moved.status != 0:
+            _ = run_program(["rm", "-rf", partial], 30.0)
+    except error:
+        _ = String(error)
+
+
 def build_town(
     town: String,
     max_size: Int,
@@ -375,6 +550,11 @@ def build_town(
         raise Error("max_size is negative")
     if not (tile > 0.0):
         raise Error("tile is not positive")
+    var remembered = _remembered_town(
+        town, max_size, tile, raw, layout, maps, out_root
+    )
+    if remembered.byte_length() > 0:
+        return remembered
     var name = "carla.town." + _lower_ascii(town)
     var out_dir = out_root + "/" + name
     var removed = run_program(["rm", "-rf", out_dir], 30.0)
@@ -633,7 +813,9 @@ def build_town(
         written.set(item, "triangles", written.new_int(stat_count[mesh]))
         written.append(meshes, item)
     written.set(written.root, "meshes", meshes)
-    return written.dumps()
+    var result = written.dumps()
+    _remember_town(town, max_size, tile, raw, layout, maps, out_dir, result)
+    return result
 
 
 def main() raises:

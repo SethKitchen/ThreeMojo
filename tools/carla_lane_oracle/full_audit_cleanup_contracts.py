@@ -726,7 +726,11 @@ def _code_equal(left, right):
 
 
 def _compiled_functions(raw, filename):
-    module_code = compile(raw, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize); _compiled_functions.last = module_code
+    tree = ast.parse(raw)
+    module_code = compile(tree, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize)
+    _compiled_functions.last = module_code
+    _compiled_functions.last_raw = raw
+    _compiled_functions.last_tree = tree
     return {item.co_name: item for item in module_code.co_consts if isinstance(item, types.CodeType)}
 
 
@@ -745,7 +749,11 @@ def _compiled_defaults(raw):
                 result[owner + statement.name] = (positional or None, keyword or None)
             elif isinstance(statement, ast.ClassDef):
                 collect(statement.body, owner + statement.name + '.')
-    collect(ast.parse(raw).body)
+    if getattr(_compiled_functions, 'last_raw', None) is raw:
+        statements = _compiled_functions.last_tree.body
+    else:
+        statements = ast.parse(raw).body
+    collect(statements)
     return result
 
 
@@ -765,11 +773,10 @@ _IMPORT_MODULE_CODE = {}
 _IMPORT_DEFAULTS = {}
 _SELF_PATH = Path(__file__).resolve()
 _SELF_RAW = _SELF_PATH.read_bytes()
-require(_code_identity(sys._getframe().f_code) == _code_identity(compile(
-        _SELF_RAW, __file__, 'exec', dont_inherit=True, optimize=sys.flags.optimize)),
+_IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)
+require(_code_equal(sys._getframe().f_code, _compiled_functions.last),
         'executing checker code does not match source')
 _IMPORT_IDENTITIES[str(_SELF_PATH)] = sha(_SELF_RAW)
-_IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)
 _IMPORT_MODULE_CODE[str(_SELF_PATH)] = sys._getframe().f_code
 _IMPORT_DEFAULTS[str(_SELF_PATH)] = _compiled_defaults(_SELF_RAW)
 for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, conditioned_cubic, scaled_float32, pr760_stage, pr780_successor):
@@ -786,8 +793,7 @@ for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), cons
     require(sha(_raw) == DEPENDENCY_TOOL_SHA256.get(_relative), 'unreviewed dependency checker bytes: ' + _relative)
     _executed = getattr(_module, '_EXECUTED_MODULE_CODE', None)
     require(isinstance(_executed, types.CodeType)
-            and _code_identity(_executed) == _code_identity(
-                _compiled_functions.last),
+            and _code_equal(_executed, _compiled_functions.last),
             'executed dependency module differs from captured source: ' + _relative)
     _IMPORT_MODULE_CODE[str(_path)] = _executed
     _IMPORT_DEFAULTS[str(_path)] = _compiled_defaults(_raw)
@@ -892,6 +898,24 @@ def _canonical_relative_text(text):
             and '//' not in text and '/./' not in text and '/../' not in text)
 
 
+# One census reuses directory checks. None means every call checks again.
+_CHECKED_DIRS = None
+
+
+def _use_dir_cache():
+    """Start a directory cache for one census. Callers restore the old value."""
+    global _CHECKED_DIRS
+    previous = _CHECKED_DIRS
+    _CHECKED_DIRS = set()
+    return previous
+
+
+def _restore_dir_cache(previous):
+    """Put the directory cache back, including the uncached state."""
+    global _CHECKED_DIRS
+    _CHECKED_DIRS = previous
+
+
 def _regular(root, relative):
     if os.name == 'posix' and Path is pathlib.Path and _canonical_relative_text(relative):
         parts = tuple(relative.split('/'))
@@ -899,6 +923,26 @@ def _regular(root, relative):
     else:
         parts = Path(relative).parts
         require(parts and not Path(relative).is_absolute() and '..' not in parts, 'unsafe input path')
+    checked = _CHECKED_DIRS
+    if (checked is not None and os.name == 'posix' and type(root) is PosixPath
+            and _canonical_relative_text(relative)):
+        root_key = os.fspath(root)
+        if root_key not in checked:
+            require(_root_unaliased(root), 'symbolic root or ancestor')
+            checked.add(root_key)
+        current = root_key
+        last = len(parts) - 1
+        for index, part in enumerate(parts):
+            current += '/' + part
+            if index != last and current in checked:
+                continue
+            info = os.lstat(current)
+            require(not stat.S_ISLNK(info.st_mode), 'symlink input: ' + relative)
+            if index == last:
+                require(stat.S_ISREG(info.st_mode), 'input is not a regular file: ' + relative)
+            else:
+                checked.add(current)
+        return Path(current)
     path = Path(root)
     require(_root_unaliased(path), 'symbolic root or ancestor')
     for part in parts:
@@ -951,6 +995,14 @@ def inventory(root, *, _snapshots=None, _production=None):
 
 
 def dependency_inventory(root, *, roots=(), entries=(), _known=None, _snapshots=None):
+    previous = _use_dir_cache()
+    try:
+        return _dependency_inventory(root, roots=roots, entries=entries, _known=_known, _snapshots=_snapshots)
+    finally:
+        _restore_dir_cache(previous)
+
+
+def _dependency_inventory(root, *, roots, entries, _known, _snapshots):
     inputs, affected = _sibling('cache_key'), _sibling('affected')
     known = _known if _known is not None else {p.as_posix() for p in inputs.input_paths(root) if p.suffix == '.mojo'}
     found, pending = set(), list(roots)
@@ -1239,6 +1291,14 @@ def provenance_after_sha256(edge):
 
 def _helper_entry_census(root, *, _operation=None):
     """Observe actual source bytes that determine the compiled entry contexts."""
+    previous = _use_dir_cache()
+    try:
+        return _helper_entry_census_body(root, _operation=_operation)
+    finally:
+        _restore_dir_cache(previous)
+
+
+def _helper_entry_census_body(root, *, _operation=None):
     known = {path.as_posix() for path in _sibling('cache_key').input_paths(root)
              if path.suffix == '.mojo'}
     _operation_known_paths(root, known, _operation=_operation)
@@ -1254,6 +1314,14 @@ def _helper_entry_census(root, *, _operation=None):
 
 def _helper_entry_census_finish(root, image, *, _operation=None):
     """Keep all entry-classifying reads, then finish with a fresh path census."""
+    previous = _use_dir_cache()
+    try:
+        _helper_entry_census_finish_body(root, image, _operation=_operation)
+    finally:
+        _restore_dir_cache(previous)
+
+
+def _helper_entry_census_finish_body(root, image, *, _operation=None):
     for path, raw in image.items():
         actual = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
         require(type(actual) is bytes and actual == raw, 'render entry source changed: ' + path)
