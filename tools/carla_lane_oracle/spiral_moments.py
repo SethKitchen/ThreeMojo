@@ -190,10 +190,26 @@ def nearest_even(value):
     return low if low % 2 == 0 else high
 
 
+def _rounded_words(literals):
+    try:
+        return ideal_projection.decimal_words(literals)
+    except ValueError as error:
+        raise CheckError(str(error)) from error
+
+
 def decimal_word(token):
     value = F(token)
     # Fractions have no signed zero; a source literal does.
-    return SIGN if not value and token.startswith('-') else nearest_even(value)
+    if not value and token.startswith('-'):
+        return SIGN
+    try:
+        words = ideal_projection.decimal_words([token])
+    except ValueError as error:
+        if str(error) != 'unsupported decimal word':
+            raise CheckError(str(error)) from error
+        return nearest_even(value)
+    require(len(words) == 1, 'binary64 overflow')
+    return words[0]
 
 
 def normalized_block(text):
@@ -223,7 +239,7 @@ def parse_array(text, name, size):
         literals = ideal_projection.array_literals(text, name, size)
     except ValueError as error:
         _constant_error(error, name)
-    return [decimal_word(literal) for literal in literals]
+    return _rounded_words(literals)
 
 
 def verify_inputs(root):
@@ -250,6 +266,9 @@ def verify_inputs(root):
     require(set(constants) == {'_GL_NODES', '_GL_WEIGHTS',
                                '_COS_COEFFICIENTS', '_SIN_COEFFICIENTS'},
             'wrong constant-array set')
+    scalar_names = []
+    scalar_literals = []
+    scalar_records = []
     for name, record in pins['scalars'].items():
         require(set(record) == {'path', 'word'}, 'wrong scalar pin keys: ' + name)
         require(record['path'] == 'extensions/carla/curve_trig.mojo',
@@ -259,7 +278,13 @@ def verify_inputs(root):
             literal = ideal_projection.scalar_literal(text, name)
         except ValueError as error:
             _constant_error(error, name)
-        require(hexword(decimal_word(literal)) == record['word'],
+        scalar_names.append(name)
+        scalar_literals.append(literal)
+        scalar_records.append(record)
+    scalar_words = _rounded_words(scalar_literals)
+    require(len(scalar_words) == len(scalar_names), 'binary64 overflow')
+    for name, record, word in zip(scalar_names, scalar_records, scalar_words):
+        require(hexword(word) == record['word'],
                 'stored scalar word changed: ' + name)
     blocks = {}
     for name, record in pins['blocks'].items():

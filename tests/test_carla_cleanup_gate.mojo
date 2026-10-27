@@ -32,6 +32,7 @@ from tests._python_tokens import (
     without_move_sigils,
 )
 from tools.carla_cleanup_gate import (
+    decimal_words_json,
     cleanup_digest,
     cleanup_record,
     cleanup_sha,
@@ -456,6 +457,17 @@ def test_a_repeated_premise_fragment_is_refused() raises:
         )
     ):
         cleanup_premises(directory)
+
+
+def test_a_decimal_literal_rounds_to_binary64() raises:
+    """Signed zero and one tenth keep their binary64 words."""
+    assert_equal(
+        decimal_words_json('["0.0","-0.0","0.1","-0.1"]'),
+        (
+            '["0x0000000000000000","0x8000000000000000",'
+            + '"0x3FB999999999999A","0xBFB999999999999A"]'
+        ),
+    )
 
 
 def test_the_token_digest_matches_cpython() raises:

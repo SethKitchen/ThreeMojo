@@ -30,6 +30,7 @@
     carla_cleanup_gate --block DIR
     carla_cleanup_gate --strip-try PATH
     carla_cleanup_gate --pin-rows PATH
+    carla_cleanup_gate --decimal PATH
     carla_cleanup_gate --literals PATH --name NAME --kind array --size N
     carla_cleanup_gate --literals PATH --name NAME --kind scalar
 
@@ -69,6 +70,7 @@ from tests._python_tokens import (
 )
 from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PY_STR, PyJson
 from tools._sha256 import sha256_hex
+from tools._spiral_moment_words import decimal_word
 
 
 comptime _MIGRATION_SHA256 = (
@@ -442,6 +444,53 @@ def cleanup_tokens(directory: String) raises:
         index += 1
 
 
+def _u64_hex(word: UInt64) -> String:
+    """Return one binary64 word as `0x` and sixteen uppercase hex digits.
+
+    Args:
+        word: The encoding.
+
+    Returns:
+        The fixed-width spelling.
+    """
+    var out = String("0x")
+    var shift = 60
+    while shift >= 0:
+        var nibble = Int((word >> UInt64(shift)) & 0xF)
+        if nibble < 10:
+            out += chr(48 + nibble)
+        else:
+            out += chr(55 + nibble)
+        shift -= 4
+    return out
+
+
+def decimal_words_json(payload: String) raises -> String:
+    """Round each decimal literal to its nearest binary64 word.
+
+    Args:
+        payload: A JSON list of decimal literal spellings.
+
+    Returns:
+        A JSON list of `0x` words. Each word has 16 hexadecimal digits.
+        `-0.0` keeps its sign.
+
+    Raises:
+        Error: A literal is not a finite decimal number.
+    """
+    var doc = PyJson.parse(payload)
+    var count = doc.length(doc.root)
+    var out = PyJson()
+    var rows = out.new_list()
+    var index = 0
+    while index < count:
+        var token = doc.text(doc.item(doc.root, index))
+        out.append(rows, out.new_str(_u64_hex(decimal_word(token))))
+        index += 1
+    out.root = rows
+    return out.dumps()
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -456,7 +505,7 @@ def _usage():
             " --syntax PATH | --slice PATH --name NAME | --fragment DIR |"
             " --normalize PATH | --table PATH --count N | --moment-source PATH"
             " | --block DIR | --strip-try PATH | --pin-rows PATH"
-            " | --literals PATH --name NAME"
+            " | --decimal PATH | --literals PATH --name NAME"
             " --kind array --size N | --literals PATH --name NAME --kind scalar"
         ),
         file=stderr,
@@ -503,6 +552,7 @@ def main() raises:
     var block = String("")
     var strip_try = String("")
     var pin_rows = String("")
+    var decimal = String("")
     var literals = String("")
     var literal_size = String("")
     var arguments = argv()
@@ -543,6 +593,7 @@ def main() raises:
             or word == "--block"
             or word == "--strip-try"
             or word == "--pin-rows"
+            or word == "--decimal"
             or word == "--literals"
             or word == "--size"
         ):
@@ -615,6 +666,8 @@ def main() raises:
                 strip_try = value
             elif word == "--pin-rows":
                 pin_rows = value
+            elif word == "--decimal":
+                decimal = value
             elif word == "--literals":
                 literals = value
             elif word == "--size":
@@ -683,6 +736,8 @@ def main() raises:
     if strip_try.byte_length() > 0:
         modes += 1
     if pin_rows.byte_length() > 0:
+        modes += 1
+    if decimal.byte_length() > 0:
         modes += 1
     if significant.byte_length() > 0:
         modes += 1
@@ -768,6 +823,9 @@ def main() raises:
             return
         if pin_rows.byte_length() > 0:
             print(pin_transition_rows(Path(pin_rows).read_text()), end="")
+            return
+        if decimal.byte_length() > 0:
+            print(decimal_words_json(Path(decimal).read_text()), end="")
             return
         if strip_try.byte_length() > 0:
             print(

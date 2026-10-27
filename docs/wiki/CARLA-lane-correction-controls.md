@@ -72,6 +72,8 @@ It replaces one executable token fragment for the cleanup mutation tests.
 
 It reads the decimal literals in one stored array or scalar declaration.
 
+It rounds one stored decimal literal to a binary64 word.
+
 It drops comments and blank lines from one source block.
 
 It reads the stored moment words from the generated table.

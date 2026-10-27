@@ -360,6 +360,33 @@ def pin_transition_rows(pins, transitions):
     return json.loads(result.stdout)
 
 
+def decimal_words(literals):
+    """Return the nearest binary64 word of each decimal literal."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps(list(literals), separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='decimal-words-') as directory:
+        path = Path(directory) / 'literals.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--decimal', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = 'spiral moment word: '
+        if message.startswith(prefix):
+            message = message[len(prefix):]
+        raise ValueError(message)
+    return [int(item, 16) for item in json.loads(result.stdout)]
+
+
 def declaration(text, name, owner=()):
     """Return one declaration selected by the cleanup gate."""
     import os
