@@ -46,6 +46,11 @@ comptime _E_ASSIGN = 19
 comptime _E_AUG = 20
 comptime _E_WHILE = 21
 comptime _E_RETURN = 22
+comptime _E_IF = 23
+comptime _E_FOR = 24
+comptime _E_EXPR = 25
+comptime _E_RAISE = 26
+comptime _E_STR = 27
 
 
 struct _Parser:
@@ -61,6 +66,8 @@ struct _Parser:
     var at: List[Int]
     var narg: List[Int]
     var nkw: List[Int]
+    var mark: List[Int]
+    var span: List[Int]
     var extra: List[Int]
     var assign_name: List[String]
     var assign_node: List[Int]
@@ -76,6 +83,8 @@ struct _Parser:
         self.at = List[Int]()
         self.narg = List[Int]()
         self.nkw = List[Int]()
+        self.mark = List[Int]()
+        self.span = List[Int]()
         self.extra = List[Int]()
         self.assign_name = List[String]()
         self.assign_node = List[Int]()
@@ -89,6 +98,7 @@ struct _Parser:
         var extra: List[Int],
         narg: Int,
         nkw: Int,
+        mark: Int = 0,
     ) -> Int:
         var count = len(extra)
         self.kind.append(kind)
@@ -98,6 +108,8 @@ struct _Parser:
         self.at.append(len(self.extra))
         self.narg.append(narg)
         self.nkw.append(nkw)
+        self.mark.append(mark)
+        self.span.append(count)
         var cursor = 0
         while cursor < count:
             self.extra.append(extra[cursor])
@@ -365,7 +377,11 @@ struct _Parser:
             self.index += 1
             return self._number(token)
         if self._kind_at() == _STRING:
-            return self._fail()
+            var token = self._text_at()
+            self.index += 1
+            return self._add(
+                _E_STR, self._unquote(token), -1, -1, self._empty(), 0, 0
+            )
         if self._is_op("("):
             return self._parse_paren()
         if self._is_op("["):
@@ -550,7 +566,90 @@ struct _Parser:
             var target = self._add(_E_NAME, name, 1, -1, self._empty(), 0, 0)
             var value = self._parse_expr()
             return self._add(_E_AUG, "Add", target, value, self._empty(), 0, 0)
-        return self._fail()
+        if self._is_name("if") or self._is_name("elif"):
+            return self._parse_if()
+        if self._is_name("for"):
+            return self._parse_for()
+        if self._is_name("raise"):
+            self.index += 1
+            var exc = self._parse_expr()
+            return self._add(_E_RAISE, "", exc, -1, self._empty(), 0, 0)
+        var value = self._parse_expr()
+        return self._add(_E_EXPR, "", value, -1, self._empty(), 0, 0)
+
+    def _unquote(self, token: String) -> String:
+        var data = token.as_bytes()
+        if len(data) < 2:
+            return token
+        var quote = data[0]
+        var end = len(data)
+        var out = String("")
+        var cursor = 1
+        while cursor < end - 1:
+            var byte = data[cursor]
+            if byte == 92 and cursor + 1 < end - 1:
+                var escaped = data[cursor + 1]
+                if escaped == 110:
+                    out += "\n"
+                elif escaped == 116:
+                    out += "\t"
+                elif escaped == 114:
+                    out += "\r"
+                else:
+                    out += chr(Int(escaped))
+                cursor += 2
+                continue
+            out += chr(Int(byte))
+            cursor += 1
+        _ = quote
+        return out
+
+    def _parse_suite(mut self) raises -> List[Int]:
+        if not self._is_op(":"):
+            raise Error("heading correspondence: unsupported expression")
+        self.index += 1
+        if self._kind_at() != _NEWLINE:
+            raise Error("heading correspondence: unsupported expression")
+        self.index += 1
+        return self._parse_body()
+
+    def _parse_if(mut self) raises -> Int:
+        self.index += 1
+        var test = self._parse_expr()
+        var body = self._parse_suite()
+        var orelse = self._empty()
+        if self._is_name("else"):
+            self.index += 1
+            orelse = self._parse_suite()
+        elif self._is_name("elif"):
+            orelse.append(self._parse_if())
+        var extra = self._empty()
+        var body_count = len(body)
+        var cursor = 0
+        while cursor < body_count:
+            extra.append(body[cursor])
+            cursor += 1
+        var else_count = len(orelse)
+        cursor = 0
+        while cursor < else_count:
+            extra.append(orelse[cursor])
+            cursor += 1
+        return self._add(_E_IF, "", test, -1, extra^, body_count, 0, else_count)
+
+    def _parse_for(mut self) raises -> Int:
+        self.index += 1
+        if self._kind_at() != _NAME:
+            return self._fail()
+        var name = self._text_at()
+        self.index += 1
+        if not self._is_name("in"):
+            return self._fail()
+        self.index += 1
+        var iter = self._parse_expr()
+        var target = self._add(_E_NAME, name, 1, -1, self._empty(), 0, 0)
+        var body = self._parse_suite()
+        var count = len(body)
+        return self._add(_E_FOR, "", target, iter, body^, count, 0)
 
     def _parse_body(mut self) raises -> List[Int]:
         if self._kind_at() != _INDENT:
@@ -571,6 +670,12 @@ struct _Parser:
     def _parse_function(mut self, typed: Bool) raises -> Int:
         while self._kind_at() == _NEWLINE:
             self.index += 1
+        var decorators = self._empty()
+        while self._is_op("@"):
+            self.index += 1
+            decorators.append(self._parse_expr())
+            if self._kind_at() == _NEWLINE:
+                self.index += 1
         if not self._is_name("def"):
             return self._fail()
         self.index += 1
@@ -593,10 +698,22 @@ struct _Parser:
         self.index += 1
         var body = self._parse_body()
         var count = len(body)
+        var extra = self._empty()
+        var cursor = 0
+        while cursor < count:
+            extra.append(body[cursor])
+            cursor += 1
+        var decorators_count = len(decorators)
+        cursor = 0
+        while cursor < decorators_count:
+            extra.append(decorators[cursor])
+            cursor += 1
         var flag = 0
         if typed:
             flag = 1
-        return self._add(_E_FUNC, name, args, returns, body^, count, flag)
+        return self._add(
+            _E_FUNC, name, args, returns, extra^, count, flag, decorators_count
+        )
 
     def _skip_statement(mut self):
         var depth = 0
@@ -659,6 +776,8 @@ struct _Parser:
     def _clone(mut self, node: Int) -> Int:
         var narg = self.narg[node]
         var nkw = self.nkw[node]
+        var mark = self.mark[node]
+        var span = self.span[node]
         var start = self.at[node]
         var left = -1
         var right = -1
@@ -667,14 +786,13 @@ struct _Parser:
         if self.right[node] >= 0:
             right = self._clone(self.right[node])
         var extra = self._empty()
-        var count = narg + nkw
         var cursor = 0
-        while cursor < count:
+        while cursor < span:
             extra.append(self._clone(self.extra[start + cursor]))
             cursor += 1
         var text = String(self.label[node])
         var kind = self.kind[node]
-        return self._add(kind, text, left, right, extra^, narg, nkw)
+        return self._add(kind, text, left, right, extra^, narg, nkw, mark)
 
     def _spec(mut self, node: Int, k0: Int, use_k0: Bool) -> Int:
         if self.kind[node] == _E_NAME:
@@ -685,6 +803,8 @@ struct _Parser:
             return self._clone(node)
         var narg = self.narg[node]
         var nkw = self.nkw[node]
+        var mark = self.mark[node]
+        var span = self.span[node]
         var start = self.at[node]
         var left = -1
         var right = -1
@@ -693,14 +813,13 @@ struct _Parser:
         if self.right[node] >= 0:
             right = self._spec(self.right[node], k0, use_k0)
         var extra = self._empty()
-        var count = narg + nkw
         var cursor = 0
-        while cursor < count:
+        while cursor < span:
             extra.append(self._spec(self.extra[start + cursor], k0, use_k0))
             cursor += 1
         var text = String(self.label[node])
         var kind = self.kind[node]
-        return self._add(kind, text, left, right, extra^, narg, nkw)
+        return self._add(kind, text, left, right, extra^, narg, nkw, mark)
 
     def _dump(mut self, node: Int) raises -> String:
         var doc = PyJson()
@@ -737,9 +856,26 @@ struct _Parser:
             )
             return self._typed(doc, "Constant", fields)
         if kind == _E_NONE:
+            return self._typed(doc, "Constant", doc.new_list())
+        if kind == _E_STR:
             var fields = doc.new_list()
-            doc.append(fields, self._pair(doc, "value", doc.new_none()))
+            doc.append(
+                fields, self._pair(doc, "value", doc.new_str(self.label[node]))
+            )
             return self._typed(doc, "Constant", fields)
+        if kind == _E_EXPR:
+            var fields = doc.new_list()
+            doc.append(
+                fields,
+                self._pair(doc, "value", self._json(doc, self.left[node])),
+            )
+            return self._typed(doc, "Expr", fields)
+        if kind == _E_RAISE:
+            var fields = doc.new_list()
+            doc.append(
+                fields, self._pair(doc, "exc", self._json(doc, self.left[node]))
+            )
+            return self._typed(doc, "Raise", fields)
         if kind == _E_ATTR:
             var fields = doc.new_list()
             doc.append(
@@ -840,7 +976,14 @@ struct _Parser:
                 fields, self._pair(doc, "body", self._arg_list(doc, node))
             )
             doc.append(
-                fields, self._pair(doc, "decorator_list", doc.new_list())
+                fields,
+                self._pair(
+                    doc,
+                    "decorator_list",
+                    self._slice_list(
+                        doc, node, self.narg[node], self.mark[node]
+                    ),
+                ),
             )
             if self.right[node] >= 0:
                 doc.append(
@@ -857,6 +1000,41 @@ struct _Parser:
                     ),
                 )
             return self._typed(doc, "FunctionDef", fields)
+        if kind == _E_IF:
+            var fields = doc.new_list()
+            doc.append(
+                fields,
+                self._pair(doc, "test", self._json(doc, self.left[node])),
+            )
+            doc.append(
+                fields, self._pair(doc, "body", self._arg_list(doc, node))
+            )
+            doc.append(
+                fields,
+                self._pair(
+                    doc,
+                    "orelse",
+                    self._slice_list(
+                        doc, node, self.narg[node], self.mark[node]
+                    ),
+                ),
+            )
+            return self._typed(doc, "If", fields)
+        if kind == _E_FOR:
+            var fields = doc.new_list()
+            doc.append(
+                fields,
+                self._pair(doc, "target", self._json(doc, self.left[node])),
+            )
+            doc.append(
+                fields,
+                self._pair(doc, "iter", self._json(doc, self.right[node])),
+            )
+            doc.append(
+                fields, self._pair(doc, "body", self._arg_list(doc, node))
+            )
+            doc.append(fields, self._pair(doc, "orelse", doc.new_list()))
+            return self._typed(doc, "For", fields)
         if kind == _E_ARGS:
             var fields = doc.new_list()
             doc.append(fields, self._pair(doc, "posonlyargs", doc.new_list()))
@@ -981,11 +1159,17 @@ struct _Parser:
         return node
 
     def _arg_list(mut self, mut doc: PyJson, node: Int) raises -> Int:
+        return self._slice_list(doc, node, 0, self.narg[node])
+
+    def _slice_list(
+        mut self, mut doc: PyJson, node: Int, offset: Int, count: Int
+    ) raises -> Int:
         var rows = doc.new_list()
         var cursor = 0
-        while cursor < self.narg[node]:
+        while cursor < count:
             doc.append(
-                rows, self._json(doc, self.extra[self.at[node] + cursor])
+                rows,
+                self._json(doc, self.extra[self.at[node] + offset + cursor]),
             )
             cursor += 1
         return rows
@@ -1121,6 +1305,97 @@ def function_dump(source: String) raises -> String:
             raise Error("heading correspondence: unsupported expression")
         parser.index += 1
     return parser._dump(node)
+
+
+def plain_function_dump(source: String) raises -> String:
+    """Return the normalized dump of one function without a generic mark.
+
+    Args:
+        source: A Python function.
+
+    Returns:
+        The dump CPython keeps when the function has no generic parameters.
+
+    Raises:
+        Error: The function is missing or uses an unsupported statement.
+    """
+    var parser = _parser(source)
+    var node = parser._parse_function(False)
+    while not parser._done():
+        var kind = parser._kind_at()
+        if kind != _NEWLINE and kind != _DEDENT and kind != _INDENT:
+            raise Error("heading correspondence: unsupported expression")
+        parser.index += 1
+    return parser._dump(node)
+
+
+def _index_of(haystack: String, needle: String) -> Int:
+    var data = haystack.as_bytes()
+    var wanted = needle.as_bytes()
+    if len(wanted) == 0 or len(wanted) > len(data):
+        return -1
+    var index = 0
+    while index + len(wanted) <= len(data):
+        var cursor = 0
+        var same = True
+        while cursor < len(wanted):
+            if data[index + cursor] != wanted[cursor]:
+                same = False
+                break
+            cursor += 1
+        if same:
+            return index
+        index += 1
+    return -1
+
+
+def _decorator_prefix(source: String, sliced: String) -> String:
+    var origin = _index_of(source, sliced)
+    if origin < 0:
+        return sliced
+    var data = source.as_bytes()
+    var start = origin
+    while start > 0 and data[start - 1] == 10:
+        var line_end = start - 1
+        var line_start = line_end
+        while line_start > 0 and data[line_start - 1] != 10:
+            line_start -= 1
+        var cursor = line_start
+        while cursor < line_end and (data[cursor] == 32 or data[cursor] == 9):
+            cursor += 1
+        if cursor >= line_end or data[cursor] != 64:
+            break
+        start = line_start
+    if start == origin:
+        return sliced
+    var prefix = String("")
+    var cursor = start
+    while cursor < origin:
+        prefix += chr(Int(data[cursor]))
+        cursor += 1
+    return prefix + sliced
+
+
+def sum2_graph_dump(payload: String) raises -> String:
+    """Return one Sum2 function dump from a JSON document.
+
+    Args:
+        payload: JSON with `source` and `name`.
+
+    Returns:
+        The normalized dump without a generic mark.
+
+    Raises:
+        Error: The function is missing or uses an unsupported statement.
+    """
+    var doc = PyJson.parse(payload)
+    var source = doc.text(doc.at(doc.root, "source"))
+    var name = doc.text(doc.at(doc.root, "name"))
+    var syntax = python_syntax_json(
+        _decorator_prefix(source, function_slice(source, name))
+    )
+    var parsed = PyJson.parse(syntax)
+    return plain_function_dump(parsed.text(parsed.at(parsed.root, "source")))
 
 
 def assignment_dump(source: String, name: String) raises -> String:

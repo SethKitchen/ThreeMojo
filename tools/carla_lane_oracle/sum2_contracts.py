@@ -22,7 +22,6 @@ else:
     import source_contracts as _typed_source
 
 import ast
-import copy
 if __package__:
     from . import sum2_guard_contracts as guards
 else:
@@ -338,6 +337,41 @@ def verify_binding(text, name, allowed_module='', allow_definition=False):
         raise ValueError(str(error)) from error
 
 
+def _graph_dump(text, name, rename=''):
+    """Return one function dump from the cleanup gate."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({'source': text, 'name': name}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='sum2-dump-') as directory:
+        path = Path(directory) / 'payload.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--sum2-dump', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    dump = result.stdout
+    if rename:
+        parsed = json.loads(dump)
+        parsed[1][0][1] = rename
+        dump = json.dumps(parsed, separators=(',', ':'))
+    return dump
+
+
+def _without_first(dump):
+    parsed = json.loads(dump)
+    body = next(value for key, value in parsed[1] if key == 'body')
+    first = json.dumps(body.pop(0), separators=(',', ':'))
+    return first, json.dumps(parsed, separators=(',', ':'))
+
+
 def verify(root, *, _operation=None):
     # Lazy import avoids a checker-module cycle; no source is executed.
     if __package__:
@@ -357,32 +391,25 @@ def verify(root, *, _operation=None):
     texts['spiral_roundoff_proof'] = selection.predecessor_text(
         root, 'extensions/carla/spiral_roundoff_proof.mojo', _operation=_operation)
 
-    trees = {name: _syntax_tree(text) for name, text in texts.items()
-             if name != 'curve_sum2'}
     # The complete lexical contract above retains all keyword-subscripts and
     # decorators. Separately relate the unchanged arithmetic leaf/recurrence
     # to the initial station-reviewed declarations using actual token spans.
-    previous = _syntax_tree(HELPER)
-    update = c.unique_function(_syntax_tree(declaration(
-        texts['curve_sum2'], '_sum2_update')), '_sum2_update')
-    expected_update = c.unique_function(previous, '_sum2_update')
-    require(c.dump(update) == c.dump(expected_update), 'Sum2 recurrence changed')
-    leaf = c.unique_function(_syntax_tree(declaration(
-        texts['curve_sum2'], '_sum2_error_checked')), '_sum2_error_checked')
-    leaf.name = '_sum2_error'
-    require(c.dump(leaf) == c.dump(c.unique_function(previous, '_sum2_error')),
+    require(_graph_dump(declaration(texts['curve_sum2'], '_sum2_update'), '_sum2_update')
+            == _graph_dump(HELPER, '_sum2_update'), 'Sum2 recurrence changed')
+    require(_graph_dump(declaration(texts['curve_sum2'], '_sum2_error_checked'),
+                        '_sum2_error_checked', '_sum2_error')
+            == _graph_dump(HELPER, '_sum2_error'),
             'Sum2 checked arithmetic leaf changed')
+    sentinel = c.dump(ast.parse('_require_sum2_environment()').body[0])
     for module, name, expected in (
             ('lane_geometry', '_lane_spiral', SCALAR),
             ('spiral_roundoff_proof', '_sum2_envelope_error', ENVELOPE),
             ('spiral_roundoff_proof', '_try_spiral_roundoff_envelope', ELIGIBILITY)):
-        actual = copy.deepcopy(c.unique_function(trees[module], name))
+        actual = _graph_dump(texts[module], name)
         if name == '_lane_spiral':
-            require(c.dump(actual.body[0]) == c.dump(ast.parse(
-                '_require_sum2_environment()').body[0]), 'scalar environment check moved')
-            actual.body.pop(0)
-        wanted = c.unique_function(_syntax_tree(expected), name)
-        require(c.dump(actual) == c.dump(wanted),
+            first, actual = _without_first(actual)
+            require(first == sentinel, 'scalar environment check moved')
+        require(actual == _graph_dump(expected, name),
                 'Sum2 complete caller graph changed: ' + name)
     # Require the exact direct import inventory and reject all shadow forms.
     for module, helpers in (

@@ -9,7 +9,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from std.os import makedirs
 from std.pathlib import Path
-from tests._python_expr import expression_dump, function_dump
+from tests._python_expr import expression_dump, function_dump, plain_function_dump
 from tests._python_tokens import (
     declaration_place,
     declaration_text,
@@ -499,6 +499,18 @@ def test_a_function_dump_matches_cpython() raises:
     assert_equal(
         function_dump(source),
         '["FunctionDef",[["name","f"],["args",["arguments",[["posonlyargs",[]],["args",[["arg",[["arg","geometry"],["annotation",["Name",[["id","RoadGeometry"],["ctx",["Load",[]]]]]]]],["arg",[["arg","d"],["annotation",["Subscript",[["value",["Name",[["id","_JetExpression"],["ctx",["Load",[]]]]]],["slice",["Name",[["id","derivatives"],["ctx",["Load",[]]]]]],["ctx",["Load",[]]]]]]]]]],["kwonlyargs",[]],["kw_defaults",[]],["defaults",[]]]]],["body",[["Assign",[["targets",[["Name",[["id","x"],["ctx",["Store",[]]]]]]],["value",["Constant",[["value",1]]]]]],["While",[["test",["Compare",[["left",["Name",[["id","x"],["ctx",["Load",[]]]]]],["ops",[["Lt",[]]]],["comparators",[["Constant",[["value",2]]]]]]]],["body",[["AugAssign",[["target",["Name",[["id","x"],["ctx",["Store",[]]]]]],["op",["Add",[]]],["value",["Constant",[["value",1]]]]]]]],["orelse",[]]]],["Return",[["value",["Tuple",[["elts",[["Name",[["id","x"],["ctx",["Load",[]]]]],["Name",[["id","d"],["ctx",["Load",[]]]]]]],["ctx",["Load",[]]]]]]]]]],["decorator_list",[]],["returns",["Subscript",[["value",["Name",[["id","Tuple"],["ctx",["Load",[]]]]]],["slice",["Tuple",[["elts",[["Name",[["id","Int"],["ctx",["Load",[]]]]],["Name",[["id","Int"],["ctx",["Load",[]]]]]]],["ctx",["Load",[]]]]]],["ctx",["Load",[]]]]]],["mojo_type_parameters",[["NAME","derivatives"],["OP",":"],["NAME","Bool"]]]]]',
+    )
+
+
+def test_an_if_and_for_dump_matches_cpython() raises:
+    """If, for, and a decorator dump match CPython."""
+    assert_equal(
+        plain_function_dump("def f():\n    if a < 1 or not b:\n        return None\n"),
+        '["FunctionDef",[["name","f"],["args",["arguments",[["posonlyargs",[]],["args",[]],["kwonlyargs",[]],["kw_defaults",[]],["defaults",[]]]]],["body",[["If",[["test",["BoolOp",[["op",["Or",[]]],["values",[["Compare",[["left",["Name",[["id","a"],["ctx",["Load",[]]]]]],["ops",[["Lt",[]]]],["comparators",[["Constant",[["value",1]]]]]]],["UnaryOp",[["op",["Not",[]]],["operand",["Name",[["id","b"],["ctx",["Load",[]]]]]]]]]]]]],["body",[["Return",[["value",["Constant",[]]]]]]],["orelse",[]]]]]],["decorator_list",[]]]]',
+    )
+    assert_equal(
+        plain_function_dump("@no_inline\ndef f():\n    for piece in range(pieces):\n        x = piece\n"),
+        '["FunctionDef",[["name","f"],["args",["arguments",[["posonlyargs",[]],["args",[]],["kwonlyargs",[]],["kw_defaults",[]],["defaults",[]]]]],["body",[["For",[["target",["Name",[["id","piece"],["ctx",["Store",[]]]]]],["iter",["Call",[["func",["Name",[["id","range"],["ctx",["Load",[]]]]]],["args",[["Name",[["id","pieces"],["ctx",["Load",[]]]]]]],["keywords",[]]]]],["body",[["Assign",[["targets",[["Name",[["id","x"],["ctx",["Store",[]]]]]]],["value",["Name",[["id","piece"],["ctx",["Load",[]]]]]]]]]],["orelse",[]]]]]],["decorator_list",[["Name",[["id","no_inline"],["ctx",["Load",[]]]]]]]]]',
     )
 
 

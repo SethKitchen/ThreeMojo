@@ -29,6 +29,8 @@
     carla_cleanup_gate --imports PATH
     carla_cleanup_gate --heading PATH
     carla_cleanup_gate --function-dump PATH
+    carla_cleanup_gate --plain-dump PATH
+    carla_cleanup_gate --sum2-dump PATH
     carla_cleanup_gate --syntax PATH
     carla_cleanup_gate --slice PATH --name NAME
     carla_cleanup_gate --fragment DIR
@@ -52,7 +54,12 @@ An absent previous file checks only the migration record.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tests._python_expr import function_dump, heading_sources
+from tests._python_expr import (
+    function_dump,
+    heading_sources,
+    plain_function_dump,
+    sum2_graph_dump,
+)
 from tests._python_tokens import (
     declaration_place,
     ideal_function_source,
@@ -548,6 +555,7 @@ def _usage():
             " PATH | --ideal PATH --name NAME | --stored-half PATH |"
             " --project-sum2 PATH | --commute-legacy PATH | --binding PATH |"
             " --imports PATH | --heading PATH | --function-dump PATH |"
+            " --plain-dump PATH | --sum2-dump PATH |"
             " --syntax PATH |"
             " --slice PATH --name NAME | --fragment DIR | --normalize PATH |"
             " --table PATH --count N | --moment-source PATH | --moment-payload"
@@ -597,6 +605,8 @@ def main() raises:
     var imports = String("")
     var heading = String("")
     var function_path = String("")
+    var plain_path = String("")
+    var sum2_dump = String("")
     var syntax = String("")
     var slice_path = String("")
     var fragment = String("")
@@ -648,6 +658,8 @@ def main() raises:
             or word == "--imports"
             or word == "--heading"
             or word == "--function-dump"
+            or word == "--plain-dump"
+            or word == "--sum2-dump"
             or word == "--syntax"
             or word == "--slice"
             or word == "--fragment"
@@ -729,6 +741,10 @@ def main() raises:
                 heading = value
             elif word == "--function-dump":
                 function_path = value
+            elif word == "--plain-dump":
+                plain_path = value
+            elif word == "--sum2-dump":
+                sum2_dump = value
             elif word == "--syntax":
                 syntax = value
             elif word == "--slice":
@@ -821,6 +837,10 @@ def main() raises:
     if heading.byte_length() > 0:
         modes += 1
     if function_path.byte_length() > 0:
+        modes += 1
+    if plain_path.byte_length() > 0:
+        modes += 1
+    if sum2_dump.byte_length() > 0:
         modes += 1
     if syntax.byte_length() > 0:
         modes += 1
@@ -1038,6 +1058,12 @@ def main() raises:
             return
         if function_path.byte_length() > 0:
             print(function_dump(Path(function_path).read_text()), end="")
+            return
+        if plain_path.byte_length() > 0:
+            print(plain_function_dump(Path(plain_path).read_text()), end="")
+            return
+        if sum2_dump.byte_length() > 0:
+            print(sum2_graph_dump(Path(sum2_dump).read_text()), end="")
             return
         if starts.byte_length() > 0:
             print(top_level_starts_json(Path(starts).read_text()), end="")
