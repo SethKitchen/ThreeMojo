@@ -59,9 +59,42 @@ def _loop_labels():
     return _LOOP_LABELS
 
 
+_LOOP_DRIVERS = None
+
+
+def _loop_drivers():
+    """Return the native loop source and the production drivers."""
+    global _LOOP_DRIVERS
+    if _LOOP_DRIVERS is not None:
+        return _LOOP_DRIVERS
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[1]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+         'carla_coverage_loop_drivers'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _LOOP_DRIVERS = json.loads(result.stdout)
+    return _LOOP_DRIVERS
+
+
 def __getattr__(name):
     if name == 'NATIVE_TOOL_DEPENDENCIES':
         return tuple(_loop_labels()['dependencies'])
+    if name == 'PRODUCTION_DRIVER':
+        return _loop_drivers()['production']
+    if name == 'HANG_DRIVER':
+        return _loop_drivers()['hang']
+    if name == 'COMPILE_ERROR_DRIVER':
+        return _loop_drivers()['compile_error']
+    if name == 'SOURCE':
+        return _loop_drivers()['source']
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
@@ -81,81 +114,6 @@ RUNTIME_SECONDS = 5
 # This new finite harness-only bound includes compilation and capture setup.
 # It does not replace the runtime alarm or change production capture budgets.
 INTEGRATION_SECONDS = 180
-PRODUCTION_DRIVER = '''from production import total
-from std.testing import assert_equal
-from std.ffi import external_call
-
-def main() raises:
-    assert_equal(external_call["alarm", UInt32](UInt32(5)), UInt32(0))
-    assert_equal(total(0), 1)
-    assert_equal(total(2), 2)
-    print("RESULT production capture")
-'''
-HANG_DRIVER = PRODUCTION_DRIVER.replace(
-    '    assert_equal(total(2), 2)\n    print("RESULT production capture")\n',
-    '    while True:\n        _ = external_call["pause", Int32]()\n')
-COMPILE_ERROR_DRIVER = 'from production import total\n\ndef main() raises:\n    var broken =\n'
-SOURCE = '''from std.testing import assert_equal
-from std.sys import argv
-
-def fixed(leave: Int) raises -> Int:
-    var total = 0
-    for index in range(3):
-        if leave == 1:
-            break
-        if leave == 2:
-            return total
-        if leave == 3:
-            raise Error("expected body")
-        if index == 0:
-            continue
-        total += index
-    else:
-        total += 10
-    return total
-
-def empty() -> Int:
-    for index in range(0):
-        return index
-    else:
-        return 7
-
-def mark(value: Int, mut order: String) -> Int:
-    order += String(value)
-    return value
-
-def literal() raises -> Int:
-    var total = 0
-    var order = String("")
-    for value in [mark(1, order), mark(2, order), mark(3, order)]:
-        assert_equal(order, "123")
-        total += value
-    return total
-
-def dynamic(n: Int) -> Int:
-    var total = 0
-    for index in range(n):
-        total += index
-    return total
-
-def main() raises:
-    var mode = Int(String(argv()[1]))
-    assert_equal(fixed(0), 13)
-    assert_equal(fixed(1), 0)
-    assert_equal(fixed(2), 0)
-    var caught = False
-    try:
-        _ = fixed(3)
-    except error:
-        caught = String(error) == "expected body"
-    assert_equal(caught, True)
-    assert_equal(empty(), 7)
-    assert_equal(literal(), 6)
-    assert_equal(dynamic(2), 1)
-    if mode == 0:
-        assert_equal(dynamic(0), 0)
-    print("RESULT constant loops")
-'''
 
 
 def require(condition, message):
@@ -253,7 +211,7 @@ def capture_with_compiler_budget(command, output, capture, *, mojo, loop_proof=N
 
 
 def line_of(fragment):
-    matches = [number for number, line in enumerate(SOURCE.splitlines(), 1)
+    matches = [number for number, line in enumerate(_loop_drivers()['source'].splitlines(), 1)
                if fragment in line]
     require(len(matches) == 1, 'Fixture identity is not unique: ' + fragment)
     return matches[0]
@@ -677,7 +635,7 @@ def main():
         results = _loop_labels()['results']
         if args.output:
             args.output.mkdir(parents=True, exist_ok=True)
-            (args.output / 'native-source.mojo').write_text(SOURCE)
+            (args.output / 'native-source.mojo').write_text(_loop_drivers()['source'])
             (args.output / 'qualification.json').write_text(json.dumps(results, indent=2) + '\n')
         print(_loop_labels()['pass_line'])
 
