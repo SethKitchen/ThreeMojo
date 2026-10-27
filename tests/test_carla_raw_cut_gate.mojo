@@ -9,6 +9,7 @@ from std.testing import TestSuite, assert_raises
 
 from tools.carla_raw_cut_gate import (
     raw_cut_binding,
+    raw_cut_graph,
     raw_cut_digest,
     raw_cut_fixture,
     raw_cut_record,
@@ -54,6 +55,14 @@ def test_an_unbound_successor_is_refused() raises:
         )
     ):
         raw_cut_binding("aa", "bb")
+
+
+def test_a_changed_operation_graph_is_refused() raises:
+    """Different significant token lists fail closed."""
+    with assert_raises(
+        contains="raw cut inverse contract: raw inverse operation graph changed"
+    ):
+        raw_cut_graph("[]", '[[1,"def"]]', "graph")
 
 
 def main() raises:

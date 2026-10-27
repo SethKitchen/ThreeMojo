@@ -9,6 +9,7 @@
     carla_raw_cut_gate --predecessor PATH --sha HEX
     carla_raw_cut_gate --fixture PATH --token HEX
     carla_raw_cut_gate --successor HEX --recorded HEX
+    carla_raw_cut_gate --actual PATH --wanted PATH --part graph|environment|reference
 
 The program checks the texts it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -134,6 +135,26 @@ def raw_cut_binding(successor: String, recorded: String) raises:
         _fail("successor is not bound to accepted predecessor")
 
 
+def raw_cut_graph(actual: String, wanted: String, part: String) raises:
+    """Require two significant token lists to match.
+
+    Args:
+        actual: The canonical token list of the live text.
+        wanted: The canonical token list of the recorded text.
+        part: `graph`, `environment`, or `reference`.
+
+    Raises:
+        Error: The token lists differ.
+    """
+    if actual == wanted:
+        return
+    if part == "graph":
+        _fail("raw inverse operation graph changed")
+    if part == "environment":
+        _fail("environment guard premise changed")
+    _fail("native predecessor reference changed")
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -141,6 +162,7 @@ def _usage():
             "usage: carla_raw_cut_gate --migration PATH [--module PATH]"
             " | --predecessor PATH --sha HEX | --fixture PATH --token HEX"
             " | --successor HEX --recorded HEX"
+            " | --actual PATH --wanted PATH --part graph|environment|reference"
         ),
         file=stderr,
     )
@@ -161,6 +183,9 @@ def main() raises:
     var token = String("")
     var successor = String("")
     var recorded = String("")
+    var actual = String("")
+    var wanted = String("")
+    var part = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -174,6 +199,9 @@ def main() raises:
             or word == "--token"
             or word == "--successor"
             or word == "--recorded"
+            or word == "--actual"
+            or word == "--wanted"
+            or word == "--part"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -192,8 +220,14 @@ def main() raises:
                 token = value
             elif word == "--successor":
                 successor = value
-            else:
+            elif word == "--recorded":
                 recorded = value
+            elif word == "--actual":
+                actual = value
+            elif word == "--wanted":
+                wanted = value
+            else:
+                part = value
             index += 2
             continue
         _usage()
@@ -206,7 +240,23 @@ def main() raises:
         modes += 1
     if successor.byte_length() > 0 or recorded.byte_length() > 0:
         modes += 1
+    if (
+        actual.byte_length() > 0
+        or wanted.byte_length() > 0
+        or part.byte_length() > 0
+    ):
+        modes += 1
     if modes != 1:
+        _usage()
+    if (
+        actual.byte_length() > 0
+        or wanted.byte_length() > 0
+        or part.byte_length() > 0
+    ) and (
+        actual.byte_length() == 0
+        or wanted.byte_length() == 0
+        or (part != "graph" and part != "environment" and part != "reference")
+    ):
         _usage()
     if (successor.byte_length() == 0) != (recorded.byte_length() == 0):
         _usage()
@@ -223,6 +273,11 @@ def main() raises:
     ):
         _usage()
     try:
+        if actual.byte_length() > 0:
+            raw_cut_graph(
+                Path(actual).read_text(), Path(wanted).read_text(), part
+            )
+            return
         if successor.byte_length() > 0:
             raw_cut_binding(successor, recorded)
             return

@@ -24,7 +24,7 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_speed_gate.mojo` checks the speed-parser record, its module token, and its correctness tests.
 
-`tools/carla_raw_cut_gate.mojo` checks the raw-cut inverse record, the dispatch module token, the predecessor digest, the fixture token, and the successor binding.
+`tools/carla_raw_cut_gate.mojo` checks the raw-cut inverse record, the fixture token, the successor binding, and the operation graph.
 
 `tools/carla_runtime_view_gate.mojo` checks the runtime-view record and its bound tests.
 
