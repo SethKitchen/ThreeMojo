@@ -21,7 +21,7 @@ from tests._python_tokens import (
     python_syntax_json,
 )
 from tools._python_float import parse_float
-from tools._python_json import PY_LIST, PyJson, py_equal
+from tools._python_json import PY_LIST, PY_STR, PyJson, py_equal
 
 
 comptime _E_NAME = 1
@@ -584,18 +584,22 @@ struct _Parser:
             return self._add(
                 _E_ANN, "", target, annotation, extra^, 0, 0, present
             )
-        if self._kind_at() == _NAME and self._next_op("="):
-            var name = self._text_at()
-            self.index += 2
-            var target = self._add(_E_NAME, name, 1, -1, self._empty(), 0, 0)
-            var value = self._parse_expr()
-            return self._add(_E_ASSIGN, "", target, value, self._empty(), 0, 0)
-        if self._kind_at() == _NAME and self._next_op("+="):
-            var name = self._text_at()
-            self.index += 2
-            var target = self._add(_E_NAME, name, 1, -1, self._empty(), 0, 0)
-            var value = self._parse_expr()
-            return self._add(_E_AUG, "Add", target, value, self._empty(), 0, 0)
+        if self._kind_at() == _NAME:
+            var saved = self.index
+            var target = self._parse_primary()
+            if self._is_op("=") or self._is_op("+="):
+                var aug = self._is_op("+=")
+                self._mark_store(target)
+                self.index += 1
+                var value = self._parse_expr()
+                if aug:
+                    return self._add(
+                        _E_AUG, "Add", target, value, self._empty(), 0, 0
+                    )
+                return self._add(
+                    _E_ASSIGN, "", target, value, self._empty(), 0, 0
+                )
+            self.index = saved
         if self._is_name("if") or self._is_name("elif"):
             return self._parse_if()
         if self._is_name("for"):
@@ -606,6 +610,12 @@ struct _Parser:
             return self._add(_E_RAISE, "", exc, -1, self._empty(), 0, 0)
         var value = self._parse_expr()
         return self._add(_E_EXPR, "", value, -1, self._empty(), 0, 0)
+
+    def _mark_store(mut self, node: Int):
+        if self.kind[node] == _E_NAME:
+            self.left[node] = 1
+        elif self.kind[node] == _E_ATTR or self.kind[node] == _E_SUB:
+            self.nkw[node] = 1
 
     def _unquote(self, token: String) -> String:
         var data = token.as_bytes()
@@ -927,7 +937,10 @@ struct _Parser:
             doc.append(
                 fields, self._pair(doc, "attr", doc.new_str(self.label[node]))
             )
-            doc.append(fields, self._pair(doc, "ctx", self._load(doc)))
+            var ctx = self._load(doc)
+            if self.nkw[node] == 1:
+                ctx = self._bare(doc, "Store")
+            doc.append(fields, self._pair(doc, "ctx", ctx))
             return self._typed(doc, "Attribute", fields)
         if kind == _E_CALL:
             var fields = doc.new_list()
@@ -976,7 +989,10 @@ struct _Parser:
                 fields,
                 self._pair(doc, "slice", self._json(doc, self.right[node])),
             )
-            doc.append(fields, self._pair(doc, "ctx", self._load(doc)))
+            var ctx = self._load(doc)
+            if self.nkw[node] == 1:
+                ctx = self._bare(doc, "Store")
+            doc.append(fields, self._pair(doc, "ctx", ctx))
             return self._typed(doc, "Subscript", fields)
         if kind == _E_BOOL_OP:
             var fields = doc.new_list()
@@ -1478,6 +1494,84 @@ def sum2_graph_dump(payload: String) raises -> String:
     return plain_function_dump(parsed.text(parsed.at(parsed.root, "source")))
 
 
+def _node_type(doc: PyJson, node: Int) raises -> String:
+    if doc.kind(node) != PY_LIST or doc.length(node) == 0:
+        return ""
+    var head = doc.item(node, 0)
+    if doc.kind(head) != PY_STR:
+        return ""
+    return doc.text(head)
+
+
+def _check_fresh(function_doc: PyJson, producer: String, label: String) raises:
+    var body = _named_field(function_doc, function_doc.root, "body")
+    var loops = List[Int]()
+    var index = 0
+    while index < function_doc.length(body):
+        var statement = function_doc.item(body, index)
+        if _node_type(function_doc, statement) == "While":
+            loops.append(statement)
+        index += 1
+    if len(loops) != 1:
+        raise Error(
+            "optional runtime contract: one original search frontier loop"
+        )
+    var statements = _named_field(function_doc, loops[0], "body")
+    var test = PyJson.parse(expression_dump("work >= 0"))
+    var choice = -1
+    var hits = 0
+    index = 0
+    while index < function_doc.length(statements):
+        var statement = function_doc.item(statements, index)
+        if _node_type(function_doc, statement) == "If":
+            var condition = _named_field(function_doc, statement, "test")
+            if py_equal(function_doc, condition, test, test.root):
+                hits += 1
+                choice = index
+        index += 1
+    if hits != 1 or choice <= 0:
+        raise Error(
+            "optional runtime contract: fresh cell producer must use original"
+            " reference admission"
+        )
+    var work = PyJson.parse(
+        _fragment_statements("var work = _reference_work(road, lo, hi)")
+    )
+    if work.length(work.root) != 1 or not py_equal(
+        function_doc,
+        function_doc.item(statements, choice - 1),
+        work,
+        work.item(work.root, 0),
+    ):
+        raise Error(
+            "optional runtime contract: fresh cell producer must use current"
+            " cell work"
+        )
+    var expected = PyJson.parse(_fragment_statements(producer))
+    var branch = _named_field(
+        function_doc, function_doc.item(statements, choice), "body"
+    )
+    if function_doc.length(branch) < expected.length(expected.root):
+        raise Error(
+            "optional runtime contract: fresh current-cell producer must"
+            " immediately follow original debit"
+        )
+    var cursor = 0
+    while cursor < expected.length(expected.root):
+        if not py_equal(
+            function_doc,
+            function_doc.item(branch, cursor),
+            expected,
+            expected.item(expected.root, cursor),
+        ):
+            raise Error(
+                "optional runtime contract: fresh current-cell producer must"
+                " immediately follow original debit"
+            )
+        cursor += 1
+    _ = label
+
+
 def _named_field(doc: PyJson, node: Int, key: String) raises -> Int:
     var fields = doc.item(node, 1)
     var index = 0
@@ -1559,7 +1653,7 @@ def fragment_count(payload: String) raises -> String:
     Args:
         payload: JSON with `source`, `name`, `kind`, `fragment`, and `label`.
             `kind` is `contains`, `expression`, `sequence`, `first`, `body`,
-            or `equal`.
+            `equal`, or `fresh`.
 
     Returns:
         The decimal count of matches.
@@ -1601,6 +1695,9 @@ def fragment_count(payload: String) raises -> String:
                 count = 1
         elif py_equal(function_doc, statements, rows, rows.root):
             count = 1
+    elif kind == "fresh":
+        _check_fresh(function_doc, fragment, label)
+        count = 1
     elif kind == "equal":
         var other = fragment
         try:

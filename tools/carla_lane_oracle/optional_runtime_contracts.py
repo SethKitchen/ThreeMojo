@@ -334,21 +334,25 @@ def verify_no_containing_model_consumers(root, *, _operation=None):
 
 
 def verify_fresh_producer(run):
-    loops = [node for node in run.body if isinstance(node, ast.While)]
-    require(len(loops) == 1, 'one original search frontier loop')
-    statements = loops[0].body
-    work_test = sampled.dump(ast.parse('work >= 0', mode='eval').body)
-    choices = [i for i, node in enumerate(statements) if isinstance(node, ast.If)
-               and sampled.dump(node.test) == work_test]
-    require(len(choices) == 1 and choices[0] > 0,
-            'fresh cell producer must use original reference admission')
-    index = choices[0]
-    expected_work = _syntax_tree('var work = _reference_work(road, lo, hi)').body[0]
-    require(sampled.dump(statements[index - 1]) == sampled.dump(expected_work),
-            'fresh cell producer must use current cell work')
-    expected = _syntax_tree(FRESH_PRODUCER).body
-    require(sampled.dump(statements[index].body[:len(expected)]) == sampled.dump(expected),
-            'fresh current-cell producer must immediately follow original debit')
+    source = getattr(run, '_runtime_source', None)
+    if source is not None:
+        _fragment_count(source, run._runtime_name, 'fresh', FRESH_PRODUCER, 'fresh')
+    else:
+        loops = [node for node in run.body if isinstance(node, ast.While)]
+        require(len(loops) == 1, 'one original search frontier loop')
+        statements = loops[0].body
+        work_test = sampled.dump(ast.parse('work >= 0', mode='eval').body)
+        choices = [i for i, node in enumerate(statements) if isinstance(node, ast.If)
+                   and sampled.dump(node.test) == work_test]
+        require(len(choices) == 1 and choices[0] > 0,
+                'fresh cell producer must use original reference admission')
+        index = choices[0]
+        expected_work = _syntax_tree('var work = _reference_work(road, lo, hi)').body[0]
+        require(sampled.dump(statements[index - 1]) == sampled.dump(expected_work),
+                'fresh cell producer must use current cell work')
+        expected = _syntax_tree(FRESH_PRODUCER).body
+        require(sampled.dump(statements[index].body[:len(expected)]) == sampled.dump(expected),
+                'fresh current-cell producer must immediately follow original debit')
     for name in ('cached_fast', 'cached_expansion'):
         contains(run, 'var ' + name + ': Optional[Tuple[UInt64, UInt64, _Jet]] = None',
                  'exact expansion memo lifetime is one search invocation')
