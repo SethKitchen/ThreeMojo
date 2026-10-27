@@ -106,6 +106,8 @@ It checks the fresh cell producer after the original debit.
 
 It requires each dispatch debit to precede the optional loop.
 
+It keeps the dispatch setup after the depth refusal.
+
 It derives the stored moment rows in exact arithmetic.
 
 It checks the stored moment table against the derived words.

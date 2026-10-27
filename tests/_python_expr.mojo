@@ -1494,6 +1494,49 @@ def sum2_graph_dump(payload: String) raises -> String:
     return plain_function_dump(parsed.text(parsed.at(parsed.root, "source")))
 
 
+def _check_setup(function_doc: PyJson, fragment: String, label: String) raises:
+    var body = _named_field(function_doc, function_doc.root, "body")
+    var loops = List[Int]()
+    var index = 0
+    while index < function_doc.length(body):
+        if _node_type(function_doc, function_doc.item(body, index)) == "While":
+            loops.append(function_doc.item(body, index))
+        index += 1
+    if len(loops) != 1:
+        raise Error(
+            "optional runtime contract: one original search frontier loop"
+        )
+    var statements = _named_field(function_doc, loops[0], "body")
+    var test = PyJson.parse(expression_dump("not sampled_checked"))
+    var choice = -1
+    var hits = 0
+    index = 0
+    while index < function_doc.length(statements):
+        var statement = function_doc.item(statements, index)
+        if _node_type(function_doc, statement) == "If":
+            var condition = _named_field(function_doc, statement, "test")
+            if py_equal(function_doc, condition, test, test.root):
+                hits += 1
+                choice = index
+        index += 1
+    if hits != 1 or choice <= 0:
+        raise Error(
+            "optional runtime contract: dispatch setup remains deferred in the"
+            " original node"
+        )
+    var rows = PyJson.parse(_fragment_statements(fragment))
+    if rows.length(rows.root) != 1:
+        raise Error("invalid checker fragment: " + label)
+    var found = _count_nodes(
+        function_doc,
+        function_doc.item(statements, choice - 1),
+        rows,
+        rows.item(rows.root, 0),
+    )
+    if found != 1:
+        raise Error("optional runtime contract: " + label)
+
+
 def _check_before_loop(
     function_doc: PyJson, fragment: String, label: String
 ) raises:
@@ -1727,7 +1770,7 @@ def fragment_count(payload: String) raises -> String:
     Args:
         payload: JSON with `source`, `name`, `kind`, `fragment`, and `label`.
             `kind` is `contains`, `expression`, `sequence`, `first`, `body`,
-            `equal`, `fresh`, `before-loop`, or `before-call`.
+            `equal`, `fresh`, `before-loop`, `before-call`, or `setup`.
 
     Returns:
         The decimal count of matches.
@@ -1771,6 +1814,9 @@ def fragment_count(payload: String) raises -> String:
             count = 1
     elif kind == "fresh":
         _check_fresh(function_doc, fragment, label)
+        count = 1
+    elif kind == "setup":
+        _check_setup(function_doc, fragment, label)
         count = 1
     elif kind == "before-loop":
         _check_before_loop(function_doc, fragment, label)

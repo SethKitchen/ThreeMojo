@@ -381,16 +381,23 @@ def verify_search_semantics(run):
              'grouped caller must retain recheck and prepaid original fallback')
     expression(run, '_try_grouped_lane_jet(road, section, lane, lo, hi, certificate.nodes, certificate.terms, max_nodes, max_terms)',
                'one guarded grouped caller edge')
-    while_nodes = [item for item in run.body if isinstance(item, ast.While)]
-    require(len(while_nodes) == 1, 'one original search frontier loop')
-    statements = while_nodes[0].body
-    setup = [i for i, item in enumerate(statements) if isinstance(item, ast.If)
-             and sampled.dump(item.test) == sampled.dump(ast.parse(
-                 'not sampled_checked', mode='eval').body)]
-    require(len(setup) == 1 and setup[0] > 0, 'dispatch setup remains deferred in the original node')
-    preceding = statements[setup[0] - 1]
-    contains(preceding, 'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',
-             'depth refusal precedes dispatch setup')
+    source = getattr(run, '_runtime_source', None)
+    if source is not None:
+        _fragment_count(
+            source, run._runtime_name, 'setup',
+            'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',
+            'depth refusal precedes dispatch setup')
+    else:
+        while_nodes = [item for item in run.body if isinstance(item, ast.While)]
+        require(len(while_nodes) == 1, 'one original search frontier loop')
+        statements = while_nodes[0].body
+        setup = [i for i, item in enumerate(statements) if isinstance(item, ast.If)
+                 and sampled.dump(item.test) == sampled.dump(ast.parse(
+                     'not sampled_checked', mode='eval').body)]
+        require(len(setup) == 1 and setup[0] > 0, 'dispatch setup remains deferred in the original node')
+        preceding = statements[setup[0] - 1]
+        contains(preceding, 'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',
+                 'depth refusal precedes dispatch setup')
     expression(run, 'bitcast[DType.float64](bitcast[DType.uint64](split_at) - UInt64(1))',
                'split predecessor preserves every stored owner station')
 
