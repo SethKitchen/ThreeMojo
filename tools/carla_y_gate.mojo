@@ -15,6 +15,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
+from tools._sha256 import sha256_hex
 
 
 comptime _GROUPED = (
@@ -31,6 +32,9 @@ comptime _GEOMETRY = (
 )
 comptime _SUM2 = (
     "3fbcbb7f6ba0b9120500698665f0419acf6618d8bd34b7e18b9d10896282383d"
+)
+comptime _RECORD_SHA256 = (
+    "4b72cd07de22d61d70c7aa489e566cd25468189b6a60b5e105fa26ea726e6853"
 )
 comptime _PASS = (
     '{"status":"PASS","maximum_accumulator_exponent":947,'
@@ -89,6 +93,35 @@ def y_finiteness(
     return _PASS
 
 
+def y_successor(
+    migration: Span[UInt8, _],
+    before: Span[UInt8, _],
+    after: Span[UInt8, _],
+    before_sha: String,
+    after_sha: String,
+    check_sources: Bool,
+) raises:
+    """Require the grouped Y successor record and its module bytes.
+
+    Args:
+        migration: The successor record bytes.
+        before: The predecessor module bytes. Used when `check_sources` is true.
+        after: The successor module bytes. Used when `check_sources` is true.
+        before_sha: The required predecessor digest.
+        after_sha: The required successor digest.
+        check_sources: Whether to check the two module digests.
+
+    Raises:
+        Error: A digest changed.
+    """
+    if sha256_hex(migration) != _RECORD_SHA256:
+        raise Error("Unreviewed grouped Y successor record")
+    if not check_sources:
+        return
+    if sha256_hex(before) != before_sha or sha256_hex(after) != after_sha:
+        raise Error("Grouped Y complete-module byte identity changed")
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -102,12 +135,21 @@ def _usage():
 
 
 def main() raises:
-    """Check five source files and print the pass record."""
+    """Check five source files and print the pass record.
+
+    Raises:
+        Error: The command is invalid.
+    """
     var grouped = String("")
     var interval = String("")
     var trig = String("")
     var geometry = String("")
     var sum2 = String("")
+    var record = String("")
+    var before = String("")
+    var after = String("")
+    var before_sha = String("")
+    var after_sha = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -118,6 +160,11 @@ def main() raises:
             or word == "--trig"
             or word == "--geometry"
             or word == "--sum2"
+            or word == "--record"
+            or word == "--before"
+            or word == "--after"
+            or word == "--before-sha"
+            or word == "--after-sha"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -130,11 +177,68 @@ def main() raises:
                 trig = value
             elif word == "--geometry":
                 geometry = value
-            else:
+            elif word == "--sum2":
                 sum2 = value
+            elif word == "--record":
+                record = value
+            elif word == "--before":
+                before = value
+            elif word == "--after":
+                after = value
+            elif word == "--before-sha":
+                before_sha = value
+            else:
+                after_sha = value
             index += 2
             continue
         _usage()
+    var sources = (
+        before.byte_length() > 0
+        or after.byte_length() > 0
+        or before_sha.byte_length() > 0
+        or after_sha.byte_length() > 0
+    )
+    if record.byte_length() > 0:
+        if (
+            grouped.byte_length() > 0
+            or interval.byte_length() > 0
+            or trig.byte_length() > 0
+            or geometry.byte_length() > 0
+            or sum2.byte_length() > 0
+            or (
+                sources
+                and (
+                    before.byte_length() == 0
+                    or after.byte_length() == 0
+                    or before_sha.byte_length() == 0
+                    or after_sha.byte_length() == 0
+                )
+            )
+        ):
+            _usage()
+        try:
+            if sources:
+                y_successor(
+                    Path(record).read_bytes(),
+                    Path(before).read_bytes(),
+                    Path(after).read_bytes(),
+                    before_sha,
+                    after_sha,
+                    True,
+                )
+            else:
+                y_successor(
+                    Path(record).read_bytes(),
+                    String("").as_bytes(),
+                    String("").as_bytes(),
+                    "",
+                    "",
+                    False,
+                )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if (
         grouped.byte_length() == 0
         or interval.byte_length() == 0

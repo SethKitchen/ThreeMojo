@@ -87,9 +87,46 @@ RECORD_SHA256 = '4b72cd07de22d61d70c7aa489e566cd25468189b6a60b5e105fa26ea726e685
 PREDECESSOR_TOKEN_SHA256 = 'a8f3beca23c8d6a84d01f5eebecb0a01cd2102aad4e226ed6a782722733a86b7'
 
 
+def _run_record(arguments):
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='y-record-') as directory:
+        folder = Path(directory)
+        files = {}
+        for name, payload in arguments:
+            target = folder / name
+            target.write_bytes(payload)
+            files[name] = str(target)
+        command = ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_y_gate',
+                   '--record', files['record']]
+        if 'before' in files:
+            command.extend(['--before', files['before'], '--after', files['after'],
+                            '--before-sha', arguments[-2][1].decode(),
+                            '--after-sha', arguments[-1][1].decode()])
+        result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
+def _gate_record(payload):
+    _run_record([('record', payload)])
+
+
+def _gate_sources(record, before, after, before_sha, after_sha):
+    _run_record([
+        ('record', record), ('before', before), ('after', after),
+        ('before-sha', before_sha.encode()), ('after-sha', after_sha.encode()),
+    ])
+
+
 def predecessor_text(root, path, *, _operation=None):
     """Verify all actual Y premises before restoring its exact prior module."""
-    import hashlib
 # #333 explicit historical provenance views; current inputs remain operation-owned.
     import json
     root = Path(root)
@@ -99,8 +136,7 @@ def predecessor_text(root, path, *, _operation=None):
     # actual five-file graph must pass before any record can provide text.
     verify(root, _operation=_operation)
     payload = _typed_source.historical_bytes(root, root / RECORD, (root / RECORD).read_bytes(), _operation=_operation)
-    if hashlib.sha256(payload).hexdigest() != RECORD_SHA256:
-        raise ValueError('Unreviewed grouped Y successor record')
+    _gate_record(payload)
     record = json.loads(payload, object_pairs_hook=source_contracts.unique_keys)
     required = {'module', 'predecessor_file_sha256', 'successor_file_sha256',
                 'predecessor_token_sha256', 'successor_token_sha256',
@@ -114,9 +150,7 @@ def predecessor_text(root, path, *, _operation=None):
     after = record['after_complete_module']
     if not isinstance(before, str) or not isinstance(after, str):
         raise ValueError('Grouped Y record must contain complete source text')
-    if (hashlib.sha256(before.encode()).hexdigest() != record['predecessor_file_sha256']
-            or hashlib.sha256(after.encode()).hexdigest() != record['successor_file_sha256']):
-        raise ValueError('Grouped Y complete-module byte identity changed')
+    _gate_sources(payload, before.encode(), after.encode(), record['predecessor_file_sha256'], record['successor_file_sha256'])
     if (record['predecessor_token_sha256'] != PREDECESSOR_TOKEN_SHA256
             or source_contracts.token_sha256(before) != PREDECESSOR_TOKEN_SHA256
             or record['successor_token_sha256'] != EXPECTED[MODULE]

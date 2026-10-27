@@ -225,7 +225,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Grouped table bounds](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_grouped_gate.mojo` checks the grouped-table token digest and the stored node and weight bounds [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Y-finiteness tokens](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_y_gate.mojo` checks the five Y-finiteness token digests [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Y-finiteness tokens](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_y_gate.mojo` checks the five Y-finiteness token digests and the successor record digests [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Speed-parser record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_speed_gate.mojo` checks the speed-parser record, its module token, and its correctness tests [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

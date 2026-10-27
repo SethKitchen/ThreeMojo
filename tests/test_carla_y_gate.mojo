@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_y_gate import y_finiteness
+from tools.carla_y_gate import y_finiteness, y_successor
 
 
 def test_a_changed_module_is_refused() raises:
@@ -24,6 +24,19 @@ def test_a_changed_module_is_refused() raises:
             "def main():\n    pass\n",
             "def main():\n    pass\n",
             "def main():\n    pass\n",
+        )
+
+
+def test_a_changed_successor_record_is_refused() raises:
+    """Bytes that are not the successor record fail closed."""
+    with assert_raises(contains="Unreviewed grouped Y successor record"):
+        y_successor(
+            String("").as_bytes(),
+            String("").as_bytes(),
+            String("").as_bytes(),
+            "",
+            "",
+            False,
         )
 
 
