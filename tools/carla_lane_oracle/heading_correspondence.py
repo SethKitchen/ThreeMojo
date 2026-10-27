@@ -103,8 +103,33 @@ def _heading_result(consumers):
     return json.loads(result.stdout)
 
 
+_CARLA_PACKAGE = None
+
+
+def _carla_package():
+    """Return the CARLA extension package path."""
+    global _CARLA_PACKAGE
+    if _CARLA_PACKAGE is not None:
+        return _CARLA_PACKAGE
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_carla_package'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _CARLA_PACKAGE = result.stdout
+    return _CARLA_PACKAGE
+
+
 def verify(root, *, _operation=None):
-    path = root/'extensions/carla'
+    path = root / _carla_package()
     fresh = _typed_source.historical_text(root, path/'curve_bounds.mojo', source._observe_text(root, 'extensions/carla/curve_bounds.mojo', (path/'curve_bounds.mojo').read_text(), _operation=_operation), _operation=_operation)
     consumers = []
     for filename, name in _consumers().items():

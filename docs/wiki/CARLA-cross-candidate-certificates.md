@@ -121,6 +121,8 @@ It keeps the sampled refusal messages.
 
 It keeps the sampled syntax keywords and generic messages.
 
+It keeps the CARLA package path.
+
 Mojo checks the sampled value copies.
 Ten helpers match their renamed jet sources.
 It names the eight copied helpers and their sampled names.

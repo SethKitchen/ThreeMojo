@@ -62,6 +62,30 @@ def _checkpoints():
 _SUM2_PLAN = None
 
 
+_CARLA_PACKAGE = None
+
+
+def _carla_package():
+    """Return the CARLA extension package path."""
+    global _CARLA_PACKAGE
+    if _CARLA_PACKAGE is not None:
+        return _CARLA_PACKAGE
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_carla_package'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _CARLA_PACKAGE = result.stdout
+    return _CARLA_PACKAGE
+
+
 def _sum2_plan():
     """Return the Sum2 module names, caller comparisons, and helper map."""
     global _SUM2_PLAN
@@ -215,7 +239,7 @@ def verify(root, *, _operation=None):
     helpers = plan['helpers']
     roundoff = helpers['roundoff']
     texts[roundoff] = selection.predecessor_text(
-        root, 'extensions/carla/' + roundoff + '.mojo', _operation=_operation)
+        root, _carla_package() + '/' + roundoff + '.mojo', _operation=_operation)
 
     # The complete lexical contract above retains all keyword-subscripts and
     # decorators. Separately relate the unchanged arithmetic leaf/recurrence

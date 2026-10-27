@@ -224,6 +224,30 @@ def translated(text):
 _SYNTAX_WORDS = None
 
 
+_CARLA_PACKAGE = None
+
+
+def _carla_package():
+    """Return the CARLA extension package path."""
+    global _CARLA_PACKAGE
+    if _CARLA_PACKAGE is not None:
+        return _CARLA_PACKAGE
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_carla_package'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    _CARLA_PACKAGE = result.stdout
+    return _CARLA_PACKAGE
+
+
 def _syntax_words():
     """Return the sampled syntax keywords and the generic messages."""
     global _SYNTAX_WORDS
@@ -392,7 +416,7 @@ def reviewed_reference_tree(text, root=ROOT, *, _operation=None):
         except ModuleNotFoundError:
             from tools.carla_lane_oracle import full_audit_cleanup_contracts as full_audit
         closure = _sampled_closure()
-        text = full_audit.reviewed_text(root, 'extensions/carla/' + closure['reviewed'], text, _operation=_operation)
+        text = full_audit.reviewed_text(root, _carla_package() + '/' + closure['reviewed'], text, _operation=_operation)
     except (ValueError, OSError) as error:
         raise CheckError(_sampled_closure()['reference_changed'] + _sampled_closure()['reviewed'] + ': ' + str(error)) from error
     # The reviewed no-counter-alias successor changes only optional admission.
@@ -623,7 +647,7 @@ def verify(root):
     _operation, owns = audit._operation_enter(root, 'sampled')
     try:
         modules = _input_modules()
-        paths = {name: root/'extensions/carla'/name for name in modules}
+        paths = {name: root / _carla_package() / name for name in modules}
         texts = {name: _typed_source.historical_text(root, path, _typed_source._observe_text(root, (path).relative_to(root).as_posix(), path.read_text(), _operation=_operation), _operation=_operation) for name, path in paths.items()}
         bounds, trig, target = texts[modules[0]], texts[modules[1]], texts[modules[3]]
         # Deliberately conservative closure: imports, aliases, all helper setup,
