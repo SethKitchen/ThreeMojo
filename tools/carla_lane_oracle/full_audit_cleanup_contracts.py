@@ -9,6 +9,7 @@ modified. Every projection is named and follows fresh physical admission.
 """
 import ast
 from contextlib import nullcontext
+from contextvars import ContextVar
 import hashlib
 import importlib.util
 import io
@@ -899,21 +900,20 @@ def _canonical_relative_text(text):
 
 
 # One census reuses directory checks. None means every call checks again.
-_CHECKED_DIRS = None
+# Each thread has its own value, and a new thread starts with None. The
+# token puts back the exact earlier value, so concurrent censuses cannot
+# leave a stale cache behind.
+_CHECKED_DIRS = ContextVar('full_audit_checked_dirs', default=None)
 
 
 def _use_dir_cache():
     """Start a directory cache for one census. Callers restore the old value."""
-    global _CHECKED_DIRS
-    previous = _CHECKED_DIRS
-    _CHECKED_DIRS = set()
-    return previous
+    return _CHECKED_DIRS.set(set())
 
 
 def _restore_dir_cache(previous):
     """Put the directory cache back, including the uncached state."""
-    global _CHECKED_DIRS
-    _CHECKED_DIRS = previous
+    _CHECKED_DIRS.reset(previous)
 
 
 def _regular(root, relative):
@@ -923,7 +923,7 @@ def _regular(root, relative):
     else:
         parts = Path(relative).parts
         require(parts and not Path(relative).is_absolute() and '..' not in parts, 'unsafe input path')
-    checked = _CHECKED_DIRS
+    checked = _CHECKED_DIRS.get()
     if (checked is not None and os.name == 'posix' and type(root) is PosixPath
             and _canonical_relative_text(relative)):
         root_key = os.fspath(root)

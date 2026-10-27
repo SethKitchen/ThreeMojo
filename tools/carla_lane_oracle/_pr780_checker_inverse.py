@@ -787,50 +787,55 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                          '    _plain_seed = '
                                          'canonical(_receipt_seed) if cleanup '
                                          'is None else None\n')))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': 'af301e011ef1edb4e42f4e0e11bf52abc08d5d94f866369d87062edd528d5406',
+ 'full_audit_cleanup_contracts.py': {'after_sha256': '0076eb3bee2fde345949f15025574681e07bc4f35c46b6f533882c5ba9316c20',
                                      'before_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
-                                     'edits': ((56,
-                                                57,
+                                     'edits': ((11,
+                                                12,
+                                                (),
+                                                ('from contextvars import '
+                                                 'ContextVar\n',)),
+                                               (57,
+                                                58,
                                                 (),
                                                 ('        from . import '
                                                  'pr780_source_successor as '
                                                  'pr780_successor\n',)),
-                                               (71,
-                                                72,
+                                               (72,
+                                                73,
                                                 (),
                                                 ('        import '
                                                  'pr780_source_successor as '
                                                  'pr780_successor\n',)),
-                                               (160,
-                                                161,
+                                               (161,
+                                                162,
                                                 (),
                                                 (' '
                                                  "'tools/carla_lane_oracle/pr780_source_successor.py': "
                                                  "'3d3452a0659002ccf4aeca7e4282c2a4686f2df269f62ceb1e9a92d454c97ae5',\n",)),
-                                               (162,
-                                                163,
+                                               (163,
+                                                164,
                                                 (" 'tools/affected.py': "
                                                  "'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',\n",),
                                                 (" 'tools/affected.py': "
                                                  "'dcf533b9cd995902f53578aa93b98a32ca732643ccfa6ab7e30f95fd8b321eb3',\n",)),
-                                               (170,
-                                                171,
+                                               (171,
+                                                172,
                                                 (' '
                                                  "'tools/carla_lane_oracle/source_contracts.py': "
                                                  "'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',\n",),
                                                 (' '
                                                  "'tools/carla_lane_oracle/source_contracts.py': "
                                                  "'f4cf5b03da59b5a5070f9cdf8e26b486d4e1cd965eed172578018619ea788afe',\n",)),
-                                               (250,
-                                                252,
+                                               (251,
+                                                253,
                                                 ('                 '
                                                  "'tools/carla_lane_oracle/pr760_arithmetic_stage.py')\n",),
                                                 ('                 '
                                                  "'tools/carla_lane_oracle/pr760_arithmetic_stage.py',\n",
                                                  '                 '
                                                  "'tools/carla_lane_oracle/pr780_source_successor.py')\n")),
-                                               (675,
-                                                727,
+                                               (676,
+                                                728,
                                                 (),
                                                 ('def _code_equal(left, '
                                                  'right):\n',
@@ -949,8 +954,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  'constant_equal\n',
                                                  '\n',
                                                  '\n')),
-                                               (728,
-                                                733,
+                                               (729,
+                                                734,
                                                 ('    module_code = '
                                                  'compile(raw, filename, '
                                                  "'exec', dont_inherit=True, "
@@ -968,8 +973,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '    '
                                                  '_compiled_functions.last_tree '
                                                  '= tree\n')),
-                                               (751,
-                                                756,
+                                               (752,
+                                                757,
                                                 ('    '
                                                  'collect(ast.parse(raw).body)\n',),
                                                 ('    if '
@@ -981,8 +986,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '        statements = '
                                                  'ast.parse(raw).body\n',
                                                  '    collect(statements)\n')),
-                                               (775,
-                                                777,
+                                               (776,
+                                                778,
                                                 ('require(_code_identity(sys._getframe().f_code) '
                                                  '== _code_identity(compile(\n',
                                                  '        _SELF_RAW, __file__, '
@@ -994,15 +999,15 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '__file__)\n',
                                                  'require(_code_equal(sys._getframe().f_code, '
                                                  '_compiled_functions.last),\n')),
-                                               (779,
-                                                779,
+                                               (780,
+                                                780,
                                                 ('_IMPORT_CODE[str(_SELF_PATH)] '
                                                  '= '
                                                  '_compiled_functions(_SELF_RAW, '
                                                  '__file__)\n',),
                                                 ()),
-                                               (781,
-                                                782,
+                                               (782,
+                                                783,
                                                 ('for _module in (source, '
                                                  "guard, _sibling('affected'), "
                                                  "_sibling('cache_key'), "
@@ -1025,8 +1030,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  'conditioned_cubic, '
                                                  'scaled_float32, pr760_stage, '
                                                  'pr780_successor):\n',)),
-                                               (795,
-                                                796,
+                                               (796,
+                                                797,
                                                 ('            and '
                                                  '_code_identity(_executed) == '
                                                  '_code_identity(compile(_raw, '
@@ -1037,8 +1042,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                 ('            and '
                                                  '_code_equal(_executed, '
                                                  '_compiled_functions.last),\n',)),
-                                               (829,
-                                                840,
+                                               (830,
+                                                841,
                                                 (),
                                                 ('    compare = '
                                                  "globals().get('_code_equal')\n",
@@ -1073,8 +1078,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '    compare = '
                                                  'types.FunctionType(compare_code, '
                                                  'globals())\n')),
-                                               (844,
-                                                845,
+                                               (845,
+                                                846,
                                                 ('               '
                                                  'vars(scaled_float32), '
                                                  'vars(pr760_stage))\n',),
@@ -1082,8 +1087,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  'vars(scaled_float32), '
                                                  'vars(pr760_stage), '
                                                  'vars(pr780_successor))\n',)),
-                                               (865,
-                                                866,
+                                               (866,
+                                                867,
                                                 ('                    '
                                                  'require(actual is not None '
                                                  'and _code_identity(actual) '
@@ -1092,8 +1097,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  'require(actual is not None '
                                                  'and compare(actual, '
                                                  'code),\n',)),
-                                               (872,
-                                                873,
+                                               (873,
+                                                874,
                                                 ('                '
                                                  'require(actual is not None '
                                                  'and _code_identity(actual) '
@@ -1103,18 +1108,28 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  'require(actual is not None '
                                                  'and compare(actual, '
                                                  'expected),\n',)),
-                                               (883,
-                                                884,
+                                               (884,
+                                                885,
                                                 (),
                                                 ('    '
                                                  'pr780_successor.verify_data()\n',)),
-                                               (900,
+                                               (901,
                                                 918,
                                                 (),
                                                 ('# One census reuses '
                                                  'directory checks. None means '
                                                  'every call checks again.\n',
-                                                 '_CHECKED_DIRS = None\n',
+                                                 '# Each thread has its own '
+                                                 'value, and a new thread '
+                                                 'starts with None. The\n',
+                                                 '# token puts back the exact '
+                                                 'earlier value, so concurrent '
+                                                 'censuses cannot\n',
+                                                 '# leave a stale cache '
+                                                 'behind.\n',
+                                                 '_CHECKED_DIRS = '
+                                                 "ContextVar('full_audit_checked_dirs', "
+                                                 'default=None)\n',
                                                  '\n',
                                                  '\n',
                                                  'def _use_dir_cache():\n',
@@ -1122,11 +1137,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  'cache for one census. '
                                                  'Callers restore the old '
                                                  'value."""\n',
-                                                 '    global _CHECKED_DIRS\n',
-                                                 '    previous = '
-                                                 '_CHECKED_DIRS\n',
-                                                 '    _CHECKED_DIRS = set()\n',
-                                                 '    return previous\n',
+                                                 '    return '
+                                                 '_CHECKED_DIRS.set(set())\n',
                                                  '\n',
                                                  '\n',
                                                  'def '
@@ -1134,16 +1146,15 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '    """Put the directory '
                                                  'cache back, including the '
                                                  'uncached state."""\n',
-                                                 '    global _CHECKED_DIRS\n',
-                                                 '    _CHECKED_DIRS = '
-                                                 'previous\n',
+                                                 '    '
+                                                 '_CHECKED_DIRS.reset(previous)\n',
                                                  '\n',
                                                  '\n')),
                                                (925,
                                                 945,
                                                 (),
                                                 ('    checked = '
-                                                 '_CHECKED_DIRS\n',
+                                                 '_CHECKED_DIRS.get()\n',
                                                  '    if (checked is not None '
                                                  "and os.name == 'posix' and "
                                                  'type(root) is PosixPath\n',
@@ -1932,7 +1943,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '60a5ffc3564afb6f59389d4ad14c934ecc4db6bc64431af3efe01e5ed44f9591':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '441a80e05625bf06476c2669f902e329c48d3b4f179e1c8ff296a25d8ea87072':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)

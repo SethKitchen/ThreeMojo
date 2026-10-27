@@ -989,7 +989,9 @@ class BoundedOwnerCurrentControls(unittest.TestCase):
         self.assertNotIn('loaders/xml.mojo', canonical)
         for path in fixtures.WINNER_SHARED_HELPER_SUCCESSORS:
             self.assertEqual(canonical[path], helpers.BEFORE_SHA256[path])
-            raw = (self.root/path).read_bytes()
+            # #792 extended the sky and weather helpers; their PR780 predecessor
+            # is the shared-helper endpoint.
+            raw = cleanup.pr780_successor.predecessor_bytes(path, (self.root/path).read_bytes())
             self.assertEqual(hashlib.sha256(raw).hexdigest(), helpers.AFTER_SHA256[path])
             before = helpers.predecessor_source(path, raw.decode('utf-8'))
             self.assertEqual(hashlib.sha256(before.encode('utf-8')).hexdigest(), canonical[path])
