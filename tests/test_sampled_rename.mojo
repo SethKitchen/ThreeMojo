@@ -11,6 +11,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 from tools._process import run_program
 from tests._python_tokens import (
     decorator_prefix,
+    primitive_aliases,
     project_constant_heading,
     project_lane_value,
     project_reference_value,
@@ -447,6 +448,22 @@ def test_one_function_is_replaced_without_moving_its_neighbors() raises:
         raise Error("neighbor function missing")
     with assert_raises(contains="missing or ambiguous function"):
         _ = replace_function(source, "absent", "def absent():\n    return 1\n")
+
+
+def test_derivative_aliases_keep_their_reviewed_values() raises:
+    """The Jet alias is true and the value alias is false."""
+    var source = (
+        "comptime _Jet = _JetExpression[True]\n"
+        "comptime _ValueJet = _JetExpression[False]\n"
+    )
+    primitive_aliases(source)
+    with assert_raises(contains="actual derivative alias changed: _Jet"):
+        primitive_aliases(
+            "comptime _Jet = _JetExpression[False]\n"
+            "comptime _ValueJet = _JetExpression[False]\n"
+        )
+    with assert_raises(contains="missing or ambiguous actual alias: _Jet"):
+        primitive_aliases("comptime _ValueJet = _JetExpression[False]\n")
 
 
 def main() raises:

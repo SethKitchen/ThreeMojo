@@ -338,6 +338,8 @@ It removes the try-only refusal before the reference graph hash.
 
 It restores the historical envelope helper before that hash.
 
+It checks the Jet and value aliases before the primitive hash.
+
 Mojo checks the live sampled module graphs.
 The trig module keeps its reviewed syntax graph.
 The interval module keeps its reviewed syntax graph.

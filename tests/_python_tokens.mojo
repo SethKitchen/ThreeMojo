@@ -2304,6 +2304,147 @@ def replace_function(
     )
 
 
+def _note_alias(
+    tokens: List[String],
+    mut jet_count: Int,
+    mut value_count: Int,
+    mut jet_ok: Int,
+    mut value_ok: Int,
+):
+    """Count one top-level `_Jet` or `_ValueJet` alias.
+
+    Args:
+        tokens: The statement's code tokens.
+        jet_count: How many `_Jet` aliases have been seen.
+        value_count: How many `_ValueJet` aliases have been seen.
+        jet_ok: Set to 1 when the `_Jet` alias has the reviewed value.
+        value_ok: Set to 1 when the `_ValueJet` alias has the reviewed value.
+    """
+    var start = 0
+    if len(tokens) > 0 and tokens[0] == "comptime":
+        start = 1
+    if start >= len(tokens):
+        return
+    var name = tokens[start]
+    if name != "_Jet" and name != "_ValueJet":
+        return
+    var enabled = "True" if name == "_Jet" else "False"
+    var ok = (
+        len(tokens) == start + 6
+        and tokens[start + 1] == "="
+        and tokens[start + 2] == "_JetExpression"
+        and tokens[start + 3] == "["
+        and tokens[start + 4] == enabled
+        and tokens[start + 5] == "]"
+    )
+    if name == "_Jet":
+        jet_count += 1
+        if ok:
+            jet_ok = 1
+    else:
+        value_count += 1
+        if ok:
+            value_ok = 1
+
+
+def primitive_aliases(source: String) raises:
+    """Require the two reviewed derivative aliases.
+
+    Args:
+        source: Mojo source for the interval module.
+
+    Returns:
+        None. `_Jet` and `_ValueJet` keep their reviewed values.
+
+    Raises:
+        Error: An alias is missing, repeated, or changed.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var current = List[String]()
+    var jet_count = 0
+    var value_count = 0
+    var jet_ok = 0
+    var value_ok = 0
+    var indent = 0
+    var bracket = 0
+    var in_statement = False
+    var nested = False
+    var index = 0
+    while index < len(kinds):
+        var kind = kinds[index]
+        var text = texts[index]
+        if kind == _INDENT:
+            indent += 1
+            if in_statement:
+                nested = True
+        elif kind == _DEDENT:
+            indent -= 1
+        elif text == "(" or text == "[" or text == "{":
+            bracket += 1
+            if indent == 0 and in_statement and not nested:
+                current.append(text)
+        elif text == ")" or text == "]" or text == "}":
+            if bracket > 0:
+                bracket -= 1
+            if indent == 0 and in_statement and not nested:
+                current.append(text)
+        elif (
+            indent == 0
+            and bracket > 0
+            and in_statement
+            and not nested
+            and kind != _NEWLINE
+            and kind != _INDENT
+            and kind != _DEDENT
+        ):
+            current.append(text)
+        elif (
+            kind == _NEWLINE
+            and bracket == 0
+            and indent == 0
+            and in_statement
+            and not nested
+        ):
+            var nxt = index + 1
+            if nxt >= len(kinds) or kinds[nxt] != _INDENT:
+                _note_alias(current, jet_count, value_count, jet_ok, value_ok)
+                current.clear()
+                in_statement = False
+        elif (
+            indent == 0
+            and bracket == 0
+            and kind != _NEWLINE
+            and kind != _INDENT
+            and kind != _DEDENT
+        ):
+            if nested and (text == "elif" or text == "else"):
+                nested = False
+            elif not in_statement or nested:
+                if len(current) > 0:
+                    _note_alias(
+                        current, jet_count, value_count, jet_ok, value_ok
+                    )
+                    current.clear()
+                current.append(text)
+                in_statement = True
+                nested = False
+            else:
+                current.append(text)
+        index += 1
+    if len(current) > 0 and not nested:
+        _note_alias(current, jet_count, value_count, jet_ok, value_ok)
+    if jet_count != 1:
+        raise Error("missing or ambiguous actual alias: _Jet")
+    if not jet_ok:
+        raise Error("actual derivative alias changed: _Jet")
+    if value_count != 1:
+        raise Error("missing or ambiguous actual alias: _ValueJet")
+    if not value_ok:
+        raise Error("actual derivative alias changed: _ValueJet")
+
+
 def _line_end(source: String, start: Int) -> Int:
     """Return the byte after the line that begins at `start`.
 

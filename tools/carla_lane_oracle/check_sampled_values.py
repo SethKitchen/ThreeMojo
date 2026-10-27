@@ -263,14 +263,8 @@ def primitive_graph(text):
     found = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == '_JetExpression']
     require(len(found) == 1, 'unsupported primitive declaration')
     # Actual top-level aliases, not matching text that could live in a comment.
-    for name, enabled in (('_Jet', True), ('_ValueJet', False)):
-        aliases = [n for n in tree.body if isinstance(n, ast.Assign) and
-                   any(isinstance(t, ast.Name) and t.id == name for t in n.targets)]
-        require(len(aliases) == 1 and len(aliases[0].targets) == 1,
-                'missing or ambiguous actual alias: ' + name)
-        expected = ast.parse('_JetExpression[' + str(enabled) + ']', mode='eval').body
-        require(dump(aliases[0].value) == dump(expected),
-                'actual derivative alias changed: ' + name)
+    # The class hash below stays on the Python syntax tree.
+    _sampled_text('--primitive-aliases', text)
     return hashlib.sha256(dump(found[0]).encode()).hexdigest()
 
 
