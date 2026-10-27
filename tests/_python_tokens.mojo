@@ -3672,6 +3672,40 @@ def replace_first(source: String, old: String, new: String) -> String:
     return String(source[byte=0:at]) + new + String(source[byte=end:])
 
 
+def replace_firsts(payload: String) raises -> String:
+    """Replace the first occurrence in each text.
+
+    Args:
+        payload: A JSON list. Each item has `source`, `old`, and `new`.
+
+    Returns:
+        A JSON list of the replaced texts, in the same order.
+
+    Raises:
+        Error: An item is missing a field.
+    """
+    var doc = PyJson.parse(payload)
+    var out = PyJson()
+    var rows = out.new_list()
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        var item = doc.item(doc.root, index)
+        out.append(
+            rows,
+            out.new_str(
+                replace_first(
+                    doc.text(doc.at(item, "source")),
+                    doc.text(doc.at(item, "old")),
+                    doc.text(doc.at(item, "new")),
+                )
+            ),
+        )
+        index += 1
+    out.root = rows
+    return out.dumps()
+
+
 def import_scope_prefix(source: String) -> String:
     """Return the module prefix before the first definition.
 

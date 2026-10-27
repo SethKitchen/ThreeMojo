@@ -21,28 +21,32 @@ def __getattr__(name):
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
-def _replace_first(text, old, new):
-    """Replace the first occurrence of `old` in `text`."""
+def _replace_firsts(items):
+    """Replace the first occurrence in each text."""
+    if not items:
+        return []
+    import json
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='replace-first-') as directory:
-        folder = Path(directory)
-        (folder / 'source.text').write_text(text)
-        (folder / 'old.text').write_text(old)
-        (folder / 'new.text').write_text(new)
+    payload = json.dumps([
+        {'source': source, 'old': old, 'new': new} for source, old, new in items
+    ], separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='replace-firsts-') as directory:
+        record = Path(directory) / 'replacements.json'
+        record.write_text(payload)
         result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--replace-first', str(folder)],
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_replace_firsts',
+             str(record)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return result.stdout
+    return json.loads(result.stdout)
 
 
 def _check_operation(root, operation):
@@ -235,7 +239,7 @@ def verify(root, *, _operation=None):
     labels = _lane_labels()
     pairs = [(current, record['after_source'], labels['successor'])]
     requests = []
-    frozen_expected = []
+    replacements = []
     for item in record['declarations']:
         name = item['name']
         requests.append({'source': record['before_source'], 'name': name, 'owner': []})
@@ -245,10 +249,11 @@ def verify(root, *, _operation=None):
                              _operation=_operation), _operation=_operation)
         reference = labels['reference'] + name
         requests.append({'source': test, 'name': reference, 'owner': []})
-        frozen_expected.append(_replace_first(
+        replacements.append((
             item['before'],
             labels['definition'] + name + labels['call'],
             labels['definition'] + reference + labels['call']))
+    frozen_expected = _replace_firsts(replacements)
     premise_items = []
     for item in record['premises']:
         premise_items.append(item)

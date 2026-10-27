@@ -366,6 +366,8 @@ It accepts one historical lane declaration when the owner is empty and the token
 
 It renames the first frozen lane declaration.
 
+It renames every frozen lane declaration in one check.
+
 It keeps the lane-control labels and the frozen reference prefix.
 
 It keeps the lane-control record digests.
