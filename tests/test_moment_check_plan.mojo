@@ -100,6 +100,37 @@ def test_moment_check_plan_keeps_the_array_order() raises:
     assert_equal(
         doc.text(doc.at(doc.root, "sha_prefix")), "canonical source SHA-256: "
     )
+    assert_equal(
+        doc.text(doc.at(doc.root, "help_check")),
+        "read-only check (the default)",
+    )
+    assert_equal(
+        doc.text(doc.at(doc.root, "help_generate")),
+        "write canonical outputs to output directory",
+    )
+    assert_equal(
+        doc.text(doc.at(doc.root, "help_report")),
+        "explicitly write a JSON report",
+    )
+    assert_equal(
+        doc.text(doc.at(doc.root, "help_output")),
+        (
+            "output directory; otherwise CARLA_LANE_ORACLE_OUTPUT or"
+            " out/carla-lane-oracle"
+        ),
+    )
+    assert_equal(
+        doc.text(doc.at(doc.root, "help_root")),
+        "repository root (default: this script repository)",
+    )
+    assert_equal(
+        doc.text(doc.at(doc.root, "error_check")),
+        "--check is read-only; use --report without --check",
+    )
+    assert_equal(
+        doc.text(doc.at(doc.root, "error_output")),
+        "--output requires --generate or --report",
+    )
 
 
 def main() raises:

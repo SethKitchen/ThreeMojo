@@ -14,7 +14,8 @@ def moment_check_plan() -> String:
     """Return the moment dependency record and the check messages.
 
     Returns:
-        JSON with the record fields, the array names, and the messages.
+        JSON with the record fields, the array names, the messages, and the
+        command texts.
     """
     return (
         '{"group":"stored_arithmetic",'
@@ -42,5 +43,13 @@ def moment_check_plan() -> String:
         + '"output_dir":"out/carla-lane-oracle",'
         + '"pass_line":"PASS: 64 counts, 1408 exact coefficients, 2816 tight'
         ' endpoints, 22528 payload bytes",'
-        + '"sha_prefix":"canonical source SHA-256: "}'
+        + '"sha_prefix":"canonical source SHA-256: ",'
+        + '"help_check":"read-only check (the default)",'
+        + '"help_generate":"write canonical outputs to output directory",'
+        + '"help_report":"explicitly write a JSON report",'
+        + '"help_output":"output directory; otherwise CARLA_LANE_ORACLE_OUTPUT'
+        ' or out/carla-lane-oracle",'
+        + '"help_root":"repository root (default: this script repository)",'
+        + '"error_check":"--check is read-only; use --report without --check",'
+        + '"error_output":"--output requires --generate or --report"}'
     )

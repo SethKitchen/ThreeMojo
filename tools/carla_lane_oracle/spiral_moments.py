@@ -647,18 +647,19 @@ def _cli_failures():
 
 
 def main(argv=None):
+    plan = _moment_plan()
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument('--check', action='store_true', help='read-only check (the default)')
-    mode.add_argument('--generate', action='store_true', help='write canonical outputs to output directory')
-    parser.add_argument('--report', action='store_true', help='explicitly write a JSON report')
-    parser.add_argument('--output', type=Path, help='output directory; otherwise CARLA_LANE_ORACLE_OUTPUT or out/carla-lane-oracle')
-    parser.add_argument('--repo-root', type=Path, default=ROOT, help='repository root (default: this script repository)')
+    mode.add_argument('--check', action='store_true', help=plan['help_check'])
+    mode.add_argument('--generate', action='store_true', help=plan['help_generate'])
+    parser.add_argument('--report', action='store_true', help=plan['help_report'])
+    parser.add_argument('--output', type=Path, help=plan['help_output'])
+    parser.add_argument('--repo-root', type=Path, default=ROOT, help=plan['help_root'])
     args = parser.parse_args(argv)
     if args.check and args.report:
-        parser.error('--check is read-only; use --report without --check')
+        parser.error(plan['error_check'])
     if args.output is not None and not (args.generate or args.report):
-        parser.error('--output requires --generate or --report')
+        parser.error(plan['error_output'])
     root = args.repo_root.resolve()
     try:
         constants, pins = verify_inputs(root)
@@ -666,7 +667,7 @@ def main(argv=None):
         if not args.generate:
             verify_table((root / _table()).read_bytes(), rows)
         report = make_report(root, rows, pins)
-        report_plan = _moment_plan()
+        report_plan = plan
         if args.generate or args.report:
             output = args.output or Path(os.environ.get(report_plan['output_env'],
                                                         str(root / report_plan['output_dir'])))

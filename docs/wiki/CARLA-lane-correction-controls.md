@@ -272,6 +272,8 @@ It keeps the moment report names and the pass line.
 
 It keeps the moment failure prefix.
 
+It keeps the moment command help and the two command errors.
+
 It keeps the KeyError mark and the moment-word prefix.
 
 It writes the canonical stored-moment table source.
