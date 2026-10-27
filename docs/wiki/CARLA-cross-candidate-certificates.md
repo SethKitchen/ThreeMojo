@@ -154,6 +154,8 @@ It checks that call, then drops it before the body comparison.
 The envelope and the roundoff predecessor match their checkpoints.
 A changed graph is refused.
 
+It returns the Sum2 result counts after those caller checks.
+
 One comparison refuses a changed caller graph.
 
 Mojo checks the reviewed Sum2 helper bindings.

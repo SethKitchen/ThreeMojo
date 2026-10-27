@@ -342,6 +342,37 @@ def _require_function(text, name):
         raise ValueError(message)
 
 
+def _sum2_result(projection, guard):
+    """Return the Sum2 correspondence result in historical field order."""
+    import ast
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps(
+        {'projection': projection, 'environment_guard': guard},
+        separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='sum2-result-') as directory:
+        path = Path(directory) / 'result.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sum2_result',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = 'KeyError: '
+        if message.startswith(prefix):
+            raise KeyError(ast.literal_eval(message[len(prefix):])) from None
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def verify(root, *, _operation=None):
     # Lazy import avoids a checker-module cycle; no source is executed.
     if __package__:
@@ -401,9 +432,4 @@ def verify(root, *, _operation=None):
         selected_block(
             texts['curve_bounds'], 'def _spiral_expression[', 'def _sample_index('),
         stored_half_tail(interval))
-    return {'status': 'PASS', 'recurrence_operations': 6, 'correction_additions': 1,
-            'scalar_axes': 2, 'initialization': 'positive zero',
-            'term_count': '5 * pieces', 'bound': 'E + (u + gamma_(n-1)^2) M',
-            'arithmetic_premises': 'nearest rounding, gradual underflow, rounded terms, no reassociation or intermediate overflow',
-            'ideal_projection': projection, 'environment_guard': guard_result,
-            'native_codegen_qualified': False}
+    return _sum2_result(projection, guard_result)
