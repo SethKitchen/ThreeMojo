@@ -114,6 +114,10 @@ It keeps the current dispatch source when the token matches.
 
 It compares each premise text before the predecessor fallback.
 
+It reads every dispatch premise declaration in one check.
+
+It reads every dispatch reference declaration in one check.
+
 It selects the Map seed or the lane predecessor after that comparison.
 
 It keeps the two dispatch sources and the five protected paths.

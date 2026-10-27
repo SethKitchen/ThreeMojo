@@ -365,6 +365,33 @@ def _declaration(text, name, owner):
     return result.stdout
 
 
+def _declarations(items):
+    """Return the declaration texts in the requested order."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    if not items:
+        return []
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(items, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='dispatch-declarations-') as directory:
+        path = Path(directory) / 'declarations.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_declarations',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _premise_fallback(matched, path, name, owner):
     """Return `seed`, `lane`, or `none` for one differing premise."""
     import json
@@ -424,10 +451,18 @@ def verify_premises(root, *, _operation=None):
         _gate_graphs([
             (docs[index * 2], docs[index * 2 + 1], label)
             for index, (_, _, label) in enumerate(prepared)])
+    loaded = []
     for item in record['premise_functions']:
         physical_text = _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation)
         text = _typed_source.historical_text(root, item['path'], physical_text, _operation=_operation)
-        actual = _declaration(text, item['name'], tuple(item['owner']))
+        loaded.append((item, physical_text, text))
+    declared = _declarations([{
+        'source': text,
+        'name': item['name'],
+        'owner': list(item['owner']),
+    } for item, _physical_text, text in loaded])
+    for index, (item, physical_text, _text) in enumerate(loaded):
+        actual = declared[index]
         current_doc, recorded_doc = _significant_documents([actual, item['source']])
         matched = _dispatch_query('--match', {
             'actual': current_doc, 'expected': recorded_doc}) == 'true'
@@ -459,9 +494,17 @@ def verify_premises(root, *, _operation=None):
                 require(False, labels['lane_message'] + str(error))
         require(matched, labels['premise_function'] + item['name'])
     pairs = []
+    references = []
     for item in record['reference_functions']:
-        actual = _declaration(_typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation), item['name'], ())
-        pairs.append((actual, item['token_sha256'],
+        text = _typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation)
+        references.append((item, text))
+    reference_declarations = _declarations([{
+        'source': text,
+        'name': item['name'],
+        'owner': [],
+    } for item, text in references])
+    for index, (item, _text) in enumerate(references):
+        pairs.append((reference_declarations[index], item['token_sha256'],
                       labels['reference'] + item['name']))
     if pairs:
         _gate_tokens(pairs)
