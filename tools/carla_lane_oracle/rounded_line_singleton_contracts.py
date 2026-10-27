@@ -229,6 +229,16 @@ def _same_text(actual, expected):
     return ideal_projection.texts_match(actual, expected)
 
 
+def _texts_match_all(pairs):
+    if not pairs:
+        return []
+    if __package__:
+        from . import ideal_projection
+    else:
+        import ideal_projection
+    return ideal_projection.texts_match_all(pairs)
+
+
 def _selected_minimum(path, name, owner):
     import json
     import os
@@ -424,9 +434,12 @@ def verify_premises(root):
         checked.append((path, actual, item['source'], item['token_sha256']))
     module_docs = _significant_documents(
         [text for _, actual, source, _ in checked for text in (actual, source)])
+    matched_flags = _texts_match_all([
+        (module_docs[index * 2], module_docs[index * 2 + 1])
+        for index in range(len(checked))])
     pending = []
     for index, (path, actual, _, token) in enumerate(checked):
-        if not _same_text(module_docs[index * 2], module_docs[index * 2 + 1]):
+        if not matched_flags[index]:
             pending.append((path, actual, token))
     _verify_dependencies(pending)
     prepared = []

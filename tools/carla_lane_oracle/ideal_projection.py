@@ -1165,19 +1165,17 @@ def require_same_text(actual, expected, message):
     })
 
 
-def texts_match(actual, expected):
-    """Return whether two texts are the same string."""
+def _texts_match_query(payload):
     import os
     import subprocess
     import tempfile
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps(
-        {'actual': actual, 'expected': expected}, separators=(',', ':'))
+    text = json.dumps(payload, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='texts-match-') as directory:
         path = Path(directory) / 'texts.json'
-        path.write_text(payload)
+        path.write_text(text)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_source',
              '--match', str(path)],
@@ -1187,7 +1185,21 @@ def texts_match(actual, expected):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return result.stdout.strip() == 'true'
+    return result.stdout.strip()
+
+
+def texts_match(actual, expected):
+    """Return whether two texts are the same string."""
+    return _texts_match_query({'actual': actual, 'expected': expected}) == 'true'
+
+
+def texts_match_all(pairs):
+    """Return whether each text equals its pair."""
+    if not pairs:
+        return []
+    flags = json.loads(_texts_match_query([
+        {'actual': actual, 'expected': expected} for actual, expected in pairs]))
+    return [flag == 'true' for flag in flags]
 
 
 def normalized_block(text):

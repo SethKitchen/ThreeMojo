@@ -74,6 +74,8 @@ It selects the rounded lane minimum before restoring a changed declaration.
 
 It reads every rounded LINE declaration in one check.
 
+It compares every rounded LINE module text in one check.
+
 It keeps the consumer import scope before the first definition.
 
 It keeps the lane path, the rounded-line path, and the consumer messages.
@@ -97,6 +99,8 @@ It writes that restored pin with two-space indentation.
 It relabels one runtime pin failure when the cause is the reviewed contract error.
 
 `tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the pin digests, the ordered pin pair, and the pin placements.
+
+It compares every coverage-invariant successor digest in one check.
 
 It keeps the four coverage-invariant source paths.
 

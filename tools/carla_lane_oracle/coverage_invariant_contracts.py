@@ -394,17 +394,22 @@ def verify(root, *, _operation=None):
                 from . import ideal_projection
             else:
                 import ideal_projection
+            loaded = []
             for path, item in record['sources'].items():
-                matches = ideal_projection.texts_match(
+                loaded.append((
+                    path,
                     source.token_sha256(_typed_source.historical_text(root, path, full_audit._observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)),
-                    item['after_token_sha256'])
-                if not matches:
+                    item['after_token_sha256']))
+            matched_flags = ideal_projection.texts_match_all([
+                (digest, expected) for _path, digest, expected in loaded])
+            for (path, _digest, expected), matched in zip(loaded, matched_flags):
+                if not matched:
                     if __package__:
                         from . import coverage_followup_contracts as followup
                     else:
                         import coverage_followup_contracts as followup
-                    matches = followup.accepts_predecessor_source(root,path,item['after_token_sha256'], **operation_args)
-                require(matches, _invariant_labels()['successor'] + path)
+                    matched = followup.accepts_predecessor_source(root,path,expected, **operation_args)
+                require(matched, _invariant_labels()['successor'] + path)
             curve.verify(root, **operation_args)
             grouped.verify(root, **operation_args)
             if __package__:
