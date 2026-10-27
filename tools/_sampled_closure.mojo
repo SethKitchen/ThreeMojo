@@ -15,7 +15,8 @@ def sampled_closure() -> String:
 
     Returns:
         JSON with the reference names, the reviewed module, the primitive
-        module, the syntax module, and the two closure groups.
+        module, the syntax module, the two closure groups, and the bounds
+        path.
     """
     return (
         '{"reference_names":["curve_bounds.mojo","curve_trig.mojo","curve_interval.mojo"],'
@@ -34,5 +35,6 @@ def sampled_closure() -> String:
         + '"function":"missing or ambiguous function: ",'
         + '"primitive_declaration":"unsupported primitive declaration",'
         + '"value_gate":"sampled value gate: ",'
-        + '"jet_gate":"sampled jet gate: "}'
+        + '"jet_gate":"sampled jet gate: ",'
+        + '"bounds_path":"extensions/carla/curve_bounds.mojo"}'
     )

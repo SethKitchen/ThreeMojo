@@ -979,19 +979,52 @@ def _try_only_gate(text):
         raise ValueError(message)
 
 
+_SAMPLED_CLOSURE = None
+
+
+def _sampled_closure():
+    """Return the sampled reference names and the closure groups."""
+    global _SAMPLED_CLOSURE
+    if _SAMPLED_CLOSURE is not None:
+        return _SAMPLED_CLOSURE
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sampled_closure'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _SAMPLED_CLOSURE = json.loads(result.stdout)
+    return _SAMPLED_CLOSURE
+
+
+def _reference_refusal():
+    """Return the bounds path and the reference-module refusal."""
+    closure = _sampled_closure()
+    return (
+        closure['bounds_path'],
+        closure['reference_changed'] + closure['reviewed'] + ': ',
+    )
+
+
 def verify_try_only_reference(text, root, _operation=None):
     """Admit the reference module, then check the try-only refusal in Mojo."""
+    bounds, refusal = _reference_refusal()
     try:
         try:
             import full_audit_cleanup_contracts as full_audit
         except ModuleNotFoundError:
             from tools.carla_lane_oracle import full_audit_cleanup_contracts as full_audit
         text = full_audit.reviewed_text(
-            root, 'extensions/carla/curve_bounds.mojo', text, _operation=_operation)
+            root, bounds, text, _operation=_operation)
     except (ValueError, OSError) as error:
-        raise ValueError(
-            'reference module changed; renewed review required: curve_bounds.mojo: '
-            + str(error)) from error
+        raise ValueError(refusal + str(error)) from error
     try:
         try:
             import envelope_budget_contracts as budget
@@ -999,9 +1032,7 @@ def verify_try_only_reference(text, root, _operation=None):
             from tools.carla_lane_oracle import envelope_budget_contracts as budget
         budget.historical_function(text, root=root)
     except ValueError as error:
-        raise ValueError(
-            'reference module changed; renewed review required: curve_bounds.mojo: '
-            + str(error)) from error
+        raise ValueError(refusal + str(error)) from error
     _try_only_gate(text)
 
 

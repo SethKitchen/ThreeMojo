@@ -284,6 +284,8 @@ It checks each operation block and routing text against its pin.
 
 It removes the try-only parameter from one routing declaration.
 
+It keeps the bounds path and the reference refusal.
+
 It reads the current pin value at each coverage transition and writes the historical value.
 
 It returns the kept-token digest and declaration text for the lane-control and Sum2 checks.

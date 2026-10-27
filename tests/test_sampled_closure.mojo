@@ -64,6 +64,10 @@ def test_sampled_reference_names_stay_in_reviewed_order() raises:
         doc.text(doc.at(doc.root, "value_gate")), "sampled value gate: "
     )
     assert_equal(doc.text(doc.at(doc.root, "jet_gate")), "sampled jet gate: ")
+    assert_equal(
+        doc.text(doc.at(doc.root, "bounds_path")),
+        "extensions/carla/curve_bounds.mojo",
+    )
 
 
 def main() raises:
