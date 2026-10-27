@@ -166,20 +166,23 @@ def _mojo_seal_command(root, stage, compiler, flags, mojo, suites=None, *, verif
                commands['seal']]
     if verify:
         command.append(commands['verify'])
-    command += ['--root', str(root), '--build', str(stage),
-                '--compiler', compiler, '--flags', flags, '--mojo', mojo]
+    options = commands['options']
+    command += [options['root'], str(root), options['build'], str(stage),
+                options['compiler'], compiler, options['flags'], flags,
+                options['mojo'], mojo]
     if suites is not None:
-        command += ['--suites', *suites]
+        command += [options['suites'], *suites]
     return command
 
 
 def mojo_begin(root, stage, compiler, flags, mojo, names):
     """Write the generation checkpoint with the Mojo begin tool."""
     commands = _commands()
+    options = commands['options']
     run([commands['shell'], str(ROOT / commands['tool']), mojo, commands['begin'],
-         '--root', str(root), '--build', str(stage),
-         '--compiler', compiler, '--flags', flags, '--mojo', mojo,
-         '--sources', *names])
+         options['root'], str(root), options['build'], str(stage),
+         options['compiler'], compiler, options['flags'], flags,
+         options['mojo'], mojo, options['sources'], *names])
 
 
 def mojo_seal(root, stage, compiler, flags, mojo, suites=None, *, success=True):
@@ -217,13 +220,15 @@ def capture_with_compiler_budget(command, output, capture, *, mojo, loop_proof=N
         deadline = min(deadline, inherited)
     environment = os.environ.copy()
     environment[coverage_io.DEADLINE_ENV] = repr(deadline)
+    options = _commands()['options']
     arguments = [*coverage_io_argv(mojo, _commands()['capture']),
-                 '--out', str(output), '--err', str(capture)]
+                 options['out'], str(output), options['err'], str(capture)]
     if loop_proof is not None:
-        arguments += ['--loop-proof', str(loop_proof), '--loop-proof-root', str(source_root)]
+        arguments += [options['loop_proof'], str(loop_proof),
+                      options['loop_proof_root'], str(source_root)]
     # Do not use an outer SIGKILL timeout: capture owns a separate child group
     # and its existing absolute-deadline watchdog must reap that whole group.
-    return run([*arguments, '--', *command], success=success, env=environment)
+    return run([*arguments, options['separator'], *command], success=success, env=environment)
 
 
 def line_of(fragment):
@@ -280,9 +285,10 @@ def mojo_mask(mojo, stage):
     """Return the masked manifest from the Mojo seal."""
     commands = _commands()
     target = Path(stage) / commands['masked']
+    options = commands['options']
     run([commands['shell'], str(ROOT / commands['tool']), mojo, commands['seal'],
          commands['mask'],
-         '--build', str(stage), '--output', str(target)])
+         options['build'], str(stage), options['output'], str(target)])
     return target.read_bytes()
 
 
@@ -639,9 +645,10 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
 def check_current_generated_include_root(stage, mojo, compiler, flags):
     """Exercise real maintained generation with the complete passthrough layout."""
     commands = _commands()
+    options = commands['options']
     run([commands['shell'], str(ROOT / commands['tool']), mojo,
-         commands['include_root'], '--mojo', mojo, '--stage', str(stage),
-         '--compiler', compiler, '--flags', flags], cwd=ROOT)
+         commands['include_root'], options['mojo'], mojo, options['stage'], str(stage),
+         options['compiler'], compiler, options['flags'], flags], cwd=ROOT)
     owner_result = check_generated_receipt_owner(stage, mojo, compiler, flags)
     labels = _loop_labels()
     require(owner_result == labels['owner'], labels['owner_message'])
@@ -663,11 +670,12 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--mojo', default=str(ROOT / '.venv/bin/mojo'))
-    parser.add_argument('--output', type=Path)
+    options = _commands()['options']
+    parser.add_argument(options['mojo'], default=str(ROOT / '.venv/bin/mojo'))
+    parser.add_argument(options['output'], type=Path)
     args = parser.parse_args()
     mojo = str(Path(args.mojo).resolve())
-    compiler = run([mojo, '--version']).stdout.strip()
+    compiler = run([mojo, options['version']]).stdout.strip()
     commands = _commands()
     flags = commands['flags']
 
@@ -684,7 +692,7 @@ def main():
         print(_loop_labels()['theorems'], current_rows, flush=True)
         require_runtime_alarm()
         run([commands['shell'], str(ROOT / commands['tool']), mojo,
-             commands['fixture'], '--mojo', mojo])
+             commands['fixture'], options['mojo'], mojo])
         results = _loop_labels()['results']
         if args.output:
             args.output.mkdir(parents=True, exist_ok=True)
