@@ -8,6 +8,7 @@
     carla_singleton_gate --migration PATH
     carla_singleton_gate --text PATH --decoded PATH
     carla_singleton_gate --graphs DIR
+    carla_singleton_gate --selector PATH --wanted PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -70,6 +71,20 @@ def singleton_views(text: String, decoded: String) raises:
         _fail("consumer lane source text/bytes disagree")
 
 
+def singleton_path(actual: String, expected: String) raises:
+    """Require the selector predecessor path.
+
+    Args:
+        actual: The path the selector record reports.
+        expected: The path the singleton record requested.
+
+    Raises:
+        Error: The paths disagree.
+    """
+    if actual != expected:
+        _fail("wrong selector predecessor path")
+
+
 def singleton_graphs(directory: String) raises:
     """Require each consumer token list to match its record.
 
@@ -98,6 +113,7 @@ def _usage():
         (
             "usage: carla_singleton_gate --migration PATH"
             " | --text PATH --decoded PATH | --graphs DIR"
+            " | --selector PATH --wanted PATH"
         ),
         file=stderr,
     )
@@ -114,6 +130,8 @@ def main() raises:
     var text = String("")
     var decoded = String("")
     var graphs = String("")
+    var selector = String("")
+    var wanted = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -123,6 +141,8 @@ def main() raises:
             or word == "--text"
             or word == "--decoded"
             or word == "--graphs"
+            or word == "--selector"
+            or word == "--wanted"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -133,8 +153,12 @@ def main() raises:
                 text = value
             elif word == "--decoded":
                 decoded = value
-            else:
+            elif word == "--graphs":
                 graphs = value
+            elif word == "--selector":
+                selector = value
+            else:
+                wanted = value
             index += 2
             continue
         _usage()
@@ -145,7 +169,13 @@ def main() raises:
         modes += 1
     if graphs.byte_length() > 0:
         modes += 1
-    if modes != 1 or (text.byte_length() == 0) != (decoded.byte_length() == 0):
+    if selector.byte_length() > 0 or wanted.byte_length() > 0:
+        modes += 1
+    if (
+        modes != 1
+        or (text.byte_length() == 0) != (decoded.byte_length() == 0)
+        or (selector.byte_length() == 0) != (wanted.byte_length() == 0)
+    ):
         _usage()
     try:
         if graphs.byte_length() > 0:
@@ -153,6 +183,9 @@ def main() raises:
             return
         if text.byte_length() > 0:
             singleton_views(Path(text).read_text(), Path(decoded).read_text())
+            return
+        if selector.byte_length() > 0:
+            singleton_path(Path(selector).read_text(), Path(wanted).read_text())
             return
         singleton_record(Path(migration).read_bytes())
     except error:

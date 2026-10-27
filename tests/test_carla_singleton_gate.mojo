@@ -11,6 +11,7 @@ from std.os import makedirs
 from std.pathlib import Path
 from tools.carla_singleton_gate import (
     singleton_graphs,
+    singleton_path,
     singleton_record,
     singleton_views,
 )
@@ -34,6 +35,19 @@ def test_disagreeing_lane_views_are_refused() raises:
     ):
         singleton_views(
             "def changed():\n    pass\n", "def other():\n    pass\n"
+        )
+
+
+def test_a_changed_selector_path_is_refused() raises:
+    """A selector path that is not the requested path fails closed."""
+    with assert_raises(
+        contains=(
+            "rounded LINE singleton contract: wrong selector predecessor path"
+        )
+    ):
+        singleton_path(
+            "extensions/carla/other.mojo",
+            "extensions/carla/curve_rounded_line.mojo",
         )
 
 

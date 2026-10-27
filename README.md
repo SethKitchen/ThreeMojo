@@ -235,7 +235,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Coverage-followup record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_followup_gate.mojo` checks the coverage-followup record, the pin digests, the ordered pin pair, and the pin placements [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Rounded LINE singleton record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_singleton_gate.mojo` checks the rounded LINE singleton record, the lane text token, and the consumer graphs [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Rounded LINE singleton record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_singleton_gate.mojo` checks the rounded LINE singleton record, the lane text token, the consumer graphs, and the selector path [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Frozen ARC producer record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record, the producer functions, and the arc layout [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
@@ -243,7 +243,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Support and dispatch record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch record, the predecessor edge, and the operation graphs [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Reviewed cleanup record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the stored-word digest, and the successor tokens [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Reviewed cleanup record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the stored-word digest, and successor tokens [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Lane-control record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

@@ -76,6 +76,30 @@ def _gate_views(text, decoded):
         raise ValueError(message)
 
 
+def _gate_selector(actual, expected):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='singleton-path-') as directory:
+        folder = Path(directory)
+        actual_path = folder / 'actual'
+        expected_path = folder / 'expected'
+        actual_path.write_text(actual)
+        expected_path.write_text(expected)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_singleton_gate',
+             '--selector', str(actual_path), '--wanted', str(expected_path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def _gate_graphs(pairs):
     import json
     import os
@@ -119,7 +143,7 @@ def _reviewed_text(root, path, record):
     # Validate the actual complete selector/context/name graph before restoring
     # its exact immediate predecessor. The successor calls read_record only.
     current = successor.verify_premises(root)
-    require(current['path'] == path, 'wrong selector predecessor path')
+    _gate_selector(current['path'], path)
     return current['before_source']
 
 
