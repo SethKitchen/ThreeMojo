@@ -15,10 +15,8 @@ import json
 
 if __package__:
     from . import source_contracts as source
-    from . import ideal_projection
 else:
     import source_contracts as source
-    import ideal_projection
 
 
 _MIGRATION_RECORDS = None
@@ -298,7 +296,7 @@ def reviewed_source(root, path, expected, *, _operation=None):
     text = _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
     labels = _dispatch_labels()
     choice = _dispatch_query('--choice', {
-        'token': ideal_projection.token_sha256(text),
+        'text': text,
         'expected': expected,
         'path': path,
         'dispatch_path': labels['dispatch_path'],

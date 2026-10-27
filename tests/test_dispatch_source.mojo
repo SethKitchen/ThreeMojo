@@ -7,6 +7,7 @@
 
 from std.testing import TestSuite, assert_equal, assert_raises
 
+from tests._python_tokens import token_sha256
 from tools._dispatch_source import reviewed_source_choice, texts_match
 
 
@@ -69,6 +70,19 @@ def test_premise_texts_compare_as_strings() raises:
     )
     assert_equal(texts_match('{"actual":"","expected":""}'), "true")
     assert_equal(texts_match('{"actual":"same","expected":"changed"}'), "false")
+
+
+def test_a_dispatch_source_uses_its_kept_token_digest() raises:
+    """A source is hashed when the payload has no token."""
+    var source = "def f():\n    return 1\n"
+    var digest = token_sha256(source)
+    var payload = (
+        '{"text":"def f():\\n    return 1\\n","expected":"'
+        + digest
+        + '","path":"other.mojo",'
+        + '"dispatch_path":"extensions/carla/curve_sample_dispatch.mojo"}'
+    )
+    assert_equal(reviewed_source_choice(payload), "current")
 
 
 def main() raises:

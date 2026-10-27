@@ -120,6 +120,8 @@ It compares the junction token digest in one check.
 
 It keeps the current dispatch source when the token matches.
 
+It hashes the dispatch source before that choice.
+
 It compares each premise text before the predecessor fallback.
 
 It reads every dispatch premise declaration in one check.

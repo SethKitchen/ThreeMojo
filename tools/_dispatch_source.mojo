@@ -10,14 +10,17 @@ module may restore its predecessor. Premise texts compare as Python
 strings.
 """
 
-from tools._python_json import PyJson
+from tests._python_tokens import token_sha256
+from tools._python_json import MISSING, PyJson
 
 
 def reviewed_source_choice(payload: String) raises -> String:
     """Return whether to keep the current source or restore the predecessor.
 
     Args:
-        payload: JSON with `token`, `expected`, `path`, and `dispatch_path`.
+        payload: JSON with `expected`, `path`, and `dispatch_path`.
+            `token` is the current digest. `text` is hashed when `token`
+            is absent.
 
     Returns:
         `current` when the token matches. `restore` when it does not and
@@ -28,9 +31,13 @@ def reviewed_source_choice(payload: String) raises -> String:
             module.
     """
     var doc = PyJson.parse(payload)
-    if doc.text(doc.at(doc.root, "token")) == doc.text(
-        doc.at(doc.root, "expected")
-    ):
+    var token_node = doc.get(doc.root, "token")
+    var token: String
+    if token_node == MISSING:
+        token = token_sha256(doc.text(doc.at(doc.root, "text")))
+    else:
+        token = doc.text(token_node)
+    if token == doc.text(doc.at(doc.root, "expected")):
         return "current"
     var path = doc.text(doc.at(doc.root, "path"))
     if path == doc.text(doc.at(doc.root, "dispatch_path")):
