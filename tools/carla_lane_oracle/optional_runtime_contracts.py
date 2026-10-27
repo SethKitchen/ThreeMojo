@@ -97,30 +97,6 @@ def body(root, module, name, *, _operation=None):
     return body_from_source(text, name)
 
 
-def _declaration(text, name, owner):
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='declaration-gate-') as directory:
-        source = Path(directory) / 'source.mojo'
-        source.write_text(text)
-        arguments = ['sh', str(root / 'tools' / 'tool.sh'), mojo,
-                     'carla_cleanup_gate', '--declaration', str(source),
-                     '--name', name]
-        for part in owner:
-            arguments.extend(['--owner', part])
-        result = subprocess.run(arguments, capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    return result.stdout
-
-
 def _lexical_directory(flag, texts):
     import json
     import os
@@ -148,19 +124,20 @@ def _lexical_directory(flag, texts):
     return json.loads(result.stdout)
 
 
-def _without_moves(text):
+def _semantic_declaration(text, name):
+    """Return one declaration with postfix move sigils removed."""
     import os
     import subprocess
     import tempfile
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='optional-moves-') as directory:
+    with tempfile.TemporaryDirectory(prefix='semantic-declaration-') as directory:
         source = Path(directory) / 'source.mojo'
         source.write_text(text)
         result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--moves', str(source)],
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_semantic_declaration', str(source), name],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -184,11 +161,10 @@ class _RuntimeFunction:
 
 def body_from_source(text, name):
     """Bind one moved declaration; this grants no source admission."""
-    source = _declaration(text, name, ())
     # The historical AST adapter has no lane-search move arguments. Remove
     # only postfix move sigils before argument delimiters for this semantic
     # view; complete lexical contracts separately retain every move token.
-    return _RuntimeFunction(name, _without_moves(source))
+    return _RuntimeFunction(name, _semantic_declaration(text, name))
 
 
 def _fragment_checks(items):

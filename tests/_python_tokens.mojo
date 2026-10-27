@@ -5788,6 +5788,23 @@ def without_move_sigils(source: String) raises -> String:
     return out
 
 
+def semantic_declaration(source: String, name: String) raises -> String:
+    """Return one declaration with postfix move sigils removed.
+
+    Args:
+        source: The module that declares `name`.
+        name: The function name.
+
+    Returns:
+        The declaration text Python's parser accepts.
+
+    Raises:
+        Error: The function is missing, or a `^` is not a move sigil.
+    """
+    var owners = List[String]()
+    return without_move_sigils(declaration_text(source, name, owners))
+
+
 def token_names(source: String) raises -> List[String]:
     """Return the NAME tokens of `source`, in order.
 

@@ -216,6 +216,8 @@ It keeps the optional-runtime contract messages.
 
 It keeps the ten optional-runtime declaration groups.
 
+It keeps one semantic declaration without move sigils.
+
 It checks the followup room, the recheck room, and the node fee.
 
 Mojo skips hidden and non-production paths, then keeps a file whose text contains a watched name.
