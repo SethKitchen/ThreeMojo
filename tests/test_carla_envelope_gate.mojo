@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_envelope_gate import envelope_record
+from tools.carla_envelope_gate import envelope_record, envelope_token
 
 
 def test_a_changed_record_is_refused() raises:
@@ -16,6 +16,14 @@ def test_a_changed_record_is_refused() raises:
         contains="Unreviewed envelope budget predecessor record"
     ):
         envelope_record(String("").as_bytes())
+
+
+def test_a_changed_admission_token_is_refused() raises:
+    """A source that does not have the recorded token digest fails closed."""
+    with assert_raises(
+        contains="Reviewed budget admission, routing or arithmetic changed"
+    ):
+        envelope_token("def changed():\n    pass\n", "00")
 
 
 def main() raises:

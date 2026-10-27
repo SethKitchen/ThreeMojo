@@ -251,7 +251,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Runtime-boundary record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_runtime_boundary_gate.mojo` checks the runtime-boundary record and its bound tests [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Envelope budget record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Envelope budget record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record and the admission token [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Selection predecessor record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_selection_record_gate.mojo` checks the selection predecessor record and the restored token [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

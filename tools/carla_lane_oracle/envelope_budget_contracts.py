@@ -39,8 +39,7 @@ def verify_text(text, *, root=None, _operation=None):
             checked = full_audit.reviewed_text(actual_root, MODULE, text, _operation=_operation)
         except (ValueError, OSError) as error:
             raise ValueError('Reviewed budget admission, routing or arithmetic changed') from error
-    if source_contracts.token_sha256(checked)!=EXPECTED:
-        raise ValueError('Reviewed budget admission, routing or arithmetic changed')
+    _gate_token(checked, EXPECTED)
     body=sum2_guard_contracts.declaration(text,'_try_lane_envelope_capture',())
     start=body.index('    var at = info_index(')
     end=body.index('    if optional_work > max_terms - terms:')
@@ -66,6 +65,26 @@ def _gate(payload):
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_envelope_gate',
              '--migration', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
+def _gate_token(text, expected):
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='envelope-token-') as directory:
+        target = Path(directory) / 'source.mojo'
+        target.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_envelope_gate',
+             '--source', str(target), '--token', expected],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()

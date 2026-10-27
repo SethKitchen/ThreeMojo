@@ -46,7 +46,7 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_runtime_boundary_gate.mojo` checks the runtime-boundary record and its bound tests.
 
-`tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record.
+`tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record and the admission token.
 
 `tools/carla_selection_record_gate.mojo` checks the selection predecessor record and the restored token.
 
