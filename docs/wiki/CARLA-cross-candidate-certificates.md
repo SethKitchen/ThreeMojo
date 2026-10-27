@@ -340,6 +340,8 @@ It restores the historical envelope helper before that hash.
 
 It checks the Jet and value aliases before the primitive hash.
 
+It slices the stored-half declaration from its marker.
+
 Mojo checks the live sampled module graphs.
 The trig module keeps its reviewed syntax graph.
 The interval module keeps its reviewed syntax graph.

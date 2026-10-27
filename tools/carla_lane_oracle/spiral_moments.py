@@ -385,9 +385,10 @@ def verify_inputs(root):
     require(projection['legacy_sha256'] == ideal_projection.LEGACY_SHA256,
             'historical ideal pin digest changed')
     interval = _typed_source.historical_text(root, root / DEPENDENCIES['paths'][0], (root / DEPENDENCIES['paths'][0]).read_text(encoding='utf-8'))
-    marker = 'def _stored_half['
-    require(interval.count(marker) == 1, 'missing or ambiguous stored-half declaration')
-    helper = interval[interval.index(marker):]
+    try:
+        helper = ideal_projection.stored_half_tail(interval)
+    except ValueError as error:
+        raise CheckError(str(error)) from error
     try:
         result = ideal_projection.verify_projection(
             projection['legacy_normalized_source'], blocks['ideal_spiral'], helper)

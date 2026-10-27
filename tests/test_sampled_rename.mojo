@@ -17,6 +17,7 @@ from tests._python_tokens import (
     project_reference_value,
     project_union_value,
     sampled_top_level,
+    stored_half_tail,
     replace_function,
     strip_try_only_refusal,
 )
@@ -464,6 +465,23 @@ def test_derivative_aliases_keep_their_reviewed_values() raises:
         )
     with assert_raises(contains="missing or ambiguous actual alias: _Jet"):
         primitive_aliases("comptime _ValueJet = _JetExpression[False]\n")
+
+
+def test_the_stored_half_tail_starts_at_the_one_marker() raises:
+    """The suffix begins at the only stored-half declaration."""
+    var source = (
+        "def earlier():\n    return 1\ndef _stored_half[t: T]():\n   "
+        " return 2\n"
+    )
+    assert_equal(
+        stored_half_tail(source), "def _stored_half[t: T]():\n    return 2\n"
+    )
+    with assert_raises(contains="missing or ambiguous stored-half declaration"):
+        _ = stored_half_tail("def other():\n    return 1\n")
+    with assert_raises(contains="missing or ambiguous stored-half declaration"):
+        _ = stored_half_tail(
+            source + "def _stored_half[u: T]():\n    return 3\n"
+        )
 
 
 def main() raises:

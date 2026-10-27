@@ -2304,6 +2304,44 @@ def replace_function(
     )
 
 
+def stored_half_tail(source: String) raises -> String:
+    """Return the source from the one stored-half declaration onward.
+
+    Args:
+        source: Mojo source for the interval module.
+
+    Returns:
+        The suffix that begins at `def _stored_half[`.
+
+    Raises:
+        Error: That declaration is missing or repeated.
+    """
+    var marker = String("def _stored_half[")
+    var data = source.as_bytes()
+    var needle = marker.as_bytes()
+    var count = 0
+    var at = -1
+    var index = 0
+    while index + len(needle) <= len(data):
+        var matched = True
+        var cursor = 0
+        while cursor < len(needle):
+            if data[index + cursor] != needle[cursor]:
+                matched = False
+                break
+            cursor += 1
+        if matched:
+            count += 1
+            if at < 0:
+                at = index
+            index += len(needle)
+        else:
+            index += 1
+    if count != 1:
+        raise Error("missing or ambiguous stored-half declaration")
+    return String(source[byte=at:])
+
+
 def _note_alias(
     tokens: List[String],
     mut jet_count: Int,
