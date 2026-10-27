@@ -21,10 +21,12 @@ it. An environment variable carries the signals that were blocked before
 the first start, and a child gets the signal mask of that first start.
 
 On macOS, `hold_signals` does not use the mask. It adds each signal to a
-`kqueue` and then ignores it. The action of a signal is the same in every
-thread, so no thread can take the default action. The `kqueue` records a
-signal even when the program ignores it, and `take_signal` reads it from
-there. A child gets the first action of each signal back before `execv`.
+`kqueue`, and then gives it a handler that does nothing. The action of a
+signal is the same in every thread, so no thread takes the default action.
+The `kqueue` records the signal, and `take_signal` reads it from there.
+`execv` gives a caught signal its default action back, so a child does not
+inherit the handler. A signal that the program ignored before the hold
+stays ignored.
 
 A child is started with `fork` and `execv`, as Python's `subprocess` does:
 it gets a new session, the other descriptors close, and the program is
@@ -65,10 +67,8 @@ comptime ENOTDIR = 20
 comptime WNOHANG = 1
 """`waitpid` returns at once when the child has not ended."""
 
-comptime _SIG_DFL = 0
-"""The default action of a signal, as a `signal` handler."""
 comptime _SIG_IGN = 1
-"""The action that ignores a signal, as a `signal` handler."""
+"""The handler address that ignores a signal."""
 comptime _EVFILT_SIGNAL = -6
 """The macOS `kqueue` filter that records signals."""
 comptime _EV_ADD = 1
@@ -427,7 +427,8 @@ struct SignalHold(Copyable, Movable):
     var first_blocked: List[Int]
     """The ones that were blocked before the first start."""
     var first_ignored: List[Int]
-    """On macOS, the ones that the program ignored before the hold."""
+    """On macOS, the ones that the program ignored before the hold. They
+    have no handler, and a child inherits that they are ignored."""
     var queue: Int
     """On macOS, the `kqueue` that records `numbers`, or -1."""
     var active: Bool
@@ -452,20 +453,6 @@ struct SignalHold(Copyable, Movable):
             if number not in self.first_blocked:
                 mask.remove(number)
         return mask^
-
-    def reset_actions(self):
-        """Give a child the first action of each held signal, on macOS.
-
-        Call it in the child, between `fork` and `execv`: it allocates
-        nothing. On Linux the hold does not change an action.
-        """
-        comptime if not CompilationTarget.is_linux():
-            if self.active:
-                for number in self.numbers:
-                    if number not in self.first_ignored:
-                        _ = external_call["signal", Int](
-                            c_int(number), _SIG_DFL
-                        )
 
 
 def _executable() -> String:
@@ -499,8 +486,8 @@ def hold_signals(numbers: List[Int]) raises -> SignalHold:
     environment, and replaces itself with `execv`. The second start removes
     the mark and returns. When `execv` fails, the program goes on with the
     signals unblocked, and their default actions apply. On macOS, the
-    program instead ignores the signals and records them in a `kqueue`,
-    and it does not start again.
+    program instead records the signals in a `kqueue` and gives them a
+    handler that does nothing, and it does not start again.
 
     Args:
         numbers: The signals.
@@ -567,10 +554,23 @@ def hold_signals(numbers: List[Int]) raises -> SignalHold:
     return hold^
 
 
-def _queue_signals(mut hold: SignalHold):
-    """Record `hold.numbers` in a new `kqueue`, then ignore them (macOS).
+@export("threemojo_take_no_action")
+def _take_no_action(signal: c_int) abi("C"):
+    """Do nothing when a held signal arrives (macOS).
 
-    A signal is added to the queue before the program ignores it, so a
+    The handler only replaces the default action. `take_signal` reads the
+    signal from the `kqueue`.
+
+    Args:
+        signal: The signal.
+    """
+    pass
+
+
+def _queue_signals(mut hold: SignalHold):
+    """Record `hold.numbers` in a new `kqueue`, then catch them (macOS).
+
+    A signal is added to the queue before the program catches it, so a
     signal between the two steps takes its default action and is not lost.
     When a step fails, the signals keep their default actions.
 
@@ -603,10 +603,16 @@ def _queue_signals(mut hold: SignalHold):
         ):
             close_fd(queue)
             return
+    # A `struct sigaction`: the handler, then the mask and the flags.
+    var action = List[Int64](length=2, fill=0)
     for number in hold.numbers:
-        var before = external_call["signal", Int](c_int(number), _SIG_IGN)
-        if before == _SIG_IGN:
+        _ = external_call["sigaction", c_int](
+            c_int(number), _at(0), _at(Int(action.unsafe_ptr()))
+        )
+        if action[0] == _SIG_IGN:
             hold.first_ignored.append(number)
+        else:
+            _ = external_call["signal", Int](c_int(number), _take_no_action)
     hold.queue = queue
     hold.active = True
 
@@ -811,7 +817,6 @@ def spawn(
         _ = external_call["pthread_sigmask", c_int](
             mask_how_set(), _at(mask.address()), _at(0)
         )
-        hold.reset_actions()
         _close_from(3, pipe[1])
         report[0] = Int32(plan.run())
         _ = external_call["write", Int](
