@@ -312,17 +312,25 @@ def _resolve(path: String) raises -> String:
     var full = path if path.startswith("/") else realpath(".") + "/" + path
     if exists(full):
         return realpath(full)
-    var slash = full.rfind("/")
-    if slash <= 0:
-        return full
-    var parent = String(full[byte=:slash])
-    var name = String(full[byte=slash:])
-    if exists(parent):
-        var real = realpath(parent)
-        if real == "/":
-            return name
-        return real + name
-    return full
+    # Resolve the nearest folder that exists, then add the missing names.
+    # On macOS a temporary folder is under the link `/var`, and a capture
+    # cache can be two names below a folder that exists.
+    var head = full
+    var tail = String()
+    while True:
+        var slash = head.rfind("/")
+        if slash < 0:
+            return full
+        tail = String(head[byte=slash:]) + tail
+        var up = String(head[byte=:slash])
+        head = up
+        if head.byte_length() == 0:
+            return tail
+        if exists(head):
+            var real = realpath(head)
+            if real == "/":
+                return tail
+            return real + tail
 
 
 def _join(base: String, child: String) -> String:

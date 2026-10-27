@@ -14,6 +14,7 @@ from std.testing import TestSuite, assert_equal, assert_not_equal, assert_true
 from tests._tree import tool_mojo
 from tools._process import ProcessResult, run_program
 from tools._python_json import PyJson
+from tools.coverage_loop_begin import _resolve
 
 
 def _text(path: String) raises -> String:
@@ -371,6 +372,43 @@ def test_an_alias_keeps_inside_paths_and_an_external_link_stays_outside() raises
         assert_equal(moved[1], paths[1])
         assert_equal(moved[2], realpath(other))
         assert_not_equal(moved[2], paths[2])
+    finally:
+        _cleanup(parent)
+
+
+def test_a_missing_path_resolves_the_links_above_it() raises:
+    """A path that does not exist resolves as `Path.resolve()` does.
+
+    macOS keeps its temporary folders under the link `/var`, and a capture
+    names its cache before the cache exists.
+    """
+    var parent = mkdtemp(prefix="coverage-resolve-")
+    try:
+        makedirs(parent + "/real")
+        _ = run_program(["ln", "-s", parent + "/real", parent + "/link"], 10)
+        var paths: List[String] = [
+            parent + "/link",
+            parent + "/link/missing",
+            parent + "/link/missing/deeper/cache",
+        ]
+        for path in paths:
+            var python = run_program(
+                [
+                    "python3",
+                    "-c",
+                    "import pathlib, sys; sys.stdout.write("
+                    + "str(pathlib.Path(sys.argv[1]).resolve()))",
+                    path,
+                ],
+                30.0,
+                merge_errors=False,
+            )
+            assert_equal(python.status, 0)
+            assert_equal(_resolve(path), python.output)
+        assert_equal(
+            _resolve(parent + "/link/missing/deeper/cache"),
+            realpath(parent) + "/real/missing/deeper/cache",
+        )
     finally:
         _cleanup(parent)
 
