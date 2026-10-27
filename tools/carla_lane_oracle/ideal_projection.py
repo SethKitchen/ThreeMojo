@@ -372,17 +372,22 @@ def verify_projection(legacy, current, helper_text):
             'expected exactly two historical rate-half commutations')
     # A caller inspecting a complete module supplies its unique actual AST
     # declaration, never a text slice that could select a docstring decoy.
-    current_tree = (copy.deepcopy(current) if isinstance(current, ast.FunctionDef)
-                    else function_tree(current, '_spiral_expression'))
-    require(current_tree.name == '_spiral_expression' and
-            getattr(current_tree, '_mojo_type_parameters', None) ==
-            [('NAME', 'derivatives'), ('OP', ':'), ('NAME', 'Bool')],
-            'changed ideal generic declaration')
+    # String inputs keep the declaration check and skip the Python parse.
     if isinstance(current, str):
+        ideal = _ideal_source(current, '_spiral_expression')
+        require(ideal.startswith('def _spiral_expression ')
+                or ideal.startswith('def _spiral_expression('),
+                'changed ideal generic declaration')
         projected = project_sum2_text(current)
         arguments = projected['arguments']
         right_dump = _projected_dump(projected['source'])
     else:
+        current_tree = (copy.deepcopy(current) if isinstance(current, ast.FunctionDef)
+                        else function_tree(current, '_spiral_expression'))
+        require(current_tree.name == '_spiral_expression' and
+                getattr(current_tree, '_mojo_type_parameters', None) ==
+                [('NAME', 'derivatives'), ('OP', ':'), ('NAME', 'Bool')],
+                'changed ideal generic declaration')
         project = ProjectHalf()
         right = project.visit(project_sum2(current_tree))
         right._mojo_type_parameters = current_tree._mojo_type_parameters

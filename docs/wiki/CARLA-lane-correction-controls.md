@@ -96,6 +96,8 @@ It compares the fresh heading graph with each stored consumer.
 
 It compares the projected ideal spiral with the historical half-rate form.
 
+It checks the ideal spiral declaration before projecting it.
+
 It compares the Sum2 recurrence, leaf, and caller graphs.
 
 It counts one stored statement or expression in a runtime helper.
