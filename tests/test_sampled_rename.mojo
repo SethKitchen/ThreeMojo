@@ -10,6 +10,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._process import run_program
 from tests._python_tokens import (
+    decorator_prefix,
     project_constant_heading,
     project_lane_value,
     project_reference_value,
@@ -380,6 +381,22 @@ def test_lane_projection_wraps_the_arc_and_line_branches() raises:
         raise Error("removed lane statement remained")
     with assert_raises(contains="complete lane dispatcher layout changed"):
         _ = project_lane_value("def demo():\n    return 1\n")
+
+
+def test_decorator_lines_stay_above_their_function() raises:
+    """Only the decorators immediately above the named function are kept."""
+    var source = (
+        "@no_inline\ndef _atan_branch():\n    return 1\ndef other():\n   "
+        " return 2\n"
+    )
+    assert_equal(decorator_prefix(source, "_atan_branch"), "@no_inline\n")
+    assert_equal(decorator_prefix(source, "other"), "")
+    assert_equal(
+        decorator_prefix("@a\n@b(1)\ndef f():\n    return 1\n", "f"),
+        "@a\n@b(1)\n",
+    )
+    with assert_raises(contains="missing or ambiguous function"):
+        _ = decorator_prefix(source, "absent")
 
 
 def main() raises:

@@ -2102,6 +2102,101 @@ def project_lane_value(source: String) raises -> String:
     return signature
 
 
+def decorator_prefix(source: String, name: String) raises -> String:
+    """Return the decorator lines immediately above one top-level function.
+
+    Args:
+        source: Mojo source that contains the function.
+        name: The function name.
+
+    Returns:
+        The decorator text, including its trailing newline, or an empty string.
+
+    Raises:
+        Error: The function is missing or ambiguous.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    var lines = List[Int]()
+    var start_cols = List[Int]()
+    var end_lines = List[Int]()
+    var end_cols = List[Int]()
+    _tokenize_lines(
+        source, kinds, texts, lines, start_cols, end_lines, end_cols
+    )
+    var starts = List[Int]()
+    var firsts = List[String]()
+    var names = List[String]()
+    var indent = 0
+    var bracket = 0
+    var in_statement = False
+    var nested = False
+    var index = 0
+    while index < len(kinds):
+        var kind = kinds[index]
+        var text = texts[index]
+        if kind == _INDENT:
+            indent += 1
+            if in_statement:
+                nested = True
+        elif kind == _DEDENT:
+            indent -= 1
+        elif text == "(" or text == "[" or text == "{":
+            bracket += 1
+        elif text == ")" or text == "]" or text == "}":
+            if bracket > 0:
+                bracket -= 1
+        elif (
+            kind == _NEWLINE
+            and bracket == 0
+            and indent == 0
+            and in_statement
+            and not nested
+        ):
+            var nxt = index + 1
+            if nxt >= len(kinds) or kinds[nxt] != _INDENT:
+                in_statement = False
+        elif (
+            indent == 0
+            and bracket == 0
+            and kind != _NEWLINE
+            and kind != _INDENT
+            and kind != _DEDENT
+        ):
+            if nested and (text == "elif" or text == "else"):
+                nested = False
+            elif not in_statement or nested:
+                var function_name = String("")
+                if (
+                    text == "def"
+                    and index + 1 < len(kinds)
+                    and kinds[index + 1] == _NAME
+                ):
+                    function_name = texts[index + 1]
+                starts.append(_byte_at(source, lines[index], 0))
+                firsts.append(text)
+                names.append(function_name)
+                in_statement = True
+                nested = False
+        index += 1
+    var found = -1
+    var hits = 0
+    var cursor = 0
+    while cursor < len(names):
+        if names[cursor] == name and name.byte_length() > 0:
+            hits += 1
+            found = cursor
+        cursor += 1
+    if hits != 1:
+        raise Error("missing or ambiguous function: " + name)
+    var first = found
+    while first > 0 and firsts[first - 1] == "@":
+        first -= 1
+    if first == found:
+        return String("")
+    return String(source[byte = starts[first] : starts[found]])
+
+
 def _name_byte(byte: UInt8) -> Bool:
     """Return whether `byte` can appear inside an identifier.
 

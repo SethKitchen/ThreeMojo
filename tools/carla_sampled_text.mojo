@@ -16,6 +16,7 @@
     carla_sampled_text --project-union PATH
     carla_sampled_text --project-reference PATH
     carla_sampled_text --project-lane PATH
+    carla_sampled_text --decorators PATH --name NAME
 
 The extract mode prints one top-level function. The rename mode prints the
 declaration with sampled identifiers renamed. The drop mode removes the first
@@ -26,6 +27,7 @@ names and statement kinds. The project-constant mode prints the unknown-interval
 heading. The project-union mode prints the value-only union signature.
 The project-reference mode prints the sampled dispatcher.
 The project-lane mode prints the value-only lane dispatcher.
+The decorators mode prints the lines above one function.
 The caller supplies the source.
 """
 
@@ -39,6 +41,7 @@ from tests._python_expr import (
 )
 from tests._python_tokens import (
     project_constant_heading,
+    decorator_prefix,
     project_lane_value,
     project_reference_value,
     project_union_value,
@@ -64,7 +67,8 @@ def _usage():
             " | --body-roles PATH | --body-dump PATH --index N | --return-elts"
             " PATH --index N | --top-level PATH --name NAMES |"
             " --project-constant PATH | --project-union PATH |"
-            " --project-reference PATH | --project-lane PATH"
+            " --project-reference PATH | --project-lane PATH | --decorators"
+            " PATH --name NAME"
         ),
         file=stderr,
     )
@@ -91,6 +95,7 @@ def main() raises:
     var project_union = String("")
     var project_reference = String("")
     var project_lane = String("")
+    var decorators = String("")
     var name = String("")
     var index_text = String("")
     var arguments = argv()
@@ -112,6 +117,7 @@ def main() raises:
             or word == "--project-union"
             or word == "--project-reference"
             or word == "--project-lane"
+            or word == "--decorators"
             or word == "--index"
             or word == "--name"
         ):
@@ -146,6 +152,8 @@ def main() raises:
                 project_reference = value
             elif word == "--project-lane":
                 project_lane = value
+            elif word == "--decorators":
+                decorators = value
             elif word == "--index":
                 index_text = value
             else:
@@ -182,12 +190,15 @@ def main() raises:
         modes += 1
     if project_lane.byte_length() > 0:
         modes += 1
+    if decorators.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if (
         extract.byte_length() > 0
         or drop.byte_length() > 0
         or top_level.byte_length() > 0
+        or decorators.byte_length() > 0
     ) and name.byte_length() == 0:
         _usage()
     if rename.byte_length() > 0 and name.byte_length() > 0:
@@ -283,6 +294,9 @@ def main() raises:
             return
         if project_lane.byte_length() > 0:
             print(project_lane_value(Path(project_lane).read_text()), end="")
+            return
+        if decorators.byte_length() > 0:
+            print(decorator_prefix(Path(decorators).read_text(), name), end="")
             return
         print(rename_sampled_identifiers(Path(rename).read_text()), end="")
     except error:

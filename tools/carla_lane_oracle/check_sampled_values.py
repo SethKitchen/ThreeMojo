@@ -20,7 +20,6 @@ else:
 
 import argparse
 import ast
-import copy
 import hashlib
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 import io
@@ -388,28 +387,28 @@ def verify(root):
                 # Remove only these two complete assignments, never value/error.
                 for field in ('first', 'second'):
                     new = _sampled_text('--drop-intersection', new, field)
-            expected[NAMES[name]] = new
+            filename = 'curve_trig.mojo' if name.startswith('_atan') else 'curve_bounds.mojo'
+            expected[NAMES[name]] = _sampled_text('--decorators', texts[filename], name) + new
         expected['_uncertain_value'] = '''def _uncertain_value(value: _Interval) -> _ValueJet:
         return _uncertain_expression[False](value)
     '''
         # Project complete parsed declarations, never raw prefix/tail slices.
-        def reference(filename, name):
-            renamed = _sampled_text(
+        def renamed_source(filename, name):
+            return _sampled_text(
                 '--rename', _sampled_text('--extract', texts[filename], name))
-            node = unique_function(syntax_tree(renamed), NAMES.get(name, name))
-            node.decorator_list = copy.deepcopy(unique_function(reference_trees[filename], name).decorator_list)
-            copied = copy.deepcopy(node)
-            copied._mojo_body_roles = json.loads(_sampled_text('--body-roles', renamed))
-            copied._mojo_source = renamed
-            return copied
 
-        old = reference('curve_bounds.mojo', '_union_points')
-        require(old._mojo_body_roles == ['return'], 'union complete body shape changed')
-        expected['_union_value_points'] = unique_function(syntax_tree(_sampled_text(
-            '--project-union', old._mojo_source)), '_union_value_points')
+        def body_roles(text):
+            return json.loads(_sampled_text('--body-roles', text))
 
-        old = reference('curve_bounds.mojo', '_reference_jet_capture')
-        require(old._mojo_body_roles == [
+        def with_decorators(filename, original, text):
+            return _sampled_text('--decorators', texts[filename], original) + text
+
+        old = renamed_source('curve_bounds.mojo', '_union_points')
+        require(body_roles(old) == ['return'], 'union complete body shape changed')
+        expected['_union_value_points'] = _sampled_text('--project-union', old)
+
+        old = renamed_source('curve_bounds.mojo', '_reference_jet_capture')
+        require(body_roles(old) == [
             'assign:d', 'if:geometry.kind == LINE', 'if:geometry.kind == ARC',
             'if:geometry.kind == SPIRAL', 'if:len(geometry.samples) < 2',
             'assign:domain', 'assign:low', 'assign:high', 'if:high - low > 1',
@@ -418,21 +417,21 @@ def verify(root):
         # Remove precisely the three complete non-sampled branches. The new
         # leading guard rejects those kinds; the independent broad wrapper
         # provides the full-Jet SPIRAL bridge. All 12 statements are accounted for.
-        expected['_reference_sampled_value'] = unique_function(syntax_tree(_sampled_text(
-            '--project-reference', old._mojo_source)), '_reference_sampled_value')
+        expected['_reference_sampled_value'] = _sampled_text('--project-reference', old)
 
         for name, filename in (('_sinc_jet', 'curve_trig.mojo'),
                                ('_arc_offset_jet', 'curve_bounds.mojo')):
-            expected[NAMES[name]] = reference(filename, name)
+            expected[NAMES[name]] = with_decorators(
+                filename, name, renamed_source(filename, name))
 
-        constant = reference('curve_trig.mojo', '_constant_sincos_jet')
-        require(constant._mojo_body_roles == ['assign:result',
+        constant = renamed_source('curve_trig.mojo', '_constant_sincos_jet')
+        require(body_roles(constant) == ['assign:result',
             'if:not isfinite(heading) or abs(heading) > _PHASE_LIMIT',
             'assign:zero', 'return'], 'constant heading layout changed')
-        require(_sampled_text('--body-dump', constant._mojo_source, index=2) == dump(ast.parse(
+        require(_sampled_text('--body-dump', constant, index=2) == dump(ast.parse(
             'zero = _Interval.point(0.0)').body[0]),
                 'constant heading derivative constructor changed')
-        elements = json.loads(_sampled_text('--return-elts', constant._mojo_source, index=3))
+        elements = json.loads(_sampled_text('--return-elts', constant, index=3))
         require(isinstance(elements, list) and len(elements) == 2,
                 'constant heading result shape changed')
         for index, _item in enumerate(elements):
@@ -441,11 +440,9 @@ def verify(root):
             require(elements[index] == dump(required), 'constant heading field projection changed')
         # Only derivative constructor fields change. Coefficient enclosure,
         # exact-zero scalar error, result ordering and guards are retained.
-        projected = unique_function(syntax_tree(_sampled_text(
-            '--project-constant', constant._mojo_source)), '_constant_sincos_value')
-        projected.decorator_list = copy.deepcopy(unique_function(
-            reference_trees['curve_trig.mojo'], '_constant_sincos_jet').decorator_list)
-        expected['_constant_sincos_value'] = projected
+        expected['_constant_sincos_value'] = with_decorators(
+            'curve_trig.mojo', '_constant_sincos_jet',
+            _sampled_text('--project-constant', constant))
 
         expected['_sampled_lane_value_bound'] = '''def _sampled_lane_value_bound(
             road: Road, section: Int, lane: Int, low: Float64, high: Float64
@@ -462,14 +459,14 @@ def verify(root):
                         _without_derivatives(full[2]))
             return _lane_value_bound_impl[True](road, section, lane, low, high)
     '''
-        old = reference('curve_bounds.mojo', '_lane_jet_model_proof')
+        old = renamed_source('curve_bounds.mojo', '_lane_jet_model_proof')
         # This private value-only specialization has no cached proof argument.
         # Remove only the exact new refusal branch whose proof condition is false
         # for that route. The full cached-proof caller remains separately bound.
-        require(_sampled_text('--body-dump', old._mojo_source, index=0) == dump(ast.parse("""if proof and not _sum2_supported_environment():
+        require(_sampled_text('--body-dump', old, index=0) == dump(ast.parse("""if proof and not _sum2_supported_environment():
         return _unknown_value_point()
     """).body[0]), 'cached-proof environment refusal changed or moved')
-        require(old._mojo_body_roles[1:] == [
+        require(body_roles(old)[1:] == [
             'assign:geometry_at', 'assign:elevation_at', 'assign:offset_at',
             'if:geometry_at < 0 or elevation_at < 0 or offset_at < 0',
             'if:info_index(road.info.geometries, high) != geometry_at or info_index(road.info.elevations, high) != elevation_at or info_index(road.info.lane_offsets, high) != offset_at',
@@ -480,7 +477,7 @@ def verify(root):
             'annotate:reused', 'if:not capture', 'annotate:point', 'if:reused',
             'assign:trig', 'return',
         ], 'complete lane dispatcher layout changed')
-        require(_sampled_text('--body-dump', old._mojo_source, index=15) == dump(ast.parse('''if capture:
+        require(_sampled_text('--body-dump', old, index=15) == dump(ast.parse('''if capture:
             captured.record_at = geometry_at
             captured.low = low
             captured.high = high
@@ -494,18 +491,12 @@ def verify(root):
         # claim that the proof branch is value-independent. Whole reference
         # modules bind every removed proof statement and its dependencies.
         # 21..22: original trig and final output are retained, without slicing.
-        expected['_lane_value_bound_impl'] = unique_function(syntax_tree(_sampled_text(
-            '--project-lane', old._mojo_source)), '_lane_value_bound_impl')
+        expected['_lane_value_bound_impl'] = _sampled_text('--project-lane', old)
         _sampled_text('--top-level', target, ','.join(sorted(expected)))
         for name, source in expected.items():
-            wanted = (unique_function(syntax_tree(source), name)
-                      if isinstance(source, str) else source)
-            if name in {NAMES[n] for n in COPIES}:
-                original = next(n for n in COPIES if NAMES[n] == name)
-                filename = 'curve_trig.mojo' if original.startswith('_atan') else 'curve_bounds.mojo'
-                # Decorators are part of the actual declarations, not dropped by
-                # a text slice starting at def. Current copies have none.
-                wanted.decorator_list = unique_function(reference_trees[filename], original).decorator_list
+            # Decorators stay on the copied text. The syntax tree is the
+            # independent comparison with the sampled module.
+            wanted = unique_function(syntax_tree(source), name)
             actual = unique_function(target_tree, name)
             require(dump(wanted) == dump(actual),
                     'sampled helper diverged: ' + name)
