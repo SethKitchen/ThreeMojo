@@ -6030,25 +6030,28 @@ EDGES = json.loads(r'''
   },
   "tools/carla_lane_oracle/source_contracts.py": {
     "before_sha256": "ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5",
-    "after_sha256": "6a1f6f3efed801d586976fb3f7acff672d61409fbc61c957b8bf7cd808d3fda8",
+    "after_sha256": "f4cf5b03da59b5a5070f9cdf8e26b486d4e1cd965eed172578018619ea788afe",
     "before_token_sha256": "b22fc35f7dfa59a57136e32d554c6ae85d2790aef00f672adee10883c1067c7e",
-    "after_token_sha256": "943ff2bc5565dbac6d57905f78cf8b8909cbf33f7d85fdfc3580d9c79af6714f",
+    "after_token_sha256": "c0e6fc03c3295433c521f8af4402ed587239a76e965919d1efc031d486c671a8",
     "edits": [
       {
         "start": 51,
-        "stop": 56,
+        "stop": 59,
         "before": [],
         "after": [
           "# Immutable records pin these sources by their digests from before the PR780\n",
           "# successor edit. Their historical view is the exact predecessor.\n",
           "HISTORICAL_SUCCESSOR_PATHS = frozenset((\n",
           "    PREFIX + 'assets.mojo', PREFIX + 'model_cache.mojo', PREFIX + 'sensor.mojo',\n",
-          "    PREFIX + 'speed_limits.mojo', 'tests/test_carla_speed_parser_exceptions.mojo'))\n"
+          "    PREFIX + 'speed_limits.mojo', 'tests/test_carla_speed_parser_exceptions.mojo',\n",
+          "    PREFIX + 'lidar.mojo', PREFIX + 'semantic_lidar.mojo', PREFIX + 'render_post.mojo',\n",
+          "    PREFIX + 'render_sky.mojo', PREFIX + 'render_textures.mojo',\n",
+          "    PREFIX + 'render_weather.mojo'))\n"
         ]
       },
       {
-        "start": 355,
-        "stop": 357,
+        "start": 358,
+        "stop": 360,
         "before": [
           "        if relative not in pr760.CARLA_REGISTRY_PATHS:\n"
         ],
@@ -6058,8 +6061,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 380,
-        "stop": 382,
+        "start": 383,
+        "stop": 385,
         "before": [
           "        if relative not in pr760.CARLA_REGISTRY_PATHS:\n"
         ],
@@ -18561,7 +18564,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tests/test_water.mojo': 'ca06948cf38d875767eac56f56daca02ecf819c7ae528bb245a643fd4609feb5',
  'tests/test_wide_line_workers.mojo': '2df16a02373e7f1145573f41df89971d8483ddddd1439607c114642f3a0e2b09',
  'tests/test_wide_lines.mojo': '7682cd7250d40b39523caf930ca435d094260c23881fcea0a0d37fdc3029ec5f',
- 'tools/carla_lane_oracle/source_contracts.py': 'ea592d2bfda0604aff24f0262afe164980221d12138eaa6e8fd485bc2539095a',
+ 'tools/carla_lane_oracle/source_contracts.py': 'a4d9eedbdb156c45a4edd507002a2fb169e261ff5f0bc1cd4830c559c4dd2685',
  'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': '39c4e84ee8f2480d1039369011c39ab38c055f71fae6bf0962778b558be9b82f',
  'tools/carla_lane_oracle/test_pr760_physical_image.py': 'fb6a9d7dfab6f5d7e620e6d42ae9dd47ee8fbd609e65a2f82a7e56e888734970',
  'tools/carla_lane_oracle/test_pr776_input_successors.py': 'dde181f02ca49efaa0550a5f9d24847dfc618d14113e2caea7aea3422edd7042',
@@ -18571,7 +18574,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tools/carla_lane_oracle/translated_parameter_resolution.py': '1c63297c0097ce50b9f314ba321e7f4d04c009f6379552a84adefb62a2a7f375',
  'tools/compile_fail_expectations.json': 'a15d4cff3d89429312350a4da95604569da83be105f69a0690025904c2cfbc84',
  'tools/test_conditioned_coverage_loops.py': 'f88451e7313fd84cc788847b1c960dc395b98736779a92c81a1d056ff2977520'}
-DATA_SHA256 = '9265def3156e502213df1665162dcc18aa79574dde38fb2f402c7066971fef76'
+DATA_SHA256 = 'f3c989dba24709a0498fd430fe07fcc268e0917f46f1bf30ed6cb3e6711c6d06'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -18587,7 +18590,7 @@ def sha(raw):
 def _index_snapshot():
     """Authenticate and detach the fixed per-edge digests and bound inputs."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == '9265def3156e502213df1665162dcc18aa79574dde38fb2f402c7066971fef76', 'authority digest selector changed')
+    require(DATA_SHA256 == 'f3c989dba24709a0498fd430fe07fcc268e0917f46f1bf30ed6cb3e6711c6d06', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGE_SHA256, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')

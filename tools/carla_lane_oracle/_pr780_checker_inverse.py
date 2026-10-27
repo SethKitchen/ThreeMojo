@@ -332,42 +332,80 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                          '    return dependencies\n')),
                                        (1297,
                                         1318,
-                                        (
-                                         "    filename = Path(__file__).resolve().parent/'carla_lane_oracle/pr760_arithmetic_stage.py'\n",
-                                         '    cleanup.require(Path(stage.__file__).resolve() == filename,\n',
-                                         "                    'density inverse executing origin changed')\n",
-                                         "    compiled = compile(raw, str(filename), 'exec', dont_inherit=True, optimize=sys.flags.optimize)\n",
-                                         '    cleanup.require(cleanup._code_identity(stage._EXECUTED_MODULE_CODE)\n',
-                                         "                    == cleanup._code_identity(compiled), 'density inverse module code changed')\n",
-                                         '    defaults = cleanup._compiled_defaults(raw)\n',
-                                         '    for name, expected in cleanup._compiled_functions(raw, str(filename)).items():\n',
+                                        ('    filename = '
+                                         "Path(__file__).resolve().parent/'carla_lane_oracle/pr760_arithmetic_stage.py'\n",
+                                         '    '
+                                         'cleanup.require(Path(stage.__file__).resolve() '
+                                         '== filename,\n',
+                                         "                    'density inverse "
+                                         "executing origin changed')\n",
+                                         '    compiled = compile(raw, '
+                                         "str(filename), 'exec', "
+                                         'dont_inherit=True, '
+                                         'optimize=sys.flags.optimize)\n',
+                                         '    '
+                                         'cleanup.require(cleanup._code_identity(stage._EXECUTED_MODULE_CODE)\n',
+                                         '                    == '
+                                         'cleanup._code_identity(compiled), '
+                                         "'density inverse module code "
+                                         "changed')\n",
+                                         '    defaults = '
+                                         'cleanup._compiled_defaults(raw)\n',
+                                         '    for name, expected in '
+                                         'cleanup._compiled_functions(raw, '
+                                         'str(filename)).items():\n',
                                          "        if name.startswith('<'):\n",
                                          '            continue\n',
-                                         '        live = getattr(stage, name, None)\n',
-                                        ),
-                                        (
-                                         "    filename = Path(__file__).resolve().parent/'carla_lane_oracle/pr760_arithmetic_stage.py'\n",
-                                         '    cleanup.require(Path(stage.__file__).resolve() == filename,\n',
-                                         "                    'density inverse executing origin changed')\n",
-                                         '    # Import already compiled this source and compared it with the executing\n',
-                                         '    # module. The same bytes and the same code object need no second compile.\n',
+                                         '        live = getattr(stage, name, '
+                                         'None)\n'),
+                                        ('    filename = '
+                                         "Path(__file__).resolve().parent/'carla_lane_oracle/pr760_arithmetic_stage.py'\n",
+                                         '    '
+                                         'cleanup.require(Path(stage.__file__).resolve() '
+                                         '== filename,\n',
+                                         "                    'density inverse "
+                                         "executing origin changed')\n",
+                                         '    # Import already compiled this '
+                                         'source and compared it with the '
+                                         'executing\n',
+                                         '    # module. The same bytes and the '
+                                         'same code object need no second '
+                                         'compile.\n',
                                          '    key = str(filename.resolve())\n',
-                                         '    executed = stage._EXECUTED_MODULE_CODE\n',
-                                         '    if (cleanup._IMPORT_IDENTITIES.get(key) == cleanup.sha(raw)\n',
-                                         '            and cleanup._IMPORT_MODULE_CODE.get(key) is executed):\n',
-                                         '        functions = cleanup._IMPORT_CODE[key]\n',
-                                         '        defaults = cleanup._IMPORT_DEFAULTS[key]\n',
+                                         '    executed = '
+                                         'stage._EXECUTED_MODULE_CODE\n',
+                                         '    if '
+                                         '(cleanup._IMPORT_IDENTITIES.get(key) '
+                                         '== cleanup.sha(raw)\n',
+                                         '            and '
+                                         'cleanup._IMPORT_MODULE_CODE.get(key) '
+                                         'is executed):\n',
+                                         '        functions = '
+                                         'cleanup._IMPORT_CODE[key]\n',
+                                         '        defaults = '
+                                         'cleanup._IMPORT_DEFAULTS[key]\n',
                                          '    else:\n',
-                                         "        compiled = compile(raw, str(filename), 'exec', dont_inherit=True, optimize=sys.flags.optimize)\n",
-                                         '        cleanup.require(cleanup._code_identity(executed)\n',
-                                         "                        == cleanup._code_identity(compiled), 'density inverse module code changed')\n",
-                                         '        functions = cleanup._compiled_functions(raw, str(filename))\n',
-                                         '        defaults = cleanup._compiled_defaults(raw)\n',
-                                         '    for name, expected in functions.items():\n',
+                                         '        compiled = compile(raw, '
+                                         "str(filename), 'exec', "
+                                         'dont_inherit=True, '
+                                         'optimize=sys.flags.optimize)\n',
+                                         '        '
+                                         'cleanup.require(cleanup._code_identity(executed)\n',
+                                         '                        == '
+                                         'cleanup._code_identity(compiled), '
+                                         "'density inverse module code "
+                                         "changed')\n",
+                                         '        functions = '
+                                         'cleanup._compiled_functions(raw, '
+                                         'str(filename))\n',
+                                         '        defaults = '
+                                         'cleanup._compiled_defaults(raw)\n',
+                                         '    for name, expected in '
+                                         'functions.items():\n',
                                          "        if name.startswith('<'):\n",
                                          '            continue\n',
-                                         '        live = getattr(stage, name, None)\n',
-                                        )),
+                                         '        live = getattr(stage, name, '
+                                         'None)\n')),
                                        (1340,
                                         1358,
                                         ('        snapshots = {}\n',),
@@ -665,719 +703,1115 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                          "'--root', '@BUILD@',\n")),
                                        (2618,
                                         2635,
-                                        (
-                                         "        'execution': execution_contract(root, build, inputs, mojo=mojo,\n",
-                                         '                                        capture_cache=capture_cache, suites=suites)}\n',
+                                        ("        'execution': "
+                                         'execution_contract(root, build, '
+                                         'inputs, mojo=mojo,\n',
+                                         '                                        '
+                                         'capture_cache=capture_cache, '
+                                         'suites=suites)}\n',
                                          '    cleanup = None\n',
-                                         "    if importlib.util.find_spec('carla_lane_oracle') is None:\n",
-                                         '        # Standalone plain receipts need no CARLA semantic authority. A known\n',
-                                         '        # reviewed source may never silently become a plain-only receipt.\n',
-                                         '        reviewed_modules = (set(REVIEWED_LOOP_RULES)\n',
-                                         '                            | {row[0] for row in GUARDED_LOOP_RULES}\n',
-                                         "                            | {'renderers/renderer', 'extensions/carla/map',\n",
-                                         "                               DENSITY_SOURCE.removesuffix('.mojo')})\n",
-                                         "        if reviewed_modules & {name.removesuffix('.mojo') for name in generation['modules']}:\n",
-                                         "            raise ValueError('Reviewed loop authority is unavailable')\n",
+                                         '    if '
+                                         "importlib.util.find_spec('carla_lane_oracle') "
+                                         'is None:\n',
+                                         '        # Standalone plain receipts '
+                                         'need no CARLA semantic authority. A '
+                                         'known\n',
+                                         '        # reviewed source may never '
+                                         'silently become a plain-only '
+                                         'receipt.\n',
+                                         '        reviewed_modules = '
+                                         '(set(REVIEWED_LOOP_RULES)\n',
+                                         '                            | '
+                                         '{row[0] for row in '
+                                         'GUARDED_LOOP_RULES}\n',
+                                         '                            | '
+                                         "{'renderers/renderer', "
+                                         "'extensions/carla/map',\n",
+                                         '                               '
+                                         "DENSITY_SOURCE.removesuffix('.mojo')})\n",
+                                         '        if reviewed_modules & '
+                                         "{name.removesuffix('.mojo') for name "
+                                         "in generation['modules']}:\n",
+                                         '            raise '
+                                         "ValueError('Reviewed loop authority "
+                                         "is unavailable')\n",
                                          '    else:\n',
-                                         '        # A present but broken authority installation is an error, not fallback.\n',
-                                         '        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup\n',
-                                         '    _plain_seed = canonical(_receipt_seed) if cleanup is None else None\n',
-                                        ),
-                                        (
-                                         "        'execution': execution_contract(root, build, inputs, mojo=mojo,\n",
-                                         '                                        capture_cache=capture_cache, suites=suites)}\n',
+                                         '        # A present but broken '
+                                         'authority installation is an error, '
+                                         'not fallback.\n',
+                                         '        from carla_lane_oracle '
+                                         'import full_audit_cleanup_contracts '
+                                         'as cleanup\n',
+                                         '    _plain_seed = '
+                                         'canonical(_receipt_seed) if cleanup '
+                                         'is None else None\n'),
+                                        ("        'execution': "
+                                         'execution_contract(root, build, '
+                                         'inputs, mojo=mojo,\n',
+                                         '                                        '
+                                         'capture_cache=capture_cache, '
+                                         'suites=suites)}\n',
                                          '    cleanup = None\n',
-                                         '    # Standalone plain receipts need no CARLA semantic authority. A known\n',
-                                         '    # reviewed source may never silently become a plain-only receipt.\n',
-                                         '    reviewed_modules = (set(REVIEWED_LOOP_RULES)\n',
-                                         '                        | {row[0] for row in GUARDED_LOOP_RULES}\n',
-                                         "                        | {'renderers/renderer', 'extensions/carla/map',\n",
-                                         "                           DENSITY_SOURCE.removesuffix('.mojo')})\n",
-                                         '    needs_authority = bool(reviewed_modules & {\n',
-                                         "        name.removesuffix('.mojo') for name in generation['modules']})\n",
-                                         "    if needs_authority and importlib.util.find_spec('carla_lane_oracle') is None:\n",
-                                         "        raise ValueError('Reviewed loop authority is unavailable')\n",
+                                         '    # Standalone plain receipts need '
+                                         'no CARLA semantic authority. A '
+                                         'known\n',
+                                         '    # reviewed source may never '
+                                         'silently become a plain-only '
+                                         'receipt.\n',
+                                         '    reviewed_modules = '
+                                         '(set(REVIEWED_LOOP_RULES)\n',
+                                         '                        | {row[0] '
+                                         'for row in GUARDED_LOOP_RULES}\n',
+                                         '                        | '
+                                         "{'renderers/renderer', "
+                                         "'extensions/carla/map',\n",
+                                         '                           '
+                                         "DENSITY_SOURCE.removesuffix('.mojo')})\n",
+                                         '    needs_authority = '
+                                         'bool(reviewed_modules & {\n',
+                                         "        name.removesuffix('.mojo') "
+                                         'for name in '
+                                         "generation['modules']})\n",
+                                         '    if needs_authority and '
+                                         "importlib.util.find_spec('carla_lane_oracle') "
+                                         'is None:\n',
+                                         "        raise ValueError('Reviewed "
+                                         "loop authority is unavailable')\n",
                                          '    if needs_authority:\n',
-                                         '        # A present but broken authority installation is an error, not fallback.\n',
-                                         '        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup\n',
-                                         '    _plain_seed = canonical(_receipt_seed) if cleanup is None else None\n',
-                                        )))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': '1f6613c7e4ae7fa33521574348fc887394d4bb74a4654b0902dd39fb1ad2fda0',
+                                         '        # A present but broken '
+                                         'authority installation is an error, '
+                                         'not fallback.\n',
+                                         '        from carla_lane_oracle '
+                                         'import full_audit_cleanup_contracts '
+                                         'as cleanup\n',
+                                         '    _plain_seed = '
+                                         'canonical(_receipt_seed) if cleanup '
+                                         'is None else None\n')))},
+ 'full_audit_cleanup_contracts.py': {'after_sha256': 'aa350af69e75bea2c8ba6343c764a7a49ac53919a8ed0b74ad32cf61074f1a8f',
                                      'before_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
-                                     'edits': (
-                                               (56,
+                                     'edits': ((56,
                                                 57,
                                                 (),
-                                                (
-                                                 '        from . import pr780_source_successor as pr780_successor\n',
-                                                )),
+                                                ('        from . import '
+                                                 'pr780_source_successor as '
+                                                 'pr780_successor\n',)),
                                                (71,
                                                 72,
                                                 (),
-                                                (
-                                                 '        import pr780_source_successor as pr780_successor\n',
-                                                )),
+                                                ('        import '
+                                                 'pr780_source_successor as '
+                                                 'pr780_successor\n',)),
                                                (160,
                                                 161,
                                                 (),
-                                                (
-                                                 " 'tools/carla_lane_oracle/pr780_source_successor.py': 'bcdd006aac22822fe43261b3d50279c1623942520c39ea5dbc6956fbec7336fe',\n",
-                                                )),
+                                                (' '
+                                                 "'tools/carla_lane_oracle/pr780_source_successor.py': "
+                                                 "'33ceab36b9d2d29730724c19fd37b50043c10473defcb662d36f6ca85b9d05e9',\n",)),
                                                (162,
                                                 163,
-                                                (
-                                                 " 'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',\n",
-                                                ),
-                                                (
-                                                 " 'tools/affected.py': 'dcf533b9cd995902f53578aa93b98a32ca732643ccfa6ab7e30f95fd8b321eb3',\n",
-                                                )),
+                                                (" 'tools/affected.py': "
+                                                 "'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',\n",),
+                                                (" 'tools/affected.py': "
+                                                 "'dcf533b9cd995902f53578aa93b98a32ca732643ccfa6ab7e30f95fd8b321eb3',\n",)),
                                                (170,
                                                 171,
-                                                (
-                                                 " 'tools/carla_lane_oracle/source_contracts.py': 'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',\n",
-                                                ),
-                                                (
-                                                 " 'tools/carla_lane_oracle/source_contracts.py': '6a1f6f3efed801d586976fb3f7acff672d61409fbc61c957b8bf7cd808d3fda8',\n",
-                                                )),
+                                                (' '
+                                                 "'tools/carla_lane_oracle/source_contracts.py': "
+                                                 "'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',\n",),
+                                                (' '
+                                                 "'tools/carla_lane_oracle/source_contracts.py': "
+                                                 "'f4cf5b03da59b5a5070f9cdf8e26b486d4e1cd965eed172578018619ea788afe',\n",)),
                                                (250,
                                                 252,
-                                                (
-                                                 "                 'tools/carla_lane_oracle/pr760_arithmetic_stage.py')\n",
-                                                ),
-                                                (
-                                                 "                 'tools/carla_lane_oracle/pr760_arithmetic_stage.py',\n",
-                                                 "                 'tools/carla_lane_oracle/pr780_source_successor.py')\n",
-                                                )),
+                                                ('                 '
+                                                 "'tools/carla_lane_oracle/pr760_arithmetic_stage.py')\n",),
+                                                ('                 '
+                                                 "'tools/carla_lane_oracle/pr760_arithmetic_stage.py',\n",
+                                                 '                 '
+                                                 "'tools/carla_lane_oracle/pr780_source_successor.py')\n")),
                                                (675,
                                                 727,
                                                 (),
-                                                (
-                                                 'def _code_equal(left, right):\n',
-                                                 '    """Compare complete code data without building two recursive images."""\n',
-                                                 '    def constant_equal(first, second):\n',
+                                                ('def _code_equal(left, '
+                                                 'right):\n',
+                                                 '    """Compare complete code '
+                                                 'data without building two '
+                                                 'recursive images."""\n',
+                                                 '    def '
+                                                 'constant_equal(first, '
+                                                 'second):\n',
                                                  '        kind = type(first)\n',
-                                                 '        if kind is not type(second):\n',
-                                                 '            # Both sides must still reject unsupported data after a mismatch.\n',
-                                                 '            return _code_constant(first) == _code_constant(second)\n',
-                                                 '        if kind is types.CodeType:\n',
-                                                 '            return code_equal(first, second)\n',
+                                                 '        if kind is not '
+                                                 'type(second):\n',
+                                                 '            # Both sides '
+                                                 'must still reject '
+                                                 'unsupported data after a '
+                                                 'mismatch.\n',
+                                                 '            return '
+                                                 '_code_constant(first) == '
+                                                 '_code_constant(second)\n',
+                                                 '        if kind is '
+                                                 'types.CodeType:\n',
+                                                 '            return '
+                                                 'code_equal(first, second)\n',
                                                  '        if kind is tuple:\n',
-                                                 '            if len(first) != len(second):\n',
-                                                 '                return _code_constant(first) == _code_constant(second)\n',
+                                                 '            if len(first) != '
+                                                 'len(second):\n',
+                                                 '                return '
+                                                 '_code_constant(first) == '
+                                                 '_code_constant(second)\n',
                                                  '            equal = True\n',
-                                                 '            for one, two in zip(first, second, strict=True):\n',
-                                                 '                equal = constant_equal(one, two) and equal\n',
+                                                 '            for one, two in '
+                                                 'zip(first, second, '
+                                                 'strict=True):\n',
+                                                 '                equal = '
+                                                 'constant_equal(one, two) and '
+                                                 'equal\n',
                                                  '            return equal\n',
-                                                 '        if kind is frozenset:\n',
-                                                 '            # Preserve typed elements, float bits and canonical NaN collapse.\n',
-                                                 '            return _code_constant(first) == _code_constant(second)\n',
+                                                 '        if kind is '
+                                                 'frozenset:\n',
+                                                 '            # Preserve typed '
+                                                 'elements, float bits and '
+                                                 'canonical NaN collapse.\n',
+                                                 '            return '
+                                                 '_code_constant(first) == '
+                                                 '_code_constant(second)\n',
                                                  '        if kind is float:\n',
-                                                 "            return struct.pack('>d', first) == struct.pack('>d', second)\n",
-                                                 '        if kind is complex:\n',
-                                                 "            return (struct.pack('>dd', first.real, first.imag)\n",
-                                                 "                    == struct.pack('>dd', second.real, second.imag))\n",
-                                                 '        if first is Ellipsis:\n',
+                                                 '            return '
+                                                 "struct.pack('>d', first) == "
+                                                 "struct.pack('>d', second)\n",
+                                                 '        if kind is '
+                                                 'complex:\n',
+                                                 '            return '
+                                                 "(struct.pack('>dd', "
+                                                 'first.real, first.imag)\n',
+                                                 '                    == '
+                                                 "struct.pack('>dd', "
+                                                 'second.real, second.imag))\n',
+                                                 '        if first is '
+                                                 'Ellipsis:\n',
                                                  '            return True\n',
                                                  '        if kind is slice:\n',
-                                                 '            return constant_equal((first.start, first.stop, first.step),\n',
-                                                 '                                  (second.start, second.stop, second.step))\n',
-                                                 '        if kind is str or kind is bytes or kind is int or kind is bool or kind is type(None):\n',
-                                                 '            return first == second\n',
-                                                 '        return _code_constant(first) == _code_constant(second)\n',
+                                                 '            return '
+                                                 'constant_equal((first.start, '
+                                                 'first.stop, first.step),\n',
+                                                 '                                  '
+                                                 '(second.start, second.stop, '
+                                                 'second.step))\n',
+                                                 '        if kind is str or '
+                                                 'kind is bytes or kind is int '
+                                                 'or kind is bool or kind is '
+                                                 'type(None):\n',
+                                                 '            return first == '
+                                                 'second\n',
+                                                 '        return '
+                                                 '_code_constant(first) == '
+                                                 '_code_constant(second)\n',
                                                  '\n',
-                                                 '    def code_equal(first, second):\n',
-                                                 '        if type(first) is not types.CodeType or type(second) is not types.CodeType:\n',
-                                                 '            return _code_identity(first) == _code_identity(second)\n',
+                                                 '    def code_equal(first, '
+                                                 'second):\n',
+                                                 '        if type(first) is '
+                                                 'not types.CodeType or '
+                                                 'type(second) is not '
+                                                 'types.CodeType:\n',
+                                                 '            return '
+                                                 '_code_identity(first) == '
+                                                 '_code_identity(second)\n',
                                                  '        equal = True\n',
-                                                 '        for name in sorted(dir(first)):\n',
-                                                 "            if name.startswith('co_') and name != 'co_filename':\n",
-                                                 '                value = getattr(first, name)\n',
-                                                 '                if not callable(value):\n',
-                                                 '                    # Visit every field: later unsupported constants must fail.\n',
-                                                 '                    equal = constant_equal(value, getattr(second, name)) and equal\n',
+                                                 '        for name in '
+                                                 'sorted(dir(first)):\n',
+                                                 '            if '
+                                                 "name.startswith('co_') and "
+                                                 "name != 'co_filename':\n",
+                                                 '                value = '
+                                                 'getattr(first, name)\n',
+                                                 '                if not '
+                                                 'callable(value):\n',
+                                                 '                    # Visit '
+                                                 'every field: later '
+                                                 'unsupported constants must '
+                                                 'fail.\n',
+                                                 '                    equal = '
+                                                 'constant_equal(value, '
+                                                 'getattr(second, name)) and '
+                                                 'equal\n',
                                                  '        return equal\n',
                                                  '\n',
                                                  '    try:\n',
-                                                 '        return code_equal(left, right)\n',
+                                                 '        return '
+                                                 'code_equal(left, right)\n',
                                                  '    finally:\n',
-                                                 '        # Release the recursive closures without waiting for cyclic collection.\n',
-                                                 '        del code_equal, constant_equal\n',
+                                                 '        # Release the '
+                                                 'recursive closures without '
+                                                 'waiting for cyclic '
+                                                 'collection.\n',
+                                                 '        del code_equal, '
+                                                 'constant_equal\n',
                                                  '\n',
-                                                 '\n',
-                                                )),
+                                                 '\n')),
                                                (728,
                                                 733,
-                                                (
-                                                 "    module_code = compile(raw, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize)\n",
-                                                ),
-                                                (
-                                                 '    tree = ast.parse(raw)\n',
-                                                 "    module_code = compile(tree, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize)\n",
-                                                 '    _compiled_functions.last = module_code\n',
-                                                 '    _compiled_functions.last_raw = raw\n',
-                                                 '    _compiled_functions.last_tree = tree\n',
-                                                )),
+                                                ('    module_code = '
+                                                 'compile(raw, filename, '
+                                                 "'exec', dont_inherit=True, "
+                                                 'optimize=sys.flags.optimize)\n',),
+                                                ('    tree = ast.parse(raw)\n',
+                                                 '    module_code = '
+                                                 'compile(tree, filename, '
+                                                 "'exec', dont_inherit=True, "
+                                                 'optimize=sys.flags.optimize)\n',
+                                                 '    _compiled_functions.last '
+                                                 '= module_code\n',
+                                                 '    '
+                                                 '_compiled_functions.last_raw '
+                                                 '= raw\n',
+                                                 '    '
+                                                 '_compiled_functions.last_tree '
+                                                 '= tree\n')),
                                                (751,
                                                 756,
-                                                (
-                                                 '    collect(ast.parse(raw).body)\n',
-                                                ),
-                                                (
-                                                 "    if getattr(_compiled_functions, 'last_raw', None) is raw:\n",
-                                                 '        statements = _compiled_functions.last_tree.body\n',
+                                                ('    '
+                                                 'collect(ast.parse(raw).body)\n',),
+                                                ('    if '
+                                                 'getattr(_compiled_functions, '
+                                                 "'last_raw', None) is raw:\n",
+                                                 '        statements = '
+                                                 '_compiled_functions.last_tree.body\n',
                                                  '    else:\n',
-                                                 '        statements = ast.parse(raw).body\n',
-                                                 '    collect(statements)\n',
-                                                )),
+                                                 '        statements = '
+                                                 'ast.parse(raw).body\n',
+                                                 '    collect(statements)\n')),
                                                (775,
                                                 777,
-                                                (
-                                                 'require(_code_identity(sys._getframe().f_code) == _code_identity(compile(\n',
-                                                 "        _SELF_RAW, __file__, 'exec', dont_inherit=True, optimize=sys.flags.optimize)),\n",
-                                                ),
-                                                (
-                                                 '_IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)\n',
-                                                 'require(_code_equal(sys._getframe().f_code, _compiled_functions.last),\n',
-                                                )),
+                                                ('require(_code_identity(sys._getframe().f_code) '
+                                                 '== _code_identity(compile(\n',
+                                                 '        _SELF_RAW, __file__, '
+                                                 "'exec', dont_inherit=True, "
+                                                 'optimize=sys.flags.optimize)),\n'),
+                                                ('_IMPORT_CODE[str(_SELF_PATH)] '
+                                                 '= '
+                                                 '_compiled_functions(_SELF_RAW, '
+                                                 '__file__)\n',
+                                                 'require(_code_equal(sys._getframe().f_code, '
+                                                 '_compiled_functions.last),\n')),
                                                (779,
                                                 779,
-                                                (
-                                                 '_IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)\n',
-                                                ),
+                                                ('_IMPORT_CODE[str(_SELF_PATH)] '
+                                                 '= '
+                                                 '_compiled_functions(_SELF_RAW, '
+                                                 '__file__)\n',),
                                                 ()),
                                                (781,
                                                 782,
-                                                (
-                                                 "for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, conditioned_cubic, scaled_float32, pr760_stage):\n",
-                                                ),
-                                                (
-                                                 "for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, conditioned_cubic, scaled_float32, pr760_stage, pr780_successor):\n",
-                                                )),
+                                                ('for _module in (source, '
+                                                 "guard, _sibling('affected'), "
+                                                 "_sibling('cache_key'), "
+                                                 'consumer_ledger, station, '
+                                                 'shared_helpers, '
+                                                 'runtime_view, deviation, '
+                                                 'witness_format, '
+                                                 'typed_boundary, '
+                                                 'conditioned_cubic, '
+                                                 'scaled_float32, '
+                                                 'pr760_stage):\n',),
+                                                ('for _module in (source, '
+                                                 "guard, _sibling('affected'), "
+                                                 "_sibling('cache_key'), "
+                                                 'consumer_ledger, station, '
+                                                 'shared_helpers, '
+                                                 'runtime_view, deviation, '
+                                                 'witness_format, '
+                                                 'typed_boundary, '
+                                                 'conditioned_cubic, '
+                                                 'scaled_float32, pr760_stage, '
+                                                 'pr780_successor):\n',)),
                                                (795,
                                                 796,
-                                                (
-                                                 "            and _code_identity(_executed) == _code_identity(compile(_raw, _module.__file__, 'exec',\n",
-                                                 '                dont_inherit=True, optimize=sys.flags.optimize)),\n',
-                                                ),
-                                                (
-                                                 '            and _code_equal(_executed, _compiled_functions.last),\n',
-                                                )),
+                                                ('            and '
+                                                 '_code_identity(_executed) == '
+                                                 '_code_identity(compile(_raw, '
+                                                 "_module.__file__, 'exec',\n",
+                                                 '                '
+                                                 'dont_inherit=True, '
+                                                 'optimize=sys.flags.optimize)),\n'),
+                                                ('            and '
+                                                 '_code_equal(_executed, '
+                                                 '_compiled_functions.last),\n',)),
                                                (829,
                                                 840,
                                                 (),
-                                                (
-                                                 "    compare = globals().get('_code_equal')\n",
-                                                 '    require(type(compare) is types.FunctionType and compare.__globals__ is globals()\n',
-                                                 '            and compare.__defaults__ is None and compare.__kwdefaults__ is None\n',
-                                                 "            and '__wrapped__' not in compare.__dict__,\n",
-                                                 "            'executing code comparison helper changed')\n",
-                                                 '    compare_code = compare.__code__\n',
-                                                 '    require(_code_identity(compare_code) == _code_identity(\n',
-                                                 "                _IMPORT_CODE[str(_SELF_PATH)]['_code_equal']),\n",
-                                                 "            'executing code comparison helper changed')\n",
-                                                 '    # Later mutation of the live function must not replace this captured code.\n',
-                                                 '    compare = types.FunctionType(compare_code, globals())\n',
-                                                )),
+                                                ('    compare = '
+                                                 "globals().get('_code_equal')\n",
+                                                 '    require(type(compare) is '
+                                                 'types.FunctionType and '
+                                                 'compare.__globals__ is '
+                                                 'globals()\n',
+                                                 '            and '
+                                                 'compare.__defaults__ is None '
+                                                 'and compare.__kwdefaults__ '
+                                                 'is None\n',
+                                                 '            and '
+                                                 "'__wrapped__' not in "
+                                                 'compare.__dict__,\n',
+                                                 "            'executing code "
+                                                 'comparison helper '
+                                                 "changed')\n",
+                                                 '    compare_code = '
+                                                 'compare.__code__\n',
+                                                 '    '
+                                                 'require(_code_identity(compare_code) '
+                                                 '== _code_identity(\n',
+                                                 '                '
+                                                 "_IMPORT_CODE[str(_SELF_PATH)]['_code_equal']),\n",
+                                                 "            'executing code "
+                                                 'comparison helper '
+                                                 "changed')\n",
+                                                 '    # Later mutation of the '
+                                                 'live function must not '
+                                                 'replace this captured '
+                                                 'code.\n',
+                                                 '    compare = '
+                                                 'types.FunctionType(compare_code, '
+                                                 'globals())\n')),
                                                (844,
                                                 845,
-                                                (
-                                                 '               vars(scaled_float32), vars(pr760_stage))\n',
-                                                ),
-                                                (
-                                                 '               vars(scaled_float32), vars(pr760_stage), vars(pr780_successor))\n',
-                                                )),
+                                                ('               '
+                                                 'vars(scaled_float32), '
+                                                 'vars(pr760_stage))\n',),
+                                                ('               '
+                                                 'vars(scaled_float32), '
+                                                 'vars(pr760_stage), '
+                                                 'vars(pr780_successor))\n',)),
                                                (865,
                                                 866,
-                                                (
-                                                 '                    require(actual is not None and _code_identity(actual) == _code_identity(code),\n',
-                                                ),
-                                                (
-                                                 '                    require(actual is not None and compare(actual, code),\n',
-                                                )),
+                                                ('                    '
+                                                 'require(actual is not None '
+                                                 'and _code_identity(actual) '
+                                                 '== _code_identity(code),\n',),
+                                                ('                    '
+                                                 'require(actual is not None '
+                                                 'and compare(actual, '
+                                                 'code),\n',)),
                                                (872,
                                                 873,
-                                                (
-                                                 '                require(actual is not None and _code_identity(actual) == _code_identity(expected),\n',
-                                                ),
-                                                (
-                                                 '                require(actual is not None and compare(actual, expected),\n',
-                                                )),
+                                                ('                '
+                                                 'require(actual is not None '
+                                                 'and _code_identity(actual) '
+                                                 '== '
+                                                 '_code_identity(expected),\n',),
+                                                ('                '
+                                                 'require(actual is not None '
+                                                 'and compare(actual, '
+                                                 'expected),\n',)),
                                                (883,
                                                 884,
                                                 (),
-                                                (
-                                                 '    pr780_successor.verify_data()\n',
-                                                )),
+                                                ('    '
+                                                 'pr780_successor.verify_data()\n',)),
                                                (900,
                                                 918,
                                                 (),
-                                                (
-                                                 '# One census reuses directory checks. None means every call checks again.\n',
+                                                ('# One census reuses '
+                                                 'directory checks. None means '
+                                                 'every call checks again.\n',
                                                  '_CHECKED_DIRS = None\n',
                                                  '\n',
                                                  '\n',
                                                  'def _use_dir_cache():\n',
-                                                 '    """Start a directory cache for one census. Callers restore the old value."""\n',
+                                                 '    """Start a directory '
+                                                 'cache for one census. '
+                                                 'Callers restore the old '
+                                                 'value."""\n',
                                                  '    global _CHECKED_DIRS\n',
-                                                 '    previous = _CHECKED_DIRS\n',
+                                                 '    previous = '
+                                                 '_CHECKED_DIRS\n',
                                                  '    _CHECKED_DIRS = set()\n',
                                                  '    return previous\n',
                                                  '\n',
                                                  '\n',
-                                                 'def _restore_dir_cache(previous):\n',
-                                                 '    """Put the directory cache back, including the uncached state."""\n',
+                                                 'def '
+                                                 '_restore_dir_cache(previous):\n',
+                                                 '    """Put the directory '
+                                                 'cache back, including the '
+                                                 'uncached state."""\n',
                                                  '    global _CHECKED_DIRS\n',
-                                                 '    _CHECKED_DIRS = previous\n',
+                                                 '    _CHECKED_DIRS = '
+                                                 'previous\n',
                                                  '\n',
-                                                 '\n',
-                                                )),
+                                                 '\n')),
                                                (925,
                                                 945,
                                                 (),
-                                                (
-                                                 '    checked = _CHECKED_DIRS\n',
-                                                 "    if (checked is not None and os.name == 'posix' and type(root) is PosixPath\n",
-                                                 '            and _canonical_relative_text(relative)):\n',
-                                                 '        root_key = os.fspath(root)\n',
-                                                 '        if root_key not in checked:\n',
-                                                 "            require(_root_unaliased(root), 'symbolic root or ancestor')\n",
-                                                 '            checked.add(root_key)\n',
+                                                ('    checked = '
+                                                 '_CHECKED_DIRS\n',
+                                                 '    if (checked is not None '
+                                                 "and os.name == 'posix' and "
+                                                 'type(root) is PosixPath\n',
+                                                 '            and '
+                                                 '_canonical_relative_text(relative)):\n',
+                                                 '        root_key = '
+                                                 'os.fspath(root)\n',
+                                                 '        if root_key not in '
+                                                 'checked:\n',
+                                                 '            '
+                                                 'require(_root_unaliased(root), '
+                                                 "'symbolic root or "
+                                                 "ancestor')\n",
+                                                 '            '
+                                                 'checked.add(root_key)\n',
                                                  '        current = root_key\n',
-                                                 '        last = len(parts) - 1\n',
-                                                 '        for index, part in enumerate(parts):\n',
-                                                 "            current += '/' + part\n",
-                                                 '            if index != last and current in checked:\n',
+                                                 '        last = len(parts) - '
+                                                 '1\n',
+                                                 '        for index, part in '
+                                                 'enumerate(parts):\n',
+                                                 "            current += '/' + "
+                                                 'part\n',
+                                                 '            if index != last '
+                                                 'and current in checked:\n',
                                                  '                continue\n',
-                                                 '            info = os.lstat(current)\n',
-                                                 "            require(not stat.S_ISLNK(info.st_mode), 'symlink input: ' + relative)\n",
-                                                 '            if index == last:\n',
-                                                 "                require(stat.S_ISREG(info.st_mode), 'input is not a regular file: ' + relative)\n",
+                                                 '            info = '
+                                                 'os.lstat(current)\n',
+                                                 '            require(not '
+                                                 'stat.S_ISLNK(info.st_mode), '
+                                                 "'symlink input: ' + "
+                                                 'relative)\n',
+                                                 '            if index == '
+                                                 'last:\n',
+                                                 '                '
+                                                 'require(stat.S_ISREG(info.st_mode), '
+                                                 "'input is not a regular "
+                                                 "file: ' + relative)\n",
                                                  '            else:\n',
-                                                 '                checked.add(current)\n',
-                                                 '        return Path(current)\n',
-                                                )),
+                                                 '                '
+                                                 'checked.add(current)\n',
+                                                 '        return '
+                                                 'Path(current)\n')),
                                                (997,
                                                 1005,
                                                 (),
-                                                (
-                                                 '    previous = _use_dir_cache()\n',
+                                                ('    previous = '
+                                                 '_use_dir_cache()\n',
                                                  '    try:\n',
-                                                 '        return _dependency_inventory(root, roots=roots, entries=entries, _known=_known, _snapshots=_snapshots)\n',
+                                                 '        return '
+                                                 '_dependency_inventory(root, '
+                                                 'roots=roots, '
+                                                 'entries=entries, '
+                                                 '_known=_known, '
+                                                 '_snapshots=_snapshots)\n',
                                                  '    finally:\n',
-                                                 '        _restore_dir_cache(previous)\n',
+                                                 '        '
+                                                 '_restore_dir_cache(previous)\n',
                                                  '\n',
                                                  '\n',
-                                                 'def _dependency_inventory(root, *, roots, entries, _known, _snapshots):\n',
-                                                )),
+                                                 'def '
+                                                 '_dependency_inventory(root, '
+                                                 '*, roots, entries, _known, '
+                                                 '_snapshots):\n')),
                                                (1293,
                                                 1301,
                                                 (),
-                                                (
-                                                 '    previous = _use_dir_cache()\n',
+                                                ('    previous = '
+                                                 '_use_dir_cache()\n',
                                                  '    try:\n',
-                                                 '        return _helper_entry_census_body(root, _operation=_operation)\n',
+                                                 '        return '
+                                                 '_helper_entry_census_body(root, '
+                                                 '_operation=_operation)\n',
                                                  '    finally:\n',
-                                                 '        _restore_dir_cache(previous)\n',
+                                                 '        '
+                                                 '_restore_dir_cache(previous)\n',
                                                  '\n',
                                                  '\n',
-                                                 'def _helper_entry_census_body(root, *, _operation=None):\n',
-                                                )),
+                                                 'def '
+                                                 '_helper_entry_census_body(root, '
+                                                 '*, _operation=None):\n')),
                                                (1310,
                                                 1311,
-                                                (
-                                                 '        {path: _physical_text(raw) for path, raw in image.items()}))\n',
-                                                ),
-                                                (
-                                                 "        {path: _physical_text(raw) for path, raw in image.items() if b'main' in raw}))\n",
-                                                )),
+                                                ('        {path: '
+                                                 '_physical_text(raw) for '
+                                                 'path, raw in '
+                                                 'image.items()}))\n',),
+                                                ('        {path: '
+                                                 '_physical_text(raw) for '
+                                                 'path, raw in image.items() '
+                                                 "if b'main' in raw}))\n",)),
                                                (1316,
                                                 1324,
                                                 (),
-                                                (
-                                                 '    previous = _use_dir_cache()\n',
+                                                ('    previous = '
+                                                 '_use_dir_cache()\n',
                                                  '    try:\n',
-                                                 '        _helper_entry_census_finish_body(root, image, _operation=_operation)\n',
+                                                 '        '
+                                                 '_helper_entry_census_finish_body(root, '
+                                                 'image, '
+                                                 '_operation=_operation)\n',
                                                  '    finally:\n',
-                                                 '        _restore_dir_cache(previous)\n',
+                                                 '        '
+                                                 '_restore_dir_cache(previous)\n',
                                                  '\n',
                                                  '\n',
-                                                 'def _helper_entry_census_finish_body(root, image, *, _operation=None):\n',
-                                                )),
+                                                 'def '
+                                                 '_helper_entry_census_finish_body(root, '
+                                                 'image, *, '
+                                                 '_operation=None):\n')),
                                                (3157,
+                                                3158,
+                                                (),
+                                                ('        retained = '
+                                                 'pr780_successor.predecessor_bytes(path, '
+                                                 "raw).decode('utf-8') if "
+                                                 'pr780_successor.reviewed_edge(path) '
+                                                 'is not None and sha(raw) == '
+                                                 "pr780_successor.reviewed_edge(path)['after_sha256'] "
+                                                 'else '
+                                                 "raw.decode('utf-8')\n",)),
+                                               (3159,
                                                 3160,
-                                                (
-                                                 "        prior = (_pr760['predecessors'][path] if _pr760 and path in _pr760['predecessors']\n",
-                                                 "                 else pr760_stage.predecessor_source(path, raw.decode('utf-8'))\n",
-                                                 "                 if current and path in pr760_stage.CARLA_REGISTRY_PATHS else raw.decode('utf-8'))\n",
-                                                ),
-                                                (
-                                                 "        retained = pr780_successor.predecessor_bytes(path, raw).decode('utf-8') if pr780_successor.reviewed_edge(path) is not None and sha(raw) == pr780_successor.reviewed_edge(path)['after_sha256'] else raw.decode('utf-8')\n",
-                                                 "        prior = (_pr760['predecessors'][path] if _pr760 and path in _pr760['predecessors']\n",
-                                                 '                 else pr760_stage.predecessor_source(path, retained) if current and path in pr760_stage.CARLA_REGISTRY_PATHS else retained)\n',
-                                                )),
+                                                ('                 else '
+                                                 'pr760_stage.predecessor_source(path, '
+                                                 "raw.decode('utf-8'))\n",
+                                                 '                 if current '
+                                                 'and path in '
+                                                 'pr760_stage.CARLA_REGISTRY_PATHS '
+                                                 "else raw.decode('utf-8'))\n"),
+                                                ('                 else '
+                                                 'pr760_stage.predecessor_source(path, '
+                                                 'retained) if current and '
+                                                 'path in '
+                                                 'pr760_stage.CARLA_REGISTRY_PATHS '
+                                                 'else retained)\n',)),
                                                (3181,
                                                 3182,
-                                                (
-                                                 '        if path in tests and typed_boundary.is_current(path, raw):\n',
-                                                ),
-                                                (
-                                                 "        if path in tests and (typed_boundary.is_current(path, raw) or pr780_successor.reviewed_edge(path) is not None and sha(raw) == pr780_successor.reviewed_edge(path)['after_sha256']):\n",
-                                                )),
+                                                ('        if path in tests and '
+                                                 'typed_boundary.is_current(path, '
+                                                 'raw):\n',),
+                                                ('        if path in tests and '
+                                                 '(typed_boundary.is_current(path, '
+                                                 'raw) or '
+                                                 'pr780_successor.reviewed_edge(path) '
+                                                 'is not None and sha(raw) == '
+                                                 "pr780_successor.reviewed_edge(path)['after_sha256']):\n",)),
                                                (3190,
                                                 3191,
-                                                (
-                                                 "    texts = {path: raw.decode('utf-8') for path, raw in sources.items()}\n",
-                                                ),
-                                                (
-                                                 "    texts = {path: (pr780_successor.predecessor_bytes(path, raw).decode('utf-8') if pr780_successor.reviewed_edge(path) is not None and sha(raw) == pr780_successor.reviewed_edge(path)['after_sha256'] else raw.decode('utf-8')) for path, raw in sources.items()}\n",
-                                                )),
-                                               (3608,
-                                                3611,
+                                                ('    texts = {path: '
+                                                 "raw.decode('utf-8') for "
+                                                 'path, raw in '
+                                                 'sources.items()}\n',),
+                                                ('    texts = {path: '
+                                                 '(pr780_successor.predecessor_bytes(path, '
+                                                 "raw).decode('utf-8') if "
+                                                 'pr780_successor.reviewed_edge(path) '
+                                                 'is not None and sha(raw) == '
+                                                 "pr780_successor.reviewed_edge(path)['after_sha256'] "
+                                                 "else raw.decode('utf-8')) "
+                                                 'for path, raw in '
+                                                 'sources.items()}\n',)),
+                                               (3303,
+                                                3309,
                                                 (),
-                                                (
-                                                 '    extension = pr780_successor.reviewed_edge(path)\n',
-                                                 "    if extension is not None and sha(text) == extension['after_sha256']:\n",
-                                                 "        text = pr780_successor.predecessor_bytes(path, text.encode('utf-8')).decode('utf-8')\n",
-                                                )),
-                                               (3699,
-                                                3702,
+                                                ('    # A reviewed PR780 '
+                                                 'successor extends a helper '
+                                                 'endpoint. Its exact\n',
+                                                 '    # predecessor, which the '
+                                                 'bindings above admitted, '
+                                                 'selects the edge.\n',
+                                                 '    bindings = {path: '
+                                                 "(pr780_successor.reviewed_edge(path)['before_sha256']\n",
+                                                 '                       if '
+                                                 'pr780_successor.reviewed_edge(path) '
+                                                 'is not None\n',
+                                                 '                       and '
+                                                 'digest == '
+                                                 "pr780_successor.reviewed_edge(path)['after_sha256'] "
+                                                 'else digest)\n',
+                                                 '                for path, '
+                                                 'digest in '
+                                                 'bindings.items()}\n')),
+                                               (3614,
+                                                3617,
                                                 (),
-                                                (
-                                                 '    extension = pr780_successor.reviewed_edge(path)\n',
-                                                 '    if edge is None and extension is None:\n',
-                                                 '        return text\n',
-                                                )),
-                                               (3703,
-                                                3704,
-                                                (
-                                                 '        return text\n',
-                                                ),
-                                                (
-                                                 '        edge = extension\n',
-                                                )),
-                                               (3720,
-                                                3727,
-                                                (
-                                                 "        new_endpoint = path in pr760_stage.CARLA_REGISTRY_PATHS and source.token_sha256(text) == edge['after_token_sha256']\n",
-                                                 '        if not (new_endpoint or typed_boundary.is_current(path, text) or\n',
-                                                 "                source.token_sha256(text) == edge['after_token_sha256']):\n",
-                                                ),
-                                                (
-                                                 "        extended = (extension is not None and sha(text) != extension['before_sha256'] and\n",
-                                                 "            source.token_sha256(text) == extension['after_token_sha256'])\n",
-                                                 '        new_endpoint = path in pr760_stage.CARLA_REGISTRY_PATHS and (extended or\n',
-                                                 "            source.token_sha256(text) == edge['after_token_sha256'])\n",
-                                                 '        if not (extended or new_endpoint or typed_boundary.is_current(path, text) or\n',
-                                                 '                (edge is not extension and\n',
-                                                 "                 source.token_sha256(text) == edge['after_token_sha256'])):\n",
-                                                )),
-                                               (3730,
-                                                3732,
-                                                (
-                                                 "        require((sha(raw) == edge['after_sha256']) if new_endpoint else typed_boundary.is_current(path, raw),\n",
-                                                ),
-                                                (
-                                                 "        require((sha(raw) == extension['after_sha256']) if extended else\n",
-                                                 "                (sha(raw) == edge['after_sha256']) if new_endpoint else typed_boundary.is_current(path, raw),\n",
-                                                )),
-                                               (3932,
-                                                3936,
+                                                ('    extension = '
+                                                 'pr780_successor.reviewed_edge(path)\n',
+                                                 '    if extension is not None '
+                                                 'and sha(text) == '
+                                                 "extension['after_sha256']:\n",
+                                                 '        text = '
+                                                 'pr780_successor.predecessor_bytes(path, '
+                                                 "text.encode('utf-8')).decode('utf-8')\n")),
+                                               (3705,
+                                                3708,
                                                 (),
-                                                (
-                                                 '                else:\n',
-                                                 '                    extension = pr780_successor.reviewed_edge(path)\n',
-                                                 "                    if extension is not None and sha(historical) == extension['after_sha256']:\n",
-                                                 '                        historical = pr780_successor.predecessor_bytes(path, historical)\n',
-                                                )),
-                                               (4101,
-                                                4102,
+                                                ('    extension = '
+                                                 'pr780_successor.reviewed_edge(path)\n',
+                                                 '    if edge is None and '
+                                                 'extension is None:\n',
+                                                 '        return text\n')),
+                                               (3709,
+                                                3710,
+                                                ('        return text\n',),
+                                                ('        edge = '
+                                                 'extension\n',)),
+                                               (3726,
+                                                3733,
+                                                ('        new_endpoint = path '
+                                                 'in '
+                                                 'pr760_stage.CARLA_REGISTRY_PATHS '
+                                                 'and '
+                                                 'source.token_sha256(text) == '
+                                                 "edge['after_token_sha256']\n",
+                                                 '        if not (new_endpoint '
+                                                 'or '
+                                                 'typed_boundary.is_current(path, '
+                                                 'text) or\n',
+                                                 '                '
+                                                 'source.token_sha256(text) == '
+                                                 "edge['after_token_sha256']):\n"),
+                                                ('        extended = '
+                                                 '(extension is not None and '
+                                                 'sha(text) != '
+                                                 "extension['before_sha256'] "
+                                                 'and\n',
+                                                 '            '
+                                                 'source.token_sha256(text) == '
+                                                 "extension['after_token_sha256'])\n",
+                                                 '        new_endpoint = path '
+                                                 'in '
+                                                 'pr760_stage.CARLA_REGISTRY_PATHS '
+                                                 'and (extended or\n',
+                                                 '            '
+                                                 'source.token_sha256(text) == '
+                                                 "edge['after_token_sha256'])\n",
+                                                 '        if not (extended or '
+                                                 'new_endpoint or '
+                                                 'typed_boundary.is_current(path, '
+                                                 'text) or\n',
+                                                 '                (edge is not '
+                                                 'extension and\n',
+                                                 '                 '
+                                                 'source.token_sha256(text) == '
+                                                 "edge['after_token_sha256'])):\n")),
+                                               (3736,
+                                                3738,
+                                                ('        require((sha(raw) == '
+                                                 "edge['after_sha256']) if "
+                                                 'new_endpoint else '
+                                                 'typed_boundary.is_current(path, '
+                                                 'raw),\n',),
+                                                ('        require((sha(raw) == '
+                                                 "extension['after_sha256']) "
+                                                 'if extended else\n',
+                                                 '                (sha(raw) == '
+                                                 "edge['after_sha256']) if "
+                                                 'new_endpoint else '
+                                                 'typed_boundary.is_current(path, '
+                                                 'raw),\n')),
+                                               (3938,
+                                                3942,
                                                 (),
-                                                (
-                                                 "    extensions = pr780_successor._data_snapshot()['edges']\n",
-                                                )),
-                                               (4105,
+                                                ('                else:\n',
+                                                 '                    '
+                                                 'extension = '
+                                                 'pr780_successor.reviewed_edge(path)\n',
+                                                 '                    if '
+                                                 'extension is not None and '
+                                                 'sha(historical) == '
+                                                 "extension['after_sha256']:\n",
+                                                 '                        '
+                                                 'historical = '
+                                                 'pr780_successor.predecessor_bytes(path, '
+                                                 'historical)\n')),
+                                               (4107,
                                                 4108,
-                                                (
-                                                 "                   source.token_sha256(text) == pr760_stage.EDGES[p]['after_token_sha256'])}\n",
-                                                ),
-                                                (
-                                                 "                   source.token_sha256(text) == pr760_stage.EDGES[p]['after_token_sha256'])\n",
-                                                 '               or (p in extensions and source.token_sha256(text) ==\n',
-                                                 "                   extensions[p]['after_token_sha256'])}\n",
-                                                )),
-                                               (4231,
-                                                4237,
-                                                (
-                                                 "            projected = (pr760_stage.predecessor_source(path, current.decode('utf-8'))\n",
-                                                ),
-                                                (
-                                                 '            extension = pr780_successor.reviewed_edge(path)\n',
-                                                 '            retained = (pr780_successor.predecessor_bytes(path, current)\n',
-                                                 '                        if extension is not None and sha(current) in (\n',
-                                                 "                            extension['before_sha256'], extension['after_sha256'])\n",
-                                                 '                        else current)\n',
-                                                 "            projected = (pr760_stage.predecessor_source(path, retained.decode('utf-8'))\n",
-                                                )),
-                                               (4239,
-                                                4240,
-                                                (
-                                                 "                if qualification else current.decode('utf-8'))\n",
-                                                ),
-                                                (
-                                                 "                if qualification else retained.decode('utf-8'))\n",
-                                                )),
-                                               (4243,
-                                                4244,
-                                                (
-                                                 '            if current_image and (path in pr760_stage.EXAMPLE_PATHS or qualification):\n',
-                                                ),
-                                                (
-                                                 '            if current_image and (path in pr760_stage.EXAMPLE_PATHS or qualification or current != retained):\n',
-                                                )),
-                                               (4274,
-                                                4279,
-                                                (
-                                                 "        if result.get(station.MODULE) == typed_boundary.EDGES[station.MODULE]['after_sha256']:\n",
-                                                ),
-                                                (
-                                                 '        station_digest = result.get(station.MODULE)\n',
-                                                 '        extension = pr780_successor.reviewed_edge(station.MODULE)\n',
-                                                 "        if extension is not None and station_digest == extension['after_sha256']:\n",
-                                                 "            station_digest = extension['before_sha256']\n",
-                                                 "        if station_digest == typed_boundary.EDGES[station.MODULE]['after_sha256']:\n",
-                                                )),
-                                               (4347,
-                                                4348,
-                                                (
-                                                 " 'tools/carla_lane_oracle/source_contracts.py': 'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',\n",
-                                                ),
-                                                (
-                                                 " 'tools/carla_lane_oracle/source_contracts.py': '6a1f6f3efed801d586976fb3f7acff672d61409fbc61c957b8bf7cd808d3fda8',\n",
-                                                )),
-                                               (4367,
-                                                4370,
-                                                (
-                                                 " 'tools/carla_lane_oracle/test_pr760_physical_image.py': '1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',\n",
-                                                 " 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': 'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab'}\n",
-                                                ),
-                                                (
-                                                 " 'tools/carla_lane_oracle/test_pr760_physical_image.py': '6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669',\n",
-                                                 " 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': 'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab',\n",
-                                                 " 'tools/carla_lane_oracle/test_typed_boundary_contracts.py': '8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'}\n",
-                                                )),
-                                               (4374,
-                                                4375,
-                                                (
-                                                 "    return {'tools/carla_lane_oracle/test_pr776_input_successors.py': 'af0d9aff27b4f06ce8b102979825d84c177ec78b349dbbb1de4a98423c03f132',\n",
-                                                ),
-                                                (
-                                                 "    return {'tools/carla_lane_oracle/test_pr776_input_successors.py': '148a021e1d8173122f231f4e6839d4dfd7bb2bb14d76d70e3725ff310620d2aa',\n",
-                                                )),
-                                               (4383,
-                                                4384,
-                                                (
-                                                 '    """Recover exact earlier comparison bytes for five named PR776 inputs.\n',
-                                                ),
-                                                (
-                                                 '    """Recover exact earlier comparison bytes for six named PR776 inputs.\n',
-                                                )),
-                                               (4392,
-                                                4395,
                                                 (),
-                                                (
-                                                 '    extension = pr780_successor.reviewed_edge(path)\n',
-                                                 "    if extension is not None and sha(raw) == extension['after_sha256']:\n",
-                                                 '        raw = pr780_successor.predecessor_bytes(path, raw)\n',
-                                                )),
-                                               (4776,
-                                                4777,
-                                                (
-                                                 "                                                          '1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',\n",
-                                                ),
-                                                (
-                                                 "                                                          '6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669',\n",
-                                                )),
-                                               (4778,
-                                                4779,
-                                                (
-                                                 '                                                            128,\n',
-                                                ),
-                                                (
-                                                 '                                                            129,\n',
-                                                )),
-                                               (4795,
-                                                4798,
-                                                (
-                                                 '                                                             "\'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py\'):\\n",\n',
-                                                ),
-                                                (
-                                                 '                                                             "\'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py\',\\n",\n',
-                                                 "                                                             '                        '\n",
-                                                 '                                                             "\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\'):\\n",\n',
-                                                )),
-                                               (4804,
-                                                4806,
-                                                (
-                                                 '                                                           (239,\n',
-                                                 '                                                            243,\n',
-                                                ),
-                                                (
-                                                 '                                                           (240,\n',
-                                                 '                                                            245,\n',
-                                                )),
-                                               (4811,
+                                                ('    extensions = '
+                                                 "pr780_successor._data_snapshot()['edges']\n",)),
+                                               (4111,
+                                                4114,
+                                                ('                   '
+                                                 'source.token_sha256(text) == '
+                                                 "pr760_stage.EDGES[p]['after_token_sha256'])}\n",),
+                                                ('                   '
+                                                 'source.token_sha256(text) == '
+                                                 "pr760_stage.EDGES[p]['after_token_sha256'])\n",
+                                                 '               or (p in '
+                                                 'extensions and '
+                                                 'source.token_sha256(text) '
+                                                 '==\n',
+                                                 '                   '
+                                                 "extensions[p]['after_token_sha256'])}\n")),
+                                               (4237,
+                                                4243,
+                                                ('            projected = '
+                                                 '(pr760_stage.predecessor_source(path, '
+                                                 "current.decode('utf-8'))\n",),
+                                                ('            extension = '
+                                                 'pr780_successor.reviewed_edge(path)\n',
+                                                 '            retained = '
+                                                 '(pr780_successor.predecessor_bytes(path, '
+                                                 'current)\n',
+                                                 '                        if '
+                                                 'extension is not None and '
+                                                 'sha(current) in (\n',
+                                                 '                            '
+                                                 "extension['before_sha256'], "
+                                                 "extension['after_sha256'])\n",
+                                                 '                        else '
+                                                 'current)\n',
+                                                 '            projected = '
+                                                 '(pr760_stage.predecessor_source(path, '
+                                                 "retained.decode('utf-8'))\n")),
+                                               (4245,
+                                                4246,
+                                                ('                if '
+                                                 'qualification else '
+                                                 "current.decode('utf-8'))\n",),
+                                                ('                if '
+                                                 'qualification else '
+                                                 "retained.decode('utf-8'))\n",)),
+                                               (4249,
+                                                4250,
+                                                ('            if current_image '
+                                                 'and (path in '
+                                                 'pr760_stage.EXAMPLE_PATHS or '
+                                                 'qualification):\n',),
+                                                ('            if current_image '
+                                                 'and (path in '
+                                                 'pr760_stage.EXAMPLE_PATHS or '
+                                                 'qualification or current != '
+                                                 'retained):\n',)),
+                                               (4280,
+                                                4285,
+                                                ('        if '
+                                                 'result.get(station.MODULE) '
+                                                 '== '
+                                                 "typed_boundary.EDGES[station.MODULE]['after_sha256']:\n",),
+                                                ('        station_digest = '
+                                                 'result.get(station.MODULE)\n',
+                                                 '        extension = '
+                                                 'pr780_successor.reviewed_edge(station.MODULE)\n',
+                                                 '        if extension is not '
+                                                 'None and station_digest == '
+                                                 "extension['after_sha256']:\n",
+                                                 '            station_digest = '
+                                                 "extension['before_sha256']\n",
+                                                 '        if station_digest == '
+                                                 "typed_boundary.EDGES[station.MODULE]['after_sha256']:\n")),
+                                               (4353,
+                                                4354,
+                                                (' '
+                                                 "'tools/carla_lane_oracle/source_contracts.py': "
+                                                 "'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',\n",),
+                                                (' '
+                                                 "'tools/carla_lane_oracle/source_contracts.py': "
+                                                 "'f4cf5b03da59b5a5070f9cdf8e26b486d4e1cd965eed172578018619ea788afe',\n",)),
+                                               (4373,
+                                                4376,
+                                                (' '
+                                                 "'tools/carla_lane_oracle/test_pr760_physical_image.py': "
+                                                 "'1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',\n",
+                                                 ' '
+                                                 "'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': "
+                                                 "'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab'}\n"),
+                                                (' '
+                                                 "'tools/carla_lane_oracle/test_pr760_physical_image.py': "
+                                                 "'6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669',\n",
+                                                 ' '
+                                                 "'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': "
+                                                 "'ac51eb5dd58c8e3768f2405108203351194d72d63f2b53f4e30d5b2d4d8c26ab',\n",
+                                                 ' '
+                                                 "'tools/carla_lane_oracle/test_typed_boundary_contracts.py': "
+                                                 "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'}\n")),
+                                               (4380,
+                                                4381,
+                                                ('    return '
+                                                 "{'tools/carla_lane_oracle/test_pr776_input_successors.py': "
+                                                 "'af0d9aff27b4f06ce8b102979825d84c177ec78b349dbbb1de4a98423c03f132',\n",),
+                                                ('    return '
+                                                 "{'tools/carla_lane_oracle/test_pr776_input_successors.py': "
+                                                 "'148a021e1d8173122f231f4e6839d4dfd7bb2bb14d76d70e3725ff310620d2aa',\n",)),
+                                               (4389,
+                                                4390,
+                                                ('    """Recover exact earlier '
+                                                 'comparison bytes for five '
+                                                 'named PR776 inputs.\n',),
+                                                ('    """Recover exact earlier '
+                                                 'comparison bytes for six '
+                                                 'named PR776 inputs.\n',)),
+                                               (4398,
+                                                4401,
+                                                (),
+                                                ('    extension = '
+                                                 'pr780_successor.reviewed_edge(path)\n',
+                                                 '    if extension is not None '
+                                                 'and sha(raw) == '
+                                                 "extension['after_sha256']:\n",
+                                                 '        raw = '
+                                                 'pr780_successor.predecessor_bytes(path, '
+                                                 'raw)\n')),
+                                               (4782,
+                                                4783,
+                                                ('                                                          '
+                                                 "'1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',\n",),
+                                                ('                                                          '
+                                                 "'6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669',\n",)),
+                                               (4784,
+                                                4785,
+                                                ('                                                            '
+                                                 '128,\n',),
+                                                ('                                                            '
+                                                 '129,\n',)),
+                                               (4801,
+                                                4804,
+                                                ('                                                             '
+                                                 '"\'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py\'):\\n",\n',),
+                                                ('                                                             '
+                                                 '"\'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py\',\\n",\n',
+                                                 '                                                             '
+                                                 "'                        '\n",
+                                                 '                                                             '
+                                                 '"\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\'):\\n",\n')),
+                                               (4810,
                                                 4812,
-                                                (
-                                                 "                                                             'raw) if path ==\\n',\n",
-                                                ),
-                                                (
-                                                 "                                                             'raw) if path in (\\n',\n",
-                                                )),
-                                               (4813,
-                                                4816,
-                                                (
-                                                 '                                                             "\'tools/carla_lane_oracle/test_expectation_binding_successor.py\' "\n',
-                                                ),
-                                                (
-                                                 '                                                             "\'tools/carla_lane_oracle/test_expectation_binding_successor.py\',\\n",\n',
-                                                 "                                                             '                        '\n",
-                                                 '                                                             "\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\') "\n',
-                                                )),
-                                               (4832,
-                                                4843,
-                                                (
-                                                 "                                                               'inputs[water])\\n')),))}\n",
-                                                ),
-                                                (
-                                                 "                                                               'inputs[water])\\n')),)),\n",
-                                                 " 'tools/carla_lane_oracle/test_typed_boundary_contracts.py': ('7114f17cce33b84fe226d3559b4d08d1227a6c1cda1f83825441d22e48b51705',\n",
-                                                 "                                                              '8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7',\n",
-                                                 '                                                              ((444,\n',
-                                                 '                                                                446,\n',
-                                                 '                                                                (),\n',
-                                                 "                                                                ('                if path == '\n",
-                                                 '                                                                 "\'tools/compile_fail_expectations.json\':\\n",\n',
-                                                 "                                                                 '                    raw = '\n",
-                                                 "                                                                 'audit.pr776_predecessor_bytes(path, '\n",
-                                                 "                                                                 'raw)\\n')),))}\n",
-                                                )),
-                                               (4879,
-                                                4882,
+                                                ('                                                           '
+                                                 '(239,\n',
+                                                 '                                                            '
+                                                 '243,\n'),
+                                                ('                                                           '
+                                                 '(240,\n',
+                                                 '                                                            '
+                                                 '245,\n')),
+                                               (4817,
+                                                4818,
+                                                ('                                                             '
+                                                 "'raw) if path ==\\n',\n",),
+                                                ('                                                             '
+                                                 "'raw) if path in (\\n',\n",)),
+                                               (4819,
+                                                4822,
+                                                ('                                                             '
+                                                 '"\'tools/carla_lane_oracle/test_expectation_binding_successor.py\' '
+                                                 '"\n',),
+                                                ('                                                             '
+                                                 '"\'tools/carla_lane_oracle/test_expectation_binding_successor.py\',\\n",\n',
+                                                 '                                                             '
+                                                 "'                        '\n",
+                                                 '                                                             '
+                                                 '"\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\') '
+                                                 '"\n')),
+                                               (4838,
+                                                4849,
+                                                ('                                                               '
+                                                 "'inputs[water])\\n')),))}\n",),
+                                                ('                                                               '
+                                                 "'inputs[water])\\n')),)),\n",
+                                                 ' '
+                                                 "'tools/carla_lane_oracle/test_typed_boundary_contracts.py': "
+                                                 "('7114f17cce33b84fe226d3559b4d08d1227a6c1cda1f83825441d22e48b51705',\n",
+                                                 '                                                              '
+                                                 "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7',\n",
+                                                 '                                                              '
+                                                 '((444,\n',
+                                                 '                                                                '
+                                                 '446,\n',
+                                                 '                                                                '
+                                                 '(),\n',
+                                                 '                                                                '
+                                                 "('                if path == "
+                                                 "'\n",
+                                                 '                                                                 '
+                                                 '"\'tools/compile_fail_expectations.json\':\\n",\n',
+                                                 '                                                                 '
+                                                 "'                    raw = "
+                                                 "'\n",
+                                                 '                                                                 '
+                                                 "'audit.pr776_predecessor_bytes(path, "
+                                                 "'\n",
+                                                 '                                                                 '
+                                                 "'raw)\\n')),))}\n")),
+                                               (4885,
+                                                4888,
                                                 (),
-                                                (
-                                                 '    extension = pr780_successor.reviewed_edge(path)\n',
-                                                 "    if extension is not None and sha(raw) == extension['after_sha256']:\n",
-                                                 '        raw = pr780_successor.predecessor_bytes(path, raw)\n',
-                                                )),
-                                               (4884,
-                                                4887,
+                                                ('    extension = '
+                                                 'pr780_successor.reviewed_edge(path)\n',
+                                                 '    if extension is not None '
+                                                 'and sha(raw) == '
+                                                 "extension['after_sha256']:\n",
+                                                 '        raw = '
+                                                 'pr780_successor.predecessor_bytes(path, '
+                                                 'raw)\n')),
+                                               (4890,
+                                                4893,
                                                 (),
-                                                (
-                                                 '        raw = pr776_predecessor_bytes(path, raw)\n',
-                                                 "    if (path == 'tools/carla_lane_oracle/test_typed_boundary_contracts.py'\n",
-                                                 "            and sha(raw) == '8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'):\n",
-                                                )),
-                                               (5479,
-                                                5484,
+                                                ('        raw = '
+                                                 'pr776_predecessor_bytes(path, '
+                                                 'raw)\n',
+                                                 '    if (path == '
+                                                 "'tools/carla_lane_oracle/test_typed_boundary_contracts.py'\n",
+                                                 '            and sha(raw) == '
+                                                 "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'):\n")),
+                                               (5485,
+                                                5490,
                                                 (),
-                                                (
-                                                 "    extension_path = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'\n",
-                                                 '    extension = pr780_successor.reviewed_edge(extension_path)\n',
-                                                 '    if (type(raw) is bytes and\n',
-                                                 "            sha(raw) == extension['after_sha256']):\n",
-                                                 '        raw = pr780_successor.predecessor_bytes(extension_path, raw)\n',
-                                                )),
-                                               (5571,
-                                                5572,
+                                                ('    extension_path = '
+                                                 "'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'\n",
+                                                 '    extension = '
+                                                 'pr780_successor.reviewed_edge(extension_path)\n',
+                                                 '    if (type(raw) is bytes '
+                                                 'and\n',
+                                                 '            sha(raw) == '
+                                                 "extension['after_sha256']):\n",
+                                                 '        raw = '
+                                                 'pr780_successor.predecessor_bytes(extension_path, '
+                                                 'raw)\n')),
+                                               (5577,
+                                                5578,
                                                 (),
-                                                (
-                                                 '        extension_data = pr780_successor._data_snapshot()\n',
-                                                )),
-                                               (5573,
-                                                5581,
+                                                ('        extension_data = '
+                                                 'pr780_successor._data_snapshot()\n',)),
+                                               (5579,
+                                                5587,
                                                 (),
-                                                (
-                                                 "        extended_pins = {path: edge['after_sha256']\n",
-                                                 "                         for path, edge in extension_data['edges'].items()}\n",
-                                                 '        require(set(extended_pins) <= set(expected) | set(_pr776_bound_inputs()),\n',
-                                                 "                'PR780 source successor misses a fixed predecessor')\n",
-                                                 "        for path, edge in extension_data['edges'].items():\n",
-                                                 "            require(edge['before_sha256'] == successor_pins.get(path,\n",
-                                                 '                    expected.get(path, _pr776_bound_inputs().get(path))),\n',
-                                                 "                    'PR780 source successor predecessor join changed: ' + path)\n",
-                                                )),
-                                               (5583,
-                                                5584,
-                                                (
-                                                 '            require(sha(raw) == successor_pins.get(path, digest),\n',
-                                                ),
-                                                (
-                                                 '            require(sha(raw) == extended_pins.get(path, successor_pins.get(path, digest)),\n',
-                                                )),
-                                               (5585,
+                                                ('        extended_pins = '
+                                                 '{path: '
+                                                 "edge['after_sha256']\n",
+                                                 '                         for '
+                                                 'path, edge in '
+                                                 "extension_data['edges'].items()}\n",
+                                                 '        '
+                                                 'require(set(extended_pins) '
+                                                 '<= set(expected) | '
+                                                 'set(_pr776_bound_inputs()),\n',
+                                                 "                'PR780 "
+                                                 'source successor misses a '
+                                                 "fixed predecessor')\n",
+                                                 '        for path, edge in '
+                                                 "extension_data['edges'].items():\n",
+                                                 '            '
+                                                 "require(edge['before_sha256'] "
+                                                 '== '
+                                                 'successor_pins.get(path,\n',
+                                                 '                    '
+                                                 'expected.get(path, '
+                                                 '_pr776_bound_inputs().get(path))),\n',
+                                                 "                    'PR780 "
+                                                 'source successor predecessor '
+                                                 "join changed: ' + path)\n")),
+                                               (5589,
                                                 5590,
-                                                (
-                                                 '            if path in successor_pins:\n',
-                                                 '                prior_inputs[path] = pr776_predecessor_bytes(path, raw)\n',
-                                                 '                require(sha(prior_inputs[path]) == digest,\n',
-                                                 "                        'PR776 successor misses fixed PR760 input: ' + path)\n",
-                                                ),
-                                                (
-                                                 '            retained = pr780_successor.predecessor_bytes(path, raw)\n',
-                                                 '            prior_inputs[path] = (pr776_predecessor_bytes(path, retained)\n',
-                                                 '                                  if path in successor_pins else retained)\n',
-                                                 '            require(sha(prior_inputs[path]) == digest,\n',
-                                                 "                    'PR780/PR776 successor misses fixed PR760 input: ' + path)\n",
-                                                )),
+                                                ('            require(sha(raw) '
+                                                 '== successor_pins.get(path, '
+                                                 'digest),\n',),
+                                                ('            require(sha(raw) '
+                                                 '== extended_pins.get(path, '
+                                                 'successor_pins.get(path, '
+                                                 'digest)),\n',)),
                                                (5591,
-                                                5598,
-                                                (
-                                                 "            require(sha(observe(path)) == digest, 'PR776 bound input changed: ' + path)\n",
-                                                ),
-                                                (
-                                                 '            raw = observe(path)\n',
-                                                 "            require(sha(raw) == extended_pins.get(path, digest), 'PR776 bound input changed: ' + path)\n",
-                                                 '            require(sha(pr780_successor.predecessor_bytes(path, raw)) == digest,\n',
-                                                 "                    'PR780 successor misses fixed PR776 input: ' + path)\n",
-                                                 '        pr780_successor.verify_sources({path: image[path] for path in extended_pins})\n',
-                                                 "        for path, digest in extension_data['bound_inputs'].items():\n",
-                                                 "            require(sha(observe(path)) == digest, 'PR780 bound input changed: ' + path)\n",
-                                                )),
-                                               (5614,
-                                                5616,
-                                                (
-                                                 "                              if path == 'tools/carla_lane_oracle/test_witness_format_contracts.py' else image[path].decode('utf-8'))\n",
-                                                ),
-                                                (
-                                                 "                              if path == 'tools/carla_lane_oracle/test_witness_format_contracts.py'\n",
-                                                 "                              else prior_inputs.get(path, image[path]).decode('utf-8'))\n",
-                                                )),
-                                               (5631,
-                                                5632,
-                                                (
-                                                 "        helper_texts = {path: previous.get(path, image[path].decode('utf-8'))\n",
-                                                ),
-                                                (
-                                                 "        helper_texts = {path: previous.get(path, prior_inputs.get(path, image[path]).decode('utf-8'))\n",
-                                                )),
-                                               (5685,
-                                                5691,
-                                                (
-                                                 '        observed = inventory(root, _snapshots=image, _production=production)\n',
-                                                ),
-                                                (
-                                                 '        # The fixed PR760 inventory binds retained predecessor tokens, so a\n',
-                                                 '        # successor source contributes the tokens of its exact predecessor.\n',
+                                                5596,
+                                                ('            if path in '
+                                                 'successor_pins:\n',
+                                                 '                '
+                                                 'prior_inputs[path] = '
+                                                 'pr776_predecessor_bytes(path, '
+                                                 'raw)\n',
+                                                 '                '
+                                                 'require(sha(prior_inputs[path]) '
+                                                 '== digest,\n',
+                                                 '                        '
+                                                 "'PR776 successor misses "
+                                                 "fixed PR760 input: ' + "
+                                                 'path)\n'),
+                                                ('            retained = '
+                                                 'pr780_successor.predecessor_bytes(path, '
+                                                 'raw)\n',
+                                                 '            '
+                                                 'prior_inputs[path] = '
+                                                 '(pr776_predecessor_bytes(path, '
+                                                 'retained)\n',
+                                                 '                                  '
+                                                 'if path in successor_pins '
+                                                 'else retained)\n',
+                                                 '            '
+                                                 'require(sha(prior_inputs[path]) '
+                                                 '== digest,\n',
+                                                 '                    '
+                                                 "'PR780/PR776 successor "
+                                                 "misses fixed PR760 input: ' "
+                                                 '+ path)\n')),
+                                               (5597,
+                                                5604,
+                                                ('            '
+                                                 'require(sha(observe(path)) '
+                                                 "== digest, 'PR776 bound "
+                                                 "input changed: ' + path)\n",),
+                                                ('            raw = '
+                                                 'observe(path)\n',
+                                                 '            require(sha(raw) '
+                                                 '== extended_pins.get(path, '
+                                                 "digest), 'PR776 bound input "
+                                                 "changed: ' + path)\n",
+                                                 '            '
+                                                 'require(sha(pr780_successor.predecessor_bytes(path, '
+                                                 'raw)) == digest,\n',
+                                                 "                    'PR780 "
+                                                 'successor misses fixed PR776 '
+                                                 "input: ' + path)\n",
+                                                 '        '
+                                                 'pr780_successor.verify_sources({path: '
+                                                 'image[path] for path in '
+                                                 'extended_pins})\n',
+                                                 '        for path, digest in '
+                                                 "extension_data['bound_inputs'].items():\n",
+                                                 '            '
+                                                 'require(sha(observe(path)) '
+                                                 "== digest, 'PR780 bound "
+                                                 "input changed: ' + path)\n")),
+                                               (5620,
+                                                5622,
+                                                ('                              '
+                                                 'if path == '
+                                                 "'tools/carla_lane_oracle/test_witness_format_contracts.py' "
+                                                 'else '
+                                                 "image[path].decode('utf-8'))\n",),
+                                                ('                              '
+                                                 'if path == '
+                                                 "'tools/carla_lane_oracle/test_witness_format_contracts.py'\n",
+                                                 '                              '
+                                                 'else prior_inputs.get(path, '
+                                                 "image[path]).decode('utf-8'))\n")),
+                                               (5637,
+                                                5638,
+                                                ('        helper_texts = '
+                                                 '{path: previous.get(path, '
+                                                 "image[path].decode('utf-8'))\n",),
+                                                ('        helper_texts = '
+                                                 '{path: previous.get(path, '
+                                                 'prior_inputs.get(path, '
+                                                 "image[path]).decode('utf-8'))\n",)),
+                                               (5691,
+                                                5697,
+                                                ('        observed = '
+                                                 'inventory(root, '
+                                                 '_snapshots=image, '
+                                                 '_production=production)\n',),
+                                                ('        # The fixed PR760 '
+                                                 'inventory binds retained '
+                                                 'predecessor tokens, so a\n',
+                                                 '        # successor source '
+                                                 'contributes the tokens of '
+                                                 'its exact predecessor.\n',
                                                  '        observed = {\n',
-                                                 "            path: ({'tokens_sha256': source.token_sha256(prior_inputs[path].decode('utf-8'))}\n",
-                                                 '                   if path in prior_inputs else row)\n',
-                                                 '            for path, row in inventory(root, _snapshots=image, _production=production).items()}\n',
-                                                )),
-                                              )},
- 'source_contracts.py': {'after_sha256': '6a1f6f3efed801d586976fb3f7acff672d61409fbc61c957b8bf7cd808d3fda8',
+                                                 '            path: '
+                                                 "({'tokens_sha256': "
+                                                 "source.token_sha256(prior_inputs[path].decode('utf-8'))}\n",
+                                                 '                   if path '
+                                                 'in prior_inputs else row)\n',
+                                                 '            for path, row in '
+                                                 'inventory(root, '
+                                                 '_snapshots=image, '
+                                                 '_production=production).items()}\n')))},
+ 'source_contracts.py': {'after_sha256': 'f4cf5b03da59b5a5070f9cdf8e26b486d4e1cd965eed172578018619ea788afe',
                          'before_sha256': 'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',
                          'edits': ((51,
-                                    56,
+                                    59,
                                     (),
                                     ('# Immutable records pin these sources by '
                                      'their digests from before the PR780\n',
@@ -1389,17 +1823,23 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                      "'model_cache.mojo', PREFIX + "
                                      "'sensor.mojo',\n",
                                      "    PREFIX + 'speed_limits.mojo', "
-                                     "'tests/test_carla_speed_parser_exceptions.mojo'))\n")),
-                                   (355,
-                                    357,
+                                     "'tests/test_carla_speed_parser_exceptions.mojo',\n",
+                                     "    PREFIX + 'lidar.mojo', PREFIX + "
+                                     "'semantic_lidar.mojo', PREFIX + "
+                                     "'render_post.mojo',\n",
+                                     "    PREFIX + 'render_sky.mojo', PREFIX + "
+                                     "'render_textures.mojo',\n",
+                                     "    PREFIX + 'render_weather.mojo'))\n")),
+                                   (358,
+                                    360,
                                     ('        if relative not in '
                                      'pr760.CARLA_REGISTRY_PATHS:\n',),
                                     ('        if (relative not in '
                                      'pr760.CARLA_REGISTRY_PATHS\n',
                                      '                and relative not in '
                                      'HISTORICAL_SUCCESSOR_PATHS):\n')),
-                                   (380,
-                                    382,
+                                   (383,
+                                    385,
                                     ('        if relative not in '
                                      'pr760.CARLA_REGISTRY_PATHS:\n',),
                                     ('        if (relative not in '
@@ -1412,7 +1852,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '8e99d515249e7647b82e121bf8d96a2046f8b6cf5f4a96e448e3ce93c9bc8902':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '36d120038099886a4e3aadb9c5493d7b8a9cf6497569101ffedd2b92bec6ab33':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)

@@ -53,7 +53,10 @@ GROUP_PATHS = {
 # successor edit. Their historical view is the exact predecessor.
 HISTORICAL_SUCCESSOR_PATHS = frozenset((
     PREFIX + 'assets.mojo', PREFIX + 'model_cache.mojo', PREFIX + 'sensor.mojo',
-    PREFIX + 'speed_limits.mojo', 'tests/test_carla_speed_parser_exceptions.mojo'))
+    PREFIX + 'speed_limits.mojo', 'tests/test_carla_speed_parser_exceptions.mojo',
+    PREFIX + 'lidar.mojo', PREFIX + 'semantic_lidar.mojo', PREFIX + 'render_post.mojo',
+    PREFIX + 'render_sky.mojo', PREFIX + 'render_textures.mojo',
+    PREFIX + 'render_weather.mojo'))
 QUALIFIER_FILES = ('curve_bounds.mojo', 'curve_trig.mojo',
                    'curve_interval.mojo', 'lane_value_bounds.mojo')
 QUALIFIERS = {'var', 'mut', 'out', 'ref', 'comptime', 'raises'}
