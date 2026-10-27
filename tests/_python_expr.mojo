@@ -1494,6 +1494,80 @@ def sum2_graph_dump(payload: String) raises -> String:
     return plain_function_dump(parsed.text(parsed.at(parsed.root, "source")))
 
 
+def _check_before_loop(
+    function_doc: PyJson, fragment: String, label: String
+) raises:
+    var body = _named_field(function_doc, function_doc.root, "body")
+    var rows = PyJson.parse(_fragment_statements(fragment))
+    var loop = -1
+    var index = 0
+    while index < function_doc.length(body):
+        if (
+            _node_type(function_doc, function_doc.item(body, index)) == "For"
+            and loop < 0
+        ):
+            loop = index
+        index += 1
+    var cursor = 0
+    while cursor < rows.length(rows.root):
+        var at = _statement_index(
+            function_doc, body, rows, rows.item(rows.root, cursor)
+        )
+        if at < 0 or loop < 0 or at >= loop:
+            raise Error("optional runtime contract: " + label)
+        cursor += 1
+
+
+def _statement_index(
+    doc: PyJson, body: Int, wanted: PyJson, target: Int
+) raises -> Int:
+    var index = 0
+    while index < doc.length(body):
+        if py_equal(doc, doc.item(body, index), wanted, target):
+            return index
+        index += 1
+    return -1
+
+
+def _has_call(doc: PyJson, node: Int, name: String) raises -> Bool:
+    if _node_type(doc, node) == "Call":
+        var func = _named_field(doc, node, "func")
+        if _node_type(doc, func) == "Name":
+            var ident = _named_field(doc, func, "id")
+            if doc.text(ident) == name:
+                return True
+    if doc.kind(node) == PY_LIST:
+        var index = 0
+        while index < doc.length(node):
+            if _has_call(doc, doc.item(node, index), name):
+                return True
+            index += 1
+    return False
+
+
+def _check_before_call(
+    function_doc: PyJson, fragment: String, call: String, label: String
+) raises:
+    var body = _named_field(function_doc, function_doc.root, "body")
+    var rows = PyJson.parse(_fragment_statements(fragment))
+    if rows.length(rows.root) != 1:
+        raise Error("invalid checker fragment: " + label)
+    var debit = _statement_index(
+        function_doc, body, rows, rows.item(rows.root, 0)
+    )
+    var hits = 0
+    var early = False
+    var index = 0
+    while index < function_doc.length(body):
+        if _has_call(function_doc, function_doc.item(body, index), call):
+            hits += 1
+            if debit < 0 or index <= debit:
+                early = True
+        index += 1
+    if debit < 0 or hits != 2 or early:
+        raise Error("optional runtime contract: " + label)
+
+
 def _node_type(doc: PyJson, node: Int) raises -> String:
     if doc.kind(node) != PY_LIST or doc.length(node) == 0:
         return ""
@@ -1653,7 +1727,7 @@ def fragment_count(payload: String) raises -> String:
     Args:
         payload: JSON with `source`, `name`, `kind`, `fragment`, and `label`.
             `kind` is `contains`, `expression`, `sequence`, `first`, `body`,
-            `equal`, or `fresh`.
+            `equal`, `fresh`, `before-loop`, or `before-call`.
 
     Returns:
         The decimal count of matches.
@@ -1697,6 +1771,14 @@ def fragment_count(payload: String) raises -> String:
             count = 1
     elif kind == "fresh":
         _check_fresh(function_doc, fragment, label)
+        count = 1
+    elif kind == "before-loop":
+        _check_before_loop(function_doc, fragment, label)
+        count = 1
+    elif kind == "before-call":
+        _check_before_call(
+            function_doc, fragment, doc.text(doc.at(doc.root, "call")), label
+        )
         count = 1
     elif kind == "equal":
         var other = fragment

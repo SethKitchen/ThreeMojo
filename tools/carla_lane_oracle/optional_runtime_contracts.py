@@ -179,7 +179,7 @@ def body_from_source(text, name):
     return node
 
 
-def _fragment_count(source, name, kind, fragment, label):
+def _fragment_count(source, name, kind, fragment, label, call=''):
     import json
     import os
     import subprocess
@@ -187,10 +187,13 @@ def _fragment_count(source, name, kind, fragment, label):
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps({
+    payload = {
         'source': source, 'name': name, 'kind': kind, 'fragment': fragment,
         'label': label,
-    }, separators=(',', ':'))
+    }
+    if call:
+        payload['call'] = call
+    payload = json.dumps(payload, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='fragment-count-') as directory:
         path = Path(directory) / 'payload.json'
         path.write_text(payload)
@@ -431,13 +434,20 @@ def verify_semantics(root, *, _operation=None):
     contains(lane, 'var extra = _spiral_grouped_roundoff_work(counts[0])', 'first count debit')
     contains(lane, 'if counts[1] != counts[0]:\n    extra += _spiral_grouped_roundoff_work(counts[1])',
              'second count debit')
-    debit = next((i for i, item in enumerate(lane.body)
-                  if sampled.dump(item) == sampled.dump(ast.parse('terms += extra').body[0])), -1)
-    raw_positions = [i for i, item in enumerate(lane.body) if any(
-        isinstance(part, ast.Call) and isinstance(part.func, ast.Name)
-        and part.func.id == '_try_spiral_grouped_roundoff_envelope' for part in ast.walk(item))]
-    require(debit >= 0 and len(raw_positions) == 2 and all(i > debit for i in raw_positions),
-            'atomic whole-count debit must precede both raw envelopes')
+    if getattr(lane, '_runtime_source', None) is not None:
+        _fragment_count(
+            lane._runtime_source, lane._runtime_name, 'before-call',
+            'terms += extra',
+            'atomic whole-count debit must precede both raw envelopes',
+            '_try_spiral_grouped_roundoff_envelope')
+    else:
+        debit = next((i for i, item in enumerate(lane.body)
+                      if sampled.dump(item) == sampled.dump(ast.parse('terms += extra').body[0])), -1)
+        raw_positions = [i for i, item in enumerate(lane.body) if any(
+            isinstance(part, ast.Call) and isinstance(part.func, ast.Name)
+            and part.func.id == '_try_spiral_grouped_roundoff_envelope' for part in ast.walk(item))]
+        require(debit >= 0 and len(raw_positions) == 2 and all(i > debit for i in raw_positions),
+                'atomic whole-count debit must precede both raw envelopes')
     expression(lane, '_lane_jet_model_proof[False](road, section, lane, low, high, Vector3(0, 0, 0), proof, low, high, captured, require_reuse=True)',
                'try-only reconstruction cannot invoke hidden GL')
     contains(metered, 'if work + fallback_work > max_terms - terms:\n    return None',
@@ -492,12 +502,18 @@ def verify_semantics(root, *, _operation=None):
     contains(cuts, 'var extra = 8 * count', 'complete optional dispatch debit')
     contains(cuts, 'if count < 1 or count > 2:\n    return None', 'at most two invocation-local cuts')
     sequence(cuts, DISPATCH_ADMISSION, 'bounded count and complete reserve must precede dispatch debit')
-    names = [sampled.dump(item) for item in cuts.body]
-    loop = next((i for i, item in enumerate(cuts.body) if isinstance(item, ast.For)), -1)
-    for statement in ('nodes += 1', 'terms += extra'):
-        wanted = sampled.dump(ast.parse(statement).body[0])
-        require(wanted in names and names.index(wanted) < loop,
-                'dispatch debit must precede optional attempts')
+    if getattr(cuts, '_runtime_source', None) is not None:
+        for statement in ('nodes += 1', 'terms += extra'):
+            _fragment_count(
+                cuts._runtime_source, cuts._runtime_name, 'before-loop',
+                statement, 'dispatch debit must precede optional attempts')
+    else:
+        names = [sampled.dump(item) for item in cuts.body]
+        loop = next((i for i, item in enumerate(cuts.body) if isinstance(item, ast.For)), -1)
+        for statement in ('nodes += 1', 'terms += extra'):
+            wanted = sampled.dump(ast.parse(statement).body[0])
+            require(wanted in names and names.index(wanted) < loop,
+                    'dispatch debit must precede optional attempts')
 
     verify_no_containing_model_consumers(root, _operation=_operation)
     # The standalone helper remains reviewed and tested even though the

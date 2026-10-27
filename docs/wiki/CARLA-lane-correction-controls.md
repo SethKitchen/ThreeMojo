@@ -104,6 +104,8 @@ It checks the fresh guard and the helper body against the stored fragment.
 
 It checks the fresh cell producer after the original debit.
 
+It requires each dispatch debit to precede the optional loop.
+
 It derives the stored moment rows in exact arithmetic.
 
 It checks the stored moment table against the derived words.
