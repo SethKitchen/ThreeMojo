@@ -250,6 +250,8 @@ It accepts one historical lane declaration when the owner is empty and the token
 
 It renames the first frozen lane declaration.
 
+It keeps the lane-control labels and the frozen reference prefix.
+
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.
 It puts the module path on the render-actor edge.
 

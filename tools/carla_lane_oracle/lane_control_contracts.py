@@ -156,6 +156,31 @@ def _gate_tokens(pairs):
         raise RuntimeError(message)
 
 
+_LANE_LABELS = None
+
+
+def _lane_labels():
+    """Return the lane-control labels and the frozen reference prefix."""
+    global _LANE_LABELS
+    if _LANE_LABELS is not None:
+        return _LANE_LABELS
+    import json
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_control_labels'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise RuntimeError(message)
+    _LANE_LABELS = json.loads(result.stdout)
+    return _LANE_LABELS
+
+
 def verify(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
@@ -178,26 +203,30 @@ def verify(root, *, _operation=None):
             import lane_order_contracts as order
         current = order.predecessor_source(root, **operation_args)
 
-    pairs = [(current, record['after_source'], 'lane-control successor module changed')]
+    labels = _lane_labels()
+    pairs = [(current, record['after_source'], labels['successor'])]
     for item in record['declarations']:
         name = item['name']
         pairs.append((_declaration(record['before_source'], name, ()), item['before'],
-                      'lane-control before declaration drift'))
+                      labels['before']))
         pairs.append((_declaration(current, name, ()), item['after'],
-                      'lane-control after declaration drift'))
+                      labels['after']))
         test = _typed_source.historical_text(root, 'tests/test_carla_lane_control_successor.mojo', _observe_text(root, 'tests/test_carla_lane_control_successor.mojo',
                              (root / 'tests/test_carla_lane_control_successor.mojo').read_text(),
                              _operation=_operation), _operation=_operation)
-        frozen = _declaration(test, '_reference' + name, ())
+        reference = labels['reference'] + name
+        frozen = _declaration(test, reference, ())
         expected = _replace_first(
-            item['before'], 'def ' + name + '(', 'def _reference' + name + '(')
-        pairs.append((frozen, expected, 'lane-control frozen predecessor changed'))
+            item['before'],
+            labels['definition'] + name + labels['call'],
+            labels['definition'] + reference + labels['call'])
+        pairs.append((frozen, expected, labels['frozen']))
     for item in record['premises']:
         actual = _declaration(_typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root / item['path']).read_text(), _operation=_operation), _operation=_operation), item['name'], ())
-        pairs.append((actual, item['source'], 'lane-control guarded premise changed: ' + item['name']))
+        pairs.append((actual, item['source'], labels['premise'] + item['name']))
     for rel, expected in record['producer_modules'].items():
         pairs.append((_typed_source.historical_text(root, rel, _observe_text(root, rel, (root / rel).read_text(), _operation=_operation), _operation=_operation), expected,
-                      'lane-control IEEE producer module changed: ' + rel))
+                      labels['producer'] + rel))
     _gate_tokens(pairs)
     return record
 
