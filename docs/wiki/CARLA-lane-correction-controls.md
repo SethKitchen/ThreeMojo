@@ -34,7 +34,7 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record and the cleanup digest.
 
-`tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the frozen digest, and the component records.
+`tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the frozen digest, the component records, and the pin digests.
 
 `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch migration digest, its source set, and the historical pin digests.
 
