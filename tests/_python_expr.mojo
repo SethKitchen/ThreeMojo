@@ -1494,6 +1494,52 @@ def sum2_graph_dump(payload: String) raises -> String:
     return plain_function_dump(parsed.text(parsed.at(parsed.root, "source")))
 
 
+def _forbid_attribute(
+    function_doc: PyJson, fragment: String, label: String
+) raises:
+    var dot = -1
+    var data = fragment.as_bytes()
+    var index = 0
+    while index < len(data):
+        if data[index] == 46:
+            dot = index
+            break
+        index += 1
+    if dot <= 0 or dot + 1 >= len(data):
+        raise Error("invalid checker fragment: " + label)
+    var value = String("")
+    var attr = String("")
+    index = 0
+    while index < dot:
+        value += chr(Int(data[index]))
+        index += 1
+    index = dot + 1
+    while index < len(data):
+        attr += chr(Int(data[index]))
+        index += 1
+    if _has_attribute(function_doc, function_doc.root, value, attr):
+        raise Error("optional runtime contract: " + label)
+
+
+def _has_attribute(
+    doc: PyJson, node: Int, value: String, attr: String
+) raises -> Bool:
+    if _node_type(doc, node) == "Attribute":
+        var owner = _named_field(doc, node, "value")
+        var name = _named_field(doc, node, "attr")
+        if _node_type(doc, owner) == "Name":
+            var ident = _named_field(doc, owner, "id")
+            if doc.text(ident) == value and doc.text(name) == attr:
+                return True
+    if doc.kind(node) == PY_LIST:
+        var index = 0
+        while index < doc.length(node):
+            if _has_attribute(doc, doc.item(node, index), value, attr):
+                return True
+            index += 1
+    return False
+
+
 def _check_setup(function_doc: PyJson, fragment: String, label: String) raises:
     var body = _named_field(function_doc, function_doc.root, "body")
     var loops = List[Int]()
@@ -1770,7 +1816,8 @@ def fragment_count(payload: String) raises -> String:
     Args:
         payload: JSON with `source`, `name`, `kind`, `fragment`, and `label`.
             `kind` is `contains`, `expression`, `sequence`, `first`, `body`,
-            `equal`, `fresh`, `before-loop`, `before-call`, or `setup`.
+            `equal`, `fresh`, `before-loop`, `before-call`, `setup`, or
+            `no-attribute`.
 
     Returns:
         The decimal count of matches.
@@ -1817,6 +1864,9 @@ def fragment_count(payload: String) raises -> String:
         count = 1
     elif kind == "setup":
         _check_setup(function_doc, fragment, label)
+        count = 1
+    elif kind == "no-attribute":
+        _forbid_attribute(function_doc, fragment, label)
         count = 1
     elif kind == "before-loop":
         _check_before_loop(function_doc, fragment, label)

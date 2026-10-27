@@ -486,9 +486,14 @@ def verify_semantics(root, *, _operation=None):
              'support uses uniform whole-domain error')
     contains(support, 'var four_error = _Interval.point(4.0) * _Interval.point(domain.error)',
              'convex support uses uniform whole-domain error')
-    require(not any(isinstance(part, ast.Attribute) and isinstance(part.value, ast.Name)
-                    and part.value.id == 'center' and part.attr == 'error' for part in ast.walk(support)),
-            'translated center error cannot replace world error')
+    if getattr(support, '_runtime_source', None) is not None:
+        _fragment_count(
+            support._runtime_source, support._runtime_name, 'no-attribute',
+            'center.error', 'translated center error cannot replace world error')
+    else:
+        require(not any(isinstance(part, ast.Attribute) and isinstance(part.value, ast.Name)
+                        and part.value.id == 'center' and part.attr == 'error' for part in ast.walk(support)),
+                'translated center error cannot replace world error')
 
     predicate = body(root, 'curve_sample_dispatch', '_sample_dispatch_predicate', _operation=_operation)
     require(_fragment_count(
