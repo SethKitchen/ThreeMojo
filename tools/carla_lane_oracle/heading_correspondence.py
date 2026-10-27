@@ -56,6 +56,30 @@ def _heading_graph(fresh, consumers, eligibility):
         raise ValueError(message)
 
 
+def _heading_result(consumers):
+    """Return the heading correspondence result for `consumers` entries."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({'consumers': consumers}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='heading-result-') as directory:
+        path = Path(directory) / 'result.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_heading_result',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def verify(root, *, _operation=None):
     path = root/'extensions/carla'
     fresh = _typed_source.historical_text(root, path/'curve_bounds.mojo', source._observe_text(root, 'extensions/carla/curve_bounds.mojo', (path/'curve_bounds.mojo').read_text(), _operation=_operation), _operation=_operation)
@@ -64,8 +88,4 @@ def verify(root, *, _operation=None):
         consumers.append((filename, name, _typed_source.historical_text(root, path/filename, source._observe_text(root, 'extensions/carla/' + filename, (path/filename).read_text(), _operation=_operation), _operation=_operation)))
     eligibility = _typed_source.historical_text(root, path/'spiral_moment_proof.mojo', source._observe_text(root, 'extensions/carla/spiral_moment_proof.mojo', (path/'spiral_moment_proof.mojo').read_text(), _operation=_operation), _operation=_operation)
     _heading_graph(fresh, consumers, eligibility)
-    return {'heading_consumers': len(CONSUMERS),
-            'fresh_rate_and_heading_match': True,
-            'ideal_u_and_original_quadrant_phase_unchanged': True,
-            'scope': 'Exact fresh/full-Jet heading source graph after k0 expansion; '
-                     'no change to ideal u, quadrant eligibility or scalar evaluator'}
+    return _heading_result(len(CONSUMERS))
