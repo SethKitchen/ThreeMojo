@@ -503,7 +503,11 @@ def _open_write(path: String) raises -> Int:
 
 def _set_nonblock(fd: Int, enabled: Bool) raises:
     """Set or clear `O_NONBLOCK` on `fd`."""
-    var flags = external_call["fcntl", c_int](c_int(fd), c_int(3), c_int(0))
+    # `fcntl` takes its third argument through `...`. Apple Silicon passes a
+    # variadic argument on the stack, so the call must say which are fixed.
+    var flags = external_call["fcntl", c_int, num_fixed_args=2](
+        c_int(fd), c_int(3), c_int(0)
+    )
     if flags < 0:
         raise Error("OSError: [Errno ", errno(), "] ", strerror(errno()))
     var next = Int(flags)
@@ -511,7 +515,12 @@ def _set_nonblock(fd: Int, enabled: Bool) raises:
         next |= _o_nonblock()
     else:
         next &= ~_o_nonblock()
-    if external_call["fcntl", c_int](c_int(fd), c_int(4), c_int(next)) < 0:
+    if (
+        external_call["fcntl", c_int, num_fixed_args=2](
+            c_int(fd), c_int(4), c_int(next)
+        )
+        < 0
+    ):
         raise Error("OSError: [Errno ", errno(), "] ", strerror(errno()))
 
 

@@ -269,8 +269,10 @@ def open_at(directory: Int, path: List[UInt8], flags: Int) -> Int:
     Returns:
         The descriptor, or -1 with `errno` set.
     """
+    # `openat` is variadic in C. Every call names its three fixed arguments,
+    # so each program declares it once, and Apple Silicon reads them right.
     return Int(
-        external_call["openat", c_int](
+        external_call["openat", c_int, num_fixed_args=3](
             c_int(directory), _at(Int(path.unsafe_ptr())), c_int(flags)
         )
     )
