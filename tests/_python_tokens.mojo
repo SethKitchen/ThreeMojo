@@ -1974,6 +1974,168 @@ def normalized_block(source: String) -> String:
     return out
 
 
+def _locate(source: String, needle: String) -> Int:
+    """Return the only match of `needle`, or -1.
+
+    Args:
+        source: The text to search.
+        needle: The non-overlapping fragment.
+
+    Returns:
+        The byte index of the only match, or -1 when the count is not 1.
+    """
+    var data = source.as_bytes()
+    var pattern = needle.as_bytes()
+    if len(pattern) == 0:
+        return -1
+    var found = -1
+    var index = 0
+    while index + len(pattern) <= len(data):
+        var same = True
+        var cursor = 0
+        while same and cursor < len(pattern):
+            if data[index + cursor] != pattern[cursor]:
+                same = False
+            cursor += 1
+        if same:
+            if found >= 0:
+                return -1
+            found = index
+            index += len(pattern)
+        else:
+            index += 1
+    return found
+
+
+def _line_number(source: String, offset: Int) -> Int:
+    """Return the 1-based line of a byte offset.
+
+    Args:
+        source: The text.
+        offset: The byte index.
+
+    Returns:
+        The line number, counting newline bytes before `offset`.
+    """
+    var data = source.as_bytes()
+    var line = 1
+    var index = 0
+    var stop = offset
+    if stop > len(data):
+        stop = len(data)
+    while index < stop:
+        if data[index] == 10:
+            line += 1
+        index += 1
+    return line
+
+
+def _at_line_start(source: String, offset: Int) -> Bool:
+    """Return whether `offset` is at the start of a line.
+
+    Args:
+        source: The text.
+        offset: The byte index.
+
+    Returns:
+        True at offset 0 or immediately after a newline.
+    """
+    if offset == 0:
+        return True
+    return source.as_bytes()[offset - 1] == 10
+
+
+def _has_top_level_line(doc: PyJson, line: Int) raises -> Bool:
+    """Return whether a start record is `(line, 0)`.
+
+    Args:
+        doc: The JSON list of start pairs.
+        line: The 1-based line.
+
+    Returns:
+        True when that line has a column-0 start.
+
+    Raises:
+        Error: A start pair is not a list.
+    """
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        var pair = doc.item(doc.root, index)
+        if (
+            doc.length(pair) >= 2
+            and doc.text(doc.item(pair, 0)) == String(line)
+            and doc.text(doc.item(pair, 1)) == "0"
+        ):
+            return True
+        index += 1
+    return False
+
+
+def _last_normalized_line_is_decorator(text: String) -> Bool:
+    """Return whether the last kept line starts with `@`.
+
+    Args:
+        text: One normalized block, ending in a newline.
+
+    Returns:
+        True when that line is a decorator.
+    """
+    var data = text.as_bytes()
+    var end = len(data)
+    if end > 0 and data[end - 1] == 10:
+        end -= 1
+    if end == 0:
+        return False
+    var start = end
+    while start > 0 and data[start - 1] != 10:
+        start -= 1
+    return data[start] == 64
+
+
+def selected_block(source: String, begin: String, end: String) raises -> String:
+    """Return one normalized source block between two markers.
+
+    Args:
+        source: The module source.
+        begin: The opening marker. It must occur once.
+        end: The closing marker. It must occur once, after `begin`.
+
+    Returns:
+        The normalized text from `begin` up to `end`.
+
+    Raises:
+        Error: A marker is missing, repeated, indented, or not a top-level
+            token, or a decorator is attached to the opening line.
+    """
+    var start = _locate(source, begin)
+    if start < 0:
+        raise Error("missing or ambiguous source-block start")
+    var stop = _locate(source, end)
+    if stop < 0:
+        raise Error("missing or ambiguous source-block end")
+    if start >= stop:
+        raise Error("moved source-block boundary")
+    if not _at_line_start(source, start) or not _at_line_start(source, stop):
+        raise Error("source-block boundary is not top-level")
+    var starts = String("")
+    try:
+        starts = top_level_starts_json(source)
+    except error:
+        _ = String(error)
+        raise Error("malformed source-block tokens")
+    var doc = PyJson.parse(starts)
+    if not _has_top_level_line(
+        doc, _line_number(source, start)
+    ) or not _has_top_level_line(doc, _line_number(source, stop)):
+        raise Error("source-block boundary is not an actual top-level token")
+    if _last_normalized_line_is_decorator(
+        normalized_block(String(source[byte=:start]))
+    ):
+        raise Error("unbound decorator before source-block start")
+    return normalized_block(String(source[byte=start:stop]))
+
+
 def _decimal_literal(text: String) -> Bool:
     """Return whether `text` is one decimal literal.
 

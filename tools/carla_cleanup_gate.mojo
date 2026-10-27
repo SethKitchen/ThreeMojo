@@ -26,6 +26,7 @@
     carla_cleanup_gate --normalize PATH
     carla_cleanup_gate --table PATH --count N
     carla_cleanup_gate --moment-source PATH
+    carla_cleanup_gate --block DIR
     carla_cleanup_gate --literals PATH --name NAME --kind array --size N
     carla_cleanup_gate --literals PATH --name NAME --kind scalar
 
@@ -45,6 +46,7 @@ from tests._python_tokens import (
     moment_source,
     moment_words_json,
     normalized_block,
+    selected_block,
     replace_token_fragment,
     python_syntax_json,
     declaration_text,
@@ -450,7 +452,7 @@ def _usage():
             " | --routing PATH --constants PATH"
             " | --ideal PATH --name NAME | --syntax PATH"
             " | --slice PATH --name NAME | --fragment DIR | --normalize PATH"
-            " | --table PATH --count N | --moment-source PATH"
+            " | --table PATH --count N | --moment-source PATH | --block DIR"
             " | --literals PATH --name NAME --kind array --size N"
             " | --literals PATH --name NAME --kind scalar"
         ),
@@ -494,6 +496,7 @@ def main() raises:
     var table = String("")
     var table_count = String("")
     var moment_source_path = String("")
+    var block = String("")
     var literals = String("")
     var literal_size = String("")
     var arguments = argv()
@@ -530,6 +533,7 @@ def main() raises:
             or word == "--table"
             or word == "--count"
             or word == "--moment-source"
+            or word == "--block"
             or word == "--literals"
             or word == "--size"
         ):
@@ -594,6 +598,8 @@ def main() raises:
                 table_count = value
             elif word == "--moment-source":
                 moment_source_path = value
+            elif word == "--block":
+                block = value
             elif word == "--literals":
                 literals = value
             elif word == "--size":
@@ -654,6 +660,8 @@ def main() raises:
     if table.byte_length() > 0 or table_count.byte_length() > 0:
         modes += 1
     if moment_source_path.byte_length() > 0:
+        modes += 1
+    if block.byte_length() > 0:
         modes += 1
     if significant.byte_length() > 0:
         modes += 1
@@ -736,6 +744,16 @@ def main() raises:
                 )
             else:
                 _usage()
+            return
+        if block.byte_length() > 0:
+            print(
+                selected_block(
+                    Path(block + "/source.text").read_text(),
+                    Path(block + "/begin.text").read_text(),
+                    Path(block + "/end.text").read_text(),
+                ),
+                end="",
+            )
             return
         if moment_source_path.byte_length() > 0:
             print(

@@ -394,6 +394,31 @@ def moment_words(text, count):
     return json.loads(result.stdout)
 
 
+def selected_block(text, begin, end):
+    """Return one normalized source block between two markers."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='selected-block-') as directory:
+        folder = Path(directory)
+        (folder / 'source.text').write_text(text)
+        (folder / 'begin.text').write_text(begin)
+        (folder / 'end.text').write_text(end)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--block', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def normalized_block(text):
     """Drop comments and blank lines from one source block."""
     import os

@@ -17,6 +17,7 @@ from tests._python_tokens import (
     moment_source,
     moment_words_json,
     normalized_block,
+    selected_block,
     replace_token_fragment,
     ideal_function_source,
     python_syntax_json,
@@ -205,6 +206,37 @@ def test_a_moment_table_keeps_its_hex_words() raises:
     with assert_raises(contains="wrong table declaration shape"):
         _ = moment_words_json(
             source.replace("Array[UInt64, 2]", "Array[UInt64, 1]"), 2
+        )
+
+
+def test_a_source_block_stops_at_the_next_marker() raises:
+    """A docstring copy of a marker is not a top-level boundary."""
+    var source = String(
+        '"""\n'
+        + "def decoy():\n"
+        + '"""\n'
+        + "def first():\n"
+        + "    return 1\n"
+        + "\n"
+        + "def second():\n"
+        + "    return 2\n"
+    )
+    assert_equal(
+        selected_block(source, "def first():", "def second():"),
+        "def first():\n    return 1\n",
+    )
+    with assert_raises(
+        contains="source-block boundary is not an actual top-level token"
+    ):
+        _ = selected_block(source, "def decoy():", "def second():")
+    with assert_raises(contains="unbound decorator before source-block start"):
+        _ = selected_block(
+            (
+                "@no_inline\ndef first():\n    return 1\n\ndef second():\n   "
+                " return 2\n"
+            ),
+            "def first():",
+            "def second():",
         )
 
 

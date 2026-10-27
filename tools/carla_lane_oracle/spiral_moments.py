@@ -202,22 +202,10 @@ def normalized_block(text):
 
 
 def selected_block(text, begin, end):
-    require(text.count(begin) == 1, 'missing or ambiguous source-block start')
-    require(text.count(end) == 1, 'missing or ambiguous source-block end')
-    start, stop = text.index(begin), text.index(end)
-    require(start < stop, 'moved source-block boundary')
-    require((start == 0 or text[start-1] == '\n')
-            and (stop == 0 or text[stop-1] == '\n'), 'source-block boundary is not top-level')
     try:
-        token_starts = ideal_projection.top_level_source_starts(text)
+        return ideal_projection.selected_block(text, begin, end)
     except ValueError as error:
-        raise CheckError('malformed source-block tokens') from error
-    require(all((text.count('\n', 0, offset) + 1, 0) in token_starts
-                for offset in (start, stop)), 'source-block boundary is not an actual top-level token')
-    preceding = normalized_block(text[:start]).rstrip().splitlines()
-    require(not preceding or not preceding[-1].startswith('@'),
-            'unbound decorator before source-block start')
-    return normalized_block(text[start:stop])
+        raise CheckError(str(error)) from error
 
 
 def _constant_error(error, name):
