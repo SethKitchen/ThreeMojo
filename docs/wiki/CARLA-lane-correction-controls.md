@@ -62,6 +62,8 @@ It masks the stored-word routing used by the spiral-moment check.
 
 It removes `var`, `comptime`, and the `derivatives: Bool` parameter list from one ideal function.
 
+It returns Python source and generic parameters for one sampled declaration.
+
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.

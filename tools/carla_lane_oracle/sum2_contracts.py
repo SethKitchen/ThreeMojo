@@ -7,8 +7,9 @@ The literal declarations below are the reviewed mathematical/compiler source
 checkpoint, not an automatically refreshed digest. AST equality binds the
 original recurrence and arithmetic leaf. Complete lexical contracts retain
 the environment guard, keyword subscripts, callers and decorators; dependency
-and qualifier token gates separately cover the surrounding modules. This
-checker never executes Mojo and cannot qualify native code generation.
+and qualifier token gates separately cover the surrounding modules. The
+cleanup gate supplies the sampled declaration syntax. This checker cannot
+qualify native code generation.
 """
 if __package__:
     from . import source_contracts as source
@@ -33,6 +34,58 @@ if __package__:
     from .ideal_projection import verify_projection
 else:
     from ideal_projection import verify_projection
+
+
+def _syntax_tree(text):
+    """Return one sampled declaration tree.
+
+    The cleanup gate removes Mojo keywords and records generic parameters.
+    This function parses that source. It does not run the fragment.
+
+    Args:
+        text: Mojo source to inspect as a Python AST.
+
+    Returns:
+        The parsed module. Each generic declaration carries
+        ``_mojo_type_parameters``.
+
+    Raises:
+        CheckError: A generic declaration is unclosed, repeated, or parsed
+            more than once.
+    """
+    import os
+    import subprocess
+    import tempfile
+    if __package__:
+        from . import check_sampled_values as sampled
+    else:
+        import check_sampled_values as sampled
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='sum2-syntax-') as directory:
+        source = Path(directory) / 'source.mojo'
+        source.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--syntax', str(source)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise sampled.CheckError(message)
+    payload = json.loads(result.stdout)
+    tree = ast.parse(payload['source'])
+    for key, parameters in payload['generics']:
+        kind, name = key
+        node_type = ast.FunctionDef if kind == 'def' else ast.ClassDef
+        matches = [node for node in ast.walk(tree)
+                   if isinstance(node, node_type) and node.name == name]
+        sampled.require(
+            len(matches) == 1, 'ambiguous parsed generic declaration')
+        matches[0]._mojo_type_parameters = [tuple(item) for item in parameters]
+    return tree
+
 
 # Initial accepted arithmetic checkpoint. The guarded and final format/doc
 # source bindings are preserved in sum2-correspondence-migration.json.
@@ -307,17 +360,17 @@ def verify(root, *, _operation=None):
     texts['spiral_roundoff_proof'] = selection.predecessor_text(
         root, 'extensions/carla/spiral_roundoff_proof.mojo', _operation=_operation)
 
-    trees = {name: c.syntax_tree(text) for name, text in texts.items()
+    trees = {name: _syntax_tree(text) for name, text in texts.items()
              if name != 'curve_sum2'}
     # The complete lexical contract above retains all keyword-subscripts and
     # decorators. Separately relate the unchanged arithmetic leaf/recurrence
     # to the initial station-reviewed declarations using actual token spans.
-    previous = c.syntax_tree(HELPER)
-    update = c.unique_function(c.syntax_tree(guards.declaration(
+    previous = _syntax_tree(HELPER)
+    update = c.unique_function(_syntax_tree(guards.declaration(
         texts['curve_sum2'], '_sum2_update')), '_sum2_update')
     expected_update = c.unique_function(previous, '_sum2_update')
     require(c.dump(update) == c.dump(expected_update), 'Sum2 recurrence changed')
-    leaf = c.unique_function(c.syntax_tree(guards.declaration(
+    leaf = c.unique_function(_syntax_tree(guards.declaration(
         texts['curve_sum2'], '_sum2_error_checked')), '_sum2_error_checked')
     leaf.name = '_sum2_error'
     require(c.dump(leaf) == c.dump(c.unique_function(previous, '_sum2_error')),
@@ -331,7 +384,7 @@ def verify(root, *, _operation=None):
             require(c.dump(actual.body[0]) == c.dump(ast.parse(
                 '_require_sum2_environment()').body[0]), 'scalar environment check moved')
             actual.body.pop(0)
-        wanted = c.unique_function(c.syntax_tree(expected), name)
+        wanted = c.unique_function(_syntax_tree(expected), name)
         require(c.dump(actual) == c.dump(wanted),
                 'Sum2 complete caller graph changed: ' + name)
     # Require the exact direct import inventory and reject all shadow forms.
@@ -350,7 +403,7 @@ def verify(root, *, _operation=None):
             verify_binding(trees[module], helper, allowed_import=matches[0])
     pins = json.loads(_typed_source.historical_text(root, root / 'tools/carla_lane_oracle/spiral-moment-pins.json', source._observe_text(root, (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').relative_to(root).as_posix(), (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').read_text(), _operation=_operation), _operation=_operation))
     interval = _typed_source.historical_text(root, root / 'extensions/carla/curve_interval.mojo', source._observe_text(root, (root / 'extensions/carla/curve_interval.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_interval.mojo').read_text(), _operation=_operation), _operation=_operation)
-    interval_tree = c.syntax_tree(interval)
+    interval_tree = _syntax_tree(interval)
     half = c.unique_function(interval_tree, '_stored_half')
     half_imports = [node for node in trees['curve_bounds'].body
                     if isinstance(node, ast.ImportFrom)

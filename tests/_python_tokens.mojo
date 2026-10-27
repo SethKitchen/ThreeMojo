@@ -1044,6 +1044,165 @@ def ideal_function_source(source: String, name: String) raises -> String:
     return out
 
 
+def python_syntax_json(source: String) raises -> String:
+    """Return Python source and generic metadata for one Mojo fragment.
+
+    Args:
+        source: Mojo source to inspect as a Python AST.
+
+    Returns:
+        JSON with `source` and `generics`. `struct` is written as `class`.
+        `var`, `mut`, `out`, `ref`, `comptime`, and `raises` are removed.
+
+    Raises:
+        Error: A generic declaration is unclosed or repeated, or the source
+            cannot be tokenized.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var kept_kinds = List[Int]()
+    var kept_texts = List[String]()
+    var index = 0
+    while index < len(kinds):
+        var drop = kinds[index] == _NAME and (
+            texts[index] == "var"
+            or texts[index] == "mut"
+            or texts[index] == "out"
+            or texts[index] == "ref"
+            or texts[index] == "comptime"
+            or texts[index] == "raises"
+        )
+        if not drop:
+            var word = texts[index]
+            if kinds[index] == _NAME and word == "struct":
+                word = "class"
+            kept_kinds.append(kinds[index])
+            kept_texts.append(word)
+        index += 1
+    var generic_kinds = List[String]()
+    var generic_names = List[String]()
+    var param_kinds = List[String]()
+    var param_texts = List[String]()
+    var param_starts = List[Int]()
+    var param_counts = List[Int]()
+    index = 0
+    while index + 2 < len(kept_kinds):
+        var opener = (
+            kept_kinds[index] == _NAME
+            and (kept_texts[index] == "def" or kept_texts[index] == "class")
+            and kept_kinds[index + 1] == _NAME
+            and kept_kinds[index + 2] == _OP
+            and kept_texts[index + 2] == "["
+        )
+        if opener:
+            var end = index + 3
+            var depth = 1
+            while end < len(kept_kinds) and depth > 0:
+                if kept_texts[end] == "[":
+                    depth += 1
+                elif kept_texts[end] == "]":
+                    depth -= 1
+                end += 1
+            if depth != 0:
+                raise Error("unclosed Mojo generic declaration")
+            var start = len(param_kinds)
+            var token = index + 3
+            while token < end - 1:
+                if (
+                    kept_kinds[token] != _NEWLINE
+                    and kept_kinds[token] != _INDENT
+                    and kept_kinds[token] != _DEDENT
+                ):
+                    param_kinds.append(_token_name(kept_kinds[token]))
+                    param_texts.append(kept_texts[token])
+                token += 1
+            var count = len(param_kinds) - start
+            if count > 0 and param_texts[start + count - 1] == ",":
+                _ = param_kinds.pop()
+                _ = param_texts.pop()
+                count -= 1
+            var key = kept_texts[index] + "\t" + kept_texts[index + 1]
+            var seen = 0
+            while seen < len(generic_kinds):
+                var previous = generic_kinds[seen] + "\t" + generic_names[seen]
+                if previous == key:
+                    raise Error("ambiguous generic declaration")
+                seen += 1
+            generic_kinds.append(kept_texts[index])
+            generic_names.append(kept_texts[index + 1])
+            param_starts.append(start)
+            param_counts.append(count)
+            var next_kinds = List[Int]()
+            var next_texts = List[String]()
+            var copy = 0
+            while copy < index + 2:
+                next_kinds.append(kept_kinds[copy])
+                next_texts.append(kept_texts[copy])
+                copy += 1
+            copy = end
+            while copy < len(kept_kinds):
+                next_kinds.append(kept_kinds[copy])
+                next_texts.append(kept_texts[copy])
+                copy += 1
+            kept_kinds = next_kinds^
+            kept_texts = next_texts^
+        index += 1
+    var out = String("")
+    var indents = List[String]()
+    indents.append("")
+    var need_indent = False
+    index = 0
+    while index < len(kept_kinds):
+        var kind = kept_kinds[index]
+        if kind == _NEWLINE:
+            out += "\n"
+            need_indent = True
+        elif kind == _DEDENT:
+            if len(indents) > 1:
+                _ = indents.pop()
+        elif kind == _INDENT:
+            indents.append(kept_texts[index])
+        else:
+            if need_indent:
+                out += indents[len(indents) - 1]
+                need_indent = False
+            elif out.byte_length() > 0:
+                var data = out.as_bytes()
+                if data[len(data) - 1] != 10:
+                    out += " "
+            out += kept_texts[index]
+        index += 1
+    var doc = PyJson()
+    var root = doc.new_dict()
+    doc.set(root, "source", doc.new_str(out))
+    var rows = doc.new_list()
+    var generic = 0
+    while generic < len(generic_kinds):
+        var entry = doc.new_list()
+        var key = doc.new_list()
+        doc.append(key, doc.new_str(generic_kinds[generic]))
+        doc.append(key, doc.new_str(generic_names[generic]))
+        doc.append(entry, key)
+        var items = doc.new_list()
+        var cursor = param_starts[generic]
+        var count = param_counts[generic]
+        var item = 0
+        while item < count:
+            var pair = doc.new_list()
+            doc.append(pair, doc.new_str(param_kinds[cursor]))
+            doc.append(pair, doc.new_str(param_texts[cursor]))
+            doc.append(items, pair)
+            cursor += 1
+            item += 1
+        doc.append(entry, items)
+        doc.append(rows, entry)
+        generic += 1
+    doc.set(root, "generics", rows)
+    doc.root = root
+    return doc.dumps()
+
+
 def module_statements_json(source: String) raises -> String:
     """Return the top-level statements, without the module docstring.
 

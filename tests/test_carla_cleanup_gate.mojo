@@ -13,6 +13,7 @@ from tests._python_tokens import (
     declaration_place,
     declaration_text,
     ideal_function_source,
+    python_syntax_json,
     significant_json,
     module_routing_json,
     module_statements_json,
@@ -122,6 +123,34 @@ def test_an_ideal_generic_parameter_list_is_removed() raises:
         raise Error(plain)
     if plain.find("def _stored_half") < 0 or plain.find("return result") < 0:
         raise Error(plain)
+
+
+def test_a_generic_declaration_becomes_python_source() raises:
+    """`struct` becomes `class`, and the parameter list is metadata."""
+    var source = String(
+        "struct Box[T: Int]:\n"
+        + "    def value[\n"
+        + "        derivatives: Bool,\n"
+        + "    ]() -> Int:\n"
+        + "        var number = 1\n"
+        + "        return number\n"
+    )
+    var document = python_syntax_json(source)
+    if document.find('"class"') < 0 or document.find('"struct"') >= 0:
+        raise Error(document)
+    if document.find("derivatives") < 0 or document.find("var ") >= 0:
+        raise Error(document)
+    if document.find("def value") < 0 or document.find("return number") < 0:
+        raise Error(document)
+
+
+def test_a_repeated_generic_name_is_refused() raises:
+    """Two generic declarations with the same name fail closed."""
+    with assert_raises(contains="ambiguous generic declaration"):
+        _ = python_syntax_json(
+            "def value[T: Int]():\n    return 1\n\n"
+            + "def value[U: Int]():\n    return 2\n"
+        )
 
 
 def test_a_stored_word_routing_masks_the_right_hand_side() raises:
