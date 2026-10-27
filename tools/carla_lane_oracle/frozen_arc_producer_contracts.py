@@ -21,9 +21,45 @@ else:
 
 MIGRATION = 'tools/carla_lane_oracle/frozen-arc-producer-migration.json'
 MIGRATION_SHA256 = '70091e23400193257514363570187b47890e3c08c352fe79eb08bf291737cc9f'
-SOURCE_PATH = 'extensions/carla/curve_frozen_arc.mojo'
-PROTECTED_INPUTS = (MIGRATION, SOURCE_PATH, 'extensions/carla/polynomial.mojo',
-                    'extensions/carla/road.mojo')
+_PATHS = None
+
+
+def _paths():
+    """Return the frozen-arc source and its dependency paths."""
+    global _PATHS
+    if _PATHS is not None:
+        return _PATHS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_paths'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _PATHS = json.loads(result.stdout)
+    return _PATHS
+
+
+def _ensure_paths():
+    """Bind the frozen-arc source before a source read."""
+    global SOURCE_PATH
+    SOURCE_PATH = _paths()['source']
+
+
+def __getattr__(name):
+    if name in ('SOURCE_PATH', 'PROTECTED_INPUTS'):
+        _ensure_paths()
+    if name == 'SOURCE_PATH':
+        return SOURCE_PATH
+    if name == 'PROTECTED_INPUTS':
+        return (MIGRATION, SOURCE_PATH, *_paths()['protected'])
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def _check_operation(root, operation):
@@ -417,6 +453,7 @@ def verify(root, *, _operation=None):
             raise
         raise ValueError('frozen ARC producer contract: unreviewed runtime pin successor') from error
     _gate_digest(guard_payload, record['guard_pins_unchanged_sha256'], 'guard')
+    _ensure_paths()
     _gate_token(_typed_source.historical_text(root, SOURCE_PATH, _observe_text(
         root, SOURCE_PATH, (root/SOURCE_PATH).read_text(), _operation=_operation), _operation=_operation),
         record['source_successor']['after_token_sha256'])

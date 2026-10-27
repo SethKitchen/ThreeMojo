@@ -48,6 +48,8 @@ It keeps the consumer import scope before the first definition.
 
 `tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record, the producer functions, and the arc layout.
 
+It keeps the frozen-arc source and the polynomial and road paths.
+
 It writes each frozen runtime pin back to its historical value.
 
 It writes that restored pin with two-space indentation.

@@ -276,6 +276,42 @@ def frozen_arc_layout(actual: String, stored: String) raises:
         )
 
 
+def _dependency(index: Int) -> String:
+    """Return one frozen-arc dependency path.
+
+    Args:
+        index: The path position, 0 or 1.
+
+    Returns:
+        The repository path.
+    """
+    if index == 0:
+        return "extensions/carla/polynomial.mojo"
+    return "extensions/carla/road.mojo"
+
+
+def frozen_arc_paths() raises -> String:
+    """Return the frozen-arc source and its dependency paths.
+
+    Returns:
+        JSON with `source` and `protected` in reviewed order.
+
+    Raises:
+        Error: The lists cannot be written.
+    """
+    var doc = PyJson()
+    var spec = doc.new_dict()
+    doc.set(spec, "source", doc.new_str(_SOURCE))
+    var protected = doc.new_list()
+    var index = 0
+    while index < 2:
+        doc.append(protected, doc.new_str(_dependency(index)))
+        index += 1
+    doc.set(spec, "protected", protected)
+    doc.root = spec
+    return doc.dumps()
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
