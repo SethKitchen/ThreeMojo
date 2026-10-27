@@ -7,6 +7,7 @@
 
 from std.testing import TestSuite, assert_equal, assert_raises
 
+from tests._python_tokens import token_sha256
 from tools._dependency_words import dependency_word_choice
 
 
@@ -89,6 +90,20 @@ def test_an_unreviewed_dependency_change_is_refused() raises:
         _ = dependency_word_choice(
             _payload("changed", "other-token", "geometry.mojo")
         )
+
+
+def test_a_source_text_uses_its_kept_token_digest() raises:
+    """A source is hashed when the payload has no token."""
+    var source = "def f():\n    return 1\n"
+    var digest = token_sha256(source)
+    var payload = (
+        '{"text":"def f():\\n    return 1\\n","expected":"'
+        + digest
+        + '","path":"other.mojo","trig_path":"trig.mojo",'
+        + '"trig_token":"trig-token","geometry_path":"geometry.mojo",'
+        + '"geometry_token":"geometry-token"}'
+    )
+    assert_equal(dependency_word_choice(payload), "match")
 
 
 def main() raises:

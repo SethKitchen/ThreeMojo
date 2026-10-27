@@ -9,15 +9,17 @@ An exact token match needs no word check. Only the reviewed trig and
 geometry tokens may differ and still keep their stored words.
 """
 
-from tools._python_json import PyJson
+from tests._python_tokens import token_sha256
+from tools._python_json import MISSING, PyJson
 
 
 def dependency_word_choice(payload: String) raises -> String:
     """Return which stored-word check a dependency needs.
 
     Args:
-        payload: JSON with `token`, `expected`, `path`, `trig_path`,
-            `trig_token`, `geometry_path`, and `geometry_token`.
+        payload: JSON with `expected`, `path`, `trig_path`, `trig_token`,
+            `geometry_path`, and `geometry_token`. `token` is the current
+            digest. `text` is hashed when `token` is absent.
 
     Returns:
         `match` when the token is unchanged, `trig` for the trig word
@@ -27,7 +29,12 @@ def dependency_word_choice(payload: String) raises -> String:
         Error: The path is not one of those reviewed token pairs.
     """
     var doc = PyJson.parse(payload)
-    var token = doc.text(doc.at(doc.root, "token"))
+    var token_node = doc.get(doc.root, "token")
+    var token: String
+    if token_node == MISSING:
+        token = token_sha256(doc.text(doc.at(doc.root, "text")))
+    else:
+        token = doc.text(token_node)
     var expected = doc.text(doc.at(doc.root, "expected"))
     if token == expected:
         return "match"

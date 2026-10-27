@@ -505,7 +505,7 @@ def _gate_words(text, kind, label):
         raise ValueError(message)
 
 
-def _dependency_choice(token, expected, path):
+def _dependency_choice(text, expected, path):
     import json
     import os
     import subprocess
@@ -515,7 +515,7 @@ def _dependency_choice(token, expected, path):
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     pins = _dependency_pins()
     payload = json.dumps({
-        'token': token,
+        'text': text,
         'expected': expected,
         'path': path,
         'trig_path': pins['trig_path'],
@@ -542,7 +542,7 @@ def verify_dependency(path, text, expected):
     # A fixed whole-module fingerprint admits only equivalent stored words.
     # Historical pins remain unchanged; other dependencies retain exact tokens.
     pins = _dependency_pins()
-    choice = _dependency_choice(ideal_projection.token_sha256(text), expected, path)
+    choice = _dependency_choice(text, expected, path)
     if choice == pins['trig_choice']:
         _gate_words(text, pins['trig_choice'], path)
     elif choice == pins['geometry_choice']:
@@ -561,9 +561,8 @@ def verify(root, *, _operation=None):
     for path, transition in record['sources'].items():
         text = accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
         if (path == labels['junction']
-                and not ideal_projection.texts_match(
-                    ideal_projection.token_sha256(text),
-                    transition['after_token_sha256'])):
+                and not ideal_projection.token_digest_equals(
+                    text, transition['after_token_sha256'])):
             try:
                 if __package__:
                     from . import full_audit_cleanup_contracts as full_audit

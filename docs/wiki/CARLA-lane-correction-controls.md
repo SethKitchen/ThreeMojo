@@ -114,6 +114,8 @@ It writes each historical pin with two-space indentation.
 
 It compares each successor token digest before the predecessor fallback.
 
+It compares the junction token digest in one check.
+
 `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch record, the predecessor edge, and the operation graphs.
 
 It keeps the current dispatch source when the token matches.
@@ -135,6 +137,8 @@ It keeps the dispatch contract prefix.
 `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the trig and geometry stored words, and the successor tokens.
 
 It admits trig and geometry word changes only for their reviewed token.
+
+It hashes a premise dependency before choosing its word check.
 
 It selects each reviewed declaration and checks that each premise fragment occurs once, in order.
 
