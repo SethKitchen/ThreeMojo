@@ -48,6 +48,8 @@ It keeps the consumer import scope before the first definition.
 
 It writes each frozen runtime pin back to its historical value.
 
+It relabels one runtime pin failure when the cause is the reviewed contract error.
+
 `tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the pin digests, the ordered pin pair, and the pin placements.
 
 It keeps a component name inside its directory.

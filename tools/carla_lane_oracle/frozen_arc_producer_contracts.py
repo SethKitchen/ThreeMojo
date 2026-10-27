@@ -347,6 +347,62 @@ def verify_premises(root, *, _operation=None):
     return len(record['function_sources'])
 
 
+def _runtime_pin_decision(payload):
+    """Return `raise`, `cause`, or `relabel` for one runtime-pin failure."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='runtime-pin-failure-') as directory:
+        path = Path(directory) / 'decision.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_runtime_pin_failure', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout.strip()
+
+
+def _relabel_runtime_pin(error, operation_present):
+    """Return whether this failure becomes the public runtime-pin diagnostic."""
+    message = ('full-audit cleanup successor: unchanged premise, record or fixture changed: '
+               'tools/carla_lane_oracle/runtime-source-pins.json')
+    try:
+        payload = json.dumps({
+            'stage': 'error',
+            'operation': operation_present,
+            'exact_value_error': type(error) is ValueError,
+            'error_args': list(error.args),
+            'expected_error': 'unreviewed complete successor: ' + message,
+        }, separators=(',', ':'))
+    except (TypeError, ValueError):
+        return False
+    if _runtime_pin_decision(payload) != 'cause':
+        return False
+    cause = error.__cause__
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    try:
+        payload = json.dumps({
+            'stage': 'cause',
+            'exact_contract_error': type(cause) is full_audit.ContractError,
+            'cause_args': None if cause is None else list(cause.args),
+            'expected_cause': message,
+        }, separators=(',', ':'))
+    except (TypeError, ValueError):
+        return False
+    return _runtime_pin_decision(payload) == 'relabel'
+
+
 def verify(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
@@ -357,17 +413,7 @@ def verify(root, *, _operation=None):
     except ValueError as error:
         # Preserve this public runtime-pin diagnostic after complete admission
         # rejects the same fixed input. Never relabel private operation faults.
-        message = ('full-audit cleanup successor: unchanged premise, record or fixture changed: '
-                   'tools/carla_lane_oracle/runtime-source-pins.json')
-        if (_operation is not None or type(error) is not ValueError
-                or error.args != ('unreviewed complete successor: ' + message,)):
-            raise
-        if __package__:
-            from . import full_audit_cleanup_contracts as full_audit
-        else:
-            import full_audit_cleanup_contracts as full_audit
-        cause = error.__cause__
-        if type(cause) is not full_audit.ContractError or cause.args != (message,):
+        if not _relabel_runtime_pin(error, _operation is not None):
             raise
         raise ValueError('frozen ARC producer contract: unreviewed runtime pin successor') from error
     _gate_digest(guard_payload, record['guard_pins_unchanged_sha256'], 'guard')
