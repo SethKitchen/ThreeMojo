@@ -108,41 +108,33 @@ class CommuteLegacyRateHalf(ast.NodeTransformer):
         return node
 
 
+def check_stored_half(text):
+    """Require the stored-half helper to keep its reviewed result uses."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='stored-half-') as directory:
+        path = Path(directory) / 'helper.mojo'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--stored-half', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def verify_helper_projection(helper_text):
     """The pinned helper starts with a half product and only revises error."""
-    helper = (copy.deepcopy(helper_text) if isinstance(helper_text, ast.FunctionDef)
-              else function_tree(helper_text, '_stored_half'))
-    signature = copy.deepcopy(helper)
-    signature.body = [ast.Pass()]
-    expected_signature = function_tree(
-        'def _stored_half[derivatives: Bool](value: _JetExpression[derivatives]) '
-        '-> _JetExpression[derivatives]:\n    pass\n', '_stored_half')
-    require(dump(signature) == dump(expected_signature),
-            'ideal helper declaration or decorator changed')
-    initial = helper.body[0]
-    expected = ast.parse('result = value * _JetExpression[derivatives].constant(0.5)').body[0]
-    require(dump(initial) == dump(expected), 'ideal helper initial expression changed')
-    allowed_result_names = {id(initial.targets[0])}
-    for node in ast.walk(helper):
-        if isinstance(node, ast.Return):
-            require(isinstance(node.value, ast.Name) and node.value.id == 'result',
-                    'ideal helper return changed')
-            allowed_result_names.add(id(node.value))
-        if isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)) and node is not initial:
-            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-            for target in targets:
-                require(not (isinstance(target, ast.Name) and target.id == 'result'),
-                        'ideal helper result rebound')
-                if (isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
-                        and target.value.id == 'result'):
-                    require(target.attr == 'error', 'non-error result field changed')
-                    allowed_result_names.add(id(target.value))
-        if isinstance(node, ast.Call):
-            require(not any(isinstance(arg, ast.Name) and arg.id == 'result'
-                            for arg in node.args), 'ideal helper result escapes')
-    for node in ast.walk(helper):
-        if isinstance(node, ast.Name) and node.id == 'result':
-            require(id(node) in allowed_result_names, 'unapproved ideal helper result use')
+    if not isinstance(helper_text, str):
+        raise ValueError('ideal helper declaration or decorator changed')
+    check_stored_half(helper_text)
 
 
 def project_sum2(tree):

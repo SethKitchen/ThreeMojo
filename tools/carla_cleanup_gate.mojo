@@ -22,6 +22,7 @@
     carla_cleanup_gate --starts PATH
     carla_cleanup_gate --routing PATH --constants PATH
     carla_cleanup_gate --ideal PATH --name NAME
+    carla_cleanup_gate --stored-half PATH
     carla_cleanup_gate --syntax PATH
     carla_cleanup_gate --slice PATH --name NAME
     carla_cleanup_gate --fragment DIR
@@ -49,6 +50,7 @@ from tests._python_tokens import (
     declaration_place,
     ideal_function_source,
     constant_literals_json,
+    check_stored_half,
     function_slice,
     moment_payload_json,
     moment_source,
@@ -533,6 +535,7 @@ def _usage():
             " --bounds PATH --name NAME [--owner NAME] | --significant-json DIR"
             " | --names DIR | --moves PATH | --statements PATH | --starts PATH"
             " | --routing PATH --constants PATH | --ideal PATH --name NAME |"
+            " --stored-half PATH |"
             " --syntax PATH | --slice PATH --name NAME | --fragment DIR |"
             " --normalize PATH | --table PATH --count N | --moment-source PATH"
             " | --moment-payload PATH"
@@ -576,6 +579,7 @@ def main() raises:
     var routing = String("")
     var constants = String("")
     var ideal = String("")
+    var stored_half = String("")
     var syntax = String("")
     var slice_path = String("")
     var fragment = String("")
@@ -620,6 +624,7 @@ def main() raises:
             or word == "--routing"
             or word == "--constants"
             or word == "--ideal"
+            or word == "--stored-half"
             or word == "--syntax"
             or word == "--slice"
             or word == "--fragment"
@@ -687,6 +692,8 @@ def main() raises:
                 constants = value
             elif word == "--ideal":
                 ideal = value
+            elif word == "--stored-half":
+                stored_half = value
             elif word == "--syntax":
                 syntax = value
             elif word == "--slice":
@@ -765,6 +772,8 @@ def main() raises:
     ):
         modes += 1
     if ideal.byte_length() > 0:
+        modes += 1
+    if stored_half.byte_length() > 0:
         modes += 1
     if syntax.byte_length() > 0:
         modes += 1
@@ -958,6 +967,9 @@ def main() raises:
                 ideal_function_source(Path(ideal).read_text(), decl_name),
                 end="",
             )
+            return
+        if stored_half.byte_length() > 0:
+            check_stored_half(Path(stored_half).read_text())
             return
         if starts.byte_length() > 0:
             print(top_level_starts_json(Path(starts).read_text()), end="")

@@ -417,7 +417,8 @@ def verify(root, *, _operation=None):
     verify_binding(trees['curve_bounds'], '_stored_half', allowed_import=half_imports[0])
     verify_binding(interval_tree, '_stored_half', allowed_definition=half)
     projection = verify_projection(pins['ideal_projection']['legacy_normalized_source'],
-        c.unique_function(trees['curve_bounds'], '_spiral_expression'), half)
+        c.unique_function(trees['curve_bounds'], '_spiral_expression'),
+        interval[interval.index('def _stored_half['):])
     return {'status': 'PASS', 'recurrence_operations': 6, 'correction_additions': 1,
             'scalar_axes': 2, 'initialization': 'positive zero',
             'term_count': '5 * pieces', 'bound': 'E + (u + gamma_(n-1)^2) M',

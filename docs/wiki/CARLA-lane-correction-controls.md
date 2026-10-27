@@ -80,6 +80,8 @@ It reads the exact fraction of each stored binary64 word.
 
 It returns the SHA-256 digest of each reviewed source text and pin file.
 
+It checks the stored-half helper result uses.
+
 It derives the stored moment rows in exact arithmetic.
 
 It checks the stored moment table against the derived words.

@@ -1431,6 +1431,285 @@ def ideal_function_source(source: String, name: String) raises -> String:
     return out
 
 
+def _name_byte(byte: UInt8) -> Bool:
+    """Return whether `byte` can appear inside an identifier.
+
+    Args:
+        byte: One source byte.
+
+    Returns:
+        True for ASCII letters, digits, and underscore.
+    """
+    if byte >= 48 and byte <= 57:
+        return True
+    if byte >= 65 and byte <= 90:
+        return True
+    if byte >= 97 and byte <= 122:
+        return True
+    return byte == 95
+
+
+def _is_space_byte(byte: UInt8) -> Bool:
+    """Return whether `byte` is ASCII whitespace.
+
+    Args:
+        byte: One source byte.
+
+    Returns:
+        True for space, tab, and newlines.
+    """
+    return byte == 9 or byte == 10 or byte == 13 or byte == 32
+
+
+def _ends_with_word(data: Span[UInt8, _], end: Int, word: String) -> Bool:
+    """Return whether `word` ends the text before `end`, ignoring trailing space.
+
+    Args:
+        data: The source bytes.
+        end: The index after the examined prefix.
+        word: The identifier to match.
+
+    Returns:
+        True when that identifier is the last word and is not part of a longer
+        name.
+    """
+    var cursor = end
+    while cursor > 0 and _is_space_byte(data[cursor - 1]):
+        cursor -= 1
+    var needle = word.as_bytes()
+    if cursor < len(needle):
+        return False
+    var start = cursor - len(needle)
+    var index = 0
+    while index < len(needle):
+        if data[start + index] != needle[index]:
+            return False
+        index += 1
+    if start > 0 and _name_byte(data[start - 1]):
+        return False
+    return True
+
+
+def _skip_gap(data: Span[UInt8, _], index: Int) -> Int:
+    """Return the next index that is not a space or a tab.
+
+    Args:
+        data: The source bytes.
+        index: The start index.
+
+    Returns:
+        The index of the next byte that is not a space or tab, or the end.
+    """
+    var cursor = index
+    while cursor < len(data) and (data[cursor] == 9 or data[cursor] == 32):
+        cursor += 1
+    return cursor
+
+
+def _skip_space(data: Span[UInt8, _], index: Int) -> Int:
+    """Return the next non-space index.
+
+    Args:
+        data: The source bytes.
+        index: The start index.
+
+    Returns:
+        The index of the next non-space byte, or the end.
+    """
+    var cursor = index
+    while cursor < len(data) and _is_space_byte(data[cursor]):
+        cursor += 1
+    return cursor
+
+
+def _read_name(data: Span[UInt8, _], index: Int) -> String:
+    """Return the identifier at `index`.
+
+    Args:
+        data: The source bytes.
+        index: The first byte of the identifier.
+
+    Returns:
+        The identifier, or empty when `index` does not start one.
+    """
+    var cursor = index
+    var out = String("")
+    while cursor < len(data) and _name_byte(data[cursor]):
+        out += chr(Int(data[cursor]))
+        cursor += 1
+    return out
+
+
+def _assignment_after(data: Span[UInt8, _], index: Int) -> Bool:
+    """Return whether `=` that is not `==` follows `index`.
+
+    Args:
+        data: The source bytes.
+        index: The first byte to inspect.
+
+    Returns:
+        True when the next non-space character is a single equals sign.
+    """
+    var cursor = _skip_space(data, index)
+    if cursor >= len(data) or data[cursor] != 61:
+        return False
+    return cursor + 1 >= len(data) or data[cursor + 1] != 61
+
+
+def check_stored_half(source: String) raises:
+    """Require the stored-half helper to keep its reviewed result uses.
+
+    Args:
+        source: Mojo source beginning at `def _stored_half[`.
+
+    Raises:
+        Error: The declaration, the initial half product, a return, or a use
+            of `result` changed.
+    """
+    var normalized = ideal_function_source(source, "_stored_half")
+    var lines = List[String]()
+    var current = String("")
+    var data = normalized.as_bytes()
+    var index = 0
+    while index < len(data):
+        if data[index] == 10:
+            lines.append(current)
+            current = String("")
+        else:
+            current += chr(Int(data[index]))
+        index += 1
+    if current.byte_length() > 0:
+        lines.append(current)
+    var header = String(
+        "def _stored_half ( value : _JetExpression [ derivatives ] , ) -> "
+        + "_JetExpression [ derivatives ] :"
+    )
+    var first = String(
+        "    result = value * _JetExpression [ derivatives ] . constant ( 0.5 )"
+    )
+    if len(lines) == 0 or lines[0] != header:
+        raise Error("ideal helper declaration or decorator changed")
+    if len(lines) < 2 or lines[1] != first:
+        raise Error("ideal helper initial expression changed")
+    var line = 2
+    while line < len(lines):
+        if lines[line].startswith("def "):
+            raise Error("ambiguous ideal function declaration")
+        line += 1
+    var body = String("")
+    line = 2
+    while line < len(lines):
+        if body.byte_length() > 0:
+            body += "\n"
+        body += lines[line]
+        line += 1
+    var bytes = body.as_bytes()
+    var needle = "result".as_bytes()
+    index = 0
+    while index + len(needle) <= len(bytes):
+        var fits = True
+        var cursor = 0
+        while fits and cursor < len(needle):
+            if bytes[index + cursor] != needle[cursor]:
+                fits = False
+            cursor += 1
+        var left = index == 0 or not _name_byte(bytes[index - 1])
+        var right = index + len(needle) == len(bytes) or not _name_byte(
+            bytes[index + len(needle)]
+        )
+        if fits and left and right:
+            var after = index + len(needle)
+            if _ends_with_word(bytes, index, "return"):
+                var stop = _skip_gap(bytes, after)
+                if stop < len(bytes) and bytes[stop] != 10:
+                    raise Error("ideal helper return changed")
+            elif _assignment_after(bytes, after) and _statement_start(
+                bytes, index
+            ):
+                raise Error("ideal helper result rebound")
+            else:
+                var attribute = _skip_space(bytes, after)
+                if attribute < len(bytes) and bytes[attribute] == 46:
+                    var name = _read_name(
+                        bytes, _skip_space(bytes, attribute + 1)
+                    )
+                    var name_at = _skip_space(bytes, attribute + 1)
+                    if name.byte_length() > 0 and _assignment_after(
+                        bytes, name_at + name.byte_length()
+                    ):
+                        if name != "error":
+                            raise Error("non-error result field changed")
+                    elif _call_argument(bytes, index):
+                        raise Error("ideal helper result escapes")
+                    else:
+                        raise Error("unapproved ideal helper result use")
+                elif _call_argument(bytes, index):
+                    raise Error("ideal helper result escapes")
+                else:
+                    raise Error("unapproved ideal helper result use")
+            index = after
+            continue
+        index += 1
+    index = 0
+    var ret = "return".as_bytes()
+    while index + len(ret) <= len(bytes):
+        var found = True
+        var at = 0
+        while found and at < len(ret):
+            if bytes[index + at] != ret[at]:
+                found = False
+            at += 1
+        var edge = index == 0 or not _name_byte(bytes[index - 1])
+        var tail = index + len(ret)
+        var word_edge = tail == len(bytes) or not _name_byte(bytes[tail])
+        if found and edge and word_edge:
+            var name_at = _skip_gap(bytes, tail)
+            var value = _read_name(bytes, name_at)
+            var stop = _skip_gap(bytes, name_at + value.byte_length())
+            var more = stop < len(bytes) and bytes[stop] != 10
+            if value != "result" or more:
+                raise Error("ideal helper return changed")
+            index = tail
+            continue
+        index += 1
+
+
+def _statement_start(data: Span[UInt8, _], index: Int) -> Bool:
+    """Return whether `index` begins a statement.
+
+    Args:
+        data: The source bytes.
+        index: The first byte of an identifier.
+
+    Returns:
+        True at the start of the text or after a newline and indentation.
+    """
+    var cursor = index
+    while cursor > 0 and (data[cursor - 1] == 9 or data[cursor - 1] == 32):
+        cursor -= 1
+    if cursor == 0:
+        return True
+    return data[cursor - 1] == 10
+
+
+def _call_argument(data: Span[UInt8, _], index: Int) -> Bool:
+    """Return whether `index` is a positional call argument.
+
+    Args:
+        data: The source bytes.
+        index: The start of an identifier.
+
+    Returns:
+        True when the previous non-space byte is `(` or `,`.
+    """
+    var cursor = index
+    while cursor > 0 and _is_space_byte(data[cursor - 1]):
+        cursor -= 1
+    if cursor == 0:
+        return False
+    return data[cursor - 1] == 40 or data[cursor - 1] == 44
+
+
 def _starts_at(source: String, index: Int, prefix: String) -> Bool:
     """Return whether `source` has `prefix` at a byte index.
 
