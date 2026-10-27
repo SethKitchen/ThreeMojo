@@ -46,6 +46,10 @@ It writes each frozen runtime pin back to its historical value.
 
 `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch record, the predecessor edge, and the operation graphs.
 
+It keeps the current dispatch source when the token matches.
+
+It compares each premise text before the predecessor fallback.
+
 `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the trig and geometry stored words, and the successor tokens.
 
 It admits trig and geometry word changes only for their reviewed token.

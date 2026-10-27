@@ -150,15 +150,46 @@ def read_record(root):
 
 
 
+def _dispatch_query(mode, payload):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='dispatch-source-') as directory:
+        path = Path(directory) / 'source.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_source',
+             mode, str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout.strip()
+
+
 def reviewed_source(root, path, expected, *, _operation=None):
     """Compose the exact raw inverse theorem with this retained outer proof."""
     if _operation is not None:
         _check_operation(root, _operation)
     text = _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
-    if ideal_projection.token_sha256(text) == expected:
+    choice = _dispatch_query('--choice', {
+        'token': ideal_projection.token_sha256(text),
+        'expected': expected,
+        'path': path,
+        'dispatch_path': 'extensions/carla/curve_sample_dispatch.mojo',
+    })
+    if choice == 'current':
         return text
-    require(path == 'extensions/carla/curve_sample_dispatch.mojo',
-            'unreviewed source successor: ' + path)
+    if choice != 'restore':
+        raise ValueError(
+            'curve support/dispatch contract: unreviewed source successor: ' + path)
     if __package__:
         from . import raw_cut_inverse_contracts as raw
     else:
@@ -253,7 +284,8 @@ def verify_premises(root, *, _operation=None):
         text = _typed_source.historical_text(root, item['path'], physical_text, _operation=_operation)
         actual = _declaration(text, item['name'], tuple(item['owner']))
         current_doc, recorded_doc = _significant_documents([actual, item['source']])
-        matched = current_doc == recorded_doc
+        matched = _dispatch_query('--match', {
+            'actual': current_doc, 'expected': recorded_doc}) == 'true'
         if not matched and (item['path'], item['name'], tuple(item['owner'])) == (
                 'extensions/carla/map.mojo', '_try_winner_seed', ()):
             try:
@@ -265,7 +297,8 @@ def verify_premises(root, *, _operation=None):
                 actual = _declaration(predecessor, item['name'], ())
                 current_doc, recorded_doc = _significant_documents([
                     actual, item['source']])
-                matched = current_doc == recorded_doc
+                matched = _dispatch_query('--match', {
+                    'actual': current_doc, 'expected': recorded_doc}) == 'true'
             except (ValueError, OSError) as error:
                 require(False, 'reviewed Map caller premise changed: ' + str(error))
         if not matched and item['path'] == 'extensions/carla/lane_refinement.mojo':
