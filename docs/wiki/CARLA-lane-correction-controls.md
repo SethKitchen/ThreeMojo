@@ -110,6 +110,8 @@ It keeps the dispatch setup after the depth refusal.
 
 It refuses a center error used as the world error.
 
+It requires the stored-half declaration before the projection.
+
 It derives the stored moment rows in exact arithmetic.
 
 It checks the stored moment table against the derived words.

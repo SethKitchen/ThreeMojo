@@ -365,6 +365,27 @@ def _graph_dump(text, name, rename=''):
     return dump
 
 
+def _require_function(text, name):
+    """Require one top-level function to be present."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='require-function-') as directory:
+        path = Path(directory) / 'source.mojo'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--slice', str(path), '--name', name],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def _without_first(dump):
     parsed = json.loads(dump)
     body = next(value for key, value in parsed[1] if key == 'body')
@@ -425,8 +446,10 @@ def verify(root, *, _operation=None):
                 allowed_module='extensions.carla.curve_sum2')
     pins = json.loads(_typed_source.historical_text(root, root / 'tools/carla_lane_oracle/spiral-moment-pins.json', source._observe_text(root, (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').relative_to(root).as_posix(), (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').read_text(), _operation=_operation), _operation=_operation))
     interval = _typed_source.historical_text(root, root / 'extensions/carla/curve_interval.mojo', source._observe_text(root, (root / 'extensions/carla/curve_interval.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_interval.mojo').read_text(), _operation=_operation), _operation=_operation)
-    interval_tree = _syntax_tree(interval)
-    _ = c.unique_function(interval_tree, '_stored_half')
+    try:
+        _require_function(interval, '_stored_half')
+    except ValueError as error:
+        raise c.CheckError(str(error)) from error
     half_imports = [item for item in direct_imports(texts['curve_bounds'])
                     if any(name == '_stored_half' or alias == '_stored_half'
                            for name, alias in item['names'])]
