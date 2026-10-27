@@ -11,6 +11,7 @@ from std.testing import TestSuite, assert_raises
 
 from tools.carla_followup_gate import (
     followup_digest,
+    followup_pair,
     followup_record,
     followup_tokens,
 )
@@ -54,6 +55,19 @@ def test_a_changed_successor_token_is_refused() raises:
         )
     ):
         followup_tokens(directory)
+
+
+def test_a_reordered_pin_pair_is_refused() raises:
+    """A pin-file order other than runtime then guard fails closed."""
+    var directory = "/tmp/followup-pair-test"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/labels.json").write_text(
+        '["sum2-guard-pins.json","runtime-source-pins.json"]'
+    )
+    with assert_raises(
+        contains="coverage followup successor: wrong fixed ordered pin pair"
+    ):
+        followup_pair(directory)
 
 
 def main() raises:

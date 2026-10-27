@@ -262,6 +262,28 @@ def predecessor_pin_pair(root):
     return _predecessor_pin_pair(root)
 
 
+def _gate_pair(names):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='followup-pair-') as directory:
+        folder = Path(directory)
+        (folder / 'labels.json').write_text(json.dumps(list(names)))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_followup_gate',
+             '--pair', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def _predecessor_pin_pair(root, *, _operation=None):
     """Reconstruct the fixed pair from two separately checked record reads.
 
@@ -277,10 +299,10 @@ def _predecessor_pin_pair(root, *, _operation=None):
         _check_operation(root, _operation)
     filenames = ('runtime-source-pins.json', 'sum2-guard-pins.json')
     runtime_record = read_record(root)
-    require(tuple(runtime_record['pin_files']) == filenames, 'wrong fixed ordered pin pair')
+    _gate_pair(runtime_record['pin_files'])
     runtime_item = runtime_record['pin_files'][filenames[0]]
     guard_record = read_record(root)
-    require(tuple(guard_record['pin_files']) == filenames, 'wrong fixed ordered pin pair')
+    _gate_pair(guard_record['pin_files'])
     guard_item = guard_record['pin_files'][filenames[1]]
     if _operation is None:
         runtime_payload, guard_payload = accepted.predecessor_pin_pair(root)
