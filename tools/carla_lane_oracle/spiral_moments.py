@@ -265,6 +265,29 @@ def _moment_route_accept(current, expected, message, strip):
                    'message': message, 'strip': strip})
 
 
+def _moment_arrays(items):
+    """Return the stored array words that match their pins."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(items, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-arrays-') as directory:
+        path = Path(directory) / 'arrays.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_arrays',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _moment_blocks(items):
     """Return the normalized operation blocks that match their pins."""
     import os
@@ -466,13 +489,31 @@ def verify_inputs(root):
     stored_words = {}
     flat_words = []
     flat_names = []
+    loaded_arrays = []
     for name, record in pins['arrays'].items():
-        words = parse_array(_typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8')),
-                            name, len(record['words']))
-        _require_stored_words(words, record['words'],
-                              messages['stored_words'] + name)
-        stored_words[name] = words
-        flat_words.extend(words)
+        loaded_arrays.append((name, record, _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))))
+    try:
+        stored = _moment_arrays([{
+            'name': name,
+            'source': text,
+            'size': len(record['words']),
+            'expected': record['words'],
+            'message': messages['stored_words'] + name,
+        } for name, record, text in loaded_arrays])
+    except ValueError as error:
+        message = str(error)
+        word = _cli_failures()['word']
+        if message.startswith(word):
+            message = message[len(word):]
+        marker = 'stored array literal: '
+        if message.startswith(marker):
+            name, rest = message[len(marker):].split('\n', 1)
+            _constant_error(ValueError(rest), name)
+        raise CheckError(message) from error
+    for name, words in stored.items():
+        values = [int(word) for word in words]
+        stored_words[name] = values
+        flat_words.extend(values)
         flat_names.append(name)
     texts = _fraction_texts(flat_words)
     _moment_guard('--count', {

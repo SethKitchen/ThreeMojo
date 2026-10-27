@@ -276,6 +276,8 @@ It keeps the moment routing constants and the route comparison.
 
 It keeps every stored-moment operation block in one check.
 
+It keeps every stored-moment constant array in one check.
+
 It keeps the moment dependency record and the check messages.
 
 It keeps the moment report names and the pass line.
