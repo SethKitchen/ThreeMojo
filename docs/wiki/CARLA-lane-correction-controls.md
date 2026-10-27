@@ -66,6 +66,8 @@ It returns Python source and generic parameters for one sampled declaration.
 
 The Sum2, optional-runtime, and heading checks parse declarations through that syntax.
 
+It slices one top-level function for the heading check.
+
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.

@@ -1044,6 +1044,81 @@ def ideal_function_source(source: String, name: String) raises -> String:
     return out
 
 
+def _starts_at(source: String, index: Int, prefix: String) -> Bool:
+    """Return whether `source` has `prefix` at a byte index.
+
+    Args:
+        source: The text.
+        index: The byte index.
+        prefix: The ASCII prefix.
+
+    Returns:
+        True when the prefix fits and matches.
+    """
+    var data = source.as_bytes()
+    var needle = prefix.as_bytes()
+    if index < 0 or index + len(needle) > len(data):
+        return False
+    var cursor = 0
+    while cursor < len(needle):
+        if data[index + cursor] != needle[cursor]:
+            return False
+        cursor += 1
+    return True
+
+
+def function_slice(source: String, name: String) raises -> String:
+    """Return one top-level function through the next `def` or decorator.
+
+    Args:
+        source: Mojo source.
+        name: The function name.
+
+    Returns:
+        The source from `def NAME` through the line before the next top-level
+        `def` or `@`. The slice runs to the end when no later marker exists.
+
+    Raises:
+        Error: The name is missing or occurs more than once.
+    """
+    var prefix = String("def ") + name
+    var data = source.as_bytes()
+    var starts = List[Int]()
+    var ends = List[Int]()
+    var index = 0
+    var line_start = True
+    while index < len(data):
+        if line_start and _starts_at(source, index, prefix):
+            var closer_at = index + prefix.byte_length()
+            if closer_at < len(data):
+                var closer = data[closer_at]
+                if closer == 40 or closer == 91:
+                    starts.append(index)
+                    ends.append(closer_at + 1)
+        if data[index] == 10:
+            line_start = True
+        else:
+            line_start = False
+        index += 1
+    if len(starts) != 1:
+        raise Error("missing or ambiguous function: " + name)
+    var origin = ends[0]
+    var relative = 0
+    var at_line = True
+    while origin + relative < len(data):
+        if at_line and (
+            _starts_at(source, origin + relative, "def ")
+            or _starts_at(source, origin + relative, "@")
+        ):
+            return String(source[byte = starts[0] : origin + relative])
+        if data[origin + relative] == 10:
+            at_line = True
+        else:
+            at_line = False
+        relative += 1
+    return String(source[byte = starts[0] :])
+
+
 def python_syntax_json(source: String) raises -> String:
     """Return Python source and generic metadata for one Mojo fragment.
 

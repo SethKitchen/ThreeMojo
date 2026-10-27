@@ -12,6 +12,7 @@ from std.pathlib import Path
 from tests._python_tokens import (
     declaration_place,
     declaration_text,
+    function_slice,
     ideal_function_source,
     python_syntax_json,
     significant_json,
@@ -123,6 +124,37 @@ def test_an_ideal_generic_parameter_list_is_removed() raises:
         raise Error(plain)
     if plain.find("def _stored_half") < 0 or plain.find("return result") < 0:
         raise Error(plain)
+
+
+def test_a_top_level_function_slice_stops_at_the_next_def() raises:
+    """The slice starts at `def` and stops before the next top-level marker."""
+    var source = String(
+        "@hidden\n"
+        + "def first(value: Int):\n"
+        + "    return value\n"
+        + "\n"
+        + "def second[T: Int]():\n"
+        + "    return 1\n"
+        + "@later\n"
+        + "def third():\n"
+        + "    return 2\n"
+    )
+    assert_equal(
+        function_slice(source, "first"),
+        "def first(value: Int):\n    return value\n\n",
+    )
+    assert_equal(
+        function_slice(source, "second"),
+        "def second[T: Int]():\n    return 1\n",
+    )
+    assert_equal(
+        function_slice(source, "third"),
+        "def third():\n    return 2\n",
+    )
+    with assert_raises(contains="missing or ambiguous function: first"):
+        _ = function_slice(source + "def first():\n    return 0\n", "first")
+    with assert_raises(contains="missing or ambiguous function: absent"):
+        _ = function_slice(source, "absent")
 
 
 def test_a_generic_declaration_becomes_python_source() raises:

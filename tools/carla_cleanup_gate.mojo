@@ -21,6 +21,7 @@
     carla_cleanup_gate --routing PATH --constants PATH
     carla_cleanup_gate --ideal PATH --name NAME
     carla_cleanup_gate --syntax PATH
+    carla_cleanup_gate --slice PATH --name NAME
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -33,6 +34,7 @@ from std.sys import argv, exit, stderr
 from tests._python_tokens import (
     declaration_place,
     ideal_function_source,
+    function_slice,
     python_syntax_json,
     declaration_text,
     stored_float_array,
@@ -436,6 +438,7 @@ def _usage():
             " | --statements PATH | --starts PATH"
             " | --routing PATH --constants PATH"
             " | --ideal PATH --name NAME | --syntax PATH"
+            " | --slice PATH --name NAME"
         ),
         file=stderr,
     )
@@ -471,6 +474,7 @@ def main() raises:
     var constants = String("")
     var ideal = String("")
     var syntax = String("")
+    var slice_path = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -499,6 +503,7 @@ def main() raises:
             or word == "--constants"
             or word == "--ideal"
             or word == "--syntax"
+            or word == "--slice"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -547,8 +552,12 @@ def main() raises:
                 constants = value
             elif word == "--ideal":
                 ideal = value
-            else:
+            elif word == "--syntax":
                 syntax = value
+            elif word == "--slice":
+                slice_path = value
+            else:
+                _usage()
             index += 2
             continue
         _usage()
@@ -577,12 +586,15 @@ def main() raises:
         declaration.byte_length() == 0
         and bounds.byte_length() == 0
         and ideal.byte_length() == 0
+        and slice_path.byte_length() == 0
         and (decl_name.byte_length() > 0 or len(owners) > 0)
     ):
         modes += 1
     if ideal.byte_length() > 0:
         modes += 1
     if syntax.byte_length() > 0:
+        modes += 1
+    if slice_path.byte_length() > 0:
         modes += 1
     if significant.byte_length() > 0:
         modes += 1
@@ -614,6 +626,7 @@ def main() raises:
         declaration.byte_length() == 0
         and bounds.byte_length() == 0
         and ideal.byte_length() == 0
+        and slice_path.byte_length() == 0
         and (decl_name.byte_length() > 0 or len(owners) > 0)
     ):
         _usage()
@@ -621,6 +634,7 @@ def main() raises:
         declaration.byte_length() > 0
         or bounds.byte_length() > 0
         or ideal.byte_length() > 0
+        or slice_path.byte_length() > 0
     ) and decl_name.byte_length() == 0:
         _usage()
     try:
@@ -631,6 +645,12 @@ def main() raises:
                 module_routing_json(
                     Path(routing).read_text(), Path(constants).read_text()
                 ),
+                end="",
+            )
+            return
+        if slice_path.byte_length() > 0:
+            print(
+                function_slice(Path(slice_path).read_text(), decl_name),
                 end="",
             )
             return

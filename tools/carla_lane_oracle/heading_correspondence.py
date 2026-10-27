@@ -21,11 +21,37 @@ import ast
 import copy
 from pathlib import Path
 
-from check_sampled_values import dump, function, unique_function
+from check_sampled_values import CheckError, dump, unique_function
 if __package__:
     from .sum2_contracts import _syntax_tree
 else:
     from sum2_contracts import _syntax_tree
+
+
+def _function_text(text, name):
+    """Return one top-level function slice.
+
+    The cleanup gate finds the same span as the historical regular expression.
+    """
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='heading-slice-') as directory:
+        source = Path(directory) / 'source.mojo'
+        source.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--slice', str(source), '--name', name],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    return result.stdout
 
 CONSUMERS = {
     'spiral_domain_proof.mojo': '_spiral_proof_branch',
@@ -42,7 +68,7 @@ def require(condition, message):
 def declaration(text, name):
     # The full source/token gate binds actual declaration identity, decorators
     # and everything outside this selected complete declaration as well.
-    return unique_function(_syntax_tree(function(text, name)), name)
+    return unique_function(_syntax_tree(_function_text(text, name)), name)
 
 
 def assigned(node, name):
