@@ -30,5 +30,6 @@ def sum2_plan() -> String:
         ' complete caller graph changed: _sum2_envelope_error"},'
         + '{"module":"spiral_roundoff_proof","left_name":"_try_spiral_roundoff_envelope","checkpoint":"eligibility","right_name":"_try_spiral_roundoff_envelope","message":"Sum2'
         ' complete caller graph changed: _try_spiral_roundoff_envelope"}'
-        + '],"helpers":{"lane":"lane_geometry","bounds":"curve_bounds","roundoff":"spiral_roundoff_proof"}}'
+        + '],"helpers":{"lane":"lane_geometry","bounds":"curve_bounds","roundoff":"spiral_roundoff_proof"},'
+        + '"stored_half":"_stored_half","half_key":"bounds","interval_key":"interval"}'
     )

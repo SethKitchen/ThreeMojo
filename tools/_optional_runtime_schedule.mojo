@@ -46,5 +46,5 @@ def optional_runtime_schedule() -> String:
         + '{"group":"recheck","bind":[{"key":"recheck","module":"curve_objective_model","name":"_objective_recheck_room","label":"complete'
         ' integer cached-closure recheck admission"}],"edges":["recheck"]},'
         + '{"group":"fee","bind":[{"key":"fee","module":"map","name":"_query_node_step_cost","label":"reviewed'
-        ' goal node fee"}],"edges":["fee"]}]}'
+        ' goal node fee"}],"edges":["fee"]}],"search":"_run_lane_search"}'
     )

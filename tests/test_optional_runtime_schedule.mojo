@@ -21,6 +21,8 @@ def test_optional_runtime_groups_stay_in_reviewed_order() raises:
     var doc = PyJson.parse(optional_runtime_schedule())
     assert_equal(doc.key(doc.root, 0), "before")
     assert_equal(doc.key(doc.root, 1), "after")
+    assert_equal(doc.key(doc.root, 2), "search")
+    assert_equal(doc.text(doc.at(doc.root, "search")), "_run_lane_search")
     var before = doc.at(doc.root, "before")
     var after = doc.at(doc.root, "after")
     assert_equal(doc.length(before), 7)

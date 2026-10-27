@@ -63,6 +63,9 @@ def test_sum2_modules_and_caller_comparisons_stay_reviewed() raises:
     assert_equal(doc.text(doc.at(helpers, "lane")), "lane_geometry")
     assert_equal(doc.text(doc.at(helpers, "bounds")), "curve_bounds")
     assert_equal(doc.text(doc.at(helpers, "roundoff")), "spiral_roundoff_proof")
+    assert_equal(doc.text(doc.at(doc.root, "stored_half")), "_stored_half")
+    assert_equal(doc.text(doc.at(doc.root, "half_key")), "bounds")
+    assert_equal(doc.text(doc.at(doc.root, "interval_key")), "interval")
 
 
 def main() raises:

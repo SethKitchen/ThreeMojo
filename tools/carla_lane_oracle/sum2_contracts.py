@@ -212,8 +212,10 @@ def verify(root, *, _operation=None):
         from . import selection_finiteness_contracts as selection
     else:
         import selection_finiteness_contracts as selection
-    texts['spiral_roundoff_proof'] = selection.predecessor_text(
-        root, 'extensions/carla/spiral_roundoff_proof.mojo', _operation=_operation)
+    helpers = plan['helpers']
+    roundoff = helpers['roundoff']
+    texts[roundoff] = selection.predecessor_text(
+        root, 'extensions/carla/' + roundoff + '.mojo', _operation=_operation)
 
     # The complete lexical contract above retains all keyword-subscripts and
     # decorators. Separately relate the unchanged arithmetic leaf/recurrence
@@ -231,17 +233,17 @@ def verify(root, *, _operation=None):
             drop_first=item['drop_first'] if 'drop_first' in item else False,
             expect_first=item['expect_first'] if 'expect_first' in item else '')
     # Require the exact direct import inventory and reject all shadow forms.
-    helpers = plan['helpers']
     _sum2_import_gate('--helpers', {
         key: texts[helpers[key]] for key in helpers})
     pins = json.loads(_typed_source.historical_text(root, root / 'tools/carla_lane_oracle/spiral-moment-pins.json', source._observe_text(root, (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').relative_to(root).as_posix(), (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').read_text(), _operation=_operation), _operation=_operation))
     interval = _typed_source.historical_text(root, root / 'extensions/carla/curve_interval.mojo', source._observe_text(root, (root / 'extensions/carla/curve_interval.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_interval.mojo').read_text(), _operation=_operation), _operation=_operation)
     try:
-        _require_function(interval, '_stored_half')
+        _require_function(interval, plan['stored_half'])
     except ValueError as error:
         raise c.CheckError(str(error)) from error
     _sum2_import_gate('--half', {
-        'bounds': texts['curve_bounds'], 'interval': interval,
+        plan['half_key']: texts[helpers[plan['half_key']]],
+        plan['interval_key']: interval,
     })
     projection = verify_projection(
         pins['ideal_projection']['legacy_normalized_source'],

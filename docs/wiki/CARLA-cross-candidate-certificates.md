@@ -178,6 +178,8 @@ It keeps the reviewed Sum2 helper and caller texts.
 
 It keeps the four Sum2 module names and the five caller comparisons.
 
+It keeps the roundoff predecessor and the stored-half name.
+
 It returns the Sum2 result counts after those caller checks.
 
 One comparison refuses a changed caller graph.
@@ -195,6 +197,8 @@ It builds the grouped, model, support, and dispatch checks in that order.
 It returns the optional-runtime result after those edge checks.
 
 It keeps the five optional-runtime module names.
+
+It keeps the lane-search function name.
 
 It keeps the ten optional-runtime declaration groups.
 

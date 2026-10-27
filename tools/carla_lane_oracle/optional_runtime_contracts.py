@@ -518,7 +518,7 @@ def verify_semantics(root, *, _operation=None):
     # Only the complete live gate and exact center inverse admit a predecessor;
     # current lane failures may differ diagnostically from historical fixtures.
     previous = full_audit.reviewed_lane_before_center_text(root, _operation=_operation)
-    verify_search_semantics(body_from_source(previous, '_run_lane_search'))
+    verify_search_semantics(body_from_source(previous, plan['search']))
     # Retain the sampled-reference gate after raw-inverse diagnostics.
     if __package__:
         from .ideal_projection import verify_try_only_reference
