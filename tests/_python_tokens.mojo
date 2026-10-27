@@ -922,6 +922,57 @@ def token_words(source: String) raises -> List[String]:
     return words^
 
 
+def without_move_sigils(source: String) raises -> String:
+    """Return `source` without a postfix `^` before `,` or `)`.
+
+    Args:
+        source: Mojo source, usually one declaration.
+
+    Returns:
+        A source Python's parser accepts as the same function.
+
+    Raises:
+        Error: A `^` is not immediately before `,` or `)`, or the source
+            cannot be tokenized.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var kept_kinds = List[Int]()
+    var kept_texts = List[String]()
+    var index = 0
+    while index < len(kinds):
+        if kinds[index] == _OP and texts[index] == "^":
+            var follow = index + 1
+            if follow >= len(kinds) or (
+                texts[follow] != "," and texts[follow] != ")"
+            ):
+                raise Error("unsupported move-token placement")
+            index += 1
+            continue
+        kept_kinds.append(kinds[index])
+        kept_texts.append(texts[index])
+        index += 1
+    var out = String("")
+    index = 0
+    while index < len(kept_kinds):
+        var kind = kept_kinds[index]
+        if kind == _NEWLINE:
+            out += "\n"
+        elif kind == _DEDENT:
+            pass
+        elif kind == _INDENT:
+            out += kept_texts[index]
+        else:
+            if out.byte_length() > 0:
+                var data = out.as_bytes()
+                if data[len(data) - 1] != 10:
+                    out += " "
+            out += kept_texts[index]
+        index += 1
+    return out
+
+
 def token_names(source: String) raises -> List[String]:
     """Return the NAME tokens of `source`, in order.
 

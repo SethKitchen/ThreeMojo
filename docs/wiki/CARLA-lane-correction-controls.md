@@ -50,6 +50,10 @@ It reports the declaration line span used by the selection contract.
 
 `tools/carla_frozen_arc_gate.mojo` builds the declaration routing for the frozen ARC producer.
 
+It lists the executable names checked by the optional-runtime contract.
+
+It removes an argument move sigil before that contract parses a function body.
+
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.

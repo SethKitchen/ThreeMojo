@@ -13,6 +13,8 @@ from tests._python_tokens import (
     declaration_place,
     declaration_text,
     significant_json,
+    token_names,
+    without_move_sigils,
 )
 from tools.carla_cleanup_gate import (
     cleanup_digest,
@@ -89,6 +91,24 @@ def test_a_changed_stored_word_is_refused() raises:
         )
     ):
         cleanup_words(source, "geometry", "extensions/carla/geometry.mojo")
+
+
+def test_argument_move_sigils_are_removed() raises:
+    """A postfix move sigil before a comma or parenthesis is removed."""
+    var source = "def f(road^, section^):\n    return road\n"
+    var plain = without_move_sigils(source)
+    if plain.find("^") >= 0:
+        raise Error(plain)
+    var names = token_names(plain)
+    var saw_road = False
+    var saw_section = False
+    for name in names:
+        if name == "road":
+            saw_road = True
+        if name == "section":
+            saw_section = True
+    if not saw_road or not saw_section:
+        raise Error("argument name missing")
 
 
 def test_a_comment_does_not_change_significant_tokens() raises:

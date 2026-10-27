@@ -14,6 +14,8 @@
     carla_cleanup_gate --declaration PATH --name NAME [--owner NAME]
     carla_cleanup_gate --bounds PATH --name NAME [--owner NAME]
     carla_cleanup_gate --significant-json DIR
+    carla_cleanup_gate --names DIR
+    carla_cleanup_gate --moves PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -30,8 +32,10 @@ from tests._python_tokens import (
     stored_scalar,
     significant_json,
     stored_word_sha256,
+    token_names,
     token_sha256,
     token_words,
+    without_move_sigils,
 )
 from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PY_STR, PyJson
 from tools._sha256 import sha256_hex
@@ -302,6 +306,34 @@ def significant_documents(directory: String) raises:
     print(doc.dumps())
 
 
+def name_documents(directory: String) raises:
+    """Print the NAME tokens for each numbered source.
+
+    Args:
+        directory: A directory with `count` and `N.text` files.
+
+    Raises:
+        Error: A source cannot be tokenized, or the directory cannot be read.
+    """
+    var count = Int(Path(directory + "/count").read_text())
+    var doc = PyJson()
+    var rows = doc.new_list()
+    var index = 0
+    while index < count:
+        var names = token_names(
+            Path(directory + "/" + String(index) + ".text").read_text()
+        )
+        var row = doc.new_list()
+        var name_index = 0
+        while name_index < len(names):
+            doc.append(row, doc.new_str(names[name_index]))
+            name_index += 1
+        doc.append(rows, row)
+        index += 1
+    doc.root = rows
+    print(doc.dumps())
+
+
 def cleanup_premises(directory: String) raises:
     """Require each premise fragment once, in order.
 
@@ -390,7 +422,7 @@ def _usage():
             " | --premises DIR"
             " | --declaration PATH --name NAME [--owner NAME]"
             " | --bounds PATH --name NAME [--owner NAME]"
-            " | --significant-json DIR"
+            " | --significant-json DIR | --names DIR | --moves PATH"
         ),
         file=stderr,
     )
@@ -418,6 +450,8 @@ def main() raises:
     var decl_name = String("")
     var owners = List[String]()
     var significant = String("")
+    var names = String("")
+    var moves = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -438,6 +472,8 @@ def main() raises:
             or word == "--name"
             or word == "--owner"
             or word == "--significant-json"
+            or word == "--names"
+            or word == "--moves"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -470,8 +506,12 @@ def main() raises:
                 decl_name = value
             elif word == "--owner":
                 owners.append(value)
-            else:
+            elif word == "--significant-json":
                 significant = value
+            elif word == "--names":
+                names = value
+            else:
+                moves = value
             index += 2
             continue
         _usage()
@@ -504,6 +544,10 @@ def main() raises:
         modes += 1
     if significant.byte_length() > 0:
         modes += 1
+    if names.byte_length() > 0:
+        modes += 1
+    if moves.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if previous.byte_length() > 0 and migration.byte_length() == 0:
@@ -529,6 +573,12 @@ def main() raises:
     ) and decl_name.byte_length() == 0:
         _usage()
     try:
+        if moves.byte_length() > 0:
+            print(without_move_sigils(Path(moves).read_text()), end="")
+            return
+        if names.byte_length() > 0:
+            name_documents(names)
+            return
         if significant.byte_length() > 0:
             significant_documents(significant)
             return

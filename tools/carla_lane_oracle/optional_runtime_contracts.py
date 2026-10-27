@@ -20,7 +20,6 @@ else:
 
 import ast
 from functools import lru_cache
-import tokenize
 
 try:
     import check_sampled_values as sampled
@@ -114,23 +113,64 @@ def _declaration(text, name, owner):
     return result.stdout
 
 
+def _lexical_directory(flag, texts):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    if not texts:
+        return []
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='optional-lexical-') as directory:
+        folder = Path(directory)
+        for index, text in enumerate(texts):
+            (folder / f'{index}.text').write_text(text)
+        (folder / 'count').write_text(str(len(texts)))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             flag, str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
+def _without_moves(text):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='optional-moves-') as directory:
+        source = Path(directory) / 'source.mojo'
+        source.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--moves', str(source)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        if message == 'unsupported move-token placement':
+            message = 'optional runtime contract: ' + message
+        raise ValueError(message)
+    return result.stdout
+
+
 def body_from_source(text, name):
     """Parse a supplied semantic fixture; this grants no source admission."""
     source = _declaration(text, name, ())
     # The historical AST adapter has no lane-search move arguments. Remove
     # only postfix move sigils before argument delimiters for this semantic
     # view; complete lexical contracts separately retain every move token.
-    tokens = source_contracts.tokens(source)
-    kept = []
-    for index, token in enumerate(tokens):
-        if token.type == tokenize.OP and token.string == '^':
-            following = next((item for item in tokens[index + 1:]
-                              if item.type not in (tokenize.NL, tokenize.COMMENT)), None)
-            require(following is not None and following.string in (',', ')'),
-                    'unsupported move-token placement')
-            continue
-        kept.append((token.type, token.string))
-    return sampled.unique_function(sampled.syntax_tree(tokenize.untokenize(kept)), name)
+    return sampled.unique_function(sampled.syntax_tree(_without_moves(source)), name)
 
 
 def contains(node, text, label, count=1):
@@ -212,12 +252,12 @@ else:
 
 @lru_cache(maxsize=256)
 def executable_names(text):
-    return frozenset(token.string for token in source_contracts.tokens(text)
-                     if token.type == tokenize.NAME)
+    return frozenset(_lexical_directory('--names', [text])[0])
 
 
 def verify_no_containing_model_consumers(root, *, _operation=None):
     helper = 'extensions/carla/curve_objective_model.mojo'
+    chosen = []
     for path in sorted(root.rglob('*.mojo')):
         relative = path.relative_to(root)
         if relative.parts[0] in guard.NONPRODUCTION or any(
@@ -226,12 +266,15 @@ def verify_no_containing_model_consumers(root, *, _operation=None):
         text = _typed_source.historical_text(root, path, source._observe_text(root, (path).relative_to(root).as_posix(), path.read_text(), _operation=_operation), _operation=_operation)
         if not any(name in text for name in MODEL_NAMES | REMOVED_SEARCH_NAMES):
             continue
-        names = executable_names(text)
-        if relative.as_posix() != helper:
+        chosen.append((relative.as_posix(), text))
+    lists = _lexical_directory('--names', [text for _, text in chosen])
+    for (relative, _), names_list in zip(chosen, lists):
+        names = frozenset(names_list)
+        if relative != helper:
             require(not (names & MODEL_NAMES),
                     'containing-objective model production consumer reintroduced: '
-                    + relative.as_posix())
-        if relative.as_posix() == 'extensions/carla/lane_refinement.mojo':
+                    + relative)
+        if relative == 'extensions/carla/lane_refinement.mojo':
             require(not (names & REMOVED_SEARCH_NAMES),
                     'containing-objective model search state reintroduced')
 
