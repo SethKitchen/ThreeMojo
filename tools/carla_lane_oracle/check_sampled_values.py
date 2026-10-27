@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Read-only source correspondence for derivative-elided sampled bounds.
 
-No Mojo execution. Uses only the Python standard library; no Mojo parser or compiler is run.
-Numeric grouping, branches, imports and retained value/error operations are
-checked against the full-Jet source. Primitive changes require renewed review.
+Copied declarations are sliced and renamed by the Mojo text gate. The syntax
+correspondence still uses the Python standard library. Numeric grouping,
+branches, imports and retained value/error operations are checked against the
+full-Jet source. Primitive changes require renewed review.
 """
 if __package__:
     from . import source_contracts as source
@@ -136,6 +137,29 @@ def function(text, name):
     match = matches[0]
     end = re.search(r'(?m)^(?:def |@)', text[match.end():])
     return text[match.start():match.end()+end.start() if end else len(text)]
+
+
+def _sampled_text(mode, text, name=''):
+    """Slice or rename one declaration with the Mojo text gate."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='sampled-text-') as directory:
+        path = Path(directory) / 'source.mojo'
+        path.write_text(text)
+        command = ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+                   'carla_sampled_text', mode, str(path)]
+        if name:
+            command.extend(['--name', name])
+        result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    return result.stdout
 
 
 def translated(text):
@@ -362,8 +386,9 @@ def verify(root):
         require(actual_imports == expected_imports, 'sampled graph imports changed')
         expected = {}
         for name in COPIES:
-            old = function(trig if name.startswith('_atan') else bounds, name)
-            new = translated(old)
+            old = _sampled_text(
+                '--extract', trig if name.startswith('_atan') else bounds, name)
+            new = _sampled_text('--rename', old)
             if name == '_sample_blend_jet':
                 # Remove only these two complete assignments, never value/error.
                 for field in ('first', 'second'):
@@ -376,7 +401,9 @@ def verify(root):
     '''
         # Project complete parsed declarations, never raw prefix/tail slices.
         def reference(filename, name):
-            node = unique_function(syntax_tree(translated(function(texts[filename], name))), NAMES.get(name, name))
+            node = unique_function(syntax_tree(_sampled_text(
+                '--rename', _sampled_text('--extract', texts[filename], name))),
+                NAMES.get(name, name))
             node.decorator_list = copy.deepcopy(unique_function(reference_trees[filename], name).decorator_list)
             return copy.deepcopy(node)
 

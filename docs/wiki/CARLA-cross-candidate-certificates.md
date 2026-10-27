@@ -312,6 +312,8 @@ The trig module keeps its reviewed token digest.
 The interval module keeps its reviewed token digest.
 A changed token is refused.
 
+It slices and renames each copied sampled declaration.
+
 Mojo checks the live sampled module graphs.
 The trig module keeps its reviewed syntax graph.
 The interval module keeps its reviewed syntax graph.
