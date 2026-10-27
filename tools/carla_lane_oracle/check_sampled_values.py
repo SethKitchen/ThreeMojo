@@ -138,6 +138,24 @@ def function(text, name):
     return text[match.start():match.end()+end.start() if end else len(text)]
 
 
+def _sampled_declarations():
+    """Return the three reviewed sampled declarations."""
+    import json
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sampled_declarations'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    return json.loads(result.stdout)
+
+
 def _sampled_text(mode, text, name='', index=None, replacement=None):
     """Slice, rename, or dump one declaration with the Mojo text gate."""
     import os
@@ -492,9 +510,7 @@ def verify(root):
                     new = _sampled_text('--drop-intersection', new, field)
             filename = 'curve_trig.mojo' if name.startswith('_atan') else 'curve_bounds.mojo'
             expected[NAMES[name]] = _sampled_text('--decorators', texts[filename], name) + new
-        expected['_uncertain_value'] = '''def _uncertain_value(value: _Interval) -> _ValueJet:
-        return _uncertain_expression[False](value)
-    '''
+        expected.update(_sampled_declarations())
         # Project complete parsed declarations, never raw prefix/tail slices.
         def renamed_source(filename, name):
             return _sampled_text(
@@ -534,22 +550,6 @@ def verify(root):
         expected['_constant_sincos_value'] = with_decorators(
             'curve_trig.mojo', '_constant_sincos_jet',
             _sampled_text('--project-constant', constant))
-
-        expected['_sampled_lane_value_bound'] = '''def _sampled_lane_value_bound(
-            road: Road, section: Int, lane: Int, low: Float64, high: Float64
-        ) raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
-            return _lane_value_bound_impl[False](road, section, lane, low, high)
-    '''
-        expected['_lane_value_bound'] = '''def _lane_value_bound(
-            road: Road, section: Int, lane: Int, low: Float64, high: Float64
-        ) raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
-            var at = info_index(road.info.geometries, low)
-            if at >= 0 and road.info.geometries[at].geometry.kind == SPIRAL:
-                var full = _lane_jet(road, section, lane, low, high)
-                return (_without_derivatives(full[0]), _without_derivatives(full[1]),
-                        _without_derivatives(full[2]))
-            return _lane_value_bound_impl[True](road, section, lane, low, high)
-    '''
         old = renamed_source('curve_bounds.mojo', '_lane_jet_model_proof')
         # This private value-only specialization has no cached proof argument.
         # Remove only the exact new refusal branch whose proof condition is false

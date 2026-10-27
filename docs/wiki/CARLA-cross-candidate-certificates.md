@@ -135,6 +135,8 @@ It hashes each observed source byte string before that result.
 
 It writes the sampled value result with two-space indentation.
 
+It stores the three sampled lane and uncertain declarations.
+
 Mojo checks the sampled qualifier pins.
 The trig and interval modules match the live pins.
 The bounds pin is the count-loop source.
