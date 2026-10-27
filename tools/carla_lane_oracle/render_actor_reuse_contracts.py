@@ -93,6 +93,30 @@ def _gate_bytes(payload, digest, token, label):
         _run(arguments)
 
 
+def _merged_edge(path, edge):
+    """Return `edge` with `path` written first."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({'path': path, 'edge': edge}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='render-actor-edge-') as directory:
+        record = Path(directory) / 'edge.json'
+        record.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_merged_edge',
+             str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def verify(root, *, _operation=None):
     """Verify live ledger endpoints; return the original historical edges.
 
@@ -112,7 +136,7 @@ def verify(root, *, _operation=None):
                                 _operation=_operation), _operation=_operation)
         _gate_bytes(actual, current['after_sha256'], current['after_token_sha256'],
                     'unreviewed render actor consumer: ' + path)
-        edges[path] = {'path': path, **edge}
+        edges[path] = _merged_edge(path, edge)
     for path, expected in record['correctness_tests'].items():
         _gate_bytes(_typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
                                              _operation=_operation), _operation=_operation),

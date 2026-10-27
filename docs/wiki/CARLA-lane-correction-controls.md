@@ -207,6 +207,7 @@ It accepts one historical lane declaration when the owner is empty and the token
 It renames the first frozen lane declaration.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.
+It puts the module path on the render-actor edge.
 
 `tools/carla_runtime_boundary_gate.mojo` checks the runtime-boundary record, its bound tests, and the view-step edges.
 
