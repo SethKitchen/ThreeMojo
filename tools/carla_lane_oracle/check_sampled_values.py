@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Read-only source correspondence for derivative-elided sampled bounds.
 
-Copied declarations are sliced and renamed by the Mojo text gate. The syntax
-correspondence still uses the Python standard library. Numeric grouping,
+Copied declarations are sliced, renamed, and classified by the Mojo text gate.
+The syntax correspondence still uses the Python standard library. Numeric grouping,
 branches, imports and retained value/error operations are checked against the
 full-Jet source. Primitive changes require renewed review.
 """
@@ -392,30 +392,16 @@ def verify(root):
     '''
         # Project complete parsed declarations, never raw prefix/tail slices.
         def reference(filename, name):
-            node = unique_function(syntax_tree(_sampled_text(
-                '--rename', _sampled_text('--extract', texts[filename], name))),
-                NAMES.get(name, name))
+            renamed = _sampled_text(
+                '--rename', _sampled_text('--extract', texts[filename], name))
+            node = unique_function(syntax_tree(renamed), NAMES.get(name, name))
             node.decorator_list = copy.deepcopy(unique_function(reference_trees[filename], name).decorator_list)
-            return copy.deepcopy(node)
+            copied = copy.deepcopy(node)
+            copied._mojo_body_roles = json.loads(_sampled_text('--body-roles', renamed))
+            return copied
 
         def declaration(source):
             return syntax_tree(source).body[0]
-
-        def shape(nodes):
-            """Each complete top-level statement has an explicit reviewed role."""
-            result = []
-            for node in nodes:
-                if isinstance(node, ast.Assign):
-                    result.append('assign:' + ast.unparse(node.targets[0]))
-                elif isinstance(node, ast.AnnAssign):
-                    result.append('annotate:' + ast.unparse(node.target))
-                elif isinstance(node, ast.If):
-                    result.append('if:' + ast.unparse(node.test))
-                elif isinstance(node, ast.Return):
-                    result.append('return')
-                else:
-                    result.append(type(node).__name__)
-            return result
 
         union = declaration('''def _union_value_points(
             one: Tuple[_ValueJet, _ValueJet, _ValueJet],
@@ -424,7 +410,7 @@ def verify(root):
             pass
     ''')
         old = reference('curve_bounds.mojo', '_union_points')
-        require(shape(old.body) == ['return'], 'union complete body shape changed')
+        require(old._mojo_body_roles == ['return'], 'union complete body shape changed')
         union.body = old.body
         expected['_union_value_points'] = union
 
@@ -435,7 +421,7 @@ def verify(root):
                 return _unknown_value_point()
     ''')
         old = reference('curve_bounds.mojo', '_reference_jet_capture')
-        require(shape(old.body) == [
+        require(old._mojo_body_roles == [
             'assign:d', 'if:geometry.kind == LINE', 'if:geometry.kind == ARC',
             'if:geometry.kind == SPIRAL', 'if:len(geometry.samples) < 2',
             'assign:domain', 'assign:low', 'assign:high', 'if:high - low > 1',
@@ -452,7 +438,7 @@ def verify(root):
             expected[NAMES[name]] = reference(filename, name)
 
         constant = reference('curve_trig.mojo', '_constant_sincos_jet')
-        require(shape(constant.body) == ['assign:result',
+        require(constant._mojo_body_roles == ['assign:result',
             'if:not isfinite(heading) or abs(heading) > _PHASE_LIMIT',
             'assign:zero', 'return'], 'constant heading layout changed')
         require(dump(constant.body[2]) == dump(ast.parse('zero = _Interval.point(0.0)').body[0]),
@@ -499,7 +485,7 @@ def verify(root):
         return _unknown_value_point()
     """).body[0]), 'cached-proof environment refusal changed or moved')
         old.body.pop(0)
-        require(shape(old.body) == [
+        require(old._mojo_body_roles[1:] == [
             'assign:geometry_at', 'assign:elevation_at', 'assign:offset_at',
             'if:geometry_at < 0 or elevation_at < 0 or offset_at < 0',
             'if:info_index(road.info.geometries, high) != geometry_at or info_index(road.info.elevations, high) != elevation_at or info_index(road.info.lane_offsets, high) != offset_at',

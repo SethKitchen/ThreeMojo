@@ -19,6 +19,7 @@ from tests._python_tokens import (
     _tokenize,
     function_slice,
     python_syntax_json,
+    syntax_tree_source,
 )
 from tools._python_float import parse_float
 from tools._python_json import PY_LIST, PY_STR, PyJson, py_equal
@@ -53,6 +54,18 @@ comptime _E_RAISE = 26
 comptime _E_STR = 27
 comptime _E_IFEXP = 28
 comptime _E_ANN = 29
+comptime _E_SIMPLE = 30
+
+comptime _P_TEST = 4
+comptime _P_OR = 5
+comptime _P_AND = 6
+comptime _P_NOT = 7
+comptime _P_CMP = 8
+comptime _P_ARITH = 13
+comptime _P_TERM = 14
+comptime _P_FACTOR = 15
+comptime _P_POWER = 16
+comptime _P_ATOM = 18
 
 
 struct _Parser:
@@ -545,6 +558,19 @@ struct _Parser:
         return self._add(_E_ARGS, "", -1, -1, args^, count, 0)
 
     def _parse_statement(mut self) raises -> Int:
+        if (
+            self._is_name("continue")
+            or self._is_name("break")
+            or self._is_name("pass")
+        ):
+            var word = self._text_at()
+            self.index += 1
+            var label = String("Continue")
+            if word == "break":
+                label = "Break"
+            elif word == "pass":
+                label = "Pass"
+            return self._add(_E_SIMPLE, label, -1, -1, self._empty(), 0, 0)
         if self._is_name("while"):
             self.index += 1
             var test = self._parse_expr()
@@ -872,6 +898,225 @@ struct _Parser:
         var text = String(self.label[node])
         var kind = self.kind[node]
         return self._add(kind, text, left, right, extra^, narg, nkw, mark)
+
+    def _bin_symbol(self, op: String) -> String:
+        if op == "Add":
+            return "+"
+        if op == "Sub":
+            return "-"
+        if op == "Mult":
+            return "*"
+        if op == "Div":
+            return "/"
+        if op == "FloorDiv":
+            return "//"
+        if op == "Mod":
+            return "%"
+        if op == "Pow":
+            return "**"
+        return op
+
+    def _bin_precedence(self, symbol: String) -> Int:
+        if symbol == "+" or symbol == "-":
+            return _P_ARITH
+        if symbol == "*" or symbol == "/" or symbol == "//" or symbol == "%":
+            return _P_TERM
+        if symbol == "**":
+            return _P_POWER
+        return _P_ARITH
+
+    def _cmp_symbol(self, op: String) -> String:
+        if op == "Eq":
+            return "=="
+        if op == "NotEq":
+            return "!="
+        if op == "Lt":
+            return "<"
+        if op == "LtE":
+            return "<="
+        if op == "Gt":
+            return ">"
+        if op == "GtE":
+            return ">="
+        if op == "Is":
+            return "is"
+        if op == "IsNot":
+            return "is not"
+        if op == "In":
+            return "in"
+        if op == "NotIn":
+            return "not in"
+        return op
+
+    def _unparse(mut self, node: Int, limit: Int) raises -> String:
+        var kind = self.kind[node]
+        if kind == _E_NAME or kind == _E_INT or kind == _E_FLOAT:
+            return String(self.label[node])
+        if kind == _E_BOOL:
+            if self.label[node] == "true":
+                return "True"
+            return "False"
+        if kind == _E_NONE:
+            return "None"
+        if kind == _E_ATTR:
+            var name = String(self.label[node])
+            var value_node = self.left[node]
+            var numeric = self.kind[value_node] == _E_INT
+            var text = self._unparse(value_node, _P_ATOM)
+            if numeric:
+                text += " "
+            text += "."
+            text += name
+            return text
+        if kind == _E_SUB:
+            var value_node = self.left[node]
+            var slice_node = self.right[node]
+            return (
+                self._unparse(value_node, _P_ATOM)
+                + "["
+                + self._unparse(slice_node, _P_TEST)
+                + "]"
+            )
+        if kind == _E_CALL:
+            var func_node = self.left[node]
+            var text = self._unparse(func_node, _P_ATOM) + "("
+            var start = self.at[node]
+            var narg = self.narg[node]
+            var nkw = self.nkw[node]
+            var cursor = 0
+            while cursor < narg:
+                if cursor > 0:
+                    text += ", "
+                text += self._unparse(self.extra[start + cursor], _P_TEST)
+                cursor += 1
+            var kw = 0
+            while kw < nkw:
+                if narg + kw > 0:
+                    text += ", "
+                var item = self.extra[start + narg + kw]
+                var arg_name = String(self.label[item])
+                var value_node = self.left[item]
+                text += arg_name
+                text += "="
+                text += self._unparse(value_node, _P_TEST)
+                kw += 1
+            text += ")"
+            return text
+        if kind == _E_UNARY:
+            var op = String(self.label[node])
+            var own = _P_NOT
+            var spelling = String("not ")
+            if op == "USub":
+                own = _P_FACTOR
+                spelling = "-"
+            elif op == "UAdd":
+                own = _P_FACTOR
+                spelling = "+"
+            elif op == "Invert":
+                own = _P_FACTOR
+                spelling = "~"
+            var operand = self.left[node]
+            var text = spelling + self._unparse(operand, own)
+            if limit > own:
+                return "(" + text + ")"
+            return text
+        if kind == _E_BIN:
+            var op = String(self.label[node])
+            var symbol = self._bin_symbol(op)
+            var own = self._bin_precedence(symbol)
+            var left_limit = own
+            var right_limit = own + 1
+            if symbol == "**":
+                left_limit = own + 1
+                right_limit = own
+            var left_node = self.left[node]
+            var right_node = self.right[node]
+            var text = (
+                self._unparse(left_node, left_limit)
+                + " "
+                + symbol
+                + " "
+                + self._unparse(right_node, right_limit)
+            )
+            if limit > own:
+                return "(" + text + ")"
+            return text
+        if kind == _E_BOOL_OP:
+            var op = String(self.label[node])
+            var own = _P_AND
+            var symbol = String("and")
+            if op == "Or":
+                own = _P_OR
+                symbol = "or"
+            var assigned = own
+            var text = String("")
+            var start = self.at[node]
+            var count = self.narg[node]
+            var cursor = 0
+            while cursor < count:
+                assigned += 1
+                var piece = self._unparse(self.extra[start + cursor], assigned)
+                if cursor > 0:
+                    text += " " + symbol + " "
+                text += piece
+                cursor += 1
+            if limit > own:
+                return "(" + text + ")"
+            return text
+        if kind == _E_CMP:
+            var ops = String(self.label[node])
+            var op_words = List[String]()
+            var data = ops.as_bytes()
+            var size = len(data)
+            var op_at = 0
+            while op_at < size:
+                var word = String("")
+                while op_at < size and data[op_at] != 10:
+                    word += chr(Int(data[op_at]))
+                    op_at += 1
+                op_words.append(word^)
+                if op_at < size:
+                    op_at += 1
+            var left_node = self.left[node]
+            var text = self._unparse(left_node, _P_CMP + 1)
+            var start = self.at[node]
+            var count = self.narg[node]
+            var cursor = 0
+            while cursor < count:
+                var symbol = String("==")
+                if cursor < len(op_words):
+                    symbol = self._cmp_symbol(op_words[cursor])
+                text += " " + symbol + " "
+                text += self._unparse(self.extra[start + cursor], _P_CMP + 1)
+                cursor += 1
+            if limit > _P_CMP:
+                return "(" + text + ")"
+            return text
+        raise Error("sampled body role: unsupported expression")
+
+    def _role(mut self, node: Int) raises -> String:
+        var kind = self.kind[node]
+        if kind == _E_ASSIGN:
+            return "assign:" + self._unparse(self.left[node], _P_TEST)
+        if kind == _E_ANN:
+            return "annotate:" + self._unparse(self.left[node], _P_TEST)
+        if kind == _E_IF:
+            return "if:" + self._unparse(self.left[node], _P_TEST)
+        if kind == _E_RETURN:
+            return "return"
+        if kind == _E_AUG:
+            return "AugAssign"
+        if kind == _E_WHILE:
+            return "While"
+        if kind == _E_FOR:
+            return "For"
+        if kind == _E_EXPR:
+            return "Expr"
+        if kind == _E_RAISE:
+            return "Raise"
+        if kind == _E_SIMPLE:
+            return String(self.label[node])
+        raise Error("sampled body role: unsupported statement")
 
     def _dump(mut self, node: Int) raises -> String:
         var doc = PyJson()
@@ -1209,6 +1454,9 @@ struct _Parser:
                 self._pair(doc, "comparators", self._arg_list(doc, node)),
             )
             return self._typed(doc, "Compare", fields)
+        if kind == _E_SIMPLE:
+            var label = String(self.label[node])
+            return self._typed(doc, label, doc.new_list())
         return self._fail()
 
     def _name_fields(self, mut doc: PyJson, node: Int) -> Int:
@@ -1401,6 +1649,41 @@ def statement_dump(source: String) raises -> String:
             raise Error("heading correspondence: unsupported expression")
         parser.index += 1
     return parser._dump(node)
+
+
+def body_role_json(source: String) raises -> String:
+    """Return the JSON statement roles of one function body.
+
+    Args:
+        source: Mojo source for one function.
+
+    Returns:
+        A JSON list of `assign:`, `annotate:`, `if:`, and `return` roles.
+
+    Raises:
+        Error: The function is missing or uses an unsupported statement.
+    """
+    var rewritten = syntax_tree_source(source)
+    var parser = _parser(rewritten)
+    var node = parser._parse_function(False)
+    while not parser._done():
+        var kind = parser._kind_at()
+        if kind != _NEWLINE and kind != _DEDENT and kind != _INDENT:
+            raise Error("sampled body role: unsupported statement")
+        parser.index += 1
+    if parser.kind[node] != _E_FUNC:
+        raise Error("sampled body role: unsupported statement")
+    var doc = PyJson()
+    var rows = doc.new_list()
+    var count = parser.narg[node]
+    var start = parser.at[node]
+    var index = 0
+    while index < count:
+        var role = parser._role(parser.extra[start + index])
+        doc.append(rows, doc.new_str(role))
+        index += 1
+    doc.root = rows
+    return doc.dumps()
 
 
 def function_dump(source: String) raises -> String:

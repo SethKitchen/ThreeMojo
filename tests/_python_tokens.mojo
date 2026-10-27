@@ -1471,6 +1471,179 @@ def ideal_function_source(source: String, name: String) raises -> String:
     return out
 
 
+def syntax_tree_source(source: String) raises -> String:
+    """Return one function as the sampled syntax check would parse it.
+
+    Args:
+        source: Mojo source for one function.
+
+    Returns:
+        Source with Mojo keywords, generic brackets, and parameter defaults removed.
+
+    Raises:
+        Error: The source cannot be tokenized, or a generic bracket is unclosed.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    try:
+        _tokenize(source, kinds, texts)
+    except error:
+        _ = String(error)
+        raise Error("unsupported ideal source syntax")
+    var kept_kinds = List[Int]()
+    var kept_texts = List[String]()
+    var index = 0
+    while index < len(kinds):
+        var word = texts[index]
+        var drop = kinds[index] == _NAME and (
+            word == "var"
+            or word == "mut"
+            or word == "out"
+            or word == "ref"
+            or word == "comptime"
+            or word == "raises"
+        )
+        if not drop:
+            if kinds[index] == _NAME and word == "struct":
+                word = "class"
+            kept_kinds.append(kinds[index])
+            kept_texts.append(word)
+        index += 1
+    while True:
+        var found = False
+        var close = 0
+        index = 0
+        while index + 2 < len(kept_kinds):
+            if (
+                kept_kinds[index] == _NAME
+                and (kept_texts[index] == "def" or kept_texts[index] == "class")
+                and kept_kinds[index + 1] == _NAME
+                and kept_kinds[index + 2] == _OP
+                and kept_texts[index + 2] == "["
+            ):
+                var depth = 1
+                close = index + 3
+                while close < len(kept_kinds) and depth > 0:
+                    if kept_texts[close] == "[":
+                        depth += 1
+                    elif kept_texts[close] == "]":
+                        depth -= 1
+                    close += 1
+                if depth != 0:
+                    raise Error("unclosed Mojo generic declaration")
+                found = True
+                break
+            index += 1
+        if not found:
+            break
+        var next_kinds = List[Int]()
+        var next_texts = List[String]()
+        var cursor = 0
+        while cursor < index + 2:
+            next_kinds.append(kept_kinds[cursor])
+            next_texts.append(kept_texts[cursor])
+            cursor += 1
+        cursor = close
+        while cursor < len(kept_kinds):
+            next_kinds.append(kept_kinds[cursor])
+            next_texts.append(kept_texts[cursor])
+            cursor += 1
+        kept_kinds = next_kinds^
+        kept_texts = next_texts^
+    var keep = List[Int]()
+    index = 0
+    while index < len(kept_kinds):
+        keep.append(1)
+        index += 1
+    index = 0
+    while index + 1 < len(kept_kinds):
+        if (
+            kept_kinds[index] == _NAME
+            and kept_texts[index] == "def"
+            and kept_kinds[index + 1] == _NAME
+        ):
+            var bracket = 0
+            var paren = -1
+            var scan = index + 2
+            while scan < len(kept_kinds):
+                var token = kept_texts[scan]
+                if token == "[":
+                    bracket += 1
+                elif token == "]" and bracket > 0:
+                    bracket -= 1
+                elif token == "(" and bracket == 0:
+                    paren = scan
+                    break
+                scan += 1
+            if paren >= 0:
+                var depth = 0
+                var at = paren
+                while at < len(kept_kinds):
+                    var token = kept_texts[at]
+                    if token == "(" or token == "[" or token == "{":
+                        depth += 1
+                    elif token == ")" or token == "]" or token == "}":
+                        depth -= 1
+                        if depth == 0 and token == ")":
+                            break
+                    elif depth == 1 and token == "=":
+                        var nested = 1
+                        var stop = at + 1
+                        while stop < len(kept_kinds):
+                            var later = kept_texts[stop]
+                            if later == "(" or later == "[" or later == "{":
+                                nested += 1
+                            elif later == ")" or later == "]" or later == "}":
+                                nested -= 1
+                                if nested == 0:
+                                    break
+                            elif nested == 1 and later == ",":
+                                break
+                            stop += 1
+                        var drop_at = at
+                        while drop_at < stop:
+                            keep[drop_at] = 0
+                            drop_at += 1
+                        at = stop
+                        continue
+                    at += 1
+        index += 1
+    var out_kinds = List[Int]()
+    var out_texts = List[String]()
+    index = 0
+    while index < len(kept_kinds):
+        if keep[index] == 1:
+            out_kinds.append(kept_kinds[index])
+            out_texts.append(kept_texts[index])
+        index += 1
+    var out = String("")
+    var indents = List[String]()
+    indents.append("")
+    var need_indent = False
+    index = 0
+    while index < len(out_kinds):
+        var kind = out_kinds[index]
+        if kind == _NEWLINE:
+            out += "\n"
+            need_indent = True
+        elif kind == _DEDENT:
+            if len(indents) > 1:
+                _ = indents.pop()
+        elif kind == _INDENT:
+            indents.append(out_texts[index])
+        else:
+            if need_indent:
+                out += indents[len(indents) - 1]
+                need_indent = False
+            elif out.byte_length() > 0:
+                var data = out.as_bytes()
+                if data[len(data) - 1] != 10:
+                    out += " "
+            out += out_texts[index]
+        index += 1
+    return out
+
+
 def _name_byte(byte: UInt8) -> Bool:
     """Return whether `byte` can appear inside an identifier.
 

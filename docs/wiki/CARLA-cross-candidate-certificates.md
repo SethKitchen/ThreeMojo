@@ -318,6 +318,8 @@ It removes the two derivative intersections from the blend helper.
 
 It checks stored helpers and the value-only imports.
 
+It checks the statement roles of four sampled declarations.
+
 Mojo checks the live sampled module graphs.
 The trig module keeps its reviewed syntax graph.
 The interval module keeps its reviewed syntax graph.

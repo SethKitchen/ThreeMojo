@@ -9,6 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._process import run_program
+from tests._python_expr import body_role_json
 from tools._sampled_value_gate import (
     drop_derivative_intersection,
     extract_sampled_function,
@@ -172,6 +173,30 @@ def test_every_renamed_function_matches_python() raises:
             extracted = extract_sampled_function(bounds, name)
         assert_equal(extracted, raw_body)
         assert_equal(rename_sampled_identifiers(extracted), renamed)
+
+
+def test_statement_roles_match_the_reviewed_shape() raises:
+    """Top-level roles keep the Python statement classes and tests."""
+    var plain = "def demo():\n    return 1\n"
+    assert_equal(body_role_json(plain), '["return"]')
+    var mixed = (
+        "def demo[capture: Bool](flag: Bool = False):\n"
+        "    ref lanes = road\n"
+        "    comptime if capture:\n"
+        "        return 1\n"
+        "    var reused: Int = 0\n"
+        "    if proof and not ready():\n"
+        "        while flag:\n"
+        "            continue\n"
+        "    return lanes\n"
+    )
+    assert_equal(
+        body_role_json(mixed),
+        (
+            '["assign:lanes","if:capture","annotate:reused","if:proof and (not'
+            ' ready())","return"]'
+        ),
+    )
 
 
 def main() raises:

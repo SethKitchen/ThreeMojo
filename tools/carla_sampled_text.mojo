@@ -3,20 +3,23 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md
 
-"""Slice, rename, or edit one sampled declaration.
+"""Slice, rename, edit, or classify one sampled declaration.
 
     carla_sampled_text --extract PATH --name NAME
     carla_sampled_text --rename PATH
     carla_sampled_text --drop-intersection PATH --name first|second
+    carla_sampled_text --body-roles PATH
 
 The extract mode prints one top-level function. The rename mode prints the
 declaration with sampled identifiers renamed. The drop mode removes the first
-derivative intersection. The caller supplies the source.
+derivative intersection. The body-roles mode prints JSON statement roles.
+The caller supplies the source.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
+from tests._python_expr import body_role_json
 from tools._sampled_jet_gate import stored_helper_fields
 from tools._sampled_value_gate import (
     drop_derivative_intersection,
@@ -34,6 +37,7 @@ def _usage():
             "usage: carla_sampled_text --extract PATH --name NAME | --rename"
             " PATH | --drop-intersection PATH --name first|second |"
             " --helper-fields PATH | --value-fields PATH | --value-imports PATH"
+            " | --body-roles PATH"
         ),
         file=stderr,
     )
@@ -41,7 +45,7 @@ def _usage():
 
 
 def main() raises:
-    """Slice or rename one sampled declaration.
+    """Slice, rename, or classify one sampled declaration.
 
     Raises:
         Error: The command is invalid, or the function is missing.
@@ -52,6 +56,7 @@ def main() raises:
     var helper_fields = String("")
     var value_fields = String("")
     var value_imports = String("")
+    var body_roles = String("")
     var name = String("")
     var arguments = argv()
     var index = 1
@@ -64,6 +69,7 @@ def main() raises:
             or word == "--helper-fields"
             or word == "--value-fields"
             or word == "--value-imports"
+            or word == "--body-roles"
             or word == "--name"
         ):
             if index + 1 >= len(arguments):
@@ -81,6 +87,8 @@ def main() raises:
                 value_fields = value
             elif word == "--value-imports":
                 value_imports = value
+            elif word == "--body-roles":
+                body_roles = value
             else:
                 name = value
             index += 2
@@ -99,6 +107,8 @@ def main() raises:
         modes += 1
     if value_imports.byte_length() > 0:
         modes += 1
+    if body_roles.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if (
@@ -106,6 +116,8 @@ def main() raises:
     ) and name.byte_length() == 0:
         _usage()
     if rename.byte_length() > 0 and name.byte_length() > 0:
+        _usage()
+    if body_roles.byte_length() > 0 and name.byte_length() > 0:
         _usage()
     try:
         if extract.byte_length() > 0:
@@ -128,6 +140,9 @@ def main() raises:
             return
         if value_imports.byte_length() > 0:
             sampled_value_imports(Path(value_imports).read_text())
+            return
+        if body_roles.byte_length() > 0:
+            print(body_role_json(Path(body_roles).read_text()), end="")
             return
         print(rename_sampled_identifiers(Path(rename).read_text()), end="")
     except error:
