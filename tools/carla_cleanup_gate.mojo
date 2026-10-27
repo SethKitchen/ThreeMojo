@@ -12,6 +12,7 @@
     carla_cleanup_gate --words PATH --kind trig|geometry --label PATH
     carla_cleanup_gate --premises DIR
     carla_cleanup_gate --declaration PATH --name NAME [--owner NAME]
+    carla_cleanup_gate --bounds PATH --name NAME [--owner NAME]
     carla_cleanup_gate --significant-json DIR
 
 The program checks the bytes it is given. It does not read the repository
@@ -23,6 +24,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import (
+    declaration_place,
     declaration_text,
     stored_float_array,
     stored_scalar,
@@ -387,6 +389,7 @@ def _usage():
             " | --words PATH --kind trig|geometry --label PATH"
             " | --premises DIR"
             " | --declaration PATH --name NAME [--owner NAME]"
+            " | --bounds PATH --name NAME [--owner NAME]"
             " | --significant-json DIR"
         ),
         file=stderr,
@@ -411,6 +414,7 @@ def main() raises:
     var label = String("")
     var premises = String("")
     var declaration = String("")
+    var bounds = String("")
     var decl_name = String("")
     var owners = List[String]()
     var significant = String("")
@@ -430,6 +434,7 @@ def main() raises:
             or word == "--label"
             or word == "--premises"
             or word == "--declaration"
+            or word == "--bounds"
             or word == "--name"
             or word == "--owner"
             or word == "--significant-json"
@@ -459,6 +464,8 @@ def main() raises:
                 premises = value
             elif word == "--declaration":
                 declaration = value
+            elif word == "--bounds":
+                bounds = value
             elif word == "--name":
                 decl_name = value
             elif word == "--owner":
@@ -485,10 +492,14 @@ def main() raises:
         modes += 1
     if premises.byte_length() > 0:
         modes += 1
+    if declaration.byte_length() > 0:
+        modes += 1
+    if bounds.byte_length() > 0:
+        modes += 1
     if (
-        declaration.byte_length() > 0
-        or decl_name.byte_length() > 0
-        or len(owners) > 0
+        declaration.byte_length() == 0
+        and bounds.byte_length() == 0
+        and (decl_name.byte_length() > 0 or len(owners) > 0)
     ):
         modes += 1
     if significant.byte_length() > 0:
@@ -507,15 +518,26 @@ def main() raises:
         kind.byte_length() > 0 or label.byte_length() > 0
     ):
         _usage()
-    if declaration.byte_length() == 0 and (
-        decl_name.byte_length() > 0 or len(owners) > 0
+    if (
+        declaration.byte_length() == 0
+        and bounds.byte_length() == 0
+        and (decl_name.byte_length() > 0 or len(owners) > 0)
     ):
         _usage()
-    if declaration.byte_length() > 0 and decl_name.byte_length() == 0:
+    if (
+        declaration.byte_length() > 0 or bounds.byte_length() > 0
+    ) and decl_name.byte_length() == 0:
         _usage()
     try:
         if significant.byte_length() > 0:
             significant_documents(significant)
+            return
+        if bounds.byte_length() > 0:
+            var place = declaration_place(
+                Path(bounds).read_text(), decl_name, owners
+            )
+            print(String(place.first) + " " + String(place.last))
+            print(place.text, end="")
             return
         if declaration.byte_length() > 0:
             print(

@@ -557,6 +557,29 @@ def _take_decorator(mut decorators: List[Int], depth: Int) -> Int:
     return value
 
 
+struct DeclarationPlace:
+    """One dedented declaration and its half-open source line span."""
+
+    var text: String
+    """The declaration text, with the shared indent removed."""
+    var first: Int
+    """The first source line, starting at 0."""
+    var last: Int
+    """The line after the declaration, starting at 0."""
+
+    def __init__(out self, text: String, first: Int, last: Int):
+        """Store one declaration span.
+
+        Args:
+            text: The dedented declaration.
+            first: The first source line, starting at 0.
+            last: The line after the declaration, starting at 0.
+        """
+        self.text = text
+        self.first = first
+        self.last = last
+
+
 def declaration_text(
     source: String, name: String, owners: List[String]
 ) raises -> String:
@@ -569,6 +592,27 @@ def declaration_text(
 
     Returns:
         The declaration text, with the shared indent removed.
+
+    Raises:
+        Error: The function is missing, repeated, owned by another scope,
+            or has no indented body.
+    """
+    var place = declaration_place(source, name, owners)
+    return place.text
+
+
+def declaration_place(
+    source: String, name: String, owners: List[String]
+) raises -> DeclarationPlace:
+    """Return one declaration and the source lines it occupies.
+
+    Args:
+        source: Mojo source.
+        name: The function name.
+        owners: The enclosing struct names, from the outside inward.
+
+    Returns:
+        The dedented text and the half-open line span.
 
     Raises:
         Error: The function is missing, repeated, owned by another scope,
@@ -704,7 +748,7 @@ def declaration_text(
         cursor += 1
     if blank:
         raise Error("empty actual guard function: " + name)
-    return result
+    return DeclarationPlace(result, first_line, last_line)
 
 
 def token_words(source: String) raises -> List[String]:

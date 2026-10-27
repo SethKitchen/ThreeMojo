@@ -46,6 +46,8 @@ The singleton, frozen ARC, dispatch, raw-cut, and optional-runtime contracts use
 
 It also builds the significant token lists for the singleton, frozen ARC, dispatch, raw-cut, and selection contracts.
 
+It reports the declaration line span used by the selection contract.
+
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.

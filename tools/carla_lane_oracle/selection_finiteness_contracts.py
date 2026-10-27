@@ -173,14 +173,36 @@ def _significant_documents(texts):
     return json.loads(result.stdout)
 
 
+def _declaration_bounds(text, name, owner):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='declaration-bounds-') as directory:
+        source = Path(directory) / 'source.mojo'
+        source.write_text(text)
+        arguments = ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+                     'carla_cleanup_gate', '--bounds', str(source),
+                     '--name', name]
+        for part in owner:
+            arguments.extend(['--owner', part])
+        result = subprocess.run(arguments, capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    header, _, body = result.stdout.partition('\n')
+    first, last = header.split()
+    return body, int(first), int(last)
+
+
 def predecessor_text(root, path, *, _operation=None):
     """Verify both actual producers before reconstructing one legacy module."""
 # #333 explicit historical provenance views; current inputs remain operation-owned.
     import json
-    if __package__:
-        from . import sum2_guard_contracts as guard
-    else:
-        import sum2_guard_contracts as guard
     root=Path(root)
     verify(root, _operation=_operation)
     payload=_typed_source.historical_bytes(root, root/'tools/carla_lane_oracle/selection-finiteness-contract.json', (root/'tools/carla_lane_oracle/selection-finiteness-contract.json').read_bytes(), _operation=_operation)
@@ -192,12 +214,11 @@ def predecessor_text(root, path, *, _operation=None):
     name=('_try_spiral_grouped_roundoff_envelope' if path.endswith('/spiral_grouped_roundoff_proof.mojo')
           else '_try_spiral_roundoff_envelope')
     text=_producer_text(root,path, _operation=_operation)
-    body,span,tokens=guard.function_span(text,name,())
+    body, first, last = _declaration_bounds(text, name, ())
     current_doc, recorded_doc = _significant_documents([
         body, item['after_complete_function']])
     if current_doc != recorded_doc:
         raise ValueError('Selection complete successor body changed')
-    first=tokens[span[0]].start[0]-1;last=tokens[span[1]-1].start[0]-1
     lines=text.splitlines(keepends=True)
     restored=''.join(lines[:first])+item['before_complete_function']+''.join(lines[last:])
     _gate_restored(restored, item['before_token_sha256'])

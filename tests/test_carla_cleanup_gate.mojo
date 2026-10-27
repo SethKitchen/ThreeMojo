@@ -9,7 +9,11 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from std.os import makedirs
 from std.pathlib import Path
-from tests._python_tokens import declaration_text, significant_json
+from tests._python_tokens import (
+    declaration_place,
+    declaration_text,
+    significant_json,
+)
 from tools.carla_cleanup_gate import (
     cleanup_digest,
     cleanup_record,
@@ -106,8 +110,12 @@ def test_a_struct_method_keeps_its_declaration() raises:
         + "        return 2\n"
     )
     var none = List[String]()
+    var place = declaration_place(source, "first", none)
+    assert_equal(place.text, "def first():\n    return 1\n\n")
+    if place.first != 0 or place.last != 3:
+        raise Error("first declaration span changed")
     assert_equal(
-        declaration_text(source, "first", none),
+        declaration_text(source, "first", List[String]()),
         "def first():\n    return 1\n\n",
     )
     var owner = List[String]()
