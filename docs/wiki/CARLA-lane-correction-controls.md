@@ -274,6 +274,8 @@ It keeps the moment array paths, scalar names, block boundaries, and routing pat
 
 It keeps the moment routing constants and the route comparison.
 
+It keeps every stored-moment operation block in one check.
+
 It keeps the moment dependency record and the check messages.
 
 It keeps the moment report names and the pass line.

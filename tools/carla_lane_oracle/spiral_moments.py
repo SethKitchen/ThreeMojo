@@ -265,6 +265,29 @@ def _moment_route_accept(current, expected, message, strip):
                    'message': message, 'strip': strip})
 
 
+def _moment_blocks(items):
+    """Return the normalized operation blocks that match their pins."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(items, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-blocks-') as directory:
+        path = Path(directory) / 'blocks.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_blocks',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _moment_guard(mode, payload):
     try:
         ideal_projection.moment_guard(mode, payload)
@@ -488,14 +511,17 @@ def verify_inputs(root):
     block_items = []
     for name, record in pins['blocks'].items():
         block_items.append((name, record))
+    loaded_blocks = []
     for name, record in block_items:
-        try:
-            blocks[name] = ideal_projection.require_operation_block(
-                _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8')),
-                record['begin'], record['end'], record['normalized_source'],
-                record['sha256'], name)
-        except ValueError as error:
-            raise CheckError(str(error)) from error
+        loaded_blocks.append((name, record, _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))))
+    try:
+        blocks = _moment_blocks([{
+            'name': name, 'source': text, 'begin': record['begin'],
+            'end': record['end'], 'expected': record['normalized_source'],
+            'digest': record['sha256'],
+        } for name, record, text in loaded_blocks])
+    except ValueError as error:
+        raise CheckError(str(error)) from error
     routing_items = []
     for name, record in pins['routing'].items():
         routing_items.append((name, record))
