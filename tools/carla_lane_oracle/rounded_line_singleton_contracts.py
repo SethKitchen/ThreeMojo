@@ -490,15 +490,23 @@ def verify_premises(root):
         'name': item['name'],
         'owner': list(item['owner']),
     } for item, _selected, text in loaded])
+    selected_pairs = []
+    for index, (item, selected, _text) in enumerate(loaded):
+        if selected:
+            selected_pairs.append((index, declared[index], item['source']))
+    selected_docs = _significant_documents([
+        text for _index, actual, source in selected_pairs for text in (actual, source)])
+    selected_flags = _texts_match_all([
+        (selected_docs[index * 2], selected_docs[index * 2 + 1])
+        for index in range(len(selected_pairs))])
+    selected_match = {
+        index: flag for (index, _actual, _source), flag in zip(selected_pairs, selected_flags)}
     prepared = []
     for index, (item, selected, text) in enumerate(loaded):
         actual = declared[index]
-        if selected:
-            current_doc, recorded_doc = _significant_documents([
-                actual, item['source']])
-            if not _same_text(current_doc, recorded_doc):
-                text = full_audit.reviewed_text(root, item['path'], text)
-                actual = _declaration(text, item['name'], tuple(item['owner']))
+        if selected and not selected_match[index]:
+            text = full_audit.reviewed_text(root, item['path'], text)
+            actual = _declaration(text, item['name'], tuple(item['owner']))
         prepared.append((actual, item['source'],
                          labels['declaration'] + item['name']))
     if prepared:
