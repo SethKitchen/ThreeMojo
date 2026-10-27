@@ -36,6 +36,8 @@ It keeps the selection contract path and the predecessor messages.
 
 It keeps the interval token digest.
 
+It compares the selection token digest in one check.
+
 It keeps the selector constant message.
 
 `tools/carla_grouped_gate.mojo` checks the grouped-table token digest and the stored node and weight bounds.
@@ -45,6 +47,8 @@ It keeps the grouped proof module and its token digest.
 It keeps the grouped consumer digest.
 
 It compares that grouped-table token digest before the predecessor fallback.
+
+It compares that grouped-table token digest in one check.
 
 `tools/carla_y_gate.mojo` checks the five Y-finiteness token digests, the successor record digests, and the module token identity.
 
@@ -329,6 +333,8 @@ It keeps the bounds path and the reference refusal.
 It reads the current pin value at each coverage transition and writes the historical value.
 
 It returns the kept-token digest and declaration text for the lane-control and Sum2 checks.
+
+It compares the two lane-control token digests in one check.
 
 It reads every lane-control declaration in one check.
 

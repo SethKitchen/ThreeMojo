@@ -93,8 +93,7 @@ def verify(root, *, _operation=None):
         else:
             import full_audit_cleanup_contracts as full_audit
         text = full_audit._observe_text(root, MODULE, text, _operation=_operation)
-    if not ideal_projection.texts_match(
-            ideal_projection.token_sha256(text), TOKEN_SHA256):
+    if not ideal_projection.token_digest_equals(text, TOKEN_SHA256):
         if __package__:
             from . import selection_finiteness_contracts as selection
         else:

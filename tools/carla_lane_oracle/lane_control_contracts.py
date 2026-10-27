@@ -93,27 +93,6 @@ def _declaration(text, name, owner=()):
     return result.stdout
 
 
-def _token_sha256(text):
-    import os
-    import subprocess
-    import tempfile
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='lane-token-sha-') as directory:
-        source_path = Path(directory) / 'source.mojo'
-        source_path.write_text(text)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--token-sha', str(source_path)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    return result.stdout.strip()
-
-
 def _declarations(items):
     """Return the declaration texts in the requested order."""
     import os
@@ -246,8 +225,7 @@ def verify(root, *, _operation=None):
         from . import ideal_projection
     else:
         import ideal_projection
-    if not ideal_projection.texts_match(
-            _token_sha256(current), _token_sha256(record['after_source'])):
+    if not ideal_projection.token_texts_match(current, record['after_source']):
         if __package__:
             from . import lane_order_contracts as order
         else:

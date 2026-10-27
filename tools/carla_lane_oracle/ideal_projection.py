@@ -847,6 +847,41 @@ def token_sha256(text):
     return result.stdout.strip()
 
 
+def _token_digest(payload):
+    """Return whether one kept-token comparison agrees."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='token-digest-') as directory:
+        path = Path(directory) / 'digest.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_token_digest',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
+def token_texts_match(left, right):
+    """Return whether two sources have the same kept-token digest."""
+    return _token_digest({'left': left, 'right': right}) == 'true'
+
+
+def token_digest_equals(text, digest):
+    """Return whether one source has the pinned kept-token digest."""
+    return _token_digest({'text': text, 'digest': digest}) == 'true'
+
+
 def array_literals(text, name, size):
     """Return the source spellings of one complete constant array."""
     return _constant_literals(text, name, 'array', size)

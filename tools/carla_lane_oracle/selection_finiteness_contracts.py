@@ -110,8 +110,7 @@ def _producer_text(root, path, *, _operation=None):
     else:
         import ideal_projection
     if (path == next(iter(_expected()))
-            and not ideal_projection.texts_match(
-                ideal_projection.token_sha256(text), _expected()[path])):
+            and not ideal_projection.token_digest_equals(text, _expected()[path])):
         if __package__:
             from . import grouped_y_finiteness_contracts as grouped_y
         else:
