@@ -230,6 +230,11 @@ def test_the_radial_blur_is_three_js_s() raises:
     settings.premultiplied_alpha = True
     out = radial_blur_pixel(LightView(even, SIZE, SIZE), 2, 5, settings)
     assert_almost_equal(out.r, 0.2, atol=1e-4)
+    # A count past 16777216 keeps the pixel, premultiplied too.
+    settings.count = 16777217
+    out = radial_blur_pixel(LightView(even, SIZE, SIZE), 2, 5, settings)
+    assert_almost_equal(out.r, 0.2, atol=1e-4)
+    assert_almost_equal(out.a, 1, atol=1e-6)
     # Over a frame, a bright center smears outward.
     var frame = RenderTarget(SIZE, SIZE, Color(0, 0, 0), FLOAT_TARGET)
     frame.colors[4 * SIZE + 4] = gray(1)

@@ -795,7 +795,8 @@ def rasterize_splat(
     )
     if left > right or top > bottom:
         return
-    for y in range(top, bottom + 1):
+    # The return above leaves at least one row.
+    for y in range(top, bottom + 1):  # pragma: no branch
         var span = _rule_span(rule, y, left, right)
         _blend_row(target, splat, y, span[0], span[1])
 

@@ -50,6 +50,7 @@ from postprocessing.composer import (
     texture_pass,
 )
 from postprocessing.effects import (
+    _bokeh2_taps_fit,
     Bokeh2Settings,
     bokeh2_light,
     bokeh2_penta,
@@ -1187,6 +1188,9 @@ def test_bokeh2_settings_are_checked() raises:
     wide.rings = 1
     wide.samples = 16777216
     check_bokeh2(wide)
+    # A count below one fits, because that walk does not run.
+    assert_true(_bokeh2_taps_fit(0, 5))
+    assert_true(_bokeh2_taps_fit(3, 0))
     assert_true(bokeh2_pass().kind == BOKEH2)
     with assert_raises(contains="a ring"):
         _ = bokeh2_pass(empty)

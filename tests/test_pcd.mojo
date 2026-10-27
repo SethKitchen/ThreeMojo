@@ -471,6 +471,30 @@ def test_pcd_products_that_do_not_fit_are_refused() raises:
     var empty = "POINTS 1000000\nDATA binary\n"
     with assert_raises(contains="not fit"):
         _ = parse_pcd(text_bytes(empty))
+    var packed = text_bytes("POINTS 1000000\nDATA binary_compressed\n")
+    put(packed, 0, 4)
+    put(packed, 0, 4)
+    with assert_raises(contains="points do not fit"):
+        _ = parse_pcd(packed)
+    # Two fields of 2^62 values each make a row past the largest Int.
+    var row = (
+        "FIELDS a b\nSIZE 4 4\nTYPE F F\n"
+        "COUNT 4611686018427387904 4611686018427387904\nDATA ascii\n"
+    )
+    with assert_raises(contains="row does not fit"):
+        _ = parse_pcd_header(text_bytes(row))
+
+
+def test_a_cloud_of_no_fields_reads_no_bytes() raises:
+    # Fewer points than the file has bytes are read, each of no bytes.
+    var bare = parse_pcd(text_bytes("POINTS 3\nDATA binary\n"))
+    assert_equal(bare.header.points, 3)
+    assert_equal(bare.header.row_size, 0)
+    assert_false(bare.geometry.has_attribute(String(POSITION)))
+    var packed = text_bytes("POINTS 3\nDATA binary_compressed\n")
+    put(packed, 0, 4)
+    put(packed, 0, 4)
+    assert_equal(parse_pcd(packed).header.points, 3)
 
 
 def main() raises:

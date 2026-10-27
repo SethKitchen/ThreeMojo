@@ -178,7 +178,7 @@ def dependency_checker_bytes(root: String) raises:
     _digest(
         base,
         "tools/carla_lane_oracle/pr780_source_successor.py",
-        "3d3452a0659002ccf4aeca7e4282c2a4686f2df269f62ceb1e9a92d454c97ae5",
+        "24f749e1222c13ad2be8418ee92f0f61a51144abd8deaed1b3a517b5e4d57cc6",
         "unreviewed dependency checker bytes: ",
     )
     _public(

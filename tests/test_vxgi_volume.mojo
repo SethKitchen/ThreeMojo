@@ -28,6 +28,8 @@ from lights.vxgi_cone_tracer import (
     unorm8,
 )
 from lights.vxgi_volume import (
+    _grid_index,
+    _padded,
     VXGIVolume,
     VXGI_DIRECTIONAL,
     VXGI_PI,
@@ -333,6 +335,21 @@ def test_a_record_holds_what_three_js_writes() raises:
     assert_equal(record[7], 0)
     assert_equal(record[11], 2)
     assert_equal(record[12], 0)
+
+
+def test_a_grid_index_or_an_axis_that_does_not_fit_is_refused() raises:
+    # A coordinate at no place lies past the high side of the grid.
+    assert_equal(_grid_index(nan[DType.float32]()), Int.MAX)
+    assert_equal(_grid_index(Float32(-1e30)), Int.MIN)
+    assert_equal(_grid_index(2.5), 2)
+    # An axis is its size, a voxel each side, up to the coarsest step.
+    assert_equal(_padded(6, 1, 4), 8)
+    # A voxel count past an integer is refused, and so is a group count
+    # whose voxels do not fit in one.
+    with assert_raises(contains="larger than this port"):
+        _ = _padded(1e300, 1, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = _padded(9223372036854774784.0, 1, 1 << 20)
 
 
 def test_a_volume_refuses_settings_it_cannot_use() raises:

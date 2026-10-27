@@ -511,6 +511,15 @@ def test_the_glare_grid_maps_the_image_and_back() raises:
     assert_equal(glare_sample_x(2, 3, 16777217), 13981014)
     assert_equal(glare_cell_x(16777216, 16777217, 48), 47)
     assert_equal(glare_cell_y(16777216, 16777217, 48), 47)
+    # A wide image or a wide grid on either axis uses the wide arithmetic.
+    assert_equal(glare_sample_y(2, 3, 16777217), 13981014)
+    assert_equal(glare_cell_x(2, 3, 16777217), 11184811)
+    assert_equal(glare_cell_y(2, 3, 16777217), 11184811)
+    # A coordinate at the far side reads the last column or row.
+    assert_equal(glare_sample_x(10, 10, 100), 99)
+    assert_equal(glare_sample_y(10, 10, 100), 99)
+    assert_equal(glare_cell_x(640, 640, 48), 47)
+    assert_equal(glare_cell_y(360, 360, 48), 47)
     # Past 2^53 the last column's ratio is one, so it used to read one
     # past the image and one past the grid. A zero side is not a column.
     assert_equal(glare_sample_x(Int.MAX - 1, Int.MAX, 100), 99)
@@ -1178,6 +1187,37 @@ def test_water_samples_use_texture_texel_centers() raises:
     assert_almost_equal(missing_grad_v.r, 0)
     with assert_raises(contains="larger than this port"):
         _ = PebbleBed(1 << 31, 1 << 31, List[Float32]())
+
+
+def test_a_far_axis_repeats_beside_a_near_or_missing_axis() raises:
+    var grid = ComplexField(SpectrumResolution(8))
+    for y in range(8):
+        for x in range(8):
+            grid.put(x, y, 0, Float32(x + 8 * y))
+    var surface = SurfaceField(Length(8), grid^)
+    # 2^63 meters is not a texel index. The patch is 8 m, so it repeats
+    # onto the origin.
+    var far = Float32(9223372036854775808.0)
+    var missing = nan[DType.float32]()
+    assert_almost_equal(
+        sample_surface_smooth(surface, 2.5, far).height,
+        sample_surface_smooth(surface, 2.5, 0).height,
+    )
+    assert_almost_equal(
+        sample_surface_filtered(surface, far, 2.5, 0, 0, 0, 0, False).height,
+        sample_surface_filtered(surface, 0, 2.5, 0, 0, 0, 0, False).height,
+    )
+    # A position with one missing axis is flat, also when the other axis
+    # is far.
+    assert_almost_equal(sample_surface(surface, far, missing).height, 0)
+    assert_almost_equal(sample_surface_smooth(surface, missing, 2.5).height, 0)
+    assert_almost_equal(sample_surface_smooth(surface, far, missing).height, 0)
+    assert_almost_equal(
+        sample_surface_filtered(
+            surface, 2.5, missing, 0, 0, 0, 0, False
+        ).height,
+        0,
+    )
 
 
 def test_underwater_sun_keeps_its_incident_direction() raises:

@@ -13,7 +13,7 @@ from tools._sha256 import sha256_hex
 comptime _MODULE = "extensions/carla/map.mojo"
 """The live Map module."""
 comptime _CURRENT_SHA256 = (
-    "4ac668239112e81ac0b2bc84eaed32d1efbee1f70e61d1d97ca02324f914f35c"
+    "d31186a9f02b328dc644194a1246a0b71ff7bc4c68f8556b8b18e3a623bb90cb"
 )
 """The file digest of the live Map module."""
 comptime _LIVE_SHA256 = (
@@ -831,7 +831,8 @@ def _station_spans(
 
 
 def _without_waypoint_guard(text: String) raises -> String:
-    """Remove the live waypoint-count guard.
+    """Remove the live waypoint-count guard, and restore the step test
+    that the guard leaves without a case.
 
     Args:
         text: The live Map module.
@@ -852,17 +853,33 @@ def _without_waypoint_guard(text: String) raises -> String:
         '              "A generated waypoint count is larger than this port'
         ' walks"\n                )\n            var s = EPSILON\n'
     )
-    if _count(text, note) != 1 or _count(text, guard) != 1:
+    var step = (
+        "                var following = s + distance\n"
+        "                if not isfinite(following):\n"
+    )
+    if (
+        _count(text, note) != 1
+        or _count(text, guard) != 1
+        or _count(text, step) != 1
+    ):
         raise Error("reviewed Map deviation successor: live map changed")
     var previous = _replace_first(
         text,
         note,
         "            Error: If the distance is not positive.\n",
     )
-    return _replace_first(
+    previous = _replace_first(
         previous,
         guard,
         "        for road in self.roads:\n            var s = EPSILON\n",
+    )
+    return _replace_first(
+        previous,
+        step,
+        (
+            "                var following = s + distance\n"
+            "                if not isfinite(following) or following <= s:\n"
+        ),
     )
 
 

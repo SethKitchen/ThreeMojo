@@ -677,7 +677,10 @@ def affected_lane_waypoints(
     for landmark in map.landmarks_from_id(sign_id):
         ref r = landmark.reference
         for v in r.validities:
-            for lane in generate_range(v.from_lane.value, v.to_lane.value):
+            # The range holds both its ends, so one lane at least.
+            for lane in generate_range(
+                v.from_lane.value, v.to_lane.value
+            ):  # pragma: no branch
                 if lane == 0:
                     continue
                 var w = map.waypoint_xodr_float32(

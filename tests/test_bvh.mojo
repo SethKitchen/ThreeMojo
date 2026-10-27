@@ -248,6 +248,10 @@ def test_refusals() raises:
         _ = parse_bvh(
             bvh(ONE, "Frames: 99999999999999999999\nFrame Time: 1"), scene
         )
+    with assert_raises(contains="number of frames"):
+        _ = parse_bvh(
+            bvh(ONE, "Frames: -99999999999999999999\nFrame Time: 1"), scene
+        )
     with assert_raises(contains="as many as it counts"):
         _ = parse_bvh(
             "HIERARCHY\nROOT A\n{\nOFFSET 0 0 0\nCHANNELS"

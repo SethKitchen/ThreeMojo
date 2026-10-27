@@ -1679,6 +1679,8 @@ def test_the_helpers() raises:
     assert_equal(wrap_code(REPEAT), 1000)
     with assert_raises():
         _ = wrap_of(1003)
+    with assert_raises():
+        _ = wrap_of(999)
     assert_true(is_mipmap_filter(1005))
     assert_false(is_mipmap_filter(1006))
     assert_false(is_mipmap_filter(1003))

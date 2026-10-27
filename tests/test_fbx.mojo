@@ -57,6 +57,7 @@ from loaders.fbx_tree import (
     object_name,
     parse_fbx,
     parse_fbx_text,
+    require_fbx_whole,
     string_property,
 )
 from loaders.gltf import decode_base64
@@ -1684,6 +1685,9 @@ def test_models() raises:
             bad_order,
             bad_assets,
         )
+    # A number past the low end of an integer is refused too.
+    with assert_raises(contains="whole number"):
+        require_fbx_whole(-1e20)
     var fraction = Scene()
     var fraction_assets = Assets()
     with assert_raises(contains="whole number"):

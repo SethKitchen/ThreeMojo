@@ -293,18 +293,14 @@ def _local_meters(coord: Float32, patch: Float32) -> Tuple[Bool, Float32]:
     Returns:
         Whether the position is finite, and its place in the first patch.
     """
-    # Metal has no `Float64`. A kernel folds in `Float32`; only a position
-    # past 2^63 texels comes here.
-    comptime if not is_gpu():
-        var wide = Float64(coord) / Float64(patch)
-        if not isfinite(wide):
-            return (False, Float32(0))
-        var part = wide - floor(wide)
-        return (True, Float32(part * Float64(patch)))
-    var turns = coord / patch
+    # Metal has no `Float64`, so a kernel folds in `Float32`. Only a
+    # position past 2^63 texels comes here.
+    comptime wide = DType.float32 if is_gpu() else DType.float64
+    var turns = Scalar[wide](coord) / Scalar[wide](patch)
     if not isfinite(turns):
         return (False, Float32(0))
-    return (True, (turns - floor(turns)) * patch)
+    var part = turns - floor(turns)
+    return (True, Float32(part * Scalar[wide](patch)))
 
 
 def _local_turn(turns: Float32) -> Tuple[Bool, Float32]:
@@ -316,15 +312,12 @@ def _local_turn(turns: Float32) -> Tuple[Bool, Float32]:
     Returns:
         Whether the coordinate is finite, and its fraction.
     """
-    # Metal has no `Float64`. A kernel folds in `Float32`.
-    comptime if not is_gpu():
-        var wide = Float64(turns)
-        if not isfinite(wide):
-            return (False, Float32(0))
-        return (True, Float32(wide - floor(wide)))
-    if not isfinite(turns):
+    # Metal has no `Float64`, so a kernel folds in `Float32`.
+    comptime wide = DType.float32 if is_gpu() else DType.float64
+    var turn = Scalar[wide](turns)
+    if not isfinite(turn):
         return (False, Float32(0))
-    return (True, turns - floor(turns))
+    return (True, Float32(turn - floor(turn)))
 
 
 def _wrap(index: Int, n: Int) -> Int:

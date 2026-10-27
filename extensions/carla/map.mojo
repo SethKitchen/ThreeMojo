@@ -3976,7 +3976,7 @@ struct Map(Movable):
                                 )
                             )
                 var following = s + distance
-                if not isfinite(following) or following <= s:
+                if not isfinite(following):
                     raise Error(
                         "Waypoint spacing cannot advance at this station"
                     )

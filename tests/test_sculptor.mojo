@@ -2018,6 +2018,21 @@ def test_pointer_events_that_do_not_sculpt() raises:
     assert_true(sculptor.events[len(sculptor.events) - 1] == SCULPT_END)
 
 
+def test_a_long_move_whose_first_stamp_misses_changes_nothing() raises:
+    var assets = Assets()
+    var scene = _scene(_bumpy(), assets, Object3D())
+    var sculptor = _pointer_sculptor(scene, assets, SCULPT_BRUSH, 30)
+    var camera = _camera()
+    sculptor.pointer_down(camera, scene, 100, 100)
+    assert_true(sculptor.is_sculpting())
+    var events = len(sculptor.events)
+    # A move of 10^9 pixels holds its stamps at 4096 steps, so its first
+    # step is far past the plane and the stroke stamps nothing.
+    sculptor.pointer_move(camera, scene, assets, 1e9, 100)
+    assert_equal(len(sculptor.events), events)
+    assert_true(sculptor.is_sculpting())
+
+
 def test_drag_off_the_view_and_to_no_place() raises:
     var assets = Assets()
     var scene = _scene(_bumpy(), assets, Object3D())

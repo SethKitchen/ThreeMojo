@@ -369,6 +369,7 @@ def test_rain_settings() raises:
     # 3000 per million pixels over 800 by 600 pixels.
     assert_equal(rain.streaks(800, 600), 1440)
     assert_equal(rain.streaks(0, 600), 0)
+    assert_equal(rain.streaks(800, 0), 0)
     var heavy = rain
     heavy.density = Float32(1e20)
     with assert_raises(contains="larger than this port"):

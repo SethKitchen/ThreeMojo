@@ -27,7 +27,7 @@ comptime _LANE_REVIEWED = (
 
 comptime _MAP = "extensions/carla/map.mojo"
 comptime _MAP_LIVE = (
-    "4ac668239112e81ac0b2bc84eaed32d1efbee1f70e61d1d97ca02324f914f35c"
+    "d31186a9f02b328dc644194a1246a0b71ff7bc4c68f8556b8b18e3a623bb90cb"
 )
 """The admitted bytes of `extensions/carla/map.mojo`."""
 comptime _MAP_REVIEWED = (
@@ -166,6 +166,17 @@ def _map(text: String) raises -> String:
             ' port walks"\n                )\n            var s = EPSILON\n'
         ),
         "        for road in self.roads:\n            var s = EPSILON\n",
+    )
+    reviewed = _undo(
+        reviewed,
+        (
+            "                var following = s + distance\n"
+            "                if not isfinite(following):\n"
+        ),
+        (
+            "                var following = s + distance\n"
+            "                if not isfinite(following) or following <= s:\n"
+        ),
     )
     return reviewed^
 

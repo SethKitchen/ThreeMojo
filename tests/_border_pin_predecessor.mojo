@@ -2290,20 +2290,20 @@ def _edits_29(
         stops: The exclusive end lines.
         befores: The predecessor lines for each span.
     """
-    starts.append(714)
-    stops.append(725)
+    starts.append(717)
+    stops.append(728)
     befores.append(
         "    var x = Float32(-0.9) * trigger_volume.extent.x\n    var"
         " end = Float32(0.9) * trigger_volume.extent.x\n"
     )
-    starts.append(708)
-    stops.append(710)
+    starts.append(711)
+    stops.append(713)
     befores.append("        Error: If a map query fails.\n")
-    starts.append(682)
-    stops.append(683)
+    starts.append(685)
+    stops.append(686)
     befores.append("                var w = map.waypoint_xodr(\n")
     starts.append(679)
-    stops.append(680)
+    stops.append(683)
     befores.append(
         "            var lanes = List[Int]()\n            if v.from_l"
         "ane.value < v.to_lane.value:\n                # from < to, s"
@@ -4501,7 +4501,7 @@ def restored_border_pins(
     var live_29 = Path("extensions/carla/traffic_light.mojo").read_text()
     if (
         sha256_hex(live_29.as_bytes())
-        != "dea4519729e449d63121655f7d2b4bee2df58b4266764236bb9d108ae766e3da"
+        != "c5c9a860a7d6668d2fa0a803a20fce84bd598512d42b3ebc98f01c27af9d939e"
     ):
         raise Error(
             "reviewed border parser successor: border pin changed: "

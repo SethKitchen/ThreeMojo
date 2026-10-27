@@ -1524,8 +1524,9 @@ def _padded(size: Float64, voxel: Float64, multiple: Int) raises -> Int:
     var cells = ceil(size / voxel) + 2
     if not (isfinite(cells) and cells < Float64(Int.MAX)):
         raise Error("A VXGI volume is larger than this port builds")
+    # A finite count of cells gives a finite count of groups.
     var groups = ceil(cells / Float64(multiple))
-    if not (isfinite(groups) and groups < Float64(Int.MAX // multiple)):
+    if not (groups < Float64(Int.MAX // multiple)):
         raise Error("A VXGI volume is larger than this port builds")
     return Int(groups) * multiple
 

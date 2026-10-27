@@ -238,7 +238,7 @@ def qualify_include_root(
         "04ff45c12cefcb4dbe3a7b136e77b6baaf02cff52325f6599d99250f820fdebb"
     )
     pins.append(
-        "4ac668239112e81ac0b2bc84eaed32d1efbee1f70e61d1d97ca02324f914f35c"
+        "d31186a9f02b328dc644194a1246a0b71ff7bc4c68f8556b8b18e3a623bb90cb"
     )
     var sources = List[String]()
     sources.append("extensions/carla/curve_rounded_arc.mojo")

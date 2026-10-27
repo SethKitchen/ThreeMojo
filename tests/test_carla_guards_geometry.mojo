@@ -134,6 +134,13 @@ def test_spiral_query_work_limits_refuse() raises:
         _ = _lane_geometry_pos_at(past, 1e19)
     with assert_raises(contains="spiral work limit"):
         _ = _lane_geometry_pos_at(long, 1e19)
+    # A count that fits in an Int, but is past the query budget, does not
+    # finish either.
+    var wide = with_spiral_si(
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 5e6), 0.0, 0.0
+    )
+    with assert_raises(contains="spiral work limit"):
+        _ = _lane_geometry_pos_at(wide, 5e6)
 
 
 def test_poly3_sampling_refuses_a_length_that_cannot_advance() raises:

@@ -839,7 +839,8 @@ def parse_pcd(bytes: List[UInt8]) raises -> PcdModel:
         if header.row_size == 0 and header.points > len(bytes):
             raise Error("PCD: the points do not fit")
         var payload = _point_bytes(header.points, header.row_size)
-        if start > len(bytes) or payload > len(bytes) - start:
+        # The header ends inside the file, so `start` is not past its end.
+        if payload > len(bytes) - start:
             raise Error(
                 "PCD: the file ends before its "
                 + String(header.points)
