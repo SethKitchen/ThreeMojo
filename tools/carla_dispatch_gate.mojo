@@ -6,6 +6,7 @@
 """Check the curve support and dispatch migration record.
 
     carla_dispatch_gate --migration PATH
+    carla_dispatch_gate --bytes PATH --sha HEX --label TEXT
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -89,9 +90,32 @@ def dispatch_record(migration: Span[UInt8, _]) raises:
         _fail("wrong successor schema or source set")
 
 
+def dispatch_pin(
+    payload: Span[UInt8, _], expected: String, label: String
+) raises:
+    """Require one historical pin digest.
+
+    Args:
+        payload: The pin file bytes.
+        expected: The required SHA-256 hex digest.
+        label: The repository path, used in the failure text.
+
+    Raises:
+        Error: The digest changed.
+    """
+    if sha256_hex(payload) != expected:
+        _fail("standalone historical pin input changed: " + label)
+
+
 def _usage():
     """Print the command usage and stop."""
-    print("usage: carla_dispatch_gate --migration PATH", file=stderr)
+    print(
+        (
+            "usage: carla_dispatch_gate --migration PATH"
+            " | --bytes PATH --sha HEX --label TEXT"
+        ),
+        file=stderr,
+    )
     exit(2)
 
 
@@ -102,21 +126,44 @@ def main() raises:
         Error: The command is invalid.
     """
     var migration = String("")
+    var payload = String("")
+    var digest = String("")
+    var label = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
-        if word == "--migration":
+        if (
+            word == "--migration"
+            or word == "--bytes"
+            or word == "--sha"
+            or word == "--label"
+        ):
             if index + 1 >= len(arguments):
                 _usage()
-            migration = arguments[index + 1]
+            var value = arguments[index + 1]
+            if word == "--migration":
+                migration = value
+            elif word == "--bytes":
+                payload = value
+            elif word == "--sha":
+                digest = value
+            else:
+                label = value
             index += 2
             continue
         _usage()
-    if migration.byte_length() == 0:
+    if (migration.byte_length() == 0) == (payload.byte_length() == 0):
+        _usage()
+    if payload.byte_length() > 0 and (
+        digest.byte_length() == 0 or label.byte_length() == 0
+    ):
         _usage()
     try:
-        dispatch_record(Path(migration).read_bytes())
+        if migration.byte_length() > 0:
+            dispatch_record(Path(migration).read_bytes())
+        else:
+            dispatch_pin(Path(payload).read_bytes(), digest, label)
     except error:
         print(String(error), file=stderr)
         exit(1)

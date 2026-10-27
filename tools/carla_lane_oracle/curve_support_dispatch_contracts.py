@@ -10,7 +10,6 @@ if __package__:
     from . import source_contracts as _typed_source
 else:
     import source_contracts as _typed_source
-import hashlib
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 
@@ -162,10 +161,30 @@ def verify(root, *, _operation=None):
     return record
 
 
+def _gate_pin(payload, digest, label):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='dispatch-pin-') as directory:
+        target = Path(directory) / 'pin'
+        target.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_gate',
+             '--bytes', str(target), '--sha', digest, '--label', label],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def verify_historical_pin_inputs(root):
     # Use only before the centrally reviewed integration migration. This is
     # not called by verify: a later exact pin successor must remain possible.
     record = read_record(root)
     for path, expected in record['historical_pins'].items():
-        require(hashlib.sha256(_typed_source.historical_bytes(root, root/path, (root/path).read_bytes())).hexdigest() == expected,
-                'standalone historical pin input changed: ' + path)
+        _gate_pin(_typed_source.historical_bytes(root, root/path, (root/path).read_bytes()), expected, path)
