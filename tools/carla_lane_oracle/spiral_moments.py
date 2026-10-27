@@ -263,6 +263,29 @@ def _moment_node_sums(payload):
     return json.loads(result.stdout)
 
 
+def _moment_projection(payload):
+    """Return the ideal projection record when the spirals match."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-projection-') as directory:
+        path = Path(directory) / 'projection.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_moment_projection', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _moment_arrays(items):
     """Return the stored array words that match their pins."""
     import os
@@ -671,8 +694,11 @@ def verify_inputs(root):
     except ValueError as error:
         raise CheckError(str(error)) from error
     try:
-        result = ideal_projection.verify_projection(
-            projection['legacy_normalized_source'], blocks[_moment_plan()['spiral_block']], helper)
+        result = _moment_projection({
+            'legacy': projection['legacy_normalized_source'],
+            'current': blocks[_moment_plan()['spiral_block']],
+            'helper': helper,
+        })
     except ValueError as error:
         raise CheckError(messages['projection'] + str(error)) from error
     try:
