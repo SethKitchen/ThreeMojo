@@ -421,6 +421,31 @@ def derive_rows(nodes, weights, cosine, sine):
     return json.loads(result.stdout)
 
 
+def verify_moment_table(text, words):
+    """Return the table words when they match the derived canonical source."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='moment-table-') as directory:
+        folder = Path(directory)
+        (folder / 'table.text').write_text(text)
+        (folder / 'words.json').write_text(
+            json.dumps(list(words), separators=(',', ':')))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--verify-table', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return [int(item, 16) for item in json.loads(result.stdout)]
+
+
 def declaration(text, name, owner=()):
     """Return one declaration selected by the cleanup gate."""
     import os

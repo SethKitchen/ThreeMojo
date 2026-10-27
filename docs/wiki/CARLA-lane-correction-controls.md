@@ -76,6 +76,8 @@ It rounds one stored decimal literal to a binary64 word.
 
 It derives the stored moment rows in exact arithmetic.
 
+It checks the stored moment table against the derived words.
+
 It drops comments and blank lines from one source block.
 
 It reads the stored moment words from the generated table.
