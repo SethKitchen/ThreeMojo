@@ -12,7 +12,13 @@ from std.pathlib import Path
 from tests._python_expr import (
     expression_dump,
     function_dump,
+    ideal_current_matches,
+    ideal_legacy_dump,
     plain_function_dump,
+    require_dump_name,
+    require_half_arguments,
+    require_ideal_prefix,
+    require_same_projection,
     statement_dump,
     sum2_graph_dump,
 )
@@ -544,6 +550,93 @@ def _sum2_payload(
         doc.set(root, "drop_first", doc.new_bool(True))
     doc.root = root
     return doc.dumps()
+
+
+def test_the_ideal_half_projection_keeps_the_reviewed_graph() raises:
+    """The commuted legacy dump matches the live stored-half projection."""
+    var pins = PyJson.parse(
+        Path("tools/carla_lane_oracle/spiral-moment-pins.json").read_text()
+    )
+    var legacy = pins.text(
+        pins.at(
+            pins.at(pins.root, "ideal_projection"), "legacy_normalized_source"
+        )
+    )
+    var current = pins.text(
+        pins.at(
+            pins.at(pins.at(pins.root, "blocks"), "ideal_spiral"),
+            "normalized_source",
+        )
+    )
+    var dump = ideal_legacy_dump(legacy)
+    ideal_current_matches(current, dump)
+    with assert_raises(
+        contains="ideal expression differs beyond reviewed half projection"
+    ):
+        ideal_current_matches(current, dump + " ")
+
+
+def test_an_ideal_half_count_or_name_change_is_refused() raises:
+    """The declaration name, prefix, arguments, and commutation count stay fixed.
+    """
+    var named = function_dump("def _spiral_expression():\n    return 1\n")
+    require_dump_name(named)
+    with assert_raises(contains="changed ideal generic declaration"):
+        require_dump_name('["FunctionDef",[["name","other"]]]')
+    require_ideal_prefix("def _spiral_expression ():\n    return 1\n")
+    require_ideal_prefix("def _spiral_expression():\n    return 1\n")
+    with assert_raises(contains="changed ideal generic declaration"):
+        require_ideal_prefix("def other():\n    return 1\n")
+    var doc = PyJson()
+    var rows = doc.new_list()
+    doc.append(rows, doc.new_str("step"))
+    doc.append(rows, doc.new_str("rate"))
+    doc.append(rows, doc.new_str("step"))
+    doc.append(rows, doc.new_str("step"))
+    doc.append(rows, doc.new_str("rate"))
+    doc.root = rows
+    require_half_arguments(doc, doc.root)
+    var short = PyJson()
+    var fewer = short.new_list()
+    short.append(fewer, short.new_str("step"))
+    short.root = fewer
+    with assert_raises(
+        contains="expected exactly five reviewed stored-half calls"
+    ):
+        require_half_arguments(short, short.root)
+    var renamed = PyJson()
+    var changed = renamed.new_list()
+    renamed.append(changed, renamed.new_str("rate"))
+    renamed.append(changed, renamed.new_str("rate"))
+    renamed.append(changed, renamed.new_str("step"))
+    renamed.append(changed, renamed.new_str("step"))
+    renamed.append(changed, renamed.new_str("rate"))
+    renamed.root = changed
+    with assert_raises(
+        contains="expected exactly five reviewed stored-half calls"
+    ):
+        require_half_arguments(renamed, renamed.root)
+    require_same_projection(named, named)
+    with assert_raises(
+        contains="ideal expression differs beyond reviewed half projection"
+    ):
+        require_same_projection(named, named + " ")
+    var two = (
+        "def _spiral_expression[derivatives: Bool]():\n"
+        "    var a = Expression.constant(0.5) * rate\n"
+        "    var b = Expression.constant(0.5) * rate\n"
+        "    return a\n"
+    )
+    var one = (
+        "def _spiral_expression[derivatives: Bool]():\n"
+        "    var a = Expression.constant(0.5) * rate\n"
+        "    return a\n"
+    )
+    _ = ideal_legacy_dump(two)
+    with assert_raises(
+        contains="expected exactly two historical rate-half commutations"
+    ):
+        _ = ideal_legacy_dump(one)
 
 
 def test_the_checked_leaf_name_is_replaced_before_the_dump() raises:

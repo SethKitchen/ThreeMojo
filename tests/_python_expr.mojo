@@ -17,7 +17,10 @@ from tests._python_tokens import (
     _OP,
     _STRING,
     _tokenize,
+    commute_legacy_source,
     function_slice,
+    ideal_function_source,
+    project_sum2_source,
     python_syntax_json,
     syntax_tree_source,
 )
@@ -1821,6 +1824,122 @@ def plain_function_dump(source: String) raises -> String:
             raise Error("heading correspondence: unsupported expression")
         parser.index += 1
     return parser._dump(node)
+
+
+def require_dump_name(dump: String) raises:
+    """Require the dumped function name to be `_spiral_expression`.
+
+    Args:
+        dump: A normalized function dump.
+
+    Raises:
+        Error: The declaration name changed.
+    """
+    var tree = PyJson.parse(dump)
+    var fields = tree.item(tree.root, 1)
+    var pair = tree.item(fields, 0)
+    var name = tree.text(tree.item(pair, 1))
+    if name != "_spiral_expression":
+        raise Error("changed ideal generic declaration")
+
+
+def require_ideal_prefix(ideal: String) raises:
+    """Require the ideal declaration to start with the reviewed name.
+
+    Args:
+        ideal: The normalized ideal function.
+
+    Raises:
+        Error: The declaration name changed.
+    """
+    if ideal.startswith("def _spiral_expression "):
+        return
+    if ideal.startswith("def _spiral_expression("):
+        return
+    raise Error("changed ideal generic declaration")
+
+
+def require_half_arguments(doc: PyJson, arguments: Int) raises:
+    """Require the stored-half argument names to stay in review order.
+
+    Args:
+        doc: The projection document.
+        arguments: The argument-name list.
+
+    Raises:
+        Error: The call list changed.
+    """
+    var expected = List[String]()
+    expected.append("step")
+    expected.append("rate")
+    expected.append("step")
+    expected.append("step")
+    expected.append("rate")
+    var count = doc.length(arguments)
+    if count != 5:
+        raise Error("expected exactly five reviewed stored-half calls")
+    var index = 0
+    while index < 5:
+        if doc.text(doc.item(arguments, index)) != expected[index]:
+            raise Error("expected exactly five reviewed stored-half calls")
+        index += 1
+
+
+def require_same_projection(left: String, right: String) raises:
+    """Require the commuted legacy graph to match the live projection.
+
+    Args:
+        left: The commuted legacy dump.
+        right: The live projected dump.
+
+    Raises:
+        Error: The graphs differ.
+    """
+    if left != right:
+        raise Error("ideal expression differs beyond reviewed half projection")
+
+
+def ideal_legacy_dump(legacy: String) raises -> String:
+    """Return the commuted legacy dump after the name and count checks.
+
+    Args:
+        legacy: The pinned legacy ideal spiral.
+
+    Returns:
+        The normalized dump of the commuted function.
+
+    Raises:
+        Error: The declaration name changed, or the commutation count is not
+            two.
+    """
+    var parsed = PyJson.parse(commute_legacy_source(legacy))
+    var source = parsed.text(parsed.at(parsed.root, "source"))
+    var dump = function_dump(source)
+    require_dump_name(dump)
+    var count = Int(parsed.text(parsed.at(parsed.root, "count")))
+    if count != 2:
+        raise Error("expected exactly two historical rate-half commutations")
+    return dump
+
+
+def ideal_current_matches(current: String, left_dump: String) raises:
+    """Require the live ideal spiral to match one commuted legacy dump.
+
+    Args:
+        current: The live ideal spiral source.
+        left_dump: The commuted legacy dump.
+
+    Raises:
+        Error: The declaration, the stored-half arguments, or the projected
+            graph changed.
+    """
+    require_ideal_prefix(ideal_function_source(current, "_spiral_expression"))
+    var projected = PyJson.parse(project_sum2_source(current))
+    require_half_arguments(projected, projected.at(projected.root, "arguments"))
+    var right = function_dump(
+        projected.text(projected.at(projected.root, "source"))
+    )
+    require_same_projection(left_dump, right)
 
 
 def _index_of(haystack: String, needle: String) -> Int:

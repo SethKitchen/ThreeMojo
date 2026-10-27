@@ -85,6 +85,7 @@ A changed literal, a suffix, and a second declaration are refused.
 Mojo checks the projected ideal spiral graph.
 The legacy source and the live source share one digest.
 Five stored-half calls become half products.
+The commuted declaration keeps the spiral name.
 A changed term and a moved auxiliary are refused.
 
 Mojo checks the try-only reuse refusal.

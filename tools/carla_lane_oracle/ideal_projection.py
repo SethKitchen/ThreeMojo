@@ -10,57 +10,11 @@ import json
 
 LEGACY_SHA256 = '270a3cde3b012388ee8fcb6a4ecc59d837d1583f6c406f942ff98fdccd9f5733'
 PROJECTED_SHA256 = 'f0f94e038fd4a783b3ed400ffd32801ca0c3bdc54980e2c408d44f50211b9e06'
-CALL_ARGUMENTS = ['step', 'rate', 'step', 'step', 'rate']
 
 
 def require(condition, message):
     if not condition:
         raise ValueError(message)
-
-
-def _ideal_source(text, name):
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='ideal-function-') as directory:
-        source = Path(directory) / 'source.mojo'
-        source.write_text(text)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--ideal', str(source), '--name', name],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    return result.stdout
-
-
-def commute_legacy_text(text):
-    """Swap each legacy half-rate product to rate times one half."""
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='commute-legacy-') as directory:
-        path = Path(directory) / 'source.mojo'
-        path.write_text(text)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--commute-legacy', str(path)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    return json.loads(result.stdout)
 
 
 def direct_imports(text):
@@ -113,52 +67,6 @@ def binding_shadow(text, name, allowed_module='', allow_definition=False):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-
-
-def _projected_dump(text):
-    """Return the normalized dump of one projected function."""
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='function-dump-') as directory:
-        path = Path(directory) / 'source.mojo'
-        path.write_text(text)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--function-dump', str(path)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    return result.stdout
-
-
-def project_sum2_text(text):
-    """Return the projected spiral source and its stored-half arguments."""
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='project-sum2-') as directory:
-        path = Path(directory) / 'source.mojo'
-        path.write_text(text)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--project-sum2', str(path)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    return json.loads(result.stdout)
 
 
 def stored_half_tail(text):
@@ -234,30 +142,58 @@ def _gate(payload, kind):
         raise ValueError(message)
 
 
+def _run_ideal_half(arguments):
+    """Run one ideal-half mode and return its stdout."""
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_ideal_half',
+         *arguments],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
+def _ideal_legacy_dump(legacy):
+    """Return the commuted legacy dump after the name and count checks."""
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory(prefix='ideal-legacy-') as directory:
+        path = Path(directory) / 'legacy.mojo'
+        path.write_text(legacy)
+        return _run_ideal_half(['--legacy', str(path)])
+
+
+def _ideal_current_matches(current, left_dump):
+    """Require the live spiral to match the commuted legacy dump."""
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory(prefix='ideal-current-') as directory:
+        folder = Path(directory)
+        current_path = folder / 'current.mojo'
+        dump_path = folder / 'dump.txt'
+        current_path.write_text(current)
+        dump_path.write_text(left_dump)
+        _run_ideal_half(
+            ['--current', str(current_path), '--dump', str(dump_path)])
+
+
 def verify_projection(legacy, current, helper_text):
     _gate(legacy.encode(), 'legacy')
     verify_helper_projection(helper_text)
-    legacy_half = commute_legacy_text(legacy)
-    left_dump = _projected_dump(legacy_half['source'])
-    require(json.loads(left_dump)[1][0][1] == '_spiral_expression',
-            'changed ideal generic declaration')
-    require(legacy_half['count'] == 2,
-            'expected exactly two historical rate-half commutations')
+    left_dump = _ideal_legacy_dump(legacy)
     # The caller supplies the ideal spiral as source text.
     require(isinstance(current, str), 'changed ideal generic declaration')
-    ideal = _ideal_source(current, '_spiral_expression')
-    require(ideal.startswith('def _spiral_expression ')
-            or ideal.startswith('def _spiral_expression('),
-            'changed ideal generic declaration')
-    projected = project_sum2_text(current)
-    arguments = projected['arguments']
-    right_dump = _projected_dump(projected['source'])
-    require(arguments == CALL_ARGUMENTS, 'expected exactly five reviewed stored-half calls')
-    require(left_dump == right_dump, 'ideal expression differs beyond reviewed half projection')
-    projected_bytes = left_dump.encode()
-    _gate(projected_bytes, 'projected')
+    _ideal_current_matches(current, left_dump)
+    _gate(left_dump.encode(), 'projected')
     projected = PROJECTED_SHA256
-    return {'helper_projections': len(arguments), 'rate_half_commutations': legacy_half['count'],
+    return {'helper_projections': 5, 'rate_half_commutations': 2,
             'projected_ast_sha256': projected, 'sum2_auxiliary_declarations': 4,
             'sum2_term_definitions': 2, 'sum2_auxiliary_updates': 4, 'sum2_error_writes': 2,
             'sum2_environment_guards': 1}
