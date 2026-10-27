@@ -120,6 +120,26 @@ def speed_parser(
         _fail("bound parser/XML correctness test changed: " + _XML)
 
 
+def speed_parser_paths() raises -> String:
+    """Return the speed-limit module and its two correctness tests.
+
+    Returns:
+        JSON with `module` and `tests` in reviewed order.
+
+    Raises:
+        Error: The lists cannot be written.
+    """
+    var doc = PyJson()
+    var spec = doc.new_dict()
+    doc.set(spec, "module", doc.new_str(_MODULE))
+    var tests = doc.new_list()
+    doc.append(tests, doc.new_str(_LEXICAL))
+    doc.append(tests, doc.new_str(_XML))
+    doc.set(spec, "tests", tests)
+    doc.root = spec
+    return doc.dumps()
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -133,7 +153,11 @@ def _usage():
 
 
 def main() raises:
-    """Check the speed-parser record and print nothing on success."""
+    """Check the speed-parser record and print nothing on success.
+
+    Raises:
+        Error: The command is invalid, or a record check fails.
+    """
     var migration = String("")
     var accepted = String("")
     var module = String("")

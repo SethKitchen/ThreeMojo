@@ -30,6 +30,8 @@ It compares that grouped-table token digest before the predecessor fallback.
 
 `tools/carla_speed_gate.mojo` checks the speed-parser record, its module token, and its correctness tests.
 
+It keeps the speed-limit module and its two correctness tests.
+
 `tools/carla_raw_cut_gate.mojo` checks the raw-cut inverse record, the fixture token, the successor binding, and the operation graph.
 
 `tools/carla_runtime_view_gate.mojo` checks the runtime-view record and its bound tests.

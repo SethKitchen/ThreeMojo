@@ -15,9 +15,48 @@ else:
     import source_contracts as source
 MIGRATION = 'tools/carla_lane_oracle/speed-parser-successor.json'
 MIGRATION_SHA256 = '47e949673fb8740816c06d455654c7e7ae43f65ce7d7568a201e83ae16c49364'
-MODULE = 'extensions/carla/speed_limits.mojo'
-TESTS = ('tests/test_carla_speed_lexical.mojo', 'tests/test_carla_speed_xml_lexical.mojo')
-PROTECTED_INPUTS = (MIGRATION, MODULE, *TESTS)
+_PATHS = None
+
+
+def _paths():
+    """Return the speed-limit module and its two correctness tests."""
+    global _PATHS
+    if _PATHS is not None:
+        return _PATHS
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_speed_parser_paths'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _PATHS = json.loads(result.stdout)
+    return _PATHS
+
+
+def _ensure_paths():
+    """Bind the module and tests before a source read."""
+    global MODULE, TESTS
+    data = _paths()
+    MODULE = data['module']
+    TESTS = tuple(data['tests'])
+
+
+def __getattr__(name):
+    if name in ('MODULE', 'TESTS', 'PROTECTED_INPUTS'):
+        _ensure_paths()
+    if name == 'MODULE':
+        return MODULE
+    if name == 'TESTS':
+        return TESTS
+    if name == 'PROTECTED_INPUTS':
+        return (MIGRATION, MODULE, *TESTS)
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def _check_operation(root, operation):
@@ -81,6 +120,7 @@ def _gate(migration, accepted, module, lexical, xml):
 def verify(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
+    _ensure_paths()
     root = Path(root)
     raw = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes(), _operation=_operation)
     accepted = _typed_source.historical_bytes(root, root/'tools/carla_lane_oracle/accepted-successor-migration.json', (root/'tools/carla_lane_oracle/accepted-successor-migration.json').read_bytes(), _operation=_operation)
