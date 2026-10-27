@@ -286,6 +286,8 @@ It keeps every stored-moment scalar word in one check.
 
 It groups every stored-moment fraction text by array.
 
+It checks every rounded node sum in one check.
+
 It keeps the moment dependency record and the check messages.
 
 It keeps the moment report names and the pass line.

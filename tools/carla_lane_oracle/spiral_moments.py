@@ -59,13 +59,6 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def _require_stored_words(words, expected, message):
-    try:
-        ideal_projection.require_stored_words(words, expected, message)
-    except ValueError as error:
-        raise CheckError(str(error)) from error
-
-
 def fraction_of_word(word):
     require(type(word) is int and 0 <= word < 1 << 64, 'invalid UInt64 word')
     exponent = (word >> 52) & 0x7FF
@@ -140,13 +133,6 @@ def nearest_even(value):
     if above - value < value - below:
         return high
     return low if low % 2 == 0 else high
-
-
-def _fraction_texts(words):
-    try:
-        return ideal_projection.fraction_texts(words)
-    except ValueError as error:
-        raise CheckError(str(error)) from error
 
 
 def _rounded_words(literals):
@@ -252,6 +238,29 @@ def _moment_route_batch(mode, payload):
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
     return result.stdout
+
+
+def _moment_node_sums(payload):
+    """Return the rounded node-sum fractions that match their pin."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-node-sums-') as directory:
+        path = Path(directory) / 'sums.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_moment_node_sums', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
 
 
 def _moment_arrays(items):
@@ -680,13 +689,15 @@ def verify_inputs(root):
     except ValueError as error:
         raise CheckError(messages['closure'] + str(error)) from error
     try:
-        sums = ideal_projection.rounded_node_sums(
-            stored_words[_moment_plan()['nodes']], stored_words[_moment_plan()['weights']])
+        node_sums = _moment_node_sums({
+            'nodes': [str(word) for word in stored_words[_moment_plan()['nodes']]],
+            'weights': [str(word) for word in stored_words[_moment_plan()['weights']]],
+            'expected': pins['rounded_node_sums'],
+            'message': messages['node_sums'],
+        })
     except ValueError as error:
         raise CheckError(str(error)) from error
-    _require_stored_words(sums, pins['rounded_node_sums'],
-                          messages['node_sums'])
-    constants[_moment_plan()['sums_name']] = [F(text) for text in _fraction_texts(sums)]
+    constants[_moment_plan()['sums_name']] = [F(text) for text in node_sums]
     return constants, pins
 
 
