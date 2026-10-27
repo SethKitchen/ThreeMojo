@@ -6,6 +6,7 @@
 """Check the rounded LINE singleton migration record.
 
     carla_singleton_gate --migration PATH
+    carla_singleton_gate --text PATH --decoded PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -14,6 +15,7 @@ and it does not restore a historical source. The caller does that first.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
+from tests._python_tokens import token_sha256
 from tools._python_json import MISSING, PyJson, py_equal
 from tools._sha256 import sha256_hex
 
@@ -53,9 +55,29 @@ def singleton_record(migration: Span[UInt8, _]) raises:
         _fail("wrong schema")
 
 
+def singleton_views(text: String, decoded: String) raises:
+    """Require the text view and the decoded byte view to share one token.
+
+    Args:
+        text: The text read from the lane source.
+        decoded: The same file decoded from its bytes.
+
+    Raises:
+        Error: The token digests disagree.
+    """
+    if token_sha256(text) != token_sha256(decoded):
+        _fail("consumer lane source text/bytes disagree")
+
+
 def _usage():
     """Print the command usage and stop."""
-    print("usage: carla_singleton_gate --migration PATH", file=stderr)
+    print(
+        (
+            "usage: carla_singleton_gate --migration PATH"
+            " | --text PATH --decoded PATH"
+        ),
+        file=stderr,
+    )
     exit(2)
 
 
@@ -66,20 +88,36 @@ def main() raises:
         Error: The command is invalid.
     """
     var migration = String("")
+    var text = String("")
+    var decoded = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
-        if word == "--migration":
+        if word == "--migration" or word == "--text" or word == "--decoded":
             if index + 1 >= len(arguments):
                 _usage()
-            migration = arguments[index + 1]
+            var value = arguments[index + 1]
+            if word == "--migration":
+                migration = value
+            elif word == "--text":
+                text = value
+            else:
+                decoded = value
             index += 2
             continue
         _usage()
-    if migration.byte_length() == 0:
+    var modes = 0
+    if migration.byte_length() > 0:
+        modes += 1
+    if text.byte_length() > 0 or decoded.byte_length() > 0:
+        modes += 1
+    if modes != 1 or (text.byte_length() == 0) != (decoded.byte_length() == 0):
         _usage()
     try:
+        if text.byte_length() > 0:
+            singleton_views(Path(text).read_text(), Path(decoded).read_text())
+            return
         singleton_record(Path(migration).read_bytes())
     except error:
         print(String(error), file=stderr)

@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_singleton_gate import singleton_record
+from tools.carla_singleton_gate import singleton_record, singleton_views
 
 
 def test_a_changed_record_is_refused() raises:
@@ -16,6 +16,19 @@ def test_a_changed_record_is_refused() raises:
         contains="rounded LINE singleton contract: unreviewed migration record"
     ):
         singleton_record(String("").as_bytes())
+
+
+def test_disagreeing_lane_views_are_refused() raises:
+    """Text and decoded views with different tokens fail closed."""
+    with assert_raises(
+        contains=(
+            "rounded LINE singleton contract: consumer lane source text/bytes"
+            " disagree"
+        )
+    ):
+        singleton_views(
+            "def changed():\n    pass\n", "def other():\n    pass\n"
+        )
 
 
 def main() raises:

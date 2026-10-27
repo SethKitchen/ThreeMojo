@@ -52,6 +52,30 @@ def _gate(payload):
         raise ValueError(message)
 
 
+def _gate_views(text, decoded):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='singleton-views-') as directory:
+        folder = Path(directory)
+        text_path = folder / 'text.mojo'
+        decoded_path = folder / 'decoded.mojo'
+        text_path.write_text(text)
+        decoded_path.write_text(decoded)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_singleton_gate',
+             '--text', str(text_path), '--decoded', str(decoded_path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root / MIGRATION, (root / MIGRATION).read_bytes())
     _gate(payload)
@@ -87,8 +111,8 @@ def _lane_text(root):
     text = path.read_text()
     physical = path.read_bytes()
     with io.TextIOWrapper(io.BytesIO(physical), encoding='utf-8', newline=None) as reader:
-        require(source.token_sha256(text) == source.token_sha256(reader.read()),
-                'consumer lane source text/bytes disagree')
+        decoded = reader.read()
+    _gate_views(text, decoded)
     return _typed_source.historical_text(root, path, physical.decode('utf-8'))
 
 

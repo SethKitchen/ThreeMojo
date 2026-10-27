@@ -30,7 +30,7 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_followup_gate.mojo` checks the coverage-followup record, the prior invariant digest, the component records, the pin digests, and the successor tokens.
 
-`tools/carla_singleton_gate.mojo` checks the rounded LINE singleton migration digest and its schema.
+`tools/carla_singleton_gate.mojo` checks the rounded LINE singleton migration digest, its schema, and the lane text token.
 
 `tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record, the cleanup digest, the pin digests, and the successor token.
 
