@@ -31,9 +31,9 @@ import json
 from pathlib import Path
 
 if __package__:
-    from .ideal_projection import verify_projection
+    from .ideal_projection import declaration, verify_projection
 else:
-    from ideal_projection import verify_projection
+    from ideal_projection import declaration, verify_projection
 
 
 def _syntax_tree(text):
@@ -366,11 +366,11 @@ def verify(root, *, _operation=None):
     # decorators. Separately relate the unchanged arithmetic leaf/recurrence
     # to the initial station-reviewed declarations using actual token spans.
     previous = _syntax_tree(HELPER)
-    update = c.unique_function(_syntax_tree(guards.declaration(
+    update = c.unique_function(_syntax_tree(declaration(
         texts['curve_sum2'], '_sum2_update')), '_sum2_update')
     expected_update = c.unique_function(previous, '_sum2_update')
     require(c.dump(update) == c.dump(expected_update), 'Sum2 recurrence changed')
-    leaf = c.unique_function(_syntax_tree(guards.declaration(
+    leaf = c.unique_function(_syntax_tree(declaration(
         texts['curve_sum2'], '_sum2_error_checked')), '_sum2_error_checked')
     leaf.name = '_sum2_error'
     require(c.dump(leaf) == c.dump(c.unique_function(previous, '_sum2_error')),

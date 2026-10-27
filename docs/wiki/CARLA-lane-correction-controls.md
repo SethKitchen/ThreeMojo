@@ -82,7 +82,7 @@ It returns one normalized source block between two markers.
 
 It removes the try-only parameter from one routing declaration.
 
-It returns the kept-token digest and declaration text for the lane-control check.
+It returns the kept-token digest and declaration text for the lane-control and Sum2 checks.
 
 The cleanup, dispatch, selection, grouped-table, and lane-control checks use that digest.
 
