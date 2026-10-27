@@ -74,8 +74,12 @@ def _producer_text(root, path, *, _operation=None):
         else:
             import full_audit_cleanup_contracts as full_audit
         text = _typed_source.historical_text(root, path, full_audit._observe_text(root, path, text, _operation=_operation), _operation=_operation)
+    if __package__:
+        from . import ideal_projection
+    else:
+        import ideal_projection
     if (path == 'extensions/carla/spiral_grouped_roundoff_proof.mojo'
-            and source_contracts.token_sha256(text) != EXPECTED[path]):
+            and ideal_projection.token_sha256(text) != EXPECTED[path]):
         if __package__:
             from . import grouped_y_finiteness_contracts as grouped_y
         else:

@@ -30,8 +30,10 @@ else:
 
 if __package__:
     from . import accepted_successor_contracts as accepted
+    from . import ideal_projection
 else:
     import accepted_successor_contracts as accepted
+    import ideal_projection
 
 MIGRATION = 'tools/carla_lane_oracle/reviewed-cleanup-migration.json'
 MIGRATION_SHA256 = '01753344fe01d885eb3bbaf253815bca01816c57c09b6e7cc1c3a233808b42a9'
@@ -325,7 +327,7 @@ def _gate_words(text, kind, label):
 
 
 def verify_dependency(path, text, expected):
-    if source.token_sha256(text) == expected:
+    if ideal_projection.token_sha256(text) == expected:
         return
     # A fixed whole-module fingerprint admits only equivalent stored words.
     # Historical pins remain unchanged; other dependencies retain exact tokens.
@@ -349,7 +351,7 @@ def verify(root, *, _operation=None):
     for path, transition in record['sources'].items():
         text = accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
         if (path == 'extensions/carla/junction_bounds.mojo'
-                and source.token_sha256(text) != transition['after_token_sha256']):
+                and ideal_projection.token_sha256(text) != transition['after_token_sha256']):
             try:
                 if __package__:
                     from . import full_audit_cleanup_contracts as full_audit

@@ -15,8 +15,10 @@ import json
 
 if __package__:
     from . import source_contracts as source
+    from . import ideal_projection
 else:
     import source_contracts as source
+    import ideal_projection
 
 MIGRATION = 'tools/carla_lane_oracle/curve-support-dispatch-migration.json'
 MIGRATION_SHA256 = '1a6d7794bf0869a1e717685e556d8400e075ab97917ce8d855da6bd61c3ee19f'
@@ -153,7 +155,7 @@ def reviewed_source(root, path, expected, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
     text = _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
-    if source.token_sha256(text) == expected:
+    if ideal_projection.token_sha256(text) == expected:
         return text
     require(path == 'extensions/carla/curve_sample_dispatch.mojo',
             'unreviewed source successor: ' + path)

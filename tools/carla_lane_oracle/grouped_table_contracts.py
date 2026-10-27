@@ -5,17 +5,13 @@ if __package__:
 else:
     import source_contracts as _typed_source
 
-if __package__:
-    from . import source_contracts as source
-else:
-    import source_contracts as source
 from pathlib import Path
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 
 if __package__:
-    from .source_contracts import token_sha256
+    from . import ideal_projection
 else:
-    from source_contracts import token_sha256
+    import ideal_projection
 
 TOKEN_SHA256='3fcfc637a40c4e322b5747f27f8d77163c3f47a49d1092b37c20744cafecba40'
 MODULE='extensions/carla/spiral_grouped_roundoff_proof.mojo'
@@ -56,7 +52,7 @@ def verify(root, *, _operation=None):
         else:
             import full_audit_cleanup_contracts as full_audit
         text = full_audit._observe_text(root, MODULE, text, _operation=_operation)
-    if token_sha256(text)!=TOKEN_SHA256:
+    if ideal_projection.token_sha256(text)!=TOKEN_SHA256:
         if __package__:
             from . import selection_finiteness_contracts as selection
         else:
