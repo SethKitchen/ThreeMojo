@@ -287,11 +287,12 @@ def _sum2_import_gate(mode, payload):
         raise ValueError(message)
 
 
-def _graph_dump(text, name, rename='', *, drop_first=False):
+def _graph_dump(text, name, rename='', *, drop_first=False, expect_first=''):
     """Return one function dump from the cleanup gate.
 
     `rename` replaces the function name in that dump. `drop_first` removes
     the first body statement and returns that statement dump, then the rest.
+    `expect_first` requires the removed statement to match that source.
     """
     import os
     import subprocess
@@ -303,6 +304,8 @@ def _graph_dump(text, name, rename='', *, drop_first=False):
         payload['rename'] = rename
     if drop_first:
         payload['drop_first'] = True
+    if expect_first:
+        payload['expect_first'] = expect_first
     payload = json.dumps(payload, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='sum2-dump-') as directory:
         path = Path(directory) / 'payload.json'
@@ -319,28 +322,6 @@ def _graph_dump(text, name, rename='', *, drop_first=False):
     if drop_first:
         parts = json.loads(result.stdout)
         return parts['first'], parts['rest']
-    return result.stdout
-
-
-def _statement_dump(text):
-    """Return the normalized dump of one statement."""
-    import os
-    import subprocess
-    import tempfile
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='statement-dump-') as directory:
-        path = Path(directory) / 'source.mojo'
-        path.write_text(text)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--statement-dump', str(path)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
     return result.stdout
 
 
@@ -393,14 +374,14 @@ def verify(root, *, _operation=None):
                         '_sum2_error_checked', '_sum2_error')
             == _graph_dump(HELPER, '_sum2_error'),
             'Sum2 checked arithmetic leaf changed')
-    sentinel = _statement_dump('_require_sum2_environment()')
     for module, name, expected in (
             ('lane_geometry', '_lane_spiral', SCALAR),
             ('spiral_roundoff_proof', '_sum2_envelope_error', ENVELOPE),
             ('spiral_roundoff_proof', '_try_spiral_roundoff_envelope', ELIGIBILITY)):
         if name == '_lane_spiral':
-            first, actual = _graph_dump(texts[module], name, drop_first=True)
-            require(first == sentinel, 'scalar environment check moved')
+            _, actual = _graph_dump(
+                texts[module], name, drop_first=True,
+                expect_first='_require_sum2_environment()')
         else:
             actual = _graph_dump(texts[module], name)
         require(actual == _graph_dump(expected, name),

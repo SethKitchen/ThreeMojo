@@ -405,9 +405,7 @@ def verify(root):
         require(_sampled_text('--body-dump', constant, index=2) == dump(ast.parse(
             'zero = _Interval.point(0.0)').body[0]),
                 'constant heading derivative constructor changed')
-        elements = json.loads(_sampled_text('--return-elts', constant, index=3))
-        require(isinstance(elements, list) and len(elements) == 2,
-                'constant heading result shape changed')
+        elements = json.loads(_sampled_text('--return-pair', constant, index=3))
         for index, _item in enumerate(elements):
             required = ast.parse('_ValueJet(result[' + str(index) +
                 '].rounded_value(), zero, zero, 0.0)', mode='eval').body

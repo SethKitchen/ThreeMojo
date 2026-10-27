@@ -12,6 +12,7 @@
     carla_sampled_text --check-roles PATH --name KIND
     carla_sampled_text --body-dump PATH --index N
     carla_sampled_text --return-elts PATH --index N
+    carla_sampled_text --return-pair PATH --index N
     carla_sampled_text --top-level PATH --name NAMES
     carla_sampled_text --project-constant PATH
     carla_sampled_text --project-union PATH
@@ -29,7 +30,8 @@ declaration with sampled identifiers renamed. The drop mode removes the first
 derivative intersection. The body-roles mode prints JSON statement roles.
 The check-roles mode requires one reviewed role list.
 The body-dump mode prints one statement dump. The return-elts mode prints
-JSON dumps of a returned tuple, or null. The top-level mode checks helper
+JSON dumps of a returned tuple, or null. The return-pair mode requires two
+elements and prints those dumps. The top-level mode checks helper
 names and statement kinds. The project-constant mode prints the unknown-interval
 heading. The project-union mode prints the value-only union signature.
 The project-reference mode prints the sampled dispatcher.
@@ -49,6 +51,7 @@ from std.sys import argv, exit, stderr
 from tests._python_expr import (
     body_role_json,
     body_statement_json,
+    require_return_pair,
     require_sampled_roles,
     return_elements_json,
 )
@@ -83,8 +86,8 @@ def _usage():
             " PATH | --drop-intersection PATH --name first|second |"
             " --helper-fields PATH | --value-fields PATH | --value-imports PATH"
             " | --body-roles PATH | --check-roles PATH --name KIND |"
-            " --body-dump PATH --index N | --return-elts"
-            " PATH --index N | --top-level PATH --name NAMES |"
+            " --body-dump PATH --index N | --return-elts PATH --index N |"
+            " --return-pair PATH --index N | --top-level PATH --name NAMES |"
             " --project-constant PATH | --project-union PATH |"
             " --project-reference PATH | --project-lane PATH | --decorators"
             " PATH --name NAME | --strip-try-only PATH | --replace-function"
@@ -112,6 +115,7 @@ def main() raises:
     var check_roles = String("")
     var body_dump = String("")
     var return_elts = String("")
+    var return_pair = String("")
     var top_level = String("")
     var project_constant = String("")
     var project_union = String("")
@@ -141,6 +145,7 @@ def main() raises:
             or word == "--check-roles"
             or word == "--body-dump"
             or word == "--return-elts"
+            or word == "--return-pair"
             or word == "--top-level"
             or word == "--project-constant"
             or word == "--project-union"
@@ -179,6 +184,8 @@ def main() raises:
                 body_dump = value
             elif word == "--return-elts":
                 return_elts = value
+            elif word == "--return-pair":
+                return_pair = value
             elif word == "--top-level":
                 top_level = value
             elif word == "--project-constant":
@@ -231,6 +238,8 @@ def main() raises:
         modes += 1
     if return_elts.byte_length() > 0:
         modes += 1
+    if return_pair.byte_length() > 0:
+        modes += 1
     if top_level.byte_length() > 0:
         modes += 1
     if project_constant.byte_length() > 0:
@@ -281,15 +290,21 @@ def main() raises:
     if replace_path.byte_length() == 0 and with_path.byte_length() > 0:
         _usage()
     if (
-        body_dump.byte_length() > 0 or return_elts.byte_length() > 0
+        body_dump.byte_length() > 0
+        or return_elts.byte_length() > 0
+        or return_pair.byte_length() > 0
     ) and name.byte_length() > 0:
         _usage()
     if (
-        body_dump.byte_length() > 0 or return_elts.byte_length() > 0
+        body_dump.byte_length() > 0
+        or return_elts.byte_length() > 0
+        or return_pair.byte_length() > 0
     ) and index_text.byte_length() == 0:
         _usage()
     if (
-        body_dump.byte_length() == 0 and return_elts.byte_length() == 0
+        body_dump.byte_length() == 0
+        and return_elts.byte_length() == 0
+        and return_pair.byte_length() == 0
     ) and index_text.byte_length() > 0:
         _usage()
     var statement_index = 0
@@ -340,6 +355,14 @@ def main() raises:
             print(
                 return_elements_json(
                     Path(return_elts).read_text(), statement_index
+                ),
+                end="",
+            )
+            return
+        if return_pair.byte_length() > 0:
+            print(
+                require_return_pair(
+                    Path(return_pair).read_text(), statement_index
                 ),
                 end="",
             )

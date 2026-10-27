@@ -18,6 +18,7 @@ from tests._python_expr import (
     require_dump_name,
     require_half_arguments,
     require_ideal_prefix,
+    require_return_pair,
     require_same_projection,
     require_sampled_roles,
     statement_dump,
@@ -529,7 +530,11 @@ def test_a_function_dump_matches_cpython() raises:
 
 
 def _sum2_payload(
-    source: String, name: String, rename: String, drop_first: Bool
+    source: String,
+    name: String,
+    rename: String,
+    drop_first: Bool,
+    expect_first: String = "",
 ) raises -> String:
     """Return one Sum2 dump request.
 
@@ -538,6 +543,7 @@ def _sum2_payload(
         name: The function name.
         rename: The replacement name. Empty keeps the parsed name.
         drop_first: True to remove the first body statement.
+        expect_first: The required first statement. Empty skips that check.
 
     Returns:
         The JSON payload.
@@ -553,6 +559,8 @@ def _sum2_payload(
         doc.set(root, "rename", doc.new_str(rename))
     if drop_first:
         doc.set(root, "drop_first", doc.new_bool(True))
+    if expect_first != "":
+        doc.set(root, "expect_first", doc.new_str(expect_first))
     doc.root = root
     return doc.dumps()
 
@@ -642,6 +650,50 @@ def test_an_ideal_half_count_or_name_change_is_refused() raises:
         contains="expected exactly two historical rate-half commutations"
     ):
         _ = ideal_legacy_dump(one)
+
+
+def test_the_removed_environment_call_must_match() raises:
+    """The dropped scalar statement must be the environment call."""
+    var kept = (
+        "def _lane_spiral():\n    _require_sum2_environment()\n    return 1\n"
+    )
+    var parts = PyJson.parse(
+        sum2_graph_dump(
+            _sum2_payload(
+                kept,
+                "_lane_spiral",
+                "",
+                True,
+                "_require_sum2_environment()",
+            )
+        )
+    )
+    assert_equal(
+        parts.text(parts.at(parts.root, "first")),
+        statement_dump("_require_sum2_environment()\n"),
+    )
+    assert_equal(
+        parts.text(parts.at(parts.root, "rest")),
+        plain_function_dump("def _lane_spiral():\n    return 1\n"),
+    )
+    var moved = "def _lane_spiral():\n    x = 1\n    return 1\n"
+    with assert_raises(contains="scalar environment check moved"):
+        _ = sum2_graph_dump(
+            _sum2_payload(
+                moved, "_lane_spiral", "", True, "_require_sum2_environment()"
+            )
+        )
+
+
+def test_a_heading_return_must_have_two_elements() raises:
+    """The heading return is refused unless it has two elements."""
+    var pair = "def f():\n    return (one, two)\n"
+    var parsed = PyJson.parse(require_return_pair(pair, 0))
+    assert_equal(parsed.length(parsed.root), 2)
+    with assert_raises(contains="constant heading result shape changed"):
+        _ = require_return_pair("def f():\n    return one\n", 0)
+    with assert_raises(contains="constant heading result shape changed"):
+        _ = require_return_pair("def f():\n    return (one, two, three)\n", 0)
 
 
 def test_the_sampled_role_lists_stay_reviewed() raises:

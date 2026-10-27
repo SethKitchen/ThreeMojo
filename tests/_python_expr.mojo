@@ -1892,6 +1892,29 @@ def return_elements_json(source: String, index: Int) raises -> String:
     return doc.dumps()
 
 
+def require_return_pair(source: String, index: Int) raises -> String:
+    """Return the dumps of one return tuple that has two elements.
+
+    Args:
+        source: Mojo source for one function.
+        index: The zero-based body index of the return.
+
+    Returns:
+        A JSON list of the two element dumps.
+
+    Raises:
+        Error: The return is not a two-element tuple, or the statement is
+            unsupported.
+    """
+    var text = return_elements_json(source, index)
+    if text == "null":
+        raise Error("constant heading result shape changed")
+    var doc = PyJson.parse(text)
+    if doc.length(doc.root) != 2:
+        raise Error("constant heading result shape changed")
+    return text
+
+
 def function_dump(source: String) raises -> String:
     """Return the normalized dump of one function, including its generic mark.
 
@@ -2100,7 +2123,7 @@ def _decorator_prefix(source: String, sliced: String) -> String:
 
 
 def _plain_parts(
-    source: String, rename: String, drop_first: Bool
+    source: String, rename: String, drop_first: Bool, expect_first: String
 ) raises -> String:
     """Dump one function, with an optional rename and dropped first statement.
 
@@ -2108,14 +2131,15 @@ def _plain_parts(
         source: Python function source.
         rename: The replacement name. Empty keeps the parsed name.
         drop_first: True to remove the first body statement.
+        expect_first: The required first statement. Empty skips that check.
 
     Returns:
         The function dump, or JSON `first` and `rest` when `drop_first` is
         true.
 
     Raises:
-        Error: The function is missing, the body is empty, or a statement
-            uses an unsupported form.
+        Error: The function is missing, the body is empty, the first
+            statement moved, or a statement uses an unsupported form.
     """
     var parser = _parser(source)
     var node = parser._parse_function(False)
@@ -2132,6 +2156,9 @@ def _plain_parts(
         raise Error("sampled body role: unsupported statement")
     var first_at = parser.at[node]
     var first = parser._dump(parser.extra[first_at])
+    if expect_first != "":
+        if statement_dump(expect_first) != first:
+            raise Error("scalar environment check moved")
     parser.at[node] = first_at + 1
     var count = parser.narg[node]
     parser.narg[node] = count - 1
@@ -2165,15 +2192,16 @@ def sum2_graph_dump(payload: String) raises -> String:
     Args:
         payload: JSON with `source` and `name`. Optional `rename` replaces
             the function name. Optional `drop_first` removes the first body
-            statement and returns JSON with `first` and `rest`.
+            statement and returns JSON with `first` and `rest`. Optional
+            `expect_first` requires that removed statement.
 
     Returns:
         The normalized dump without a generic mark, or the two-part JSON
         when `drop_first` is true.
 
     Raises:
-        Error: The function is missing, the body is empty, or a statement
-            uses an unsupported form.
+        Error: The function is missing, the body is empty, the first
+            statement moved, or a statement uses an unsupported form.
     """
     var doc = PyJson.parse(payload)
     var source = doc.text(doc.at(doc.root, "source"))
@@ -2186,6 +2214,10 @@ def sum2_graph_dump(payload: String) raises -> String:
     var drop_node = doc.get(doc.root, "drop_first")
     if drop_node != MISSING:
         drop_first = doc.flag(drop_node)
+    var expect_first = String("")
+    var expect_node = doc.get(doc.root, "expect_first")
+    if expect_node != MISSING:
+        expect_first = doc.text(expect_node)
     var syntax = python_syntax_json(
         _decorator_prefix(source, function_slice(source, name))
     )
@@ -2193,7 +2225,7 @@ def sum2_graph_dump(payload: String) raises -> String:
     var text = parsed.text(parsed.at(parsed.root, "source"))
     if rename == "" and not drop_first:
         return plain_function_dump(text)
-    return _plain_parts(text, rename, drop_first)
+    return _plain_parts(text, rename, drop_first, expect_first)
 
 
 def _forbid_attribute(
