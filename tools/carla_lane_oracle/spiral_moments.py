@@ -288,6 +288,28 @@ def _moment_arrays(items):
     return json.loads(result.stdout)
 
 
+def _moment_scalars(payload):
+    """Check the stored scalar words that match their pins."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-scalars-') as directory:
+        path = Path(directory) / 'scalars.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_scalars',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def _moment_blocks(items):
     """Return the normalized operation blocks that match their pins."""
     import os
@@ -529,25 +551,29 @@ def verify_inputs(root):
         'expected': list(arrays),
         'message': messages['array_set']})
     constants[_moment_plan()['stored_words']] = stored_words
-    scalar_names = []
-    scalar_literals = []
-    scalar_records = []
+    loaded_scalars = []
     for name, record in pins['scalars'].items():
-        text = _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))
-        try:
-            literal = ideal_projection.scalar_literal(text, name)
-        except ValueError as error:
-            _constant_error(error, name)
-        scalar_names.append(name)
-        scalar_literals.append(literal)
-        scalar_records.append(record)
-    scalar_words = _rounded_words(scalar_literals)
-    _moment_guard('--count', {
-        'left': len(scalar_words), 'right': len(scalar_names),
-        'message': messages['overflow']})
-    for name, record, word in zip(scalar_names, scalar_records, scalar_words):
-        _require_stored_words([word], [record['word']],
-                              messages['scalar_word'] + name)
+        loaded_scalars.append((name, record, _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))))
+    try:
+        _moment_scalars({
+            'items': [{
+                'name': name,
+                'source': text,
+                'expected': record['word'],
+                'message': messages['scalar_word'] + name,
+            } for name, record, text in loaded_scalars],
+            'overflow': messages['overflow'],
+        })
+    except ValueError as error:
+        message = str(error)
+        word = _cli_failures()['word']
+        if message.startswith(word):
+            message = message[len(word):]
+        marker = 'stored scalar literal: '
+        if message.startswith(marker):
+            name, rest = message[len(marker):].split('\n', 1)
+            _constant_error(ValueError(rest), name)
+        raise CheckError(message) from error
     blocks = {}
     block_items = []
     for name, record in pins['blocks'].items():
