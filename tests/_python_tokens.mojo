@@ -3697,6 +3697,36 @@ def import_scope_prefix(source: String) -> String:
     return String(source[byte=0:cut])
 
 
+def import_scope_prefixes(payload: String) raises -> String:
+    """Return the import scope of each module.
+
+    Args:
+        payload: A JSON list of Mojo module texts.
+
+    Returns:
+        A JSON list of prefixes, in the same order. Each prefix is the
+        text before the first definition.
+
+    Raises:
+        Error: An item is not a string.
+    """
+    var doc = PyJson.parse(payload)
+    var out = PyJson()
+    var rows = out.new_list()
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        out.append(
+            rows,
+            out.new_str(
+                import_scope_prefix(doc.text(doc.item(doc.root, index)))
+            ),
+        )
+        index += 1
+    out.root = rows
+    return out.dumps()
+
+
 def _starts_at(source: String, index: Int, prefix: String) -> Bool:
     """Return whether `source` has `prefix` at a byte index.
 

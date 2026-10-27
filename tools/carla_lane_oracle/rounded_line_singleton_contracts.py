@@ -322,25 +322,34 @@ def _verify_dependencies(items):
 
 def _import_scope(text):
     """Return the consumer prefix before the first definition."""
+    return _import_scopes([text])[0]
+
+
+def _import_scopes(texts):
+    """Return the consumer prefix of each module."""
+    if not texts:
+        return []
+    import json
     import os
     import subprocess
     import tempfile
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='import-scope-') as directory:
-        path = Path(directory) / 'source.mojo'
-        path.write_text(text)
+    payload = json.dumps(list(texts), separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='import-scopes-') as directory:
+        path = Path(directory) / 'scopes.json'
+        path.write_text(payload)
         result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--import-scope', str(path)],
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_import_scopes',
+             str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return result.stdout
+    return json.loads(result.stdout)
 
 
 def _universal_newlines(text):
@@ -442,11 +451,14 @@ def verify_premises(root):
         if not matched_flags[index]:
             pending.append((path, actual, token))
     _verify_dependencies(pending)
-    prepared = []
     labels = _singleton_paths()
+    scope_items = []
     for path, expected in record['import_scopes'].items():
         text = _lane_text(root) if path == labels['lane'] else _typed_source.historical_text(root, root/path, (root/path).read_text())
-        actual = _import_scope(text)
+        scope_items.append((path, text, expected))
+    prefixes = _import_scopes([text for _path, text, _expected in scope_items])
+    prepared = []
+    for (path, text, expected), actual in zip(scope_items, prefixes):
         if path == labels['lane']:
             current_doc, recorded_doc = _significant_documents([actual, expected])
             if not _same_text(current_doc, recorded_doc):

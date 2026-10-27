@@ -78,6 +78,8 @@ It compares every rounded LINE module text in one check.
 
 It keeps the consumer import scope before the first definition.
 
+It extracts every consumer import scope in one check.
+
 It keeps the lane path, the rounded-line path, and the consumer messages.
 
 It keeps the rounded-line contract prefix.
