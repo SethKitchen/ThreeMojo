@@ -26,6 +26,7 @@ from tests._python_expr import (
     sum2_graphs_match,
 )
 from tools._python_json import PyJson
+from tools._sha256 import sha256_hex
 from tools._sampled_value_gate import (
     extract_sampled_function,
     rename_sampled_identifiers,
@@ -42,6 +43,9 @@ from tests._python_tokens import (
     moment_source,
     moment_words_json,
     normalized_block,
+    require_operation_block,
+    require_same_text,
+    require_text_digest,
     selected_block,
     pin_transition_rows,
     strip_try_only_routing,
@@ -301,6 +305,63 @@ def test_a_source_block_stops_at_the_next_marker() raises:
             ),
             "def first():",
             "def second():",
+        )
+
+
+def test_an_operation_block_must_match_its_pin() raises:
+    """A changed operation block or routing text is refused."""
+    var source = String(
+        "def first():\n    return 1\n\ndef second():\n    return 2\n"
+    )
+    var expected = "def first():\n    return 1\n"
+    var digest = sha256_hex(expected.as_bytes())
+    assert_equal(
+        require_operation_block(
+            source,
+            "def first():",
+            "def second():",
+            expected,
+            digest,
+            "ideal_spiral",
+        ),
+        expected,
+    )
+    with assert_raises(
+        contains="inconsistent operation-graph pin: ideal_spiral"
+    ):
+        _ = require_operation_block(
+            source,
+            "def first():",
+            "def second():",
+            expected,
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "ideal_spiral",
+        )
+    var wrong = expected + "x"
+    with assert_raises(contains="operation graph changed: ideal_spiral"):
+        _ = require_operation_block(
+            source,
+            "def first():",
+            "def second():",
+            wrong,
+            sha256_hex(wrong.as_bytes()),
+            "ideal_spiral",
+        )
+    require_text_digest(
+        expected, digest, "inconsistent routing pin: ideal_caller"
+    )
+    with assert_raises(contains="inconsistent routing pin: ideal_caller"):
+        require_text_digest(
+            expected,
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "inconsistent routing pin: ideal_caller",
+        )
+    require_same_text(
+        expected, expected, "source routing changed: ideal_caller"
+    )
+    with assert_raises(contains="source routing changed: ideal_caller"):
+        require_same_text(
+            expected, wrong, "source routing changed: ideal_caller"
         )
 
 

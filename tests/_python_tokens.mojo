@@ -4774,6 +4774,69 @@ def selected_block(source: String, begin: String, end: String) raises -> String:
     return normalized_block(String(source[byte=start:stop]))
 
 
+def require_operation_block(
+    source: String,
+    begin: String,
+    end: String,
+    expected: String,
+    digest: String,
+    name: String,
+) raises -> String:
+    """Return one source block that matches its pin.
+
+    Args:
+        source: The module source.
+        begin: The opening marker.
+        end: The closing marker.
+        expected: The pinned normalized block.
+        digest: The pinned SHA-256 of `expected`.
+        name: The block name in the failure text.
+
+    Returns:
+        The normalized block.
+
+    Raises:
+        Error: The pin digest disagrees, the live block changed, or a marker
+            is invalid.
+    """
+    var current = selected_block(source, begin, end)
+    if sha256_hex(expected.as_bytes()) != digest:
+        raise Error("inconsistent operation-graph pin: " + name)
+    if current != expected:
+        raise Error("operation graph changed: " + name)
+    return current
+
+
+def require_text_digest(text: String, digest: String, message: String) raises:
+    """Require the SHA-256 of `text` to equal `digest`.
+
+    Args:
+        text: The pinned text.
+        digest: The pinned digest.
+        message: The failure text.
+
+    Raises:
+        Error: The digest disagrees.
+    """
+    if sha256_hex(text.as_bytes()) != digest:
+        raise Error(message)
+
+
+def require_same_text(actual: String, expected: String, message: String) raises:
+    """Require two texts to be identical.
+
+    Args:
+        actual: The live text.
+        expected: The pinned text.
+        message: The failure text.
+
+    Raises:
+        Error: The texts differ.
+    """
+    if actual != expected:
+        raise Error(message)
+
+
 def _decimal_literal(text: String) -> Bool:
     """Return whether `text` is one decimal literal.
 

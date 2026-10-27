@@ -144,6 +144,8 @@ It writes the canonical stored-moment table source.
 
 It returns one normalized source block between two markers.
 
+It checks each operation block and routing text against its pin.
+
 It removes the try-only parameter from one routing declaration.
 
 It reads the current pin value at each coverage transition.

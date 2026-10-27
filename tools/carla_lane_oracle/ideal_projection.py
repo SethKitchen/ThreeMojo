@@ -665,6 +665,52 @@ def selected_block(text, begin, end):
     return result.stdout
 
 
+def _pin_text(payload):
+    """Run one pin-text check and return its stdout."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='pin-text-') as directory:
+        path = Path(directory) / 'payload.json'
+        path.write_text(json.dumps(payload, separators=(',', ':')))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_pin_text',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
+def require_operation_block(text, begin, end, expected, digest, name):
+    """Return one source block that matches its pin."""
+    return _pin_text({
+        'kind': 'block', 'source': text, 'begin': begin, 'end': end,
+        'expected': expected, 'digest': digest, 'name': name,
+    })
+
+
+def require_text_digest(text, digest, message):
+    """Require the SHA-256 of `text` to equal `digest`."""
+    _pin_text({
+        'kind': 'digest', 'text': text, 'digest': digest, 'message': message,
+    })
+
+
+def require_same_text(actual, expected, message):
+    """Require two texts to be identical."""
+    _pin_text({
+        'kind': 'same', 'actual': actual, 'expected': expected,
+        'message': message,
+    })
+
+
 def normalized_block(text):
     """Drop comments and blank lines from one source block."""
     import os

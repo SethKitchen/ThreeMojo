@@ -334,29 +334,27 @@ def verify_inputs(root):
                 'wrong source-block boundary pin: ' + name)
         require(record['path'] == BLOCK_PATHS[name], 'wrong operation pin path: ' + name)
         block_items.append((name, record))
-    block_digests = _sha256_texts(
-        [record['normalized_source'] for _, record in block_items])
-    require(len(block_digests) == len(block_items), 'inconsistent operation-graph pin')
-    for (name, record), source_digest in zip(block_items, block_digests):
-        current = selected_block(_typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8')),
-                                 record['begin'], record['end'])
-        expected = record['normalized_source']
-        require(source_digest == record['sha256'],
-                'inconsistent operation-graph pin: ' + name)
-        require(current == expected, 'operation graph changed: ' + name)
-        blocks[name] = current
+    for name, record in block_items:
+        try:
+            blocks[name] = ideal_projection.require_operation_block(
+                _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8')),
+                record['begin'], record['end'], record['normalized_source'],
+                record['sha256'], name)
+        except ValueError as error:
+            raise CheckError(str(error)) from error
     routing_items = []
     for name, record in pins['routing'].items():
         require(set(record) == {'path', 'normalized_tokens', 'sha256'},
                 'wrong routing pin keys: ' + name)
         require(record['path'] == ROUTING_PATHS[name], 'wrong routing pin path: ' + name)
         routing_items.append((name, record))
-    routing_digests = _sha256_texts(
-        [record['normalized_tokens'] for _, record in routing_items])
-    require(len(routing_digests) == len(routing_items), 'inconsistent routing pin')
-    for (name, record), source_digest in zip(routing_items, routing_digests):
+    for name, record in routing_items:
         expected = record['normalized_tokens']
-        require(source_digest == record['sha256'], 'inconsistent routing pin: ' + name)
+        try:
+            ideal_projection.require_text_digest(
+                expected, record['sha256'], 'inconsistent routing pin: ' + name)
+        except ValueError as error:
+            raise CheckError(str(error)) from error
         source = _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))
         current = ideal_projection.module_routing(source, set(ARRAY_SPECS) | SCALAR_NAMES)
         if name == 'ideal_caller':
@@ -371,7 +369,11 @@ def verify_inputs(root):
                 current = ideal_projection.strip_try_only(current)
             except ValueError as error:
                 raise CheckError(str(error)) from error
-        require(current == expected, 'source routing changed: ' + name)
+        try:
+            ideal_projection.require_same_text(
+                current, expected, 'source routing changed: ' + name)
+        except ValueError as error:
+            raise CheckError(str(error)) from error
     try:
         source_contracts.verify_group(root, 'stored_arithmetic')
     except ValueError as error:
