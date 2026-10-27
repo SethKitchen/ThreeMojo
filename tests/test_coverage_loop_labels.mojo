@@ -34,6 +34,16 @@ def test_coverage_loop_qualification_labels_stay_reviewed() raises:
     var hang = doc.at(results, "test_production_hang")
     assert_equal(doc.text(doc.at(hang, "status")), "142")
     assert_false(doc.flag(doc.at(hang, "success_receipt")))
+    var conditioned = doc.at(doc.root, "conditioned")
+    assert_equal(
+        doc.text(doc.at(conditioned, "error")),
+        "conditioned cubic authority namespace changed",
+    )
+    assert_equal(doc.text(doc.item(doc.at(conditioned, "steps"), 0)), "active")
+    assert_equal(doc.text(doc.item(doc.at(conditioned, "steps"), 2)), "sticky")
+    assert_equal(
+        doc.text(doc.at(doc.root, "mutation_key")), "current_mutation_controls"
+    )
     assert_equal(
         doc.text(doc.at(doc.root, "pass_line")),
         (

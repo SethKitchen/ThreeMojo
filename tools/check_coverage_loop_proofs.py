@@ -367,10 +367,10 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
     standalone = audit.proof_bindings(root, include_roots=(stage,))
     require(all(list(value.items()) == list(standalone.items()) for value in observed_maps),
             'Cached dependency keys or overwrite order differ from standalone admission')
-    print('Generated owner: supplemental receipt plus two fresh counted receipts; '
-          'one full and one typed admission per counted receipt', flush=True)
+    print(_loop_labels()['owner_print'], flush=True)
     # A restored live-table mutation must still poison this real active owner.
     # This uses no writable source fixture and runs in the maintained entrypoint.
+    conditioned = _loop_labels()['conditioned']
     conditioned_refusals = []
     def conditioned_authority_mutation(frame, event, value, owners):
         if (conditioned_refusals or event != 'return'
@@ -379,7 +379,7 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
         require(len(owners) == 1 and frame.f_locals.get('self') is owners[0]
                 and owners[0]._kind == 'generated_receipt' and owners[0]._state == 'active'
                 and not owners[0]._capturing,
-                'Conditioned mutation missed the active generated owner')
+                conditioned['active'])
         owner = owners[0]
         conditioned_refusals.append('active')
         old_bindings = audit.conditioned_cubic.BINDING_INPUTS
@@ -388,40 +388,35 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
             try:
                 audit._typed_boundary_bindings(root, _operation=owner)
             except audit._OperationCoherenceError as error:
-                require(str(error) == 'conditioned cubic authority namespace changed',
-                        'Conditioned mutation missed the immediate authority refusal')
+                require(str(error) == conditioned['error'], conditioned['immediate'])
                 conditioned_refusals.append('refused')
             else:
-                raise RuntimeError('Active generated owner accepted changed conditioned authority')
+                raise RuntimeError(conditioned['accepted'])
         finally:
             audit.conditioned_cubic.BINDING_INPUTS = old_bindings
         require(audit.conditioned_cubic.BINDING_INPUTS is old_bindings,
-                'Conditioned mutation did not restore its original table')
+                conditioned['restore'])
         try:
             audit._operation_check(owner, root)
         except audit._OperationCoherenceError as error:
-            require(str(error) == 'conditioned cubic authority namespace changed',
-                    'Restored conditioned mutation lost its exact sticky refusal')
+            require(str(error) == conditioned['error'], conditioned['sticky'])
             conditioned_refusals.append('sticky')
         else:
-            raise RuntimeError('Restored conditioned authority revived its failed owner')
+            raise RuntimeError(conditioned['revived'])
     with trace(conditioned_authority_mutation) as (_, owners, _):
         try:
             derive()
         except audit._OperationCoherenceError as error:
-            require(str(error) == 'conditioned cubic authority namespace changed',
-                    'Conditioned mutation escaped with an unrelated refusal')
+            require(str(error) == conditioned['error'], conditioned['unrelated'])
         else:
-            raise RuntimeError('Conditioned authority mutation received a receipt')
-    require(conditioned_refusals == ['active', 'refused', 'sticky']
+            raise RuntimeError(conditioned['receipt'])
+    require(conditioned_refusals == conditioned['steps']
             and len(owners) == 1 and owners[0]._failed and owners[0]._state == 'closed'
             and owners[0]._owner_frame is None and owners[0]._receipt_seed is None,
-            'Conditioned mutation did not refuse, restore and close its real owner')
-    print('Generated owner: transient conditioned authority refused and restored', flush=True)
+            conditioned['close'])
+    print(conditioned['print'], flush=True)
     if mutable_source is None:
-        return {'fresh_receipts': 3, 'counted_receipts': 2,
-            'full_per_counted_receipt': 1, 'typed_per_counted_receipt': 1,
-                'conditioned_authority_refusal': True}
+        return dict(_loop_labels()['owner'])
 
     # These mutations require only the separately admitted writable source and
     # generated stage. The complete positive producer relation is rechecked
@@ -578,10 +573,10 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
     require(proofs.maintained_inputs(root, exclude=stage) == expected['root_inputs'],
             'Current source mutation controls did not restore the fixture')
     proofs.check_capture_inputs({'receipt': expected}, root, stage)
-    print('Generated owner current refusals:', ', '.join(completed), flush=True)
-    return {'fresh_receipts': 3, 'counted_receipts': 2,
-            'full_per_counted_receipt': 1, 'typed_per_counted_receipt': 1,
-            'conditioned_authority_refusal': True, 'current_mutation_controls': completed}
+    print(_loop_labels()['refusals_print'], ', '.join(completed), flush=True)
+    result = dict(_loop_labels()['owner'])
+    result[_loop_labels()['mutation_key']] = completed
+    return result
 
 
 
