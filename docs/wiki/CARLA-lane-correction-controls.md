@@ -20,6 +20,8 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_grouped_gate.mojo` checks the grouped-table token digest and the stored node and weight bounds.
 
+`tools/carla_y_gate.mojo` checks the five Y-finiteness token digests.
+
 ## Lane poses
 
 The pose follows the derivative of the actual lane-center expression.
