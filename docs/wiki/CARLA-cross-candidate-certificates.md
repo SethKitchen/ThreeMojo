@@ -166,7 +166,7 @@ Fresh helpers keep the environment guard.
 The grouped debit, dispatch reserve, and model rooms stay in place.
 A missing edge or a moved guard is refused.
 
-Mojo checks the containing-model consumers after skipping hidden and non-production paths.
+Mojo skips hidden and non-production paths, then keeps a file whose text contains a watched name.
 The objective-model file keeps its own helper names.
 Every other production module leaves those names out.
 Lane refinement leaves the removed search names out.
