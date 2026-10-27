@@ -7,6 +7,7 @@
 
     carla_cleanup_gate --migration PATH [--previous PATH]
     carla_cleanup_gate --bytes PATH --sha HEX
+    carla_cleanup_gate --sha-of PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -149,6 +150,18 @@ def cleanup_record(
     _require_previous(doc, previous)
 
 
+def cleanup_sha(payload: Span[UInt8, _]) -> String:
+    """Return the SHA-256 hex digest of stored-word bytes.
+
+    Args:
+        payload: The canonical stored-word JSON.
+
+    Returns:
+        The lowercase hex digest.
+    """
+    return sha256_hex(payload)
+
+
 def cleanup_digest(payload: Span[UInt8, _], expected: String) raises:
     """Require the guard-pin successor digest.
 
@@ -168,7 +181,7 @@ def _usage():
     print(
         (
             "usage: carla_cleanup_gate --migration PATH [--previous PATH]"
-            " | --bytes PATH --sha HEX"
+            " | --bytes PATH --sha HEX | --sha-of PATH"
         ),
         file=stderr,
     )
@@ -185,6 +198,7 @@ def main() raises:
     var previous = String("")
     var payload = String("")
     var digest = String("")
+    var sha_of = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -194,6 +208,7 @@ def main() raises:
             or word == "--previous"
             or word == "--bytes"
             or word == "--sha"
+            or word == "--sha-of"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -204,18 +219,30 @@ def main() raises:
                 previous = value
             elif word == "--bytes":
                 payload = value
-            else:
+            elif word == "--sha":
                 digest = value
+            else:
+                sha_of = value
             index += 2
             continue
         _usage()
-    if (migration.byte_length() == 0) == (payload.byte_length() == 0):
+    var modes = 0
+    if migration.byte_length() > 0:
+        modes += 1
+    if payload.byte_length() > 0:
+        modes += 1
+    if sha_of.byte_length() > 0:
+        modes += 1
+    if modes != 1:
         _usage()
     if previous.byte_length() > 0 and migration.byte_length() == 0:
         _usage()
     if payload.byte_length() > 0 and digest.byte_length() == 0:
         _usage()
     try:
+        if sha_of.byte_length() > 0:
+            print(cleanup_sha(Path(sha_of).read_bytes()))
+            return
         if payload.byte_length() > 0:
             cleanup_digest(Path(payload).read_bytes(), digest)
         elif previous.byte_length() == 0:

@@ -11,7 +11,6 @@ if __package__:
 else:
     import source_contracts as _typed_source
 
-import hashlib
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 import tokenize
@@ -108,6 +107,28 @@ def _gate(migration, previous=None):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+
+
+def _sha256(payload):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='cleanup-sha-') as directory:
+        target = Path(directory) / 'payload'
+        target.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--sha-of', str(target)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout.strip()
 
 
 def _gate_digest(payload, expected):
@@ -279,7 +300,7 @@ def _stored_word_sha256(text, arrays, scalars):
         else:
             statement.append((item.type, item.string))
     kept.extend(statement)
-    return hashlib.sha256(json.dumps(kept, separators=(',', ':')).encode()).hexdigest()
+    return _sha256(json.dumps(kept, separators=(',', ':')).encode())
 
 
 

@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_cleanup_gate import cleanup_digest, cleanup_record
+from tools.carla_cleanup_gate import cleanup_digest, cleanup_record, cleanup_sha
 
 
 def test_a_changed_record_is_refused() raises:
@@ -27,6 +27,16 @@ def test_a_changed_guard_pin_is_refused() raises:
         )
     ):
         cleanup_digest(String("nope").as_bytes(), "00")
+
+
+def test_the_stored_word_digest_matches_sha256() raises:
+    """The stored-word digest is SHA-256 of the given bytes."""
+    var digest = cleanup_sha(String("abc").as_bytes())
+    if (
+        digest
+        != "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    ):
+        raise Error(digest)
 
 
 def main() raises:
