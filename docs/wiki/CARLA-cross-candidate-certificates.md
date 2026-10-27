@@ -320,6 +320,8 @@ It checks stored helpers and the value-only imports.
 
 It checks the statement roles of four sampled declarations.
 
+It checks the heading constructor, its projection, and two lane proof statements.
+
 Mojo checks the live sampled module graphs.
 The trig module keeps its reviewed syntax graph.
 The interval module keeps its reviewed syntax graph.

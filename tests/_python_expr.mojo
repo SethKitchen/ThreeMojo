@@ -1651,6 +1651,52 @@ def statement_dump(source: String) raises -> String:
     return parser._dump(node)
 
 
+def _prepare_function(source: String, mut node: Int) raises -> _Parser:
+    """Parse one function after the sampled syntax rewrite.
+
+    Args:
+        source: Mojo source for one function.
+        node: Set to the function node.
+
+    Returns:
+        The parser positioned after that function.
+
+    Raises:
+        Error: The function is missing or uses an unsupported statement.
+    """
+    var rewritten = syntax_tree_source(source)
+    var parser = _parser(rewritten)
+    node = parser._parse_function(False)
+    while not parser._done():
+        var kind = parser._kind_at()
+        if kind != _NEWLINE and kind != _DEDENT and kind != _INDENT:
+            raise Error("sampled body role: unsupported statement")
+        parser.index += 1
+    if parser.kind[node] != _E_FUNC:
+        raise Error("sampled body role: unsupported statement")
+    return parser^
+
+
+def _body_statement(mut parser: _Parser, node: Int, index: Int) raises -> Int:
+    """Return one top-level body statement.
+
+    Args:
+        parser: The parser for the rewritten function.
+        node: The function node.
+        index: The zero-based body index.
+
+    Returns:
+        The statement node.
+
+    Raises:
+        Error: The index is outside the body.
+    """
+    var count = parser.narg[node]
+    if index < 0 or index >= count:
+        raise Error("sampled body role: unsupported statement")
+    return parser.extra[parser.at[node] + index]
+
+
 def body_role_json(source: String) raises -> String:
     """Return the JSON statement roles of one function body.
 
@@ -1663,16 +1709,8 @@ def body_role_json(source: String) raises -> String:
     Raises:
         Error: The function is missing or uses an unsupported statement.
     """
-    var rewritten = syntax_tree_source(source)
-    var parser = _parser(rewritten)
-    var node = parser._parse_function(False)
-    while not parser._done():
-        var kind = parser._kind_at()
-        if kind != _NEWLINE and kind != _DEDENT and kind != _INDENT:
-            raise Error("sampled body role: unsupported statement")
-        parser.index += 1
-    if parser.kind[node] != _E_FUNC:
-        raise Error("sampled body role: unsupported statement")
+    var node = 0
+    var parser = _prepare_function(source, node)
     var doc = PyJson()
     var rows = doc.new_list()
     var count = parser.narg[node]
@@ -1682,6 +1720,61 @@ def body_role_json(source: String) raises -> String:
         var role = parser._role(parser.extra[start + index])
         doc.append(rows, doc.new_str(role))
         index += 1
+    doc.root = rows
+    return doc.dumps()
+
+
+def body_statement_json(source: String, index: Int) raises -> String:
+    """Return the normalized dump of one function-body statement.
+
+    Args:
+        source: Mojo source for one function.
+        index: The zero-based body index.
+
+    Returns:
+        The dump, with the same fields CPython 3.12 keeps.
+
+    Raises:
+        Error: The function is missing, the index is outside the body, or a
+            statement uses an unsupported form.
+    """
+    var node = 0
+    var parser = _prepare_function(source, node)
+    var stmt = _body_statement(parser, node, index)
+    return parser._dump(stmt)
+
+
+def return_elements_json(source: String, index: Int) raises -> String:
+    """Return the JSON dumps of one return value's tuple elements.
+
+    Args:
+        source: Mojo source for one function.
+        index: The zero-based body index of the return.
+
+    Returns:
+        A JSON list of element dumps, or `null` when the value is not a tuple.
+
+    Raises:
+        Error: The function is missing, the index is outside the body, or a
+            statement uses an unsupported form.
+    """
+    var node = 0
+    var parser = _prepare_function(source, node)
+    var stmt = _body_statement(parser, node, index)
+    if parser.kind[stmt] != _E_RETURN:
+        return "null"
+    var value = parser.left[stmt]
+    if value < 0 or parser.kind[value] != _E_TUPLE:
+        return "null"
+    var doc = PyJson()
+    var rows = doc.new_list()
+    var count = parser.narg[value]
+    var start = parser.at[value]
+    var cursor = 0
+    while cursor < count:
+        var element = parser._dump(parser.extra[start + cursor])
+        doc.append(rows, doc.new_str(element))
+        cursor += 1
     doc.root = rows
     return doc.dumps()
 

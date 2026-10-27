@@ -139,8 +139,8 @@ def function(text, name):
     return text[match.start():match.end()+end.start() if end else len(text)]
 
 
-def _sampled_text(mode, text, name=''):
-    """Slice or rename one declaration with the Mojo text gate."""
+def _sampled_text(mode, text, name='', index=None):
+    """Slice, rename, or dump one declaration with the Mojo text gate."""
     import os
     import subprocess
     import tempfile
@@ -153,6 +153,8 @@ def _sampled_text(mode, text, name=''):
                    'carla_sampled_text', mode, str(path)]
         if name:
             command.extend(['--name', name])
+        if index is not None:
+            command.extend(['--index', str(index)])
         result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -398,6 +400,7 @@ def verify(root):
             node.decorator_list = copy.deepcopy(unique_function(reference_trees[filename], name).decorator_list)
             copied = copy.deepcopy(node)
             copied._mojo_body_roles = json.loads(_sampled_text('--body-roles', renamed))
+            copied._mojo_source = renamed
             return copied
 
         def declaration(source):
@@ -441,16 +444,19 @@ def verify(root):
         require(constant._mojo_body_roles == ['assign:result',
             'if:not isfinite(heading) or abs(heading) > _PHASE_LIMIT',
             'assign:zero', 'return'], 'constant heading layout changed')
-        require(dump(constant.body[2]) == dump(ast.parse('zero = _Interval.point(0.0)').body[0]),
+        require(_sampled_text('--body-dump', constant._mojo_source, index=2) == dump(ast.parse(
+            'zero = _Interval.point(0.0)').body[0]),
                 'constant heading derivative constructor changed')
         constant.body[2] = ast.parse('unknown = _Interval.whole()').body[0]
+        elements = json.loads(_sampled_text('--return-elts', constant._mojo_source, index=3))
         returned = constant.body[3].value
-        require(isinstance(returned, ast.Tuple) and len(returned.elts) == 2,
+        require(isinstance(elements, list) and len(elements) == 2
+                and isinstance(returned, ast.Tuple) and len(returned.elts) == 2,
                 'constant heading result shape changed')
         for index, item in enumerate(returned.elts):
             required = ast.parse('_ValueJet(result[' + str(index) +
                 '].rounded_value(), zero, zero, 0.0)', mode='eval').body
-            require(dump(item) == dump(required), 'constant heading field projection changed')
+            require(elements[index] == dump(required), 'constant heading field projection changed')
             # Only derivative constructor fields change. Coefficient enclosure,
             # exact-zero scalar error, result ordering and guards are retained.
             item.args[1:3] = [ast.Name(id='unknown', ctx=ast.Load()),
@@ -481,7 +487,7 @@ def verify(root):
         # This private value-only specialization has no cached proof argument.
         # Remove only the exact new refusal branch whose proof condition is false
         # for that route. The full cached-proof caller remains separately bound.
-        require(dump(old.body[0]) == dump(ast.parse("""if proof and not _sum2_supported_environment():
+        require(_sampled_text('--body-dump', old._mojo_source, index=0) == dump(ast.parse("""if proof and not _sum2_supported_environment():
         return _unknown_value_point()
     """).body[0]), 'cached-proof environment refusal changed or moved')
         old.body.pop(0)
@@ -496,7 +502,7 @@ def verify(root):
             'annotate:reused', 'if:not capture', 'annotate:point', 'if:reused',
             'assign:trig', 'return',
         ], 'complete lane dispatcher layout changed')
-        require(dump(old.body[14]) == dump(ast.parse('''if capture:
+        require(_sampled_text('--body-dump', old._mojo_source, index=15) == dump(ast.parse('''if capture:
             captured.record_at = geometry_at
             captured.low = low
             captured.high = high

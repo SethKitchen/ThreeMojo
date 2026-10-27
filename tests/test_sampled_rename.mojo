@@ -9,7 +9,14 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._process import run_program
-from tests._python_expr import body_role_json
+from tests._python_expr import (
+    body_role_json,
+    body_statement_json,
+    expression_dump,
+    return_elements_json,
+    statement_dump,
+)
+from tools._python_json import PyJson
 from tools._sampled_value_gate import (
     drop_derivative_intersection,
     extract_sampled_function,
@@ -197,6 +204,34 @@ def test_statement_roles_match_the_reviewed_shape() raises:
             ' ready())","return"]'
         ),
     )
+
+
+def test_a_body_statement_dump_matches_cpython_shape() raises:
+    """Indexed body dumps keep the stored constructor and a returned tuple."""
+    var source = (
+        "def demo():\n"
+        "    zero = _Interval.point(0.0)\n"
+        "    comptime if capture:\n"
+        "        captured.low = low\n"
+        "    return (A(0), A(1))\n"
+    )
+    assert_equal(
+        body_statement_json(source, 0),
+        statement_dump("zero = _Interval.point(0.0)"),
+    )
+    assert_equal(
+        body_statement_json(source, 1),
+        statement_dump("if capture:\n    captured.low = low\n"),
+    )
+    var first = expression_dump("A(0)")
+    var second = expression_dump("A(1)")
+    var doc = PyJson()
+    var rows = doc.new_list()
+    doc.append(rows, doc.new_str(first))
+    doc.append(rows, doc.new_str(second))
+    doc.root = rows
+    assert_equal(return_elements_json(source, 2), doc.dumps())
+    assert_equal(return_elements_json("def demo():\n    return 1\n", 0), "null")
 
 
 def main() raises:
