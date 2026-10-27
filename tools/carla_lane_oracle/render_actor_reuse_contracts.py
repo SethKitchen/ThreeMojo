@@ -154,6 +154,33 @@ def _merged_edge(path, edge):
     return json.loads(result.stdout)
 
 
+_RENDER_MESSAGES = None
+
+
+def _render_messages():
+    """Return the render-actor consumer and test messages."""
+    global _RENDER_MESSAGES
+    if _RENDER_MESSAGES is not None:
+        return _RENDER_MESSAGES
+    import json
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+         'carla_bound_consumer_messages'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _RENDER_MESSAGES = json.loads(result.stdout)
+    return _RENDER_MESSAGES
+
+
 def verify(root, *, _operation=None):
     """Verify live ledger endpoints; return the original historical edges.
 
@@ -172,10 +199,10 @@ def verify(root, *, _operation=None):
         actual = _typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
                                 _operation=_operation), _operation=_operation)
         _gate_bytes(actual, current['after_sha256'], current['after_token_sha256'],
-                    'unreviewed render actor consumer: ' + path)
+                    _render_messages()['render_consumer'] + path)
         edges[path] = _merged_edge(path, edge)
     for path, expected in record['correctness_tests'].items():
         _gate_bytes(_typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
                                              _operation=_operation), _operation=_operation),
-                    expected, None, 'bound render actor test changed: ' + path)
+                    expected, None, _render_messages()['render_test'] + path)
     return edges

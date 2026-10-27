@@ -267,6 +267,8 @@ It puts the module path on the render-actor edge.
 
 It keeps the render-actor module and its three bound tests.
 
+It keeps the render-actor consumer and test messages.
+
 `tools/carla_runtime_boundary_gate.mojo` checks the runtime-boundary record, its bound tests, and the view-step edges.
 
 It extends an edge when a reviewed view step starts at that edge.
@@ -276,6 +278,8 @@ It puts the module path on that edge.
 It keeps the four runtime-boundary module paths.
 
 It keeps the twelve runtime-boundary test paths.
+
+It keeps the runtime-boundary consumer and test messages.
 
 `tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record and the admission token.
 
