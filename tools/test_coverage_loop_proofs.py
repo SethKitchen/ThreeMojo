@@ -9,6 +9,7 @@ import io
 import json
 import os
 import signal
+import shlex
 import shutil
 import subprocess
 import time
@@ -2568,6 +2569,13 @@ class MapSuccessorLoopTests(unittest.TestCase):
         for folder in ('tools','tools/carla_lane_oracle'):
             for path in (self.repo/folder).glob('*.py'):
                 shutil.copyfile(path, fixture/folder/path.name)
+        # The copied gate checks run tools/tool.sh beside them, with the root's
+        # .venv compiler by default. Both come from the checkout.
+        (fixture/'tools/tool.sh').write_text(
+            'exec sh ' + shlex.quote(str(self.repo/'tools/tool.sh')) + ' "$@"\n')
+        environment = dict(os.environ)
+        if (self.repo/'.venv/bin/mojo').exists():
+            environment.setdefault('MOJO', str(self.repo/'.venv/bin/mojo'))
         if internal_error:
             with (fixture/'tools/carla_lane_oracle/source_contracts.py').open('a') as stream:
                 stream.write('\nraise ModuleNotFoundError("optional-consumer-inner-sentinel")\n')
@@ -2644,7 +2652,8 @@ print('consumer verified',consumer,mode,','.join(sorted(loaded)))
         # every native test budget remains unchanged.
         timeout = _consumer_validation_timeout(
             consumer, internal_error=internal_error, unknown=unknown)
-        result=subprocess.run(command,cwd=cwd,capture_output=True,text=True,timeout=timeout)
+        result=subprocess.run(command,cwd=cwd,capture_output=True,text=True,timeout=timeout,
+                              env=environment)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         return result.stdout
 

@@ -210,6 +210,9 @@ def capture_with_compiler_budget(command, output, capture, *, mojo, loop_proof=N
             'Both proof and source root must be supplied together')
     require(type(seconds) in (int, float) and 0 < seconds <= INTEGRATION_SECONDS,
             'Invalid compiler/integration bound')
+    # The bound is for the capture. A first build of the capture tool, as in a
+    # fresh checkout or after an edit under tools/, happens before it starts.
+    run(['sh', str(ROOT / 'tools/tool.sh'), mojo, '--build', 'coverage_io'])
     deadline = time.monotonic() + seconds
     inherited = coverage_io.shared_deadline()
     if inherited is not None:
