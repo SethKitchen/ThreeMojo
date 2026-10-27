@@ -26,7 +26,7 @@ from tools._sha256 import sha256_hex
 comptime _MODULE = "extensions/carla/map.mojo"
 """The live Map module."""
 comptime _LIVE_TOKEN = (
-    "f109edb146ee727a84c0bee87ba87ae7cef68faf914cc11bdfd25375a9cddb78"
+    "482b296f13d4f26b242b1700b1ae416e6248ca45b7b599b1640c0a7c172dfe27"
 )
 """The token digest of the live Map module."""
 comptime _DEVIATION_SHA256 = (
