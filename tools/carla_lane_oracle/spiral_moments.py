@@ -362,13 +362,9 @@ def verify_inputs(root):
         if name == 'ideal_caller':
             # Keep the historical routing pin. Validate the exact additive
             # try-only refusal, then project only its default-False parameter.
-            if __package__:
-                from . import check_sampled_values as sampled
-            else:
-                import check_sampled_values as sampled
             try:
-                sampled.reviewed_reference_tree(source, root)
-            except sampled.CheckError as error:
+                ideal_projection.verify_try_only_reference(source, root)
+            except ValueError as error:
                 raise CheckError(
                     'source routing changed: ' + name + ': ' + str(error)) from error
             try:

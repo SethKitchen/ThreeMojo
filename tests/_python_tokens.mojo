@@ -2282,6 +2282,230 @@ def function_slice(source: String, name: String) raises -> String:
     return String(source[byte = starts[0] :])
 
 
+def _code_at(kinds: List[Int], index: Int) -> Int:
+    """Return the next token that is not a newline or indent.
+
+    Args:
+        kinds: The token kinds.
+        index: The first token to inspect.
+
+    Returns:
+        The index of the next code token, or the end.
+    """
+    var cursor = index
+    while cursor < len(kinds):
+        var kind = kinds[cursor]
+        if kind != _NEWLINE and kind != _INDENT and kind != _DEDENT:
+            return cursor
+        cursor += 1
+    return cursor
+
+
+def try_only_refusal(source: String) raises:
+    """Require the lane proof to keep the reviewed try-only refusal.
+
+    Args:
+        source: Mojo source that contains `_lane_jet_model_proof`.
+
+    Returns:
+        Nothing.
+
+    Raises:
+        Error: The function is missing, or the try-only parameter, default,
+            refusal, or flag use changed.
+    """
+    var slice = function_slice(source, "_lane_jet_model_proof")
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(slice, kinds, texts)
+    var count = len(kinds)
+    var index = _code_at(kinds, 0)
+    if (
+        index + 1 >= count
+        or kinds[index] != _NAME
+        or texts[index] != "def"
+        or texts[index + 1] != "_lane_jet_model_proof"
+    ):
+        raise Error("missing or ambiguous function: _lane_jet_model_proof")
+    index += 2
+    if index < count and kinds[index] == _OP and texts[index] == "[":
+        var depth = 1
+        index += 1
+        while index < count and depth > 0:
+            if kinds[index] == _OP and texts[index] == "[":
+                depth += 1
+            elif kinds[index] == _OP and texts[index] == "]":
+                depth -= 1
+            index += 1
+    index = _code_at(kinds, index)
+    if index >= count or texts[index] != "(":
+        raise Error("try-only parameter changed")
+    index += 1
+    var param_kinds = List[Int]()
+    var param_texts = List[String]()
+    var last_start = 0
+    var pending = True
+    var depth = 1
+    while index < count and depth > 0:
+        var kind = kinds[index]
+        var text = texts[index]
+        if kind == _OP and (text == "(" or text == "[" or text == "{"):
+            depth += 1
+        elif kind == _OP and (text == ")" or text == "]" or text == "}"):
+            depth -= 1
+            if depth == 0:
+                index += 1
+                break
+        if depth == 1 and kind == _OP and text == ",":
+            pending = True
+            index += 1
+            continue
+        if kind == _NEWLINE or kind == _INDENT or kind == _DEDENT:
+            index += 1
+            continue
+        if depth == 1 and pending:
+            last_start = len(param_kinds)
+            pending = False
+        param_kinds.append(kind)
+        param_texts.append(text)
+        index += 1
+    var length = len(param_kinds) - last_start
+    var named = (
+        length >= 3
+        and param_kinds[last_start] == _NAME
+        and param_texts[last_start] == "require_reuse"
+        and param_kinds[last_start + 1] == _OP
+        and param_texts[last_start + 1] == ":"
+        and param_kinds[last_start + 2] == _NAME
+        and param_texts[last_start + 2] == "Bool"
+    )
+    if not named:
+        raise Error("try-only parameter changed")
+    var default_false = (
+        length == 5
+        and param_texts[last_start + 3] == "="
+        and param_texts[last_start + 4] == "False"
+    )
+    if not default_false:
+        raise Error("try-only default must preserve historical callers")
+    var header = 0
+    while index < count:
+        var kind = kinds[index]
+        var text = texts[index]
+        if kind == _OP and (text == "(" or text == "[" or text == "{"):
+            header += 1
+        elif kind == _OP and (text == ")" or text == "]" or text == "}"):
+            if header > 0:
+                header -= 1
+        elif header == 0 and kind == _OP and text == ":":
+            index += 1
+            break
+        index += 1
+    var level = 0
+    var matches = 0
+    var saw_elif = False
+    var refusal = False
+    var names = 0
+    while index < count:
+        var kind = kinds[index]
+        var text = texts[index]
+        if kind == _INDENT:
+            level += 1
+            index += 1
+            continue
+        if kind == _DEDENT:
+            if level > 0:
+                level -= 1
+            index += 1
+            continue
+        if kind == _NEWLINE:
+            index += 1
+            continue
+        if kind == _NAME and text == "require_reuse":
+            names += 1
+        if (
+            level == 1
+            and kind == _NAME
+            and text == "if"
+            and index + 2 < count
+            and texts[index + 1] == "reused"
+            and texts[index + 2] == ":"
+        ):
+            matches += 1
+            var cursor = index + 3
+            var body_level = 1
+            while cursor < count:
+                var body_kind = kinds[cursor]
+                if body_kind == _INDENT:
+                    body_level += 1
+                elif body_kind == _DEDENT:
+                    if body_level > 0:
+                        body_level -= 1
+                elif (
+                    body_level == 1
+                    and body_kind != _NEWLINE
+                    and body_kind != _INDENT
+                    and body_kind != _DEDENT
+                ):
+                    break
+                cursor += 1
+            var elif_ok = (
+                cursor + 2 < count
+                and texts[cursor] == "elif"
+                and texts[cursor + 1] == "require_reuse"
+                and texts[cursor + 2] == ":"
+            )
+            if elif_ok:
+                saw_elif = True
+                var body = cursor + 3
+                var inner = 1
+                var words = List[String]()
+                while body < count:
+                    var body_kind = kinds[body]
+                    if body_kind == _INDENT:
+                        inner += 1
+                    elif body_kind == _DEDENT:
+                        if inner > 0:
+                            inner -= 1
+                        if inner == 0:
+                            body += 1
+                            break
+                    elif (
+                        inner == 2
+                        and body_kind != _NEWLINE
+                        and body_kind != _INDENT
+                        and body_kind != _DEDENT
+                    ):
+                        words.append(texts[body])
+                    elif (
+                        inner == 1
+                        and body_kind != _NEWLINE
+                        and body_kind != _INDENT
+                        and body_kind != _DEDENT
+                    ):
+                        break
+                    body += 1
+                var returned = (
+                    len(words) == 4
+                    and words[0] == "return"
+                    and words[1] == "_unknown_point"
+                    and words[2] == "("
+                    and words[3] == ")"
+                )
+                var tail = _code_at(kinds, body)
+                var followed = tail < count and (
+                    texts[tail] == "else" or texts[tail] == "elif"
+                )
+                refusal = returned and followed
+        index += 1
+    if matches != 1 or not saw_elif:
+        raise Error("try-only refusal missing from reuse/fallback edge")
+    if not refusal:
+        raise Error("try-only refusal changed")
+    if names != 1:
+        raise Error("try-only flag has an unreviewed use")
+
+
 def python_syntax_json(source: String) raises -> String:
     """Return Python source and generic metadata for one Mojo fragment.
 

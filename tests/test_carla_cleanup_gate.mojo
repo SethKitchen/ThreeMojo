@@ -20,6 +20,7 @@ from tests._python_tokens import (
     declaration_text,
     constant_literals_json,
     function_slice,
+    try_only_refusal,
     moment_source,
     moment_words_json,
     normalized_block,
@@ -533,6 +534,50 @@ def test_an_if_expression_and_annotation_match_cpython() raises:
         ),
         '["FunctionDef",[["name","f"],["args",["arguments",[["posonlyargs",[]],["args",[]],["kwonlyargs",[]],["kw_defaults",[]],["defaults",[]]]]],["body",[["Assign",[["targets",[["Name",[["id","fixed"],["ctx",["Store",[]]]]]]],["value",["IfExp",[["test",["Name",[["id","goal"],["ctx",["Load",[]]]]]],["body",["Constant",[["value",26]]]],["orelse",["Constant",[["value",20]]]]]]]]],["AnnAssign",[["target",["Name",[["id","point_domain"],["ctx",["Store",[]]]]]],["annotation",["Subscript",[["value",["Name",[["id","Tuple"],["ctx",["Load",[]]]]]],["slice",["Tuple",[["elts",[["Name",[["id","Int"],["ctx",["Load",[]]]]],["Name",[["id","Int"],["ctx",["Load",[]]]]]]],["ctx",["Load",[]]]]]],["ctx",["Load",[]]]]]],["simple",1]]],["AnnAssign",[["target",["Name",[["id","x"],["ctx",["Store",[]]]]]],["annotation",["Name",[["id","Int"],["ctx",["Load",[]]]]]],["value",["Constant",[["value",1]]]],["simple",1]]]]],["decorator_list",[]]]]',
     )
+
+
+def test_the_try_only_refusal_matches_the_reviewed_shape() raises:
+    """The lane proof keeps one reviewed try-only refusal."""
+    var source = String(
+        "def _lane_jet_model_proof[capture: Bool](\n"
+        + "    ideal_translation: Bool = False,\n"
+        + "    require_reuse: Bool = False,\n"
+        + ") -> Int:\n"
+        + "    if reused:\n"
+        + "        point = reused.value()\n"
+        + "    elif require_reuse:\n"
+        + "        return _unknown_point()\n"
+        + "    else:\n"
+        + "        point = 1\n"
+        + "    return point\n"
+    )
+    try_only_refusal(source)
+    with assert_raises(contains="try-only parameter changed"):
+        try_only_refusal(
+            source.replace("require_reuse: Bool = False", "reuse: Bool = False")
+        )
+    with assert_raises(
+        contains="try-only default must preserve historical callers"
+    ):
+        try_only_refusal(
+            source.replace(
+                "require_reuse: Bool = False", "require_reuse: Bool = True"
+            )
+        )
+    with assert_raises(
+        contains="try-only refusal missing from reuse/fallback edge"
+    ):
+        try_only_refusal(
+            source.replace(
+                "    elif require_reuse:\n        return _unknown_point()\n", ""
+            )
+        )
+    with assert_raises(contains="try-only refusal changed"):
+        try_only_refusal(
+            source.replace("return _unknown_point()", "return other()")
+        )
+    with assert_raises(contains="try-only flag has an unreviewed use"):
+        try_only_refusal(source.replace("point = 1", "point = require_reuse"))
 
 
 def test_a_statement_dump_matches_cpython() raises:

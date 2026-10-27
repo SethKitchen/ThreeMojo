@@ -774,6 +774,54 @@ def moment_words(text, count):
     return json.loads(result.stdout)
 
 
+def _try_only_gate(text):
+    """Require the lane proof's reviewed try-only refusal."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='try-only-') as directory:
+        path = Path(directory) / 'source.mojo'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--try-only', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
+def verify_try_only_reference(text, root, _operation=None):
+    """Admit the reference module, then check the try-only refusal in Mojo."""
+    try:
+        try:
+            import full_audit_cleanup_contracts as full_audit
+        except ModuleNotFoundError:
+            from tools.carla_lane_oracle import full_audit_cleanup_contracts as full_audit
+        text = full_audit.reviewed_text(
+            root, 'extensions/carla/curve_bounds.mojo', text, _operation=_operation)
+    except (ValueError, OSError) as error:
+        raise ValueError(
+            'reference module changed; renewed review required: curve_bounds.mojo: '
+            + str(error)) from error
+    try:
+        try:
+            import envelope_budget_contracts as budget
+        except ModuleNotFoundError:
+            from tools.carla_lane_oracle import envelope_budget_contracts as budget
+        budget.historical_function(text, root=root)
+    except ValueError as error:
+        raise ValueError(
+            'reference module changed; renewed review required: curve_bounds.mojo: '
+            + str(error)) from error
+    _try_only_gate(text)
+
+
 def strip_try_only(routing_json):
     """Remove the default-false try-only parameter from one routing document."""
     import os

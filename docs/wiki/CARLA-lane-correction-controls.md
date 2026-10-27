@@ -98,6 +98,8 @@ It compares the projected ideal spiral with the historical half-rate form.
 
 It checks the ideal spiral declaration before projecting it.
 
+It checks the lane proof refusal before routing.
+
 It compares the Sum2 recurrence, leaf, and caller graphs.
 
 It compares the scalar environment call with its stored statement.

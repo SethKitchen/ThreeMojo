@@ -21,12 +21,10 @@ else:
 from functools import lru_cache
 
 try:
-    import check_sampled_values as sampled
     import sum2_guard_contracts as guard
     import source_contracts
     import full_audit_cleanup_contracts as full_audit
 except ModuleNotFoundError:
-    from tools.carla_lane_oracle import check_sampled_values as sampled
     from tools.carla_lane_oracle import sum2_guard_contracts as guard, source_contracts
     from tools.carla_lane_oracle import full_audit_cleanup_contracts as full_audit
 
@@ -491,7 +489,11 @@ def verify_semantics(root, *, _operation=None):
     previous = full_audit.reviewed_lane_before_center_text(root, _operation=_operation)
     verify_search_semantics(body_from_source(previous, '_run_lane_search'))
     # Retain the sampled-reference gate after raw-inverse diagnostics.
-    sampled.reviewed_reference_tree(_typed_source.historical_text(root, root / 'extensions/carla/curve_bounds.mojo', source._observe_text(root, (root / 'extensions/carla/curve_bounds.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_bounds.mojo').read_text(), _operation=_operation), _operation=_operation), root, _operation=_operation)
+    if __package__:
+        from .ideal_projection import verify_try_only_reference
+    else:
+        from ideal_projection import verify_try_only_reference
+    verify_try_only_reference(_typed_source.historical_text(root, root / 'extensions/carla/curve_bounds.mojo', source._observe_text(root, (root / 'extensions/carla/curve_bounds.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_bounds.mojo').read_text(), _operation=_operation), _operation=_operation), root, _operation=_operation)
     return {'status': 'PASS', 'new_modules': list(NEW_MODULES),
             'checked_error_edge': 'guarded raw -> grouped origin -> checked Sum2 leaf',
             'containing_model_consumers': 'absent from production; standalone helper retained',
