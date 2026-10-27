@@ -208,6 +208,8 @@ It renames the first frozen lane declaration.
 
 It extends an edge when a reviewed view step starts at that edge.
 
+It puts the module path on that edge.
+
 `tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record and the admission token.
 
 `tools/carla_selection_record_gate.mojo` checks the selection predecessor record and the restored token.
