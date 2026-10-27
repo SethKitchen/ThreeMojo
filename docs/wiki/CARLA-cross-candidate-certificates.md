@@ -326,6 +326,8 @@ It checks the sampled helper names and top-level statements.
 
 It projects the constant heading onto unknown intervals.
 
+It projects the union helper from its return.
+
 Mojo checks the live sampled module graphs.
 The trig module keeps its reviewed syntax graph.
 The interval module keeps its reviewed syntax graph.

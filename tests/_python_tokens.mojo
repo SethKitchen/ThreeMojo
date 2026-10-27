@@ -1760,6 +1760,108 @@ def project_constant_heading(source: String) raises -> String:
     return _emit_token_source(out_kinds, out_texts)
 
 
+def _byte_at(source: String, line: Int, column: Int) -> Int:
+    """Return the byte offset of a 1-based line and 0-based column.
+
+    Args:
+        source: The original source. Indentation is spaces.
+        line: The 1-based line.
+        column: The 0-based column.
+
+    Returns:
+        The byte offset, or the end of the source when the position is past it.
+    """
+    var data = source.as_bytes()
+    var current = 1
+    var index = 0
+    while index < len(data) and current < line:
+        if data[index] == 10:
+            current += 1
+        index += 1
+    var offset = index + column
+    if offset > len(data):
+        return len(data)
+    return offset
+
+
+def project_union_value(source: String) raises -> String:
+    """Project one renamed union helper onto the value-only signature.
+
+    Args:
+        source: The renamed `_union_value_points` declaration.
+
+    Returns:
+        The fixed signature followed by the original return body.
+
+    Raises:
+        Error: The body is not one return statement.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    var lines = List[Int]()
+    var start_cols = List[Int]()
+    var end_lines = List[Int]()
+    var end_cols = List[Int]()
+    _tokenize_lines(
+        source, kinds, texts, lines, start_cols, end_lines, end_cols
+    )
+    var depth = 0
+    var colon = -1
+    var seen_def = False
+    var index = 0
+    while index < len(kinds):
+        var text = texts[index]
+        if text == "(" or text == "[" or text == "{":
+            depth += 1
+        elif text == ")" or text == "]" or text == "}":
+            if depth > 0:
+                depth -= 1
+        elif kinds[index] == _NAME and text == "def":
+            seen_def = True
+        elif kinds[index] == _OP and text == ":" and depth == 0 and seen_def:
+            colon = index
+            break
+        index += 1
+    if colon < 0:
+        raise Error("union complete body shape changed")
+    var indent = 0
+    var bracket = 0
+    var statements = 0
+    var returns = 0
+    var started = False
+    index = colon + 1
+    while index < len(kinds):
+        var kind = kinds[index]
+        var text = texts[index]
+        if kind == _INDENT:
+            indent += 1
+        elif kind == _DEDENT:
+            indent -= 1
+        elif text == "(" or text == "[" or text == "{":
+            bracket += 1
+        elif text == ")" or text == "]" or text == "}":
+            if bracket > 0:
+                bracket -= 1
+        elif kind == _NEWLINE and bracket == 0:
+            started = False
+        elif indent == 1 and bracket == 0 and not started:
+            started = True
+            statements += 1
+            if kind == _NAME and text == "return":
+                returns += 1
+        index += 1
+    if statements != 1 or returns != 1:
+        raise Error("union complete body shape changed")
+    var signature = String(
+        "def _union_value_points(\n"
+        "    one: Tuple[_ValueJet, _ValueJet, _ValueJet],\n"
+        "    two: Tuple[_ValueJet, _ValueJet, _ValueJet],\n"
+        ") -> Tuple[_ValueJet, _ValueJet, _ValueJet]:"
+    )
+    var offset = _byte_at(source, end_lines[colon], end_cols[colon])
+    return signature + String(source[byte=offset:])
+
+
 def _name_byte(byte: UInt8) -> Bool:
     """Return whether `byte` can appear inside an identifier.
 

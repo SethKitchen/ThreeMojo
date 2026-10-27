@@ -9,7 +9,11 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._process import run_program
-from tests._python_tokens import project_constant_heading, sampled_top_level
+from tests._python_tokens import (
+    project_constant_heading,
+    project_union_value,
+    sampled_top_level,
+)
 from tests._python_expr import (
     body_role_json,
     body_statement_json,
@@ -290,6 +294,27 @@ def test_constant_heading_projection_uses_unknown_intervals() raises:
         contains="constant heading derivative constructor changed"
     ):
         _ = project_constant_heading("def demo():\n    return 1\n")
+
+
+def test_union_projection_keeps_the_return_body() raises:
+    """The value-only signature replaces the generic header only."""
+    var source = (
+        "def _union_points[derivatives: Bool](\n"
+        "    one: Tuple[_JetExpression[derivatives]],\n"
+        ") -> Tuple[_Jet, _Jet, _Jet]:\n"
+        "    return _uncertain(one)\n"
+    )
+    var projected = project_union_value(source)
+    if projected.find("def _union_value_points(") < 0:
+        raise Error("value signature missing")
+    if projected.find("return _uncertain(one)") < 0:
+        raise Error("return body missing")
+    if projected.find("_JetExpression") >= 0:
+        raise Error("generic header remained")
+    with assert_raises(contains="union complete body shape changed"):
+        _ = project_union_value(
+            "def demo():\n    var one = 1\n    return one\n"
+        )
 
 
 def main() raises:

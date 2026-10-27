@@ -13,6 +13,7 @@
     carla_sampled_text --return-elts PATH --index N
     carla_sampled_text --top-level PATH --name NAMES
     carla_sampled_text --project-constant PATH
+    carla_sampled_text --project-union PATH
 
 The extract mode prints one top-level function. The rename mode prints the
 declaration with sampled identifiers renamed. The drop mode removes the first
@@ -20,7 +21,8 @@ derivative intersection. The body-roles mode prints JSON statement roles.
 The body-dump mode prints one statement dump. The return-elts mode prints
 JSON dumps of a returned tuple, or null. The top-level mode checks helper
 names and statement kinds. The project-constant mode prints the unknown-interval
-heading. The caller supplies the source.
+heading. The project-union mode prints the value-only union signature.
+The caller supplies the source.
 """
 
 from std.pathlib import Path
@@ -31,7 +33,11 @@ from tests._python_expr import (
     body_statement_json,
     return_elements_json,
 )
-from tests._python_tokens import project_constant_heading, sampled_top_level
+from tests._python_tokens import (
+    project_constant_heading,
+    project_union_value,
+    sampled_top_level,
+)
 from tools._sampled_jet_gate import stored_helper_fields
 from tools._sampled_value_gate import (
     drop_derivative_intersection,
@@ -51,7 +57,7 @@ def _usage():
             " --helper-fields PATH | --value-fields PATH | --value-imports PATH"
             " | --body-roles PATH | --body-dump PATH --index N | --return-elts"
             " PATH --index N | --top-level PATH --name NAMES |"
-            " --project-constant PATH"
+            " --project-constant PATH | --project-union PATH"
         ),
         file=stderr,
     )
@@ -75,6 +81,7 @@ def main() raises:
     var return_elts = String("")
     var top_level = String("")
     var project_constant = String("")
+    var project_union = String("")
     var name = String("")
     var index_text = String("")
     var arguments = argv()
@@ -93,6 +100,7 @@ def main() raises:
             or word == "--return-elts"
             or word == "--top-level"
             or word == "--project-constant"
+            or word == "--project-union"
             or word == "--index"
             or word == "--name"
         ):
@@ -121,6 +129,8 @@ def main() raises:
                 top_level = value
             elif word == "--project-constant":
                 project_constant = value
+            elif word == "--project-union":
+                project_union = value
             elif word == "--index":
                 index_text = value
             else:
@@ -151,6 +161,8 @@ def main() raises:
         modes += 1
     if project_constant.byte_length() > 0:
         modes += 1
+    if project_union.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if (
@@ -164,6 +176,8 @@ def main() raises:
     if body_roles.byte_length() > 0 and name.byte_length() > 0:
         _usage()
     if project_constant.byte_length() > 0 and name.byte_length() > 0:
+        _usage()
+    if project_union.byte_length() > 0 and name.byte_length() > 0:
         _usage()
     if (
         body_dump.byte_length() > 0 or return_elts.byte_length() > 0
@@ -234,6 +248,9 @@ def main() raises:
                 project_constant_heading(Path(project_constant).read_text()),
                 end="",
             )
+            return
+        if project_union.byte_length() > 0:
+            print(project_union_value(Path(project_union).read_text()), end="")
             return
         print(rename_sampled_identifiers(Path(rename).read_text()), end="")
     except error:

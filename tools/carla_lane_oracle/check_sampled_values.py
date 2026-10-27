@@ -406,16 +406,10 @@ def verify(root):
         def declaration(source):
             return syntax_tree(source).body[0]
 
-        union = declaration('''def _union_value_points(
-            one: Tuple[_ValueJet, _ValueJet, _ValueJet],
-            two: Tuple[_ValueJet, _ValueJet, _ValueJet],
-        ) -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
-            pass
-    ''')
         old = reference('curve_bounds.mojo', '_union_points')
         require(old._mojo_body_roles == ['return'], 'union complete body shape changed')
-        union.body = old.body
-        expected['_union_value_points'] = union
+        expected['_union_value_points'] = unique_function(syntax_tree(_sampled_text(
+            '--project-union', old._mojo_source)), '_union_value_points')
 
         sampled = declaration('''def _reference_sampled_value(
             geometry: RoadGeometry, distance: _ValueJet, translation: Vector3
