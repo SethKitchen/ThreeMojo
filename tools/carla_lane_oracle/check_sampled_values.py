@@ -308,7 +308,7 @@ def _python_syntax_tree(text):
         node_type = ast.FunctionDef if kind == words['def_word'] else ast.ClassDef
         matches = [n for n in ast.walk(tree) if isinstance(n, node_type) and n.name == name]
         require(len(matches) == 1, words['parsed'])
-        matches[0]._mojo_type_parameters = parameters
+        setattr(matches[0], words['mojo_parameters'], parameters)
     return tree
 
 
@@ -359,16 +359,18 @@ def syntax_tree(text):
         node_type = ast.FunctionDef if kind == words['def_word'] else ast.ClassDef
         matches = [n for n in ast.walk(tree) if isinstance(n, node_type) and n.name == name]
         require(len(matches) == 1, words['parsed'])
-        matches[0]._mojo_type_parameters = [tuple(item) for item in parameters]
+        setattr(matches[0], words['mojo_parameters'], [tuple(item) for item in parameters])
     return tree
 
 
 def normalized_node(node):
     if isinstance(node, ast.AST):
+        words = _syntax_words()
+        parameter_name = words['mojo_parameters']
         fields = [(key, normalized_node(value)) for key, value in ast.iter_fields(node)
-                  if value is not None and not (key == 'type_params' and not value)]
-        if hasattr(node, '_mojo_type_parameters'):
-            fields.append(('mojo_type_parameters', node._mojo_type_parameters))
+                  if value is not None and not (key == words['type_params'] and not value)]
+        if hasattr(node, parameter_name):
+            fields.append((parameter_name, getattr(node, parameter_name)))
         return (type(node).__name__, fields)
     if isinstance(node, list):
         return [normalized_node(value) for value in node]
@@ -393,7 +395,7 @@ def unique_function(tree, name):
 
 def primitive_graph(text):
     tree = syntax_tree(text)
-    found = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == '_JetExpression']
+    found = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == _syntax_words()['primitive_class']]
     # The declaration count is a token check. The class hash below stays on
     # the Python syntax tree.
     _sampled_text('--primitive-declaration', text)

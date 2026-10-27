@@ -130,10 +130,11 @@ def _carla_package():
 
 def verify(root, *, _operation=None):
     path = root / _carla_package()
-    fresh = _typed_source.historical_text(root, path/'curve_bounds.mojo', source._observe_text(root, 'extensions/carla/curve_bounds.mojo', (path/'curve_bounds.mojo').read_text(), _operation=_operation), _operation=_operation)
+    package = _carla_package()
+    fresh = _typed_source.historical_text(root, path/'curve_bounds.mojo', source._observe_text(root, package + '/curve_bounds.mojo', (path/'curve_bounds.mojo').read_text(), _operation=_operation), _operation=_operation)
     consumers = []
     for filename, name in _consumers().items():
-        consumers.append((filename, name, _typed_source.historical_text(root, path/filename, source._observe_text(root, 'extensions/carla/' + filename, (path/filename).read_text(), _operation=_operation), _operation=_operation)))
-    eligibility = _typed_source.historical_text(root, path/'spiral_moment_proof.mojo', source._observe_text(root, 'extensions/carla/spiral_moment_proof.mojo', (path/'spiral_moment_proof.mojo').read_text(), _operation=_operation), _operation=_operation)
+        consumers.append((filename, name, _typed_source.historical_text(root, path/filename, source._observe_text(root, package + '/' + filename, (path/filename).read_text(), _operation=_operation), _operation=_operation)))
+    eligibility = _typed_source.historical_text(root, path/'spiral_moment_proof.mojo', source._observe_text(root, package + '/spiral_moment_proof.mojo', (path/'spiral_moment_proof.mojo').read_text(), _operation=_operation), _operation=_operation)
     _heading_graph(fresh, consumers, eligibility)
     return _heading_result(len(_consumers()))

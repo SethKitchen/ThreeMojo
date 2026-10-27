@@ -21,5 +21,7 @@ def sampled_syntax_words() -> String:
         + '"struct_word":"struct","class_word":"class","def_word":"def",'
         + '"unclosed":"unclosed Mojo generic declaration",'
         + '"ambiguous":"ambiguous generic declaration",'
-        + '"parsed":"ambiguous parsed generic declaration"}'
+        + '"parsed":"ambiguous parsed generic declaration",'
+        + '"primitive_class":"_JetExpression","type_params":"type_params",'
+        + '"mojo_parameters":"mojo_type_parameters"}'
     )

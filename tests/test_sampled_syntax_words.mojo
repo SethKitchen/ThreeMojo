@@ -36,6 +36,13 @@ def test_sampled_syntax_keywords_stay_in_reviewed_order() raises:
         doc.text(doc.at(doc.root, "parsed")),
         "ambiguous parsed generic declaration",
     )
+    assert_equal(
+        doc.text(doc.at(doc.root, "primitive_class")), "_JetExpression"
+    )
+    assert_equal(doc.text(doc.at(doc.root, "type_params")), "type_params")
+    assert_equal(
+        doc.text(doc.at(doc.root, "mojo_parameters")), "mojo_type_parameters"
+    )
 
 
 def main() raises:
