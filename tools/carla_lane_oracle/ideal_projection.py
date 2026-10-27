@@ -348,6 +348,29 @@ def scalar_literal(text, name):
     return values[0]
 
 
+def moment_source(words):
+    """Return the canonical stored-moment table for one word list."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='moment-source-') as directory:
+        payload = Path(directory) / 'words.json'
+        payload.write_text(json.dumps(words, separators=(',', ':')))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--moment-source', str(payload)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def moment_words(text, count):
     """Return the `0x` words from one generated moment table."""
     import os

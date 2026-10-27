@@ -14,6 +14,7 @@ from tests._python_tokens import (
     declaration_text,
     constant_literals_json,
     function_slice,
+    moment_source,
     moment_words_json,
     normalized_block,
     replace_token_fragment,
@@ -159,6 +160,29 @@ def test_a_top_level_function_slice_stops_at_the_next_def() raises:
         _ = function_slice(source + "def first():\n    return 0\n", "first")
     with assert_raises(contains="missing or ambiguous function: absent"):
         _ = function_slice(source, "absent")
+
+
+def test_the_moment_source_keeps_the_canonical_header() raises:
+    """2816 zero words become the generated table layout."""
+    var words = String("[")
+    var index = 0
+    while index < 2816:
+        if index > 0:
+            words += ","
+        words += '"0x0000000000000000"'
+        index += 1
+    words += "]"
+    var text = moment_source(words)
+    if not text.startswith("# Copyright (c) 2026 Seth Kitchen, PE\n"):
+        raise Error("header changed")
+    if text.find("    # Count 1\n    # cosine\n") < 0:
+        raise Error("first count changed")
+    if text.find("    # Count 64\n    # cosine\n") < 0:
+        raise Error("last count changed")
+    if not text.endswith("]\n"):
+        raise Error("closer changed")
+    with assert_raises(contains="malformed moment source word"):
+        _ = moment_source('["0x1"]')
 
 
 def test_a_moment_table_keeps_its_hex_words() raises:

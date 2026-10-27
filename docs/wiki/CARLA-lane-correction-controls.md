@@ -76,6 +76,8 @@ It drops comments and blank lines from one source block.
 
 It reads the stored moment words from the generated table.
 
+It writes the canonical stored-moment table source.
+
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.
