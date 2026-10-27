@@ -235,7 +235,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Coverage-followup record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_followup_gate.mojo` checks the coverage-followup record, the pin digests, the ordered pin pair, and the pin placements [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Rounded LINE singleton record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_singleton_gate.mojo` checks the rounded LINE singleton migration digest, its schema, and the lane text token [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Rounded LINE singleton record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_singleton_gate.mojo` checks the rounded LINE singleton record, the lane text token, and the consumer graphs [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Frozen ARC producer record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record, the runtime placements, and the producer functions [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

@@ -7,6 +7,7 @@
 
     carla_singleton_gate --migration PATH
     carla_singleton_gate --text PATH --decoded PATH
+    carla_singleton_gate --graphs DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -16,7 +17,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
-from tools._python_json import MISSING, PyJson, py_equal
+from tools._python_json import MISSING, PY_LIST, PyJson, py_equal
 from tools._sha256 import sha256_hex
 
 
@@ -69,12 +70,34 @@ def singleton_views(text: String, decoded: String) raises:
         _fail("consumer lane source text/bytes disagree")
 
 
+def singleton_graphs(directory: String) raises:
+    """Require each consumer token list to match its record.
+
+    Args:
+        directory: A directory whose `labels.json` lists the comparisons in order.
+
+    Raises:
+        Error: A token list changed, or the list cannot be read.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("consumer import scope changed")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var row = doc.item(doc.root, index)
+        var label = doc.text(doc.at(row, "label"))
+        if doc.text(doc.at(row, "actual")) != doc.text(doc.at(row, "expected")):
+            _fail(label)
+        index += 1
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_singleton_gate --migration PATH"
-            " | --text PATH --decoded PATH"
+            " | --text PATH --decoded PATH | --graphs DIR"
         ),
         file=stderr,
     )
@@ -90,11 +113,17 @@ def main() raises:
     var migration = String("")
     var text = String("")
     var decoded = String("")
+    var graphs = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
-        if word == "--migration" or word == "--text" or word == "--decoded":
+        if (
+            word == "--migration"
+            or word == "--text"
+            or word == "--decoded"
+            or word == "--graphs"
+        ):
             if index + 1 >= len(arguments):
                 _usage()
             var value = arguments[index + 1]
@@ -102,8 +131,10 @@ def main() raises:
                 migration = value
             elif word == "--text":
                 text = value
-            else:
+            elif word == "--decoded":
                 decoded = value
+            else:
+                graphs = value
             index += 2
             continue
         _usage()
@@ -112,9 +143,14 @@ def main() raises:
         modes += 1
     if text.byte_length() > 0 or decoded.byte_length() > 0:
         modes += 1
+    if graphs.byte_length() > 0:
+        modes += 1
     if modes != 1 or (text.byte_length() == 0) != (decoded.byte_length() == 0):
         _usage()
     try:
+        if graphs.byte_length() > 0:
+            singleton_graphs(graphs)
+            return
         if text.byte_length() > 0:
             singleton_views(Path(text).read_text(), Path(decoded).read_text())
             return

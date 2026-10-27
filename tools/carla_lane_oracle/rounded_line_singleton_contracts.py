@@ -76,6 +76,32 @@ def _gate_views(text, decoded):
         raise ValueError(message)
 
 
+def _gate_graphs(pairs):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    def canon(value):
+        return json.dumps([[item[0], item[1]] for item in value], separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    rows = [{'label': label, 'actual': canon(actual), 'expected': canon(expected)}
+            for actual, expected, label in pairs]
+    with tempfile.TemporaryDirectory(prefix='singleton-graphs-') as directory:
+        folder = Path(directory)
+        (folder / 'labels.json').write_text(json.dumps(rows))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_singleton_gate',
+             '--graphs', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root / MIGRATION, (root / MIGRATION).read_bytes())
     _gate(payload)
@@ -123,6 +149,7 @@ def verify_premises(root):
         actual = _reviewed_text(root, path, record)
         if guard.significant(actual) != guard.significant(item['source']):
             _verify_dependency(path, actual, item['token_sha256'])
+    pairs = []
     for path, expected in record['import_scopes'].items():
         text = _lane_text(root) if path == 'extensions/carla/lane_refinement.mojo' else _typed_source.historical_text(root, root/path, (root/path).read_text())
         actual = text.split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
@@ -131,7 +158,11 @@ def verify_premises(root):
             # Only a changed consumed scope requests complete current admission.
             text = full_audit.reviewed_text(root, path, text)
             actual = text.split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
-        require(guard.significant(actual) == guard.significant(expected), 'consumer import scope changed: ' + path)
+        pairs.append((guard.significant(actual), guard.significant(expected),
+                      'consumer import scope changed: ' + path))
+    if pairs:
+        _gate_graphs(pairs)
+    pairs = []
     for item in record['declarations']:
         selected = (item['path'], item['name'], tuple(item['owner'])) == (
             'extensions/carla/lane_refinement.mojo', '_rounded_axis_lane_minimum', ())
@@ -140,8 +171,10 @@ def verify_premises(root):
         if selected and guard.significant(actual) != guard.significant(item['source']):
             text = full_audit.reviewed_text(root, item['path'], text)
             actual = guard.declaration(text, item['name'], tuple(item['owner']))
-        require(guard.significant(actual) == guard.significant(item['source']),
-                'consumer/reference declaration changed: ' + item['name'])
+        pairs.append((guard.significant(actual), guard.significant(item['source']),
+                      'consumer/reference declaration changed: ' + item['name']))
+    if pairs:
+        _gate_graphs(pairs)
     return record
 
 

@@ -7,7 +7,13 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_singleton_gate import singleton_record, singleton_views
+from std.os import makedirs
+from std.pathlib import Path
+from tools.carla_singleton_gate import (
+    singleton_graphs,
+    singleton_record,
+    singleton_views,
+)
 
 
 def test_a_changed_record_is_refused() raises:
@@ -29,6 +35,23 @@ def test_disagreeing_lane_views_are_refused() raises:
         singleton_views(
             "def changed():\n    pass\n", "def other():\n    pass\n"
         )
+
+
+def test_a_changed_consumer_graph_is_refused() raises:
+    """A consumer token list that changed fails closed."""
+    var directory = "/tmp/singleton-graphs-test"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/labels.json").write_text(
+        '[{"label":"consumer import scope changed: lane.mojo",'
+        + '"actual":"[]","expected":"[[1,\\"def\\"]]"}]'
+    )
+    with assert_raises(
+        contains=(
+            "rounded LINE singleton contract: consumer import scope changed:"
+            " lane.mojo"
+        )
+    ):
+        singleton_graphs(directory)
 
 
 def main() raises:
