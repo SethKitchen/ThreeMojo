@@ -178,6 +178,39 @@ def _semantic_declarations(items):
     return json.loads(result.stdout)
 
 
+def _semantic_step(payload):
+    """Bind one group and check its edges."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='semantic-step-') as directory:
+        path = Path(directory) / 'step.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_semantic_step',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        contract = _runtime_contract()
+        if message == contract['move']:
+            message = contract['prefix'] + message
+        elif (
+            message.startswith(contract['fragment'])
+            and not message.startswith(contract['prefix'])
+        ):
+            message = contract['prefix'] + message
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 class _RuntimeFunction:
     """One moved helper declaration checked by the Mojo fragment gate."""
 
@@ -522,25 +555,36 @@ def _run_semantic_steps(root, steps, operation):
             module = item['module']
             text = _typed_source.historical_text(root, root / ('extensions/carla/' + module + '.mojo'), source._observe_text(root, (root / ('extensions/carla/' + module + '.mojo')).relative_to(root).as_posix(), (root / ('extensions/carla/' + module + '.mojo')).read_text(), _operation=operation), _operation=operation)
             loaded.append((item, text))
-        declared = {}
-        if loaded:
-            declared = _semantic_declarations([{
+        fresh = {item['key'] for item, _text in loaded}
+        prior = {}
+        for key in step['edges']:
+            if key not in fresh and key in nodes:
+                node = nodes[key]
+                prior[key] = {
+                    'name': node._runtime_name,
+                    'source': node._runtime_source,
+                }
+        declared = _semantic_step({
+            'group': step['group'],
+            'items': [{
                 'key': item['key'],
                 'name': item['name'],
                 'source': text,
-            } for item, text in loaded])
+            } for item, text in loaded],
+            'prior': prior,
+            'bind_labels': [{
+                'key': item['key'],
+                'label': item['label'] if 'label' in item else item['name'],
+            } for item, _text in loaded],
+            'checks': [{
+                'key': item['key'],
+                'label': item['label'],
+            } for item in step['check']] if 'check' in step else [],
+            'edges': list(step['edges']),
+            'prefix': _runtime_contract()['prefix'],
+        })
         for item, _text in loaded:
             nodes[item['key']] = _RuntimeFunction(item['name'], declared[item['key']])
-        for item in step['bind']:
-            node = nodes[item['key']]
-            label = item['label'] if 'label' in item else node._runtime_name
-            _runtime_source(node, label)
-        for item in step['check'] if 'check' in step else ():
-            _runtime_source(nodes[item['key']], item['label'])
-        edges = {}
-        for key in step['edges']:
-            edges[key] = nodes[key]
-        _semantic_edges(step['group'], edges)
 
 
 def verify_semantics(root, *, _operation=None):
