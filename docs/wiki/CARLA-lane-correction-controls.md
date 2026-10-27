@@ -66,6 +66,8 @@ It relabels one runtime pin failure when the cause is the reviewed contract erro
 
 It keeps the four coverage-invariant source paths.
 
+It keeps the six extra coverage-invariant inputs.
+
 It keeps a component name inside its directory.
 
 It uses the last path part as the pin file name.

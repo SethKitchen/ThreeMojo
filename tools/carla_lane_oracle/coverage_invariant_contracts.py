@@ -48,18 +48,38 @@ def _sources():
     return _SOURCES
 
 
+_PROTECTED_TAIL = None
+
+
+def _protected_tail():
+    """Return the protected inputs that follow the dispatch closure."""
+    global _PROTECTED_TAIL
+    if _PROTECTED_TAIL is not None:
+        return _PROTECTED_TAIL
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_invariant_protected'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _PROTECTED_TAIL = tuple(json.loads(result.stdout))
+    return _PROTECTED_TAIL
+
+
 def __getattr__(name):
     if name == 'SOURCE_PATHS':
         return _sources()
+    if name == 'PROTECTED_INPUTS':
+        return (MIGRATION, *curve.PROTECTED_INPUTS, *_protected_tail())
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
-
-PROTECTED_INPUTS = (MIGRATION, *curve.PROTECTED_INPUTS,
-                    'tools/carla_lane_oracle/grouped-table-contract.json',
-                    grouped.MODULE, 'extensions/carla/geometry.mojo',
-                    'tests/test_carla_support_dispatch_successor.mojo',
-                    'tools/carla_lane_oracle/lane-control-migration.json',
-                    'tests/test_carla_lane_control_successor.mojo')
 
 def require(condition, message):
     if not condition:

@@ -282,6 +282,38 @@ def invariant_sources() raises -> String:
     return doc.dumps()
 
 
+def invariant_protected_tail() raises -> String:
+    """Return the protected inputs that follow the dispatch closure.
+
+    Returns:
+        A JSON list in reviewed order.
+
+    Raises:
+        Error: The list cannot be written.
+    """
+    var doc = PyJson()
+    var names = doc.new_list()
+    doc.append(
+        names,
+        doc.new_str("tools/carla_lane_oracle/grouped-table-contract.json"),
+    )
+    doc.append(names, doc.new_str(_source_name(2)))
+    doc.append(names, doc.new_str("extensions/carla/geometry.mojo"))
+    doc.append(
+        names,
+        doc.new_str("tests/test_carla_support_dispatch_successor.mojo"),
+    )
+    doc.append(
+        names,
+        doc.new_str("tools/carla_lane_oracle/lane-control-migration.json"),
+    )
+    doc.append(
+        names, doc.new_str("tests/test_carla_lane_control_successor.mojo")
+    )
+    doc.root = names
+    return doc.dumps()
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
