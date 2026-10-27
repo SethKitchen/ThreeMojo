@@ -129,7 +129,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 96</summary>
+<summary>Implemented: 98</summary>
 
 - [x] [Literal loop receipt](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#constant-loop-outcome-proofs): `tools/coverage_loop_seal.mojo` writes and checks the sealed loop receipt [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
@@ -250,6 +250,10 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [x] [Render-actor reuse record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Runtime-boundary record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_runtime_boundary_gate.mojo` checks the runtime-boundary record and its bound tests [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Envelope budget record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Selection predecessor record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_selection_record_gate.mojo` checks the selection predecessor record [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Neutral CARLA texture plan](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_texture_plan.mojo` names a neutral texture and chooses its fitted size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

@@ -105,9 +105,28 @@ def verify(root, *, _operation=None):
     return verify_text(modules, interval, trig)
 
 
+def _gate_record(payload):
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='selection-record-') as directory:
+        record = Path(directory) / 'migration.json'
+        record.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_selection_record_gate',
+             '--migration', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def predecessor_text(root, path, *, _operation=None):
     """Verify both actual producers before reconstructing one legacy module."""
-    import hashlib
 # #333 explicit historical provenance views; current inputs remain operation-owned.
     import json
     if __package__:
@@ -117,8 +136,7 @@ def predecessor_text(root, path, *, _operation=None):
     root=Path(root)
     verify(root, _operation=_operation)
     payload=_typed_source.historical_bytes(root, root/'tools/carla_lane_oracle/selection-finiteness-contract.json', (root/'tools/carla_lane_oracle/selection-finiteness-contract.json').read_bytes(), _operation=_operation)
-    if hashlib.sha256(payload).hexdigest()!='dcd2c780640775e29a566491679dc6fbf5ab1afa43fbfbae86cb778433cf92e8':
-        raise ValueError('Unreviewed selection predecessor record')
+    _gate_record(payload)
     record=json.loads(payload,object_pairs_hook=source_contracts.unique_keys)
     if path not in EXPECTED or set(record['modules'])!=set(EXPECTED):
         raise ValueError('Wrong selection predecessor module')

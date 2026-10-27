@@ -54,17 +54,35 @@ def verify(root, *, _operation=None):
     return verify_text((Path(root)/MODULE).read_text(), root=root, _operation=_operation)
 
 
+def _gate(payload):
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='envelope-gate-') as directory:
+        record = Path(directory) / 'migration.json'
+        record.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_envelope_gate',
+             '--migration', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def historical_function(text, *, root=None):
     """Return the bound predecessor only after verifying the exact successor."""
-    import hashlib
 # #333 explicit historical provenance views; current inputs remain operation-owned.
     import json
     verify_text(text, root=root)
     record_path = (Path(root)/'tools/carla_lane_oracle/envelope-budget-contract.json'
                    if root is not None else Path(__file__).with_name('envelope-budget-contract.json'))
     payload = _typed_source.historical_bytes(root, record_path, record_path.read_bytes())
-    if hashlib.sha256(payload).hexdigest() != 'c43aa2bfdfb2a33575745eefb44b2f8ff0714a71a31ad750e8c4c0572fa7f2be':
-        raise ValueError('Unreviewed envelope budget predecessor record')
+    _gate(payload)
     record = json.loads(payload, object_pairs_hook=source_contracts.unique_keys)
     actual = sum2_guard_contracts.declaration(text,'_try_lane_envelope_capture',())
     if sum2_guard_contracts.significant(actual) != sum2_guard_contracts.significant(record['after_complete_function']):
