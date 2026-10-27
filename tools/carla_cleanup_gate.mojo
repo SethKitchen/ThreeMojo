@@ -26,6 +26,7 @@
     carla_cleanup_gate --project-sum2 PATH
     carla_cleanup_gate --commute-legacy PATH
     carla_cleanup_gate --binding PATH
+    carla_cleanup_gate --imports PATH
     carla_cleanup_gate --syntax PATH
     carla_cleanup_gate --slice PATH --name NAME
     carla_cleanup_gate --fragment DIR
@@ -55,6 +56,7 @@ from tests._python_tokens import (
     constant_literals_json,
     check_stored_half,
     binding_shadow_payload,
+    direct_imports_payload,
     commute_legacy_source,
     project_sum2_source,
     function_slice,
@@ -542,6 +544,7 @@ def _usage():
             " --statements PATH | --starts PATH | --routing PATH --constants"
             " PATH | --ideal PATH --name NAME | --stored-half PATH |"
             " --project-sum2 PATH | --commute-legacy PATH | --binding PATH |"
+            " --imports PATH |"
             " --syntax PATH |"
             " --slice PATH --name NAME | --fragment DIR | --normalize PATH |"
             " --table PATH --count N | --moment-source PATH | --moment-payload"
@@ -588,6 +591,7 @@ def main() raises:
     var project_sum2 = String("")
     var commute_legacy = String("")
     var binding = String("")
+    var imports = String("")
     var syntax = String("")
     var slice_path = String("")
     var fragment = String("")
@@ -636,6 +640,7 @@ def main() raises:
             or word == "--project-sum2"
             or word == "--commute-legacy"
             or word == "--binding"
+            or word == "--imports"
             or word == "--syntax"
             or word == "--slice"
             or word == "--fragment"
@@ -711,6 +716,8 @@ def main() raises:
                 commute_legacy = value
             elif word == "--binding":
                 binding = value
+            elif word == "--imports":
+                imports = value
             elif word == "--syntax":
                 syntax = value
             elif word == "--slice":
@@ -797,6 +804,8 @@ def main() raises:
     if commute_legacy.byte_length() > 0:
         modes += 1
     if binding.byte_length() > 0:
+        modes += 1
+    if imports.byte_length() > 0:
         modes += 1
     if syntax.byte_length() > 0:
         modes += 1
@@ -1005,6 +1014,9 @@ def main() raises:
             return
         if binding.byte_length() > 0:
             binding_shadow_payload(Path(binding).read_text())
+            return
+        if imports.byte_length() > 0:
+            print(direct_imports_payload(Path(imports).read_text()), end="")
             return
         if starts.byte_length() > 0:
             print(top_level_starts_json(Path(starts).read_text()), end="")

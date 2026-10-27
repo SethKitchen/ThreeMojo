@@ -29,6 +29,7 @@ from tests._python_tokens import (
     token_names,
     token_sha256,
     top_level_starts_json,
+    _direct_imports_json,
     without_move_sigils,
 )
 from tools.carla_cleanup_gate import (
@@ -484,6 +485,18 @@ def test_text_digests_match_sha256() raises:
     assert_equal(
         sha256_texts_json('["abc",""]'),
         '["ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad","e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"]',
+    )
+
+
+def test_top_level_imports_keep_source_order() raises:
+    """Top-level from-imports keep order and omit a nested import."""
+    var source = String("from a.b import c, d as e\n")
+    source += "def hidden():\n    from nested.mod import z\n"
+    source += "from a.b import (\n    f,\n    g as h,\n)\n"
+    source += "from .relative import item\n"
+    assert_equal(
+        _direct_imports_json(source),
+        '[{"module":"a.b","names":[["c",""],["d","e"]]},{"module":"a.b","names":[["f",""],["g","h"]]},{"module":"relative","names":[["item",""]]}]',
     )
 
 

@@ -118,6 +118,30 @@ def commute_legacy_text(text):
     return json.loads(result.stdout)
 
 
+def direct_imports(text):
+    """Return the top-level ``from`` imports in source order."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({'source': text}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='direct-imports-') as directory:
+        path = Path(directory) / 'payload.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--imports', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def binding_shadow(text, name, allowed_module='', allow_definition=False):
     """Reject a binding that shadows one reviewed helper name."""
     import os

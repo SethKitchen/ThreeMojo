@@ -2091,6 +2091,103 @@ def _binding_shadow(
         index += 1
 
 
+def _direct_imports_json(source: String) raises -> String:
+    """Return the top-level `from` imports in source order.
+
+    Args:
+        source: Mojo source.
+
+    Returns:
+        A JSON list of `module` and `names`. Each name is `[name, alias]`.
+        A relative prefix is omitted, matching Python `ImportFrom.module`.
+        The alias is empty when the import does not rename it.
+
+    Raises:
+        Error: The source cannot be tokenized.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var count = len(kinds)
+    var index = 0
+    var indent = 0
+    var doc = PyJson()
+    var rows = doc.new_list()
+    while index < count:
+        if kinds[index] == _INDENT:
+            indent += 1
+        elif kinds[index] == _DEDENT:
+            if indent > 0:
+                indent -= 1
+        elif indent == 0 and texts[index] == "from":
+            var module = String("")
+            var saw_import = False
+            var saw_name = False
+            index += 1
+            while index < count and texts[index] != "import":
+                if texts[index] == "." and not saw_name:
+                    pass
+                elif kinds[index] == _NAME or texts[index] == ".":
+                    if kinds[index] == _NAME:
+                        saw_name = True
+                    module += texts[index]
+                elif kinds[index] == _NEWLINE:
+                    break
+                index += 1
+            var names = doc.new_list()
+            if index < count and texts[index] == "import":
+                saw_import = True
+                index += 1
+                var depth = 0
+                while index < count:
+                    if texts[index] == "(":
+                        depth += 1
+                    elif texts[index] == ")":
+                        if depth > 0:
+                            depth -= 1
+                    elif kinds[index] == _NAME and texts[index] != "as":
+                        var bound = texts[index]
+                        var alias = String("")
+                        if (
+                            index + 2 < count
+                            and texts[index + 1] == "as"
+                            and kinds[index + 2] == _NAME
+                        ):
+                            alias = texts[index + 2]
+                            index += 2
+                        var pair = doc.new_list()
+                        doc.append(pair, doc.new_str(bound))
+                        doc.append(pair, doc.new_str(alias))
+                        doc.append(names, pair)
+                    elif kinds[index] == _NEWLINE and depth == 0:
+                        break
+                    index += 1
+            if saw_import:
+                var item = doc.new_dict()
+                doc.set(item, "module", doc.new_str(module))
+                doc.set(item, "names", names)
+                doc.append(rows, item)
+        index += 1
+    doc.root = rows
+    return doc.dumps()
+
+
+def direct_imports_payload(payload: String) raises -> String:
+    """Return the top-level `from` imports in one JSON document.
+
+    Args:
+        payload: JSON with `source`.
+
+    Returns:
+        A JSON list of module and name pairs.
+
+    Raises:
+        Error: The source cannot be tokenized.
+    """
+    var doc = PyJson.parse(payload)
+    return _direct_imports_json(doc.text(doc.at(doc.root, "source")))
+
+
 def binding_shadow_payload(payload: String) raises:
     """Reject a binding recorded in one JSON shadow document.
 

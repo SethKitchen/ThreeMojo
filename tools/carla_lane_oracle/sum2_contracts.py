@@ -32,10 +32,12 @@ from pathlib import Path
 
 if __package__:
     from .ideal_projection import (
-        binding_shadow, declaration, selected_block, verify_projection)
+        binding_shadow, declaration, direct_imports, selected_block,
+        verify_projection)
 else:
     from ideal_projection import (
-        binding_shadow, declaration, selected_block, verify_projection)
+        binding_shadow, declaration, direct_imports, selected_block,
+        verify_projection)
 
 
 def _syntax_tree(text):
@@ -319,6 +321,15 @@ def require(condition, message):
         raise ValueError(message)
 
 
+def _imported_groups(text, module):
+    groups = []
+    for item in direct_imports(text):
+        if item['module'] != module:
+            continue
+        groups.append([(name, alias or None) for name, alias in item['names']])
+    return groups
+
+
 def verify_binding(text, name, allowed_module='', allow_definition=False):
     """Reject every lexical binding form that could replace a reviewed helper."""
     try:
@@ -378,12 +389,8 @@ def verify(root, *, _operation=None):
             ('lane_geometry', ('_sum2_update', '_require_sum2_environment')),
             ('curve_bounds', ('_sum2_error_checked', '_sum2_supported_environment')),
             ('spiral_roundoff_proof', ('_sum2_error',))):
-        matches = [node for node in trees[module].body
-                   if isinstance(node, ast.ImportFrom)
-                   and node.module == 'extensions.carla.curve_sum2']
-        require(len(matches) == 1 and
-                [(alias.name, alias.asname) for alias in matches[0].names] ==
-                [(name, None) for name in helpers],
+        groups = _imported_groups(texts[module], 'extensions.carla.curve_sum2')
+        require(len(groups) == 1 and groups[0] == [(name, None) for name in helpers],
                 'Sum2 direct helper import changed: ' + module)
         for helper in helpers:
             verify_binding(
@@ -393,14 +400,13 @@ def verify(root, *, _operation=None):
     interval = _typed_source.historical_text(root, root / 'extensions/carla/curve_interval.mojo', source._observe_text(root, (root / 'extensions/carla/curve_interval.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_interval.mojo').read_text(), _operation=_operation), _operation=_operation)
     interval_tree = _syntax_tree(interval)
     _ = c.unique_function(interval_tree, '_stored_half')
-    half_imports = [node for node in trees['curve_bounds'].body
-                    if isinstance(node, ast.ImportFrom)
-                    and any(alias.name == '_stored_half' or alias.asname == '_stored_half'
-                            for alias in node.names)]
+    half_imports = [item for item in direct_imports(texts['curve_bounds'])
+                    if any(name == '_stored_half' or alias == '_stored_half'
+                           for name, alias in item['names'])]
     require(len(half_imports) == 1
-            and half_imports[0].module == 'extensions.carla.curve_interval'
-            and [(alias.name, alias.asname) for alias in half_imports[0].names
-                 if alias.name == '_stored_half' or alias.asname == '_stored_half']
+            and half_imports[0]['module'] == 'extensions.carla.curve_interval'
+            and [(name, alias or None) for name, alias in half_imports[0]['names']
+                 if name == '_stored_half' or alias == '_stored_half']
                 == [('_stored_half', None)], 'stored-half direct import changed')
     verify_binding(
         texts['curve_bounds'], '_stored_half',
