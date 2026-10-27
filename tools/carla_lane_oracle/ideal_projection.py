@@ -109,7 +109,7 @@ class CommuteLegacyRateHalf(ast.NodeTransformer):
 
 
 def project_sum2_text(text):
-    """Return the projected spiral source with reviewed Sum2 auxiliaries removed."""
+    """Return the projected spiral source and its stored-half arguments."""
     import os
     import subprocess
     import tempfile
@@ -128,7 +128,7 @@ def project_sum2_text(text):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return result.stdout
+    return json.loads(result.stdout)
 
 
 def check_stored_half(text):
@@ -288,21 +288,24 @@ def verify_projection(legacy, current, helper_text):
             getattr(current_tree, '_mojo_type_parameters', None) ==
             [('NAME', 'derivatives'), ('OP', ':'), ('NAME', 'Bool')],
             'changed ideal generic declaration')
+    commute = CommuteLegacyRateHalf()
+    left = commute.visit(left)
     if isinstance(current, str):
-        projected_source = project_sum2_text(current)
-        right = ast.parse(projected_source).body[0]
+        projected = project_sum2_text(current)
+        right = ast.parse(projected['source']).body[0]
         right._mojo_type_parameters = current_tree._mojo_type_parameters
+        arguments = projected['arguments']
     else:
-        right = project_sum2(current_tree)
-    commute, project = CommuteLegacyRateHalf(), ProjectHalf()
-    left, right = commute.visit(left), project.visit(right)
+        project = ProjectHalf()
+        right = project.visit(project_sum2(current_tree))
+        arguments = project.arguments
     require(commute.count == 2, 'expected exactly two historical rate-half commutations')
-    require(project.arguments == CALL_ARGUMENTS, 'expected exactly five reviewed stored-half calls')
+    require(arguments == CALL_ARGUMENTS, 'expected exactly five reviewed stored-half calls')
     require(dump(left) == dump(right), 'ideal expression differs beyond reviewed half projection')
     projected_bytes = dump(left).encode()
     _gate(projected_bytes, 'projected')
     projected = PROJECTED_SHA256
-    return {'helper_projections': len(project.arguments), 'rate_half_commutations': commute.count,
+    return {'helper_projections': len(arguments), 'rate_half_commutations': commute.count,
             'projected_ast_sha256': projected, 'sum2_auxiliary_declarations': 4,
             'sum2_term_definitions': 2, 'sum2_auxiliary_updates': 4, 'sum2_error_writes': 2,
             'sum2_environment_guards': 1}

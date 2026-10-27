@@ -84,6 +84,8 @@ It checks the stored-half helper result uses.
 
 It projects the Sum2 ideal spiral by removing the reviewed auxiliaries.
 
+It rewrites each stored-half call into a product with one half.
+
 It derives the stored moment rows in exact arithmetic.
 
 It checks the stored moment table against the derived words.

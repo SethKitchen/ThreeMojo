@@ -1797,24 +1797,68 @@ def _without_leading_newline(text: String) -> String:
     return out
 
 
+def _rewrite_stored_half(text: String) raises -> String:
+    """Rewrite each `_stored_half(name)` call into `name * half`.
+
+    Args:
+        text: Projected ideal source.
+
+    Returns:
+        JSON with the rewritten `source` and the call `arguments` in order.
+
+    Raises:
+        Error: A stored-half call is not one plain name.
+    """
+    var marker = "_stored_half ( "
+    var data = text.as_bytes()
+    var out = String("")
+    var names = List[String]()
+    var index = 0
+    while index < len(data):
+        if _starts_at(text, index, marker):
+            var name_at = index + marker.byte_length()
+            var name = _read_name(data, name_at)
+            var after = name_at + name.byte_length()
+            if name.byte_length() == 0 or not _starts_at(text, after, " )"):
+                raise Error("unreviewed stored-half call shape")
+            names.append(name)
+            out += name
+            out += " * Expression . constant ( 0.5 )"
+            index = after + 2
+        else:
+            out += chr(Int(data[index]))
+            index += 1
+    var doc = PyJson()
+    var root = doc.new_dict()
+    doc.set(root, "source", doc.new_str(out))
+    var arguments = doc.new_list()
+    for name in names:
+        doc.append(arguments, doc.new_str(name))
+    doc.set(root, "arguments", arguments)
+    doc.root = root
+    return doc.dumps()
+
+
 def project_sum2_source(source: String) raises -> String:
-    """Return the ideal spiral with the reviewed Sum2 auxiliaries removed.
+    """Return the projected spiral and its stored-half arguments.
 
     Args:
         source: Mojo source that contains `def _spiral_expression[`.
 
     Returns:
-        Source Python's parser accepts as the projected function.
+        JSON with `source` and `arguments`. Each stored-half call is a product
+        with one half.
 
     Raises:
-        Error: The declaration is not the reviewed Sum2 ideal layout.
+        Error: The declaration is not the reviewed Sum2 ideal layout, or a
+            stored-half call is not one plain name.
     """
     var normalized = ideal_function_source(source, "_spiral_expression")
     var expected = _without_leading_newline(_SUM2_IDEAL)
     var projected = _without_leading_newline(_SUM2_PROJECTED)
     if normalized != expected:
         raise Error("Sum2 complete ideal statement layout changed")
-    return projected
+    return _rewrite_stored_half(projected)
 
 
 def _starts_at(source: String, index: Int, prefix: String) -> Bool:
