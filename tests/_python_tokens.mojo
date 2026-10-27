@@ -8,7 +8,15 @@
 from std.memory import bitcast
 
 from tools._python_float import parse_float
-from tools._python_json import PyJson
+from tools._json_tools import quote_ascii
+from tools._python_json import (
+    PY_BOOL,
+    PY_DICT,
+    PY_LIST,
+    PY_NONE,
+    PY_STR,
+    PyJson,
+)
 from tools._sha256 import sha256_hex
 
 
@@ -4729,6 +4737,92 @@ def pin_transition_rows(payload: String) raises -> String:
         index += 1
     doc.root = rows
     return doc.dumps()
+
+
+def _emit(doc: PyJson, node: Int) raises -> String:
+    """Return JSON in stored key order, with no spaces.
+
+    Args:
+        doc: The document.
+        node: The value.
+
+    Returns:
+        The text `json.dumps` writes with `separators=(',', ':')`.
+
+    Raises:
+        Error: A nested list item cannot be read.
+    """
+    var kind = doc.kind(node)
+    if kind == PY_DICT:
+        var out = String("{")
+        var count = doc.length(node)
+        var index = 0
+        while index < count:
+            if index > 0:
+                out += ","
+            out += quote_ascii(doc.key(node, index))
+            out += ":"
+            out += _emit(doc, doc.value(node, index))
+            index += 1
+        out += "}"
+        return out
+    if kind == PY_LIST:
+        var out = String("[")
+        var count = doc.length(node)
+        var index = 0
+        while index < count:
+            if index > 0:
+                out += ","
+            out += _emit(doc, doc.item(node, index))
+            index += 1
+        out += "]"
+        return out
+    if kind == PY_STR:
+        return quote_ascii(doc.text(node))
+    if kind == PY_BOOL:
+        return "true" if doc.flag(node) else "false"
+    if kind == PY_NONE:
+        return "null"
+    return doc.text(node)
+
+
+def apply_pin_transitions(payload: String) raises -> String:
+    """Write each transition's historical value back into the pins.
+
+    Args:
+        payload: JSON with `pins` and `transitions`. Each transition has
+            `pointer` and `before`.
+
+    Returns:
+        The pins as compact JSON, in their stored key order.
+
+    Raises:
+        Error: A pointer is empty or a pointer key is absent.
+    """
+    var doc = PyJson.parse(payload)
+    var pins = doc.at(doc.root, "pins")
+    var transitions = doc.at(doc.root, "transitions")
+    var count = doc.length(transitions)
+    var index = 0
+    while index < count:
+        var change = doc.item(transitions, index)
+        var pointer = doc.at(change, "pointer")
+        var parts = doc.length(pointer)
+        if parts == 0:
+            raise Error("pin transition pointer is empty")
+        var parent = pins
+        var cursor = 0
+        while cursor < parts - 1:
+            parent = doc.at(parent, doc.text(doc.item(pointer, cursor)))
+            cursor += 1
+        var last = parts - 1
+        doc.set(
+            parent,
+            doc.text(doc.item(pointer, last)),
+            doc.copy_node(doc.at(change, "before")),
+        )
+        index += 1
+    return _emit(doc, pins)
 
 
 def selected_block(source: String, begin: String, end: String) raises -> String:

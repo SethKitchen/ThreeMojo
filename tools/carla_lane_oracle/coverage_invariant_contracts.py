@@ -157,12 +157,9 @@ def _apply_transitions(pins, transitions):
         import ideal_projection
     rows = ideal_projection.pin_transition_rows(pins, transitions)
     _gate_places(rows)
-    for change in transitions:
-        pointer = tuple(change['pointer'])
-        ref = pins
-        for part in pointer[:-1]:
-            ref = ref[part]
-        ref[pointer[-1]] = change['before']
+    updated = json.loads(ideal_projection.apply_pin_transitions(pins, transitions))
+    pins.clear()
+    pins.update(updated)
 
 
 def predecessor_pins(root, filename):
