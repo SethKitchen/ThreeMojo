@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Narrow semantic contracts for the reviewed canonical stored-term Sum2 graph.
 
-The literal declarations below are the reviewed mathematical/compiler source
-checkpoint, not an automatically refreshed digest. AST equality binds the
-original recurrence and arithmetic leaf. Complete lexical contracts retain
+The reviewed helper and caller texts are the source checkpoint, not an
+automatically refreshed digest. AST equality binds the original recurrence
+and arithmetic leaf. Complete lexical contracts retain
 the environment guard, keyword subscripts, callers and decorators; dependency
 and qualifier token gates separately cover the surrounding modules. The
 cleanup gate supplies the sampled declaration syntax. This checker cannot
@@ -40,226 +40,24 @@ else:
 # source bindings are preserved in sum2-correspondence-migration.json.
 REVIEWED_HELPER_SHA256 = '41995592963bae61a2b690b465bdad6c759b02ddbe98141ba5da30d0df5d5c8e'
 
-HELPER = '''
-from extensions.carla.curve_interval import _Interval
-from std.math import inf, isfinite
 
+def _checkpoints():
+    """Return the reviewed helper, scalar, envelope, and eligibility texts."""
+    import json
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sum2_checkpoints'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
 
-@no_inline
-def _sum2_update(
-    total: Float64, correction: Float64, term: Float64
-) -> Tuple[Float64, Float64]:
-    # Knuth TwoSum. The six separately rounded additions/subtractions recover
-    # the exact residual of total + term, including gradual underflow.
-    var high = total + term
-    var virtual_term = high - total
-    var virtual_total = high - virtual_term
-    var total_error = total - virtual_total
-    var term_error = term - virtual_term
-    var residual = total_error + term_error
-    return (high, correction + residual)
-
-
-def _sum2_error(
-    magnitude: Float64, inherited: Float64, count: Int
-) -> Float64:
-    # For every point in the complete input domain, magnitude bounds the sum
-    # of absolute stored terms and inherited bounds their total input error.
-    # Sum2: |computed - exact sum(stored terms)| <= u*|sum| + gamma_(n-1)^2*M.
-    # We conservatively use |sum| <= M. The guarded range keeps the ordinary
-    # partial sum, correction and every TwoSum subtraction below overflow.
-    if (
-        count < 1
-        or count > 1073741824
-        or not isfinite(magnitude)
-        or magnitude < 0.0
-        or magnitude > 8.452712498170644e270
-        or not isfinite(inherited)
-        or inherited < 0.0
-    ):
-        return inf[DType.float64]()
-    if magnitude == 0.0:
-        return inherited
-    if count == 1:
-        return inherited
-    var u = _Interval.point(1.1102230246251565e-16)
-    var nu = _Interval.point(Float64(count - 1)) * u
-    var gamma = nu / (_Interval.point(1.0) - nu)
-    return (
-        _Interval.point(inherited)
-        + (u + gamma * gamma) * _Interval.point(magnitude)
-    ).high
-'''
-
-SCALAR = '''
-def _lane_spiral(geometry: RoadGeometry, d: Float64) -> DirectedPoint:
-    var k0 = geometry.curvature_start
-    var rate = (
-        geometry.curvature_end - geometry.curvature_start
-    ) / geometry.length
-    var reach = max(abs(k0), abs(k0 + rate * d))
-    var pieces = 1 + Int(ceil(d * (1.0 + reach)))
-    var step = d / Float64(pieces)
-    var nodes = materialize[_GL_NODES]()
-    var weights = materialize[_GL_WEIGHTS]()
-    # Accumulate displacement before adding the origin. Repeatedly
-    # rounding a large world origin would discard small quadrature terms.
-    var x = Float64(0.0)
-    var y = Float64(0.0)
-    var x_correction = Float64(0.0)
-    var y_correction = Float64(0.0)
-    for piece in range(pieces):  # pragma: no branch
-        var start = step * Float64(piece)
-        for i in range(5):  # pragma: no branch
-            var t = start + step * 0.5 * (1.0 + nodes[i])
-            var theta = geometry.heading + t * (k0 + 0.5 * rate * t)
-            # Non-inlined Sum2 calls materialize the complete products.
-            # A named intermediate alone would not prevent contraction.
-            var next_x = _sum2_update(
-                x, x_correction, step * 0.5 * weights[i] * cos(theta)
-            )
-            var next_y = _sum2_update(
-                y, y_correction, step * 0.5 * weights[i] * sin(theta)
-            )
-            x = next_x[0]
-            x_correction = next_x[1]
-            y = next_y[0]
-            y_correction = next_y[1]
-    return DirectedPoint(
-        geometry.x + (x + x_correction),
-        geometry.y + (y + y_correction),
-        0.0,
-        geometry.heading + d * (k0 + 0.5 * rate * d),
-    )
-
-
-'''
-
-ENVELOPE = '''
-def _sum2_envelope_error(
-    term: _ValueJet, count: Int, origin: Float64
-) -> Float64:
-    if count < 1 or count > 320 or not isfinite(origin):
-        return inf[DType.float64]()
-    if (
-        not term.value.is_finite()
-        or not isfinite(term.error)
-        or term.error < 0.0
-    ):
-        return inf[DType.float64]()
-    var n = _Interval.point(Float64(count))
-    var absolute_sum = n * _Interval.point(term.rounded_value().magnitude())
-    var inherited = n * _Interval.point(term.error)
-    var error = _sum2_error(absolute_sum.high, inherited.high, count)
-    if not isfinite(error):
-        return inf[DType.float64]()
-    var ideal_magnitude = (n * _Interval.point(term.value.magnitude())).high
-    var accumulated = _ValueJet(
-        _Interval(-ideal_magnitude, ideal_magnitude),
-        _Interval.whole(),
-        _Interval.whole(),
-        error,
-    )
-    var translated = _ValueJet.constant(origin) + accumulated
-    if not translated.rounded_value().is_finite():
-        return inf[DType.float64]()
-    return translated.error
-
-
-'''
-
-
-ELIGIBILITY = '''
-def _try_spiral_roundoff_envelope(
-    geometry: RoadGeometry, d: _Jet, pieces: Int
-) -> Optional[Tuple[Float64, Float64]]:
-    # The caller supplies the original clamped distance Jet and fixed count.
-    # This does not enlarge the existing moment model's heading/k0 domain.
-    if (
-        geometry.kind != SPIRAL
-        or geometry.heading != 0.0
-        or geometry.curvature_start != 0.0
-    ):
-        return None
-    if (
-        pieces < 1
-        or pieces > 64
-        or not isfinite(geometry.length)
-        or geometry.length <= 0.0
-    ):
-        return None
-    if (
-        not isfinite(geometry.x)
-        or not isfinite(geometry.y)
-        or not isfinite(geometry.curvature_end)
-    ):
-        return None
-    var rate_value = (
-        geometry.curvature_end - geometry.curvature_start
-    ) / geometry.length
-    if not isfinite(rate_value):
-        return None
-    var domain = d.rounded_value()
-    if (
-        not domain.is_finite()
-        or domain.low <= 0.0
-        or domain.high >= geometry.length
-    ):
-        return None
-    if not d.value.is_finite() or not isfinite(d.error) or d.error < 0.0:
-        return None
-    var distance = _ValueJet(
-        d.value, _Interval.whole(), _Interval.whole(), d.error
-    )
-    var nodes = materialize[_GL_NODES]()
-    var weights = materialize[_GL_WEIGHTS]()
-    var node_low = 1.0 + nodes[0]
-    var node_high = node_low
-    var weight_low = weights[0]
-    var weight_high = weight_low
-    for i in range(1, 5):
-        var node = 1.0 + nodes[i]
-        node_low = min(node_low, node)
-        node_high = max(node_high, node)
-        weight_low = min(weight_low, weights[i])
-        weight_high = max(weight_high, weights[i])
-    var step = distance / _ValueJet.constant(Float64(pieces))
-    var start = step * _envelope_constant(0.0, Float64(pieces - 1))
-    var t = start + step * _ValueJet.constant(0.5) * _envelope_constant(
-        node_low, node_high
-    )
-    var theta = _ValueJet.constant(geometry.heading) + t * (
-        _ValueJet.constant(geometry.curvature_start)
-        + _ValueJet.constant(0.5) * _ValueJet.constant(rate_value) * t
-    )
-    # The complete original rounded phase-selection graph must select zero.
-    # No ideal beta*d*d estimate replaces the node-specific rounding graph.
-    var phase = theta.rounded_value()
-    if not phase.is_finite() or phase.magnitude() > _PHASE_LIMIT:
-        return None
-    var selection = (
-        theta * _ValueJet.constant(_INV_HALF_PI) + _ValueJet.constant(0.5)
-    ).rounded_value()
-    if (
-        not selection.is_finite()
-        or floor(selection.low) != 0.0
-        or floor(selection.high) != 0.0
-    ):
-        return None
-    var trig = _sincos_expression(theta)
-    var factor = (
-        step
-        * _ValueJet.constant(0.5)
-        * _envelope_constant(weight_low, weight_high)
-    )
-    var x = factor * trig[1]
-    var y = factor * trig[0]
-    var x_error = _sum2_envelope_error(x, 5 * pieces, geometry.x)
-    var y_error = _sum2_envelope_error(y, 5 * pieces, geometry.y)
-    if not isfinite(x_error) or not isfinite(y_error):
-        return None
-    return (x_error, y_error)
-'''
 
 def require(condition, message):
     if not condition:
@@ -395,20 +193,21 @@ def verify(root, *, _operation=None):
     # The complete lexical contract above retains all keyword-subscripts and
     # decorators. Separately relate the unchanged arithmetic leaf/recurrence
     # to the initial station-reviewed declarations using actual token spans.
+    checkpoints = _checkpoints()
     _graph_equal(
         declaration(texts['curve_sum2'], '_sum2_update'), '_sum2_update',
-        HELPER, '_sum2_update', 'Sum2 recurrence changed')
+        checkpoints['helper'], '_sum2_update', 'Sum2 recurrence changed')
     _graph_equal(
         declaration(texts['curve_sum2'], '_sum2_error_checked'),
-        '_sum2_error_checked', HELPER, '_sum2_error',
+        '_sum2_error_checked', checkpoints['helper'], '_sum2_error',
         'Sum2 checked arithmetic leaf changed', '_sum2_error')
     _graph_equal(
-        texts['lane_geometry'], '_lane_spiral', SCALAR, '_lane_spiral',
+        texts['lane_geometry'], '_lane_spiral', checkpoints['scalar'], '_lane_spiral',
         'Sum2 complete caller graph changed: _lane_spiral',
         drop_first=True, expect_first='_require_sum2_environment()')
     for module, name, expected in (
-            ('spiral_roundoff_proof', '_sum2_envelope_error', ENVELOPE),
-            ('spiral_roundoff_proof', '_try_spiral_roundoff_envelope', ELIGIBILITY)):
+            ('spiral_roundoff_proof', '_sum2_envelope_error', checkpoints['envelope']),
+            ('spiral_roundoff_proof', '_try_spiral_roundoff_envelope', checkpoints['eligibility'])):
         _graph_equal(
             texts[module], name, expected, name,
             'Sum2 complete caller graph changed: ' + name)
