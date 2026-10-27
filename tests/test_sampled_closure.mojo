@@ -35,6 +35,35 @@ def test_sampled_reference_names_stay_in_reviewed_order() raises:
             " review required"
         ),
     )
+    assert_equal(
+        doc.text(doc.at(doc.root, "reference_changed")),
+        "reference module changed; renewed review required: ",
+    )
+    assert_equal(
+        doc.text(doc.at(doc.root, "shared")),
+        "shared generic or full-Jet bridge changed: ",
+    )
+    assert_equal(
+        doc.text(doc.at(doc.root, "diverged")), "sampled helper diverged: "
+    )
+    assert_equal(
+        doc.text(doc.at(doc.root, "frame")), "sampled source frame changed"
+    )
+    assert_equal(
+        doc.text(doc.at(doc.root, "step")), "sampled projection step changed"
+    )
+    assert_equal(
+        doc.text(doc.at(doc.root, "function")),
+        "missing or ambiguous function: ",
+    )
+    assert_equal(
+        doc.text(doc.at(doc.root, "primitive_declaration")),
+        "unsupported primitive declaration",
+    )
+    assert_equal(
+        doc.text(doc.at(doc.root, "value_gate")), "sampled value gate: "
+    )
+    assert_equal(doc.text(doc.at(doc.root, "jet_gate")), "sampled jet gate: ")
 
 
 def main() raises:

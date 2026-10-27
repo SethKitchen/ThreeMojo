@@ -90,7 +90,7 @@ def require(condition, message):
 
 def function(text, name):
     matches = list(re.finditer(r'(?m)^def ' + re.escape(name) + r'[\[(]', text))
-    require(len(matches) == 1, 'missing or ambiguous function: ' + name)
+    require(len(matches) == 1, _sampled_closure()['function'] + name)
     match = matches[0]
     end = re.search(r'(?m)^(?:def |@)', text[match.end():])
     return text[match.start():match.end()+end.start() if end else len(text)]
@@ -139,7 +139,8 @@ def _sampled_text(mode, text, name='', index=None, replacement=None):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        for prefix in ('sampled value gate: ', 'sampled jet gate: '):
+        closure = _sampled_closure()
+        for prefix in (closure['value_gate'], closure['jet_gate']):
             if message.startswith(prefix):
                 message = message[len(prefix):]
         raise CheckError(message)
@@ -335,7 +336,7 @@ def graph(text):
 
 def unique_function(tree, name):
     found = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name]
-    require(len(found) == 1, 'missing or ambiguous function: ' + name)
+    require(len(found) == 1, _sampled_closure()['function'] + name)
     return found[0]
 
 
@@ -345,7 +346,7 @@ def primitive_graph(text):
     # The declaration count is a token check. The class hash below stays on
     # the Python syntax tree.
     _sampled_text('--primitive-declaration', text)
-    require(len(found) == 1, 'unsupported primitive declaration')
+    require(len(found) == 1, _sampled_closure()['primitive_declaration'])
     _sampled_text('--primitive-aliases', text)
     return hashlib.sha256(dump(found[0]).encode()).hexdigest()
 
@@ -363,9 +364,10 @@ def reviewed_reference_tree(text, root=ROOT, *, _operation=None):
             import full_audit_cleanup_contracts as full_audit
         except ModuleNotFoundError:
             from tools.carla_lane_oracle import full_audit_cleanup_contracts as full_audit
-        text = full_audit.reviewed_text(root, 'extensions/carla/curve_bounds.mojo', text, _operation=_operation)
+        closure = _sampled_closure()
+        text = full_audit.reviewed_text(root, 'extensions/carla/' + closure['reviewed'], text, _operation=_operation)
     except (ValueError, OSError) as error:
-        raise CheckError('reference module changed; renewed review required: curve_bounds.mojo: ' + str(error)) from error
+        raise CheckError(_sampled_closure()['reference_changed'] + _sampled_closure()['reviewed'] + ': ' + str(error)) from error
     # The reviewed no-counter-alias successor changes only optional admission.
     # Reconstruct its exact historical helper before the original projection;
     # every original reference graph digest remains unchanged.
@@ -376,7 +378,7 @@ def reviewed_reference_tree(text, root=ROOT, *, _operation=None):
             from tools.carla_lane_oracle import envelope_budget_contracts as budget
         previous = budget.historical_function(text, root=root)
     except ValueError as error:
-        raise CheckError('reference module changed; renewed review required: curve_bounds.mojo: ' + str(error)) from error
+        raise CheckError(_sampled_closure()['reference_changed'] + _sampled_closure()['reviewed'] + ': ' + str(error)) from error
     try:
         try:
             from ideal_projection import _try_only_gate
@@ -414,7 +416,7 @@ def _source_digests(blobs):
         raise ValueError(message)
     digests = json.loads(result.stdout)
     if len(digests) != len(blobs):
-        raise ValueError('sampled source frame changed')
+        raise ValueError(_sampled_closure()['frame'])
     return digests
 
 
@@ -581,7 +583,7 @@ def _project_sampled(bounds, trig, texts, names, copies):
             # 21..22: original trig and final output are retained, without slicing.
             expected[step['target']] = _sampled_text(step['mode'], old)
         else:
-            raise CheckError('sampled projection step changed')
+            raise CheckError(_sampled_closure()['step'])
     return expected
 
 
@@ -620,7 +622,7 @@ def verify(root):
             reference_graph = (dump(reviewed_reference_tree(texts[filename], root, _operation=_operation))
                                if filename == closure['reviewed'] else graph(texts[filename]))
             actual = hashlib.sha256(reference_graph.encode()).hexdigest()
-            require(actual == expected_hash, 'reference module changed; renewed review required: ' + filename)
+            require(actual == expected_hash, closure['reference_changed'] + filename)
         require(primitive_graph(texts[closure['primitive']]) == graphs['primitive'],
                 closure['primitive_message'])
         # Complete stored helper/interval closure and lexical qualifiers are
@@ -642,7 +644,7 @@ def verify(root):
             filename, name = key.split(':', 1)
             node = unique_function(reference_trees[filename], name)
             actual = hashlib.sha256(dump(node).encode()).hexdigest()
-            require(actual == expected_hash, 'shared generic or full-Jet bridge changed: ' + key)
+            require(actual == expected_hash, closure['shared'] + key)
         _sampled_text('--value-fields', target)
         try:
             for filename, text in texts.items():
@@ -660,7 +662,7 @@ def verify(root):
             wanted = unique_function(syntax_tree(source), name)
             actual = unique_function(target_tree, name)
             require(dump(wanted) == dump(actual),
-                    'sampled helper diverged: ' + name)
+                    closure['diverged'] + name)
         current_edges = audit.typed_successor_edges(root, _operation=_operation)
         observed = [audit._observe_bytes(
             root, path.relative_to(root).as_posix(), path.read_bytes(),

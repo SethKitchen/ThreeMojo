@@ -117,6 +117,8 @@ It keeps the sampled projection steps and their comparison texts.
 
 It keeps the sampled reference names and the closure groups.
 
+It keeps the sampled refusal messages.
+
 Mojo checks the sampled value copies.
 Ten helpers match their renamed jet sources.
 It names the eight copied helpers and their sampled names.
