@@ -30,10 +30,10 @@ from pathlib import Path
 
 if __package__:
     from .ideal_projection import (
-        declaration, selected_block, stored_half_tail, verify_projection)
+        selected_block, stored_half_tail, verify_projection)
 else:
     from ideal_projection import (
-        declaration, selected_block, stored_half_tail, verify_projection)
+        selected_block, stored_half_tail, verify_projection)
 
 
 # Initial accepted arithmetic checkpoint. The guarded and final format/doc
@@ -136,31 +136,20 @@ def _sum2_import_gate(mode, payload):
         raise ValueError(message)
 
 
-def _graph_equal(
-    left, left_name, right, right_name, message, rename='', *,
-    drop_first=False, expect_first='',
-):
-    """Require two Sum2 function dumps to match."""
+def _graph_batch(texts, checkpoints):
+    """Compare every reviewed Sum2 caller graph."""
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = {
-        'left': left, 'left_name': left_name, 'right': right,
-        'right_name': right_name, 'message': message,
-    }
-    if rename:
-        payload['rename'] = rename
-    if drop_first:
-        payload['drop_first'] = True
-    if expect_first:
-        payload['expect_first'] = expect_first
-    with tempfile.TemporaryDirectory(prefix='sum2-graph-') as directory:
+    payload = json.dumps(
+        {'texts': texts, 'checkpoints': checkpoints}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='sum2-graphs-') as directory:
         path = Path(directory) / 'payload.json'
-        path.write_text(json.dumps(payload, separators=(',', ':')))
+        path.write_text(payload)
         result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sum2_graph',
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sum2_graphs',
              str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
@@ -271,18 +260,7 @@ def verify(root, *, _operation=None):
     # The complete lexical contract above retains all keyword-subscripts and
     # decorators. Separately relate the unchanged arithmetic leaf/recurrence
     # to the initial station-reviewed declarations using actual token spans.
-    checkpoints = _checkpoints()
-    for item in plan['graphs']:
-        if 'slice' in item:
-            left = declaration(texts[item['module']], item['slice'])
-        else:
-            left = texts[item['module']]
-        _graph_equal(
-            left, item['left_name'], checkpoints[item['checkpoint']],
-            item['right_name'], item['message'],
-            item['rename'] if 'rename' in item else '',
-            drop_first=item['drop_first'] if 'drop_first' in item else False,
-            expect_first=item['expect_first'] if 'expect_first' in item else '')
+    _graph_batch(texts, _checkpoints())
     # Require the exact direct import inventory and reject all shadow forms.
     _sum2_import_gate('--helpers', {
         key: texts[helpers[key]] for key in helpers})

@@ -184,6 +184,8 @@ It keeps the reviewed Sum2 helper and caller texts.
 
 It keeps the four Sum2 module names and the five caller comparisons.
 
+It keeps the five Sum2 caller graphs in one comparison.
+
 It keeps the roundoff predecessor and the stored-half name.
 
 It keeps the ideal spiral block markers.

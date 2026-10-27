@@ -18,6 +18,7 @@ from tests._python_tokens import (
     _STRING,
     _tokenize,
     commute_legacy_source,
+    declaration_text,
     function_slice,
     ideal_function_source,
     project_sum2_source,
@@ -25,6 +26,7 @@ from tests._python_tokens import (
     syntax_tree_source,
 )
 from tools._python_float import parse_float
+from tools._sum2_plan import sum2_plan
 from tools._python_json import MISSING, PY_LIST, PY_STR, PyJson, py_equal
 
 
@@ -2369,6 +2371,79 @@ def sum2_graphs_match(payload: String) raises:
     )
     if left != right:
         raise Error(doc.text(doc.at(doc.root, "message")))
+
+
+def sum2_graph_batch(payload: String) raises:
+    """Compare every reviewed Sum2 caller graph.
+
+    Args:
+        payload: JSON with `texts` and `checkpoints`. `texts` maps each
+            module stem to its source. `checkpoints` maps each checkpoint
+            name to its reviewed source.
+
+    Raises:
+        Error: A helper is missing, or a caller graph changed.
+    """
+    var doc = PyJson.parse(payload)
+    var texts = doc.at(doc.root, "texts")
+    var checkpoints = doc.at(doc.root, "checkpoints")
+    var plan = PyJson.parse(sum2_plan())
+    var graphs = plan.at(plan.root, "graphs")
+    var count = plan.length(graphs)
+    var index = 0
+    while index < count:
+        var item = plan.item(graphs, index)
+        var module = plan.text(plan.at(item, "module"))
+        var left = doc.text(doc.at(texts, module))
+        if plan.get(item, "slice") != MISSING:
+            var owners = List[String]()
+            left = declaration_text(
+                left, plan.text(plan.at(item, "slice")), owners
+            )
+        var one = PyJson()
+        var root = one.new_dict()
+        one.set(root, "left", one.new_str(left))
+        one.set(
+            root,
+            "left_name",
+            one.new_str(plan.text(plan.at(item, "left_name"))),
+        )
+        one.set(
+            root,
+            "right",
+            one.new_str(
+                doc.text(
+                    doc.at(checkpoints, plan.text(plan.at(item, "checkpoint")))
+                )
+            ),
+        )
+        one.set(
+            root,
+            "right_name",
+            one.new_str(plan.text(plan.at(item, "right_name"))),
+        )
+        one.set(
+            root, "message", one.new_str(plan.text(plan.at(item, "message")))
+        )
+        if plan.get(item, "rename") != MISSING:
+            one.set(
+                root, "rename", one.new_str(plan.text(plan.at(item, "rename")))
+            )
+        if plan.get(item, "drop_first") != MISSING:
+            one.set(
+                root,
+                "drop_first",
+                one.new_bool(plan.flag(plan.at(item, "drop_first"))),
+            )
+        if plan.get(item, "expect_first") != MISSING:
+            one.set(
+                root,
+                "expect_first",
+                one.new_str(plan.text(plan.at(item, "expect_first"))),
+            )
+        one.root = root
+        sum2_graphs_match(one.dumps())
+        index += 1
 
 
 def _forbid_attribute(
