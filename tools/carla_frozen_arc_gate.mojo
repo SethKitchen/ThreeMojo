@@ -7,6 +7,7 @@
 
     carla_frozen_arc_gate --migration PATH [--previous PATH]
     carla_frozen_arc_gate --bytes PATH --sha HEX --kind after|before|guard
+    carla_frozen_arc_gate --source PATH --token HEX
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -16,6 +17,7 @@ An absent previous file checks only the migration record.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
+from tests._python_tokens import token_sha256
 from tools._python_json import MISSING, PY_DICT, PY_INT, PY_STR, PyJson
 from tools._sha256 import sha256_hex
 
@@ -127,12 +129,30 @@ def frozen_arc_digest(
     _fail("guard pin lineage changed")
 
 
+def frozen_arc_token(text: String, expected: String) raises:
+    """Require the frozen ARC successor token digest.
+
+    Args:
+        text: The historical module source.
+        expected: The required token digest.
+
+    Raises:
+        Error: The token digest changed.
+    """
+    if token_sha256(text) != expected:
+        raise Error(
+            "frozen ARC producer contract: complete frozen ARC successor"
+            " changed"
+        )
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_frozen_arc_gate --migration PATH [--previous PATH]"
             " | --bytes PATH --sha HEX --kind after|before|guard"
+            " | --source PATH --token HEX"
         ),
         file=stderr,
     )
@@ -150,6 +170,8 @@ def main() raises:
     var payload = String("")
     var digest = String("")
     var kind = String("")
+    var source = String("")
+    var token = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -160,6 +182,8 @@ def main() raises:
             or word == "--bytes"
             or word == "--sha"
             or word == "--kind"
+            or word == "--source"
+            or word == "--token"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -172,21 +196,37 @@ def main() raises:
                 payload = value
             elif word == "--sha":
                 digest = value
-            else:
+            elif word == "--kind":
                 kind = value
+            elif word == "--source":
+                source = value
+            else:
+                token = value
             index += 2
             continue
         _usage()
-    if (migration.byte_length() == 0) == (payload.byte_length() == 0):
+    var modes = 0
+    if migration.byte_length() > 0:
+        modes += 1
+    if payload.byte_length() > 0:
+        modes += 1
+    if source.byte_length() > 0:
+        modes += 1
+    if modes != 1:
         _usage()
     if payload.byte_length() > 0 and (
         digest.byte_length() == 0
         or (kind != "after" and kind != "before" and kind != "guard")
     ):
         _usage()
+    if source.byte_length() > 0 and token.byte_length() == 0:
+        _usage()
     if previous.byte_length() > 0 and migration.byte_length() == 0:
         _usage()
     try:
+        if source.byte_length() > 0:
+            frozen_arc_token(Path(source).read_text(), token)
+            return
         if payload.byte_length() > 0:
             frozen_arc_digest(Path(payload).read_bytes(), digest, kind)
             return

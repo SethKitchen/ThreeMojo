@@ -7,7 +7,11 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_frozen_arc_gate import frozen_arc_digest, frozen_arc_record
+from tools.carla_frozen_arc_gate import (
+    frozen_arc_digest,
+    frozen_arc_record,
+    frozen_arc_token,
+)
 
 
 def test_a_changed_record_is_refused() raises:
@@ -24,6 +28,17 @@ def test_a_changed_guard_pin_is_refused() raises:
         contains="frozen ARC producer contract: guard pin lineage changed"
     ):
         frozen_arc_digest(String("nope").as_bytes(), "00", "guard")
+
+
+def test_a_changed_successor_token_is_refused() raises:
+    """A source that does not have the recorded token digest fails closed."""
+    with assert_raises(
+        contains=(
+            "frozen ARC producer contract: complete frozen ARC successor"
+            " changed"
+        )
+    ):
+        frozen_arc_token("def changed():\n    pass\n", "00")
 
 
 def main() raises:

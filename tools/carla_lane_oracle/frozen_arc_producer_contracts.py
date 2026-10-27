@@ -76,6 +76,27 @@ def _gate(migration, previous=None):
         raise ValueError(message)
 
 
+def _gate_token(text, expected):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='frozen-arc-token-') as directory:
+        target = Path(directory) / 'source.mojo'
+        target.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
+             '--source', str(target), '--token', expected],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def _gate_digest(payload, expected, kind):
     import os
     import subprocess
@@ -179,10 +200,9 @@ def verify(root, *, _operation=None):
             raise
         raise ValueError('frozen ARC producer contract: unreviewed runtime pin successor') from error
     _gate_digest(guard_payload, record['guard_pins_unchanged_sha256'], 'guard')
-    require(source.token_sha256(_typed_source.historical_text(root, SOURCE_PATH, _observe_text(
-        root, SOURCE_PATH, (root/SOURCE_PATH).read_text(), _operation=_operation), _operation=_operation)) ==
-            record['source_successor']['after_token_sha256'],
-            'complete frozen ARC successor changed')
+    _gate_token(_typed_source.historical_text(root, SOURCE_PATH, _observe_text(
+        root, SOURCE_PATH, (root/SOURCE_PATH).read_text(), _operation=_operation), _operation=_operation),
+        record['source_successor']['after_token_sha256'])
     if __package__:
         from . import reviewed_cleanup_contracts as cleanup
     else:
