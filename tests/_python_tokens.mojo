@@ -325,6 +325,29 @@ def token_sha256(source: String) raises -> String:
     return sha256_hex(doc.dumps().as_bytes())
 
 
+def token_words(source: String) raises -> List[String]:
+    """Return the token texts, without layout tokens.
+
+    Args:
+        source: Mojo source.
+
+    Returns:
+        Names, numbers, strings and operators, in order.
+
+    Raises:
+        Error: The source cannot be tokenized.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var words = List[String]()
+    for index in range(len(kinds)):
+        var kind = kinds[index]
+        if kind != _NEWLINE and kind != _INDENT and kind != _DEDENT:
+            words.append(texts[index])
+    return words^
+
+
 def token_names(source: String) raises -> List[String]:
     """Return the NAME tokens of `source`, in order.
 

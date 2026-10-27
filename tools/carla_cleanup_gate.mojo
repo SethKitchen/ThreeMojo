@@ -10,6 +10,7 @@
     carla_cleanup_gate --sha-of PATH
     carla_cleanup_gate --tokens DIR
     carla_cleanup_gate --words PATH --kind trig|geometry --label PATH
+    carla_cleanup_gate --premises DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -24,6 +25,7 @@ from tests._python_tokens import (
     stored_scalar,
     stored_word_sha256,
     token_sha256,
+    token_words,
 )
 from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PY_STR, PyJson
 from tools._sha256 import sha256_hex
@@ -273,6 +275,60 @@ def cleanup_words(source: String, kind: String, label: String) raises:
         _fail("unchanged premise dependency changed: " + label)
 
 
+def cleanup_premises(directory: String) raises:
+    """Require each premise fragment once, in order.
+
+    Args:
+        directory: A directory with `labels.json` and `N.mojo` sources.
+
+    Raises:
+        Error: A fragment is missing, repeated, or out of order.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("unreviewed premise order")
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        var row = doc.item(doc.root, index)
+        var label = doc.text(doc.at(row, "label"))
+        var source = Path(directory + "/" + String(index) + ".mojo").read_text()
+        var actual = token_words(source)
+        var fragments = doc.at(row, "fragments")
+        if doc.kind(fragments) != PY_LIST:
+            _fail(label)
+        var previous = -1
+        var fragment_index = 0
+        var fragment_count = doc.length(fragments)
+        while fragment_index < fragment_count:
+            var expected = token_words(
+                doc.text(doc.item(fragments, fragment_index))
+            )
+            var limit = len(actual) - len(expected) + 1
+            var hits = 0
+            var found = -1
+            var start = 0
+            while start < limit:
+                var same = True
+                var offset = 0
+                while offset < len(expected):
+                    if actual[start + offset] != expected[offset]:
+                        same = False
+                        offset = len(expected)
+                    else:
+                        offset += 1
+                if same:
+                    hits += 1
+                    if hits == 1:
+                        found = start
+                start += 1
+            if hits != 1 or found <= previous:
+                _fail(label)
+            previous = found
+            fragment_index += 1
+        index += 1
+
+
 def cleanup_tokens(directory: String) raises:
     """Require each successor text to have its recorded token digest.
 
@@ -304,6 +360,7 @@ def _usage():
             "usage: carla_cleanup_gate --migration PATH [--previous PATH]"
             " | --bytes PATH --sha HEX | --sha-of PATH | --tokens DIR"
             " | --words PATH --kind trig|geometry --label PATH"
+            " | --premises DIR"
         ),
         file=stderr,
     )
@@ -325,6 +382,7 @@ def main() raises:
     var words = String("")
     var kind = String("")
     var label = String("")
+    var premises = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -339,6 +397,7 @@ def main() raises:
             or word == "--words"
             or word == "--kind"
             or word == "--label"
+            or word == "--premises"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -359,8 +418,10 @@ def main() raises:
                 words = value
             elif word == "--kind":
                 kind = value
-            else:
+            elif word == "--label":
                 label = value
+            else:
+                premises = value
             index += 2
             continue
         _usage()
@@ -379,6 +440,8 @@ def main() raises:
         or label.byte_length() > 0
     ):
         modes += 1
+    if premises.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if previous.byte_length() > 0 and migration.byte_length() == 0:
@@ -394,6 +457,9 @@ def main() raises:
     ):
         _usage()
     try:
+        if premises.byte_length() > 0:
+            cleanup_premises(premises)
+            return
         if words.byte_length() > 0:
             cleanup_words(Path(words).read_text(), kind, label)
             return

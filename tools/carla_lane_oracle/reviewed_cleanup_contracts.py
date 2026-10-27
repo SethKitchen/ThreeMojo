@@ -13,7 +13,6 @@ else:
 
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
-import tokenize
 
 if __package__:
     from . import source_contracts as source
@@ -187,21 +186,30 @@ def read_record(root):
     return record
 
 
-def words(text):
-    return [token.string for token in source.tokens(text) if token.type not in
-            (tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE, tokenize.INDENT,
-             tokenize.DEDENT, tokenize.ENDMARKER)]
-
-
-def ordered(text, fragments, label):
-    actual = words(text)
-    previous = -1
-    for fragment in fragments:
-        expected = words(fragment)
-        matches = [i for i in range(len(actual)-len(expected)+1)
-                   if actual[i:i+len(expected)] == expected]
-        require(len(matches) == 1 and matches[0] > previous, label)
-        previous = matches[0]
+def _gate_premises(groups):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='cleanup-premises-') as directory:
+        folder = Path(directory)
+        rows = []
+        for index, (text, fragments, label) in enumerate(groups):
+            (folder / f'{index}.mojo').write_text(text)
+            rows.append({'label': label, 'fragments': list(fragments)})
+        (folder / 'labels.json').write_text(json.dumps(rows))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--premises', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
 
 
 def verify_premises(root, *, _operation=None):
@@ -220,50 +228,52 @@ def verify_premises(root, *, _operation=None):
     junction = _typed_source.historical_text(root, SOURCE_PATHS[2], _observe_text(root, SOURCE_PATHS[2],
                          (root/SOURCE_PATHS[2]).read_text(), _operation=_operation), _operation=_operation)
     line_context = guard.declaration(line, '_rounded_line_axis_context', ())
-    ordered(line_context, (
-        'road._check_lane(section, lane)',
-        'if len(road.info.geometries) != 1: return None',
-        'not _RoundedBox.bounds(low, high).known',
-        'if info_index(road.info.geometries, low) != 0: return None',
-        'or info_index(road.info.lane_offsets, high) != offset_at',
-        'or info_index(road.info.elevations, high) != elevation_at',
-        'if width_at < 0 or info_index(widths, high) != width_at: return None',
-    ), 'LINE singleton/domain/low lookup and multi-record profile premises')
     arc_context = guard.declaration(arc, '_rounded_arc_context', ())
-    ordered(arc_context, (
-        'road._check_lane(section, lane)',
-        'if len(road.info.geometries) != 1: return None',
-        'if not _RoundedBox.bounds(low, high).known or high > road.length: return None',
-        'if info_index(road.info.geometries, low) != 0: return None',
-        'if len(road.info.lane_offsets) != 1 or len(road.info.elevations) != 1: return None',
-        'info_index(road.info.lane_offsets, low) != 0',
-        'or info_index(road.info.elevations, low) != 0',
-        'if len(widths) != 1: return None',
-        'if info_index(widths, low) != 0: return None',
-    ), 'ARC singleton/domain/low lookup premises')
     bounds = guard.declaration(arc, 'bounds', ('_RoundedBox',))
-    ordered(bounds, ('_rounded_operand(low)', '_rounded_operand(high)',
-                     'and low <= high'), 'ordered finite domain premise')
     center = guard.declaration(arc, 'center', ('_RoundedArc',))
-    ordered(center, (
-        'if not half.known: return [unknown, unknown, unknown]',
-        'var selector = _rounded_madd('
-        'half, _RoundedBox.point(_INV_HALF_PI), _RoundedBox.point(0.5))',
-        'if not selector.known or selector.low < 0.0 or selector.high >= 1.0: '
-        'return [unknown, unknown, unknown]',
-        'var square = half * half',
-    ), 'quarter implication requires the same accepted selector hull')
     outward = guard.declaration(junction, '_outward_float', ())
-    ordered(outward, (
-        'var result = Float32(value)',
-        'var outside: Bool',
-        'if lower: outside = Float64(result) > value',
-        'else: outside = Float64(result) < value',
-        'if outside:',
-        'UInt32(0x80000001) if lower else UInt32(1)',
-        'if (result > 0.0) == lower: bits -= 1 else: bits += 1',
-        'result = bitcast[DType.float32](bits)',
-    ), 'outward conversion direction and adjacent-word premises')
+    _gate_premises((
+        (line_context, (
+            'road._check_lane(section, lane)',
+            'if len(road.info.geometries) != 1: return None',
+            'not _RoundedBox.bounds(low, high).known',
+            'if info_index(road.info.geometries, low) != 0: return None',
+            'or info_index(road.info.lane_offsets, high) != offset_at',
+            'or info_index(road.info.elevations, high) != elevation_at',
+            'if width_at < 0 or info_index(widths, high) != width_at: return None',
+        ), 'LINE singleton/domain/low lookup and multi-record profile premises'),
+        (arc_context, (
+            'road._check_lane(section, lane)',
+            'if len(road.info.geometries) != 1: return None',
+            'if not _RoundedBox.bounds(low, high).known or high > road.length: return None',
+            'if info_index(road.info.geometries, low) != 0: return None',
+            'if len(road.info.lane_offsets) != 1 or len(road.info.elevations) != 1: return None',
+            'info_index(road.info.lane_offsets, low) != 0',
+            'or info_index(road.info.elevations, low) != 0',
+            'if len(widths) != 1: return None',
+            'if info_index(widths, low) != 0: return None',
+        ), 'ARC singleton/domain/low lookup premises'),
+        (bounds, ('_rounded_operand(low)', '_rounded_operand(high)',
+                  'and low <= high'), 'ordered finite domain premise'),
+        (center, (
+            'if not half.known: return [unknown, unknown, unknown]',
+            'var selector = _rounded_madd('
+            'half, _RoundedBox.point(_INV_HALF_PI), _RoundedBox.point(0.5))',
+            'if not selector.known or selector.low < 0.0 or selector.high >= 1.0: '
+            'return [unknown, unknown, unknown]',
+            'var square = half * half',
+        ), 'quarter implication requires the same accepted selector hull'),
+        (outward, (
+            'var result = Float32(value)',
+            'var outside: Bool',
+            'if lower: outside = Float64(result) > value',
+            'else: outside = Float64(result) < value',
+            'if outside:',
+            'UInt32(0x80000001) if lower else UInt32(1)',
+            'if (result > 0.0) == lower: bits -= 1 else: bits += 1',
+            'result = bitcast[DType.float32](bits)',
+        ), 'outward conversion direction and adjacent-word premises'),
+    ))
 
 
 

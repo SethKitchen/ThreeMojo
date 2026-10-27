@@ -40,6 +40,8 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the trig and geometry stored words, and the successor tokens.
 
+It checks that each reviewed premise fragment occurs once, in order.
+
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.

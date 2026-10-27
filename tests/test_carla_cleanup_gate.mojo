@@ -13,6 +13,7 @@ from tools.carla_cleanup_gate import (
     cleanup_digest,
     cleanup_record,
     cleanup_sha,
+    cleanup_premises,
     cleanup_tokens,
     cleanup_words,
 )
@@ -83,6 +84,27 @@ def test_a_changed_stored_word_is_refused() raises:
         )
     ):
         cleanup_words(source, "geometry", "extensions/carla/geometry.mojo")
+
+
+def test_a_repeated_premise_fragment_is_refused() raises:
+    """A premise fragment that occurs twice fails closed."""
+    var directory = "/tmp/cleanup-premises-test"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/labels.json").write_text(
+        '[{"label":"ordered finite domain premise","fragments":'
+        + '["_rounded_operand(low)"]}]'
+    )
+    Path(directory + "/0.mojo").write_text(
+        "def bounds():\n"
+        + "    _rounded_operand(low)\n"
+        + "    _rounded_operand(low)\n"
+    )
+    with assert_raises(
+        contains=(
+            "reviewed cleanup source contract: ordered finite domain premise"
+        )
+    ):
+        cleanup_premises(directory)
 
 
 def test_the_stored_word_digest_matches_sha256() raises:
