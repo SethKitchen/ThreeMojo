@@ -234,6 +234,8 @@ It checks the moment pin sets, paths, dependency closure, legacy digest, and res
 
 It keeps the moment array paths, scalar names, block boundaries, and routing paths.
 
+It keeps the moment dependency record and the check messages.
+
 It writes the canonical stored-moment table source.
 
 It returns one normalized source block between two markers.

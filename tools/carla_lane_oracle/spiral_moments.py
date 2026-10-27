@@ -42,15 +42,7 @@ SIGN = 1 << 63
 INFINITY = 0x7FF0000000000000
 MAX_FINITE = INFINITY - 1
 _MOMENT_FILES = None
-DEPENDENCIES = {
-    'group': 'stored_arithmetic',
-    'pin_file': 'tools/carla_lane_oracle/runtime-source-pins.json',
-    'paths': ['extensions/carla/curve_interval.mojo'] + [path for path in
-              source_contracts.GROUP_PATHS['canonical_accumulation']
-              if path != 'extensions/carla/curve_interval.mojo'],
-    'additional_groups': ['canonical_accumulation'],
-    'guard_pin_file': str(sum2_guard_contracts.PINS),
-}
+_MOMENT_PLAN = None
 
 
 class CheckError(ValueError):
@@ -333,6 +325,50 @@ def _word_count():
     return _moment_files()['words']
 
 
+def _moment_plan():
+    """Return the moment dependency record and the check messages."""
+    global _MOMENT_PLAN
+    if _MOMENT_PLAN is not None:
+        return _MOMENT_PLAN
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_check_plan'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    _MOMENT_PLAN = json.loads(result.stdout)
+    return _MOMENT_PLAN
+
+
+_DEPENDENCIES_READY = False
+
+
+def _dependencies():
+    """Return the dependency record, with paths from the accumulation group."""
+    global DEPENDENCIES, _DEPENDENCIES_READY
+    if _DEPENDENCIES_READY:
+        return DEPENDENCIES
+    plan = _moment_plan()
+    interval = plan['interval']
+    group = plan['additional_groups'][0]
+    DEPENDENCIES = {
+        'group': plan['group'],
+        'pin_file': plan['pin_file'],
+        'paths': [interval] + [path for path in source_contracts.GROUP_PATHS[group]
+                               if path != interval],
+        'additional_groups': list(plan['additional_groups']),
+        'guard_pin_file': str(sum2_guard_contracts.PINS),
+    }
+    _DEPENDENCIES_READY = True
+    return DEPENDENCIES
+
+
 def __getattr__(name):
     if name == 'ARRAY_SPECS':
         return _array_specs()
@@ -350,11 +386,13 @@ def __getattr__(name):
         return _table()
     if name == 'WORD_COUNT':
         return _word_count()
+    if name == 'DEPENDENCIES':
+        return _dependencies()
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def _require_moment_pins(pins):
-    spec = _moment_pin_spec(DEPENDENCIES)
+    spec = _moment_pin_spec(_dependencies())
     try:
         ideal_projection.require_moment_pins(pins, spec)
     except ValueError as error:
@@ -362,6 +400,8 @@ def _require_moment_pins(pins):
 
 
 def verify_inputs(root):
+    messages = _moment_plan()['messages']
+    arrays = _moment_plan()['arrays']
     pins = json.loads(_typed_source.historical_text(root, root / _pins(), (root / _pins()).read_text(encoding='utf-8')),
                       object_pairs_hook=source_contracts.unique_keys)
     _require_moment_pins(pins)
@@ -373,14 +413,14 @@ def verify_inputs(root):
         words = parse_array(_typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8')),
                             name, len(record['words']))
         _require_stored_words(words, record['words'],
-                              'stored constant words changed: ' + name)
+                              messages['stored_words'] + name)
         stored_words[name] = words
         flat_words.extend(words)
         flat_names.append(name)
     texts = _fraction_texts(flat_words)
     _moment_guard('--count', {
         'left': len(texts), 'right': len(flat_words),
-        'message': 'invalid UInt64 word'})
+        'message': messages['invalid_word']})
     cursor = 0
     for name in flat_names:
         size = len(stored_words[name])
@@ -388,9 +428,8 @@ def verify_inputs(root):
         cursor += size
     _moment_guard('--names', {
         'names': list(constants),
-        'expected': ['_GL_NODES', '_GL_WEIGHTS', '_COS_COEFFICIENTS',
-                     '_SIN_COEFFICIENTS'],
-        'message': 'wrong constant-array set'})
+        'expected': list(arrays),
+        'message': messages['array_set']})
     constants['_words'] = stored_words
     scalar_names = []
     scalar_literals = []
@@ -407,10 +446,10 @@ def verify_inputs(root):
     scalar_words = _rounded_words(scalar_literals)
     _moment_guard('--count', {
         'left': len(scalar_words), 'right': len(scalar_names),
-        'message': 'binary64 overflow'})
+        'message': messages['overflow']})
     for name, record, word in zip(scalar_names, scalar_records, scalar_words):
         _require_stored_words([word], [record['word']],
-                              'stored scalar word changed: ' + name)
+                              messages['scalar_word'] + name)
     blocks = {}
     block_items = []
     for name, record in pins['blocks'].items():
@@ -430,38 +469,39 @@ def verify_inputs(root):
         expected = record['normalized_tokens']
         try:
             ideal_projection.require_text_digest(
-                expected, record['sha256'], 'inconsistent routing pin: ' + name)
+                expected, record['sha256'], messages['routing_pin'] + name)
         except ValueError as error:
             raise CheckError(str(error)) from error
         source = _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))
         current = ideal_projection.module_routing(source, set(_array_specs()) | _scalar_names())
-        if name == 'ideal_caller':
+        if name == _moment_plan()['ideal_caller']:
             # Keep the historical routing pin. Validate the exact additive
             # try-only refusal, then project only its default-False parameter.
             try:
                 ideal_projection.verify_try_only_reference(source, root)
             except ValueError as error:
                 raise CheckError(
-                    'source routing changed: ' + name + ': ' + str(error)) from error
+                    messages['routing'] + name + ': ' + str(error)) from error
             try:
                 current = ideal_projection.strip_try_only(current)
             except ValueError as error:
                 raise CheckError(str(error)) from error
         try:
             ideal_projection.require_same_text(
-                current, expected, 'source routing changed: ' + name)
+                current, expected, messages['routing'] + name)
         except ValueError as error:
             raise CheckError(str(error)) from error
     try:
-        source_contracts.verify_group(root, 'stored_arithmetic')
+        source_contracts.verify_group(root, _dependencies()['group'])
     except ValueError as error:
-        raise CheckError('stored-half dependency closure: ' + str(error)) from error
+        raise CheckError(messages['closure'] + str(error)) from error
     projection = pins['ideal_projection']
     try:
         ideal_projection.require_legacy_digest(
             projection['legacy_sha256'], ideal_projection.LEGACY_SHA256)
     except ValueError as error:
         raise CheckError(str(error)) from error
+    _dependencies()
     interval = _typed_source.historical_text(root, root / DEPENDENCIES['paths'][0], (root / DEPENDENCIES['paths'][0]).read_text(encoding='utf-8'))
     try:
         helper = ideal_projection.stored_half_tail(interval)
@@ -471,7 +511,7 @@ def verify_inputs(root):
         result = ideal_projection.verify_projection(
             projection['legacy_normalized_source'], blocks['ideal_spiral'], helper)
     except ValueError as error:
-        raise CheckError('ideal half projection: ' + str(error)) from error
+        raise CheckError(messages['projection'] + str(error)) from error
     try:
         ideal_projection.require_projection_result(
             {key: projection[key] for key in result}, result)
@@ -481,17 +521,17 @@ def verify_inputs(root):
     # successor rechecks its immutable historical hash. Keep the complete
     # interval/helper dependency check above, and all transitive checks here.
     try:
-        source_contracts.verify_group(root, 'canonical_accumulation')
+        source_contracts.verify_group(root, _dependencies()['additional_groups'][0])
         sum2_contracts.verify(root)
     except ValueError as error:
-        raise CheckError('stored-half dependency closure: ' + str(error)) from error
+        raise CheckError(messages['closure'] + str(error)) from error
     try:
         sums = ideal_projection.rounded_node_sums(
-            stored_words['_GL_NODES'], stored_words['_GL_WEIGHTS'])
+            stored_words[_moment_plan()['nodes']], stored_words[_moment_plan()['weights']])
     except ValueError as error:
         raise CheckError(str(error)) from error
     _require_stored_words(sums, pins['rounded_node_sums'],
-                          'rounded 1 + node words changed')
+                          messages['node_sums'])
     constants['node_sums'] = [F(text) for text in _fraction_texts(sums)]
     return constants, pins
 
@@ -541,7 +581,7 @@ def parse_table(data):
     try:
         text = data.decode('utf-8')
     except UnicodeDecodeError as error:
-        raise CheckError('table is not UTF-8') from error
+        raise CheckError(_moment_plan()['messages']['utf8']) from error
     try:
         words = ideal_projection.moment_words(text, _word_count())
     except ValueError as error:
@@ -553,7 +593,7 @@ def verify_table(data, rows):
     try:
         text = data.decode('utf-8')
     except UnicodeDecodeError as error:
-        raise CheckError('table is not UTF-8') from error
+        raise CheckError(_moment_plan()['messages']['utf8']) from error
     try:
         return ideal_projection.verify_moment_table(text, _coefficient_words(rows))
     except ValueError as error:
@@ -564,7 +604,7 @@ def make_report(root, rows, pins):
     payload = _moment_payload(rows)
     projection = pins['ideal_projection']
     meta = ideal_projection.moment_meta(
-        payload, str(root.resolve()), projection, DEPENDENCIES,
+        payload, str(root.resolve()), projection, _dependencies(),
         pins['routing'], pins['blocks'])
     blobs = [
         _typed_source.historical_bytes(root, root / _pins(), (root / _pins()).read_bytes()),
@@ -606,7 +646,7 @@ def main(argv=None):
                                                         str(root / 'out/carla-lane-oracle')))
             # Never let an output option overwrite tracked source inputs/tools.
             protected = [root / _table(), root / _pins(), Path(__file__).resolve(),
-                         root / source_contracts.PINS, root / sum2_guard_contracts.PINS] + [root / path for path in DEPENDENCIES['paths']] + [root / record['path']
+                         root / source_contracts.PINS, root / sum2_guard_contracts.PINS] + [root / path for path in _dependencies()['paths']] + [root / record['path']
                          for group in ('arrays', 'scalars', 'blocks', 'routing')
                          for record in pins[group].values()]
             if __package__:
