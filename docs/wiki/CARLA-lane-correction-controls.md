@@ -80,6 +80,8 @@ It keeps the four coverage-invariant source paths.
 
 It keeps the six extra coverage-invariant inputs.
 
+It keeps the pin file names, the prior record, and the successor message.
+
 It keeps a component name inside its directory.
 
 It uses the last path part as the pin file name.

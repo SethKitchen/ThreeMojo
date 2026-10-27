@@ -140,16 +140,43 @@ def _gate_digest(payload, expected, kind, label):
         raise ValueError(message)
 
 
+_INVARIANT_LABELS = None
+
+
+def _invariant_labels():
+    """Return the pin file names, the prior record, and the messages."""
+    global _INVARIANT_LABELS
+    if _INVARIANT_LABELS is not None:
+        return _INVARIANT_LABELS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_invariant_labels'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _INVARIANT_LABELS = json.loads(result.stdout)
+    return _INVARIANT_LABELS
+
+
 def read_record(root):
+    labels = _invariant_labels()
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
-    prior = root/'tools/carla_lane_oracle/frozen-arc-producer-migration.json'
+    prior = root/labels['prior']
     prior_bytes = _typed_source.historical_bytes(root, prior, prior.read_bytes())
     _gate(payload, prior_bytes)
     components = []
+    oracle = labels['oracle']
     for name, _expected in record['components'].items():
-        components.append((name, _typed_source.historical_bytes(root, root/'tools/carla_lane_oracle'/name, (root/'tools/carla_lane_oracle'/name).read_bytes())))
+        components.append((name, _typed_source.historical_bytes(root, root/oracle/name, (root/oracle/name).read_bytes())))
     _gate(payload, prior_bytes, components)
     return record
 
@@ -279,11 +306,12 @@ def predecessor_pins(root, filename):
     else:
         import coverage_followup_contracts as followup
     payload = followup.predecessor_pins(root, filename)
-    _gate_digest(payload, record['after_sha256'], 'after', filename)
+    labels = _invariant_labels()
+    _gate_digest(payload, record['after_sha256'], labels['after'], filename)
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
     _apply_transitions(pins, record['transitions'])
     original = _indent_json(pins)
-    _gate_digest(original, record['before_sha256'], 'before', filename)
+    _gate_digest(original, record['before_sha256'], labels['before'], filename)
     return original
 
 def verify(root, *, _operation=None):
@@ -312,7 +340,7 @@ def verify(root, *, _operation=None):
                     else:
                         import coverage_followup_contracts as followup
                     matches = followup.accepts_predecessor_source(root,path,item['after_token_sha256'], **operation_args)
-                require(matches, 'complete successor changed: ' + path)
+                require(matches, _invariant_labels()['successor'] + path)
             curve.verify(root, **operation_args)
             grouped.verify(root, **operation_args)
             if __package__:
@@ -338,11 +366,12 @@ def _verify_owned(root, *, _operation):
 
 
 def _pin_predecessor(payload, record, filename):
-    _gate_digest(payload, record['after_sha256'], 'after', filename)
+    labels = _invariant_labels()
+    _gate_digest(payload, record['after_sha256'], labels['after'], filename)
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
     _apply_transitions(pins, record['transitions'])
     original = _indent_json(pins)
-    _gate_digest(original, record['before_sha256'], 'before', filename)
+    _gate_digest(original, record['before_sha256'], labels['before'], filename)
     return original
 
 
@@ -371,7 +400,7 @@ def _predecessor_pin_pair(root, *, _operation=None):
         ValueError: A record, inner qualification, or pin reconstruction fails.
         OSError: A required input cannot be read.
     """
-    filenames = ('runtime-source-pins.json', 'sum2-guard-pins.json')
+    filenames = tuple(_invariant_labels()['filenames'])
     runtime_record = read_record(root)
     _gate_pair(runtime_record['pin_files'])
     runtime_item = runtime_record['pin_files'][filenames[0]]
