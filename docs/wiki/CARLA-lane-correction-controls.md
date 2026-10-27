@@ -24,6 +24,8 @@ It restores one selection function inside its line span.
 
 `tools/carla_grouped_gate.mojo` checks the grouped-table token digest and the stored node and weight bounds.
 
+It keeps the grouped proof module and its token digest.
+
 It compares that grouped-table token digest before the predecessor fallback.
 
 `tools/carla_y_gate.mojo` checks the five Y-finiteness token digests, the successor record digests, and the module token identity.

@@ -25,6 +25,7 @@ from tools._spiral_moment_words import fraction_of_word
 comptime _TOKEN = (
     "3fcfc637a40c4e322b5747f27f8d77163c3f47a49d1092b37c20744cafecba40"
 )
+comptime _MODULE = "extensions/carla/spiral_grouped_roundoff_proof.mojo"
 comptime _CONSUMER = (
     "0e42c79e3bbda283c32886e50ad8b1acd614f651f1d258f4ea4b5e4e0e139299"
 )
@@ -118,6 +119,15 @@ def grouped_table(module: String, geometry: String) raises -> String:
     return _PASS
 
 
+def grouped_table_identity() -> String:
+    """Return the grouped proof module and its token digest.
+
+    Returns:
+        JSON with `module` and `token`.
+    """
+    return '{"module":"' + _MODULE + '","token":"' + _TOKEN + '"}'
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -128,7 +138,11 @@ def _usage():
 
 
 def main() raises:
-    """Check two source files and print the pass record."""
+    """Check two source files and print the pass record.
+
+    Raises:
+        Error: The command is invalid, or a grouped-table check fails.
+    """
     var module = String("")
     var geometry = String("")
     var arguments = argv()
