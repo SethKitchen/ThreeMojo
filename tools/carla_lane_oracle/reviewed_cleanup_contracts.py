@@ -318,10 +318,31 @@ def verify_premises(root, *, _operation=None):
 
 # Only the two explicit reviewed constant sets have a stored-word contract.
 # Every other token, including indentation and statement boundaries, stays bound.
-TRIG_PATH = 'extensions/carla/curve_trig.mojo'
-TRIG_TOKEN_SHA256 = '523d5700201b957152eaa79ae6cce9ca8cb9a2a0098d5b105584667360a6de7f'
-GEOMETRY_PATH = 'extensions/carla/geometry.mojo'
-GEOMETRY_TOKEN_SHA256 = 'a1979bd37d0ea725f452e0a0a269c7aaef3cda485b291e8fe79b49b35850adcb'
+_DEPENDENCY_PINS = None
+
+
+def _dependency_pins():
+    """Return the trig and geometry paths and token digests."""
+    global _DEPENDENCY_PINS
+    if _DEPENDENCY_PINS is not None:
+        return _DEPENDENCY_PINS
+    import json
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+         'carla_cleanup_dependency_pins'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _DEPENDENCY_PINS = json.loads(result.stdout)
+    return _DEPENDENCY_PINS
 
 
 def _gate_words(text, kind, label):
@@ -353,14 +374,15 @@ def _dependency_choice(token, expected, path):
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    pins = _dependency_pins()
     payload = json.dumps({
         'token': token,
         'expected': expected,
         'path': path,
-        'trig_path': TRIG_PATH,
-        'trig_token': TRIG_TOKEN_SHA256,
-        'geometry_path': GEOMETRY_PATH,
-        'geometry_token': GEOMETRY_TOKEN_SHA256,
+        'trig_path': pins['trig_path'],
+        'trig_token': pins['trig_token'],
+        'geometry_path': pins['geometry_path'],
+        'geometry_token': pins['geometry_token'],
     }, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='dependency-words-') as directory:
         record = Path(directory) / 'choice.json'
