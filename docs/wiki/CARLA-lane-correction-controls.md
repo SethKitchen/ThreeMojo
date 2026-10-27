@@ -132,6 +132,8 @@ It drops comments and blank lines from one source block.
 
 It reads the stored moment words from the generated table.
 
+It rounds one exact fraction to binary64.
+
 It writes the canonical stored-moment table source.
 
 It returns one normalized source block between two markers.

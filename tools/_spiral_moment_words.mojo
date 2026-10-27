@@ -224,20 +224,83 @@ def nearest_even(value: Fraction) raises -> UInt64:
     return high
 
 
-def _decimal(token: String) raises -> Fraction:
-    """Return the exact value of one decimal literal.
+def _slash_fraction(token: String) raises -> Fraction:
+    """Return the exact value of one integer fraction.
 
     Args:
-        token: A decimal number, with an optional sign and exponent.
+        token: Two integers separated by `/`, with an optional sign and spaces.
+
+    Returns:
+        The exact rational. A negative zero numerator keeps the sign for the
+        caller.
+
+    Raises:
+        Error: `token` is not one integer fraction, or the denominator is zero.
+    """
+    var bytes = token.as_bytes()
+    var index = 0
+    while index < len(bytes) and (bytes[index] == 9 or bytes[index] == 32):
+        index += 1
+    _require(index < len(bytes), "unsupported decimal word")
+    var negative = False
+    if bytes[index] == 43 or bytes[index] == 45:
+        negative = bytes[index] == 45
+        index += 1
+    var numerator = BigInt(0)
+    var saw_numerator = False
+    while index < len(bytes) and bytes[index] >= 48 and bytes[index] <= 57:
+        numerator = numerator * BigInt(10) + BigInt(Int(bytes[index]) - 48)
+        saw_numerator = True
+        index += 1
+    _require(saw_numerator, "unsupported decimal word")
+    while index < len(bytes) and (bytes[index] == 9 or bytes[index] == 32):
+        index += 1
+    _require(
+        index < len(bytes) and bytes[index] == 47, "unsupported decimal word"
+    )
+    index += 1
+    while index < len(bytes) and (bytes[index] == 9 or bytes[index] == 32):
+        index += 1
+    var denominator = BigInt(0)
+    var saw_denominator = False
+    var nonzero = False
+    while index < len(bytes) and bytes[index] >= 48 and bytes[index] <= 57:
+        var digit = Int(bytes[index]) - 48
+        if digit != 0:
+            nonzero = True
+        denominator = denominator * BigInt(10) + BigInt(digit)
+        saw_denominator = True
+        index += 1
+    _require(saw_denominator and nonzero, "unsupported decimal word")
+    while index < len(bytes) and (bytes[index] == 9 or bytes[index] == 32):
+        index += 1
+    _require(index == len(bytes), "unsupported decimal word")
+    var value = Fraction.of(numerator, denominator)
+    if negative:
+        return -value
+    return value^
+
+
+def _decimal(token: String) raises -> Fraction:
+    """Return the exact value of one decimal literal or integer fraction.
+
+    Args:
+        token: A decimal number, with an optional sign and exponent, or two
+            integers separated by `/`.
 
     Returns:
         The exact rational. `-0.0` is zero.
 
     Raises:
-        Error: `token` is not a decimal literal.
+        Error: `token` is not a decimal literal or one integer fraction.
     """
     var bytes = token.as_bytes()
     _require(len(bytes) > 0, "unsupported decimal word")
+    var scan = 0
+    while scan < len(bytes):
+        if bytes[scan] == 47:
+            return _slash_fraction(token)
+        scan += 1
     var index = 0
     var negative = False
     if bytes[0] == 43 or bytes[0] == 45:
@@ -299,16 +362,17 @@ def _decimal(token: String) raises -> Fraction:
 
 
 def decimal_word(token: String) raises -> UInt64:
-    """Return the binary64 encoding of one decimal literal.
+    """Return the binary64 encoding of one decimal literal or integer fraction.
 
     Args:
-        token: A decimal number, with an optional sign.
+        token: A decimal number, with an optional sign, or two integers
+            separated by `/`.
 
     Returns:
         The nearest encoding, ties to even. `-0.0` keeps its sign.
 
     Raises:
-        Error: `token` is not a finite decimal literal.
+        Error: `token` is not a finite decimal literal or integer fraction.
     """
     var value = _decimal(token)
     if value.is_zero() and token.startswith("-"):

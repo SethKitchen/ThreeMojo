@@ -522,17 +522,17 @@ def _u64_hex(word: UInt64) -> String:
 
 
 def decimal_words_json(payload: String) raises -> String:
-    """Round each decimal literal to its nearest binary64 word.
+    """Round each decimal literal or integer fraction to binary64.
 
     Args:
-        payload: A JSON list of decimal literal spellings.
+        payload: A JSON list of decimal literals or integer fractions.
 
     Returns:
         A JSON list of `0x` words. Each word has 16 hexadecimal digits.
         `-0.0` keeps its sign.
 
     Raises:
-        Error: A literal is not a finite decimal number.
+        Error: A literal is not a finite decimal number or integer fraction.
     """
     var doc = PyJson.parse(payload)
     var count = doc.length(doc.root)

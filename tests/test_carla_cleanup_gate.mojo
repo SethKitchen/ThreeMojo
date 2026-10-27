@@ -469,12 +469,16 @@ def test_a_repeated_premise_fragment_is_refused() raises:
 
 
 def test_a_decimal_literal_rounds_to_binary64() raises:
-    """Signed zero and one tenth keep their binary64 words."""
+    """Signed zero, one tenth, and an exact fraction keep their words."""
     assert_equal(
-        decimal_words_json('["0.0","-0.0","0.1","-0.1"]'),
+        decimal_words_json(
+            '["0.0","-0.0","0.1","-0.1","1/2","-1/3","2/4","-0/1"]'
+        ),
         (
             '["0x0000000000000000","0x8000000000000000",'
-            + '"0x3FB999999999999A","0xBFB999999999999A"]'
+            + '"0x3FB999999999999A","0xBFB999999999999A",'
+            + '"0x3FE0000000000000","0xBFD5555555555555",'
+            + '"0x3FE0000000000000","0x8000000000000000"]'
         ),
     )
 
