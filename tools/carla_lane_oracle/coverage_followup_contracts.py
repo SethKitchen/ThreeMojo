@@ -6,7 +6,6 @@ if __package__:
 else:
     import source_contracts as _typed_source
 
-import hashlib
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 if __package__:
@@ -115,12 +114,33 @@ def read_record(root):
     _gate(payload, prior_bytes, components)
     return record
 
+def _gate_digest(payload, expected, kind, label):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='followup-digest-') as directory:
+        target = Path(directory) / 'pin'
+        target.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_followup_gate',
+             '--bytes', str(target), '--sha', expected, '--kind', kind,
+             '--label', label],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def predecessor_pins(root, filename):
     filename = str(filename).split('/')[-1]
     record = read_record(root)['pin_files'][filename]
     payload = accepted.predecessor_pins(root, filename)
-    require(hashlib.sha256(payload).hexdigest() == record['after_sha256'],
-            'unreviewed runtime pin successor: ' + filename)
+    _gate_digest(payload, record['after_sha256'], 'after', filename)
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
     seen = set()
     for change in record['transitions']:
@@ -132,8 +152,7 @@ def predecessor_pins(root, filename):
         require(ref[pointer[-1]] == change['after'], 'active pin placement mismatch')
         ref[pointer[-1]] = change['before']
     payload = (json.dumps(pins,indent=2)+'\n').encode()
-    require(hashlib.sha256(payload).hexdigest() == record['before_sha256'],
-            'historical pin reconstruction failed')
+    _gate_digest(payload, record['before_sha256'], 'before', filename)
     return payload
 
 def _source_view(root, path, physical_text, *, _operation=None):
@@ -184,8 +203,7 @@ def accepts_predecessor_source(root,path,expected, *, _operation=None):
 
 
 def _pin_predecessor(payload, record, filename):
-    require(hashlib.sha256(payload).hexdigest() == record['after_sha256'],
-            'unreviewed runtime pin successor: ' + filename)
+    _gate_digest(payload, record['after_sha256'], 'after', filename)
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
     seen = set()
     for change in record['transitions']:
@@ -197,8 +215,7 @@ def _pin_predecessor(payload, record, filename):
         require(ref[pointer[-1]] == change['after'], 'active pin placement mismatch')
         ref[pointer[-1]] = change['before']
     payload = (json.dumps(pins,indent=2)+'\n').encode()
-    require(hashlib.sha256(payload).hexdigest() == record['before_sha256'],
-            'historical pin reconstruction failed')
+    _gate_digest(payload, record['before_sha256'], 'before', filename)
     return payload
 
 

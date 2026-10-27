@@ -7441,9 +7441,9 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '    require(source.token_sha256(text) == source.token_sha256(observed),\n',
    "            'unreviewed supplied lane source')\n"))),
     'coverage_followup_contracts.py': (
-        (3, 8,
+        (3, 9,
          (
-
+          'import hashlib\n',
          ),
          (
           'if __package__:\n',
@@ -7451,17 +7451,10 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           'else:\n',
           '    import source_contracts as _typed_source\n',
           '\n',
-         ),
-        ),
-        (9, 10,
-         (
-
-         ),
-         (
           '# #333 explicit historical provenance views; current inputs remain operation-owned.\n',
          ),
         ),
-        (64, 65,
+        (63, 64,
          (
 
          ),
@@ -7469,7 +7462,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '\n',
          ),
         ),
-        (69, 104,
+        (68, 103,
          (
 
          ),
@@ -7511,7 +7504,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '\n',
          ),
         ),
-        (105, 107,
+        (104, 106,
          (
           '    payload = (root/MIGRATION).read_bytes()\n',
           "    require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256, 'unreviewed migration record')\n",
@@ -7521,7 +7514,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '    _gate(payload)\n',
          ),
         ),
-        (108, 108,
+        (107, 107,
          (
           "    require(type(record['schema']) is int and record['schema'] == 1\n",
           "            and set(record['sources']) == set(SOURCE_PATHS), 'wrong exact successor set')\n",
@@ -7530,7 +7523,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
 
          ),
         ),
-        (109, 115,
+        (108, 114,
          (
           '    require(hashlib.sha256(prior.read_bytes()).hexdigest() ==\n',
           "            record['prior_invariant_migration_sha256'], 'historical invariant record changed')\n",
@@ -7547,11 +7540,59 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '    _gate(payload, prior_bytes, components)\n',
          ),
         ),
-        (138, 151,
+        (115, 137,
          (
 
          ),
          (
+          '\n',
+          'def _gate_digest(payload, expected, kind, label):\n',
+          '    import os\n',
+          '    import subprocess\n',
+          '    import tempfile\n',
+          '    from pathlib import Path\n',
+          '    root = Path(__file__).resolve().parents[2]\n',
+          "    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))\n",
+          "    with tempfile.TemporaryDirectory(prefix='followup-digest-') as directory:\n",
+          "        target = Path(directory) / 'pin'\n",
+          '        target.write_bytes(payload)\n',
+          '        result = subprocess.run(\n',
+          "            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_followup_gate',\n",
+          "             '--bytes', str(target), '--sha', expected, '--kind', kind,\n",
+          "             '--label', label],\n",
+          '            capture_output=True, text=True)\n',
+          '    if result.returncode != 0:\n',
+          '        lines = [line.strip() for line in result.stderr.splitlines()\n',
+          "                 if line.strip() and 'Crashpad' not in line]\n",
+          '        message = lines[-1] if lines else result.stdout.strip()\n',
+          '        raise ValueError(message)\n',
+          '\n',
+         ),
+        ),
+        (142, 143,
+         (
+          "    require(hashlib.sha256(payload).hexdigest() == record['after_sha256'],\n",
+          "            'unreviewed runtime pin successor: ' + filename)\n",
+         ),
+         (
+          "    _gate_digest(payload, record['after_sha256'], 'after', filename)\n",
+         ),
+        ),
+        (154, 155,
+         (
+          "    require(hashlib.sha256(payload).hexdigest() == record['before_sha256'],\n",
+          "            'historical pin reconstruction failed')\n",
+         ),
+         (
+          "    _gate_digest(payload, record['before_sha256'], 'before', filename)\n",
+         ),
+        ),
+        (156, 169,
+         (
+
+         ),
+         (
+          '\n',
           'def _source_view(root, path, physical_text, *, _operation=None):\n',
           '    """Keep supplied physical views only for the helper\'s named authority domain."""\n',
           '    if __package__:\n',
@@ -7564,15 +7605,32 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "    # For unrelated modules cache_key's historical API is an identity function.\n",
           '    return cache_key.reviewed_text(root, path, historical, _operation=_operation)\n',
           '\n',
-          '\n',
          ),
         ),
-        (161, 162,
+        (180, 181,
          (
           "        require(source.token_sha256(accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else cache_key.reviewed_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), **operation_args)) == item['after_token_sha256'],\n",
          ),
          (
           "        require(source.token_sha256(accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _source_view(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), **operation_args)) == item['after_token_sha256'],\n",
+         ),
+        ),
+        (205, 206,
+         (
+          "    require(hashlib.sha256(payload).hexdigest() == record['after_sha256'],\n",
+          "            'unreviewed runtime pin successor: ' + filename)\n",
+         ),
+         (
+          "    _gate_digest(payload, record['after_sha256'], 'after', filename)\n",
+         ),
+        ),
+        (217, 218,
+         (
+          "    require(hashlib.sha256(payload).hexdigest() == record['before_sha256'],\n",
+          "            'historical pin reconstruction failed')\n",
+         ),
+         (
+          "    _gate_digest(payload, record['before_sha256'], 'before', filename)\n",
          ),
         ),
     ),

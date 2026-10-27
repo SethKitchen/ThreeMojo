@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_followup_gate import followup_record
+from tools.carla_followup_gate import followup_digest, followup_record
 
 
 def test_a_changed_record_is_refused() raises:
@@ -16,6 +16,21 @@ def test_a_changed_record_is_refused() raises:
         contains="coverage followup successor: unreviewed migration record"
     ):
         followup_record(String("").as_bytes(), String("").as_bytes(), "", False)
+
+
+def test_a_changed_pin_reconstruction_is_refused() raises:
+    """A different reconstructed pin digest fails closed."""
+    with assert_raises(
+        contains=(
+            "coverage followup successor: historical pin reconstruction failed"
+        )
+    ):
+        followup_digest(
+            String("nope").as_bytes(),
+            "00",
+            "before",
+            "runtime-source-pins.json",
+        )
 
 
 def main() raises:
