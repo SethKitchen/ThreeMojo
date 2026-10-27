@@ -148,6 +148,8 @@ It keeps the eight migration record paths and digests.
 
 It keeps the five premise declarations and the junction path.
 
+It reads those five premise declarations in one check.
+
 It keeps the winner-sign record and the runtime pin path.
 
 The singleton, frozen ARC, dispatch, raw-cut, and optional-runtime contracts use that declaration text.
@@ -157,6 +159,8 @@ It also builds the significant token lists for the singleton, frozen ARC, dispat
 It reports the declaration line span used by the selection contract.
 
 `tools/carla_frozen_arc_gate.mojo` builds the declaration routing for the frozen ARC producer.
+
+It reads every frozen ARC producer declaration in one check.
 
 It lists the executable names checked by the optional-runtime contract.
 

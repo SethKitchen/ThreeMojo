@@ -448,18 +448,52 @@ def _declaration(text, name, owner):
     return result.stdout
 
 
+def _declarations(items):
+    """Return the declaration texts in the requested order."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    if not items:
+        return []
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(items, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='frozen-declarations-') as directory:
+        path = Path(directory) / 'declarations.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_declarations',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def verify_premises(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
     # This scoped check deliberately does not inspect the complete-file hash.
     # Mutation controls invoke it directly to test producer and Box obligations.
     record = read_record(root)
-    prepared = []
+    loaded = []
     for item in record['function_sources']:
-        actual = _declaration(_typed_source.historical_text(root, item['path'], _observe_text(
-            root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation),
-                                   item['name'], tuple(item['owner']))
-        prepared.append((actual, item['source'], item['name']))
+        text = _typed_source.historical_text(root, item['path'], _observe_text(
+            root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation)
+        loaded.append((item, text))
+    declared = _declarations([{
+        'source': text,
+        'name': item['name'],
+        'owner': list(item['owner']),
+    } for item, text in loaded])
+    prepared = [
+        (declared[index], item['source'], item['name'])
+        for index, (item, _text) in enumerate(loaded)]
     if prepared:
         docs = _significant_documents(
             [text for actual, source, _ in prepared for text in (actual, source)])

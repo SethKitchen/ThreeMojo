@@ -380,6 +380,32 @@ def _declaration(text, name, owner):
     return result.stdout
 
 
+def _declarations(items):
+    """Return the declaration texts in the requested order."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    if not items:
+        return []
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(items, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='cleanup-declarations-') as directory:
+        path = Path(directory) / 'declarations.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_declarations',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def verify_premises(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
@@ -391,10 +417,14 @@ def verify_premises(root, *, _operation=None):
     junction = _typed_source.historical_text(root, SOURCE_PATHS[2], _observe_text(root, SOURCE_PATHS[2],
                          (root/SOURCE_PATHS[2]).read_text(), _operation=_operation), _operation=_operation)
     texts = (line, arc, junction)
-    premises = {}
-    for item in _cleanup_declarations()['declarations']:
-        premises[item['key']] = _declaration(
-            texts[item['source']], item['name'], tuple(item['owner']))
+    items = _cleanup_declarations()['declarations']
+    declared = _declarations([{
+        'source': texts[item['source']],
+        'name': item['name'],
+        'owner': list(item['owner']),
+    } for item in items])
+    premises = {
+        item['key']: declared[index] for index, item in enumerate(items)}
     _cleanup_premises(premises)
 
 
