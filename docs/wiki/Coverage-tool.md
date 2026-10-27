@@ -389,6 +389,8 @@ It keeps the conditioned-authority refusal texts.
 
 It keeps the generated-owner mutation labels.
 
+It keeps the generated-owner admission texts.
+
 It keeps the native loop source and the production drivers.
 
 Ties use the suite path and group number. Every affected suite stays in exactly one group. CI uses eight groups and a budget of 9000 seconds a group. The budget is a hang detector, not a target. Hosted runners differ: one took a quarter longer than another on the same group.

@@ -53,6 +53,14 @@ def test_coverage_loop_qualification_labels_stay_reviewed() raises:
         doc.text(doc.at(mutation, "source")),
         "extensions/carla/curve_rounded_arc.mojo",
     )
+    var admission = doc.at(doc.root, "admission")
+    var helpers = doc.at(admission, "helpers")
+    assert_equal(doc.length(helpers), 2)
+    assert_equal(
+        doc.text(doc.item(helpers, 0)), "extensions/carla/render_sky.mojo"
+    )
+    assert_equal(doc.text(doc.item(doc.at(admission, "steps"), 0)), "scaled")
+    assert_equal(doc.text(doc.item(doc.at(admission, "steps"), 1)), "render")
     assert_equal(
         doc.text(doc.at(doc.root, "pass_line")),
         (

@@ -139,10 +139,11 @@ def run(command, *, success=True, timeout=None, cwd=None, env=None):
 
 def require_runtime_alarm():
     """Refuse inherited signal settings that can disable the native guard."""
+    admission = _loop_labels()['admission']
     require(signal.getsignal(signal.SIGALRM) == signal.SIG_DFL,
-            'Runtime alarm needs the default inherited SIGALRM disposition')
+            admission['alarm_default'])
     require(signal.SIGALRM not in signal.pthread_sigmask(signal.SIG_BLOCK, []),
-            'Runtime alarm must not be blocked')
+            admission['alarm_blocked'])
 
 
 def coverage_io_argv(mojo, mode):
@@ -191,10 +192,10 @@ def capture_with_compiler_budget(command, output, capture, *, mojo, loop_proof=N
                                  seconds=INTEGRATION_SECONDS):
     """Retain the real sealed raw command and its owned-group supervision."""
     require_runtime_alarm()
-    require((loop_proof is None) == (source_root is None),
-            'Both proof and source root must be supplied together')
+    admission = _loop_labels()['admission']
+    require((loop_proof is None) == (source_root is None), admission['proof_pair'])
     require(type(seconds) in (int, float) and 0 < seconds <= INTEGRATION_SECONDS,
-            'Invalid compiler/integration bound')
+            admission['bound'])
     deadline = time.monotonic() + seconds
     inherited = coverage_io.shared_deadline()
     if inherited is not None:
@@ -213,13 +214,13 @@ def capture_with_compiler_budget(command, output, capture, *, mojo, loop_proof=N
 def line_of(fragment):
     matches = [number for number, line in enumerate(_loop_drivers()['source'].splitlines(), 1)
                if fragment in line]
-    require(len(matches) == 1, 'Fixture identity is not unique: ' + fragment)
+    require(len(matches) == 1, _loop_labels()['admission']['fixture_identity'] + fragment)
     return matches[0]
 
 
 def capture_result(result, stem, envelope, command):
     """Keep raw/reduced diagnostic bytes; these are not production captures."""
-    require(result.returncode == 0, 'Cannot record a failed native capture')
+    require(result.returncode == 0, _loop_labels()['admission']['failed_capture'])
     raw = Path(str(stem) + '.raw.txt')
     raw.parent.mkdir(parents=True, exist_ok=True)
     output = Path(str(stem) + '.out')
@@ -256,7 +257,7 @@ def diagnostic_manifest(masked, module, lines):
               and fields[1].decode() == module and int(fields[2]) in lines):
             rows.append(row)
             seen.add(int(fields[2]))
-    require(seen == set(lines), 'Diagnostic loop identity is missing')
+    require(seen == set(lines), _loop_labels()['admission']['diagnostic'])
     return b'\n'.join(rows) + b'\n'
 
 
@@ -271,18 +272,19 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
     root = ROOT if mutable_source is None else Path(mutable_source).resolve()
     stage = Path(stage).resolve()
     expected = proofs.read_receipt(stage/'loop-proofs.json')['receipt']
+    admission = _loop_labels()['admission']
     require(proofs.maintained_inputs(root, exclude=stage) == expected['root_inputs'],
-            'Owner fixture differs from the genuine producer source image')
+            admission['fixture'])
     if mutable_source is not None:
         require(root != ROOT.resolve() and not root.is_relative_to(ROOT.resolve()),
-                'Writable fixture must be independent of the sealed source')
+                admission['writable'])
     settings = {'mojo': [mojo], 'suites': expected['execution']['suites'],
                 'capture_cache': proofs._expand_path(expected['execution']['cache'], root, stage)}
     def derive():
         return proofs.build_receipt(root, stage, compiler, flags, **settings)
     @contextlib.contextmanager
     def trace(callback=None):
-        require(sys.getprofile() is None, 'Owner controls require an unprofiled test thread')
+        require(sys.getprofile() is None, admission['unprofiled'])
         counts, owners, binding_maps = defaultdict(int), [], []
         def profile(frame, event, value):
             if event not in ('call', 'return'):
@@ -319,54 +321,53 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
             if (not supplements and frame.f_code is
                     audit._InvariantInputs._receipt_inputs_check.__code__):
                 require(len(owners) == 1 and owners[0]._state == 'pending',
-                        'Supplemental control missed the pending generated owner')
+                        admission['pending'])
                 owner = owners[0]
                 supplements.append('scaled')
                 scaled = audit.scaled_float32_proof_bindings(
                     root, include_roots=(stage,), _operation=owner)
                 require(scaled and owner._state == ('active' if current_cohort else 'pending')
                         and owner._scaled_resolver_paths == audit.scaled_float32.NATIVE_CLOSURE,
-                        'Scaled admission lost its cohort state or independent resolver context')
+                        admission['scaled'])
                 observed = (owner._raw.keys() if current_cohort else
                     {path for location, path, raw, mode in owner._receipt_observations
                      if location == owner._root})
                 require(scaled.keys() <= observed,
-                        'Scaled admission borrowed generated rather than source observations')
+                        admission['borrowed'])
             elif (supplements == ['scaled'] and frame.f_code is
                     audit._InvariantInputs._receipt_bindings.__code__):
                 owner = owners[0]
-                require(owner._state == 'active', 'Render helper missed current admission')
+                require(owner._state == 'active', admission['render_state'])
                 supplements.append('render')
                 # Current render fixtures themselves require typed admission.
                 # Exercise their owned include path after the normal root gate.
                 helpers = audit.shared_helper_proof_bindings(root,
-                    paths=('extensions/carla/render_sky.mojo', 'extensions/carla/render_weather.mojo'),
+                    paths=tuple(admission['helpers']),
                     include_roots=(stage,), _operation=owner)
                 require(helpers and any(path.startswith('render/') for path in helpers)
                         and {path for path in helpers if path.endswith('.mojo')} <= owner._raw.keys()
                         and owner._scaled_resolver_paths == audit.scaled_float32.NATIVE_CLOSURE,
-                        'Supplemental helper admission replaced or mixed physical domains')
+                        admission['domains'])
         with trace(pending_supplements) as (counts, owners, binding_maps):
             actual = derive()
-        require(supplements == (['scaled', 'render'] if attempt == 0 else []),
-                'Supplemental admission controls did not run exactly once')
+        require(supplements == (admission['steps'] if attempt == 0 else []),
+                admission['once'])
         require(proofs.canonical(actual) == proofs.canonical(expected),
-                'Invocation-local ownership changed a genuine receipt')
+                admission['receipt'])
         if attempt > 0:
-            require(dict(counts) == {'full': 1, 'typed': 1},
-                    'Generated rows replayed source semantics or skipped initial admission')
+            require(dict(counts) == {'full': 1, 'typed': 1}, admission['replay'])
         require(len(owners) == 1 and owners[0]._state == 'closed'
                 and not owners[0]._failed and owners[0]._owner_frame is None,
-                'Successful generated owner did not close')
-        require(binding_maps, 'Receipt did not exercise current binding-map reuse')
+                admission['closed'])
+        require(binding_maps, admission['binding'])
         observed_maps.extend(binding_maps)
         positives.append(owners[0])
     require(len({id(owner) for owner in positives}) == 3,
-            'Independent receipts reused an admission')
+            admission['reused'])
     # A separately derived old path remains the exact dependency-map oracle.
     standalone = audit.proof_bindings(root, include_roots=(stage,))
     require(all(list(value.items()) == list(standalone.items()) for value in observed_maps),
-            'Cached dependency keys or overwrite order differ from standalone admission')
+            admission['cache'])
     print(_loop_labels()['owner_print'], flush=True)
     # A restored live-table mutation must still poison this real active owner.
     # This uses no writable source fixture and runs in the maintained entrypoint.
