@@ -6036,9 +6036,9 @@ EDGES = json.loads(r'''
   },
   "tools/carla_lane_oracle/source_contracts.py": {
     "before_sha256": "ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5",
-    "after_sha256": "f4cf5b03da59b5a5070f9cdf8e26b486d4e1cd965eed172578018619ea788afe",
+    "after_sha256": "41c7beca0d045d43d51f6100ba4f45a41baa0f8d784498845e22cfdfd3de504f",
     "before_token_sha256": "b22fc35f7dfa59a57136e32d554c6ae85d2790aef00f672adee10883c1067c7e",
-    "after_token_sha256": "c0e6fc03c3295433c521f8af4402ed587239a76e965919d1efc031d486c671a8",
+    "after_token_sha256": "5dbe6b936acf04d8ad4b501f7d4ad19d83efcff92f6694118e12ca055f72a381",
     "edits": [
       {
         "start": 51,
@@ -6056,8 +6056,20 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 358,
-        "stop": 360,
+        "start": 177,
+        "stop": 180,
+        "before": [
+          "@lru_cache(maxsize=1024)\n"
+        ],
+        "after": [
+          "# One audit pass hashes more than a thousand distinct sources. A smaller\n",
+          "# memo evicts each one before the next pass reads it again.\n",
+          "@lru_cache(maxsize=4096)\n"
+        ]
+      },
+      {
+        "start": 360,
+        "stop": 362,
         "before": [
           "        if relative not in pr760.CARLA_REGISTRY_PATHS:\n"
         ],
@@ -6067,8 +6079,8 @@ EDGES = json.loads(r'''
         ]
       },
       {
-        "start": 383,
-        "stop": 385,
+        "start": 385,
+        "stop": 387,
         "before": [
           "        if relative not in pr760.CARLA_REGISTRY_PATHS:\n"
         ],
@@ -18746,7 +18758,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tests/test_water.mojo': '628c88b8f045ebf32c67ae46c737758ba3d88f99783eca9c2bef246351f2bec6',
  'tests/test_wide_line_workers.mojo': '2df16a02373e7f1145573f41df89971d8483ddddd1439607c114642f3a0e2b09',
  'tests/test_wide_lines.mojo': '7682cd7250d40b39523caf930ca435d094260c23881fcea0a0d37fdc3029ec5f',
- 'tools/carla_lane_oracle/source_contracts.py': 'a4d9eedbdb156c45a4edd507002a2fb169e261ff5f0bc1cd4830c559c4dd2685',
+ 'tools/carla_lane_oracle/source_contracts.py': '6bcb3bb9a73cc167157ddba4dfd014ee89157a42d595789ad7bcddbbe39a9ba5',
  'tools/carla_lane_oracle/test_main_rebase_successor.py': '598b7f235d6dd347551dfbdcca7390a73016e23ff16a970246e07dbfe48a6459',
  'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': '39c4e84ee8f2480d1039369011c39ab38c055f71fae6bf0962778b558be9b82f',
  'tools/carla_lane_oracle/test_pr760_physical_image.py': 'fb6a9d7dfab6f5d7e620e6d42ae9dd47ee8fbd609e65a2f82a7e56e888734970',
@@ -18758,7 +18770,7 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tools/carla_lane_oracle/translated_parameter_resolution.py': '1c63297c0097ce50b9f314ba321e7f4d04c009f6379552a84adefb62a2a7f375',
  'tools/compile_fail_expectations.json': 'a15d4cff3d89429312350a4da95604569da83be105f69a0690025904c2cfbc84',
  'tools/test_conditioned_coverage_loops.py': 'f88451e7313fd84cc788847b1c960dc395b98736779a92c81a1d056ff2977520'}
-DATA_SHA256 = 'c7aaa81f8724d96e98a419838ad36e5f3e48e40ab5530ebbee1453e0efc61780'
+DATA_SHA256 = '12fe0669dca98b65dde519227588671eb9375c78b308d051bfe4c60aba01bf40'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -18774,7 +18786,7 @@ def sha(raw):
 def _index_snapshot():
     """Authenticate and detach the fixed per-edge digests and bound inputs."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == 'c7aaa81f8724d96e98a419838ad36e5f3e48e40ab5530ebbee1453e0efc61780', 'authority digest selector changed')
+    require(DATA_SHA256 == '12fe0669dca98b65dde519227588671eb9375c78b308d051bfe4c60aba01bf40', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGE_SHA256, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')
@@ -18807,7 +18819,13 @@ def _data_snapshot():
 
 def verify_data():
     """Authenticate the complete finite inverse table against executing code."""
-    _data_snapshot()
+    # The same checks as _data_snapshot, without a detached copy to discard.
+    index = _index_snapshot()
+    require(type(EDGES) is dict and set(EDGES) == set(index['edges']),
+            'fixed source inverse data changed')
+    for path, digest in index['edges'].items():
+        encoded = json.dumps(EDGES[path], sort_keys=True, separators=(',', ':'))
+        require(sha(encoded) == digest, 'fixed source inverse data changed')
 
 
 def _predecessor(path, raw, edge):

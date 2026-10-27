@@ -94,7 +94,7 @@ def dependency_checker_bytes(root: String) raises:
     _digest(
         base,
         "tools/carla_lane_oracle/source_contracts.py",
-        "f4cf5b03da59b5a5070f9cdf8e26b486d4e1cd965eed172578018619ea788afe",
+        "41c7beca0d045d43d51f6100ba4f45a41baa0f8d784498845e22cfdfd3de504f",
         "unreviewed dependency checker bytes: ",
     )
     _digest(
@@ -178,7 +178,7 @@ def dependency_checker_bytes(root: String) raises:
     _digest(
         base,
         "tools/carla_lane_oracle/pr780_source_successor.py",
-        "24f749e1222c13ad2be8418ee92f0f61a51144abd8deaed1b3a517b5e4d57cc6",
+        "db5260f896d6faef87d0d57797dc13b6904812b157a25dca2ae2d342bc19185e",
         "unreviewed dependency checker bytes: ",
     )
     _public(

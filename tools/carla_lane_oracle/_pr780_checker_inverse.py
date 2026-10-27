@@ -679,7 +679,7 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'e7f70c3bd674b81810d23fa002
                                          "*compiler, 'coverage_hit_aot',\n",
                                          "            '--profile', profile, "
                                          "'--root', '@BUILD@',\n")))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': 'e3bf9e2ddc98bf5b66e3d33ad4c13334b8c1823529b661b172bfc07f16ae6e0c',
+ 'full_audit_cleanup_contracts.py': {'after_sha256': '227e5c2776ba997379b62046e626e7dadbf920fd3b02f897f9b21441472be691',
                                      'before_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
                                      'edits': ((11,
                                                 12,
@@ -703,7 +703,7 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'e7f70c3bd674b81810d23fa002
                                                 (),
                                                 (' '
                                                  "'tools/carla_lane_oracle/pr780_source_successor.py': "
-                                                 "'24f749e1222c13ad2be8418ee92f0f61a51144abd8deaed1b3a517b5e4d57cc6',\n",)),
+                                                 "'db5260f896d6faef87d0d57797dc13b6904812b157a25dca2ae2d342bc19185e',\n",)),
                                                (163,
                                                 164,
                                                 (" 'tools/affected.py': "
@@ -717,7 +717,7 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'e7f70c3bd674b81810d23fa002
                                                  "'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',\n",),
                                                 (' '
                                                  "'tools/carla_lane_oracle/source_contracts.py': "
-                                                 "'f4cf5b03da59b5a5070f9cdf8e26b486d4e1cd965eed172578018619ea788afe',\n",)),
+                                                 "'41c7beca0d045d43d51f6100ba4f45a41baa0f8d784498845e22cfdfd3de504f',\n",)),
                                                (251,
                                                 253,
                                                 ('                 '
@@ -1485,7 +1485,7 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'e7f70c3bd674b81810d23fa002
                                                  "'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',\n",),
                                                 (' '
                                                  "'tools/carla_lane_oracle/source_contracts.py': "
-                                                 "'f4cf5b03da59b5a5070f9cdf8e26b486d4e1cd965eed172578018619ea788afe',\n",)),
+                                                 "'41c7beca0d045d43d51f6100ba4f45a41baa0f8d784498845e22cfdfd3de504f',\n",)),
                                                (4366,
                                                 4369,
                                                 (' '
@@ -1791,7 +1791,7 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'e7f70c3bd674b81810d23fa002
                                                  'inventory(root, '
                                                  '_snapshots=image, '
                                                  '_production=production).items()}\n')))},
- 'source_contracts.py': {'after_sha256': 'f4cf5b03da59b5a5070f9cdf8e26b486d4e1cd965eed172578018619ea788afe',
+ 'source_contracts.py': {'after_sha256': '41c7beca0d045d43d51f6100ba4f45a41baa0f8d784498845e22cfdfd3de504f',
                          'before_sha256': 'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',
                          'edits': ((51,
                                     59,
@@ -1813,16 +1813,24 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'e7f70c3bd674b81810d23fa002
                                      "    PREFIX + 'render_sky.mojo', PREFIX + "
                                      "'render_textures.mojo',\n",
                                      "    PREFIX + 'render_weather.mojo'))\n")),
-                                   (358,
-                                    360,
+                                   (177,
+                                    180,
+                                    ('@lru_cache(maxsize=1024)\n',),
+                                    ('# One audit pass hashes more than a '
+                                     'thousand distinct sources. A smaller\n',
+                                     '# memo evicts each one before the next '
+                                     'pass reads it again.\n',
+                                     '@lru_cache(maxsize=4096)\n')),
+                                   (360,
+                                    362,
                                     ('        if relative not in '
                                      'pr760.CARLA_REGISTRY_PATHS:\n',),
                                     ('        if (relative not in '
                                      'pr760.CARLA_REGISTRY_PATHS\n',
                                      '                and relative not in '
                                      'HISTORICAL_SUCCESSOR_PATHS):\n')),
-                                   (383,
-                                    385,
+                                   (385,
+                                    387,
                                     ('        if relative not in '
                                      'pr760.CARLA_REGISTRY_PATHS:\n',),
                                     ('        if (relative not in '
@@ -1835,7 +1843,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '872a2f2afdbacc1128bbbb011f459a2e36c3c07adae4af6be963001be2076e4e':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '0029b55e1325cae1d54f734fdc5fc35231cff59f62e0172e9e6ec5319ad8af10':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)

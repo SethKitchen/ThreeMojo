@@ -104,7 +104,7 @@ def pr760_implementation_sources(root: String) raises:
     _source(
         base,
         "tools/carla_lane_oracle/source_contracts.py",
-        "f4cf5b03da59b5a5070f9cdf8e26b486d4e1cd965eed172578018619ea788afe",
+        "41c7beca0d045d43d51f6100ba4f45a41baa0f8d784498845e22cfdfd3de504f",
     )
     _source(
         base,

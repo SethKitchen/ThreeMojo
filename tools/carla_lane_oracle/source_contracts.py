@@ -175,7 +175,9 @@ def tokens(text):
     return list(_token_snapshot(text))
 
 
-@lru_cache(maxsize=1024)
+# One audit pass hashes more than a thousand distinct sources. A smaller
+# memo evicts each one before the next pass reads it again.
+@lru_cache(maxsize=4096)
 def token_sha256(text):
     # Retain INDENT/DEDENT, statement boundaries, every qualifier, string,
     # operator and literal. Ignore comments and continuation/blank lines.
