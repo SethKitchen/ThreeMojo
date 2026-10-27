@@ -274,6 +274,10 @@ It keeps the moment array paths, scalar names, block boundaries, and routing pat
 
 It keeps the moment routing constants and the route comparison.
 
+It checks every stored-moment route digest before the source read.
+
+It compares every stored-moment route after that read.
+
 It keeps every stored-moment operation block in one check.
 
 It keeps every stored-moment constant array in one check.

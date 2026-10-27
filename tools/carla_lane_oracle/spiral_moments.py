@@ -231,20 +231,20 @@ def parse_array(text, name, size):
     return _rounded_words(literals)
 
 
-def _moment_route(mode, payload):
-    """Run one moment-routing mode and return its stdout."""
+def _moment_route_batch(mode, payload):
+    """Run one stored-moment route batch and return its stdout."""
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     text = json.dumps(payload, separators=(',', ':'))
-    with tempfile.TemporaryDirectory(prefix='moment-route-') as directory:
-        path = Path(directory) / 'route.json'
+    with tempfile.TemporaryDirectory(prefix='moment-routes-') as directory:
+        path = Path(directory) / 'routes.json'
         path.write_text(text)
         result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_route',
-             str(path)],
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_routes',
+             mode, str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -252,17 +252,6 @@ def _moment_route(mode, payload):
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
     return result.stdout
-
-
-def _moment_route_current(source):
-    """Return the live routing document for the reviewed constant names."""
-    return _moment_route({'mode': 'current', 'source': source})
-
-
-def _moment_route_accept(current, expected, message, strip):
-    """Require the live routing document to match its pin."""
-    _moment_route({'mode': 'accept', 'current': current, 'expected': expected,
-                   'message': message, 'strip': strip})
 
 
 def _moment_arrays(items):
@@ -620,18 +609,25 @@ def verify_inputs(root):
     routing_items = []
     for name, record in pins['routing'].items():
         routing_items.append((name, record))
+    try:
+        _moment_route_batch('--digests', [{
+            'text': record['normalized_tokens'],
+            'digest': record['sha256'],
+            'message': messages['routing_pin'] + name,
+        } for name, record in routing_items])
+    except ValueError as error:
+        raise CheckError(str(error)) from error
+    loaded_routes = []
     for name, record in routing_items:
-        expected = record['normalized_tokens']
-        try:
-            ideal_projection.require_text_digest(
-                expected, record['sha256'], messages['routing_pin'] + name)
-        except ValueError as error:
-            raise CheckError(str(error)) from error
-        source = _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))
-        try:
-            current = _moment_route_current(source)
-        except ValueError as error:
-            raise CheckError(str(error)) from error
+        loaded_routes.append((name, record, _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))))
+    try:
+        currents = json.loads(_moment_route_batch('--currents', [{
+            'name': name,
+            'source': source,
+        } for name, record, source in loaded_routes]))
+    except ValueError as error:
+        raise CheckError(str(error)) from error
+    for name, record, source in loaded_routes:
         if name == _moment_plan()['ideal_caller']:
             # Keep the historical routing pin. Validate the exact additive
             # try-only refusal, then project only its default-False parameter.
@@ -640,12 +636,15 @@ def verify_inputs(root):
             except ValueError as error:
                 raise CheckError(
                     messages['routing'] + name + ': ' + str(error)) from error
-        try:
-            _moment_route_accept(
-                current, expected, messages['routing'] + name,
-                name == _moment_plan()['ideal_caller'])
-        except ValueError as error:
-            raise CheckError(str(error)) from error
+    try:
+        _moment_route_batch('--accepts', [{
+            'current': currents[name],
+            'expected': record['normalized_tokens'],
+            'message': messages['routing'] + name,
+            'strip': name == _moment_plan()['ideal_caller'],
+        } for name, record, source in loaded_routes])
+    except ValueError as error:
+        raise CheckError(str(error)) from error
     try:
         source_contracts.verify_group(root, _dependencies()['group'])
     except ValueError as error:
