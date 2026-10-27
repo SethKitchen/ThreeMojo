@@ -9,6 +9,7 @@
     carla_followup_gate --bytes PATH --sha HEX --kind after|before --label TEXT
     carla_followup_gate --tokens DIR
     carla_followup_gate --pair DIR
+    carla_followup_gate --places DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -20,7 +21,15 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
-from tools._python_json import PY_DICT, PY_INT, PY_LIST, PY_STR, MISSING, PyJson
+from tools._python_json import (
+    MISSING,
+    PY_BOOL,
+    PY_DICT,
+    PY_INT,
+    PY_LIST,
+    PY_STR,
+    PyJson,
+)
 from tools._sha256 import sha256_hex
 
 
@@ -257,13 +266,37 @@ def followup_pair(directory: String) raises:
         _fail("wrong fixed ordered pin pair")
 
 
+def followup_places(directory: String) raises:
+    """Require each pin placement to be unique and current.
+
+    Args:
+        directory: A directory whose `labels.json` lists the placements in order.
+
+    Raises:
+        Error: A placement is repeated or its current value changed.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("active pin placement mismatch")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var row = doc.item(doc.root, index)
+        var duplicate = doc.at(row, "duplicate")
+        if doc.kind(duplicate) == PY_BOOL and doc.flag(duplicate):
+            _fail("duplicate pin placement")
+        if doc.text(doc.at(row, "actual")) != doc.text(doc.at(row, "expected")):
+            _fail("active pin placement mismatch")
+        index += 1
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_followup_gate --migration PATH [--prior PATH]"
             " [--components DIR] | --bytes PATH --sha HEX --kind after|before"
-            " --label TEXT | --tokens DIR | --pair DIR"
+            " --label TEXT | --tokens DIR | --pair DIR | --places DIR"
         ),
         file=stderr,
     )
@@ -285,6 +318,7 @@ def main() raises:
     var label = String("")
     var tokens = String("")
     var pair = String("")
+    var places = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -299,6 +333,7 @@ def main() raises:
             or word == "--label"
             or word == "--tokens"
             or word == "--pair"
+            or word == "--places"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -319,8 +354,10 @@ def main() raises:
                 label = value
             elif word == "--tokens":
                 tokens = value
-            else:
+            elif word == "--pair":
                 pair = value
+            else:
+                places = value
             index += 2
             continue
         _usage()
@@ -332,6 +369,8 @@ def main() raises:
     if tokens.byte_length() > 0:
         modes += 1
     if pair.byte_length() > 0:
+        modes += 1
+    if places.byte_length() > 0:
         modes += 1
     if modes != 1:
         _usage()
@@ -356,6 +395,16 @@ def main() raises:
         or components.byte_length() > 0
         or payload.byte_length() > 0
         or tokens.byte_length() > 0
+        or places.byte_length() > 0
+    ):
+        _usage()
+    if places.byte_length() > 0 and (
+        migration.byte_length() > 0
+        or prior.byte_length() > 0
+        or components.byte_length() > 0
+        or payload.byte_length() > 0
+        or tokens.byte_length() > 0
+        or pair.byte_length() > 0
     ):
         _usage()
     if migration.byte_length() > 0 and (
@@ -363,6 +412,9 @@ def main() raises:
     ):
         _usage()
     try:
+        if places.byte_length() > 0:
+            followup_places(places)
+            return
         if pair.byte_length() > 0:
             followup_pair(pair)
             return

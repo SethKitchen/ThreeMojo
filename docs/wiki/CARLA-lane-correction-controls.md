@@ -28,7 +28,7 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_runtime_view_gate.mojo` checks the runtime-view record and its bound tests.
 
-`tools/carla_followup_gate.mojo` checks the coverage-followup record, the pin digests, the successor tokens, and the ordered pin pair.
+`tools/carla_followup_gate.mojo` checks the coverage-followup record, the pin digests, the ordered pin pair, and the pin placements.
 
 `tools/carla_singleton_gate.mojo` checks the rounded LINE singleton migration digest, its schema, and the lane text token.
 

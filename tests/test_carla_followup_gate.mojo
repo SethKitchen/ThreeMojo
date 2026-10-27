@@ -12,6 +12,7 @@ from std.testing import TestSuite, assert_raises
 from tools.carla_followup_gate import (
     followup_digest,
     followup_pair,
+    followup_places,
     followup_record,
     followup_tokens,
 )
@@ -68,6 +69,20 @@ def test_a_reordered_pin_pair_is_refused() raises:
         contains="coverage followup successor: wrong fixed ordered pin pair"
     ):
         followup_pair(directory)
+
+
+def test_a_repeated_pin_placement_is_refused() raises:
+    """A repeated pointer fails closed before later values are checked."""
+    var directory = "/tmp/followup-places-test"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/labels.json").write_text(
+        '[{"duplicate":false,"actual":"aa","expected":"aa"},'
+        + '{"duplicate":true,"actual":"","expected":"bb"}]'
+    )
+    with assert_raises(
+        contains="coverage followup successor: duplicate pin placement"
+    ):
+        followup_places(directory)
 
 
 def main() raises:
