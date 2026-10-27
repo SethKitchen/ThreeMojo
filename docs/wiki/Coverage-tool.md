@@ -395,6 +395,8 @@ It keeps the runtime and integration second limits.
 
 It keeps the diagnostic manifest rows.
 
+It keeps the native source line lookup.
+
 It keeps the native loop source and the production drivers.
 
 Ties use the suite path and group number. Every affected suite stays in exactly one group. CI uses eight groups and a budget of 9000 seconds a group. The budget is a hang detector, not a target. Hosted runners differ: one took a quarter longer than another on the same group.

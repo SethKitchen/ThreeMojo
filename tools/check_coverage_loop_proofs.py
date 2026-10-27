@@ -217,10 +217,20 @@ def capture_with_compiler_budget(command, output, capture, *, mojo, loop_proof=N
 
 
 def line_of(fragment):
-    matches = [number for number, line in enumerate(_loop_drivers()['source'].splitlines(), 1)
-               if fragment in line]
-    require(len(matches) == 1, _loop_labels()['admission']['fixture_identity'] + fragment)
-    return matches[0]
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[1]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+         'carla_coverage_loop_line', fragment],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise RuntimeError(message)
+    return int(result.stdout.strip())
 
 
 def capture_result(result, stem, envelope, command):
