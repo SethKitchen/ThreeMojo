@@ -310,6 +310,29 @@ def _moment_scalars(payload):
         raise ValueError(message)
 
 
+def _moment_fraction_groups(payload):
+    """Return the exact fraction spellings for each stored array."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-fractions-') as directory:
+        path = Path(directory) / 'fractions.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_moment_fractions', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _moment_blocks(items):
     """Return the normalized operation blocks that match their pins."""
     import os
@@ -509,7 +532,6 @@ def verify_inputs(root):
     _require_moment_pins(pins)
     constants = {}
     stored_words = {}
-    flat_words = []
     flat_names = []
     loaded_arrays = []
     for name, record in pins['arrays'].items():
@@ -535,17 +557,23 @@ def verify_inputs(root):
     for name, words in stored.items():
         values = [int(word) for word in words]
         stored_words[name] = values
-        flat_words.extend(values)
         flat_names.append(name)
-    texts = _fraction_texts(flat_words)
-    _moment_guard('--count', {
-        'left': len(texts), 'right': len(flat_words),
-        'message': messages['invalid_word']})
-    cursor = 0
+    try:
+        grouped = _moment_fraction_groups({
+            'groups': [{
+                'name': name,
+                'words': [str(word) for word in stored_words[name]],
+            } for name in flat_names],
+            'invalid': messages['invalid_word'],
+        })
+    except ValueError as error:
+        message = str(error)
+        word = _cli_failures()['word']
+        if message.startswith(word):
+            message = message[len(word):]
+        raise CheckError(message) from error
     for name in flat_names:
-        size = len(stored_words[name])
-        constants[name] = [F(text) for text in texts[cursor:cursor + size]]
-        cursor += size
+        constants[name] = [F(text) for text in grouped[name]]
     _moment_guard('--names', {
         'names': list(constants),
         'expected': list(arrays),

@@ -280,6 +280,8 @@ It keeps every stored-moment constant array in one check.
 
 It keeps every stored-moment scalar word in one check.
 
+It groups every stored-moment fraction text by array.
+
 It keeps the moment dependency record and the check messages.
 
 It keeps the moment report names and the pass line.
