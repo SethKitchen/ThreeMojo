@@ -46,6 +46,21 @@ def ideal_digest(payload: Span[UInt8, _], kind: String) raises:
     raise Error("historical ideal source changed")
 
 
+def ideal_digests() -> String:
+    """Return the legacy and projected ideal digests.
+
+    Returns:
+        JSON with `legacy` and `projected`.
+    """
+    return (
+        '{"legacy":"'
+        + _LEGACY_SHA256
+        + '","projected":"'
+        + _PROJECTED_SHA256
+        + '"}'
+    )
+
+
 def _usage():
     """Print the command usage and stop."""
     print(

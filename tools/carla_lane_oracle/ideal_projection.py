@@ -7,9 +7,37 @@ closure. The lexical adapter below is used only for the two fixed declarations
 and does not claim to parse or certify arbitrary Mojo programs.
 """
 import json
+_DIGESTS = None
 
-LEGACY_SHA256 = '270a3cde3b012388ee8fcb6a4ecc59d837d1583f6c406f942ff98fdccd9f5733'
-PROJECTED_SHA256 = 'f0f94e038fd4a783b3ed400ffd32801ca0c3bdc54980e2c408d44f50211b9e06'
+
+def _digests():
+    """Return the legacy digest and the projected digest."""
+    global _DIGESTS
+    if _DIGESTS is not None:
+        return _DIGESTS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_ideal_digests'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _DIGESTS = json.loads(result.stdout)
+    return _DIGESTS
+
+
+def __getattr__(name):
+    if name == 'LEGACY_SHA256':
+        return _digests()['legacy']
+    if name == 'PROJECTED_SHA256':
+        return _digests()['projected']
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def require(condition, message):
@@ -234,7 +262,7 @@ def verify_projection(legacy, current, helper_text):
     _require_source_text(current, 'changed ideal generic declaration')
     _ideal_current_matches(current, left_dump)
     _gate(left_dump.encode(), 'projected')
-    return projection_result(PROJECTED_SHA256)
+    return projection_result(_digests()['projected'])
 
 
 def _module_statements(text):

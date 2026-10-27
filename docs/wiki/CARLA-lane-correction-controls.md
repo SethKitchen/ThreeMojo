@@ -265,6 +265,8 @@ It chooses the grouped roundoff envelope name from the module path.
 
 `tools/carla_ideal_gate.mojo` checks the historical ideal source digest and the projected graph digest.
 
+It keeps the legacy digest and the projected digest.
+
 It requires the helper and the current spiral to be text.
 
 It returns the eight ideal-projection result counts.
