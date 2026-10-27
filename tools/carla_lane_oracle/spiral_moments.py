@@ -23,7 +23,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import struct
 import sys
 
@@ -427,17 +426,11 @@ def parse_table(data):
         text = data.decode('utf-8')
     except UnicodeDecodeError as error:
         raise CheckError('table is not UTF-8') from error
-    code = '\n'.join(line.split('#', 1)[0] for line in text.splitlines()).strip()
-    match = re.fullmatch(r'comptime _SPIRAL_MOMENT_WORDS: Array\[UInt64, (\d+)\] = \[(.*)\]',
-                        code, re.S)
-    require(match is not None, 'missing or malformed table declaration')
-    require(int(match[1]) == WORD_COUNT, 'wrong table declaration shape')
-    body = match[2]
-    tokens = re.findall(r'UInt64\((0x[0-9A-Fa-f]{16})\),', body)
-    remainder = re.sub(r'UInt64\(0x[0-9A-Fa-f]{16}\),', '', body)
-    require(not remainder.strip(), 'malformed coefficient word or extra source')
-    require(len(tokens) == WORD_COUNT, 'missing or extra coefficient words')
-    return [int(token, 16) for token in tokens]
+    try:
+        words = ideal_projection.moment_words(text, WORD_COUNT)
+    except ValueError as error:
+        raise CheckError(str(error)) from error
+    return [int(word, 16) for word in words]
 
 
 def verify_table(data, rows):

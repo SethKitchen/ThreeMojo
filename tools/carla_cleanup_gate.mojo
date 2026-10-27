@@ -24,6 +24,7 @@
     carla_cleanup_gate --slice PATH --name NAME
     carla_cleanup_gate --fragment DIR
     carla_cleanup_gate --normalize PATH
+    carla_cleanup_gate --table PATH --count N
     carla_cleanup_gate --literals PATH --name NAME --kind array --size N
     carla_cleanup_gate --literals PATH --name NAME --kind scalar
 
@@ -40,6 +41,7 @@ from tests._python_tokens import (
     ideal_function_source,
     constant_literals_json,
     function_slice,
+    moment_words_json,
     normalized_block,
     replace_token_fragment,
     python_syntax_json,
@@ -446,6 +448,7 @@ def _usage():
             " | --routing PATH --constants PATH"
             " | --ideal PATH --name NAME | --syntax PATH"
             " | --slice PATH --name NAME | --fragment DIR | --normalize PATH"
+            " | --table PATH --count N"
             " | --literals PATH --name NAME --kind array --size N"
             " | --literals PATH --name NAME --kind scalar"
         ),
@@ -486,6 +489,8 @@ def main() raises:
     var slice_path = String("")
     var fragment = String("")
     var normalize = String("")
+    var table = String("")
+    var table_count = String("")
     var literals = String("")
     var literal_size = String("")
     var arguments = argv()
@@ -519,6 +524,8 @@ def main() raises:
             or word == "--slice"
             or word == "--fragment"
             or word == "--normalize"
+            or word == "--table"
+            or word == "--count"
             or word == "--literals"
             or word == "--size"
         ):
@@ -577,6 +584,10 @@ def main() raises:
                 fragment = value
             elif word == "--normalize":
                 normalize = value
+            elif word == "--table":
+                table = value
+            elif word == "--count":
+                table_count = value
             elif word == "--literals":
                 literals = value
             elif word == "--size":
@@ -633,6 +644,8 @@ def main() raises:
     if fragment.byte_length() > 0:
         modes += 1
     if normalize.byte_length() > 0:
+        modes += 1
+    if table.byte_length() > 0 or table_count.byte_length() > 0:
         modes += 1
     if significant.byte_length() > 0:
         modes += 1
@@ -715,6 +728,22 @@ def main() raises:
                 )
             else:
                 _usage()
+            return
+        if table.byte_length() > 0 or table_count.byte_length() > 0:
+            if table.byte_length() == 0 or table_count.byte_length() == 0:
+                _usage()
+            var count = 0
+            try:
+                count = Int(table_count)
+            except error:
+                _ = String(error)
+                _usage()
+            if count < 0:
+                _usage()
+            print(
+                moment_words_json(Path(table).read_text(), count),
+                end="",
+            )
             return
         if normalize.byte_length() > 0:
             print(normalized_block(Path(normalize).read_text()), end="")

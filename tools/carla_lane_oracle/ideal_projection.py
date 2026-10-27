@@ -348,6 +348,29 @@ def scalar_literal(text, name):
     return values[0]
 
 
+def moment_words(text, count):
+    """Return the `0x` words from one generated moment table."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='moment-table-') as directory:
+        source = Path(directory) / 'table.mojo'
+        source.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--table', str(source), '--count', str(count)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def normalized_block(text):
     """Drop comments and blank lines from one source block."""
     import os

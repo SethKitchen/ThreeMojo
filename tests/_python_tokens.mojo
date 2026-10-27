@@ -1665,6 +1665,181 @@ def python_syntax_json(source: String) raises -> String:
     return doc.dumps()
 
 
+def _table_code(source: String) -> String:
+    """Drop comments and join the table the way `str.splitlines` does.
+
+    Args:
+        source: The table source.
+
+    Returns:
+        The comment-free text, with surrounding whitespace removed.
+    """
+    var data = source.as_bytes()
+    var joined = String("")
+    var index = 0
+    var first = True
+    while index < len(data):
+        var start = index
+        var hash = -1
+        while index < len(data) and data[index] != 10 and data[index] != 13:
+            if hash < 0 and data[index] == 35:
+                hash = index
+            index += 1
+        var end = index if hash < 0 else hash
+        if not first:
+            joined += "\n"
+        first = False
+        var cursor = start
+        while cursor < end:
+            joined += chr(Int(data[cursor]))
+            cursor += 1
+        if index < len(data) and data[index] == 13:
+            index += 1
+        if index < len(data) and data[index] == 10:
+            index += 1
+    var bytes = joined.as_bytes()
+    var left = 0
+    var right = len(bytes)
+    while left < right and (
+        bytes[left] == 9
+        or bytes[left] == 10
+        or bytes[left] == 11
+        or bytes[left] == 12
+        or bytes[left] == 13
+        or bytes[left] == 32
+    ):
+        left += 1
+    while right > left and (
+        bytes[right - 1] == 9
+        or bytes[right - 1] == 10
+        or bytes[right - 1] == 11
+        or bytes[right - 1] == 12
+        or bytes[right - 1] == 13
+        or bytes[right - 1] == 32
+    ):
+        right -= 1
+    var out = String("")
+    var copy = left
+    while copy < right:
+        out += chr(Int(bytes[copy]))
+        copy += 1
+    return out
+
+
+def _hex_digit(byte: UInt8) -> Bool:
+    """Return whether `byte` is a hexadecimal digit.
+
+    Args:
+        byte: One source byte.
+
+    Returns:
+        True for `0-9`, `a-f`, and `A-F`.
+    """
+    return (
+        (byte >= 48 and byte <= 57)
+        or (byte >= 65 and byte <= 70)
+        or (byte >= 97 and byte <= 102)
+    )
+
+
+def moment_words_json(source: String, count: Int) raises -> String:
+    """Return the hex words in the generated moment table.
+
+    Args:
+        source: The table source, already decoded as text.
+        count: The required word count.
+
+    Returns:
+        A JSON list of `0x` words. Each word has 16 hexadecimal digits.
+
+    Raises:
+        Error: The declaration, its shape, or a word is malformed.
+    """
+    var code = _table_code(source)
+    var data = code.as_bytes()
+    var prefix = String(
+        "comptime _SPIRAL_MOMENT_WORDS: Array[UInt64, "
+    ).as_bytes()
+    var index = 0
+    var matched = len(data) >= len(prefix)
+    while matched and index < len(prefix):
+        if data[index] != prefix[index]:
+            matched = False
+        index += 1
+    if not matched:
+        raise Error("missing or malformed table declaration")
+    var declared = 0
+    var digits = 0
+    while index < len(data) and data[index] >= 48 and data[index] <= 57:
+        declared = declared * 10 + Int(data[index] - 48)
+        digits += 1
+        index += 1
+        if digits > 9:
+            raise Error("wrong table declaration shape")
+    if digits == 0:
+        raise Error("missing or malformed table declaration")
+    var suffix = String("] = [").as_bytes()
+    var cursor = 0
+    var tail = index + len(suffix) < len(data)
+    while tail and cursor < len(suffix):
+        if data[index + cursor] != suffix[cursor]:
+            tail = False
+        cursor += 1
+    if not tail or data[len(data) - 1] != 93:
+        raise Error("missing or malformed table declaration")
+    index += len(suffix)
+    if declared != count:
+        raise Error("wrong table declaration shape")
+    var body_end = len(data) - 1
+    var words = List[String]()
+    while index < body_end:
+        var byte = data[index]
+        if (
+            byte == 9
+            or byte == 10
+            or byte == 11
+            or byte == 12
+            or byte == 13
+            or byte == 32
+        ):
+            index += 1
+            continue
+        var mark = String("UInt64(0x").as_bytes()
+        var fit = index + len(mark) + 16 + 2 <= body_end
+        var at = 0
+        while fit and at < len(mark):
+            if data[index + at] != mark[at]:
+                fit = False
+            at += 1
+        var hex_at = 0
+        while fit and hex_at < 16:
+            if not _hex_digit(data[index + len(mark) + hex_at]):
+                fit = False
+            hex_at += 1
+        var close_at = index + len(mark) + 16
+        if fit and (data[close_at] != 41 or data[close_at + 1] != 44):
+            fit = False
+        if not fit:
+            raise Error("malformed coefficient word or extra source")
+        var word = String("0x")
+        var hex_index = 0
+        while hex_index < 16:
+            word += chr(Int(data[index + len(mark) + hex_index]))
+            hex_index += 1
+        words.append(word)
+        index = close_at + 2
+    if len(words) != count:
+        raise Error("missing or extra coefficient words")
+    var doc = PyJson()
+    var rows = doc.new_list()
+    var word = 0
+    while word < len(words):
+        doc.append(rows, doc.new_str(words[word]))
+        word += 1
+    doc.root = rows
+    return doc.dumps()
+
+
 def normalized_block(source: String) -> String:
     """Drop comments and blank lines, and keep the remaining indentation.
 

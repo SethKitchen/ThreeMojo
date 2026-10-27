@@ -14,6 +14,7 @@ from tests._python_tokens import (
     declaration_text,
     constant_literals_json,
     function_slice,
+    moment_words_json,
     normalized_block,
     replace_token_fragment,
     ideal_function_source,
@@ -158,6 +159,29 @@ def test_a_top_level_function_slice_stops_at_the_next_def() raises:
         _ = function_slice(source + "def first():\n    return 0\n", "first")
     with assert_raises(contains="missing or ambiguous function: absent"):
         _ = function_slice(source, "absent")
+
+
+def test_a_moment_table_keeps_its_hex_words() raises:
+    """Comments do not change the stored words, and a short word fails."""
+    var source = String(
+        "# header\n"
+        + "comptime _SPIRAL_MOMENT_WORDS: Array[UInt64, 2] = [\n"
+        + "    # Count 1\n"
+        + "    UInt64(0x0000000000000001), UInt64(0x000000000000000A),\n"
+        + "]\n"
+    )
+    assert_equal(
+        moment_words_json(source, 2),
+        '["0x0000000000000001","0x000000000000000A"]',
+    )
+    with assert_raises(contains="malformed coefficient word or extra source"):
+        _ = moment_words_json(
+            source.replace("0x0000000000000001", "0x000000000000001"), 2
+        )
+    with assert_raises(contains="wrong table declaration shape"):
+        _ = moment_words_json(
+            source.replace("Array[UInt64, 2]", "Array[UInt64, 1]"), 2
+        )
 
 
 def test_a_source_block_drops_comments_and_blank_lines() raises:
