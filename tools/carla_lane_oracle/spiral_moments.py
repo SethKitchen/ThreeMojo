@@ -231,6 +231,40 @@ def parse_array(text, name, size):
     return _rounded_words(literals)
 
 
+def _moment_route(mode, payload):
+    """Run one moment-routing mode and return its stdout."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-route-') as directory:
+        path = Path(directory) / 'route.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_route',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
+def _moment_route_current(source):
+    """Return the live routing document for the reviewed constant names."""
+    return _moment_route({'mode': 'current', 'source': source})
+
+
+def _moment_route_accept(current, expected, message, strip):
+    """Require the live routing document to match its pin."""
+    _moment_route({'mode': 'accept', 'current': current, 'expected': expected,
+                   'message': message, 'strip': strip})
+
+
 def _moment_guard(mode, payload):
     try:
         ideal_projection.moment_guard(mode, payload)
@@ -473,7 +507,10 @@ def verify_inputs(root):
         except ValueError as error:
             raise CheckError(str(error)) from error
         source = _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))
-        current = ideal_projection.module_routing(source, set(_array_specs()) | _scalar_names())
+        try:
+            current = _moment_route_current(source)
+        except ValueError as error:
+            raise CheckError(str(error)) from error
         if name == _moment_plan()['ideal_caller']:
             # Keep the historical routing pin. Validate the exact additive
             # try-only refusal, then project only its default-False parameter.
@@ -482,13 +519,10 @@ def verify_inputs(root):
             except ValueError as error:
                 raise CheckError(
                     messages['routing'] + name + ': ' + str(error)) from error
-            try:
-                current = ideal_projection.strip_try_only(current)
-            except ValueError as error:
-                raise CheckError(str(error)) from error
         try:
-            ideal_projection.require_same_text(
-                current, expected, messages['routing'] + name)
+            _moment_route_accept(
+                current, expected, messages['routing'] + name,
+                name == _moment_plan()['ideal_caller'])
         except ValueError as error:
             raise CheckError(str(error)) from error
     try:

@@ -272,6 +272,8 @@ It checks the moment pin sets, paths, dependency closure, legacy digest, and res
 
 It keeps the moment array paths, scalar names, block boundaries, and routing paths.
 
+It keeps the moment routing constants and the route comparison.
+
 It keeps the moment dependency record and the check messages.
 
 It keeps the moment report names and the pass line.
