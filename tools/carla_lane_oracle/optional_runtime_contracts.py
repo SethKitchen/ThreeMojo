@@ -248,7 +248,14 @@ def sequence(node, text, label):
 
 
 def fresh_guard(node):
-    expected = ast.parse('if not _sum2_supported_environment():\n    return None').body[0]
+    fragment = 'if not _sum2_supported_environment():\n    return None'
+    source = getattr(node, '_runtime_source', None)
+    if source is not None:
+        require(_fragment_count(
+            source, node._runtime_name, 'first', fragment, node.name) == 1,
+            'fresh invocation guard missing or moved: ' + node.name)
+        return
+    expected = ast.parse(fragment).body[0]
     require(sampled.dump(node.body[0]) == sampled.dump(expected),
             'fresh invocation guard missing or moved: ' + node.name)
 
@@ -383,8 +390,10 @@ def verify_search_semantics(run):
 
 def verify_semantics(root, *, _operation=None):
     helper = body(root, 'lane_refinement', '_same_cache_key', _operation=_operation)
-    require(sampled.dump(helper.body) == sampled.dump(_syntax_tree(
-        'return SIMD[DType.uint64, 2](station, scale) == SIMD[DType.uint64, 2](other_station, other_scale)').body),
+    require(_fragment_count(
+        helper._runtime_source, helper._runtime_name, 'body',
+        'return SIMD[DType.uint64, 2](station, scale) == SIMD[DType.uint64, 2](other_station, other_scale)',
+        'exact UInt64 pair helper comparison') == 1,
         'exact UInt64 pair helper comparison')
     model = body(root, 'curve_objective_model', '_try_objective_model', _operation=_operation)
     restrict = body(root, 'curve_objective_model', '_restrict_objective_model', _operation=_operation)
@@ -461,8 +470,10 @@ def verify_semantics(root, *, _operation=None):
             'translated center error cannot replace world error')
 
     predicate = body(root, 'curve_sample_dispatch', '_sample_dispatch_predicate', _operation=_operation)
-    require(sampled.dump(predicate.body) == sampled.dump(ast.parse(
-        'return min(max(station - origin, 0.0), length) > local').body),
+    require(_fragment_count(
+        predicate._runtime_source, predicate._runtime_name, 'body',
+        'return min(max(station - origin, 0.0), length) > local',
+        'exact stored subtraction/clamp dispatch predicate') == 1,
         'exact stored subtraction/clamp dispatch predicate')
     contains(cuts, 'var before_index = _sample_index(geometry, min(max(before - record.s, 0.0), geometry.length))',
              'actual predecessor sample index')
@@ -488,12 +499,14 @@ def verify_semantics(root, *, _operation=None):
     # The standalone helper remains reviewed and tested even though the
     # search solver no longer imports, captures, or restricts this model.
     room = body(root, 'curve_objective_model', '_objective_followup_room', _operation=_operation)
-    expected_room = sampled.unique_function(_syntax_tree(FOLLOWUP_ROOM), '_objective_followup_room')
-    require(sampled.dump(room) == sampled.dump(expected_room),
-            'complete overflow-safe integer followup admission')
+    require(_fragment_count(
+        room._runtime_source, room._runtime_name, 'equal', FOLLOWUP_ROOM,
+        'complete overflow-safe integer followup admission') == 1,
+        'complete overflow-safe integer followup admission')
     recheck = body(root, 'curve_objective_model', '_objective_recheck_room', _operation=_operation)
-    require(sampled.dump(recheck) == sampled.dump(sampled.unique_function(
-        _syntax_tree(RECHECK_ROOM), '_objective_recheck_room')),
+    require(_fragment_count(
+        recheck._runtime_source, recheck._runtime_name, 'equal', RECHECK_ROOM,
+        'complete integer cached-closure recheck admission') == 1,
         'complete integer cached-closure recheck admission')
     fee = body(root, 'map', '_query_node_step_cost', _operation=_operation)
     contains(fee, 'var fixed = 26 if goal else 20', 'reviewed goal node fee')

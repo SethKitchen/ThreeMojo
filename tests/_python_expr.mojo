@@ -1478,6 +1478,17 @@ def sum2_graph_dump(payload: String) raises -> String:
     return plain_function_dump(parsed.text(parsed.at(parsed.root, "source")))
 
 
+def _named_field(doc: PyJson, node: Int, key: String) raises -> Int:
+    var fields = doc.item(node, 1)
+    var index = 0
+    while index < doc.length(fields):
+        var pair = doc.item(fields, index)
+        if doc.text(doc.item(pair, 0)) == key:
+            return doc.item(pair, 1)
+        index += 1
+    raise Error("invalid checker fragment: missing " + key)
+
+
 def _count_nodes(
     doc: PyJson, node: Int, wanted: PyJson, target: Int
 ) raises -> Int:
@@ -1547,7 +1558,8 @@ def fragment_count(payload: String) raises -> String:
 
     Args:
         payload: JSON with `source`, `name`, `kind`, `fragment`, and `label`.
-            `kind` is `contains`, `expression`, or `sequence`.
+            `kind` is `contains`, `expression`, `sequence`, `first`, `body`,
+            or `equal`.
 
     Returns:
         The decimal count of matches.
@@ -1569,9 +1581,41 @@ def fragment_count(payload: String) raises -> String:
     var syntax = python_syntax_json(body)
     var parsed = PyJson.parse(syntax)
     var parser = _parser(parsed.text(parsed.at(parsed.root, "source")))
-    var function_doc = PyJson.parse(parser._dump(parser._parse_function(False)))
+    var left_text = parser._dump(parser._parse_function(False))
+    var function_doc = PyJson.parse(left_text)
     var count = 0
-    if kind == "expression":
+    if kind == "first" or kind == "body":
+        var rows = PyJson.parse(_fragment_statements(fragment))
+        if kind == "first" and rows.length(rows.root) != 1:
+            raise Error("invalid checker fragment: " + label)
+        var statements = _named_field(function_doc, function_doc.root, "body")
+        if kind == "first":
+            if function_doc.length(statements) == 0:
+                count = 0
+            elif py_equal(
+                function_doc,
+                function_doc.item(statements, 0),
+                rows,
+                rows.item(rows.root, 0),
+            ):
+                count = 1
+        elif py_equal(function_doc, statements, rows, rows.root):
+            count = 1
+    elif kind == "equal":
+        var other = fragment
+        try:
+            other = _decorator_prefix(fragment, function_slice(fragment, name))
+        except error:
+            other = fragment
+        var other_syntax = python_syntax_json(other)
+        var other_parsed = PyJson.parse(other_syntax)
+        var other_parser = _parser(
+            other_parsed.text(other_parsed.at(other_parsed.root, "source"))
+        )
+        var right_text = other_parser._dump(other_parser._parse_function(False))
+        if left_text == right_text:
+            count = 1
+    elif kind == "expression":
         var wanted = PyJson.parse(expression_dump(fragment))
         count = _count_nodes(
             function_doc, function_doc.root, wanted, wanted.root

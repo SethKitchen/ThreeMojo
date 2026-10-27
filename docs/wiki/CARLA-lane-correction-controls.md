@@ -100,6 +100,8 @@ It compares the Sum2 recurrence, leaf, and caller graphs.
 
 It counts one stored statement or expression in a runtime helper.
 
+It checks the fresh guard and the helper body against the stored fragment.
+
 It derives the stored moment rows in exact arithmetic.
 
 It checks the stored moment table against the derived words.
