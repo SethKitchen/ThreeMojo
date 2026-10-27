@@ -22,6 +22,10 @@ def test_the_module_and_token_stay_reviewed() raises:
         doc.text(doc.at(doc.root, "token")),
         "3fcfc637a40c4e322b5747f27f8d77163c3f47a49d1092b37c20744cafecba40",
     )
+    assert_equal(
+        doc.text(doc.at(doc.root, "consumer")),
+        "0e42c79e3bbda283c32886e50ad8b1acd614f651f1d258f4ea4b5e4e0e139299",
+    )
 
 
 def main() raises:

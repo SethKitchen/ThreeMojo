@@ -123,9 +123,17 @@ def grouped_table_identity() -> String:
     """Return the grouped proof module and its token digest.
 
     Returns:
-        JSON with `module` and `token`.
+        JSON with `module`, `token`, and `consumer`.
     """
-    return '{"module":"' + _MODULE + '","token":"' + _TOKEN + '"}'
+    return (
+        '{"module":"'
+        + _MODULE
+        + '","token":"'
+        + _TOKEN
+        + '","consumer":"'
+        + _CONSUMER
+        + '"}'
+    )
 
 
 def _usage():

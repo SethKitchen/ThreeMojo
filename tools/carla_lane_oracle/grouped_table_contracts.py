@@ -13,7 +13,6 @@ if __package__:
 else:
     import ideal_projection
 
-EXPECTED='0e42c79e3bbda283c32886e50ad8b1acd614f651f1d258f4ea4b5e4e0e139299'
 _IDENTITY = None
 
 
@@ -54,6 +53,8 @@ def __getattr__(name):
         return MODULE
     if name == 'TOKEN_SHA256':
         return TOKEN_SHA256
+    if name == 'EXPECTED':
+        return _identity()['consumer']
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 def verify_text(module, geometry):

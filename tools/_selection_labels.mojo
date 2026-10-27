@@ -14,13 +14,14 @@ def selection_labels() -> String:
     """Return the selection contract path and the predecessor messages.
 
     Returns:
-        JSON with `contract`, `producer_set`, `predecessor`, `body`, and
-        `scalar`.
+        JSON with `contract`, `producer_set`, `predecessor`, `body`,
+        `scalar`, and `interval`.
     """
     return (
         '{"contract":"tools/carla_lane_oracle/selection-finiteness-contract.json",'
         + '"producer_set":"Wrong selection producer set",'
         + '"predecessor":"Wrong selection predecessor module",'
         + '"body":"Selection complete successor body changed",'
-        + '"scalar":"Missing or ambiguous selector constant"}'
+        + '"scalar":"Missing or ambiguous selector constant",'
+        + '"interval":"e2e87c519ed45fb4ec77d9a54aad08406461b17805287874c9b05ddb6bf49b11"}'
     )

@@ -13,8 +13,12 @@ else:
 import json
 from pathlib import Path
 
-RECORD_SHA256 = '73d95d594e740205bad4cd900288a68d9f82897474fdc33e4d6043a156790170'
-PREDECESSOR_SHA256 = '33d33ba0e481e3eca3b17ae0d02457ab53bae906430b0dca58abcfa876756315'
+def __getattr__(name):
+    if name == 'RECORD_SHA256':
+        return _lane_labels()['record']
+    if name == 'PREDECESSOR_SHA256':
+        return _lane_labels()['predecessor']
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def _replace_first(text, old, new):

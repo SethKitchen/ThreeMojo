@@ -70,6 +70,10 @@ def test_sum2_modules_and_caller_comparisons_stay_reviewed() raises:
         doc.text(doc.at(doc.root, "spiral_begin")), "def _spiral_expression["
     )
     assert_equal(doc.text(doc.at(doc.root, "spiral_end")), "def _sample_index(")
+    assert_equal(
+        doc.text(doc.at(doc.root, "helper_sha")),
+        "41995592963bae61a2b690b465bdad6c759b02ddbe98141ba5da30d0df5d5c8e",
+    )
 
 
 def main() raises:

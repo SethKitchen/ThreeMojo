@@ -14,7 +14,8 @@ def lane_control_labels() -> String:
     """Return the lane-control labels and the frozen reference prefix.
 
     Returns:
-        JSON with the labels, the `def` prefix pieces, and the pass line.
+        JSON with the labels, the `def` prefix pieces, the pass line, and
+        the record digests.
     """
     return (
         '{"successor":"lane-control successor module changed",'
@@ -24,5 +25,7 @@ def lane_control_labels() -> String:
         + '"premise":"lane-control guarded premise changed: ",'
         + '"producer":"lane-control IEEE producer module changed: ",'
         + '"definition":"def ","call":"(","reference":"_reference",'
-        + '"pass":"Lane control-flow migration: PASS"}'
+        + '"pass":"Lane control-flow migration: PASS",'
+        + '"record":"73d95d594e740205bad4cd900288a68d9f82897474fdc33e4d6043a156790170",'
+        + '"predecessor":"33d33ba0e481e3eca3b17ae0d02457ab53bae906430b0dca58abcfa876756315"}'
     )

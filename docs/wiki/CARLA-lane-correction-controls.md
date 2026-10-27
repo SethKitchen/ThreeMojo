@@ -34,11 +34,15 @@ It restores one selection function inside its line span.
 
 It keeps the selection contract path and the predecessor messages.
 
+It keeps the interval token digest.
+
 It keeps the selector constant message.
 
 `tools/carla_grouped_gate.mojo` checks the grouped-table token digest and the stored node and weight bounds.
 
 It keeps the grouped proof module and its token digest.
+
+It keeps the grouped consumer digest.
 
 It compares that grouped-table token digest before the predecessor fallback.
 
@@ -212,6 +216,8 @@ It checks the lane proof refusal before routing.
 
 It compares the Sum2 recurrence, leaf, and caller graphs.
 
+It keeps the reviewed Sum2 helper digest.
+
 It compares the scalar environment call with its stored statement.
 
 It counts one stored statement or expression in a runtime helper.
@@ -299,6 +305,8 @@ It accepts one historical lane declaration when the owner is empty and the token
 It renames the first frozen lane declaration.
 
 It keeps the lane-control labels and the frozen reference prefix.
+
+It keeps the lane-control record digests.
 
 It keeps the lane-control pass line.
 

@@ -14,7 +14,8 @@ def sum2_plan() -> String:
     """Return the Sum2 module names, caller comparisons, and helper map.
 
     Returns:
-        JSON with `modules`, `graphs`, and `helpers` in that order.
+        JSON with `modules`, `graphs`, and `helpers` in that order. The
+        helper digest follows those fields.
     """
     return (
         '{"modules":["curve_sum2","lane_geometry","curve_bounds","spiral_roundoff_proof"],'
@@ -33,5 +34,6 @@ def sum2_plan() -> String:
         + '],"helpers":{"lane":"lane_geometry","bounds":"curve_bounds","roundoff":"spiral_roundoff_proof"},'
         + '"stored_half":"_stored_half","half_key":"bounds","interval_key":"interval",'
         + '"spiral_begin":"def _spiral_expression[","spiral_end":"def'
-        ' _sample_index("}'
+        ' _sample_index(",'
+        + '"helper_sha":"41995592963bae61a2b690b465bdad6c759b02ddbe98141ba5da30d0df5d5c8e"}'
     )

@@ -38,7 +38,10 @@ else:
 
 # Initial accepted arithmetic checkpoint. The guarded and final format/doc
 # source bindings are preserved in sum2-correspondence-migration.json.
-REVIEWED_HELPER_SHA256 = '41995592963bae61a2b690b465bdad6c759b02ddbe98141ba5da30d0df5d5c8e'
+def __getattr__(name):
+    if name == 'REVIEWED_HELPER_SHA256':
+        return _sum2_plan()['helper_sha']
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def _checkpoints():

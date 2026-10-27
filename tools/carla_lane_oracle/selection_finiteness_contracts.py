@@ -14,7 +14,6 @@ if __package__:
     from . import source_contracts
 else:
     import source_contracts
-INTERVAL='e2e87c519ed45fb4ec77d9a54aad08406461b17805287874c9b05ddb6bf49b11'
 _EXPECTED = None
 
 
@@ -43,6 +42,8 @@ def _expected():
 def __getattr__(name):
     if name == 'EXPECTED':
         return _expected()
+    if name == 'INTERVAL':
+        return _selection_labels()['interval']
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 def _scalar(text,name):
