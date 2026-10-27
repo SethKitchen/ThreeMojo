@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_equal
 
-from tools._merged_edge import merged_edge
+from tools._merged_edge import merged_edge, merged_edges
 
 
 def test_the_module_path_is_written_first() raises:
@@ -29,6 +29,18 @@ def test_the_module_path_is_written_first() raises:
     assert_equal(
         merged_edge('{"path":"cameras.mojo","edge":{}}'),
         '{"path":"cameras.mojo"}',
+    )
+
+
+def test_merged_edges_keep_their_order() raises:
+    """Each edge keeps its own path and stored keys."""
+    assert_equal(
+        merged_edges(
+            '[{"path":"a.mojo","edge":{"before_sha256":"a"}},'
+            + '{"path":"b.mojo","edge":{"path":"old","after_sha256":"b"}}]'
+        ),
+        '[{"path":"a.mojo","before_sha256":"a"},'
+        + '{"path":"old","after_sha256":"b"}]',
     )
 
 

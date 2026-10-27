@@ -67,6 +67,33 @@ def _dump(doc: PyJson, node: Int) raises -> String:
     return doc.text(node)
 
 
+def _place_path(mut doc: PyJson, edge: Int, path: String) raises -> Int:
+    """Return an edge object with `path` written first.
+
+    Args:
+        doc: The document that owns `edge`.
+        edge: The stored edge object.
+        path: The module path.
+
+    Returns:
+        The new edge object. A path already stored on `edge` keeps that
+        position and replaces `path`.
+
+    Raises:
+        Error: The edge cannot be read.
+    """
+    var out = doc.new_dict()
+    doc.set(out, "path", doc.new_str(path))
+    var count = doc.length(edge)
+    var index = 0
+    while index < count:
+        doc.set(
+            out, doc.key(edge, index), doc.copy_node(doc.value(edge, index))
+        )
+        index += 1
+    return out
+
+
 def merged_edge(payload: String) raises -> String:
     """Return an edge with its module path written first.
 
@@ -83,13 +110,30 @@ def merged_edge(payload: String) raises -> String:
     var doc = PyJson.parse(payload)
     var path = doc.text(doc.at(doc.root, "path"))
     var edge = doc.at(doc.root, "edge")
-    var out = doc.new_dict()
-    doc.set(out, "path", doc.new_str(path))
-    var count = doc.length(edge)
+    var placed = _place_path(doc, edge, path)
+    return _dump(doc, placed)
+
+
+def merged_edges(payload: String) raises -> String:
+    """Return each edge with its module path written first.
+
+    Args:
+        payload: A JSON list. Each item has `path` and `edge`.
+
+    Returns:
+        A JSON list of edges, in the same order.
+
+    Raises:
+        Error: An item has no `path` or `edge`.
+    """
+    var doc = PyJson.parse(payload)
+    var rows = doc.new_list()
+    var count = doc.length(doc.root)
     var index = 0
     while index < count:
-        var key = doc.key(edge, index)
-        var copied = doc.copy_node(doc.value(edge, index))
-        doc.set(out, key, copied)
+        var item = doc.item(doc.root, index)
+        var path = doc.text(doc.at(item, "path"))
+        var edge = doc.at(item, "edge")
+        doc.append(rows, _place_path(doc, edge, path))
         index += 1
-    return _dump(doc, out)
+    return _dump(doc, rows)

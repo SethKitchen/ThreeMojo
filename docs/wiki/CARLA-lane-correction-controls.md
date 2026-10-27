@@ -371,7 +371,10 @@ It keeps the lane-control migration path.
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.
 
 It checks every render-actor file digest in one check.
+
 It puts the module path on the render-actor edge.
+
+It puts every render-actor path on its edge in one check.
 
 It keeps the render-actor module and its three bound tests.
 
@@ -386,6 +389,8 @@ It checks every runtime-boundary file digest in one check.
 It extends an edge when a reviewed view step starts at that edge.
 
 It puts the module path on that edge.
+
+It puts every runtime-boundary path on its edge in one check.
 
 It keeps the four runtime-boundary module paths.
 

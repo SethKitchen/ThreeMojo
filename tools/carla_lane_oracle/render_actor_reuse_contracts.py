@@ -206,18 +206,17 @@ def _gate_bytes_all(items):
         _run(['--bytes-all', str(folder)])
 
 
-def _merged_edge(path, edge):
-    """Return `edge` with `path` written first."""
+def _merged_query(payload):
     import os
     import subprocess
     import tempfile
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps({'path': path, 'edge': edge}, separators=(',', ':'))
+    text = json.dumps(payload, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='render-actor-edge-') as directory:
         record = Path(directory) / 'edge.json'
-        record.write_text(payload)
+        record.write_text(text)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_merged_edge',
              str(record)],
@@ -228,6 +227,14 @@ def _merged_edge(path, edge):
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
     return json.loads(result.stdout)
+
+
+def _merged_edges(items):
+    """Return each edge with its path written first."""
+    if not items:
+        return []
+    return _merged_query([
+        {'path': path, 'edge': edge} for path, edge in items])
 
 
 _RENDER_MESSAGES = None
@@ -282,8 +289,9 @@ def verify(root, *, _operation=None):
     _gate_bytes_all([
         (actual, digest, token, label)
         for _path, _edge, actual, digest, token, label in checked])
-    for path, edge, _actual, _digest, _token, _label in checked:
-        edges[path] = _merged_edge(path, edge)
+    merged = _merged_edges([(path, edge) for path, edge, _actual, _digest, _token, _label in checked])
+    for (path, _edge, _actual, _digest, _token, _label), edge in zip(checked, merged):
+        edges[path] = edge
     tests = []
     for path, expected in record['correctness_tests'].items():
         tests.append((_typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
