@@ -38,6 +38,8 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch migration digest and its source set.
 
+`tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record and the winner-sign digest.
+
 ## Lane poses
 
 The pose follows the derivative of the actual lane-center expression.
