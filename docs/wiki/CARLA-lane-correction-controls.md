@@ -32,6 +32,8 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_singleton_gate.mojo` checks the rounded LINE singleton migration digest and its schema.
 
+`tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record and the cleanup digest.
+
 ## Lane poses
 
 The pose follows the derivative of the actual lane-center expression.

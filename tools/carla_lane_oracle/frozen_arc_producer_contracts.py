@@ -52,19 +52,37 @@ def require(condition, message):
         raise ValueError('frozen ARC producer contract: ' + message)
 
 
+def _gate(migration, previous=None):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='frozen-arc-gate-') as directory:
+        folder = Path(directory)
+        record = folder / 'migration.json'
+        record.write_bytes(migration)
+        arguments = ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+                     'carla_frozen_arc_gate', '--migration', str(record)]
+        if previous is not None:
+            previous_path = folder / 'previous.json'
+            previous_path.write_bytes(previous)
+            arguments.extend(['--previous', str(previous_path)])
+        result = subprocess.run(arguments, capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
-    require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256,
-            'unreviewed migration record')
+    _gate(payload)
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
-    require(type(record['schema']) is int and record['schema'] == 1,
-            'unsupported migration schema')
     previous = root/'tools/carla_lane_oracle/reviewed-cleanup-migration.json'
-    require(hashlib.sha256(_typed_source.historical_bytes(root, previous, previous.read_bytes())).hexdigest() ==
-            record['previous_cleanup_migration_sha256'],
-            'historical three-file cleanup changed')
-    require(record['source_successor']['path'] == SOURCE_PATH,
-            'wrong successor source')
+    _gate(payload, _typed_source.historical_bytes(root, previous, previous.read_bytes()))
     return record
 
 
