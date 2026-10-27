@@ -13,8 +13,41 @@ if __package__:
     from . import source_contracts as source
 else:
     import source_contracts as source
-MIGRATION = 'tools/carla_lane_oracle/speed-parser-successor.json'
-MIGRATION_SHA256 = '47e949673fb8740816c06d455654c7e7ae43f65ce7d7568a201e83ae16c49364'
+
+_MIGRATION_RECORDS = None
+
+
+def _migration_records():
+    """Return the reviewed migration paths and digests."""
+    global _MIGRATION_RECORDS
+    if _MIGRATION_RECORDS is not None:
+        return _MIGRATION_RECORDS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_migration_records'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _MIGRATION_RECORDS = json.loads(result.stdout)
+    return _MIGRATION_RECORDS
+
+
+def _ensure_migration():
+    """Bind this checker's migration path and digest."""
+    global MIGRATION, MIGRATION_SHA256
+    if 'MIGRATION' in globals() and MIGRATION is not None:
+        return
+    record = _migration_records()['speed']
+    MIGRATION = record['path']
+    MIGRATION_SHA256 = record['sha']
+
 _PATHS = None
 
 
@@ -48,8 +81,12 @@ def _ensure_paths():
 
 
 def __getattr__(name):
+    if name in ('MIGRATION', 'MIGRATION_SHA256'):
+        _ensure_migration()
+        return MIGRATION if name == 'MIGRATION' else MIGRATION_SHA256
     if name in ('MODULE', 'TESTS', 'PROTECTED_INPUTS'):
         _ensure_paths()
+        _ensure_migration()
     if name == 'MODULE':
         return MODULE
     if name == 'TESTS':
@@ -172,6 +209,7 @@ def verify(root, *, _operation=None):
         _check_operation(root, _operation)
     _ensure_paths()
     root = Path(root)
+    _ensure_migration()
     raw = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes(), _operation=_operation)
     accepted_path = _record_paths()['accepted']
     accepted = _typed_source.historical_bytes(root, root/accepted_path, (root/accepted_path).read_bytes(), _operation=_operation)

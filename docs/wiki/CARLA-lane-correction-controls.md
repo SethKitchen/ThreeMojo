@@ -136,6 +136,8 @@ It keeps the trig and geometry choice names.
 
 It keeps the cleanup contract prefix.
 
+It keeps the eight migration record paths and digests.
+
 It keeps the five premise declarations and the junction path.
 
 It keeps the winner-sign record and the runtime pin path.

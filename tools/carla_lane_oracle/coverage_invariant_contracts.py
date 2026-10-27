@@ -21,8 +21,41 @@ else:
     import source_contracts as source
     import curve_support_dispatch_contracts as curve
     import grouped_table_contracts as grouped
-MIGRATION = 'tools/carla_lane_oracle/coverage-invariant-migration.json'
-MIGRATION_SHA256 = '56a72d9bccbf9e7b8a6b51db2b9944ef4bbf55d9bcc7311f7f9615be3b3b36ac'
+
+_MIGRATION_RECORDS = None
+
+
+def _migration_records():
+    """Return the reviewed migration paths and digests."""
+    global _MIGRATION_RECORDS
+    if _MIGRATION_RECORDS is not None:
+        return _MIGRATION_RECORDS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_migration_records'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _MIGRATION_RECORDS = json.loads(result.stdout)
+    return _MIGRATION_RECORDS
+
+
+def _ensure_migration():
+    """Bind this checker's migration path and digest."""
+    global MIGRATION, MIGRATION_SHA256
+    if 'MIGRATION' in globals() and MIGRATION is not None:
+        return
+    record = _migration_records()['invariant']
+    MIGRATION = record['path']
+    MIGRATION_SHA256 = record['sha']
+
 _SOURCES = None
 
 
@@ -74,9 +107,13 @@ def _protected_tail():
 
 
 def __getattr__(name):
+    if name in ('MIGRATION', 'MIGRATION_SHA256'):
+        _ensure_migration()
+        return MIGRATION if name == 'MIGRATION' else MIGRATION_SHA256
     if name == 'SOURCE_PATHS':
         return _sources()
     if name == 'PROTECTED_INPUTS':
+        _ensure_migration()
         return (MIGRATION, *curve.PROTECTED_INPUTS, *_protected_tail())
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
@@ -193,6 +230,7 @@ def _invariant_labels():
 
 def read_record(root):
     labels = _invariant_labels()
+    _ensure_migration()
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
     record = json.loads(payload, object_pairs_hook=source.unique_keys)

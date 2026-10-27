@@ -19,8 +19,41 @@ else:
     import source_contracts as source
     import full_audit_cleanup_contracts as full_audit
 
-MIGRATION = 'tools/carla_lane_oracle/rounded-line-singleton-migration.json'
-MIGRATION_SHA256 = 'e4a0eb6c9e527dd66b2b803ee69754334feecc9bea33ce001cdf584d3a693506'
+
+_MIGRATION_RECORDS = None
+
+
+def _migration_records():
+    """Return the reviewed migration paths and digests."""
+    global _MIGRATION_RECORDS
+    if _MIGRATION_RECORDS is not None:
+        return _MIGRATION_RECORDS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_migration_records'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _MIGRATION_RECORDS = json.loads(result.stdout)
+    return _MIGRATION_RECORDS
+
+
+def _ensure_migration():
+    """Bind this checker's migration path and digest."""
+    global MIGRATION, MIGRATION_SHA256
+    if 'MIGRATION' in globals() and MIGRATION is not None:
+        return
+    record = _migration_records()['singleton']
+    MIGRATION = record['path']
+    MIGRATION_SHA256 = record['sha']
+
 
 
 _CONTRACT_PREFIXES = None
@@ -174,7 +207,15 @@ def _gate_graphs(pairs):
         raise ValueError(message)
 
 
+def __getattr__(name):
+    if name in ('MIGRATION', 'MIGRATION_SHA256'):
+        _ensure_migration()
+        return MIGRATION if name == 'MIGRATION' else MIGRATION_SHA256
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+
+
 def read_record(root):
+    _ensure_migration()
     payload = _typed_source.historical_bytes(root, root / MIGRATION, (root / MIGRATION).read_bytes())
     _gate(payload)
     return json.loads(payload, object_pairs_hook=source.unique_keys)

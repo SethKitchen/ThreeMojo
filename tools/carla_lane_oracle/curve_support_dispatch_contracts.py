@@ -20,8 +20,41 @@ else:
     import source_contracts as source
     import ideal_projection
 
-MIGRATION = 'tools/carla_lane_oracle/curve-support-dispatch-migration.json'
-MIGRATION_SHA256 = '1a6d7794bf0869a1e717685e556d8400e075ab97917ce8d855da6bd61c3ee19f'
+
+_MIGRATION_RECORDS = None
+
+
+def _migration_records():
+    """Return the reviewed migration paths and digests."""
+    global _MIGRATION_RECORDS
+    if _MIGRATION_RECORDS is not None:
+        return _MIGRATION_RECORDS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_migration_records'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _MIGRATION_RECORDS = json.loads(result.stdout)
+    return _MIGRATION_RECORDS
+
+
+def _ensure_migration():
+    """Bind this checker's migration path and digest."""
+    global MIGRATION, MIGRATION_SHA256
+    if 'MIGRATION' in globals() and MIGRATION is not None:
+        return
+    record = _migration_records()['dispatch']
+    MIGRATION = record['path']
+    MIGRATION_SHA256 = record['sha']
+
 _PATHS = None
 
 
@@ -48,9 +81,13 @@ def _paths():
 
 
 def __getattr__(name):
+    if name in ('MIGRATION', 'MIGRATION_SHA256'):
+        _ensure_migration()
+        return MIGRATION if name == 'MIGRATION' else MIGRATION_SHA256
     if name == 'SOURCE_PATHS':
         return tuple(_paths()['sources'])
     if name == 'PROTECTED_INPUTS':
+        _ensure_migration()
         data = _paths()
         return (MIGRATION, *data['sources'], *data['protected'])
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
@@ -197,6 +234,7 @@ def _gate_graphs(pairs):
 
 
 def read_record(root):
+    _ensure_migration()
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
     return json.loads(payload, object_pairs_hook=source.unique_keys)

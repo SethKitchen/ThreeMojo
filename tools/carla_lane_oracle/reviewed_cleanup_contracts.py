@@ -35,8 +35,41 @@ else:
     import accepted_successor_contracts as accepted
     import ideal_projection
 
-MIGRATION = 'tools/carla_lane_oracle/reviewed-cleanup-migration.json'
-MIGRATION_SHA256 = '01753344fe01d885eb3bbaf253815bca01816c57c09b6e7cc1c3a233808b42a9'
+
+_MIGRATION_RECORDS = None
+
+
+def _migration_records():
+    """Return the reviewed migration paths and digests."""
+    global _MIGRATION_RECORDS
+    if _MIGRATION_RECORDS is not None:
+        return _MIGRATION_RECORDS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_migration_records'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _MIGRATION_RECORDS = json.loads(result.stdout)
+    return _MIGRATION_RECORDS
+
+
+def _ensure_migration():
+    """Bind this checker's migration path and digest."""
+    global MIGRATION, MIGRATION_SHA256
+    if 'MIGRATION' in globals() and MIGRATION is not None:
+        return
+    record = _migration_records()['cleanup']
+    MIGRATION = record['path']
+    MIGRATION_SHA256 = record['sha']
+
 # A fixture that invokes the protected guard must carry its complete inputs.
 _CLEANUP_PATHS = None
 
@@ -99,12 +132,16 @@ def _protected_tail():
 def _protected_inputs():
     """Return the protected inputs, including the Mojo path tables."""
     _ensure_paths()
+    _ensure_migration()
     return (*cache_key.PROTECTED_INPUTS, *accepted.PROTECTED_INPUTS, MIGRATION, _record_paths()['runtime_pins'],
             *SOURCE_PATHS, *PREMISE_PATHS, *frozen.PROTECTED_INPUTS,
             *invariant.PROTECTED_INPUTS, *_protected_tail())
 
 
 def __getattr__(name):
+    if name in ('MIGRATION', 'MIGRATION_SHA256'):
+        _ensure_migration()
+        return MIGRATION if name == 'MIGRATION' else MIGRATION_SHA256
     if name == 'SOURCE_PATHS':
         _ensure_paths()
         return SOURCE_PATHS
@@ -287,6 +324,7 @@ def _record_paths():
 
 
 def read_record(root):
+    _ensure_migration()
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
     record = json.loads(payload, object_pairs_hook=source.unique_keys)

@@ -23,8 +23,41 @@ else:
     import source_contracts as source
     import consumer_successor_ledger as ledger
 
-MIGRATION = 'tools/carla_lane_oracle/render-actor-reuse-successor.json'
-MIGRATION_SHA256 = 'c4d146fe145289a1ad443956d2941d1e90186d448b8056f8be97d72f4f672771'
+
+_MIGRATION_RECORDS = None
+
+
+def _migration_records():
+    """Return the reviewed migration paths and digests."""
+    global _MIGRATION_RECORDS
+    if _MIGRATION_RECORDS is not None:
+        return _MIGRATION_RECORDS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_migration_records'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _MIGRATION_RECORDS = json.loads(result.stdout)
+    return _MIGRATION_RECORDS
+
+
+def _ensure_migration():
+    """Bind this checker's migration path and digest."""
+    global MIGRATION, MIGRATION_SHA256
+    if 'MIGRATION' in globals() and MIGRATION is not None:
+        return
+    record = _migration_records()['render']
+    MIGRATION = record['path']
+    MIGRATION_SHA256 = record['sha']
+
 _PATHS = None
 
 
@@ -59,11 +92,15 @@ def _actor_tests():
 
 
 def __getattr__(name):
+    if name in ('MIGRATION', 'MIGRATION_SHA256'):
+        _ensure_migration()
+        return MIGRATION if name == 'MIGRATION' else MIGRATION_SHA256
     if name == 'MODULES':
         return _actor_modules()
     if name == 'TESTS':
         return _actor_tests()
     if name == 'PROTECTED_INPUTS':
+        _ensure_migration()
         return (MIGRATION, *_actor_modules(), *_actor_tests())
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
@@ -214,6 +251,7 @@ def verify(root, *, _operation=None):
     """
     if _operation is not None:
         _check_operation(root, _operation)
+    _ensure_migration()
     raw = _typed_source.historical_bytes(root, MIGRATION, _observe_bytes(root, MIGRATION, (root/MIGRATION).read_bytes(),
                          _operation=_operation), _operation=_operation)
     _gate_record(raw)
