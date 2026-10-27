@@ -3,19 +3,24 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md
 
-"""Choose a dispatch source or compare one premise text.
+"""Choose a dispatch source or compare premise texts.
 
     carla_dispatch_source --choice PATH
     carla_dispatch_source --match PATH
 
 `--choice` prints `current` or `restore`. `--match` prints `true` or
-`false`.
+`false` for one pair. A list prints those flags in order.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._dispatch_source import reviewed_source_choice, texts_match
+from tools._dispatch_source import (
+    reviewed_source_choice,
+    texts_match,
+    texts_match_all,
+)
+from tools._python_json import PY_LIST, PyJson
 
 
 def _usage():
@@ -28,7 +33,7 @@ def _usage():
 
 
 def main() raises:
-    """Choose one dispatch source or compare one text.
+    """Choose one dispatch source or compare premise texts.
 
     Raises:
         Error: The command is invalid, or the source successor is unreviewed.
@@ -44,7 +49,11 @@ def main() raises:
         if mode == "--choice":
             print(reviewed_source_choice(text), end="")
         else:
-            print(texts_match(text), end="")
+            var doc = PyJson.parse(text)
+            if doc.kind(doc.root) == PY_LIST:
+                print(texts_match_all(text), end="")
+            else:
+                print(texts_match(text), end="")
     except error:
         print(String(error), file=stderr)
         exit(1)

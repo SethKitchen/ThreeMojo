@@ -263,6 +263,15 @@ def _dispatch_query(mode, payload):
     return result.stdout.strip()
 
 
+def _match_flags(pairs):
+    """Return whether each actual text equals its expected text."""
+    if not pairs:
+        return []
+    import json
+    return json.loads(_dispatch_query('--match', [
+        {'actual': actual, 'expected': expected} for actual, expected in pairs]))
+
+
 _DISPATCH_LABELS = None
 
 
@@ -459,11 +468,14 @@ def verify_premises(root, *, _operation=None):
         'name': item['name'],
         'owner': list(item['owner']),
     } for item, _physical_text, text in loaded])
+    premise_docs = _significant_documents([
+        text for index, (item, _physical_text, _text) in enumerate(loaded)
+        for text in (declared[index], item['source'])])
+    matched_flags = _match_flags([
+        (premise_docs[index * 2], premise_docs[index * 2 + 1])
+        for index in range(len(loaded))])
     for index, (item, physical_text, _text) in enumerate(loaded):
-        actual = declared[index]
-        current_doc, recorded_doc = _significant_documents([actual, item['source']])
-        matched = _dispatch_query('--match', {
-            'actual': current_doc, 'expected': recorded_doc}) == 'true'
+        matched = matched_flags[index] == 'true'
         fallback = _premise_fallback(
             matched, item['path'], item['name'], tuple(item['owner']))
         if fallback == labels['seed']:

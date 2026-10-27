@@ -8,7 +8,11 @@
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._python_tokens import token_sha256
-from tools._dispatch_source import reviewed_source_choice, texts_match
+from tools._dispatch_source import (
+    reviewed_source_choice,
+    texts_match,
+    texts_match_all,
+)
 
 
 def _choice(token: String, expected: String, path: String) -> String:
@@ -83,6 +87,16 @@ def test_a_dispatch_source_uses_its_kept_token_digest() raises:
         + '"dispatch_path":"extensions/carla/curve_sample_dispatch.mojo"}'
     )
     assert_equal(reviewed_source_choice(payload), "current")
+
+
+def test_premise_text_lists_keep_their_order() raises:
+    """Each pair keeps its own comparison."""
+    assert_equal(
+        texts_match_all(
+            '[{"actual":"same","expected":"same"},{"actual":"left","expected":"right"}]'
+        ),
+        '["true","false"]',
+    )
 
 
 def main() raises:

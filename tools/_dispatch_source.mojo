@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md
 
-"""Choose the dispatch source and compare one premise text.
+"""Choose the dispatch source and compare premise texts.
 
 An unchanged token keeps the current source. Only the sample-dispatch
 module may restore its predecessor. Premise texts compare as Python
@@ -65,3 +65,33 @@ def texts_match(payload: String) raises -> String:
     ):
         return "true"
     return "false"
+
+
+def texts_match_all(payload: String) raises -> String:
+    """Return whether each premise text matches.
+
+    Args:
+        payload: A JSON list. Each item has `actual` and `expected`.
+
+    Returns:
+        A JSON list of `true` or `false`, in the same order.
+
+    Raises:
+        Error: A text field is absent.
+    """
+    var doc = PyJson.parse(payload)
+    var out = PyJson()
+    var rows = out.new_list()
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        var item = doc.item(doc.root, index)
+        var flag = String("false")
+        if doc.text(doc.at(item, "actual")) == doc.text(
+            doc.at(item, "expected")
+        ):
+            flag = "true"
+        out.append(rows, out.new_str(flag))
+        index += 1
+    out.root = rows
+    return out.dumps()
