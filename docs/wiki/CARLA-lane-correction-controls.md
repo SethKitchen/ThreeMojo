@@ -150,6 +150,8 @@ It checks the stored moment table against the derived words.
 
 It packs the derived moment words into big-endian payload bytes.
 
+It writes those packed bytes from the hexadecimal payload.
+
 It checks the derived payload size and the three pin-file digests.
 
 It checks the stored array names, word counts, and output paths.
@@ -163,6 +165,8 @@ It rounds one exact fraction to binary64.
 It keeps a negative zero and reports one binary64 word.
 
 It spells each stored word as `0x` and 16 uppercase digits.
+
+It reads each stored hexadecimal word as an integer.
 
 It checks the moment pin sets, paths, dependency closure, legacy digest, and result pins.
 

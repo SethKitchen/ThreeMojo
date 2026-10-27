@@ -460,7 +460,7 @@ def _coefficient_words(rows):
 
 
 def words_from_rows(rows):
-    return [int(word, 16) for word in _coefficient_words(rows)]
+    return ideal_projection.hex_integers(_coefficient_words(rows))
 
 
 def _moment_payload(rows):
@@ -489,7 +489,7 @@ def parse_table(data):
         words = ideal_projection.moment_words(text, WORD_COUNT)
     except ValueError as error:
         raise CheckError(str(error)) from error
-    return [int(word, 16) for word in words]
+    return ideal_projection.hex_integers(words)
 
 
 def verify_table(data, rows):
@@ -569,7 +569,7 @@ def main(argv=None):
             if args.generate:
                 products.update({
                     DATA.name: generate_source(rows),
-                    'spiral_moment_words.be64': bytes.fromhex(
+                    'spiral_moment_words.be64': ideal_projection.payload_bytes(
                         _moment_payload(rows)['be64']),
                     'spiral_moment_exact_coefficients.json': (json.dumps({'counts': rows}, indent=2) + '\n').encode(),
                 })

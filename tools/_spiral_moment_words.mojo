@@ -607,6 +607,52 @@ def _u64_decimal(text: String) raises -> UInt64:
     return value
 
 
+def _u64_text(word: UInt64) -> String:
+    """Return the unsigned decimal spelling of one word.
+
+    Args:
+        word: Any 64-bit value.
+
+    Returns:
+        Decimal digits with no sign. Zero is `0`.
+    """
+    if word == UInt64(0):
+        return "0"
+    var digits = "0123456789"
+    var text = String("")
+    var value = word
+    while value != UInt64(0):
+        var digit = Int(value % UInt64(10))
+        text = String(digits[byte = digit : digit + 1]) + text
+        value = value // UInt64(10)
+    return text
+
+
+def hex_integers_json(payload: String) raises -> String:
+    """Return the decimal spelling of each hexadecimal word.
+
+    Args:
+        payload: A JSON list of `0x` words.
+
+    Returns:
+        A JSON list of unsigned decimal integers, as text.
+
+    Raises:
+        Error: A word is not one to sixteen hexadecimal digits.
+    """
+    var doc = PyJson.parse(payload)
+    var count = doc.length(doc.root)
+    var out = PyJson()
+    var rows = out.new_list()
+    var index = 0
+    while index < count:
+        var word = _parse_word(doc.text(doc.item(doc.root, index)))
+        out.append(rows, out.new_str(_u64_text(word)))
+        index += 1
+    out.root = rows
+    return out.dumps()
+
+
 def hex_words_json(payload: String) raises -> String:
     """Return the `0x` spelling of each decimal word.
 

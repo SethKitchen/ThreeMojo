@@ -296,6 +296,30 @@ def apply_pin_transitions(pins, transitions):
     return result.stdout
 
 
+def hex_integers(words):
+    """Return each hexadecimal word as an int."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps(list(words), separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='hex-integers-') as directory:
+        path = Path(directory) / 'words.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_stored_words',
+             '--integers', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return [int(item) for item in json.loads(result.stdout)]
+
+
 def decimal_words(literals):
     """Return the nearest binary64 word of each decimal literal."""
     import os
@@ -320,7 +344,7 @@ def decimal_words(literals):
         if message.startswith(prefix):
             message = message[len(prefix):]
         raise ValueError(message)
-    return [int(item, 16) for item in json.loads(result.stdout)]
+    return hex_integers(json.loads(result.stdout))
 
 
 def hex_words(words):
@@ -500,7 +524,7 @@ def rounded_node_sums(nodes, weights):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return [int(item, 16) for item in json.loads(result.stdout)]
+    return hex_integers(json.loads(result.stdout))
 
 
 def sha256_texts(texts):
@@ -576,7 +600,7 @@ def verify_moment_table(text, words):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return [int(item, 16) for item in json.loads(result.stdout)]
+    return hex_integers(json.loads(result.stdout))
 
 
 def moment_payload(words):
@@ -600,6 +624,31 @@ def moment_payload(words):
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
     return json.loads(result.stdout)
+
+
+def payload_bytes(text):
+    """Return bytes from hex digits, as ``bytes.fromhex`` reads them."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='payload-bytes-') as directory:
+        folder = Path(directory)
+        source = folder / 'payload.hex'
+        dest = folder / 'payload.bin'
+        source.write_bytes(text.encode('utf-8'))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_payload_bytes',
+             str(source), str(dest)],
+            capture_output=True, text=True)
+        if result.returncode != 0:
+            lines = [line.strip() for line in result.stderr.splitlines()
+                     if line.strip() and 'Crashpad' not in line]
+            message = lines[-1] if lines else result.stdout.strip()
+            raise ValueError(message)
+        return dest.read_bytes()
 
 
 def moment_report(meta, blobs):
