@@ -166,6 +166,30 @@ def _gate_tokens(pairs):
         raise ValueError(message)
 
 
+def _declaration(text, name, owner):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='declaration-gate-') as directory:
+        source = Path(directory) / 'source.mojo'
+        source.write_text(text)
+        arguments = ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+                     'carla_cleanup_gate', '--declaration', str(source),
+                     '--name', name]
+        for part in owner:
+            arguments.extend(['--owner', part])
+        result = subprocess.run(arguments, capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def verify_premises(root, *, _operation=None):
     # Deliberately independent of complete-module successor digest checks.
     # Bind operation graphs, local guards, full caller bodies, and declarations.
@@ -196,7 +220,7 @@ def verify_premises(root, *, _operation=None):
     for item in record['premise_functions']:
         physical_text = _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation)
         text = _typed_source.historical_text(root, item['path'], physical_text, _operation=_operation)
-        actual = guard.declaration(text, item['name'], tuple(item['owner']))
+        actual = _declaration(text, item['name'], tuple(item['owner']))
         matched = guard.significant(actual) == guard.significant(item['source'])
         if not matched and (item['path'], item['name'], tuple(item['owner'])) == (
                 'extensions/carla/map.mojo', '_try_winner_seed', ()):
@@ -206,7 +230,7 @@ def verify_premises(root, *, _operation=None):
                 else:
                     import seed_count_contracts as seed_count
                 predecessor = seed_count.reviewed_text(root, item['path'], physical_text, **operation_args)
-                actual = guard.declaration(predecessor, item['name'], ())
+                actual = _declaration(predecessor, item['name'], ())
                 matched = guard.significant(actual) == guard.significant(item['source'])
             except (ValueError, OSError) as error:
                 require(False, 'reviewed Map caller premise changed: ' + str(error))
@@ -223,7 +247,7 @@ def verify_premises(root, *, _operation=None):
         require(matched, 'index or guarded caller premise changed: ' + item['name'])
     pairs = []
     for item in record['reference_functions']:
-        actual = guard.declaration(_typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation), item['name'], ())
+        actual = _declaration(_typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation), item['name'], ())
         pairs.append((actual, item['token_sha256'],
                       'native predecessor reference changed: ' + item['name']))
     if pairs:

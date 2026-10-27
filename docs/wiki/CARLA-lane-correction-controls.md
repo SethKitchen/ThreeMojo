@@ -42,6 +42,8 @@ constant bits. Their README lists the four commands and report directory.
 
 It selects each reviewed declaration and checks that each premise fragment occurs once, in order.
 
+The singleton, frozen ARC, dispatch, raw-cut, and optional-runtime contracts use that declaration text.
+
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.

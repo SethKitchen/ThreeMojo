@@ -166,6 +166,30 @@ def _lane_text(root):
     return _typed_source.historical_text(root, path, physical.decode('utf-8'))
 
 
+def _declaration(text, name, owner):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='declaration-gate-') as directory:
+        source = Path(directory) / 'source.mojo'
+        source.write_text(text)
+        arguments = ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+                     'carla_cleanup_gate', '--declaration', str(source),
+                     '--name', name]
+        for part in owner:
+            arguments.extend(['--owner', part])
+        result = subprocess.run(arguments, capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def verify_premises(root):
     record = read_record(root)
     # Whole module tokens bind imports, declaration owners and local names.
@@ -191,10 +215,10 @@ def verify_premises(root):
         selected = (item['path'], item['name'], tuple(item['owner'])) == (
             'extensions/carla/lane_refinement.mojo', '_rounded_axis_lane_minimum', ())
         text = _lane_text(root) if selected else _typed_source.historical_text(root, root/item['path'], (root/item['path']).read_text())
-        actual = guard.declaration(text, item['name'], tuple(item['owner']))
+        actual = _declaration(text, item['name'], tuple(item['owner']))
         if selected and guard.significant(actual) != guard.significant(item['source']):
             text = full_audit.reviewed_text(root, item['path'], text)
-            actual = guard.declaration(text, item['name'], tuple(item['owner']))
+            actual = _declaration(text, item['name'], tuple(item['owner']))
         pairs.append((guard.significant(actual), guard.significant(item['source']),
                       'consumer/reference declaration changed: ' + item['name']))
     if pairs:

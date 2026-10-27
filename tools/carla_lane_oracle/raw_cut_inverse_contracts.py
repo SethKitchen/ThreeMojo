@@ -145,6 +145,30 @@ def read_record(root):
     return json.loads(payload, object_pairs_hook=source.unique_keys)
 
 
+def _declaration(text, name, owner):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='declaration-gate-') as directory:
+        source = Path(directory) / 'source.mojo'
+        source.write_text(text)
+        arguments = ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+                     'carla_cleanup_gate', '--declaration', str(source),
+                     '--name', name]
+        for part in owner:
+            arguments.extend(['--owner', part])
+        result = subprocess.run(arguments, capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def verify_premises(root, *, _operation=None):
     # Independently bind the complete lexical operations rather than relying
     # on the successor digest. The proof requires this exact stored predicate,
@@ -190,8 +214,8 @@ def verify_premises(root, *, _operation=None):
     if _operation is not None:
         reference = full_audit._observe_text(root, 'tests/test_carla_support_dispatch_successor.mojo', reference, _operation=_operation)
     reference = _typed_source.historical_text(root, 'tests/test_carla_support_dispatch_successor.mojo', reference, _operation=_operation)
-    ref = guard.declaration(reference,
-                            '_reference_sample_dispatch_cut', ())
+    ref = _declaration(reference,
+                       '_reference_sample_dispatch_cut', ())
     _gate_graph(guard.significant(ref),
                 guard.significant(record['native_reference_source']), 'reference')
     return record
