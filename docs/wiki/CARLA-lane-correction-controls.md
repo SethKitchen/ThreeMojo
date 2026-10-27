@@ -248,6 +248,8 @@ It keeps the moment array paths, scalar names, block boundaries, and routing pat
 
 It keeps the moment dependency record and the check messages.
 
+It keeps the moment report names and the pass line.
+
 It writes the canonical stored-moment table source.
 
 It returns one normalized source block between two markers.

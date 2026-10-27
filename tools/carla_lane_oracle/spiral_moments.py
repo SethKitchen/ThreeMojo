@@ -641,25 +641,26 @@ def main(argv=None):
         if not args.generate:
             verify_table((root / _table()).read_bytes(), rows)
         report = make_report(root, rows, pins)
+        report_plan = _moment_plan()
         if args.generate or args.report:
-            output = args.output or Path(os.environ.get('CARLA_LANE_ORACLE_OUTPUT',
-                                                        str(root / 'out/carla-lane-oracle')))
+            output = args.output or Path(os.environ.get(report_plan['output_env'],
+                                                        str(root / report_plan['output_dir'])))
             # Never let an output option overwrite tracked source inputs/tools.
             protected = [root / _table(), root / _pins(), Path(__file__).resolve(),
                          root / source_contracts.PINS, root / sum2_guard_contracts.PINS] + [root / path for path in _dependencies()['paths']] + [root / record['path']
-                         for group in ('arrays', 'scalars', 'blocks', 'routing')
+                         for group in report_plan['pin_groups']
                          for record in pins[group].values()]
             if __package__:
                 from . import coverage_invariant_contracts as invariant
             else:
                 import coverage_invariant_contracts as invariant
-            products = {'spiral-moment-report.json': invariant._indent_json(report)}
+            products = {report_plan['report_name']: invariant._indent_json(report)}
             if args.generate:
                 products.update({
                     _table().name: generate_source(rows),
-                    'spiral_moment_words.be64': ideal_projection.payload_bytes(
+                    report_plan['words_name']: ideal_projection.payload_bytes(
                         _moment_payload(rows)['be64']),
-                    'spiral_moment_exact_coefficients.json': invariant._indent_json({'counts': rows}),
+                    report_plan['coefficients_name']: invariant._indent_json({'counts': rows}),
                 })
             _moment_guard('--output', {
                 'destinations': [str((output / name).resolve()) for name in products],
@@ -668,8 +669,8 @@ def main(argv=None):
             output.mkdir(parents=True, exist_ok=True)
             for name, data in products.items():
                 (output / name).write_bytes(data)
-        print('PASS: 64 counts, 1408 exact coefficients, 2816 tight endpoints, 22528 payload bytes')
-        print('canonical source SHA-256: ' + report['source_sha256'])
+        print(report_plan['pass_line'])
+        print(report_plan['sha_prefix'] + report['source_sha256'])
         return 0
     except (CheckError, OSError, ValueError, KeyError, TypeError) as error:
         print('FAIL: ' + str(error), file=sys.stderr)
