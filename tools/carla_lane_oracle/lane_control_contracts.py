@@ -292,4 +292,4 @@ def accepts_predecessor(root, path, name, owner, expected_source, *, _operation=
 if __name__ == '__main__':
     import sys
     verify(Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[2])
-    print('Lane control-flow migration: PASS')
+    print(_lane_labels()['pass'])

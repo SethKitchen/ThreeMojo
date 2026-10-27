@@ -56,7 +56,7 @@ def _scalar(text,name):
     try:
         literal = ideal_projection.scalar_literal(text, name)
     except ValueError as error:
-        raise ValueError('Missing or ambiguous selector constant') from error
+        raise ValueError(_selection_labels()['scalar']) from error
     return moments.fraction_of_word(moments.decimal_word(literal))
 
 def verify_text(modules, interval, trig):

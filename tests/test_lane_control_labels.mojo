@@ -14,7 +14,7 @@ from tools._python_json import PyJson
 def test_lane_control_labels_keep_the_reference_prefix() raises:
     """The frozen name is `def _reference` plus the original name."""
     var doc = PyJson.parse(lane_control_labels())
-    assert_equal(doc.length(doc.root), 9)
+    assert_equal(doc.length(doc.root), 10)
     assert_equal(doc.key(doc.root, 0), "successor")
     assert_equal(
         doc.text(doc.at(doc.root, "successor")),
@@ -43,6 +43,9 @@ def test_lane_control_labels_keep_the_reference_prefix() raises:
     assert_equal(doc.text(doc.at(doc.root, "definition")), "def ")
     assert_equal(doc.text(doc.at(doc.root, "call")), "(")
     assert_equal(doc.text(doc.at(doc.root, "reference")), "_reference")
+    assert_equal(
+        doc.text(doc.at(doc.root, "pass")), "Lane control-flow migration: PASS"
+    )
 
 
 def main() raises:

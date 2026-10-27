@@ -12,9 +12,9 @@ from tools._selection_labels import selection_labels
 
 
 def test_selection_labels_keep_the_contract_path() raises:
-    """The contract path stays with the three predecessor messages."""
+    """The contract path stays with the predecessor and selector messages."""
     var doc = PyJson.parse(selection_labels())
-    assert_equal(doc.length(doc.root), 4)
+    assert_equal(doc.length(doc.root), 5)
     assert_equal(doc.key(doc.root, 0), "contract")
     assert_equal(doc.key(doc.root, 1), "producer_set")
     assert_equal(doc.key(doc.root, 2), "predecessor")
@@ -34,6 +34,11 @@ def test_selection_labels_keep_the_contract_path() raises:
     assert_equal(
         doc.text(doc.at(doc.root, "body")),
         "Selection complete successor body changed",
+    )
+    assert_equal(doc.key(doc.root, 4), "scalar")
+    assert_equal(
+        doc.text(doc.at(doc.root, "scalar")),
+        "Missing or ambiguous selector constant",
     )
 
 

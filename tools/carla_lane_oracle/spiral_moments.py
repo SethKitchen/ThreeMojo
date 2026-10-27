@@ -621,6 +621,31 @@ def make_report(root, rows, pins):
         raise CheckError(str(error)) from error
 
 
+_CLI_FAILURES = None
+
+
+def _cli_failures():
+    """Return the checker failure prefixes."""
+    global _CLI_FAILURES
+    if _CLI_FAILURES is not None:
+        return _CLI_FAILURES
+    import json
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cli_failures'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _CLI_FAILURES = json.loads(result.stdout)
+    return _CLI_FAILURES
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
@@ -673,7 +698,7 @@ def main(argv=None):
         print(report_plan['sha_prefix'] + report['source_sha256'])
         return 0
     except (CheckError, OSError, ValueError, KeyError, TypeError) as error:
-        print('FAIL: ' + str(error), file=sys.stderr)
+        print(_cli_failures()['moments'] + str(error), file=sys.stderr)
         return 1
 
 

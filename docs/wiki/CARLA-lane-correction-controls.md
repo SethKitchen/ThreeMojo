@@ -34,6 +34,8 @@ It restores one selection function inside its line span.
 
 It keeps the selection contract path and the predecessor messages.
 
+It keeps the selector constant message.
+
 `tools/carla_grouped_gate.mojo` checks the grouped-table token digest and the stored node and weight bounds.
 
 It keeps the grouped proof module and its token digest.
@@ -196,6 +198,8 @@ It returns the runtime-support result after the heading, optional-runtime, and S
 
 It writes the runtime-support result with two-space indentation.
 
+It keeps the runtime failure prefix.
+
 It compares the projected ideal spiral with the historical half-rate form.
 
 It checks the ideal spiral declaration before projecting it.
@@ -264,6 +268,8 @@ It keeps the moment dependency record and the check messages.
 
 It keeps the moment report names and the pass line.
 
+It keeps the moment failure prefix.
+
 It writes the canonical stored-moment table source.
 
 It returns one normalized source block between two markers.
@@ -285,6 +291,8 @@ It accepts one historical lane declaration when the owner is empty and the token
 It renames the first frozen lane declaration.
 
 It keeps the lane-control labels and the frozen reference prefix.
+
+It keeps the lane-control pass line.
 
 It keeps the lane-control migration path.
 

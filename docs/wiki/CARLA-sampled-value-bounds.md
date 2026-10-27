@@ -35,6 +35,8 @@ helpers, actual unique aliases/decorators, exact imports and the reviewed primit
 graph. The complete normalized AST of all three reference modules is conservatively
 bound, including imports, aliases, union setup and skipped dispatch regions.
 
+It keeps the sampled failure prefix.
+
 Any dependency edit requires renewed source review. It rejects derivative
 field/flag reads, square roots, missing/extra helpers and
 source divergence. It uses explicit failures under optimized Python. It does
