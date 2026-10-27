@@ -221,6 +221,8 @@ It renames the first frozen lane declaration.
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.
 It puts the module path on the render-actor edge.
 
+It keeps the render-actor module and its three bound tests.
+
 `tools/carla_runtime_boundary_gate.mojo` checks the runtime-boundary record, its bound tests, and the view-step edges.
 
 It extends an edge when a reviewed view step starts at that edge.

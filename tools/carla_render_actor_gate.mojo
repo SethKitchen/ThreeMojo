@@ -174,6 +174,30 @@ def render_actor_bytes(
         _fail(label)
 
 
+def render_actor_paths() raises -> String:
+    """Return the render-actor module and its bound tests.
+
+    Returns:
+        JSON with `modules` and `tests` in reviewed order.
+
+    Raises:
+        Error: The lists cannot be written.
+    """
+    var doc = PyJson()
+    var spec = doc.new_dict()
+    var modules = doc.new_list()
+    doc.append(modules, doc.new_str(_MODULE))
+    doc.set(spec, "modules", modules)
+    var tests = doc.new_list()
+    var index = 0
+    while index < 3:
+        doc.append(tests, doc.new_str(_test_name(index)))
+        index += 1
+    doc.set(spec, "tests", tests)
+    doc.root = spec
+    return doc.dumps()
+
+
 def _usage():
     """Print the command usage and stop."""
     print(

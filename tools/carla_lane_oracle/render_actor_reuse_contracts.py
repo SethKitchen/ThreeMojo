@@ -25,10 +25,47 @@ else:
 
 MIGRATION = 'tools/carla_lane_oracle/render-actor-reuse-successor.json'
 MIGRATION_SHA256 = 'c4d146fe145289a1ad443956d2941d1e90186d448b8056f8be97d72f4f672771'
-MODULES = ('extensions/carla/render_actors.mojo',)
-TESTS = ('tests/test_carla_render_reuse.mojo', 'tests/test_carla_model_cache.mojo',
-         'tests/test_carla_walker_render_motion.mojo')
-PROTECTED_INPUTS = (MIGRATION, *MODULES, *TESTS)
+_PATHS = None
+
+
+def _paths():
+    """Return the render-actor module and bound tests."""
+    global _PATHS
+    if _PATHS is not None:
+        return _PATHS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_render_actor_paths'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _PATHS = json.loads(result.stdout)
+    return _PATHS
+
+
+def _actor_modules():
+    return tuple(_paths()['modules'])
+
+
+def _actor_tests():
+    return tuple(_paths()['tests'])
+
+
+def __getattr__(name):
+    if name == 'MODULES':
+        return _actor_modules()
+    if name == 'TESTS':
+        return _actor_tests()
+    if name == 'PROTECTED_INPUTS':
+        return (MIGRATION, *_actor_modules(), *_actor_tests())
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def _check_operation(root, operation):
@@ -129,7 +166,7 @@ def verify(root, *, _operation=None):
     _gate_record(raw)
     record = json.loads(raw, object_pairs_hook=source.unique_keys)
     edges = {}
-    for path in MODULES:
+    for path in _actor_modules():
         edge = record['edges'][path]
         current = ledger.endpoint(root, path, edge, _operation=_operation)
         actual = _typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
