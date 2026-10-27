@@ -172,6 +172,7 @@ Mojo checks the optional runtime edges in order.
 Fresh helpers keep the environment guard.
 The grouped debit, dispatch reserve, and model rooms stay in place.
 A missing edge or a moved guard is refused.
+It builds the grouped, model, support, and dispatch checks in that order.
 It returns the optional-runtime result after those edge checks.
 
 Mojo skips hidden and non-production paths, then keeps a file whose text contains a watched name.

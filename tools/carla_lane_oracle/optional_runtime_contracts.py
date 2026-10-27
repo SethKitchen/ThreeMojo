@@ -48,29 +48,6 @@ def _objective_recheck_room(nodes: Int, max_nodes: Int) -> Bool:
     return nodes >= 0 and nodes < max_nodes
 """
 
-DISPATCH_ADMISSION = """
-if count < 1 or count > 2:
-    return None
-var extra = 8 * count
-var node_reserve = 3 * count + 2
-var term_reserve = 16 * count
-if max_nodes < node_reserve or max_terms < 0 or nodes < 0 or nodes > max_nodes - node_reserve or terms < 0 or terms > max_terms or term_reserve > max_terms - terms:
-    return None
-nodes += 1
-terms += extra
-"""
-
-GROUPED_ADMISSION = """
-certificate.terms += work
-var grouped: Optional[Tuple[_Jet, _Jet, _Jet]] = None
-if max_nodes - certificate.nodes >= 2:
-    grouped = _try_grouped_lane_jet(road, section, lane, lo, hi, certificate.nodes, certificate.terms, max_nodes, max_terms)
-if grouped:
-    point_domain = grouped.value()
-else:
-    point_domain = _lane_jet(road, section, lane, lo, hi)
-"""
-
 NEW_MODULES = ('curve_minimizer_support', 'curve_objective_model',
                'curve_sample_dispatch', 'spiral_grouped_lane',
                'spiral_grouped_roundoff_proof')
@@ -424,12 +401,39 @@ def verify_search_semantics(run):
         run._runtime_name, 'search')
 
 
+def _semantic_edges(group, nodes):
+    """Check one optional-runtime fragment group."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps({
+        key: {'name': node._runtime_name, 'source': node._runtime_source}
+        for key, node in nodes.items()
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='semantic-edges-') as directory:
+        path = Path(directory) / 'edges.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_semantic_edges', group, str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        if message.startswith('invalid checker fragment:'):
+            message = 'optional runtime contract: ' + message
+        raise ValueError(message)
+
+
 def verify_semantics(root, *, _operation=None):
     helper = body(root, 'lane_refinement', '_same_cache_key', _operation=_operation)
-    _fragment_checks([_node_edge(
-        helper, 'body',
-        'return SIMD[DType.uint64, 2](station, scale) == SIMD[DType.uint64, 2](other_station, other_scale)',
-        'exact UInt64 pair helper comparison')])
+    _runtime_source(helper, 'exact UInt64 pair helper comparison')
+    _semantic_edges('helper', {'helper': helper})
     model = body(root, 'curve_objective_model', '_try_objective_model', _operation=_operation)
     restrict = body(root, 'curve_objective_model', '_restrict_objective_model', _operation=_operation)
     cut = body(root, 'curve_sample_dispatch', '_sample_dispatch_cut', _operation=_operation)
@@ -437,140 +441,39 @@ def verify_semantics(root, *, _operation=None):
     lane = body(root, 'spiral_grouped_lane', '_try_grouped_lane_jet', _operation=_operation)
     raw = body(root, 'spiral_grouped_roundoff_proof', '_try_spiral_grouped_roundoff_envelope', _operation=_operation)
     metered = body(root, 'spiral_grouped_roundoff_proof', '_try_spiral_grouped_roundoff_envelope_metered', _operation=_operation)
-    _fragment_checks([_fresh_item(node) for node in
-                      (model, restrict, cut, cuts, lane, raw, metered)])
+    for node in (model, restrict, cut, cuts, lane, raw, metered):
+        _runtime_source(node, node._runtime_name)
+    _semantic_edges('guards', {
+        'model': model, 'restrict': restrict, 'cut': cut, 'cuts': cuts,
+        'lane': lane, 'raw': raw, 'metered': metered,
+    })
 
     # Exact guarded raw -> private origin -> checked Sum2 leaf edge. The
     # global inventory also rejects any new direct or alias route to it.
     origin = body(root, 'spiral_grouped_roundoff_proof', '_grouped_origin_error', _operation=_operation)
-    _fragment_checks([
-        _node_edge(origin, 'contains',
-                   'var error = _sum2_error_checked(magnitude.high, inherited.high, count)',
-                   'grouped origin must use the canonical checked error arguments'),
-        _node_edge(raw, 'contains',
-                   'var x_error = _grouped_origin_error(x_ideal, x_magnitude, x_inherited, 5 * pieces, geometry.x)',
-                   'complete X stored-term count and origin'),
-        _node_edge(raw, 'contains',
-                   'var y_error = _grouped_origin_error(y_ideal, y_magnitude, y_inherited, 5 * pieces, geometry.y)',
-                   'complete Y stored-term count and origin'),
-        _node_edge(raw, 'contains',
-                   'var distance = _ValueJet(d.value, _Interval.whole(), _Interval.whole(), d.error)',
-                   'retain original ideal distance and uniform scalar error'),
-        _node_edge(raw, 'contains', 'var copies = (high - low) * multiplicity',
-                   'actual group multiplicity'),
-        _node_edge(raw, 'contains', 'var multiplicity = 1 if weight == 2 else 2',
-                   'stored symmetric weight multiplicity'),
-    ])
+    _runtime_source(origin, 'grouped origin must use the canonical checked error arguments')
+    _runtime_source(raw, 'complete X stored-term count and origin')
+    _semantic_edges('origin', {'origin': origin, 'raw': raw})
     work = body(root, 'spiral_grouped_roundoff_proof', '_spiral_grouped_roundoff_work', _operation=_operation)
-    _fragment_checks([
-        _node_edge(work, 'contains', 'return 3 * min(4, pieces)',
-                   'whole count work bound'),
-        _node_edge(lane, 'contains',
-                   'if nodes < 0 or nodes >= max_nodes or terms < 0 or terms > max_terms or max_terms - terms < 24:\n    return None',
-                   'whole optional union admission'),
-        _node_edge(lane, 'contains',
-                   'if counts[0] < 1 or counts[1] > 64 or counts[1] < counts[0] or counts[1] - counts[0] > 1:\n    return None',
-                   'complete at-most-two count domain'),
-        _node_edge(lane, 'contains',
-                   'var extra = _spiral_grouped_roundoff_work(counts[0])',
-                   'first count debit'),
-        _node_edge(lane, 'contains',
-                   'if counts[1] != counts[0]:\n    extra += _spiral_grouped_roundoff_work(counts[1])',
-                   'second count debit'),
-        _node_edge(lane, 'before-call', 'terms += extra',
-                   'atomic whole-count debit must precede both raw envelopes',
-                   call='_try_spiral_grouped_roundoff_envelope'),
-        _node_edge(lane, 'expression',
-                   '_lane_jet_model_proof[False](road, section, lane, low, high, Vector3(0, 0, 0), proof, low, high, captured, require_reuse=True)',
-                   'try-only reconstruction cannot invoke hidden GL'),
-        _node_edge(metered, 'contains',
-                   'if work + fallback_work > max_terms - terms:\n    return None',
-                   'standalone adapter preserves independent fallback reservation'),
-    ])
+    _runtime_source(work, 'whole count work bound')
+    _runtime_source(lane, 'whole optional union admission')
+    _runtime_source(metered, 'standalone adapter preserves independent fallback reservation')
+    _semantic_edges('work', {'work': work, 'lane': lane, 'metered': metered})
 
     # Model data is meaningful only for the same ideal producer and owner.
     # Complete caller/source bindings cover producer smoothness and lifetime.
-    items = [
-        _node_edge(model, 'expression', 'low >= high', 'model ordered owner'),
-        _node_edge(model, 'expression', 'center_s < low', 'model center inside owner low'),
-        _node_edge(model, 'expression', 'center_s > high', 'model center inside owner high'),
-    ]
-    for field in ('value', 'first', 'second'):
-        items.append(_node_edge(
-            model, 'expression', 'not _model_interval(domain.' + field + ')',
-            'model finite whole-owner ' + field))
-    items.extend((
-        _node_edge(model, 'expression', 'not isfinite(domain.error)',
-                   'model uniform error finite'),
-        _node_edge(model, 'expression', 'domain.error < 0.0',
-                   'model uniform error nonnegative'),
-        _node_edge(restrict, 'expression', 'low < model.low',
-                   'restriction cannot widen owner low'),
-        _node_edge(restrict, 'expression', 'high > model.high',
-                   'restriction cannot widen owner high'),
-        _node_edge(restrict, 'expression',
-                   'bitcast[DType.uint64](scale) != model.scale_word',
-                   'exact normalization scale word'),
-        _node_edge(restrict, 'contains',
-                   'return _Jet(value, first, model.domain.second, model.domain.error)',
-                   'restriction retains whole-owner curvature and error'),
-        _node_edge(
-            restrict, 'contains',
-            'var value = model.center.value + model.center.first * delta + _Interval.point(0.5) * model.domain.second * delta.square()',
-            'same-ideal Taylor value restriction'),
-    ))
-    _fragment_checks(items)
+    _runtime_source(model, 'model ordered owner')
+    _runtime_source(restrict, 'restriction cannot widen owner low')
+    _semantic_edges('model', {'model': model, 'restrict': restrict})
 
     support = body(root, 'curve_minimizer_support', '_minimizer_support', _operation=_operation)
-    items = []
-    for text, label in (('best < low', 'actual witness lower containment'),
-                        ('best > high', 'actual witness upper containment'),
-                        ('not isfinite(best)', 'actual witness finite station')):
-        items.append(_node_edge(support, 'expression', text, label))
-    items.extend((
-        _node_edge(support, 'contains',
-                   'var twice_error = _Interval.point(2.0) * _Interval.point(domain.error)',
-                   'support uses uniform whole-domain error'),
-        _node_edge(support, 'contains',
-                   'var four_error = _Interval.point(4.0) * _Interval.point(domain.error)',
-                   'convex support uses uniform whole-domain error'),
-        _node_edge(support, 'no-attribute', 'center.error',
-                   'translated center error cannot replace world error'),
-    ))
-    _fragment_checks(items)
+    _runtime_source(support, 'actual witness lower containment')
+    _semantic_edges('support', {'support': support})
 
     predicate = body(root, 'curve_sample_dispatch', '_sample_dispatch_predicate', _operation=_operation)
-    debit = 'dispatch debit must precede optional attempts'
-    items = [
-        _node_edge(predicate, 'body',
-                   'return min(max(station - origin, 0.0), length) > local',
-                   'exact stored subtraction/clamp dispatch predicate'),
-        _node_edge(cuts, 'contains',
-                   'var before_index = _sample_index(geometry, min(max(before - record.s, 0.0), geometry.length))',
-                   'actual predecessor sample index'),
-        _node_edge(cuts, 'contains',
-                   'var after_index = _sample_index(geometry, min(max(station - record.s, 0.0), geometry.length))',
-                   'actual cut sample index'),
-        _node_edge(cuts, 'contains',
-                   'if before_index != threshold_at - 1 or after_index != threshold_at:\n    return None',
-                   'both actual indices must match original owners'),
-        _node_edge(cuts, 'contains', 'var node_reserve = 3 * count + 2',
-                   'dispatch node reserve includes descendants and rechecks'),
-        _node_edge(cuts, 'contains', 'var term_reserve = 16 * count',
-                   'dispatch probe and descendant term reserve'),
-        _node_edge(cuts, 'contains',
-                   'if max_nodes < node_reserve or max_terms < 0 or nodes < 0 or nodes > max_nodes - node_reserve or terms < 0 or terms > max_terms or term_reserve > max_terms - terms:\n    return None',
-                   'complete dispatch followup reserve before optional work'),
-        _node_edge(cuts, 'contains', 'var extra = 8 * count',
-                   'complete optional dispatch debit'),
-        _node_edge(cuts, 'contains', 'if count < 1 or count > 2:\n    return None',
-                   'at most two invocation-local cuts'),
-        _node_edge(cuts, 'sequence', DISPATCH_ADMISSION,
-                   'bounded count and complete reserve must precede dispatch debit'),
-    ]
-    for statement in ('nodes += 1', 'terms += extra'):
-        items.append(_node_edge(cuts, 'before-loop', statement, debit, source_label=debit))
-    _fragment_checks(items)
+    _runtime_source(predicate, 'exact stored subtraction/clamp dispatch predicate')
+    _runtime_source(cuts, 'actual predecessor sample index')
+    _semantic_edges('dispatch', {'predicate': predicate, 'cuts': cuts})
 
     verify_no_containing_model_consumers(root, _operation=_operation)
     # The standalone helper remains reviewed and tested even though the
