@@ -162,5 +162,7 @@ def coverage_loop_labels() -> String:
         + '"fixture":"check_coverage_loop_fixture","flags":"-Werror -I .",'
         + '"workspace_prefix":"threemojo-loop-proofs-","attempt":"attempt-work",'
         + '"current":"current-generated","native_source":"native-source.mojo",'
-        + '"qualification":"qualification.json"}}'
+        + '"qualification":"qualification.json",'
+        + '"raw_suffix":".raw.txt","out_suffix":".out",'
+        + '"reduced_suffix":".txt.gz"}}'
     )

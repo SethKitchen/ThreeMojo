@@ -246,16 +246,33 @@ def line_of(fragment):
 def capture_result(result, stem, envelope, command):
     """Keep raw/reduced diagnostic bytes; these are not production captures."""
     require(result.returncode == 0, _loop_labels()['admission']['failed_capture'])
-    raw = Path(str(stem) + '.raw.txt')
+    commands = _commands()
+    raw = Path(str(stem) + commands['raw_suffix'])
     raw.parent.mkdir(parents=True, exist_ok=True)
-    output = Path(str(stem) + '.out')
-    reduced = Path(str(stem) + '.txt.gz')
+    output = Path(str(stem) + commands['out_suffix'])
+    reduced = Path(str(stem) + commands['reduced_suffix'])
     raw.write_text(result.stderr)
     output.write_text(result.stdout)
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[1]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = result.stderr.encode() if isinstance(result.stderr, str) else result.stderr
+    with tempfile.TemporaryDirectory(prefix='reduce-capture-') as directory:
+        source = Path(directory) / 'stderr.txt'
+        source.write_bytes(payload)
+        reduced_text = subprocess.run(
+            [commands['shell'], str(root / commands['tool']), mojo,
+             'carla_reduce_capture', str(source)],
+            capture_output=True)
+    if reduced_text.returncode != 0:
+        errors = [line.strip() for line in reduced_text.stderr.splitlines()
+                  if line.strip() and b'Crashpad' not in line]
+        message = (errors[-1] if errors else reduced_text.stdout).decode()
+        raise RuntimeError(message)
     with gzip.open(reduced, 'wb') as stream:
-        reducer = coverage_io.Reducer(stream.write)
-        for record in result.stderr.encode().splitlines(keepends=True):
-            reducer.feed(record)
+        stream.write(reduced_text.stdout)
     return raw, reduced
 
 

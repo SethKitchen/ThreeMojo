@@ -68,6 +68,8 @@ def test_coverage_loop_qualification_labels_stay_reviewed() raises:
     assert_equal(doc.text(doc.at(commands, "seal")), "coverage_loop_seal")
     assert_equal(doc.text(doc.at(commands, "flags")), "-Werror -I .")
     assert_equal(doc.text(doc.at(commands, "receipt")), "loop-proofs.json")
+    assert_equal(doc.text(doc.at(commands, "raw_suffix")), ".raw.txt")
+    assert_equal(doc.text(doc.at(commands, "reduced_suffix")), ".txt.gz")
     assert_equal(
         doc.text(doc.at(doc.root, "pass_line")),
         (
