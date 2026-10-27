@@ -2392,15 +2392,16 @@ def primitive_declaration(source: String) raises:
         source: Mojo source for the interval module.
 
     Returns:
-        None. The declaration occurs once.
+        None. The declaration occurs once and its parameter is `derivatives: Bool`.
 
     Raises:
-        Error: The declaration is missing or repeated.
+        Error: The declaration is missing, repeated, or has another parameter.
     """
     var kinds = List[Int]()
     var texts = List[String]()
     _tokenize(source, kinds, texts)
     var count = 0
+    var generic = 0
     var indent = 0
     var bracket = 0
     var index = 0
@@ -2424,8 +2425,17 @@ def primitive_declaration(source: String) raises:
             and texts[index + 1] == "_JetExpression"
         ):
             count += 1
+            if (
+                index + 6 < len(kinds)
+                and texts[index + 2] == "["
+                and texts[index + 3] == "derivatives"
+                and texts[index + 4] == ":"
+                and texts[index + 5] == "Bool"
+                and texts[index + 6] == "]"
+            ):
+                generic += 1
         index += 1
-    if count != 1:
+    if count != 1 or generic != 1:
         raise Error("unsupported primitive declaration")
 
 

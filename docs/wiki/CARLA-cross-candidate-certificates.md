@@ -344,6 +344,8 @@ It slices the stored-half declaration from its marker.
 
 It requires one Jet primitive declaration.
 
+That declaration keeps one Bool parameter.
+
 Mojo checks the live sampled module graphs.
 The trig module keeps its reviewed syntax graph.
 The interval module keeps its reviewed syntax graph.

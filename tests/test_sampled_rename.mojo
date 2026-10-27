@@ -489,9 +489,15 @@ def test_one_jet_primitive_declaration_is_required() raises:
     """The interval module keeps one Jet primitive declaration."""
     var source = "struct _JetExpression[derivatives: Bool]():\n    pass\n"
     primitive_declaration(source)
-    primitive_declaration("class _JetExpression():\n    pass\n")
+    primitive_declaration(
+        "class _JetExpression[derivatives: Bool]():\n    pass\n"
+    )
     with assert_raises(contains="unsupported primitive declaration"):
-        primitive_declaration("struct Other():\n    pass\n")
+        primitive_declaration("class _JetExpression():\n    pass\n")
+    with assert_raises(contains="unsupported primitive declaration"):
+        primitive_declaration(
+            "struct _JetExpression[derivatives: Int]():\n    pass\n"
+        )
     with assert_raises(contains="unsupported primitive declaration"):
         primitive_declaration(source + source)
 
