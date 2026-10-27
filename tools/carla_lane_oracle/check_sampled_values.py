@@ -34,53 +34,16 @@ except ModuleNotFoundError:
     from tools.carla_lane_oracle.source_contracts import verify_group, verify_qualifiers
 
 ROOT = Path(__file__).resolve().parents[2]
-IMPORTS = '''from extensions.carla.curve_interval import (
-    _stored_difference,
-    _stored_half,
-    _stored_blend_error,
-    _Interval,
-    _ValueJet,
-    _without_derivatives,
-)
-from extensions.carla.curve_bounds import (
-    _sample_index,
-    _intersect_ideal_bounds,
-    _lane_jet,
-)
-from extensions.carla.curve_trig import (
-    _expression_polynomial,
-    _uncertain_expression,
-    _sincos_expression,
-    _PI,
-    _HALF_PI,
-    _QUARTER_PI,
-    _ATAN_REDUCE,
-    _ATAN_COEFFICIENTS,
-    _SIN_COEFFICIENTS,
-    _PHASE_LIMIT,
-    _sign_bit,
-    _curve_cos,
-    _curve_sin,
-    _curve_atan2,
-)
-from extensions.carla.geometry import (
-    RoadGeometry,
-    PARAM_POLY3,
-    POLY3,
-    LINE,
-    ARC,
-    SPIRAL,
-)
-from std.math import isfinite
-from extensions.carla.polynomial import CubicPolynomial
-from extensions.carla.road import Road
-from extensions.carla.road_info import info_index
-from math.vector3 import Vector3
-'''
 
 
 class CheckError(ValueError):
     pass
+
+
+def __getattr__(name):
+    if name == 'IMPORTS':
+        return _sampled_closure()['imports']
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def require(condition, message):

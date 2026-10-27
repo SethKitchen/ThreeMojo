@@ -37,6 +37,8 @@ bound, including imports, aliases, union setup and skipped dispatch regions.
 
 It keeps the sampled failure prefix.
 
+It keeps the sampled import block.
+
 Any dependency edit requires renewed source review. It rejects derivative
 field/flag reads, square roots, missing/extra helpers and
 source divergence. It uses explicit failures under optimized Python. It does

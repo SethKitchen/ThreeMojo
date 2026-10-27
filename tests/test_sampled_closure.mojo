@@ -5,7 +5,7 @@
 
 """The sampled reference names stay apart from the graph digests."""
 
-from std.testing import TestSuite, assert_equal
+from std.testing import TestSuite, assert_equal, assert_true
 
 from tools._python_json import PyJson
 from tools._sampled_closure import sampled_closure
@@ -67,6 +67,11 @@ def test_sampled_reference_names_stay_in_reviewed_order() raises:
     assert_equal(
         doc.text(doc.at(doc.root, "bounds_path")),
         "extensions/carla/curve_bounds.mojo",
+    )
+    assert_true(
+        doc.text(doc.at(doc.root, "imports")).startswith(
+            "from extensions.carla.curve_interval import ("
+        )
     )
 
 
