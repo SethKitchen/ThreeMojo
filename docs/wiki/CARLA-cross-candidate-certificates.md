@@ -133,6 +133,8 @@ It returns the sampled value result after those body checks.
 
 It hashes each observed source byte string before that result.
 
+It writes the sampled value result with two-space indentation.
+
 Mojo checks the sampled qualifier pins.
 The trig and interval modules match the live pins.
 The bounds pin is the count-loop source.

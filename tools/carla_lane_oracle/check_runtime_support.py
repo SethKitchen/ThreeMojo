@@ -75,7 +75,11 @@ def main():
     except (ValueError, OSError, KeyError, TypeError) as error:
         print('FAIL:', error)
         return 1
-    print(json.dumps(result, indent=2))
+    if __package__:
+        from . import coverage_invariant_contracts as invariant
+    else:
+        import coverage_invariant_contracts as invariant
+    print(invariant._indent_json(result).decode(), end='')
     return 0
 
 
