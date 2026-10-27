@@ -16,11 +16,9 @@ import json
 if __package__:
     from . import source_contracts as source
     from . import full_audit_cleanup_contracts as full_audit
-    from . import sum2_guard_contracts as guard
 else:
     import source_contracts as source
     import full_audit_cleanup_contracts as full_audit
-    import sum2_guard_contracts as guard
 
 MIGRATION = 'tools/carla_lane_oracle/rounded-line-singleton-migration.json'
 MIGRATION_SHA256 = 'e4a0eb6c9e527dd66b2b803ee69754334feecc9bea33ce001cdf584d3a693506'
@@ -100,17 +98,42 @@ def _gate_selector(actual, expected):
         raise ValueError(message)
 
 
+def _significant_documents(texts):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    if not texts:
+        return []
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='significant-json-') as directory:
+        folder = Path(directory)
+        for index, text in enumerate(texts):
+            (folder / f'{index}.text').write_text(text)
+        (folder / 'count').write_text(str(len(texts)))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--significant-json', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _gate_graphs(pairs):
     import json
     import os
     import subprocess
     import tempfile
     from pathlib import Path
-    def canon(value):
-        return json.dumps([[item[0], item[1]] for item in value], separators=(',', ':'))
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    rows = [{'label': label, 'actual': canon(actual), 'expected': canon(expected)}
+    rows = [{'label': label, 'actual': actual, 'expected': expected}
             for actual, expected, label in pairs]
     with tempfile.TemporaryDirectory(prefix='singleton-graphs-') as directory:
         folder = Path(directory)
@@ -134,7 +157,11 @@ def read_record(root):
 
 def _reviewed_text(root, path, record):
     text = _typed_source.historical_text(root, root/path, (root/path).read_text())
-    if path != 'extensions/carla/curve_rounded_line.mojo' or guard.significant(text) == guard.significant(record['modules'][path]['source']):
+    if path != 'extensions/carla/curve_rounded_line.mojo':
+        return text
+    current_doc, recorded_doc = _significant_documents([
+        text, record['modules'][path]['source']])
+    if current_doc == recorded_doc:
         return text
     if __package__:
         from . import rounded_line_selector_contracts as successor
@@ -193,36 +220,52 @@ def _declaration(text, name, owner):
 def verify_premises(root):
     record = read_record(root)
     # Whole module tokens bind imports, declaration owners and local names.
+    checked = []
     for path, item in record['modules'].items():
         actual = _reviewed_text(root, path, record)
-        if guard.significant(actual) != guard.significant(item['source']):
-            _verify_dependency(path, actual, item['token_sha256'])
-    pairs = []
+        checked.append((path, actual, item['source'], item['token_sha256']))
+    module_docs = _significant_documents(
+        [text for _, actual, source, _ in checked for text in (actual, source)])
+    for index, (path, actual, _, token) in enumerate(checked):
+        if module_docs[index * 2] != module_docs[index * 2 + 1]:
+            _verify_dependency(path, actual, token)
+    prepared = []
     for path, expected in record['import_scopes'].items():
         text = _lane_text(root) if path == 'extensions/carla/lane_refinement.mojo' else _typed_source.historical_text(root, root/path, (root/path).read_text())
         actual = text.split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
-        if (path == 'extensions/carla/lane_refinement.mojo'
-                and guard.significant(actual) != guard.significant(expected)):
-            # Only a changed consumed scope requests complete current admission.
-            text = full_audit.reviewed_text(root, path, text)
-            actual = text.split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
-        pairs.append((guard.significant(actual), guard.significant(expected),
-                      'consumer import scope changed: ' + path))
-    if pairs:
-        _gate_graphs(pairs)
-    pairs = []
+        if path == 'extensions/carla/lane_refinement.mojo':
+            current_doc, recorded_doc = _significant_documents([actual, expected])
+            if current_doc != recorded_doc:
+                # Only a changed consumed scope requests complete current admission.
+                text = full_audit.reviewed_text(root, path, text)
+                actual = text.split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
+        prepared.append((actual, expected, 'consumer import scope changed: ' + path))
+    if prepared:
+        scope_docs = _significant_documents(
+            [text for actual, expected, _ in prepared for text in (actual, expected)])
+        _gate_graphs([
+            (scope_docs[index * 2], scope_docs[index * 2 + 1], label)
+            for index, (_, _, label) in enumerate(prepared)])
+    prepared = []
     for item in record['declarations']:
         selected = (item['path'], item['name'], tuple(item['owner'])) == (
             'extensions/carla/lane_refinement.mojo', '_rounded_axis_lane_minimum', ())
         text = _lane_text(root) if selected else _typed_source.historical_text(root, root/item['path'], (root/item['path']).read_text())
         actual = _declaration(text, item['name'], tuple(item['owner']))
-        if selected and guard.significant(actual) != guard.significant(item['source']):
-            text = full_audit.reviewed_text(root, item['path'], text)
-            actual = _declaration(text, item['name'], tuple(item['owner']))
-        pairs.append((guard.significant(actual), guard.significant(item['source']),
-                      'consumer/reference declaration changed: ' + item['name']))
-    if pairs:
-        _gate_graphs(pairs)
+        if selected:
+            current_doc, recorded_doc = _significant_documents([
+                actual, item['source']])
+            if current_doc != recorded_doc:
+                text = full_audit.reviewed_text(root, item['path'], text)
+                actual = _declaration(text, item['name'], tuple(item['owner']))
+        prepared.append((actual, item['source'],
+                         'consumer/reference declaration changed: ' + item['name']))
+    if prepared:
+        declaration_docs = _significant_documents(
+            [text for actual, source, _ in prepared for text in (actual, source)])
+        _gate_graphs([
+            (declaration_docs[index * 2], declaration_docs[index * 2 + 1], label)
+            for index, (_, _, label) in enumerate(prepared)])
     return record
 
 

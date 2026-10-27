@@ -146,6 +146,33 @@ def _gate_restored(text, expected):
         raise ValueError(message)
 
 
+def _significant_documents(texts):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    if not texts:
+        return []
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='significant-json-') as directory:
+        folder = Path(directory)
+        for index, text in enumerate(texts):
+            (folder / f'{index}.text').write_text(text)
+        (folder / 'count').write_text(str(len(texts)))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--significant-json', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def predecessor_text(root, path, *, _operation=None):
     """Verify both actual producers before reconstructing one legacy module."""
 # #333 explicit historical provenance views; current inputs remain operation-owned.
@@ -166,7 +193,9 @@ def predecessor_text(root, path, *, _operation=None):
           else '_try_spiral_roundoff_envelope')
     text=_producer_text(root,path, _operation=_operation)
     body,span,tokens=guard.function_span(text,name,())
-    if guard.significant(body)!=guard.significant(item['after_complete_function']):
+    current_doc, recorded_doc = _significant_documents([
+        body, item['after_complete_function']])
+    if current_doc != recorded_doc:
         raise ValueError('Selection complete successor body changed')
     first=tokens[span[0]].start[0]-1;last=tokens[span[1]-1].start[0]-1
     lines=text.splitlines(keepends=True)

@@ -12,6 +12,7 @@
     carla_cleanup_gate --words PATH --kind trig|geometry --label PATH
     carla_cleanup_gate --premises DIR
     carla_cleanup_gate --declaration PATH --name NAME [--owner NAME]
+    carla_cleanup_gate --significant-json DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -25,6 +26,7 @@ from tests._python_tokens import (
     declaration_text,
     stored_float_array,
     stored_scalar,
+    significant_json,
     stored_word_sha256,
     token_sha256,
     token_words,
@@ -277,6 +279,27 @@ def cleanup_words(source: String, kind: String, label: String) raises:
         _fail("unchanged premise dependency changed: " + label)
 
 
+def significant_documents(directory: String) raises:
+    """Print the significant-token JSON for each numbered source.
+
+    Args:
+        directory: A directory with `count` and `N.text` files.
+
+    Raises:
+        Error: A source cannot be tokenized, or the directory cannot be read.
+    """
+    var count = Int(Path(directory + "/count").read_text())
+    var doc = PyJson()
+    var rows = doc.new_list()
+    var index = 0
+    while index < count:
+        var text = Path(directory + "/" + String(index) + ".text").read_text()
+        doc.append(rows, doc.new_str(significant_json(text)))
+        index += 1
+    doc.root = rows
+    print(doc.dumps())
+
+
 def cleanup_premises(directory: String) raises:
     """Require each premise fragment once, in order.
 
@@ -364,6 +387,7 @@ def _usage():
             " | --words PATH --kind trig|geometry --label PATH"
             " | --premises DIR"
             " | --declaration PATH --name NAME [--owner NAME]"
+            " | --significant-json DIR"
         ),
         file=stderr,
     )
@@ -389,6 +413,7 @@ def main() raises:
     var declaration = String("")
     var decl_name = String("")
     var owners = List[String]()
+    var significant = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -407,6 +432,7 @@ def main() raises:
             or word == "--declaration"
             or word == "--name"
             or word == "--owner"
+            or word == "--significant-json"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -435,8 +461,10 @@ def main() raises:
                 declaration = value
             elif word == "--name":
                 decl_name = value
-            else:
+            elif word == "--owner":
                 owners.append(value)
+            else:
+                significant = value
             index += 2
             continue
         _usage()
@@ -463,6 +491,8 @@ def main() raises:
         or len(owners) > 0
     ):
         modes += 1
+    if significant.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if previous.byte_length() > 0 and migration.byte_length() == 0:
@@ -484,6 +514,9 @@ def main() raises:
     if declaration.byte_length() > 0 and decl_name.byte_length() == 0:
         _usage()
     try:
+        if significant.byte_length() > 0:
+            significant_documents(significant)
+            return
         if declaration.byte_length() > 0:
             print(
                 declaration_text(

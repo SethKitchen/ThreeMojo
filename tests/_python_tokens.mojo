@@ -342,6 +342,31 @@ def _tokenize_lines(
         _push(kinds, texts, lines, _DEDENT, String(), line_no)
 
 
+def significant_json(source: String) raises -> String:
+    """Return the canonical significant-token JSON.
+
+    Args:
+        source: Mojo source.
+
+    Returns:
+        The JSON list of `[kind, text]` pairs, without comments or blank lines.
+
+    Raises:
+        Error: The source cannot be tokenized.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var doc = PyJson()
+    var rows = doc.new_list()
+    var index = 0
+    while index < len(kinds):
+        _append_token(doc, rows, kinds[index], texts[index])
+        index += 1
+    doc.root = rows
+    return doc.dumps()
+
+
 def token_sha256(source: String) raises -> String:
     """Return the SHA-256 of the kept tokens, as CPython 3.12 does.
 
@@ -354,18 +379,7 @@ def token_sha256(source: String) raises -> String:
     Raises:
         Error: The source cannot be tokenized.
     """
-    var kinds = List[Int]()
-    var texts = List[String]()
-    _tokenize(source, kinds, texts)
-    var doc = PyJson()
-    var rows = doc.new_list()
-    for index in range(len(kinds)):
-        var pair = doc.new_list()
-        doc.append(pair, doc.new_int(kinds[index]))
-        doc.append(pair, doc.new_str(texts[index]))
-        doc.append(rows, pair)
-    doc.root = rows
-    return sha256_hex(doc.dumps().as_bytes())
+    return sha256_hex(significant_json(source).as_bytes())
 
 
 def _kept_lines(source: String) -> List[String]:

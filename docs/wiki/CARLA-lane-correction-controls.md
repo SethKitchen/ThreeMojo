@@ -44,6 +44,8 @@ It selects each reviewed declaration and checks that each premise fragment occur
 
 The singleton, frozen ARC, dispatch, raw-cut, and optional-runtime contracts use that declaration text.
 
+It also builds the significant token lists for the singleton, frozen ARC, dispatch, raw-cut, and selection contracts.
+
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.

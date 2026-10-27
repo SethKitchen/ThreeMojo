@@ -90,17 +90,42 @@ def _gate_edge(recorded, expected):
         raise ValueError(message)
 
 
+def _significant_documents(texts):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    if not texts:
+        return []
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='significant-json-') as directory:
+        folder = Path(directory)
+        for index, text in enumerate(texts):
+            (folder / f'{index}.text').write_text(text)
+        (folder / 'count').write_text(str(len(texts)))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--significant-json', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _gate_graphs(pairs):
     import json
     import os
     import subprocess
     import tempfile
     from pathlib import Path
-    def canon(value):
-        return json.dumps([[item[0], item[1]] for item in value], separators=(',', ':'))
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    rows = [{'label': label, 'actual': canon(actual), 'expected': canon(expected)}
+    rows = [{'label': label, 'actual': actual, 'expected': expected}
             for actual, expected, label in pairs]
     with tempfile.TemporaryDirectory(prefix='dispatch-graphs-') as directory:
         folder = Path(directory)
@@ -195,33 +220,38 @@ def verify_premises(root, *, _operation=None):
     # Bind operation graphs, local guards, full caller bodies, and declarations.
     if _operation is not None:
         _check_operation(root, _operation)
-    if __package__:
-        from . import sum2_guard_contracts as guard
-    else:
-        import sum2_guard_contracts as guard
     record = read_record(root)
     operation_args = {} if _operation is None else {'_operation': _operation}
-    pairs = []
+    prepared = []
     for path, item in record['sources'].items():
-        pairs.append((
-            guard.significant(reviewed_source(root,path,item['after_token_sha256'], **operation_args)),
-            guard.significant(item['after_source']),
+        prepared.append((
+            reviewed_source(root, path, item['after_token_sha256'], **operation_args),
+            item['after_source'],
             'successor operations changed: ' + path))
-    if pairs:
-        _gate_graphs(pairs)
-    pairs = []
+    if prepared:
+        docs = _significant_documents(
+            [text for actual, expected, _ in prepared for text in (actual, expected)])
+        _gate_graphs([
+            (docs[index * 2], docs[index * 2 + 1], label)
+            for index, (_, _, label) in enumerate(prepared)])
+    prepared = []
     for path, item in record['premise_modules'].items():
-        pairs.append((
-            guard.significant(_typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)),
-            guard.significant(item['source']),
+        prepared.append((
+            _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation),
+            item['source'],
             'interval/environment premise changed: ' + path))
-    if pairs:
-        _gate_graphs(pairs)
+    if prepared:
+        docs = _significant_documents(
+            [text for actual, expected, _ in prepared for text in (actual, expected)])
+        _gate_graphs([
+            (docs[index * 2], docs[index * 2 + 1], label)
+            for index, (_, _, label) in enumerate(prepared)])
     for item in record['premise_functions']:
         physical_text = _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation)
         text = _typed_source.historical_text(root, item['path'], physical_text, _operation=_operation)
         actual = _declaration(text, item['name'], tuple(item['owner']))
-        matched = guard.significant(actual) == guard.significant(item['source'])
+        current_doc, recorded_doc = _significant_documents([actual, item['source']])
+        matched = current_doc == recorded_doc
         if not matched and (item['path'], item['name'], tuple(item['owner'])) == (
                 'extensions/carla/map.mojo', '_try_winner_seed', ()):
             try:
@@ -231,7 +261,9 @@ def verify_premises(root, *, _operation=None):
                     import seed_count_contracts as seed_count
                 predecessor = seed_count.reviewed_text(root, item['path'], physical_text, **operation_args)
                 actual = _declaration(predecessor, item['name'], ())
-                matched = guard.significant(actual) == guard.significant(item['source'])
+                current_doc, recorded_doc = _significant_documents([
+                    actual, item['source']])
+                matched = current_doc == recorded_doc
             except (ValueError, OSError) as error:
                 require(False, 'reviewed Map caller premise changed: ' + str(error))
         if not matched and item['path'] == 'extensions/carla/lane_refinement.mojo':

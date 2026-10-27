@@ -9,7 +9,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from std.os import makedirs
 from std.pathlib import Path
-from tests._python_tokens import declaration_text
+from tests._python_tokens import declaration_text, significant_json
 from tools.carla_cleanup_gate import (
     cleanup_digest,
     cleanup_record,
@@ -85,6 +85,17 @@ def test_a_changed_stored_word_is_refused() raises:
         )
     ):
         cleanup_words(source, "geometry", "extensions/carla/geometry.mojo")
+
+
+def test_a_comment_does_not_change_significant_tokens() raises:
+    """A comment is not part of the significant token list."""
+    var source = "def first():\n    return 1\n"
+    if significant_json(source) != significant_json(source + "# note\n"):
+        raise Error("comment changed the significant tokens")
+    if significant_json(source) == significant_json(
+        "def first():\n    return 2\n"
+    ):
+        raise Error("changed body kept the significant tokens")
 
 
 def test_a_struct_method_keeps_its_declaration() raises:
