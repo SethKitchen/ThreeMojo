@@ -296,6 +296,32 @@ def runtime_boundary_modules() raises -> String:
     return doc.dumps()
 
 
+def runtime_boundary_tests() raises -> String:
+    """Return the bound tests and the compile-fail fixtures.
+
+    Returns:
+        JSON with `tests` and `fixtures` in reviewed order.
+
+    Raises:
+        Error: The lists cannot be written.
+    """
+    var doc = PyJson()
+    var spec = doc.new_dict()
+    var tests = doc.new_list()
+    var fixtures = doc.new_list()
+    var index = 0
+    while index < 12:
+        var path = _test_name(index)
+        doc.append(tests, doc.new_str(path))
+        if index >= 3:
+            doc.append(fixtures, doc.new_str(path))
+        index += 1
+    doc.set(spec, "tests", tests)
+    doc.set(spec, "fixtures", fixtures)
+    doc.root = spec
+    return doc.dumps()
+
+
 def _usage():
     """Print the command usage and stop."""
     print(

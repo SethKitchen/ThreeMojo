@@ -231,6 +231,8 @@ It puts the module path on that edge.
 
 It keeps the four runtime-boundary module paths.
 
+It keeps the twelve runtime-boundary test paths.
+
 `tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record and the admission token.
 
 `tools/carla_selection_record_gate.mojo` checks the selection predecessor record and the restored token.

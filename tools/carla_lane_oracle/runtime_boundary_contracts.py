@@ -27,14 +27,7 @@ else:
 
 MIGRATION = 'tools/carla_lane_oracle/runtime-boundary-successor.json'
 MIGRATION_SHA256 = '992854b1191bd365fca3e5e8d3a7fc751ac2eb3196b33684e04ebad833baab00'
-FIXTURES = tuple(f'tests/compile_fail/carla_{name}.mojo' for name in (
-    'event_camera_time_rejects_float32_duration', 'event_camera_time_rejects_length',
-    'event_camera_time_rejects_raw_float64', 'lane_invasion_time_rejects_float32_duration',
-    'lane_invasion_time_rejects_length', 'lane_invasion_time_rejects_raw_float64',
-    'light_search_distance_rejects_duration', 'light_search_distance_rejects_float32_length',
-    'light_search_distance_rejects_raw_float64'))
-TESTS = ('tests/test_carla_sensors.mojo', 'tests/test_carla_sensors_world.mojo',
-         'tests/test_carla_world_signals.mojo', *FIXTURES)
+_BOUND_TESTS = None
 
 
 def _modules():
@@ -55,11 +48,37 @@ def _modules():
     return tuple(json.loads(result.stdout))
 
 
+def _bound_tests():
+    """Return the bound tests and the compile-fail fixtures."""
+    global _BOUND_TESTS
+    if _BOUND_TESTS is not None:
+        return _BOUND_TESTS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_runtime_boundary_tests'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _BOUND_TESTS = json.loads(result.stdout)
+    return _BOUND_TESTS
+
+
 def __getattr__(name):
     if name == 'MODULES':
         return _modules()
+    if name == 'TESTS':
+        return tuple(_bound_tests()['tests'])
+    if name == 'FIXTURES':
+        return tuple(_bound_tests()['fixtures'])
     if name == 'PROTECTED_INPUTS':
-        return (MIGRATION, *_modules(), *TESTS)
+        return (MIGRATION, *_modules(), *_bound_tests()['tests'])
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
