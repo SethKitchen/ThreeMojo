@@ -30,12 +30,10 @@ from pathlib import Path
 
 if __package__:
     from .ideal_projection import (
-        binding_shadow, declaration, direct_imports, selected_block,
-        stored_half_tail, verify_projection)
+        declaration, selected_block, stored_half_tail, verify_projection)
 else:
     from ideal_projection import (
-        binding_shadow, declaration, direct_imports, selected_block,
-        stored_half_tail, verify_projection)
+        declaration, selected_block, stored_half_tail, verify_projection)
 
 
 # Initial accepted arithmetic checkpoint. The guarded and final format/doc
@@ -268,21 +266,25 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def _imported_groups(text, module):
-    groups = []
-    for item in direct_imports(text):
-        if item['module'] != module:
-            continue
-        groups.append([(name, alias or None) for name, alias in item['names']])
-    return groups
-
-
-def verify_binding(text, name, allowed_module='', allow_definition=False):
-    """Reject every lexical binding form that could replace a reviewed helper."""
-    try:
-        binding_shadow(text, name, allowed_module, allow_definition)
-    except ValueError as error:
-        raise ValueError(str(error)) from error
+def _sum2_import_gate(mode, payload):
+    """Require the reviewed Sum2 imports through the Mojo import gate."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='sum2-imports-') as directory:
+        path = Path(directory) / 'payload.json'
+        path.write_text(json.dumps(payload, separators=(',', ':')))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sum2_imports',
+             mode, str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
 
 
 def _graph_dump(text, name, rename='', *, drop_first=False):
@@ -404,35 +406,20 @@ def verify(root, *, _operation=None):
         require(actual == _graph_dump(expected, name),
                 'Sum2 complete caller graph changed: ' + name)
     # Require the exact direct import inventory and reject all shadow forms.
-    for module, helpers in (
-            ('lane_geometry', ('_sum2_update', '_require_sum2_environment')),
-            ('curve_bounds', ('_sum2_error_checked', '_sum2_supported_environment')),
-            ('spiral_roundoff_proof', ('_sum2_error',))):
-        groups = _imported_groups(texts[module], 'extensions.carla.curve_sum2')
-        require(len(groups) == 1 and groups[0] == [(name, None) for name in helpers],
-                'Sum2 direct helper import changed: ' + module)
-        for helper in helpers:
-            verify_binding(
-                texts[module], helper,
-                allowed_module='extensions.carla.curve_sum2')
+    _sum2_import_gate('--helpers', {
+        'lane': texts['lane_geometry'],
+        'bounds': texts['curve_bounds'],
+        'roundoff': texts['spiral_roundoff_proof'],
+    })
     pins = json.loads(_typed_source.historical_text(root, root / 'tools/carla_lane_oracle/spiral-moment-pins.json', source._observe_text(root, (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').relative_to(root).as_posix(), (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').read_text(), _operation=_operation), _operation=_operation))
     interval = _typed_source.historical_text(root, root / 'extensions/carla/curve_interval.mojo', source._observe_text(root, (root / 'extensions/carla/curve_interval.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_interval.mojo').read_text(), _operation=_operation), _operation=_operation)
     try:
         _require_function(interval, '_stored_half')
     except ValueError as error:
         raise c.CheckError(str(error)) from error
-    half_imports = [item for item in direct_imports(texts['curve_bounds'])
-                    if any(name == '_stored_half' or alias == '_stored_half'
-                           for name, alias in item['names'])]
-    require(len(half_imports) == 1
-            and half_imports[0]['module'] == 'extensions.carla.curve_interval'
-            and [(name, alias or None) for name, alias in half_imports[0]['names']
-                 if name == '_stored_half' or alias == '_stored_half']
-                == [('_stored_half', None)], 'stored-half direct import changed')
-    verify_binding(
-        texts['curve_bounds'], '_stored_half',
-        allowed_module='extensions.carla.curve_interval')
-    verify_binding(interval, '_stored_half', allow_definition=True)
+    _sum2_import_gate('--half', {
+        'bounds': texts['curve_bounds'], 'interval': interval,
+    })
     projection = verify_projection(
         pins['ideal_projection']['legacy_normalized_source'],
         selected_block(

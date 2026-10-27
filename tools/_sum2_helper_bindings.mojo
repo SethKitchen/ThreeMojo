@@ -10,7 +10,12 @@ a declaration, an assignment, a parameter, or an exception binding that
 replaces one of those helpers is refused.
 """
 
-from tests._python_tokens import _tokenize
+from tests._python_tokens import (
+    _binding_shadow,
+    _direct_imports_json,
+    _tokenize,
+)
+from tools._python_json import PyJson
 
 
 comptime _NAME = 1
@@ -547,4 +552,235 @@ def sum2_helper_bindings(
         "_stored_half",
         "extensions.carla.curve_interval",
         True,
+    )
+
+
+def _expected_name(expected: String, index: Int) -> String:
+    """Return one comma-separated name, or empty when `index` is past the end.
+
+    Args:
+        expected: The required names, comma-joined.
+        index: The zero-based name to read.
+
+    Returns:
+        The name, or empty when `index` has no name.
+    """
+    var at = 0
+    var seen = 0
+    while seen < index:
+        var comma = expected.find(",", at)
+        if comma < 0:
+            return ""
+        at = comma + 1
+        seen += 1
+    var comma = expected.find(",", at)
+    if comma < 0:
+        return String(expected[byte=at:])
+    return String(expected[byte=at:comma])
+
+
+def _names_are(doc: PyJson, names: Int, expected: String) raises -> Bool:
+    """Return whether one import lists `expected` with empty aliases.
+
+    Args:
+        doc: The import document.
+        names: The `names` list.
+        expected: The required names, comma-joined.
+
+    Returns:
+        True when the names match in order and none are renamed.
+
+    Raises:
+        Error: A name pair cannot be read.
+    """
+    var count = doc.length(names)
+    var index = 0
+    while index < count:
+        var pair = doc.item(names, index)
+        var name = doc.text(doc.item(pair, 0))
+        var alias = doc.text(doc.item(pair, 1))
+        if alias != "":
+            return False
+        if name != _expected_name(expected, index):
+            return False
+        index += 1
+    var extra = _expected_name(expected, count)
+    if extra != "":
+        return False
+    return True
+
+
+def _require_group(
+    source: String, module: String, expected: String, label: String
+) raises:
+    """Require one direct import of `expected` from `module`.
+
+    Args:
+        source: The consumer module.
+        module: The required module path.
+        expected: The required names, comma-joined.
+        label: The consumer name in the failure text.
+
+    Raises:
+        Error: The import is missing, repeated, aliased, or reordered.
+    """
+    var doc = PyJson.parse(_direct_imports_json(source))
+    var found = 0
+    var matched = False
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        var item = doc.item(doc.root, index)
+        if doc.text(doc.at(item, "module")) == module:
+            found += 1
+            if found == 1:
+                matched = _names_are(doc, doc.at(item, "names"), expected)
+            else:
+                matched = False
+        index += 1
+    if found != 1:
+        raise Error("Sum2 direct helper import changed: " + label)
+    if not matched:
+        raise Error("Sum2 direct helper import changed: " + label)
+
+
+def _half_hits(doc: PyJson, names: Int) raises -> Int:
+    """Return how many pairs bind `_stored_half`.
+
+    Args:
+        doc: The import document.
+        names: The `names` list.
+
+    Returns:
+        The number of plain `_stored_half` names, or `-1` when a binding is
+        renamed or binds the name through an alias.
+
+    Raises:
+        Error: A name pair cannot be read.
+    """
+    var hits = 0
+    var index = 0
+    var count = doc.length(names)
+    while index < count:
+        var pair = doc.item(names, index)
+        var name = doc.text(doc.item(pair, 0))
+        var alias = doc.text(doc.item(pair, 1))
+        var binds = False
+        if name == "_stored_half":
+            binds = True
+        if alias == "_stored_half":
+            binds = True
+        if binds:
+            hits += 1
+            if name != "_stored_half":
+                return -1
+            if alias != "":
+                return -1
+        index += 1
+    return hits
+
+
+def _require_half(source: String) raises:
+    """Require one unaliased `_stored_half` import from the interval module.
+
+    Args:
+        source: The `curve_bounds` module.
+
+    Raises:
+        Error: The stored-half import changed.
+    """
+    var doc = PyJson.parse(_direct_imports_json(source))
+    var found = 0
+    var ok = False
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        var item = doc.item(doc.root, index)
+        var hits = _half_hits(doc, doc.at(item, "names"))
+        if hits != 0:
+            found += 1
+            if found == 1:
+                ok = hits == 1
+                if (
+                    doc.text(doc.at(item, "module"))
+                    != "extensions.carla.curve_interval"
+                ):
+                    ok = False
+            else:
+                ok = False
+        index += 1
+    if found != 1:
+        raise Error("stored-half direct import changed")
+    if not ok:
+        raise Error("stored-half direct import changed")
+
+
+def sum2_helper_import_checks(
+    lane: String, bounds: String, roundoff: String
+) raises:
+    """Require the reviewed Sum2 imports and reject shadows.
+
+    Args:
+        lane: The `lane_geometry` module.
+        bounds: The `curve_bounds` module.
+        roundoff: The `spiral_roundoff_proof` module.
+
+    Raises:
+        Error: An import changed, or a reviewed helper is shadowed.
+    """
+    _require_group(
+        lane,
+        "extensions.carla.curve_sum2",
+        "_sum2_update,_require_sum2_environment",
+        "lane_geometry",
+    )
+    _binding_shadow(lane, "_sum2_update", "extensions.carla.curve_sum2", False)
+    _binding_shadow(
+        lane,
+        "_require_sum2_environment",
+        "extensions.carla.curve_sum2",
+        False,
+    )
+    _require_group(
+        bounds,
+        "extensions.carla.curve_sum2",
+        "_sum2_error_checked,_sum2_supported_environment",
+        "curve_bounds",
+    )
+    _binding_shadow(
+        bounds, "_sum2_error_checked", "extensions.carla.curve_sum2", False
+    )
+    _binding_shadow(
+        bounds,
+        "_sum2_supported_environment",
+        "extensions.carla.curve_sum2",
+        False,
+    )
+    _require_group(
+        roundoff,
+        "extensions.carla.curve_sum2",
+        "_sum2_error",
+        "spiral_roundoff_proof",
+    )
+    _binding_shadow(
+        roundoff, "_sum2_error", "extensions.carla.curve_sum2", False
+    )
+
+
+def sum2_half_import_checks(bounds: String, interval: String) raises:
+    """Require the unaliased stored-half import and reject shadows.
+
+    Args:
+        bounds: The `curve_bounds` module.
+        interval: The `curve_interval` module.
+
+    Raises:
+        Error: The import changed, or `_stored_half` is shadowed.
+    """
+    _require_half(bounds)
+    _binding_shadow(
+        bounds, "_stored_half", "extensions.carla.curve_interval", False
+    )
+    _binding_shadow(
+        interval, "_stored_half", "extensions.carla.curve_interval", True
     )

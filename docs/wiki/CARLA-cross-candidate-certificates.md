@@ -154,6 +154,7 @@ A changed graph is refused.
 
 Mojo checks the reviewed Sum2 helper bindings.
 Each consumer imports its helpers directly.
+The stored-half import keeps its own name.
 A wildcard, an alias, or a shadowing binding is refused.
 
 Mojo checks the optional runtime edges.
