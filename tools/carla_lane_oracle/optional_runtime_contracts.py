@@ -26,10 +26,12 @@ try:
     import sum2_guard_contracts as guard
     import source_contracts
     import full_audit_cleanup_contracts as full_audit
+    from sum2_contracts import _syntax_tree
 except ModuleNotFoundError:
     from tools.carla_lane_oracle import check_sampled_values as sampled
     from tools.carla_lane_oracle import sum2_guard_contracts as guard, source_contracts
     from tools.carla_lane_oracle import full_audit_cleanup_contracts as full_audit
+    from tools.carla_lane_oracle.sum2_contracts import _syntax_tree
 
 FOLLOWUP_ROOM = """
 def _objective_followup_room(
@@ -170,11 +172,11 @@ def body_from_source(text, name):
     # The historical AST adapter has no lane-search move arguments. Remove
     # only postfix move sigils before argument delimiters for this semantic
     # view; complete lexical contracts separately retain every move token.
-    return sampled.unique_function(sampled.syntax_tree(_without_moves(source)), name)
+    return sampled.unique_function(_syntax_tree(_without_moves(source)), name)
 
 
 def contains(node, text, label, count=1):
-    expected = sampled.syntax_tree(text).body
+    expected = _syntax_tree(text).body
     require(len(expected) == 1, 'invalid checker fragment: ' + label)
     wanted = sampled.dump(expected[0])
     actual = sum(sampled.dump(item) == wanted for item in ast.walk(node))
@@ -190,7 +192,7 @@ def expression(node, text, label, count=1):
 
 def sequence(node, text, label):
     """Bind adjacent statements in one suite, without textual sentinels."""
-    wanted = [sampled.dump(item) for item in sampled.syntax_tree(text).body]
+    wanted = [sampled.dump(item) for item in _syntax_tree(text).body]
     matches = 0
     for owner in ast.walk(node):
         for _, values in ast.iter_fields(owner):
@@ -289,10 +291,10 @@ def verify_fresh_producer(run):
     require(len(choices) == 1 and choices[0] > 0,
             'fresh cell producer must use original reference admission')
     index = choices[0]
-    expected_work = sampled.syntax_tree('var work = _reference_work(road, lo, hi)').body[0]
+    expected_work = _syntax_tree('var work = _reference_work(road, lo, hi)').body[0]
     require(sampled.dump(statements[index - 1]) == sampled.dump(expected_work),
             'fresh cell producer must use current cell work')
-    expected = sampled.syntax_tree(FRESH_PRODUCER).body
+    expected = _syntax_tree(FRESH_PRODUCER).body
     require(sampled.dump(statements[index].body[:len(expected)]) == sampled.dump(expected),
             'fresh current-cell producer must immediately follow original debit')
     for name in ('cached_fast', 'cached_expansion'):
@@ -336,7 +338,7 @@ def verify_search_semantics(run):
 
 def verify_semantics(root, *, _operation=None):
     helper = body(root, 'lane_refinement', '_same_cache_key', _operation=_operation)
-    require(sampled.dump(helper.body) == sampled.dump(sampled.syntax_tree(
+    require(sampled.dump(helper.body) == sampled.dump(_syntax_tree(
         'return SIMD[DType.uint64, 2](station, scale) == SIMD[DType.uint64, 2](other_station, other_scale)').body),
         'exact UInt64 pair helper comparison')
     model = body(root, 'curve_objective_model', '_try_objective_model', _operation=_operation)
@@ -441,12 +443,12 @@ def verify_semantics(root, *, _operation=None):
     # The standalone helper remains reviewed and tested even though the
     # search solver no longer imports, captures, or restricts this model.
     room = body(root, 'curve_objective_model', '_objective_followup_room', _operation=_operation)
-    expected_room = sampled.unique_function(sampled.syntax_tree(FOLLOWUP_ROOM), '_objective_followup_room')
+    expected_room = sampled.unique_function(_syntax_tree(FOLLOWUP_ROOM), '_objective_followup_room')
     require(sampled.dump(room) == sampled.dump(expected_room),
             'complete overflow-safe integer followup admission')
     recheck = body(root, 'curve_objective_model', '_objective_recheck_room', _operation=_operation)
     require(sampled.dump(recheck) == sampled.dump(sampled.unique_function(
-        sampled.syntax_tree(RECHECK_ROOM), '_objective_recheck_room')),
+        _syntax_tree(RECHECK_ROOM), '_objective_recheck_room')),
         'complete integer cached-closure recheck admission')
     fee = body(root, 'map', '_query_node_step_cost', _operation=_operation)
     contains(fee, 'var fixed = 26 if goal else 20', 'reviewed goal node fee')

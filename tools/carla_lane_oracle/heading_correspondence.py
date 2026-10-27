@@ -21,7 +21,11 @@ import ast
 import copy
 from pathlib import Path
 
-from check_sampled_values import dump, function, syntax_tree, unique_function
+from check_sampled_values import dump, function, unique_function
+if __package__:
+    from .sum2_contracts import _syntax_tree
+else:
+    from sum2_contracts import _syntax_tree
 
 CONSUMERS = {
     'spiral_domain_proof.mojo': '_spiral_proof_branch',
@@ -38,7 +42,7 @@ def require(condition, message):
 def declaration(text, name):
     # The full source/token gate binds actual declaration identity, decorators
     # and everything outside this selected complete declaration as well.
-    return unique_function(syntax_tree(function(text, name)), name)
+    return unique_function(_syntax_tree(function(text, name)), name)
 
 
 def assigned(node, name):
