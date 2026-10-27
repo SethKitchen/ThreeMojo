@@ -68,6 +68,8 @@ It translates universal newlines before that lane text comparison.
 
 It selects the rounded lane minimum before restoring a changed declaration.
 
+It reads every rounded LINE declaration in one check.
+
 It keeps the consumer import scope before the first definition.
 
 It keeps the lane path, the rounded-line path, and the consumer messages.

@@ -387,6 +387,32 @@ def _declaration(text, name, owner):
     return result.stdout
 
 
+def _declarations(items):
+    """Return the declaration texts in the requested order."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    if not items:
+        return []
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(items, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='singleton-declarations-') as directory:
+        path = Path(directory) / 'declarations.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_declarations',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def verify_premises(root):
     record = read_record(root)
     # Whole module tokens bind imports, declaration owners and local names.
@@ -417,11 +443,19 @@ def verify_premises(root):
         _gate_graphs([
             (scope_docs[index * 2], scope_docs[index * 2 + 1], label)
             for index, (_, _, label) in enumerate(prepared)])
-    prepared = []
+    loaded = []
     for item in record['declarations']:
         selected = _selected_minimum(item['path'], item['name'], tuple(item['owner']))
         text = _lane_text(root) if selected else _typed_source.historical_text(root, root/item['path'], (root/item['path']).read_text())
-        actual = _declaration(text, item['name'], tuple(item['owner']))
+        loaded.append((item, selected, text))
+    declared = _declarations([{
+        'source': text,
+        'name': item['name'],
+        'owner': list(item['owner']),
+    } for item, _selected, text in loaded])
+    prepared = []
+    for index, (item, selected, text) in enumerate(loaded):
+        actual = declared[index]
         if selected:
             current_doc, recorded_doc = _significant_documents([
                 actual, item['source']])
