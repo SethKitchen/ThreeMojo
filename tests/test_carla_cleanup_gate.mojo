@@ -26,6 +26,7 @@ from tests._python_tokens import (
     module_routing_json,
     module_statements_json,
     token_names,
+    token_sha256,
     top_level_starts_json,
     without_move_sigils,
 )
@@ -440,6 +441,14 @@ def test_a_repeated_premise_fragment_is_refused() raises:
         )
     ):
         cleanup_premises(directory)
+
+
+def test_the_token_digest_matches_cpython() raises:
+    """The kept-token digest matches CPython 3.12 for one function."""
+    assert_equal(
+        token_sha256("def first():\n    return 1\n"),
+        "28885cd8303bb65249ae7f3f82d218953cc86334e26246f61262bd8c61fe613a",
+    )
 
 
 def test_the_stored_word_digest_matches_sha256() raises:

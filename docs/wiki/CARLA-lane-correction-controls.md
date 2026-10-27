@@ -82,6 +82,8 @@ It returns one normalized source block between two markers.
 
 It removes the try-only parameter from one routing declaration.
 
+It returns the kept-token digest and declaration text for the lane-control check.
+
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.

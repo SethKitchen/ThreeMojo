@@ -8,6 +8,7 @@
     carla_cleanup_gate --migration PATH [--previous PATH]
     carla_cleanup_gate --bytes PATH --sha HEX
     carla_cleanup_gate --sha-of PATH
+    carla_cleanup_gate --token-sha PATH
     carla_cleanup_gate --tokens DIR
     carla_cleanup_gate --words PATH --kind trig|geometry --label PATH
     carla_cleanup_gate --premises DIR
@@ -443,21 +444,17 @@ def _usage():
     """Print the command usage and stop."""
     print(
         (
-            "usage: carla_cleanup_gate --migration PATH [--previous PATH]"
-            " | --bytes PATH --sha HEX | --sha-of PATH | --tokens DIR"
-            " | --words PATH --kind trig|geometry --label PATH"
-            " | --premises DIR"
-            " | --declaration PATH --name NAME [--owner NAME]"
-            " | --bounds PATH --name NAME [--owner NAME]"
-            " | --significant-json DIR | --names DIR | --moves PATH"
-            " | --statements PATH | --starts PATH"
-            " | --routing PATH --constants PATH"
-            " | --ideal PATH --name NAME | --syntax PATH"
-            " | --slice PATH --name NAME | --fragment DIR | --normalize PATH"
-            " | --table PATH --count N | --moment-source PATH | --block DIR"
-            " | --strip-try PATH"
-            " | --literals PATH --name NAME --kind array --size N"
-            " | --literals PATH --name NAME --kind scalar"
+            "usage: carla_cleanup_gate --migration PATH [--previous PATH] |"
+            " --bytes PATH --sha HEX | --sha-of PATH | --token-sha PATH |"
+            " --tokens DIR | --words PATH --kind trig|geometry --label PATH |"
+            " --premises DIR | --declaration PATH --name NAME [--owner NAME] |"
+            " --bounds PATH --name NAME [--owner NAME] | --significant-json DIR"
+            " | --names DIR | --moves PATH | --statements PATH | --starts PATH"
+            " | --routing PATH --constants PATH | --ideal PATH --name NAME |"
+            " --syntax PATH | --slice PATH --name NAME | --fragment DIR |"
+            " --normalize PATH | --table PATH --count N | --moment-source PATH"
+            " | --block DIR | --strip-try PATH | --literals PATH --name NAME"
+            " --kind array --size N | --literals PATH --name NAME --kind scalar"
         ),
         file=stderr,
     )
@@ -475,6 +472,7 @@ def main() raises:
     var payload = String("")
     var digest = String("")
     var sha_of = String("")
+    var token_sha = String("")
     var tokens = String("")
     var words = String("")
     var kind = String("")
@@ -513,6 +511,7 @@ def main() raises:
             or word == "--bytes"
             or word == "--sha"
             or word == "--sha-of"
+            or word == "--token-sha"
             or word == "--tokens"
             or word == "--words"
             or word == "--kind"
@@ -555,6 +554,8 @@ def main() raises:
                 digest = value
             elif word == "--sha-of":
                 sha_of = value
+            elif word == "--token-sha":
+                token_sha = value
             elif word == "--tokens":
                 tokens = value
             elif word == "--words":
@@ -622,6 +623,8 @@ def main() raises:
     if payload.byte_length() > 0:
         modes += 1
     if sha_of.byte_length() > 0:
+        modes += 1
+    if token_sha.byte_length() > 0:
         modes += 1
     if tokens.byte_length() > 0:
         modes += 1
@@ -858,6 +861,9 @@ def main() raises:
             return
         if tokens.byte_length() > 0:
             cleanup_tokens(tokens)
+            return
+        if token_sha.byte_length() > 0:
+            print(token_sha256(Path(token_sha).read_text()), end="")
             return
         if sha_of.byte_length() > 0:
             print(cleanup_sha(Path(sha_of).read_bytes()))
