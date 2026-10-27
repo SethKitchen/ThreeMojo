@@ -204,19 +204,49 @@ def _rounded_words(literals):
         raise CheckError(str(error)) from error
 
 
+def _moment_error(mode, payload):
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-error-') as directory:
+        path = Path(directory) / 'error.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_errors',
+             mode, str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout.strip()
+
+
 def decimal_word(token):
     value = F(token)
-    # Fractions have no signed zero; a source literal does.
-    if not value and token.startswith('-'):
+    # Fractions have no signed zero; a source literal does. `1/0` still
+    # raises from the fraction above, before this classification.
+    if _moment_error('--signed', {'token': token, 'zero': not value}) == 'true':
         return SIGN
     try:
         words = ideal_projection.decimal_words([token])
     except ValueError as error:
-        if str(error) != 'unsupported decimal word':
-            raise CheckError(str(error)) from error
+        try:
+            result = _moment_error('--result', {'error': str(error)})
+        except ValueError as classified:
+            raise CheckError(str(classified)) from error
+        if result != 'nearest':
+            raise CheckError(result) from error
         return nearest_even(value)
-    require(len(words) == 1, 'binary64 overflow')
-    return words[0]
+    try:
+        result = _moment_error('--result', {'words': [str(word) for word in words]})
+    except ValueError as error:
+        raise CheckError(str(error)) from error
+    return int(result)
 
 
 def normalized_block(text):
@@ -232,10 +262,10 @@ def selected_block(text, begin, end):
 
 
 def _constant_error(error, name):
-    message = str(error)
-    if message in ('unsupported top-level source routing',
-                   'incomplete top-level source routing'):
-        message = 'malformed constant declaration: ' + name
+    try:
+        message = _moment_error('--constant', {'message': str(error), 'name': name})
+    except ValueError as failure:
+        raise CheckError(str(failure)) from error
     raise CheckError(message) from error
 
 

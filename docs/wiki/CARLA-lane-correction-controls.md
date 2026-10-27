@@ -156,6 +156,8 @@ It reads the stored moment words from the generated table.
 
 It rounds one exact fraction to binary64.
 
+It keeps a negative zero and reports one binary64 word.
+
 It spells each stored word as `0x` and 16 uppercase digits.
 
 It checks the moment pin sets, paths, dependency closure, legacy digest, and result pins.
