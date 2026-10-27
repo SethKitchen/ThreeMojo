@@ -97,6 +97,32 @@ def reviewed_source(root, path, expected, *, _operation=None):
     require(record['before_token_sha256'] == expected, 'raw predecessor edge mismatch')
     return record['before_source']
 
+def _gate_tokens(pairs):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='dispatch-tokens-') as directory:
+        folder = Path(directory)
+        labels = []
+        for index, (text, token, label) in enumerate(pairs):
+            (folder / f'{index}.text').write_text(text)
+            labels.append({'label': label, 'token': token})
+        (folder / 'labels.json').write_text(json.dumps(labels))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_gate',
+             '--tokens', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def verify_premises(root, *, _operation=None):
     # Deliberately independent of complete-module successor digest checks.
     # Bind operation graphs, local guards, full caller bodies, and declarations.
@@ -142,10 +168,13 @@ def verify_premises(root, *, _operation=None):
             except RuntimeError as error:
                 require(False, 'reviewed lane caller premise changed: ' + str(error))
         require(matched, 'index or guarded caller premise changed: ' + item['name'])
+    pairs = []
     for item in record['reference_functions']:
         actual = guard.declaration(_typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation), item['name'], ())
-        require(source.token_sha256(actual) == item['token_sha256'],
-                'native predecessor reference changed: ' + item['name'])
+        pairs.append((actual, item['token_sha256'],
+                      'native predecessor reference changed: ' + item['name']))
+    if pairs:
+        _gate_tokens(pairs)
     return record
 
 
@@ -154,9 +183,12 @@ def verify(root, *, _operation=None):
         _check_operation(root, _operation)
     record = read_record(root)
     operation_args = {} if _operation is None else {'_operation': _operation}
+    pairs = []
     for path, item in record['sources'].items():
-        require(source.token_sha256(reviewed_source(root,path,item['after_token_sha256'], **operation_args)) == item['after_token_sha256'],
-                'complete successor changed: ' + path)
+        pairs.append((reviewed_source(root,path,item['after_token_sha256'], **operation_args),
+                      item['after_token_sha256'], 'complete successor changed: ' + path))
+    if pairs:
+        _gate_tokens(pairs)
     verify_premises(root, **operation_args)
     return record
 

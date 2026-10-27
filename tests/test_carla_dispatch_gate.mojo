@@ -5,9 +5,15 @@
 
 """A changed support and dispatch record fails the gate."""
 
+from std.os import makedirs
+from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_dispatch_gate import dispatch_pin, dispatch_record
+from tools.carla_dispatch_gate import (
+    dispatch_pin,
+    dispatch_record,
+    dispatch_tokens,
+)
 
 
 def test_a_changed_record_is_refused() raises:
@@ -27,6 +33,23 @@ def test_a_changed_pin_is_refused() raises:
         )
     ):
         dispatch_pin(String("nope").as_bytes(), "00", "pins.json")
+
+
+def test_a_changed_reference_token_is_refused() raises:
+    """A text that does not have the recorded token digest fails closed."""
+    var directory = "/tmp/dispatch-token-test"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/labels.json").write_text(
+        '[{"label":"complete successor changed: module.mojo","token":"00"}]'
+    )
+    Path(directory + "/0.text").write_text("def changed():\n    pass\n")
+    with assert_raises(
+        contains=(
+            "curve support/dispatch contract: complete successor changed:"
+            " module.mojo"
+        )
+    ):
+        dispatch_tokens(directory)
 
 
 def main() raises:
