@@ -23,9 +23,35 @@ MIGRATION = 'tools/carla_lane_oracle/rounded-line-singleton-migration.json'
 MIGRATION_SHA256 = 'e4a0eb6c9e527dd66b2b803ee69754334feecc9bea33ce001cdf584d3a693506'
 
 
+_CONTRACT_PREFIXES = None
+
+
+def _contract_prefixes():
+    """Return the reviewed contract prefixes."""
+    global _CONTRACT_PREFIXES
+    if _CONTRACT_PREFIXES is not None:
+        return _CONTRACT_PREFIXES
+    import json
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_contract_prefixes'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _CONTRACT_PREFIXES = json.loads(result.stdout)
+    return _CONTRACT_PREFIXES
+
+
 def require(value, message):
     if not value:
-        raise ValueError('rounded LINE singleton contract: ' + message)
+        raise ValueError(_contract_prefixes()['singleton'] + message)
 
 
 def _gate(payload):

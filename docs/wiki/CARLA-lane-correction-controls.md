@@ -48,6 +48,8 @@ It keeps the speed-limit module and its two correctness tests.
 
 It keeps the accepted successor record path.
 
+It keeps the speed-parser contract prefix.
+
 `tools/carla_raw_cut_gate.mojo` checks the raw-cut inverse record, the fixture token, the successor binding, and the operation graph.
 
 `tools/carla_runtime_view_gate.mojo` checks the runtime-view record and its bound tests.
@@ -64,6 +66,8 @@ It keeps the consumer import scope before the first definition.
 
 It keeps the lane path, the rounded-line path, and the consumer messages.
 
+It keeps the rounded-line contract prefix.
+
 `tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record, the producer functions, and the arc layout.
 
 It keeps the frozen-arc source and the polynomial and road paths.
@@ -71,6 +75,8 @@ It keeps the frozen-arc source and the polynomial and road paths.
 It keeps the frozen runtime-pin labels and the public successor message.
 
 It keeps the reviewed cleanup record path.
+
+It keeps the frozen-arc contract prefix.
 
 It writes each frozen runtime pin back to its historical value.
 
@@ -85,6 +91,8 @@ It keeps the four coverage-invariant source paths.
 It keeps the six extra coverage-invariant inputs.
 
 It keeps the pin file names, the prior record, and the successor message.
+
+It keeps the coverage-invariant contract prefix.
 
 It keeps a component name inside its directory.
 
@@ -106,6 +114,8 @@ It keeps the two dispatch sources and the five protected paths.
 
 It keeps the dispatch path, the choice names, and the premise messages.
 
+It keeps the dispatch contract prefix.
+
 `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the trig and geometry stored words, and the successor tokens.
 
 It admits trig and geometry word changes only for their reviewed token.
@@ -121,6 +131,8 @@ It keeps the fourteen extra cleanup inputs.
 It keeps the trig and geometry dependency paths and tokens.
 
 It keeps the trig and geometry choice names.
+
+It keeps the cleanup contract prefix.
 
 It keeps the five premise declarations and the junction path.
 
@@ -234,6 +246,8 @@ It drops comments and blank lines from one source block.
 
 It reads the stored moment words from the generated table.
 
+It keeps the scalar spelling prefix.
+
 It rounds one exact fraction to binary64.
 
 It keeps a negative zero and reports one binary64 word.
@@ -281,6 +295,8 @@ It keeps the render-actor module and its three bound tests.
 
 It keeps the render-actor consumer and test messages.
 
+It keeps the render-actor contract prefix.
+
 `tools/carla_runtime_boundary_gate.mojo` checks the runtime-boundary record, its bound tests, and the view-step edges.
 
 It extends an edge when a reviewed view step starts at that edge.
@@ -292,6 +308,8 @@ It keeps the four runtime-boundary module paths.
 It keeps the twelve runtime-boundary test paths.
 
 It keeps the runtime-boundary consumer and test messages.
+
+It keeps the runtime-boundary contract prefix.
 
 `tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record and the admission token.
 
