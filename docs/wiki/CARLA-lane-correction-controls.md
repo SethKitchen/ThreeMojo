@@ -46,6 +46,8 @@ It compares that grouped-table token digest before the predecessor fallback.
 
 It keeps the speed-limit module and its two correctness tests.
 
+It keeps the accepted successor record path.
+
 `tools/carla_raw_cut_gate.mojo` checks the raw-cut inverse record, the fixture token, the successor binding, and the operation graph.
 
 `tools/carla_runtime_view_gate.mojo` checks the runtime-view record and its bound tests.
@@ -67,6 +69,8 @@ It keeps the lane path, the rounded-line path, and the consumer messages.
 It keeps the frozen-arc source and the polynomial and road paths.
 
 It keeps the frozen runtime-pin labels and the public successor message.
+
+It keeps the reviewed cleanup record path.
 
 It writes each frozen runtime pin back to its historical value.
 
@@ -117,6 +121,8 @@ It keeps the fourteen extra cleanup inputs.
 It keeps the trig and geometry dependency paths and tokens.
 
 It keeps the five premise declarations and the junction path.
+
+It keeps the winner-sign record and the runtime pin path.
 
 The singleton, frozen ARC, dispatch, raw-cut, and optional-runtime contracts use that declaration text.
 
@@ -261,6 +267,8 @@ It accepts one historical lane declaration when the owner is empty and the token
 It renames the first frozen lane declaration.
 
 It keeps the lane-control labels and the frozen reference prefix.
+
+It keeps the lane-control migration path.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.
 It puts the module path on the render-actor edge.

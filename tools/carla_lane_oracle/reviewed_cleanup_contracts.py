@@ -99,7 +99,7 @@ def _protected_tail():
 def _protected_inputs():
     """Return the protected inputs, including the Mojo path tables."""
     _ensure_paths()
-    return (*cache_key.PROTECTED_INPUTS, *accepted.PROTECTED_INPUTS, MIGRATION, 'tools/carla_lane_oracle/runtime-source-pins.json',
+    return (*cache_key.PROTECTED_INPUTS, *accepted.PROTECTED_INPUTS, MIGRATION, _record_paths()['runtime_pins'],
             *SOURCE_PATHS, *PREMISE_PATHS, *frozen.PROTECTED_INPUTS,
             *invariant.PROTECTED_INPUTS, *_protected_tail())
 
@@ -235,11 +235,36 @@ def _gate_digest(payload, expected):
         raise ValueError(message)
 
 
+_RECORD_PATHS = None
+
+
+def _record_paths():
+    """Return the companion migration record paths."""
+    global _RECORD_PATHS
+    if _RECORD_PATHS is not None:
+        return _RECORD_PATHS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_record_paths'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _RECORD_PATHS = json.loads(result.stdout)
+    return _RECORD_PATHS
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
-    previous = root/'tools/carla_lane_oracle/winner-sign-query-migration.json'
+    previous = root/_record_paths()['winner_sign']
     _gate(payload, _typed_source.historical_bytes(root, previous, previous.read_bytes()))
     return record
 

@@ -157,6 +157,7 @@ def _gate_tokens(pairs):
 
 
 _LANE_LABELS = None
+_RECORD_PATHS = None
 
 
 def _lane_labels():
@@ -181,12 +182,33 @@ def _lane_labels():
     return _LANE_LABELS
 
 
+def _record_paths():
+    """Return the companion migration record paths."""
+    global _RECORD_PATHS
+    if _RECORD_PATHS is not None:
+        return _RECORD_PATHS
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_record_paths'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise RuntimeError(message)
+    _RECORD_PATHS = json.loads(result.stdout)
+    return _RECORD_PATHS
+
+
 def verify(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
     root = Path(root)
     operation_args = {} if _operation is None else {'_operation': _operation}
-    path = root / 'tools/carla_lane_oracle/lane-control-migration.json'
+    path = root / _record_paths()['lane_control']
     raw = _typed_source.historical_bytes(root, path, path.read_bytes(), _operation=_operation)
     _gate(raw)
     record = json.loads(raw)

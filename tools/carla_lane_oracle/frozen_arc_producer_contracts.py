@@ -298,11 +298,36 @@ def _gate_layout(actual, expected):
         raise ValueError(message)
 
 
+_RECORD_PATHS = None
+
+
+def _record_paths():
+    """Return the companion migration record paths."""
+    global _RECORD_PATHS
+    if _RECORD_PATHS is not None:
+        return _RECORD_PATHS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_record_paths'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _RECORD_PATHS = json.loads(result.stdout)
+    return _RECORD_PATHS
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
-    previous = root/'tools/carla_lane_oracle/reviewed-cleanup-migration.json'
+    previous = root/_record_paths()['reviewed_cleanup']
     _gate(payload, _typed_source.historical_bytes(root, previous, previous.read_bytes()))
     return record
 
