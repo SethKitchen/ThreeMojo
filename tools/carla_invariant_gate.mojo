@@ -263,6 +263,25 @@ def invariant_places(directory: String) raises:
         index += 1
 
 
+def invariant_sources() raises -> String:
+    """Return the four coverage-invariant source paths.
+
+    Returns:
+        A JSON list in reviewed order.
+
+    Raises:
+        Error: The list cannot be written.
+    """
+    var doc = PyJson()
+    var names = doc.new_list()
+    var index = 0
+    while index < 4:
+        doc.append(names, doc.new_str(_source_name(index)))
+        index += 1
+    doc.root = names
+    return doc.dumps()
+
+
 def _usage():
     """Print the command usage and stop."""
     print(

@@ -23,8 +23,37 @@ else:
     import grouped_table_contracts as grouped
 MIGRATION = 'tools/carla_lane_oracle/coverage-invariant-migration.json'
 MIGRATION_SHA256 = '56a72d9bccbf9e7b8a6b51db2b9944ef4bbf55d9bcc7311f7f9615be3b3b36ac'
-SOURCE_PATHS = (*curve.SOURCE_PATHS, grouped.MODULE,
-                'extensions/carla/lane_refinement.mojo')
+_SOURCES = None
+
+
+def _sources():
+    """Return the four coverage-invariant source paths in reviewed order."""
+    global _SOURCES
+    if _SOURCES is not None:
+        return _SOURCES
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_invariant_sources'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _SOURCES = tuple(json.loads(result.stdout))
+    return _SOURCES
+
+
+def __getattr__(name):
+    if name == 'SOURCE_PATHS':
+        return _sources()
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+
+
 PROTECTED_INPUTS = (MIGRATION, *curve.PROTECTED_INPUTS,
                     'tools/carla_lane_oracle/grouped-table-contract.json',
                     grouped.MODULE, 'extensions/carla/geometry.mojo',
