@@ -128,6 +128,8 @@ It compares the junction token digest in one check.
 
 `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch record, the predecessor edge, and the operation graphs.
 
+It checks every historical dispatch pin in one check.
+
 It keeps the current dispatch source when the token matches.
 
 It hashes the dispatch source before that choice.

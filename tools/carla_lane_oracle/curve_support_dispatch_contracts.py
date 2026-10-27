@@ -538,18 +538,31 @@ def verify(root, *, _operation=None):
 
 
 def _gate_pin(payload, digest, label):
+    _gate_pins([(payload, digest, label)])
+
+
+def _gate_pins(items):
+    """Require every historical pin digest, in order."""
+    if not items:
+        return
+    import json
     import os
     import subprocess
     import tempfile
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='dispatch-pin-') as directory:
-        target = Path(directory) / 'pin'
-        target.write_bytes(payload)
+    with tempfile.TemporaryDirectory(prefix='dispatch-pins-') as directory:
+        folder = Path(directory)
+        rows = []
+        for index, (payload, digest, label) in enumerate(items):
+            name = str(index)
+            (folder / name).write_bytes(payload)
+            rows.append({'name': name, 'sha': digest, 'label': label})
+        (folder / 'labels.json').write_text(json.dumps(rows, separators=(',', ':')))
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_gate',
-             '--bytes', str(target), '--sha', digest, '--label', label],
+             '--pins', str(folder)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -562,5 +575,9 @@ def verify_historical_pin_inputs(root):
     # Use only before the centrally reviewed integration migration. This is
     # not called by verify: a later exact pin successor must remain possible.
     record = read_record(root)
+    loaded = []
     for path, expected in record['historical_pins'].items():
-        _gate_pin(_typed_source.historical_bytes(root, root/path, (root/path).read_bytes()), expected, path)
+        loaded.append((
+            _typed_source.historical_bytes(root, root/path, (root/path).read_bytes()),
+            expected, path))
+    _gate_pins(loaded)

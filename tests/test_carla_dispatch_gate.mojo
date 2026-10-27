@@ -7,12 +7,15 @@
 
 from std.os import makedirs
 from std.pathlib import Path
+from std.tempfile import mkdtemp
 from std.testing import TestSuite, assert_raises
 
+from tools._sha256 import sha256_hex
 from tools.carla_dispatch_gate import (
     dispatch_edge,
     dispatch_graphs,
     dispatch_pin,
+    dispatch_pins,
     dispatch_record,
     dispatch_tokens,
 )
@@ -24,6 +27,26 @@ def test_a_changed_record_is_refused() raises:
         contains="curve support/dispatch contract: unreviewed migration record"
     ):
         dispatch_record(String("").as_bytes())
+
+
+def test_listed_pins_keep_their_order() raises:
+    """A later pin mismatch keeps its own path."""
+    var directory = mkdtemp(prefix="dispatch-pins-")
+    var first = String("one")
+    Path(directory + "/0").write_bytes(first.as_bytes())
+    Path(directory + "/1").write_bytes(String("two").as_bytes())
+    Path(directory + "/labels.json").write_text(
+        '[{"name":"0","sha":"'
+        + sha256_hex(first.as_bytes())
+        + '","label":"one.json"},{"name":"1","sha":"00","label":"two.json"}]'
+    )
+    with assert_raises(
+        contains=(
+            "curve support/dispatch contract: standalone historical pin input"
+            " changed: two.json"
+        )
+    ):
+        dispatch_pins(directory)
 
 
 def test_a_changed_pin_is_refused() raises:

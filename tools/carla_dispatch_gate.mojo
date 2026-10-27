@@ -10,9 +10,11 @@
     carla_dispatch_gate --tokens DIR
     carla_dispatch_gate --edge HEX --expected HEX
     carla_dispatch_gate --graphs DIR
+    carla_dispatch_gate --pins DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
+A pin directory checks every listed file in order.
 """
 
 from std.pathlib import Path
@@ -109,6 +111,32 @@ def dispatch_pin(
     """
     if sha256_hex(payload) != expected:
         _fail("standalone historical pin input changed: " + label)
+
+
+def dispatch_pins(directory: String) raises:
+    """Require each listed pin digest, in order.
+
+    Args:
+        directory: A directory with `labels.json` and one file per item.
+            Each item has `name`, `sha`, and `label`.
+
+    Raises:
+        Error: A digest changed, a listed file is absent, or the list is
+            not a JSON list.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("malformed pin list")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var item = doc.item(doc.root, index)
+        dispatch_pin(
+            Path(directory + "/" + doc.text(doc.at(item, "name"))).read_bytes(),
+            doc.text(doc.at(item, "sha")),
+            doc.text(doc.at(item, "label")),
+        )
+        index += 1
 
 
 def dispatch_tokens(directory: String) raises:
@@ -224,7 +252,7 @@ def _usage():
         (
             "usage: carla_dispatch_gate --migration PATH"
             " | --bytes PATH --sha HEX --label TEXT | --tokens DIR"
-            " | --edge HEX --expected HEX | --graphs DIR"
+            " | --edge HEX --expected HEX | --graphs DIR | --pins DIR"
         ),
         file=stderr,
     )
@@ -245,6 +273,7 @@ def main() raises:
     var edge = String("")
     var expected = String("")
     var graphs = String("")
+    var pins = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -258,6 +287,7 @@ def main() raises:
             or word == "--edge"
             or word == "--expected"
             or word == "--graphs"
+            or word == "--pins"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -276,8 +306,10 @@ def main() raises:
                 edge = value
             elif word == "--expected":
                 expected = value
-            else:
+            elif word == "--graphs":
                 graphs = value
+            else:
+                pins = value
             index += 2
             continue
         _usage()
@@ -292,6 +324,8 @@ def main() raises:
         modes += 1
     if graphs.byte_length() > 0:
         modes += 1
+    if pins.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if (edge.byte_length() == 0) != (expected.byte_length() == 0):
@@ -303,6 +337,9 @@ def main() raises:
     try:
         if graphs.byte_length() > 0:
             dispatch_graphs(graphs)
+            return
+        if pins.byte_length() > 0:
+            dispatch_pins(pins)
             return
         if edge.byte_length() > 0:
             dispatch_edge(edge, expected)
