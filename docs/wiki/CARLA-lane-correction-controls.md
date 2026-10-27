@@ -32,6 +32,8 @@ It checks the producer names before that gate.
 
 It restores one selection function inside its line span.
 
+It keeps the selection contract path and the predecessor messages.
+
 `tools/carla_grouped_gate.mojo` checks the grouped-table token digest and the stored node and weight bounds.
 
 It keeps the grouped proof module and its token digest.

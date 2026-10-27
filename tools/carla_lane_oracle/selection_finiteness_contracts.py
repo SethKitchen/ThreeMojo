@@ -71,7 +71,7 @@ def verify_text(modules, interval, trig):
     ideal_projection.moment_guard('--names', {
         'names': list(modules),
         'expected': list(_expected()),
-        'message': 'Wrong selection producer set',
+        'message': _selection_labels()['producer_set'],
     })
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
@@ -274,13 +274,39 @@ def _envelope_name(path):
     return result.stdout.strip()
 
 
+_SELECTION_LABELS = None
+
+
+def _selection_labels():
+    """Return the selection contract path and the predecessor messages."""
+    global _SELECTION_LABELS
+    if _SELECTION_LABELS is not None:
+        return _SELECTION_LABELS
+    import json
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_selection_labels'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _SELECTION_LABELS = json.loads(result.stdout)
+    return _SELECTION_LABELS
+
+
 def predecessor_text(root, path, *, _operation=None):
     """Verify both actual producers before reconstructing one legacy module."""
 # #333 explicit historical provenance views; current inputs remain operation-owned.
     import json
     root=Path(root)
     verify(root, _operation=_operation)
-    payload=_typed_source.historical_bytes(root, root/'tools/carla_lane_oracle/selection-finiteness-contract.json', (root/'tools/carla_lane_oracle/selection-finiteness-contract.json').read_bytes(), _operation=_operation)
+    contract = _selection_labels()['contract']
+    payload=_typed_source.historical_bytes(root, root/contract, (root/contract).read_bytes(), _operation=_operation)
     _gate_record(payload)
     record=json.loads(payload,object_pairs_hook=source_contracts.unique_keys)
     if __package__:
@@ -290,12 +316,12 @@ def predecessor_text(root, path, *, _operation=None):
     ideal_projection.moment_guard('--member', {
         'name': path,
         'names': list(_expected()),
-        'message': 'Wrong selection predecessor module',
+        'message': _selection_labels()['predecessor'],
     })
     ideal_projection.moment_guard('--names', {
         'names': list(record['modules']),
         'expected': list(_expected()),
-        'message': 'Wrong selection predecessor module',
+        'message': _selection_labels()['predecessor'],
     })
     item=record['modules'][path]
     name=_envelope_name(path)
@@ -304,7 +330,7 @@ def predecessor_text(root, path, *, _operation=None):
     current_doc, recorded_doc = _significant_documents([
         body, item['after_complete_function']])
     ideal_projection.require_same_text(
-        current_doc, recorded_doc, 'Selection complete successor body changed')
+        current_doc, recorded_doc, _selection_labels()['body'])
     restored=_replace_span(text, first, last, item['before_complete_function'])
     _gate_restored(restored, item['before_token_sha256'])
     return restored
