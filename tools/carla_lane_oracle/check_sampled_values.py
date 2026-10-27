@@ -449,6 +449,118 @@ def _sampled_result(root, shared, modules, primitive, sources, successors):
     return json.loads(result.stdout)
 
 
+_PROJECTION_RECIPE = None
+
+
+def _projection_recipe():
+    """Return the sampled projection steps and comparison texts."""
+    global _PROJECTION_RECIPE
+    if _PROJECTION_RECIPE is not None:
+        return _PROJECTION_RECIPE
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+         'carla_sampled_projection_recipe'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    _PROJECTION_RECIPE = json.loads(result.stdout)
+    return _PROJECTION_RECIPE
+
+
+def _project_sampled(bounds, trig, texts, names, copies):
+    """Project the reviewed helpers, using Python only for the syntax texts."""
+    recipe = _projection_recipe()
+    modules = {
+        recipe['bounds_module']: bounds,
+        recipe['trig_module']: trig,
+    }
+    expected = {}
+    for name in copies:
+        filename = (recipe['trig_module'] if name.startswith(recipe['trig_prefix'])
+                    else recipe['bounds_module'])
+        old = _sampled_text('--extract', modules[filename], name)
+        new = _sampled_text('--rename', old)
+        blend = recipe['blend']
+        if name == blend['name']:
+            # Remove only these two complete assignments, never value/error.
+            for field in blend['fields']:
+                new = _sampled_text('--drop-intersection', new, field)
+        expected[names[name]] = _sampled_text('--decorators', texts[filename], name) + new
+    expected.update(_sampled_declarations())
+    # Project complete parsed declarations, never raw prefix/tail slices.
+    # Remove precisely the three complete non-sampled branches of the reference
+    # capture. The new leading guard rejects those kinds; the independent broad
+    # wrapper provides the full-Jet SPIRAL bridge. All 12 statements are
+    # accounted for.
+
+    def renamed_source(filename, name):
+        return _sampled_text(
+            '--rename', _sampled_text('--extract', texts[filename], name))
+
+    def with_decorators(filename, original, text):
+        return _sampled_text('--decorators', texts[filename], original) + text
+
+    for step in recipe['steps']:
+        kind = step['kind']
+        if kind == 'project':
+            old = renamed_source(step['module'], step['name'])
+            _sampled_text('--check-roles', old, step['role'])
+            expected[step['target']] = _sampled_text(step['mode'], old)
+        elif kind == 'rename':
+            for name, filename in step['pairs']:
+                expected[names[name]] = with_decorators(
+                    filename, name, renamed_source(filename, name))
+        elif kind == 'constant':
+            constant = renamed_source(step['module'], step['name'])
+            _sampled_text('--check-roles', constant, step['role'])
+            require(_sampled_text(
+                '--body-dump', constant, index=step['constructor_index']) == dump(ast.parse(
+                    step['constructor']).body[0]), step['constructor_message'])
+            elements = json.loads(_sampled_text(
+                '--return-pair', constant, index=step['pair_index']))
+            field = step['field']
+            for index, _item in enumerate(elements):
+                required = ast.parse(
+                    field['prefix'] + str(index) + field['suffix'], mode='eval').body
+                require(elements[index] == dump(required), step['field_message'])
+            # Only derivative constructor fields change. Coefficient enclosure,
+            # exact-zero scalar error, result ordering and guards are retained.
+            expected[step['target']] = with_decorators(
+                step['module'], step['name'], _sampled_text(step['mode'], constant))
+        elif kind == 'lane':
+            old = renamed_source(step['module'], step['name'])
+            # This private value-only specialization has no cached proof argument.
+            # Remove only the exact new refusal branch whose proof condition is false
+            # for that route. The full cached-proof caller remains separately bound.
+            require(_sampled_text(
+                '--body-dump', old, index=step['refusal_index']) == dump(ast.parse(
+                    step['refusal']).body[0]), step['refusal_message'])
+            _sampled_text('--check-roles', old, step['role'])
+            require(_sampled_text(
+                '--body-dump', old, index=step['capture_index']) == dump(ast.parse(
+                    step['capture']).body[0]), step['capture_message'])
+            # 0..13: all record checks/width traversal/elevation setup are retained.
+            # 14: the exact capture-only assignments above are deleted.
+            # 15..16: complete ARC/LINE branches move under all_geometry, in order.
+            # 17..20: complete proof/capture dispatch is replaced by a sampled call.
+            # This replacement is justified only by _reference_sampled_value's kind
+            # guard and the separately bound SPIRAL full-Jet wrapper, never by a
+            # claim that the proof branch is value-independent. Whole reference
+            # modules bind every removed proof statement and its dependencies.
+            # 21..22: original trig and final output are retained, without slicing.
+            expected[step['target']] = _sampled_text(step['mode'], old)
+        else:
+            raise CheckError('sampled projection step changed')
+    return expected
+
+
 @source.lexical_memo_scope()
 def verify(root):
     if __package__:
@@ -513,82 +625,9 @@ def verify(root):
         except ValueError as error:
             raise CheckError(str(error)) from error
         _sampled_text('--value-imports', target)
-        expected = {}
         plan = _copy_plan()
-        names = plan['names']
-        for name in plan['copies']:
-            old = _sampled_text(
-                '--extract', trig if name.startswith('_atan') else bounds, name)
-            new = _sampled_text('--rename', old)
-            if name == '_sample_blend_jet':
-                # Remove only these two complete assignments, never value/error.
-                for field in ('first', 'second'):
-                    new = _sampled_text('--drop-intersection', new, field)
-            filename = 'curve_trig.mojo' if name.startswith('_atan') else 'curve_bounds.mojo'
-            expected[names[name]] = _sampled_text('--decorators', texts[filename], name) + new
-        expected.update(_sampled_declarations())
-        # Project complete parsed declarations, never raw prefix/tail slices.
-        def renamed_source(filename, name):
-            return _sampled_text(
-                '--rename', _sampled_text('--extract', texts[filename], name))
-
-        def with_decorators(filename, original, text):
-            return _sampled_text('--decorators', texts[filename], original) + text
-
-        old = renamed_source('curve_bounds.mojo', '_union_points')
-        _sampled_text('--check-roles', old, 'union')
-        expected['_union_value_points'] = _sampled_text('--project-union', old)
-
-        old = renamed_source('curve_bounds.mojo', '_reference_jet_capture')
-        _sampled_text('--check-roles', old, 'reference')
-        # Remove precisely the three complete non-sampled branches. The new
-        # leading guard rejects those kinds; the independent broad wrapper
-        # provides the full-Jet SPIRAL bridge. All 12 statements are accounted for.
-        expected['_reference_sampled_value'] = _sampled_text('--project-reference', old)
-
-        for name, filename in (('_sinc_jet', 'curve_trig.mojo'),
-                               ('_arc_offset_jet', 'curve_bounds.mojo')):
-            expected[names[name]] = with_decorators(
-                filename, name, renamed_source(filename, name))
-
-        constant = renamed_source('curve_trig.mojo', '_constant_sincos_jet')
-        _sampled_text('--check-roles', constant, 'constant')
-        require(_sampled_text('--body-dump', constant, index=2) == dump(ast.parse(
-            'zero = _Interval.point(0.0)').body[0]),
-                'constant heading derivative constructor changed')
-        elements = json.loads(_sampled_text('--return-pair', constant, index=3))
-        for index, _item in enumerate(elements):
-            required = ast.parse('_ValueJet(result[' + str(index) +
-                '].rounded_value(), zero, zero, 0.0)', mode='eval').body
-            require(elements[index] == dump(required), 'constant heading field projection changed')
-        # Only derivative constructor fields change. Coefficient enclosure,
-        # exact-zero scalar error, result ordering and guards are retained.
-        expected['_constant_sincos_value'] = with_decorators(
-            'curve_trig.mojo', '_constant_sincos_jet',
-            _sampled_text('--project-constant', constant))
-        old = renamed_source('curve_bounds.mojo', '_lane_jet_model_proof')
-        # This private value-only specialization has no cached proof argument.
-        # Remove only the exact new refusal branch whose proof condition is false
-        # for that route. The full cached-proof caller remains separately bound.
-        require(_sampled_text('--body-dump', old, index=0) == dump(ast.parse("""if proof and not _sum2_supported_environment():
-        return _unknown_value_point()
-    """).body[0]), 'cached-proof environment refusal changed or moved')
-        _sampled_text('--check-roles', old, 'lane')
-        require(_sampled_text('--body-dump', old, index=15) == dump(ast.parse('''if capture:
-            captured.record_at = geometry_at
-            captured.low = low
-            captured.high = high
-    ''').body[0]), 'capture bookkeeping projection changed')
-        # 0..13: all record checks/width traversal/elevation setup are retained.
-        # 14: the exact capture-only assignments above are deleted.
-        # 15..16: complete ARC/LINE branches move under all_geometry, in order.
-        # 17..20: complete proof/capture dispatch is replaced by a sampled call.
-        # This replacement is justified only by _reference_sampled_value's kind
-        # guard and the separately bound SPIRAL full-Jet wrapper, never by a
-        # claim that the proof branch is value-independent. Whole reference
-        # modules bind every removed proof statement and its dependencies.
-        # 21..22: original trig and final output are retained, without slicing.
-        expected['_lane_value_bound_impl'] = _sampled_text('--project-lane', old)
+        expected = _project_sampled(
+            bounds, trig, texts, plan['names'], plan['copies'])
         _sampled_text('--top-level', target, ','.join(sorted(expected)))
         for name, source in expected.items():
             # Decorators stay on the copied text. The syntax tree is the

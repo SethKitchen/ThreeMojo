@@ -113,6 +113,8 @@ It keeps the reference, primitive, and shared graph digests.
 
 It keeps the four sampled input modules.
 
+It keeps the sampled projection steps and their comparison texts.
+
 Mojo checks the sampled value copies.
 Ten helpers match their renamed jet sources.
 It names the eight copied helpers and their sampled names.
