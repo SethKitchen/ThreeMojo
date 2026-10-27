@@ -9,6 +9,7 @@
     carla_dispatch_gate --bytes PATH --sha HEX --label TEXT
     carla_dispatch_gate --tokens DIR
     carla_dispatch_gate --edge HEX --expected HEX
+    carla_dispatch_gate --graphs DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -148,13 +149,35 @@ def dispatch_edge(recorded: String, expected: String) raises:
         _fail("raw predecessor edge mismatch")
 
 
+def dispatch_graphs(directory: String) raises:
+    """Require each operation graph to match its recorded token list.
+
+    Args:
+        directory: A directory whose `labels.json` lists the graphs in order.
+
+    Raises:
+        Error: A token list changed, or the list cannot be read.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("successor operations changed")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var row = doc.item(doc.root, index)
+        var label = doc.text(doc.at(row, "label"))
+        if doc.text(doc.at(row, "actual")) != doc.text(doc.at(row, "expected")):
+            _fail(label)
+        index += 1
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_dispatch_gate --migration PATH"
             " | --bytes PATH --sha HEX --label TEXT | --tokens DIR"
-            " | --edge HEX --expected HEX"
+            " | --edge HEX --expected HEX | --graphs DIR"
         ),
         file=stderr,
     )
@@ -174,6 +197,7 @@ def main() raises:
     var tokens = String("")
     var edge = String("")
     var expected = String("")
+    var graphs = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -186,6 +210,7 @@ def main() raises:
             or word == "--tokens"
             or word == "--edge"
             or word == "--expected"
+            or word == "--graphs"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -202,8 +227,10 @@ def main() raises:
                 tokens = value
             elif word == "--edge":
                 edge = value
-            else:
+            elif word == "--expected":
                 expected = value
+            else:
+                graphs = value
             index += 2
             continue
         _usage()
@@ -216,6 +243,8 @@ def main() raises:
         modes += 1
     if edge.byte_length() > 0 or expected.byte_length() > 0:
         modes += 1
+    if graphs.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if (edge.byte_length() == 0) != (expected.byte_length() == 0):
@@ -225,6 +254,9 @@ def main() raises:
     ):
         _usage()
     try:
+        if graphs.byte_length() > 0:
+            dispatch_graphs(graphs)
+            return
         if edge.byte_length() > 0:
             dispatch_edge(edge, expected)
             return

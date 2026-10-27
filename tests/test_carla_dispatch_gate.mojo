@@ -11,6 +11,7 @@ from std.testing import TestSuite, assert_raises
 
 from tools.carla_dispatch_gate import (
     dispatch_edge,
+    dispatch_graphs,
     dispatch_pin,
     dispatch_record,
     dispatch_tokens,
@@ -61,6 +62,23 @@ def test_a_mismatched_predecessor_edge_is_refused() raises:
         )
     ):
         dispatch_edge("aa", "bb")
+
+
+def test_a_changed_operation_graph_is_refused() raises:
+    """An operation graph whose token list changed fails closed."""
+    var directory = "/tmp/dispatch-graphs-test"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/labels.json").write_text(
+        '[{"label":"successor operations changed: module.mojo",'
+        + '"actual":"[]","expected":"[[1,\\"def\\"]]"}]'
+    )
+    with assert_raises(
+        contains=(
+            "curve support/dispatch contract: successor operations changed:"
+            " module.mojo"
+        )
+    ):
+        dispatch_graphs(directory)
 
 
 def main() raises:

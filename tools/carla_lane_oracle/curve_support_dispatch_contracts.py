@@ -90,6 +90,32 @@ def _gate_edge(recorded, expected):
         raise ValueError(message)
 
 
+def _gate_graphs(pairs):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    def canon(value):
+        return json.dumps([[item[0], item[1]] for item in value], separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    rows = [{'label': label, 'actual': canon(actual), 'expected': canon(expected)}
+            for actual, expected, label in pairs]
+    with tempfile.TemporaryDirectory(prefix='dispatch-graphs-') as directory:
+        folder = Path(directory)
+        (folder / 'labels.json').write_text(json.dumps(rows))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_gate',
+             '--graphs', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
@@ -151,12 +177,22 @@ def verify_premises(root, *, _operation=None):
         import sum2_guard_contracts as guard
     record = read_record(root)
     operation_args = {} if _operation is None else {'_operation': _operation}
+    pairs = []
     for path, item in record['sources'].items():
-        require(guard.significant(reviewed_source(root,path,item['after_token_sha256'], **operation_args)) ==
-                guard.significant(item['after_source']), 'successor operations changed: ' + path)
+        pairs.append((
+            guard.significant(reviewed_source(root,path,item['after_token_sha256'], **operation_args)),
+            guard.significant(item['after_source']),
+            'successor operations changed: ' + path))
+    if pairs:
+        _gate_graphs(pairs)
+    pairs = []
     for path, item in record['premise_modules'].items():
-        require(guard.significant(_typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)) ==
-                guard.significant(item['source']), 'interval/environment premise changed: ' + path)
+        pairs.append((
+            guard.significant(_typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)),
+            guard.significant(item['source']),
+            'interval/environment premise changed: ' + path))
+    if pairs:
+        _gate_graphs(pairs)
     for item in record['premise_functions']:
         physical_text = _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation)
         text = _typed_source.historical_text(root, item['path'], physical_text, _operation=_operation)

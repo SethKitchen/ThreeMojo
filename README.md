@@ -241,7 +241,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Coverage-invariant record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the pin digests, the ordered pin pair, and the pin placements [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Support and dispatch record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch record, its pin digests, its reference tokens, and the predecessor edge [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Support and dispatch record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch record, the predecessor edge, and the operation graphs [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Reviewed cleanup record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the stored-word digest, and the successor tokens [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
