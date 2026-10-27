@@ -21,7 +21,6 @@ if __package__:
 else:
     import source_contracts as _typed_source
 
-import ast
 if __package__:
     from . import sum2_guard_contracts as guards
 else:
@@ -37,57 +36,6 @@ else:
     from ideal_projection import (
         binding_shadow, declaration, direct_imports, selected_block,
         verify_projection)
-
-
-def _syntax_tree(text):
-    """Return one sampled declaration tree.
-
-    The cleanup gate removes Mojo keywords and records generic parameters.
-    This function parses that source. It does not run the fragment.
-
-    Args:
-        text: Mojo source to inspect as a Python AST.
-
-    Returns:
-        The parsed module. Each generic declaration carries
-        ``_mojo_type_parameters``.
-
-    Raises:
-        CheckError: A generic declaration is unclosed, repeated, or parsed
-            more than once.
-    """
-    import os
-    import subprocess
-    import tempfile
-    if __package__:
-        from . import check_sampled_values as sampled
-    else:
-        import check_sampled_values as sampled
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='sum2-syntax-') as directory:
-        source = Path(directory) / 'source.mojo'
-        source.write_text(text)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--syntax', str(source)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise sampled.CheckError(message)
-    payload = json.loads(result.stdout)
-    tree = ast.parse(payload['source'])
-    for key, parameters in payload['generics']:
-        kind, name = key
-        node_type = ast.FunctionDef if kind == 'def' else ast.ClassDef
-        matches = [node for node in ast.walk(tree)
-                   if isinstance(node, node_type) and node.name == name]
-        sampled.require(
-            len(matches) == 1, 'ambiguous parsed generic declaration')
-        matches[0]._mojo_type_parameters = [tuple(item) for item in parameters]
-    return tree
 
 
 # Initial accepted arithmetic checkpoint. The guarded and final format/doc

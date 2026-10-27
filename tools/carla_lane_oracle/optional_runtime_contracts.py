@@ -18,7 +18,6 @@ if __package__:
 else:
     import source_contracts as _typed_source
 
-import ast
 from functools import lru_cache
 
 try:
@@ -26,12 +25,10 @@ try:
     import sum2_guard_contracts as guard
     import source_contracts
     import full_audit_cleanup_contracts as full_audit
-    from sum2_contracts import _syntax_tree
 except ModuleNotFoundError:
     from tools.carla_lane_oracle import check_sampled_values as sampled
     from tools.carla_lane_oracle import sum2_guard_contracts as guard, source_contracts
     from tools.carla_lane_oracle import full_audit_cleanup_contracts as full_audit
-    from tools.carla_lane_oracle.sum2_contracts import _syntax_tree
 
 FOLLOWUP_ROOM = """
 def _objective_followup_room(
@@ -216,56 +213,34 @@ def _fragment_count(source, name, kind, fragment, label, call=''):
     return int(result.stdout)
 
 
-def contains(node, text, label, count=1):
+def _runtime_source(node, label):
     source = getattr(node, '_runtime_source', None)
-    if source is not None:
-        require(_fragment_count(source, node._runtime_name, 'contains', text, label) == count, label)
-        return
-    expected = _syntax_tree(text).body
-    require(len(expected) == 1, 'invalid checker fragment: ' + label)
-    wanted = sampled.dump(expected[0])
-    actual = sum(sampled.dump(item) == wanted for item in ast.walk(node))
-    require(actual == count, label)
+    require(source is not None, label)
+    return source
+
+
+def contains(node, text, label, count=1):
+    source = _runtime_source(node, label)
+    require(_fragment_count(source, node._runtime_name, 'contains', text, label) == count, label)
 
 
 def expression(node, text, label, count=1):
-    source = getattr(node, '_runtime_source', None)
-    if source is not None:
-        require(_fragment_count(source, node._runtime_name, 'expression', text, label) == count, label)
-        return
-    wanted = sampled.dump(ast.parse(text, mode='eval').body)
-    require(sum(sampled.dump(item) == wanted for item in ast.walk(node)) == count,
-            label)
-
+    source = _runtime_source(node, label)
+    require(_fragment_count(source, node._runtime_name, 'expression', text, label) == count, label)
 
 
 def sequence(node, text, label):
     """Bind adjacent statements in one suite, without textual sentinels."""
-    source = getattr(node, '_runtime_source', None)
-    if source is not None:
-        require(_fragment_count(source, node._runtime_name, 'sequence', text, label) == 1, label)
-        return
-    wanted = [sampled.dump(item) for item in _syntax_tree(text).body]
-    matches = 0
-    for owner in ast.walk(node):
-        for _, values in ast.iter_fields(owner):
-            if isinstance(values, list):
-                actual = [sampled.dump(value) for value in values]
-                matches += sum(actual[i:i+len(wanted)] == wanted for i in range(len(actual)))
-    require(matches == 1, label)
+    source = _runtime_source(node, label)
+    require(_fragment_count(source, node._runtime_name, 'sequence', text, label) == 1, label)
 
 
 def fresh_guard(node):
     fragment = 'if not _sum2_supported_environment():\n    return None'
-    source = getattr(node, '_runtime_source', None)
-    if source is not None:
-        require(_fragment_count(
-            source, node._runtime_name, 'first', fragment, node.name) == 1,
-            'fresh invocation guard missing or moved: ' + node.name)
-        return
-    expected = ast.parse(fragment).body[0]
-    require(sampled.dump(node.body[0]) == sampled.dump(expected),
-            'fresh invocation guard missing or moved: ' + node.name)
+    label = 'fresh invocation guard missing or moved: ' + node.name
+    source = _runtime_source(node, label)
+    require(_fragment_count(
+        source, node._runtime_name, 'first', fragment, node.name) == 1, label)
 
 
 # Removal is a scheduling decision, not a rejection of the standalone model's
@@ -342,25 +317,8 @@ def verify_no_containing_model_consumers(root, *, _operation=None):
 
 
 def verify_fresh_producer(run):
-    source = getattr(run, '_runtime_source', None)
-    if source is not None:
-        _fragment_count(source, run._runtime_name, 'fresh', FRESH_PRODUCER, 'fresh')
-    else:
-        loops = [node for node in run.body if isinstance(node, ast.While)]
-        require(len(loops) == 1, 'one original search frontier loop')
-        statements = loops[0].body
-        work_test = sampled.dump(ast.parse('work >= 0', mode='eval').body)
-        choices = [i for i, node in enumerate(statements) if isinstance(node, ast.If)
-                   and sampled.dump(node.test) == work_test]
-        require(len(choices) == 1 and choices[0] > 0,
-                'fresh cell producer must use original reference admission')
-        index = choices[0]
-        expected_work = _syntax_tree('var work = _reference_work(road, lo, hi)').body[0]
-        require(sampled.dump(statements[index - 1]) == sampled.dump(expected_work),
-                'fresh cell producer must use current cell work')
-        expected = _syntax_tree(FRESH_PRODUCER).body
-        require(sampled.dump(statements[index].body[:len(expected)]) == sampled.dump(expected),
-                'fresh current-cell producer must immediately follow original debit')
+    source = _runtime_source(run, 'one original search frontier loop')
+    _fragment_count(source, run._runtime_name, 'fresh', FRESH_PRODUCER, 'fresh')
     for name in ('cached_fast', 'cached_expansion'):
         contains(run, 'var ' + name + ': Optional[Tuple[UInt64, UInt64, _Jet]] = None',
                  'exact expansion memo lifetime is one search invocation')
@@ -386,23 +344,11 @@ def verify_search_semantics(run):
              'grouped caller must retain recheck and prepaid original fallback')
     expression(run, '_try_grouped_lane_jet(road, section, lane, lo, hi, certificate.nodes, certificate.terms, max_nodes, max_terms)',
                'one guarded grouped caller edge')
-    source = getattr(run, '_runtime_source', None)
-    if source is not None:
-        _fragment_count(
-            source, run._runtime_name, 'setup',
-            'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',
-            'depth refusal precedes dispatch setup')
-    else:
-        while_nodes = [item for item in run.body if isinstance(item, ast.While)]
-        require(len(while_nodes) == 1, 'one original search frontier loop')
-        statements = while_nodes[0].body
-        setup = [i for i, item in enumerate(statements) if isinstance(item, ast.If)
-                 and sampled.dump(item.test) == sampled.dump(ast.parse(
-                     'not sampled_checked', mode='eval').body)]
-        require(len(setup) == 1 and setup[0] > 0, 'dispatch setup remains deferred in the original node')
-        preceding = statements[setup[0] - 1]
-        contains(preceding, 'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',
-                 'depth refusal precedes dispatch setup')
+    source = _runtime_source(run, 'one original search frontier loop')
+    _fragment_count(
+        source, run._runtime_name, 'setup',
+        'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',
+        'depth refusal precedes dispatch setup')
     expression(run, 'bitcast[DType.float64](bitcast[DType.uint64](split_at) - UInt64(1))',
                'split predecessor preserves every stored owner station')
 
@@ -446,20 +392,12 @@ def verify_semantics(root, *, _operation=None):
     contains(lane, 'var extra = _spiral_grouped_roundoff_work(counts[0])', 'first count debit')
     contains(lane, 'if counts[1] != counts[0]:\n    extra += _spiral_grouped_roundoff_work(counts[1])',
              'second count debit')
-    if getattr(lane, '_runtime_source', None) is not None:
-        _fragment_count(
-            lane._runtime_source, lane._runtime_name, 'before-call',
-            'terms += extra',
-            'atomic whole-count debit must precede both raw envelopes',
-            '_try_spiral_grouped_roundoff_envelope')
-    else:
-        debit = next((i for i, item in enumerate(lane.body)
-                      if sampled.dump(item) == sampled.dump(ast.parse('terms += extra').body[0])), -1)
-        raw_positions = [i for i, item in enumerate(lane.body) if any(
-            isinstance(part, ast.Call) and isinstance(part.func, ast.Name)
-            and part.func.id == '_try_spiral_grouped_roundoff_envelope' for part in ast.walk(item))]
-        require(debit >= 0 and len(raw_positions) == 2 and all(i > debit for i in raw_positions),
-                'atomic whole-count debit must precede both raw envelopes')
+    _fragment_count(
+        _runtime_source(lane, 'atomic whole-count debit must precede both raw envelopes'),
+        lane._runtime_name, 'before-call',
+        'terms += extra',
+        'atomic whole-count debit must precede both raw envelopes',
+        '_try_spiral_grouped_roundoff_envelope')
     expression(lane, '_lane_jet_model_proof[False](road, section, lane, low, high, Vector3(0, 0, 0), proof, low, high, captured, require_reuse=True)',
                'try-only reconstruction cannot invoke hidden GL')
     contains(metered, 'if work + fallback_work > max_terms - terms:\n    return None',
@@ -491,14 +429,10 @@ def verify_semantics(root, *, _operation=None):
              'support uses uniform whole-domain error')
     contains(support, 'var four_error = _Interval.point(4.0) * _Interval.point(domain.error)',
              'convex support uses uniform whole-domain error')
-    if getattr(support, '_runtime_source', None) is not None:
-        _fragment_count(
-            support._runtime_source, support._runtime_name, 'no-attribute',
-            'center.error', 'translated center error cannot replace world error')
-    else:
-        require(not any(isinstance(part, ast.Attribute) and isinstance(part.value, ast.Name)
-                        and part.value.id == 'center' and part.attr == 'error' for part in ast.walk(support)),
-                'translated center error cannot replace world error')
+    _fragment_count(
+        _runtime_source(support, 'translated center error cannot replace world error'),
+        support._runtime_name, 'no-attribute',
+        'center.error', 'translated center error cannot replace world error')
 
     predicate = body(root, 'curve_sample_dispatch', '_sample_dispatch_predicate', _operation=_operation)
     require(_fragment_count(
@@ -519,18 +453,11 @@ def verify_semantics(root, *, _operation=None):
     contains(cuts, 'var extra = 8 * count', 'complete optional dispatch debit')
     contains(cuts, 'if count < 1 or count > 2:\n    return None', 'at most two invocation-local cuts')
     sequence(cuts, DISPATCH_ADMISSION, 'bounded count and complete reserve must precede dispatch debit')
-    if getattr(cuts, '_runtime_source', None) is not None:
-        for statement in ('nodes += 1', 'terms += extra'):
-            _fragment_count(
-                cuts._runtime_source, cuts._runtime_name, 'before-loop',
-                statement, 'dispatch debit must precede optional attempts')
-    else:
-        names = [sampled.dump(item) for item in cuts.body]
-        loop = next((i for i, item in enumerate(cuts.body) if isinstance(item, ast.For)), -1)
-        for statement in ('nodes += 1', 'terms += extra'):
-            wanted = sampled.dump(ast.parse(statement).body[0])
-            require(wanted in names and names.index(wanted) < loop,
-                    'dispatch debit must precede optional attempts')
+    source = _runtime_source(cuts, 'dispatch debit must precede optional attempts')
+    for statement in ('nodes += 1', 'terms += extra'):
+        _fragment_count(
+            source, cuts._runtime_name, 'before-loop',
+            statement, 'dispatch debit must precede optional attempts')
 
     verify_no_containing_model_consumers(root, _operation=_operation)
     # The standalone helper remains reviewed and tested even though the

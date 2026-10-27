@@ -118,6 +118,8 @@ It requires the stored-half declaration before the projection.
 
 It binds each runtime helper from its moved declaration.
 
+It refuses a runtime fragment that has no moved declaration.
+
 It derives the stored moment rows in exact arithmetic.
 
 It checks the stored moment table against the derived words.
