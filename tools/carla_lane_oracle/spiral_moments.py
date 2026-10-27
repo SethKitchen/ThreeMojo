@@ -196,6 +196,19 @@ def _sha256_texts(texts):
         raise CheckError(str(error)) from error
 
 
+def _byte_digests(blobs):
+    texts = []
+    for blob in blobs:
+        try:
+            text = blob.decode('utf-8')
+        except UnicodeDecodeError:
+            return [digest(blob) for blob in blobs]
+        if text.encode() != blob:
+            return [digest(blob) for blob in blobs]
+        texts.append(text)
+    return _sha256_texts(texts)
+
+
 def _fraction_texts(words):
     try:
         return ideal_projection.fraction_texts(words)
@@ -472,6 +485,16 @@ def verify_table(data, rows):
 def make_report(root, rows, pins):
     payload = _moment_payload(rows)
     require(payload['byte_count'] == WORD_COUNT * 8, 'wrong derived table shape')
+    pin_digests = _byte_digests([
+        _typed_source.historical_bytes(root, root / PINS, (root / PINS).read_bytes()),
+        _typed_source.historical_bytes(
+            root, root / source_contracts.PINS,
+            (root / source_contracts.PINS).read_bytes()),
+        _typed_source.historical_bytes(
+            root, root / sum2_guard_contracts.PINS,
+            (root / sum2_guard_contracts.PINS).read_bytes()),
+    ])
+    require(len(pin_digests) == 3, 'wrong derived table shape')
     return {
         'scope': 'fixed-count quadrant-zero ideal stored-polynomial coefficients and tight endpoints only',
         'counts': 64, 'coefficients': 1408, 'words': WORD_COUNT,
@@ -479,9 +502,9 @@ def make_report(root, rows, pins):
         'zeroth_moment': str(F(1) + F(3, 1 << 55)),
         'source_sha256': payload['source_sha256'],
         'words_be64_sha256': payload['be64_sha256'],
-        'pin_file_sha256': digest(_typed_source.historical_bytes(root, root / PINS, (root / PINS).read_bytes())),
-        'dependency_pin_file_sha256': digest(_typed_source.historical_bytes(root, root / source_contracts.PINS, (root / source_contracts.PINS).read_bytes())),
-        'environment_guard_pin_sha256': digest(_typed_source.historical_bytes(root, root / sum2_guard_contracts.PINS, (root / sum2_guard_contracts.PINS).read_bytes())),
+        'pin_file_sha256': pin_digests[0],
+        'dependency_pin_file_sha256': pin_digests[1],
+        'environment_guard_pin_sha256': pin_digests[2],
         'environment_guard_scope': 'Invocation-local predicate and caller source contracts only; no native FP-state/codegen qualification',
         'checked_source_root': str(root.resolve()),
         'ideal_half_projection': {key: pins['ideal_projection'][key] for key in
