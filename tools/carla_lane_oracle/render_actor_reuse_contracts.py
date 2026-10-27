@@ -182,15 +182,28 @@ def _gate_record(payload):
 
 
 def _gate_bytes(payload, digest, token, label):
+    _gate_bytes_all([(payload, digest, token, label)])
+
+
+def _gate_bytes_all(items):
+    """Require every file digest, in order."""
+    if not items:
+        return
+    import json
     import tempfile
     from pathlib import Path
-    with tempfile.TemporaryDirectory(prefix='render-actor-gate-') as directory:
-        target = Path(directory) / 'payload'
-        target.write_bytes(payload)
-        arguments = ['--bytes', str(target), '--sha', digest, '--label', label]
-        if token is not None:
-            arguments.extend(['--token', token])
-        _run(arguments)
+    with tempfile.TemporaryDirectory(prefix='render-actor-bytes-') as directory:
+        folder = Path(directory)
+        rows = []
+        for index, (payload, digest, token, label) in enumerate(items):
+            name = str(index)
+            (folder / name).write_bytes(payload)
+            row = {'name': name, 'sha': digest, 'label': label}
+            if token is not None:
+                row['token'] = token
+            rows.append(row)
+        (folder / 'labels.json').write_text(json.dumps(rows, separators=(',', ':')))
+        _run(['--bytes-all', str(folder)])
 
 
 def _merged_edge(path, edge):
@@ -257,16 +270,24 @@ def verify(root, *, _operation=None):
     _gate_record(raw)
     record = json.loads(raw, object_pairs_hook=source.unique_keys)
     edges = {}
+    checked = []
     for path in _actor_modules():
         edge = record['edges'][path]
         current = ledger.endpoint(root, path, edge, _operation=_operation)
         actual = _typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
                                 _operation=_operation), _operation=_operation)
-        _gate_bytes(actual, current['after_sha256'], current['after_token_sha256'],
-                    _render_messages()['render_consumer'] + path)
+        checked.append((
+            path, edge, actual, current['after_sha256'], current['after_token_sha256'],
+            _render_messages()['render_consumer'] + path))
+    _gate_bytes_all([
+        (actual, digest, token, label)
+        for _path, _edge, actual, digest, token, label in checked])
+    for path, edge, _actual, _digest, _token, _label in checked:
         edges[path] = _merged_edge(path, edge)
+    tests = []
     for path, expected in record['correctness_tests'].items():
-        _gate_bytes(_typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
+        tests.append((_typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
                                              _operation=_operation), _operation=_operation),
-                    expected, None, _render_messages()['render_test'] + path)
+                      expected, None, _render_messages()['render_test'] + path))
+    _gate_bytes_all(tests)
     return edges

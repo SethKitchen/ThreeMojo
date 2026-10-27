@@ -3,15 +3,17 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md
 
-"""Check the runtime-boundary record and a bound file.
+"""Check the runtime-boundary record and bound files.
 
     carla_runtime_boundary_gate --migration PATH
     carla_runtime_boundary_gate --bytes PATH --sha HEX [--token HEX] --label TEXT
+    carla_runtime_boundary_gate --bytes-all DIR
     carla_runtime_boundary_gate --steps DIR
     carla_runtime_boundary_gate --extend --path TEXT --step-sha HEX --edge-sha HEX --step-token HEX --edge-token HEX
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
+A directory checks every listed file in order.
 """
 
 from std.pathlib import Path
@@ -216,6 +218,37 @@ def runtime_boundary_bytes(
         _fail(label)
 
 
+def runtime_boundary_bytes_all(directory: String) raises:
+    """Require each listed file digest, in order.
+
+    Args:
+        directory: A directory with `labels.json` and one file per item.
+            Each item has `name`, `sha`, and `label`. `token` is optional.
+
+    Raises:
+        Error: A digest changed, a listed file is absent, or the list is
+            not a JSON list.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("malformed byte list")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var item = doc.item(doc.root, index)
+        var token_node = doc.get(item, "token")
+        var token = String("")
+        if token_node != MISSING:
+            token = doc.text(token_node)
+        runtime_boundary_bytes(
+            Path(directory + "/" + doc.text(doc.at(item, "name"))).read_bytes(),
+            doc.text(doc.at(item, "sha")),
+            token,
+            doc.text(doc.at(item, "label")),
+        )
+        index += 1
+
+
 def _known_module(name: String) -> Bool:
     """Return whether the path is one reviewed boundary module.
 
@@ -328,7 +361,8 @@ def _usage():
         (
             "usage: carla_runtime_boundary_gate --migration PATH"
             " | --bytes PATH --sha HEX [--token HEX] --label TEXT"
-            " | --steps DIR | --extend --path TEXT --step-sha HEX"
+            " | --bytes-all DIR | --steps DIR | --extend --path TEXT"
+            " --step-sha HEX"
             " --edge-sha HEX --step-token HEX --edge-token HEX"
         ),
         file=stderr,
@@ -348,6 +382,7 @@ def main() raises:
     var token = String("")
     var label = String("")
     var steps = String("")
+    var bytes_all = String("")
     var extend = False
     var module_path = String("")
     var step_sha = String("")
@@ -369,6 +404,7 @@ def main() raises:
             or word == "--token"
             or word == "--label"
             or word == "--steps"
+            or word == "--bytes-all"
             or word == "--path"
             or word == "--step-sha"
             or word == "--edge-sha"
@@ -390,6 +426,8 @@ def main() raises:
                 label = value
             elif word == "--steps":
                 steps = value
+            elif word == "--bytes-all":
+                bytes_all = value
             elif word == "--path":
                 module_path = value
             elif word == "--step-sha":
@@ -409,6 +447,8 @@ def main() raises:
     if payload.byte_length() > 0:
         modes += 1
     if steps.byte_length() > 0:
+        modes += 1
+    if bytes_all.byte_length() > 0:
         modes += 1
     if extend:
         modes += 1
@@ -437,6 +477,8 @@ def main() raises:
             return
         if migration.byte_length() > 0:
             runtime_boundary_record(Path(migration).read_bytes())
+        elif bytes_all.byte_length() > 0:
+            runtime_boundary_bytes_all(bytes_all)
         else:
             runtime_boundary_bytes(
                 Path(payload).read_bytes(), digest, token, label

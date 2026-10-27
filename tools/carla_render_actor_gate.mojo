@@ -3,13 +3,15 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md
 
-"""Check the render-actor reuse record and a bound file.
+"""Check the render-actor reuse record and bound files.
 
     carla_render_actor_gate --migration PATH
     carla_render_actor_gate --bytes PATH --sha HEX [--token HEX] --label TEXT
+    carla_render_actor_gate --bytes-all DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
+A directory checks every listed file in order.
 """
 
 from std.pathlib import Path
@@ -20,6 +22,7 @@ from tools._python_json import (
     MISSING,
     PY_DICT,
     PY_INT,
+    PY_LIST,
     PY_STR,
     PyJson,
     py_equal,
@@ -174,6 +177,37 @@ def render_actor_bytes(
         _fail(label)
 
 
+def render_actor_bytes_all(directory: String) raises:
+    """Require each listed file digest, in order.
+
+    Args:
+        directory: A directory with `labels.json` and one file per item.
+            Each item has `name`, `sha`, and `label`. `token` is optional.
+
+    Raises:
+        Error: A digest changed, a listed file is absent, or the list is
+            not a JSON list.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("malformed byte list")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var item = doc.item(doc.root, index)
+        var token_node = doc.get(item, "token")
+        var token = String("")
+        if token_node != MISSING:
+            token = doc.text(token_node)
+        render_actor_bytes(
+            Path(directory + "/" + doc.text(doc.at(item, "name"))).read_bytes(),
+            doc.text(doc.at(item, "sha")),
+            token,
+            doc.text(doc.at(item, "label")),
+        )
+        index += 1
+
+
 def render_actor_paths() raises -> String:
     """Return the render-actor module and its bound tests.
 
@@ -204,6 +238,7 @@ def _usage():
         (
             "usage: carla_render_actor_gate --migration PATH"
             " | --bytes PATH --sha HEX [--token HEX] --label TEXT"
+            " | --bytes-all DIR"
         ),
         file=stderr,
     )
@@ -211,7 +246,7 @@ def _usage():
 
 
 def main() raises:
-    """Check a render-actor record or file and print nothing on success.
+    """Check a render-actor record or its files and print nothing on success.
 
     Raises:
         Error: The command is invalid.
@@ -221,6 +256,7 @@ def main() raises:
     var digest = String("")
     var token = String("")
     var label = String("")
+    var bytes_all = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -231,6 +267,7 @@ def main() raises:
             or word == "--sha"
             or word == "--token"
             or word == "--label"
+            or word == "--bytes-all"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -243,12 +280,21 @@ def main() raises:
                 digest = value
             elif word == "--token":
                 token = value
-            else:
+            elif word == "--label":
                 label = value
+            else:
+                bytes_all = value
             index += 2
             continue
         _usage()
-    if (migration.byte_length() == 0) == (payload.byte_length() == 0):
+    var modes = 0
+    if migration.byte_length() > 0:
+        modes += 1
+    if payload.byte_length() > 0:
+        modes += 1
+    if bytes_all.byte_length() > 0:
+        modes += 1
+    if modes != 1:
         _usage()
     if payload.byte_length() > 0 and (
         digest.byte_length() == 0 or label.byte_length() == 0
@@ -257,6 +303,8 @@ def main() raises:
     try:
         if migration.byte_length() > 0:
             render_actor_record(Path(migration).read_bytes())
+        elif bytes_all.byte_length() > 0:
+            render_actor_bytes_all(bytes_all)
         else:
             render_actor_bytes(Path(payload).read_bytes(), digest, token, label)
     except error:
