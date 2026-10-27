@@ -17,41 +17,7 @@ if __package__:
 else:
     import source_contracts as _typed_source
 
-import ast
-import copy
-from pathlib import Path
-
-from check_sampled_values import CheckError, dump, unique_function
-if __package__:
-    from .sum2_contracts import _syntax_tree
-else:
-    from sum2_contracts import _syntax_tree
-
-
-def _function_text(text, name):
-    """Return one top-level function slice.
-
-    The cleanup gate finds the same span as the historical regular expression.
-    """
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='heading-slice-') as directory:
-        source = Path(directory) / 'source.mojo'
-        source.write_text(text)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--slice', str(source), '--name', name],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise CheckError(message)
-    return result.stdout
+import json
 
 CONSUMERS = {
     'spiral_domain_proof.mojo': '_spiral_proof_branch',
@@ -60,74 +26,44 @@ CONSUMERS = {
 }
 
 
-def require(condition, message):
-    if not condition:
+def _heading_graph(fresh, consumers, eligibility):
+    """Compare the fresh heading graph with each stored consumer."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({
+        'fresh': fresh,
+        'consumers': [
+            {'file': filename, 'name': name, 'text': text}
+            for filename, name, text in consumers
+        ],
+        'eligibility': eligibility,
+    }, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='heading-graph-') as directory:
+        path = Path(directory) / 'payload.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--heading', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-
-
-def declaration(text, name):
-    # The full source/token gate binds actual declaration identity, decorators
-    # and everything outside this selected complete declaration as well.
-    return unique_function(_syntax_tree(_function_text(text, name)), name)
-
-
-def assigned(node, name):
-    matches = [item.value for item in node.body if isinstance(item, ast.Assign)
-               and len(item.targets) == 1 and isinstance(item.targets[0], ast.Name)
-               and item.targets[0].id == name]
-    require(len(matches) == 1, 'heading correspondence: missing/ambiguous assignment ' + name)
-    return copy.deepcopy(matches[0])
-
-
-class Specialize(ast.NodeTransformer):
-    def __init__(self, k0=None):
-        self.k0 = k0
-
-    def visit_Name(self, node):
-        if node.id == 'Expression':
-            return ast.Name(id='_Jet', ctx=node.ctx)
-        if node.id == 'k0' and self.k0 is not None:
-            return copy.deepcopy(self.k0)
-        return node
-
-
-def expression(text):
-    return ast.parse(text, mode='eval').body
 
 
 def verify(root, *, _operation=None):
     path = root/'extensions/carla'
-    fresh = declaration(_typed_source.historical_text(root, path/'curve_bounds.mojo', source._observe_text(root, 'extensions/carla/curve_bounds.mojo', (path/'curve_bounds.mojo').read_text(), _operation=_operation), _operation=_operation), '_spiral_expression')
-    k0 = Specialize().visit(assigned(fresh, 'k0'))
-    expected_k0 = expression('_Jet.constant(geometry.curvature_start)')
-    require(dump(k0) == dump(expected_k0), 'heading correspondence: fresh k0 changed')
-    rate = Specialize().visit(assigned(fresh, 'rate'))
-    expected_rate = expression('_Jet.constant((geometry.curvature_end - geometry.curvature_start) / geometry.length)')
-    require(dump(rate) == dump(expected_rate), 'heading correspondence: fresh stored rate changed')
-    heading = Specialize(k0).visit(assigned(fresh, 'heading'))
-    expected_heading = expression('_Jet.constant(geometry.heading) + d * (_Jet.constant(geometry.curvature_start) + _stored_half(rate) * d)')
-    require(dump(heading) == dump(expected_heading), 'heading correspondence: fresh half heading changed')
-    ideal_u = expression('_Jet.constant(0.5) * rate * d * d')
+    fresh = _typed_source.historical_text(root, path/'curve_bounds.mojo', source._observe_text(root, 'extensions/carla/curve_bounds.mojo', (path/'curve_bounds.mojo').read_text(), _operation=_operation), _operation=_operation)
+    consumers = []
     for filename, name in CONSUMERS.items():
-        consumer = declaration(_typed_source.historical_text(root, path/filename, source._observe_text(root, 'extensions/carla/' + filename, (path/filename).read_text(), _operation=_operation), _operation=_operation), name)
-        require(dump(assigned(consumer, 'rate')) == dump(rate),
-                'heading correspondence: stored rate differs: ' + filename)
-        require(dump(assigned(consumer, 'heading')) == dump(heading),
-                'heading correspondence: scalar heading differs: ' + filename)
-        require(dump(assigned(consumer, 'u')) == dump(ideal_u),
-                'heading correspondence: ideal u graph changed: ' + filename)
-        calls = [node for node in ast.walk(consumer) if isinstance(node, ast.Call)
-                 and isinstance(node.func, ast.Name) and node.func.id == '_stored_half']
-        require(len(calls) == 1 and dump(calls[0]) == dump(expression('_stored_half(rate)')),
-                'heading correspondence: unexpected helper consumer: ' + filename)
-    eligibility = declaration(_typed_source.historical_text(root, path/'spiral_moment_proof.mojo', source._observe_text(root, 'extensions/carla/spiral_moment_proof.mojo', (path/'spiral_moment_proof.mojo').read_text(), _operation=_operation), _operation=_operation),
-                              '_all_spiral_nodes_quadrant_zero')
-    expected_theta = expression('_Jet.constant(geometry.heading) + t * (_Jet.constant(geometry.curvature_start) + _Jet.constant(0.5) * rate * t)')
-    require(dump(assigned(eligibility, 'theta')) == dump(expected_theta),
-            'heading correspondence: original eligibility phase graph changed')
-    require(not any(isinstance(node, ast.Name) and node.id == '_stored_half'
-                    for node in ast.walk(eligibility)),
-            'heading correspondence: stored half introduced into eligibility')
+        consumers.append((filename, name, _typed_source.historical_text(root, path/filename, source._observe_text(root, 'extensions/carla/' + filename, (path/filename).read_text(), _operation=_operation), _operation=_operation)))
+    eligibility = _typed_source.historical_text(root, path/'spiral_moment_proof.mojo', source._observe_text(root, 'extensions/carla/spiral_moment_proof.mojo', (path/'spiral_moment_proof.mojo').read_text(), _operation=_operation), _operation=_operation)
+    _heading_graph(fresh, consumers, eligibility)
     return {'heading_consumers': len(CONSUMERS),
             'fresh_rate_and_heading_match': True,
             'ideal_u_and_original_quadrant_phase_unchanged': True,

@@ -27,6 +27,7 @@
     carla_cleanup_gate --commute-legacy PATH
     carla_cleanup_gate --binding PATH
     carla_cleanup_gate --imports PATH
+    carla_cleanup_gate --heading PATH
     carla_cleanup_gate --syntax PATH
     carla_cleanup_gate --slice PATH --name NAME
     carla_cleanup_gate --fragment DIR
@@ -50,6 +51,7 @@ An absent previous file checks only the migration record.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
+from tests._python_expr import heading_sources
 from tests._python_tokens import (
     declaration_place,
     ideal_function_source,
@@ -544,7 +546,7 @@ def _usage():
             " --statements PATH | --starts PATH | --routing PATH --constants"
             " PATH | --ideal PATH --name NAME | --stored-half PATH |"
             " --project-sum2 PATH | --commute-legacy PATH | --binding PATH |"
-            " --imports PATH |"
+            " --imports PATH | --heading PATH |"
             " --syntax PATH |"
             " --slice PATH --name NAME | --fragment DIR | --normalize PATH |"
             " --table PATH --count N | --moment-source PATH | --moment-payload"
@@ -592,6 +594,7 @@ def main() raises:
     var commute_legacy = String("")
     var binding = String("")
     var imports = String("")
+    var heading = String("")
     var syntax = String("")
     var slice_path = String("")
     var fragment = String("")
@@ -641,6 +644,7 @@ def main() raises:
             or word == "--commute-legacy"
             or word == "--binding"
             or word == "--imports"
+            or word == "--heading"
             or word == "--syntax"
             or word == "--slice"
             or word == "--fragment"
@@ -718,6 +722,8 @@ def main() raises:
                 binding = value
             elif word == "--imports":
                 imports = value
+            elif word == "--heading":
+                heading = value
             elif word == "--syntax":
                 syntax = value
             elif word == "--slice":
@@ -806,6 +812,8 @@ def main() raises:
     if binding.byte_length() > 0:
         modes += 1
     if imports.byte_length() > 0:
+        modes += 1
+    if heading.byte_length() > 0:
         modes += 1
     if syntax.byte_length() > 0:
         modes += 1
@@ -1017,6 +1025,9 @@ def main() raises:
             return
         if imports.byte_length() > 0:
             print(direct_imports_payload(Path(imports).read_text()), end="")
+            return
+        if heading.byte_length() > 0:
+            heading_sources(Path(heading).read_text())
             return
         if starts.byte_length() > 0:
             print(top_level_starts_json(Path(starts).read_text()), end="")

@@ -9,6 +9,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from std.os import makedirs
 from std.pathlib import Path
+from tests._python_expr import expression_dump
 from tests._python_tokens import (
     declaration_place,
     declaration_text,
@@ -485,6 +486,20 @@ def test_text_digests_match_sha256() raises:
     assert_equal(
         sha256_texts_json('["abc",""]'),
         '["ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad","e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"]',
+    )
+
+
+def test_an_expression_dump_matches_cpython() raises:
+    """One expression dump matches CPython's normalized AST."""
+    assert_equal(
+        expression_dump("_stored_half(rate)"),
+        '["Call",[["func",["Name",[["id","_stored_half"],["ctx",["Load",[]]]]]],["args",[["Name",[["id","rate"],["ctx",["Load",[]]]]]]],["keywords",[]]]]',
+    )
+    assert_equal(expression_dump("False"), '["Constant",[["value",false]]]')
+    assert_equal(expression_dump("0.0"), '["Constant",[["value",0.0]]]')
+    assert_equal(
+        expression_dump("1.0 + nodes[0]"),
+        '["BinOp",[["left",["Constant",[["value",1.0]]]],["op",["Add",[]]],["right",["Subscript",[["value",["Name",[["id","nodes"],["ctx",["Load",[]]]]]],["slice",["Constant",[["value",0]]]],["ctx",["Load",[]]]]]]]]',
     )
 
 
