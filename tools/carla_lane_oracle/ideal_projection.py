@@ -559,7 +559,7 @@ def derive_rows(nodes, weights, cosine, sine):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        prefix = 'spiral moment derive: '
+        prefix = _cli_failures()['derive']
         if message.startswith(prefix):
             message = message[len(prefix):]
         raise ValueError(message)

@@ -10,6 +10,7 @@ The moments share one unscaled prefix sum across the counts 1 through 64.
 """
 
 from tools._bigint import BigInt
+from tools._cli_failures import derive_prefix
 from tools._fraction import Fraction
 from tools._python_json import PyJson
 from tools._spiral_moment_words import (
@@ -29,7 +30,7 @@ def _fail(message: String) raises:
     Raises:
         Error: The derivation check failed.
     """
-    raise Error("spiral moment derive: " + message)
+    raise Error(derive_prefix() + message)
 
 
 def _is_name(byte: UInt8) -> Bool:
@@ -867,6 +868,65 @@ def coefficient_rows_json(
         count += 1
     doc.root = rows
     return doc.dumps()
+
+
+def _append_coefficient_side(
+    mut source: PyJson, mut out: PyJson, flat: Int, side: Int
+) raises:
+    """Append one side's words onto `flat`.
+
+    Args:
+        source: The derived-row document.
+        out: The document that owns `flat`.
+        flat: The destination list.
+        side: The cosine or sine list in `source`.
+
+    Raises:
+        Error: The side does not hold eleven pairs.
+    """
+    var coefficients = source.length(side)
+    if coefficients != 11:
+        _fail("wrong derived table shape")
+    var index = 0
+    while index < coefficients:
+        var words = source.at(source.item(side, index), "words")
+        if source.length(words) != 2:
+            _fail("wrong derived table shape")
+        out.append(flat, out.new_str(source.text(source.item(words, 0))))
+        out.append(flat, out.new_str(source.text(source.item(words, 1))))
+        index += 1
+
+
+def coefficient_words_json(payload: String) raises -> String:
+    """Return the derived coefficient words in reviewed order.
+
+    Args:
+        payload: The JSON rows from `coefficient_rows_json`. Each row has
+            `cosine` and `sine`. Each coefficient has two `words`.
+
+    Returns:
+        A JSON list of 2816 `0x` words. Cosine words precede sine words
+        in each row, and rows stay in count order.
+
+    Raises:
+        Error: The row list, a side, or a word pair has the wrong length.
+    """
+    var source = PyJson.parse(payload)
+    var count = source.length(source.root)
+    if count != 64:
+        _fail("wrong derived table shape")
+    var out = PyJson()
+    var flat = out.new_list()
+    var row_index = 0
+    while row_index < count:
+        var row = source.item(source.root, row_index)
+        _append_coefficient_side(source, out, flat, source.at(row, "cosine"))
+        _append_coefficient_side(source, out, flat, source.at(row, "sine"))
+        row_index += 1
+    if out.length(flat) != 2816:
+        _fail("wrong derived table shape")
+    out.root = flat
+    return out.dumps()
 
 
 def coefficient_rows_payload(payload: String) raises -> String:

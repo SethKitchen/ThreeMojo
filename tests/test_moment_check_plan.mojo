@@ -35,6 +35,10 @@ def test_moment_check_plan_keeps_the_array_order() raises:
     assert_equal(doc.text(doc.at(doc.root, "nodes")), "_GL_NODES")
     assert_equal(doc.text(doc.at(doc.root, "weights")), "_GL_WEIGHTS")
     assert_equal(doc.text(doc.at(doc.root, "ideal_caller")), "ideal_caller")
+    assert_equal(doc.text(doc.at(doc.root, "stored_words")), "_words")
+    assert_equal(doc.text(doc.at(doc.root, "sums_name")), "node_sums")
+    assert_equal(doc.text(doc.at(doc.root, "spiral_block")), "ideal_spiral")
+    assert_equal(doc.text(doc.at(doc.root, "counts_key")), "counts")
     var messages = doc.at(doc.root, "messages")
     assert_equal(
         doc.text(doc.at(messages, "stored_words")),

@@ -24,6 +24,8 @@ def moment_check_plan() -> String:
         + '"additional_groups":["canonical_accumulation"],'
         + '"arrays":["_GL_NODES","_GL_WEIGHTS","_COS_COEFFICIENTS","_SIN_COEFFICIENTS"],'
         + '"nodes":"_GL_NODES","weights":"_GL_WEIGHTS","ideal_caller":"ideal_caller",'
+        + '"stored_words":"_words","sums_name":"node_sums",'
+        + '"spiral_block":"ideal_spiral","counts_key":"counts",'
         + '"messages":{"stored_words":"stored constant words changed: ",'
         + '"invalid_word":"invalid UInt64 word",'
         + '"array_set":"wrong constant-array set",'

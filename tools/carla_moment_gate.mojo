@@ -7,6 +7,7 @@
 
     carla_moment_gate --module PATH --interval PATH --geometry PATH --trig PATH
     carla_moment_gate --rows PATH
+    carla_moment_gate --coefficient-words PATH
     carla_moment_gate --node-sums PATH
     carla_moment_gate --fractions PATH
 
@@ -22,6 +23,7 @@ from tests._python_tokens import token_sha256
 from tools._fraction import Fraction
 from tools._spiral_moment_derive import (
     coefficient_rows_payload,
+    coefficient_words_json,
     stored_coefficient_words,
 )
 from tools._spiral_moment_words import (
@@ -163,8 +165,8 @@ def _usage():
     print(
         (
             "usage: carla_moment_gate --module PATH --interval PATH"
-            " --geometry PATH --trig PATH | --rows PATH | --node-sums PATH"
-            " | --fractions PATH"
+            " --geometry PATH --trig PATH | --rows PATH | --coefficient-words"
+            " PATH | --node-sums PATH | --fractions PATH"
         ),
         file=stderr,
     )
@@ -172,7 +174,7 @@ def _usage():
 
 
 def main() raises:
-    """Check four source files, or print rows, node sums, or fractions.
+    """Check four source files, or print rows, words, node sums, or fractions.
 
     Raises:
         Error: The command is invalid, or a moment check fails.
@@ -182,6 +184,7 @@ def main() raises:
     var geometry = String("")
     var trig = String("")
     var rows = String("")
+    var coefficient_words = String("")
     var node_sums = String("")
     var fractions = String("")
     var arguments = argv()
@@ -194,6 +197,7 @@ def main() raises:
             or word == "--geometry"
             or word == "--trig"
             or word == "--rows"
+            or word == "--coefficient-words"
             or word == "--node-sums"
             or word == "--fractions"
         ):
@@ -208,6 +212,8 @@ def main() raises:
                 geometry = value
             elif word == "--rows":
                 rows = value
+            elif word == "--coefficient-words":
+                coefficient_words = value
             elif word == "--node-sums":
                 node_sums = value
             elif word == "--fractions":
@@ -219,6 +225,8 @@ def main() raises:
         _usage()
     var single = 0
     if rows.byte_length() > 0:
+        single += 1
+    if coefficient_words.byte_length() > 0:
         single += 1
     if node_sums.byte_length() > 0:
         single += 1
@@ -242,6 +250,11 @@ def main() raises:
             elif node_sums.byte_length() > 0:
                 print(
                     rounded_node_sums_payload(Path(node_sums).read_text()),
+                    end="",
+                )
+            elif coefficient_words.byte_length() > 0:
+                print(
+                    coefficient_words_json(Path(coefficient_words).read_text()),
                     end="",
                 )
             else:

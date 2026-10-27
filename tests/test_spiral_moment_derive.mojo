@@ -11,6 +11,7 @@ from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from tools._python_json import PyJson
 from tools._spiral_moment_derive import (
     coefficient_rows_json,
+    coefficient_words_json,
     derive_endpoints,
     stored_coefficient_words,
     stored_scalar_word,
@@ -111,9 +112,19 @@ def test_derived_rows_keep_the_first_exact_value() raises:
     var pair = doc.at(coefficient, "words")
     assert_equal(doc.text(doc.item(pair, 0)), "0x3FF0000000000000")
     assert_equal(doc.text(doc.item(pair, 1)), "0x3FF0000000000001")
+    var flat = PyJson.parse(coefficient_words_json(rows))
+    assert_equal(flat.length(flat.root), 2816)
+    assert_equal(flat.text(flat.item(flat.root, 0)), "0x3FF0000000000000")
+    assert_equal(flat.text(flat.item(flat.root, 1)), "0x3FF0000000000001")
+    var sine = doc.at(doc.item(doc.at(first, "sine"), 0), "words")
+    assert_equal(
+        flat.text(flat.item(flat.root, 22)), doc.text(doc.item(sine, 0))
+    )
     var empty = List[UInt64]()
     with assert_raises(contains="wrong constant-array shape"):
         _ = coefficient_rows_json(empty, empty, empty, empty)
+    with assert_raises(contains="wrong derived table shape"):
+        _ = coefficient_words_json("[]")
 
 
 def test_equivalent_spellings_keep_the_stored_words() raises:

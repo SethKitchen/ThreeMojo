@@ -430,7 +430,7 @@ def verify_inputs(root):
         'names': list(constants),
         'expected': list(arrays),
         'message': messages['array_set']})
-    constants['_words'] = stored_words
+    constants[_moment_plan()['stored_words']] = stored_words
     scalar_names = []
     scalar_literals = []
     scalar_records = []
@@ -509,7 +509,7 @@ def verify_inputs(root):
         raise CheckError(str(error)) from error
     try:
         result = ideal_projection.verify_projection(
-            projection['legacy_normalized_source'], blocks['ideal_spiral'], helper)
+            projection['legacy_normalized_source'], blocks[_moment_plan()['spiral_block']], helper)
     except ValueError as error:
         raise CheckError(messages['projection'] + str(error)) from error
     try:
@@ -532,7 +532,7 @@ def verify_inputs(root):
         raise CheckError(str(error)) from error
     _require_stored_words(sums, pins['rounded_node_sums'],
                           messages['node_sums'])
-    constants['node_sums'] = [F(text) for text in _fraction_texts(sums)]
+    constants[_moment_plan()['sums_name']] = [F(text) for text in _fraction_texts(sums)]
     return constants, pins
 
 
@@ -542,18 +542,41 @@ def derive_coefficients(constants):
     S[k,n] = sum(p<n,i) w[i]*(p+q[i]/2)**(2*k).
     M[k,n] = S[k,n]/(2*n**(2*k+1)). This is algebraic common work only.
     """
-    stored = constants['_words']
+    plan = _moment_plan()
+    stored = constants[plan['stored_words']]
+    names = plan['arrays']
     try:
         return ideal_projection.derive_rows(
-            stored['_GL_NODES'], stored['_GL_WEIGHTS'],
-            stored['_COS_COEFFICIENTS'], stored['_SIN_COEFFICIENTS'])
+            stored[names[0]], stored[names[1]],
+            stored[names[2]], stored[names[3]])
     except ValueError as error:
         raise CheckError(str(error)) from error
 
 
 def _coefficient_words(rows):
-    return [word for row in rows for side in ('cosine', 'sine')
-            for coefficient in row[side] for word in coefficient['words']]
+    """Return cosine words, then sine words, for every derived row."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps(rows, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='coefficient-words-') as directory:
+        path = Path(directory) / 'rows.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_gate',
+             '--coefficient-words', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = _cli_failures()['derive']
+        if message.startswith(prefix):
+            message = message[len(prefix):]
+        raise CheckError(message)
+    return json.loads(result.stdout)
 
 
 def words_from_rows(rows):
@@ -686,7 +709,8 @@ def main(argv=None):
                     _table().name: generate_source(rows),
                     report_plan['words_name']: ideal_projection.payload_bytes(
                         _moment_payload(rows)['be64']),
-                    report_plan['coefficients_name']: invariant._indent_json({'counts': rows}),
+                    report_plan['coefficients_name']: invariant._indent_json(
+                        {report_plan['counts_key']: rows}),
                 })
             _moment_guard('--output', {
                 'destinations': [str((output / name).resolve()) for name in products],

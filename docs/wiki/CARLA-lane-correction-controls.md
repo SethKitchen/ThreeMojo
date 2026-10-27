@@ -282,6 +282,10 @@ It keeps the moment command help and the two command errors.
 
 It keeps the KeyError mark and the moment-word prefix.
 
+It keeps the moment derive prefix.
+
+It keeps the derived coefficient words in cosine, then sine, order.
+
 It writes the canonical stored-moment table source.
 
 It returns one normalized source block between two markers.
