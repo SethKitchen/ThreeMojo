@@ -394,6 +394,8 @@ It extends an edge when a reviewed view step starts at that edge.
 
 It extends every runtime-boundary edge in one check.
 
+It checks every runtime-boundary extension in one check.
+
 It puts the module path on that edge.
 
 It puts every runtime-boundary path on its edge in one check.

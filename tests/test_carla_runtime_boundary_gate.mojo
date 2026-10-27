@@ -13,6 +13,7 @@ from std.testing import TestSuite, assert_raises
 from tools._sha256 import sha256_hex
 from tools.carla_runtime_boundary_gate import (
     boundary_extend,
+    boundary_extends,
     boundary_steps,
     runtime_boundary_bytes_all,
     runtime_boundary_record,
@@ -50,6 +51,22 @@ def test_a_disconnected_view_step_is_refused() raises:
         )
     ):
         boundary_extend("aa", "bb", "cc", "cc", "extensions/carla/world.mojo")
+
+
+def test_listed_extensions_keep_their_order() raises:
+    """A later extension failure keeps its own path."""
+    with assert_raises(
+        contains=(
+            "reviewed runtime boundary successor: runtime view step does not"
+            " extend the edge: two.mojo"
+        )
+    ):
+        boundary_extends(
+            '[{"path":"one.mojo","step_sha":"aa","edge_sha":"aa",'
+            + '"step_token":"bb","edge_token":"bb"},'
+            + '{"path":"two.mojo","step_sha":"aa","edge_sha":"cc",'
+            + '"step_token":"bb","edge_token":"bb"}]'
+        )
 
 
 def test_listed_boundary_digests_keep_their_order() raises:

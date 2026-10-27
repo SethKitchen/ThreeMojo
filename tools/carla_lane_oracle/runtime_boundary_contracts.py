@@ -267,12 +267,27 @@ def _extended_edges(items, steps):
 
 
 def _gate_extend(step, edge, path):
-    _run([
-        '--extend', '--path', path,
-        '--step-sha', step['before_sha256'], '--edge-sha', edge['after_sha256'],
-        '--step-token', step['before_token_sha256'],
-        '--edge-token', edge['after_token_sha256'],
-    ])
+    _gate_extends([(step, edge, path)])
+
+
+def _gate_extends(items):
+    """Require every view step to start where its edge ends."""
+    if not items:
+        return
+    import json
+    import tempfile
+    from pathlib import Path
+    rows = [{
+        'path': path,
+        'step_sha': step['before_sha256'],
+        'edge_sha': edge['after_sha256'],
+        'step_token': step['before_token_sha256'],
+        'edge_token': edge['after_token_sha256'],
+    } for step, edge, path in items]
+    with tempfile.TemporaryDirectory(prefix='boundary-extends-') as directory:
+        record = Path(directory) / 'extends.json'
+        record.write_text(json.dumps(rows, separators=(',', ':')))
+        _run(['--extends', str(record)])
 
 
 def _merged_query(payload):
@@ -355,14 +370,19 @@ def verify(root, *, _operation=None):
     for path in _modules():
         pairs.append((path, record['edges'][path]))
     decisions = _extended_edges(pairs, steps)
-    edges = {}
-    checked = []
+    extends = []
+    prepared = []
     for (path, edge), decision in zip(pairs, decisions):
         if decision['extend']:
             # A later reviewed step starts exactly where this edge ends.
             step = steps[path]
-            _gate_extend(step, edge, path)
+            extends.append((step, edge, path))
             edge = decision['edge']
+        prepared.append((path, edge))
+    _gate_extends(extends)
+    edges = {}
+    checked = []
+    for path, edge in prepared:
         current = ledger.endpoint(root, path, edge, _operation=_operation)
         actual = _typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
                                 _operation=_operation), _operation=_operation)

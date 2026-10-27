@@ -10,10 +10,12 @@
     carla_runtime_boundary_gate --bytes-all DIR
     carla_runtime_boundary_gate --steps DIR
     carla_runtime_boundary_gate --extend --path TEXT --step-sha HEX --edge-sha HEX --step-token HEX --edge-token HEX
+    carla_runtime_boundary_gate --extends PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
-A directory checks every listed file in order.
+A directory checks every listed file in order. `--extends` checks every
+listed step in order.
 """
 
 from std.pathlib import Path
@@ -310,6 +312,34 @@ def boundary_extend(
         _fail("runtime view step does not extend the edge: " + path)
 
 
+def boundary_extends(payload: String) raises:
+    """Require each view step to start where its edge ends.
+
+    Args:
+        payload: A JSON list. Each item has `path`, `step_sha`, `edge_sha`,
+            `step_token`, and `edge_token`.
+
+    Raises:
+        Error: A step does not extend its edge, or the payload is not a
+            JSON list.
+    """
+    var doc = PyJson.parse(payload)
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("malformed extend list")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var item = doc.item(doc.root, index)
+        boundary_extend(
+            doc.text(doc.at(item, "step_sha")),
+            doc.text(doc.at(item, "edge_sha")),
+            doc.text(doc.at(item, "step_token")),
+            doc.text(doc.at(item, "edge_token")),
+            doc.text(doc.at(item, "path")),
+        )
+        index += 1
+
+
 def runtime_boundary_modules() raises -> String:
     """Return the four runtime-boundary module paths.
 
@@ -364,6 +394,7 @@ def _usage():
             " | --bytes-all DIR | --steps DIR | --extend --path TEXT"
             " --step-sha HEX"
             " --edge-sha HEX --step-token HEX --edge-token HEX"
+            " | --extends PATH"
         ),
         file=stderr,
     )
@@ -389,6 +420,7 @@ def main() raises:
     var edge_sha = String("")
     var step_token = String("")
     var edge_token = String("")
+    var extends = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -410,6 +442,7 @@ def main() raises:
             or word == "--edge-sha"
             or word == "--step-token"
             or word == "--edge-token"
+            or word == "--extends"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -436,8 +469,10 @@ def main() raises:
                 edge_sha = value
             elif word == "--step-token":
                 step_token = value
-            else:
+            elif word == "--edge-token":
                 edge_token = value
+            else:
+                extends = value
             index += 2
             continue
         _usage()
@@ -451,6 +486,8 @@ def main() raises:
     if bytes_all.byte_length() > 0:
         modes += 1
     if extend:
+        modes += 1
+    if extends.byte_length() > 0:
         modes += 1
     if modes != 1:
         _usage()
@@ -474,6 +511,9 @@ def main() raises:
             boundary_extend(
                 step_sha, edge_sha, step_token, edge_token, module_path
             )
+            return
+        if extends.byte_length() > 0:
+            boundary_extends(Path(extends).read_text())
             return
         if migration.byte_length() > 0:
             runtime_boundary_record(Path(migration).read_bytes())
