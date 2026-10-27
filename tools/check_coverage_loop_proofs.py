@@ -59,6 +59,11 @@ def _loop_labels():
     return _LOOP_LABELS
 
 
+def _commands():
+    """Return the coverage command and file names."""
+    return _loop_labels()['commands']
+
+
 _LOOP_DRIVERS = None
 
 
@@ -150,13 +155,17 @@ def require_runtime_alarm():
 
 def coverage_io_argv(mojo, mode):
     """Return the production Mojo coverage tool command."""
-    return ['sh', str(ROOT / 'tools/tool.sh'), mojo, 'coverage_io', mode]
+    commands = _commands()
+    return [commands['shell'], str(ROOT / commands['tool']), mojo,
+            commands['coverage_io'], mode]
 
 
 def _mojo_seal_command(root, stage, compiler, flags, mojo, suites=None, *, verify=False):
-    command = ['sh', str(ROOT / 'tools/tool.sh'), mojo, 'coverage_loop_seal']
+    commands = _commands()
+    command = [commands['shell'], str(ROOT / commands['tool']), mojo,
+               commands['seal']]
     if verify:
-        command.append('verify')
+        command.append(commands['verify'])
     command += ['--root', str(root), '--build', str(stage),
                 '--compiler', compiler, '--flags', flags, '--mojo', mojo]
     if suites is not None:
@@ -166,7 +175,8 @@ def _mojo_seal_command(root, stage, compiler, flags, mojo, suites=None, *, verif
 
 def mojo_begin(root, stage, compiler, flags, mojo, names):
     """Write the generation checkpoint with the Mojo begin tool."""
-    run(['sh', str(ROOT / 'tools/tool.sh'), mojo, 'coverage_loop_begin',
+    commands = _commands()
+    run([commands['shell'], str(ROOT / commands['tool']), mojo, commands['begin'],
          '--root', str(root), '--build', str(stage),
          '--compiler', compiler, '--flags', flags, '--mojo', mojo,
          '--sources', *names])
@@ -178,7 +188,7 @@ def mojo_seal(root, stage, compiler, flags, mojo, suites=None, *, success=True):
                  success=success)
     if not success:
         return result
-    return proofs.read_receipt(Path(stage) / 'loop-proofs.json')
+    return proofs.read_receipt(Path(stage) / _commands()['receipt'])
 
 
 def mojo_verify(root, stage, compiler, flags, mojo, suites=None, *, success=True):
@@ -207,7 +217,7 @@ def capture_with_compiler_budget(command, output, capture, *, mojo, loop_proof=N
         deadline = min(deadline, inherited)
     environment = os.environ.copy()
     environment[coverage_io.DEADLINE_ENV] = repr(deadline)
-    arguments = [*coverage_io_argv(mojo, 'capture'),
+    arguments = [*coverage_io_argv(mojo, _commands()['capture']),
                  '--out', str(output), '--err', str(capture)]
     if loop_proof is not None:
         arguments += ['--loop-proof', str(loop_proof), '--loop-proof-root', str(source_root)]
@@ -251,8 +261,10 @@ def capture_result(result, stem, envelope, command):
 
 def mojo_mask(mojo, stage):
     """Return the masked manifest from the Mojo seal."""
-    target = Path(stage) / 'mojo-masked-manifest.txt'
-    run(['sh', str(ROOT / 'tools/tool.sh'), mojo, 'coverage_loop_seal', 'mask',
+    commands = _commands()
+    target = Path(stage) / commands['masked']
+    run([commands['shell'], str(ROOT / commands['tool']), mojo, commands['seal'],
+         commands['mask'],
          '--build', str(stage), '--output', str(target)])
     return target.read_bytes()
 
@@ -606,8 +618,9 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
 
 def check_current_generated_include_root(stage, mojo, compiler, flags):
     """Exercise real maintained generation with the complete passthrough layout."""
-    run(['sh', str(ROOT / 'tools/tool.sh'), mojo,
-         'check_coverage_include_root', '--mojo', mojo, '--stage', str(stage),
+    commands = _commands()
+    run([commands['shell'], str(ROOT / commands['tool']), mojo,
+         commands['include_root'], '--mojo', mojo, '--stage', str(stage),
          '--compiler', compiler, '--flags', flags], cwd=ROOT)
     owner_result = check_generated_receipt_owner(stage, mojo, compiler, flags)
     labels = _loop_labels()
@@ -635,27 +648,28 @@ def main():
     args = parser.parse_args()
     mojo = str(Path(args.mojo).resolve())
     compiler = run([mojo, '--version']).stdout.strip()
-    flags = '-Werror -I .'
+    commands = _commands()
+    flags = commands['flags']
 
     if args.output is None:
-        workspace = tempfile.TemporaryDirectory(prefix='threemojo-loop-proofs-')
+        workspace = tempfile.TemporaryDirectory(prefix=commands['workspace_prefix'])
     else:
-        retained = args.output.resolve() / 'attempt-work'
+        retained = args.output.resolve() / commands['attempt']
         retained.mkdir(parents=True, exist_ok=False)
         workspace = contextlib.nullcontext(str(retained))
     with workspace as directory:
         work = Path(directory)
         current_rows = check_current_generated_include_root(
-            work/'current-generated', mojo, compiler, flags)
+            work/commands['current'], mojo, compiler, flags)
         print(_loop_labels()['theorems'], current_rows, flush=True)
         require_runtime_alarm()
-        run(['sh', str(ROOT / 'tools/tool.sh'), mojo,
-             'check_coverage_loop_fixture', '--mojo', mojo])
+        run([commands['shell'], str(ROOT / commands['tool']), mojo,
+             commands['fixture'], '--mojo', mojo])
         results = _loop_labels()['results']
         if args.output:
             args.output.mkdir(parents=True, exist_ok=True)
-            (args.output / 'native-source.mojo').write_text(_loop_drivers()['source'])
-            (args.output / 'qualification.json').write_text(json.dumps(results, indent=2) + '\n')
+            (args.output / commands['native_source']).write_text(_loop_drivers()['source'])
+            (args.output / commands['qualification']).write_text(json.dumps(results, indent=2) + '\n')
         print(_loop_labels()['pass_line'])
 
 

@@ -63,6 +63,11 @@ def test_coverage_loop_qualification_labels_stay_reviewed() raises:
     assert_equal(doc.text(doc.item(doc.at(admission, "steps"), 1)), "render")
     assert_equal(doc.text(doc.at(doc.root, "runtime_seconds")), "5")
     assert_equal(doc.text(doc.at(doc.root, "integration_seconds")), "180")
+    var commands = doc.at(doc.root, "commands")
+    assert_equal(doc.text(doc.at(commands, "coverage_io")), "coverage_io")
+    assert_equal(doc.text(doc.at(commands, "seal")), "coverage_loop_seal")
+    assert_equal(doc.text(doc.at(commands, "flags")), "-Werror -I .")
+    assert_equal(doc.text(doc.at(commands, "receipt")), "loop-proofs.json")
     assert_equal(
         doc.text(doc.at(doc.root, "pass_line")),
         (
