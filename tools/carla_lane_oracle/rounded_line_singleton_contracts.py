@@ -188,9 +188,35 @@ def _selected_minimum(path, name, owner):
     return result.stdout.strip() == 'true'
 
 
+_SINGLETON_PATHS = None
+
+
+def _singleton_paths():
+    """Return the lane path, the rounded-line path, and the messages."""
+    global _SINGLETON_PATHS
+    if _SINGLETON_PATHS is not None:
+        return _SINGLETON_PATHS
+    import json
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_singleton_paths'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _SINGLETON_PATHS = json.loads(result.stdout)
+    return _SINGLETON_PATHS
+
+
 def _reviewed_text(root, path, record):
     text = _typed_source.historical_text(root, root/path, (root/path).read_text())
-    if not _same_text(path, 'extensions/carla/curve_rounded_line.mojo'):
+    if not _same_text(path, _singleton_paths()['rounded_line']):
         return text
     current_doc, recorded_doc = _significant_documents([
         text, record['modules'][path]['source']])
@@ -262,7 +288,7 @@ def _universal_newlines(text):
 
 def _lane_text(root):
     """Compare actual text/byte views without imposing a historical file pin."""
-    path = root/'extensions/carla/lane_refinement.mojo'
+    path = root/_singleton_paths()['lane']
     text = path.read_text()
     physical = path.read_bytes()
     decoded = _universal_newlines(physical.decode('utf-8'))
@@ -307,16 +333,17 @@ def verify_premises(root):
         if not _same_text(module_docs[index * 2], module_docs[index * 2 + 1]):
             _verify_dependency(path, actual, token)
     prepared = []
+    labels = _singleton_paths()
     for path, expected in record['import_scopes'].items():
-        text = _lane_text(root) if path == 'extensions/carla/lane_refinement.mojo' else _typed_source.historical_text(root, root/path, (root/path).read_text())
+        text = _lane_text(root) if path == labels['lane'] else _typed_source.historical_text(root, root/path, (root/path).read_text())
         actual = _import_scope(text)
-        if path == 'extensions/carla/lane_refinement.mojo':
+        if path == labels['lane']:
             current_doc, recorded_doc = _significant_documents([actual, expected])
             if not _same_text(current_doc, recorded_doc):
                 # Only a changed consumed scope requests complete current admission.
                 text = full_audit.reviewed_text(root, path, text)
                 actual = _import_scope(text)
-        prepared.append((actual, expected, 'consumer import scope changed: ' + path))
+        prepared.append((actual, expected, labels['import_scope'] + path))
     if prepared:
         scope_docs = _significant_documents(
             [text for actual, expected, _ in prepared for text in (actual, expected)])
@@ -335,7 +362,7 @@ def verify_premises(root):
                 text = full_audit.reviewed_text(root, item['path'], text)
                 actual = _declaration(text, item['name'], tuple(item['owner']))
         prepared.append((actual, item['source'],
-                         'consumer/reference declaration changed: ' + item['name']))
+                         labels['declaration'] + item['name']))
     if prepared:
         declaration_docs = _significant_documents(
             [text for actual, source, _ in prepared for text in (actual, source)])

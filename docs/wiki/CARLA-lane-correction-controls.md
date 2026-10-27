@@ -58,6 +58,8 @@ It selects the rounded lane minimum before restoring a changed declaration.
 
 It keeps the consumer import scope before the first definition.
 
+It keeps the lane path, the rounded-line path, and the consumer messages.
+
 `tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record, the producer functions, and the arc layout.
 
 It keeps the frozen-arc source and the polynomial and road paths.
