@@ -167,7 +167,7 @@ DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f
  'tools/carla_lane_oracle/consumer_successor_ledger.py': 'ce9a639084dfcc1442c6ac7535060cf5a123c2eb96683d2f35816ec26b0599ed',
  'tools/carla_lane_oracle/map_deviation_contracts.py': '741a95b3fd3d0d51253dfef36327997c19ac90b9230a73942dd4697dcefffd39',
  'tools/carla_lane_oracle/map_station_contracts.py': 'caca22f46767ced3037d839a7941cb73a8ccf816238ad2037e28715f060055b7',
- 'tools/carla_lane_oracle/runtime_view_contracts.py': '67316129402fac643be3c6e49ceef94bcb25c1ef92f81fd764a6abb583f89e34',
+ 'tools/carla_lane_oracle/runtime_view_contracts.py': '7bdf5dad517fd43f6de3559fec188c15e12e1a52dfad4a594d2b93df221d9a51',
  'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
  'tools/carla_lane_oracle/source_contracts.py': 'f4cf5b03da59b5a5070f9cdf8e26b486d4e1cd965eed172578018619ea788afe',
  'tools/carla_lane_oracle/sum2_guard_contracts.py': '8c1d646c1dd70e1e7c9453077b63060ca506f76d2493137af0dd0a9a68012570',

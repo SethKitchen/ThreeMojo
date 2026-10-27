@@ -17,7 +17,6 @@ if __package__:
     from . import source_contracts as _typed_source
 else:
     import source_contracts as _typed_source
-import hashlib
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 import sys
@@ -58,18 +57,40 @@ def _read(root, path, operation):
 
 
 
+def _gate(migration, tests):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    flags = ('event', 'float32', 'length', 'raw', 'measurement')
+    with tempfile.TemporaryDirectory(prefix='runtime-view-gate-') as directory:
+        folder = Path(directory)
+        record = folder / 'migration.json'
+        record.write_bytes(migration)
+        arguments = ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+                     'carla_runtime_view_gate', '--migration', str(record)]
+        for flag, payload in zip(flags, tests, strict=True):
+            path = folder / flag
+            path.write_bytes(payload)
+            arguments.extend(['--' + flag, str(path)])
+        result = subprocess.run(arguments, capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def steps(root, *, _operation=None):
     """Return each reviewed step by path once its record and tests match."""
     with ledger._validation(root, _operation):
         raw = _read(root, MIGRATION, _operation)
-        require(hashlib.sha256(raw).hexdigest() == MIGRATION_SHA256, 'unreviewed exact step')
-        record = json.loads(raw, object_pairs_hook=source.unique_keys)
-        result = checked_steps(record)
-        for path, expected in record['correctness_tests'].items():
-            require(hashlib.sha256(_typed_source.historical_bytes(root, path, _read(root, path, _operation),
-                _operation=_operation)).hexdigest() == expected,
-                    'bound runtime view test changed: ' + path)
-        return result
+        tests = [_typed_source.historical_bytes(root, path, _read(root, path, _operation),
+                 _operation=_operation) for path in TESTS]
+        return _gate(raw, tests)
 
 
 def checked_steps(record):

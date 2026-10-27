@@ -787,7 +787,7 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                          '    _plain_seed = '
                                          'canonical(_receipt_seed) if cleanup '
                                          'is None else None\n')))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': '0076eb3bee2fde345949f15025574681e07bc4f35c46b6f533882c5ba9316c20',
+ 'full_audit_cleanup_contracts.py': {'after_sha256': '88618aa8704b9557b8b143bf20e8b8edb13592bfede9281ee8eb7b84be942583',
                                      'before_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
                                      'edits': ((11,
                                                 12,
@@ -818,6 +818,12 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  "'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',\n",),
                                                 (" 'tools/affected.py': "
                                                  "'dcf533b9cd995902f53578aa93b98a32ca732643ccfa6ab7e30f95fd8b321eb3',\n",)),
+                                               (169,
+                                                170,
+                                                (" 'tools/carla_lane_oracle/runtime_view_contracts.py': "
+                                                 "'67316129402fac643be3c6e49ceef94bcb25c1ef92f81fd764a6abb583f89e34',\n",),
+                                                (" 'tools/carla_lane_oracle/runtime_view_contracts.py': "
+                                                 "'7bdf5dad517fd43f6de3559fec188c15e12e1a52dfad4a594d2b93df221d9a51',\n",)),
                                                (171,
                                                 172,
                                                 (' '
@@ -1943,7 +1949,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '441a80e05625bf06476c2669f902e329c48d3b4f179e1c8ff296a25d8ea87072':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != 'cb8ae3b3dba3cab00c176b84aa87e857d96de8596080603a8b97f4ac413b49ef':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)
