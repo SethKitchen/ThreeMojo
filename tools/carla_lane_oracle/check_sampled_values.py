@@ -261,9 +261,10 @@ def unique_function(tree, name):
 def primitive_graph(text):
     tree = syntax_tree(text)
     found = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == '_JetExpression']
+    # The declaration count is a token check. The class hash below stays on
+    # the Python syntax tree.
+    _sampled_text('--primitive-declaration', text)
     require(len(found) == 1, 'unsupported primitive declaration')
-    # Actual top-level aliases, not matching text that could live in a comment.
-    # The class hash below stays on the Python syntax tree.
     _sampled_text('--primitive-aliases', text)
     return hashlib.sha256(dump(found[0]).encode()).hexdigest()
 

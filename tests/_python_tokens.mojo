@@ -2385,6 +2385,50 @@ def _note_alias(
             value_ok = 1
 
 
+def primitive_declaration(source: String) raises:
+    """Require one top-level `_JetExpression` declaration.
+
+    Args:
+        source: Mojo source for the interval module.
+
+    Returns:
+        None. The declaration occurs once.
+
+    Raises:
+        Error: The declaration is missing or repeated.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var count = 0
+    var indent = 0
+    var bracket = 0
+    var index = 0
+    while index < len(kinds):
+        var kind = kinds[index]
+        var text = texts[index]
+        if kind == _INDENT:
+            indent += 1
+        elif kind == _DEDENT:
+            indent -= 1
+        elif text == "(" or text == "[" or text == "{":
+            bracket += 1
+        elif text == ")" or text == "]" or text == "}":
+            if bracket > 0:
+                bracket -= 1
+        elif (
+            indent == 0
+            and bracket == 0
+            and (text == "struct" or text == "class")
+            and index + 1 < len(kinds)
+            and texts[index + 1] == "_JetExpression"
+        ):
+            count += 1
+        index += 1
+    if count != 1:
+        raise Error("unsupported primitive declaration")
+
+
 def primitive_aliases(source: String) raises:
     """Require the two reviewed derivative aliases.
 

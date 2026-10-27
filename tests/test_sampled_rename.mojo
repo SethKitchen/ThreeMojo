@@ -12,6 +12,7 @@ from tools._process import run_program
 from tests._python_tokens import (
     decorator_prefix,
     primitive_aliases,
+    primitive_declaration,
     project_constant_heading,
     project_lane_value,
     project_reference_value,
@@ -482,6 +483,17 @@ def test_the_stored_half_tail_starts_at_the_one_marker() raises:
         _ = stored_half_tail(
             source + "def _stored_half[u: T]():\n    return 3\n"
         )
+
+
+def test_one_jet_primitive_declaration_is_required() raises:
+    """The interval module keeps one Jet primitive declaration."""
+    var source = "struct _JetExpression[derivatives: Bool]():\n    pass\n"
+    primitive_declaration(source)
+    primitive_declaration("class _JetExpression():\n    pass\n")
+    with assert_raises(contains="unsupported primitive declaration"):
+        primitive_declaration("struct Other():\n    pass\n")
+    with assert_raises(contains="unsupported primitive declaration"):
+        primitive_declaration(source + source)
 
 
 def main() raises:

@@ -31,11 +31,11 @@ from pathlib import Path
 if __package__:
     from .ideal_projection import (
         binding_shadow, declaration, direct_imports, selected_block,
-        verify_projection)
+        stored_half_tail, verify_projection)
 else:
     from ideal_projection import (
         binding_shadow, declaration, direct_imports, selected_block,
-        verify_projection)
+        stored_half_tail, verify_projection)
 
 
 # Initial accepted arithmetic checkpoint. The guarded and final format/doc
@@ -436,7 +436,7 @@ def verify(root, *, _operation=None):
         pins['ideal_projection']['legacy_normalized_source'],
         selected_block(
             texts['curve_bounds'], 'def _spiral_expression[', 'def _sample_index('),
-        interval[interval.index('def _stored_half['):])
+        stored_half_tail(interval))
     return {'status': 'PASS', 'recurrence_operations': 6, 'correction_additions': 1,
             'scalar_axes': 2, 'initialization': 'positive zero',
             'term_count': '5 * pieces', 'bound': 'E + (u + gamma_(n-1)^2) M',

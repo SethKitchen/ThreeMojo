@@ -20,6 +20,7 @@
     carla_sampled_text --strip-try-only PATH
     carla_sampled_text --replace-function PATH --name NAME --with PATH
     carla_sampled_text --primitive-aliases PATH
+    carla_sampled_text --primitive-declaration PATH
     carla_sampled_text --stored-half-tail PATH
 
 The extract mode prints one top-level function. The rename mode prints the
@@ -35,6 +36,7 @@ The decorators mode prints the lines above one function.
 The strip-try-only mode removes the reviewed reuse refusal.
 The replace-function mode substitutes one complete function.
 The primitive-aliases mode checks the two derivative aliases.
+The primitive-declaration mode requires one Jet primitive.
 The stored-half-tail mode prints the source from that declaration onward.
 The caller supplies the source.
 """
@@ -49,6 +51,7 @@ from tests._python_expr import (
 )
 from tests._python_tokens import (
     primitive_aliases,
+    primitive_declaration,
     project_constant_heading,
     decorator_prefix,
     replace_function,
@@ -82,7 +85,7 @@ def _usage():
             " --project-reference PATH | --project-lane PATH | --decorators"
             " PATH --name NAME | --strip-try-only PATH | --replace-function"
             " PATH --name NAME --with PATH | --primitive-aliases PATH |"
-            " --stored-half-tail PATH"
+            " --stored-half-tail PATH | --primitive-declaration PATH"
         ),
         file=stderr,
     )
@@ -113,6 +116,7 @@ def main() raises:
     var strip_try_only = String("")
     var replace_path = String("")
     var primitive_alias_path = String("")
+    var primitive_declaration_path = String("")
     var stored_half = String("")
     var with_path = String("")
     var name = String("")
@@ -140,6 +144,7 @@ def main() raises:
             or word == "--strip-try-only"
             or word == "--replace-function"
             or word == "--primitive-aliases"
+            or word == "--primitive-declaration"
             or word == "--stored-half-tail"
             or word == "--with"
             or word == "--index"
@@ -184,6 +189,8 @@ def main() raises:
                 replace_path = value
             elif word == "--primitive-aliases":
                 primitive_alias_path = value
+            elif word == "--primitive-declaration":
+                primitive_declaration_path = value
             elif word == "--stored-half-tail":
                 stored_half = value
             elif word == "--with":
@@ -231,6 +238,8 @@ def main() raises:
     if replace_path.byte_length() > 0:
         modes += 1
     if primitive_alias_path.byte_length() > 0:
+        modes += 1
+    if primitive_declaration_path.byte_length() > 0:
         modes += 1
     if stored_half.byte_length() > 0:
         modes += 1
@@ -353,6 +362,9 @@ def main() raises:
             return
         if primitive_alias_path.byte_length() > 0:
             primitive_aliases(Path(primitive_alias_path).read_text())
+            return
+        if primitive_declaration_path.byte_length() > 0:
+            primitive_declaration(Path(primitive_declaration_path).read_text())
             return
         if stored_half.byte_length() > 0:
             print(stored_half_tail(Path(stored_half).read_text()), end="")
