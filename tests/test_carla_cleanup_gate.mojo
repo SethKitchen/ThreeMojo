@@ -15,6 +15,7 @@ from tests._python_tokens import (
     significant_json,
     module_statements_json,
     token_names,
+    top_level_starts_json,
     without_move_sigils,
 )
 from tools.carla_cleanup_gate import (
@@ -92,6 +93,17 @@ def test_a_changed_stored_word_is_refused() raises:
         )
     ):
         cleanup_words(source, "geometry", "extensions/carla/geometry.mojo")
+
+
+def test_a_nested_def_is_not_a_top_level_start() raises:
+    """Only a top-level def or import line is recorded."""
+    var source = String(
+        "def first():\n"
+        + "    def nested():\n"
+        + "        return 1\n"
+        + "from a import b\n"
+    )
+    assert_equal(top_level_starts_json(source), "[[1,0],[4,0]]")
 
 
 def test_a_module_docstring_is_not_a_top_level_statement() raises:

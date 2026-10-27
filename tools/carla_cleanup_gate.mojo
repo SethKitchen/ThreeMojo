@@ -17,6 +17,7 @@
     carla_cleanup_gate --names DIR
     carla_cleanup_gate --moves PATH
     carla_cleanup_gate --statements PATH
+    carla_cleanup_gate --starts PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -34,6 +35,7 @@ from tests._python_tokens import (
     significant_json,
     stored_word_sha256,
     module_statements_json,
+    top_level_starts_json,
     token_names,
     token_sha256,
     token_words,
@@ -425,7 +427,7 @@ def _usage():
             " | --declaration PATH --name NAME [--owner NAME]"
             " | --bounds PATH --name NAME [--owner NAME]"
             " | --significant-json DIR | --names DIR | --moves PATH"
-            " | --statements PATH"
+            " | --statements PATH | --starts PATH"
         ),
         file=stderr,
     )
@@ -456,6 +458,7 @@ def main() raises:
     var names = String("")
     var moves = String("")
     var statements = String("")
+    var starts = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -479,6 +482,7 @@ def main() raises:
             or word == "--names"
             or word == "--moves"
             or word == "--statements"
+            or word == "--starts"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -517,8 +521,10 @@ def main() raises:
                 names = value
             elif word == "--moves":
                 moves = value
-            else:
+            elif word == "--statements":
                 statements = value
+            else:
+                starts = value
             index += 2
             continue
         _usage()
@@ -557,6 +563,8 @@ def main() raises:
         modes += 1
     if statements.byte_length() > 0:
         modes += 1
+    if starts.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if previous.byte_length() > 0 and migration.byte_length() == 0:
@@ -582,6 +590,9 @@ def main() raises:
     ) and decl_name.byte_length() == 0:
         _usage()
     try:
+        if starts.byte_length() > 0:
+            print(top_level_starts_json(Path(starts).read_text()), end="")
+            return
         if statements.byte_length() > 0:
             print(module_statements_json(Path(statements).read_text()), end="")
             return

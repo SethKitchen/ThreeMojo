@@ -56,6 +56,8 @@ It removes an argument move sigil before that contract parses a function body.
 
 It returns the top-level statements used by the spiral-moment and selection contracts.
 
+It returns the top-level `def`, `from`, and `@` lines used by the spiral-moment block check.
+
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.

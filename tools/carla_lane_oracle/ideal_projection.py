@@ -335,26 +335,33 @@ def module_routing(text, word_constants=()):
     return json.dumps(statements, separators=(',', ':'), ensure_ascii=True)
 
 
+def _top_level_source_starts(text):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='source-starts-') as directory:
+        source = Path(directory) / 'source.mojo'
+        source.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--starts', str(source)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def top_level_source_starts(text):
     """Actual top-level declaration/import/decorator token starts.
 
     Unlike raw-text sentinels these cannot originate inside comments, string
     literals (including a module docstring), or indented function bodies.
     """
-    starts, depth, fresh = set(), 0, True
-    try:
-        for token in tokenize.generate_tokens(io.StringIO(text).readline):
-            if token.type == tokenize.INDENT:
-                depth += 1
-            elif token.type == tokenize.DEDENT:
-                depth -= 1
-            elif token.type == tokenize.NEWLINE:
-                fresh = True
-            elif token.type not in (tokenize.COMMENT, tokenize.NL,
-                                    tokenize.ENDMARKER, tokenize.ENCODING):
-                if depth == 0 and fresh and token.string in ('def', 'from', '@'):
-                    starts.add(token.start)
-                fresh = False
-    except (tokenize.TokenError, IndentationError) as error:
-        raise ValueError('unsupported source-boundary tokens') from error
-    return starts
+    return {(line, column) for line, column in _top_level_source_starts(text)}

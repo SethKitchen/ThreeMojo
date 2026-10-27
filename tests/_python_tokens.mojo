@@ -982,6 +982,59 @@ def module_statements_json(source: String) raises -> String:
     return doc.dumps()
 
 
+def top_level_starts_json(source: String) raises -> String:
+    """Return the lines of top-level `def`, `from`, and `@` tokens.
+
+    Args:
+        source: Mojo source.
+
+    Returns:
+        A JSON list of `[line, 0]` pairs. Lines start at 1.
+
+    Raises:
+        Error: The source boundary tokens cannot be read.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    var lines = List[Int]()
+    try:
+        _tokenize_lines(source, kinds, texts, lines)
+    except error:
+        _ = String(error)
+        raise Error("unsupported source-boundary tokens")
+    var doc = PyJson()
+    var rows = doc.new_list()
+    var depth = 0
+    var fresh = True
+    var index = 0
+    while index < len(kinds):
+        var kind = kinds[index]
+        if kind == _INDENT:
+            depth += 1
+        elif kind == _DEDENT:
+            depth -= 1
+        elif kind == _NEWLINE:
+            fresh = True
+        else:
+            if (
+                depth == 0
+                and fresh
+                and (
+                    texts[index] == "def"
+                    or texts[index] == "from"
+                    or texts[index] == "@"
+                )
+            ):
+                var pair = doc.new_list()
+                doc.append(pair, doc.new_int(lines[index]))
+                doc.append(pair, doc.new_int(0))
+                doc.append(rows, pair)
+            fresh = False
+        index += 1
+    doc.root = rows
+    return doc.dumps()
+
+
 def token_words(source: String) raises -> List[String]:
     """Return the token texts, without layout tokens.
 
