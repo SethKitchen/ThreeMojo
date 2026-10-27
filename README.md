@@ -245,7 +245,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Reviewed cleanup record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, and the stored-word digest [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Lane-control record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest and its source digests [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Lane-control record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Render-actor reuse record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

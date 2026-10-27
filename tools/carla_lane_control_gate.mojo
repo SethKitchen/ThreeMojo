@@ -6,6 +6,7 @@
 """Check the lane-control migration record.
 
     carla_lane_control_gate --migration PATH
+    carla_lane_control_gate --tokens DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -14,7 +15,8 @@ and it does not restore a historical source. The caller does that first.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_json import MISSING, PY_STR, PyJson
+from tests._python_tokens import token_sha256
+from tools._python_json import MISSING, PY_LIST, PY_STR, PyJson
 from tools._sha256 import sha256_hex
 
 
@@ -86,9 +88,35 @@ def lane_control_record(migration: Span[UInt8, _]) raises:
         _fail("lane-control successor record changed")
 
 
+def lane_control_tokens(directory: String) raises:
+    """Require each declaration pair to have the same tokens.
+
+    Args:
+        directory: A directory with `labels.json` and `N.left` / `N.right` texts.
+
+    Raises:
+        Error: A pair differs, or the directory cannot be read.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("lane-control successor module changed")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var label = doc.text(doc.item(doc.root, index))
+        var left = Path(directory + "/" + String(index) + ".left").read_text()
+        var right = Path(directory + "/" + String(index) + ".right").read_text()
+        if token_sha256(left) != token_sha256(right):
+            _fail(label)
+        index += 1
+
+
 def _usage():
     """Print the command usage and stop."""
-    print("usage: carla_lane_control_gate --migration PATH", file=stderr)
+    print(
+        "usage: carla_lane_control_gate --migration PATH | --tokens DIR",
+        file=stderr,
+    )
     exit(2)
 
 
@@ -99,20 +127,28 @@ def main() raises:
         Error: The command is invalid.
     """
     var migration = String("")
+    var tokens = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
-        if word == "--migration":
+        if word == "--migration" or word == "--tokens":
             if index + 1 >= len(arguments):
                 _usage()
-            migration = arguments[index + 1]
+            var value = arguments[index + 1]
+            if word == "--migration":
+                migration = value
+            else:
+                tokens = value
             index += 2
             continue
         _usage()
-    if migration.byte_length() == 0:
+    if (migration.byte_length() == 0) == (tokens.byte_length() == 0):
         _usage()
     try:
+        if tokens.byte_length() > 0:
+            lane_control_tokens(tokens)
+            return
         lane_control_record(Path(migration).read_bytes())
     except error:
         print(String(error), file=stderr)

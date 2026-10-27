@@ -69,6 +69,32 @@ def _gate(payload):
         raise RuntimeError(message)
 
 
+def _gate_tokens(pairs):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='lane-control-tokens-') as directory:
+        folder = Path(directory)
+        labels = []
+        for index, (left, right, label) in enumerate(pairs):
+            (folder / f'{index}.left').write_text(left)
+            (folder / f'{index}.right').write_text(right)
+            labels.append(label)
+        (folder / 'labels.json').write_text(json.dumps(labels))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_control_gate',
+             '--tokens', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise RuntimeError(message)
+
+
 def verify(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
@@ -86,28 +112,26 @@ def verify(root, *, _operation=None):
             import lane_order_contracts as order
         current = order.predecessor_source(root, **operation_args)
 
-    require(token_sha256(current) == token_sha256(record['after_source']),
-            'lane-control successor module changed')
+    pairs = [(current, record['after_source'], 'lane-control successor module changed')]
     for item in record['declarations']:
         name = item['name']
-        require(token_sha256(declaration(record['before_source'], name, ()))
-                == token_sha256(item['before']), 'lane-control before declaration drift')
-        require(token_sha256(declaration(current, name, ()))
-                == token_sha256(item['after']), 'lane-control after declaration drift')
+        pairs.append((declaration(record['before_source'], name, ()), item['before'],
+                      'lane-control before declaration drift'))
+        pairs.append((declaration(current, name, ()), item['after'],
+                      'lane-control after declaration drift'))
         test = _typed_source.historical_text(root, 'tests/test_carla_lane_control_successor.mojo', _observe_text(root, 'tests/test_carla_lane_control_successor.mojo',
                              (root / 'tests/test_carla_lane_control_successor.mojo').read_text(),
                              _operation=_operation), _operation=_operation)
         frozen = declaration(test, '_reference' + name, ())
         expected = item['before'].replace('def ' + name + '(', 'def _reference' + name + '(', 1)
-        require(token_sha256(frozen) == token_sha256(expected),
-                'lane-control frozen predecessor changed')
+        pairs.append((frozen, expected, 'lane-control frozen predecessor changed'))
     for item in record['premises']:
         actual = declaration(_typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root / item['path']).read_text(), _operation=_operation), _operation=_operation), item['name'], ())
-        require(token_sha256(actual) == token_sha256(item['source']),
-                'lane-control guarded premise changed: ' + item['name'])
+        pairs.append((actual, item['source'], 'lane-control guarded premise changed: ' + item['name']))
     for rel, expected in record['producer_modules'].items():
-        require(token_sha256(_typed_source.historical_text(root, rel, _observe_text(root, rel, (root / rel).read_text(), _operation=_operation), _operation=_operation)) == token_sha256(expected),
-                'lane-control IEEE producer module changed: ' + rel)
+        pairs.append((_typed_source.historical_text(root, rel, _observe_text(root, rel, (root / rel).read_text(), _operation=_operation), _operation=_operation), expected,
+                      'lane-control IEEE producer module changed: ' + rel))
+    _gate_tokens(pairs)
     return record
 
 
