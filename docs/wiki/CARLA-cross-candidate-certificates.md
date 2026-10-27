@@ -328,6 +328,8 @@ It projects the constant heading onto unknown intervals.
 
 It projects the union helper from its return.
 
+It projects the sampled reference dispatcher.
+
 Mojo checks the live sampled module graphs.
 The trig module keeps its reviewed syntax graph.
 The interval module keeps its reviewed syntax graph.

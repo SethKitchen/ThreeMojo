@@ -1862,6 +1862,114 @@ def project_union_value(source: String) raises -> String:
     return signature + String(source[byte=offset:])
 
 
+def project_reference_value(source: String) raises -> String:
+    """Project one renamed reference capture onto the sampled dispatcher.
+
+    Args:
+        source: The renamed `_reference_jet_capture` declaration.
+
+    Returns:
+        The value-only signature, the leading kind guard, the distance
+        assignment, and the sampled tail. The line, arc, and spiral branches
+        are removed.
+
+    Raises:
+        Error: The body does not have the twelve reviewed statements.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    var lines = List[Int]()
+    var start_cols = List[Int]()
+    var end_lines = List[Int]()
+    var end_cols = List[Int]()
+    _tokenize_lines(
+        source, kinds, texts, lines, start_cols, end_lines, end_cols
+    )
+    var depth = 0
+    var colon = -1
+    var seen_def = False
+    var index = 0
+    while index < len(kinds):
+        var text = texts[index]
+        if text == "(" or text == "[" or text == "{":
+            depth += 1
+        elif text == ")" or text == "]" or text == "}":
+            if depth > 0:
+                depth -= 1
+        elif kinds[index] == _NAME and text == "def":
+            seen_def = True
+        elif kinds[index] == _OP and text == ":" and depth == 0 and seen_def:
+            colon = index
+            break
+        index += 1
+    if colon < 0:
+        raise Error("complete reference dispatcher layout changed")
+    var starts = List[Int]()
+    var firsts = List[String]()
+    var indent = 0
+    var bracket = 0
+    var in_statement = False
+    var nested = False
+    index = colon + 1
+    while index < len(kinds):
+        var kind = kinds[index]
+        var text = texts[index]
+        if kind == _INDENT:
+            indent += 1
+            if in_statement:
+                nested = True
+        elif kind == _DEDENT:
+            indent -= 1
+        elif text == "(" or text == "[" or text == "{":
+            bracket += 1
+        elif text == ")" or text == "]" or text == "}":
+            if bracket > 0:
+                bracket -= 1
+        elif (
+            kind == _NEWLINE
+            and bracket == 0
+            and indent == 1
+            and in_statement
+            and not nested
+        ):
+            var nxt = index + 1
+            if nxt >= len(kinds) or kinds[nxt] != _INDENT:
+                in_statement = False
+        elif (
+            indent == 1
+            and bracket == 0
+            and kind != _NEWLINE
+            and kind != _INDENT
+            and kind != _DEDENT
+        ):
+            if not in_statement or nested:
+                starts.append(_byte_at(source, lines[index], 0))
+                firsts.append(text)
+                in_statement = True
+                nested = False
+        index += 1
+    if len(starts) != 12 or len(firsts) != 12:
+        raise Error("complete reference dispatcher layout changed")
+    if firsts[1] != "if" or firsts[2] != "if" or firsts[3] != "if":
+        raise Error("complete reference dispatcher layout changed")
+    var signature = String(
+        "def _reference_sampled_value(\n    geometry: RoadGeometry, distance:"
+        " _ValueJet, translation: Vector3\n) -> Tuple[_ValueJet, _ValueJet,"
+        " _ValueJet]:\n    if geometry.kind != POLY3 and geometry.kind !="
+        " PARAM_POLY3:\n        return _unknown_value_point()\n"
+    )
+    var limit = len(source.as_bytes())
+    signature += String(source[byte = starts[0] : starts[1]])
+    var keep = 4
+    while keep < 12:
+        var stop = limit
+        if keep + 1 < 12:
+            stop = starts[keep + 1]
+        signature += String(source[byte = starts[keep] : stop])
+        keep += 1
+    return signature
+
+
 def _name_byte(byte: UInt8) -> Bool:
     """Return whether `byte` can appear inside an identifier.
 

@@ -11,6 +11,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 from tools._process import run_program
 from tests._python_tokens import (
     project_constant_heading,
+    project_reference_value,
     project_union_value,
     sampled_top_level,
 )
@@ -315,6 +316,33 @@ def test_union_projection_keeps_the_return_body() raises:
         _ = project_union_value(
             "def demo():\n    var one = 1\n    return one\n"
         )
+
+
+def test_reference_projection_drops_the_three_kind_branches() raises:
+    """The line, arc, and spiral branches are removed from the dispatcher."""
+    var source = String("def old[capture: Bool](geometry: RoadGeometry):\n")
+    source += "    return marker_00\n"
+    source += "    if marker_01:\n        return 1\n"
+    source += "    if marker_02:\n        return 1\n"
+    source += "    if marker_03:\n        return 1\n"
+    var index = 4
+    while index < 12:
+        source += "    return marker_" + String(index) + "\n"
+        index += 1
+    var projected = project_reference_value(source)
+    if projected.find("def _reference_sampled_value(") < 0:
+        raise Error("sampled signature missing")
+    if projected.find("geometry.kind != POLY3") < 0:
+        raise Error("kind guard missing")
+    if (
+        projected.find("return marker_00") < 0
+        or projected.find("return marker_4") < 0
+    ):
+        raise Error("sampled tail missing")
+    if projected.find("marker_01") >= 0 or projected.find("marker_03") >= 0:
+        raise Error("kind branch remained")
+    with assert_raises(contains="complete reference dispatcher layout changed"):
+        _ = project_reference_value("def demo():\n    return 1\n")
 
 
 def main() raises:

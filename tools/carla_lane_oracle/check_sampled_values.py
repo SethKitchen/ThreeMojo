@@ -411,12 +411,6 @@ def verify(root):
         expected['_union_value_points'] = unique_function(syntax_tree(_sampled_text(
             '--project-union', old._mojo_source)), '_union_value_points')
 
-        sampled = declaration('''def _reference_sampled_value(
-            geometry: RoadGeometry, distance: _ValueJet, translation: Vector3
-        ) -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
-            if geometry.kind != POLY3 and geometry.kind != PARAM_POLY3:
-                return _unknown_value_point()
-    ''')
         old = reference('curve_bounds.mojo', '_reference_jet_capture')
         require(old._mojo_body_roles == [
             'assign:d', 'if:geometry.kind == LINE', 'if:geometry.kind == ARC',
@@ -427,8 +421,8 @@ def verify(root):
         # Remove precisely the three complete non-sampled branches. The new
         # leading guard rejects those kinds; the independent broad wrapper
         # provides the full-Jet SPIRAL bridge. All 12 statements are accounted for.
-        sampled.body += [old.body[0]] + old.body[4:]
-        expected['_reference_sampled_value'] = sampled
+        expected['_reference_sampled_value'] = unique_function(syntax_tree(_sampled_text(
+            '--project-reference', old._mojo_source)), '_reference_sampled_value')
 
         for name, filename in (('_sinc_jet', 'curve_trig.mojo'),
                                ('_arc_offset_jet', 'curve_bounds.mojo')):
