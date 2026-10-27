@@ -287,42 +287,38 @@ def _sum2_import_gate(mode, payload):
         raise ValueError(message)
 
 
-def _graph_dump(text, name, rename='', *, drop_first=False, expect_first=''):
-    """Return one function dump from the cleanup gate.
-
-    `rename` replaces the function name in that dump. `drop_first` removes
-    the first body statement and returns that statement dump, then the rest.
-    `expect_first` requires the removed statement to match that source.
-    """
+def _graph_equal(
+    left, left_name, right, right_name, message, rename='', *,
+    drop_first=False, expect_first='',
+):
+    """Require two Sum2 function dumps to match."""
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = {'source': text, 'name': name}
+    payload = {
+        'left': left, 'left_name': left_name, 'right': right,
+        'right_name': right_name, 'message': message,
+    }
     if rename:
         payload['rename'] = rename
     if drop_first:
         payload['drop_first'] = True
     if expect_first:
         payload['expect_first'] = expect_first
-    payload = json.dumps(payload, separators=(',', ':'))
-    with tempfile.TemporaryDirectory(prefix='sum2-dump-') as directory:
+    with tempfile.TemporaryDirectory(prefix='sum2-graph-') as directory:
         path = Path(directory) / 'payload.json'
-        path.write_text(payload)
+        path.write_text(json.dumps(payload, separators=(',', ':')))
         result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--sum2-dump', str(path)],
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sum2_graph',
+             str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    if drop_first:
-        parts = json.loads(result.stdout)
-        return parts['first'], parts['rest']
-    return result.stdout
 
 
 def _require_function(text, name):
@@ -368,24 +364,23 @@ def verify(root, *, _operation=None):
     # The complete lexical contract above retains all keyword-subscripts and
     # decorators. Separately relate the unchanged arithmetic leaf/recurrence
     # to the initial station-reviewed declarations using actual token spans.
-    require(_graph_dump(declaration(texts['curve_sum2'], '_sum2_update'), '_sum2_update')
-            == _graph_dump(HELPER, '_sum2_update'), 'Sum2 recurrence changed')
-    require(_graph_dump(declaration(texts['curve_sum2'], '_sum2_error_checked'),
-                        '_sum2_error_checked', '_sum2_error')
-            == _graph_dump(HELPER, '_sum2_error'),
-            'Sum2 checked arithmetic leaf changed')
+    _graph_equal(
+        declaration(texts['curve_sum2'], '_sum2_update'), '_sum2_update',
+        HELPER, '_sum2_update', 'Sum2 recurrence changed')
+    _graph_equal(
+        declaration(texts['curve_sum2'], '_sum2_error_checked'),
+        '_sum2_error_checked', HELPER, '_sum2_error',
+        'Sum2 checked arithmetic leaf changed', '_sum2_error')
+    _graph_equal(
+        texts['lane_geometry'], '_lane_spiral', SCALAR, '_lane_spiral',
+        'Sum2 complete caller graph changed: _lane_spiral',
+        drop_first=True, expect_first='_require_sum2_environment()')
     for module, name, expected in (
-            ('lane_geometry', '_lane_spiral', SCALAR),
             ('spiral_roundoff_proof', '_sum2_envelope_error', ENVELOPE),
             ('spiral_roundoff_proof', '_try_spiral_roundoff_envelope', ELIGIBILITY)):
-        if name == '_lane_spiral':
-            _, actual = _graph_dump(
-                texts[module], name, drop_first=True,
-                expect_first='_require_sum2_environment()')
-        else:
-            actual = _graph_dump(texts[module], name)
-        require(actual == _graph_dump(expected, name),
-                'Sum2 complete caller graph changed: ' + name)
+        _graph_equal(
+            texts[module], name, expected, name,
+            'Sum2 complete caller graph changed: ' + name)
     # Require the exact direct import inventory and reject all shadow forms.
     _sum2_import_gate('--helpers', {
         'lane': texts['lane_geometry'],

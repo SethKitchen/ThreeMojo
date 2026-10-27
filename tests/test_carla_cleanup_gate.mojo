@@ -23,6 +23,7 @@ from tests._python_expr import (
     require_sampled_roles,
     statement_dump,
     sum2_graph_dump,
+    sum2_graphs_match,
 )
 from tools._python_json import PyJson
 from tools._sampled_value_gate import (
@@ -650,6 +651,112 @@ def test_an_ideal_half_count_or_name_change_is_refused() raises:
         contains="expected exactly two historical rate-half commutations"
     ):
         _ = ideal_legacy_dump(one)
+
+
+def _graph_request(
+    left: String,
+    left_name: String,
+    right: String,
+    right_name: String,
+    message: String,
+    rename: String,
+    drop_first: Bool,
+    expect_first: String,
+) raises -> String:
+    """Return one Sum2 graph comparison request.
+
+    Args:
+        left: The left module.
+        left_name: The left function name.
+        right: The right module.
+        right_name: The right function name.
+        message: The failure text.
+        rename: The left function's replacement name. Empty keeps it.
+        drop_first: True to remove the left function's first statement.
+        expect_first: The required first statement. Empty skips that check.
+
+    Returns:
+        The JSON payload.
+
+    Raises:
+        Error: The JSON writer fails.
+    """
+    var doc = PyJson()
+    var root = doc.new_dict()
+    doc.set(root, "left", doc.new_str(left))
+    doc.set(root, "left_name", doc.new_str(left_name))
+    doc.set(root, "right", doc.new_str(right))
+    doc.set(root, "right_name", doc.new_str(right_name))
+    doc.set(root, "message", doc.new_str(message))
+    if rename != "":
+        doc.set(root, "rename", doc.new_str(rename))
+    if drop_first:
+        doc.set(root, "drop_first", doc.new_bool(True))
+    if expect_first != "":
+        doc.set(root, "expect_first", doc.new_str(expect_first))
+    doc.root = root
+    return doc.dumps()
+
+
+def test_two_sum2_graphs_must_match() raises:
+    """A changed Sum2 caller graph is refused by one comparison."""
+    var same = "def f():\n    return 1\n"
+    sum2_graphs_match(
+        _graph_request(
+            same, "f", same, "f", "Sum2 recurrence changed", "", False, ""
+        )
+    )
+    with assert_raises(contains="Sum2 recurrence changed"):
+        sum2_graphs_match(
+            _graph_request(
+                same,
+                "f",
+                "def f():\n    return 2\n",
+                "f",
+                "Sum2 recurrence changed",
+                "",
+                False,
+                "",
+            )
+        )
+    sum2_graphs_match(
+        _graph_request(
+            "def old():\n    return 1\n",
+            "old",
+            same,
+            "f",
+            "Sum2 checked arithmetic leaf changed",
+            "f",
+            False,
+            "",
+        )
+    )
+    var kept = "def f():\n    _require_sum2_environment()\n    return 1\n"
+    sum2_graphs_match(
+        _graph_request(
+            kept,
+            "f",
+            same,
+            "f",
+            "Sum2 complete caller graph changed: _lane_spiral",
+            "",
+            True,
+            "_require_sum2_environment()",
+        )
+    )
+    with assert_raises(contains="scalar environment check moved"):
+        sum2_graphs_match(
+            _graph_request(
+                "def f():\n    x = 1\n    return 1\n",
+                "f",
+                same,
+                "f",
+                "Sum2 complete caller graph changed: _lane_spiral",
+                "",
+                True,
+                "_require_sum2_environment()",
+            )
+        )
 
 
 def test_the_removed_environment_call_must_match() raises:

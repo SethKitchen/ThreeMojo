@@ -2228,6 +2228,89 @@ def sum2_graph_dump(payload: String) raises -> String:
     return _plain_parts(text, rename, drop_first, expect_first)
 
 
+def _dump_side(
+    source: String,
+    name: String,
+    rename: String,
+    drop_first: Bool,
+    expect_first: String,
+) raises -> String:
+    """Return one Sum2 function dump, dropping its first statement when asked.
+
+    Args:
+        source: The module or checkpoint text.
+        name: The function name.
+        rename: The replacement name. Empty keeps the parsed name.
+        drop_first: True to remove the first body statement.
+        expect_first: The required first statement. Empty skips that check.
+
+    Returns:
+        The function dump. When `drop_first` is true, the dump is the
+        function without that statement.
+
+    Raises:
+        Error: The function is missing, or the first statement moved.
+    """
+    var doc = PyJson()
+    var root = doc.new_dict()
+    doc.set(root, "source", doc.new_str(source))
+    doc.set(root, "name", doc.new_str(name))
+    if rename != "":
+        doc.set(root, "rename", doc.new_str(rename))
+    if drop_first:
+        doc.set(root, "drop_first", doc.new_bool(True))
+    if expect_first != "":
+        doc.set(root, "expect_first", doc.new_str(expect_first))
+    doc.root = root
+    var dump = sum2_graph_dump(doc.dumps())
+    if not drop_first:
+        return dump
+    var parts = PyJson.parse(dump)
+    return parts.text(parts.at(parts.root, "rest"))
+
+
+def sum2_graphs_match(payload: String) raises:
+    """Require two Sum2 function dumps to match.
+
+    Args:
+        payload: JSON with `left`, `left_name`, `right`, `right_name`, and
+            `message`. Optional `rename`, `drop_first`, and `expect_first`
+            apply to the left function.
+
+    Raises:
+        Error: The graphs differ, or either function cannot be read.
+    """
+    var doc = PyJson.parse(payload)
+    var rename = String("")
+    var rename_node = doc.get(doc.root, "rename")
+    if rename_node != MISSING:
+        rename = doc.text(rename_node)
+    var drop_first = False
+    var drop_node = doc.get(doc.root, "drop_first")
+    if drop_node != MISSING:
+        drop_first = doc.flag(drop_node)
+    var expect_first = String("")
+    var expect_node = doc.get(doc.root, "expect_first")
+    if expect_node != MISSING:
+        expect_first = doc.text(expect_node)
+    var left = _dump_side(
+        doc.text(doc.at(doc.root, "left")),
+        doc.text(doc.at(doc.root, "left_name")),
+        rename,
+        drop_first,
+        expect_first,
+    )
+    var right = _dump_side(
+        doc.text(doc.at(doc.root, "right")),
+        doc.text(doc.at(doc.root, "right_name")),
+        "",
+        False,
+        "",
+    )
+    if left != right:
+        raise Error(doc.text(doc.at(doc.root, "message")))
+
+
 def _forbid_attribute(
     function_doc: PyJson, fragment: String, label: String
 ) raises:
