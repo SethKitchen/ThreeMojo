@@ -114,10 +114,52 @@ def check_stored_half(text):
         raise ValueError(message)
 
 
+def _projection_tool(mode, payload, binary=False):
+    """Run one projection-result mode."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='projection-result-') as directory:
+        path = Path(directory) / 'payload'
+        if binary:
+            path.write_bytes(payload)
+        else:
+            path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_projection_result', mode, str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
+def _require_source_text(value, message):
+    """Require `value` to be a string, with `message` on any other value."""
+    try:
+        payload = json.dumps(
+            {'text': value, 'message': message},
+            separators=(',', ':'), allow_nan=False)
+    except (TypeError, ValueError):
+        payload = json.dumps(
+            {'text': None, 'message': message}, separators=(',', ':'))
+    _projection_tool('--text', payload)
+
+
+def projection_result(digest):
+    """Return the reviewed ideal-projection result record."""
+    return json.loads(_projection_tool('--record', digest))
+
+
 def verify_helper_projection(helper_text):
     """The pinned helper starts with a half product and only revises error."""
-    if not isinstance(helper_text, str):
-        raise ValueError('ideal helper declaration or decorator changed')
+    _require_source_text(helper_text, 'ideal helper declaration or decorator changed')
     check_stored_half(helper_text)
 
 
@@ -189,14 +231,10 @@ def verify_projection(legacy, current, helper_text):
     verify_helper_projection(helper_text)
     left_dump = _ideal_legacy_dump(legacy)
     # The caller supplies the ideal spiral as source text.
-    require(isinstance(current, str), 'changed ideal generic declaration')
+    _require_source_text(current, 'changed ideal generic declaration')
     _ideal_current_matches(current, left_dump)
     _gate(left_dump.encode(), 'projected')
-    projected = PROJECTED_SHA256
-    return {'helper_projections': 5, 'rate_half_commutations': 2,
-            'projected_ast_sha256': projected, 'sum2_auxiliary_declarations': 4,
-            'sum2_term_definitions': 2, 'sum2_auxiliary_updates': 4, 'sum2_error_writes': 2,
-            'sum2_environment_guards': 1}
+    return projection_result(PROJECTED_SHA256)
 
 
 def _module_statements(text):

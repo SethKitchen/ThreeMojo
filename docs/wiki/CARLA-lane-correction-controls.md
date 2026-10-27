@@ -208,6 +208,10 @@ It chooses the grouped roundoff envelope name from the module path.
 
 `tools/carla_ideal_gate.mojo` checks the historical ideal source digest and the projected graph digest.
 
+It requires the helper and the current spiral to be text.
+
+It returns the eight ideal-projection result counts.
+
 `tools/carla_accepted_gate.mojo` checks the accepted successor record, the pin digests, the ordered pin pair, and the pin placements.
 
 ## Lane poses
