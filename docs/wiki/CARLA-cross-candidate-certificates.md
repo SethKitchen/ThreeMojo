@@ -314,6 +314,8 @@ A changed token is refused.
 
 It slices and renames each copied sampled declaration.
 
+It removes the two derivative intersections from the blend helper.
+
 Mojo checks the live sampled module graphs.
 The trig module keeps its reviewed syntax graph.
 The interval module keeps its reviewed syntax graph.

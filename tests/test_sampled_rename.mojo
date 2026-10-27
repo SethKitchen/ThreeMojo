@@ -10,6 +10,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._process import run_program
 from tools._sampled_value_gate import (
+    drop_derivative_intersection,
     extract_sampled_function,
     rename_sampled_identifiers,
 )
@@ -36,6 +37,35 @@ def test_comments_and_strings_keep_the_old_name() raises:
     var formatted = 'f"' + "{" + "_Jet" + "}" + '"\n'
     var formatted_out = 'f"' + "{" + "_ValueJet" + "}" + '"\n'
     assert_equal(rename_sampled_identifiers(formatted), formatted_out)
+
+
+def test_the_first_derivative_intersection_becomes_a_blank_line() raises:
+    """Only the first derivative intersection assignment is removed."""
+    var source = (
+        "keep\n"
+        + "    result.first = _intersect_ideal_bounds(result.first,"
+        " ideal.first)\n"
+        + "    result.first = _intersect_ideal_bounds(result.first,"
+        " ideal.first)\n"
+    )
+    assert_equal(
+        drop_derivative_intersection(source, "first"),
+        (
+            "keep\n\n"
+            + "    result.first = _intersect_ideal_bounds(result.first,"
+            " ideal.first)\n"
+        ),
+    )
+    with assert_raises(contains="derivative intersection shape changed"):
+        _ = drop_derivative_intersection("none\n", "second")
+    with assert_raises(contains="derivative intersection shape changed"):
+        _ = drop_derivative_intersection(
+            (
+                "result.first = _intersect_ideal_bounds( result.first,"
+                " ideal.first)\n"
+            ),
+            "first",
+        )
 
 
 def test_one_function_is_cut_before_the_next() raises:

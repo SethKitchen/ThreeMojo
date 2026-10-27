@@ -392,9 +392,7 @@ def verify(root):
             if name == '_sample_blend_jet':
                 # Remove only these two complete assignments, never value/error.
                 for field in ('first', 'second'):
-                    pattern = r'(?m)^\s*result\s*\.\s*' + field + r'\s*=\s*_intersect_ideal_bounds\s*\(result\s*\.\s*' + field + r'\s*,\s*ideal\s*\.\s*' + field + r'\s*\)\s*\n'
-                    new, count = re.subn(pattern, '\n', new, count=1)
-                    require(count == 1, 'derivative intersection shape changed')
+                    new = _sampled_text('--drop-intersection', new, field)
             expected[NAMES[name]] = new
         expected['_uncertain_value'] = '''def _uncertain_value(value: _Interval) -> _ValueJet:
         return _uncertain_expression[False](value)

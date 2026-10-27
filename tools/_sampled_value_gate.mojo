@@ -548,3 +548,180 @@ def extract_sampled_function(text: String, name: String) raises -> String:
                 break
         cursor += 1
     return String(text[byte=found:stop])
+
+
+def _space_byte(byte: UInt8) -> Bool:
+    """Return whether `byte` is whitespace in a Python pattern.
+
+    Args:
+        byte: One source byte.
+
+    Returns:
+        True for space, tab, newline, carriage return, form feed, and
+        vertical tab.
+    """
+    return (
+        byte == 9
+        or byte == 10
+        or byte == 11
+        or byte == 12
+        or byte == 13
+        or byte == 32
+    )
+
+
+def _skip_space(data: Span[UInt8, _], index: Int) -> Int:
+    """Return the index after ASCII whitespace.
+
+    Args:
+        data: The source bytes.
+        index: The start index.
+
+    Returns:
+        The first index that is not whitespace, or the end.
+    """
+    var cursor = index
+    while cursor < len(data) and _space_byte(data[cursor]):
+        cursor += 1
+    return cursor
+
+
+def _literal_at(data: Span[UInt8, _], index: Int, word: String) -> Int:
+    """Return the index after `word`, or `-1` when it does not match.
+
+    Args:
+        data: The source bytes.
+        index: The start index.
+        word: The exact text.
+
+    Returns:
+        The index after the word, or `-1`.
+    """
+    var raw = word.as_bytes()
+    if index + len(raw) > len(data):
+        return -1
+    var cursor = 0
+    while cursor < len(raw):
+        if data[index + cursor] != raw[cursor]:
+            return -1
+        cursor += 1
+    return index + len(raw)
+
+
+def _intersection_end(data: Span[UInt8, _], origin: Int, field: String) -> Int:
+    """Return the end of one derivative intersection at `origin`.
+
+    Args:
+        data: The source bytes.
+        origin: A line-start index.
+        field: `first` or `second`.
+
+    Returns:
+        The index after the match, or `-1` when the line is not that
+        assignment.
+    """
+    var index = _skip_space(data, origin)
+    index = _literal_at(data, index, "result")
+    if index < 0:
+        return -1
+    index = _skip_space(data, index)
+    index = _literal_at(data, index, ".")
+    if index < 0:
+        return -1
+    index = _skip_space(data, index)
+    index = _literal_at(data, index, field)
+    if index < 0:
+        return -1
+    index = _skip_space(data, index)
+    index = _literal_at(data, index, "=")
+    if index < 0:
+        return -1
+    index = _skip_space(data, index)
+    index = _literal_at(data, index, "_intersect_ideal_bounds")
+    if index < 0:
+        return -1
+    index = _skip_space(data, index)
+    index = _literal_at(data, index, "(")
+    if index < 0:
+        return -1
+    index = _literal_at(data, index, "result")
+    if index < 0:
+        return -1
+    index = _skip_space(data, index)
+    index = _literal_at(data, index, ".")
+    if index < 0:
+        return -1
+    index = _skip_space(data, index)
+    index = _literal_at(data, index, field)
+    if index < 0:
+        return -1
+    index = _skip_space(data, index)
+    index = _literal_at(data, index, ",")
+    if index < 0:
+        return -1
+    index = _skip_space(data, index)
+    index = _literal_at(data, index, "ideal")
+    if index < 0:
+        return -1
+    index = _skip_space(data, index)
+    index = _literal_at(data, index, ".")
+    if index < 0:
+        return -1
+    index = _skip_space(data, index)
+    index = _literal_at(data, index, field)
+    if index < 0:
+        return -1
+    index = _skip_space(data, index)
+    index = _literal_at(data, index, ")")
+    if index < 0:
+        return -1
+    var run = index
+    while run < len(data) and _space_byte(data[run]):
+        run += 1
+    var last_newline = -1
+    var cursor = index
+    while cursor < run:
+        if data[cursor] == 10:
+            last_newline = cursor
+        cursor += 1
+    if last_newline < 0:
+        return -1
+    return last_newline + 1
+
+
+def drop_derivative_intersection(text: String, field: String) raises -> String:
+    """Remove the first derivative intersection assignment.
+
+    Args:
+        text: A renamed sampled helper.
+        field: `first` or `second`.
+
+    Returns:
+        The text with that assignment replaced by a blank line.
+
+    Raises:
+        Error: The assignment is missing.
+    """
+    if field != "first" and field != "second":
+        raise Error("derivative intersection shape changed")
+    var data = text.as_bytes()
+    var count = len(data)
+    var origin = 0
+    while True:
+        var end = _intersection_end(data, origin, field)
+        if end >= 0:
+            var head = String(text[byte=0:origin])
+            var tail = String(text[byte=end:])
+            return head + "\n" + tail
+        var next = origin
+        var found = False
+        while next < count:
+            if data[next] == 10:
+                found = True
+                next += 1
+                break
+            next += 1
+        if not found:
+            break
+        origin = next
+    raise Error("derivative intersection shape changed")
