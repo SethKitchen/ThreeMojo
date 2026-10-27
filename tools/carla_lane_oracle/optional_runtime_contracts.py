@@ -28,26 +28,6 @@ except ModuleNotFoundError:
     from tools.carla_lane_oracle import sum2_guard_contracts as guard, source_contracts
     from tools.carla_lane_oracle import full_audit_cleanup_contracts as full_audit
 
-FOLLOWUP_ROOM = """
-def _objective_followup_room(
-    nodes: Int, terms: Int, max_nodes: Int, max_terms: Int,
-    reference_work: Int, center_work: Int,
-) -> Bool:
-    if nodes < 0 or nodes > max_nodes or terms < 0 or terms > max_terms or reference_work < 0 or center_work < 0:
-        return False
-    var remaining = max_terms - terms
-    return (
-        max_nodes - nodes >= 4
-        and center_work <= remaining
-        and reference_work <= (remaining - center_work) // 8
-    )
-"""
-
-RECHECK_ROOM = """
-def _objective_recheck_room(nodes: Int, max_nodes: Int) -> Bool:
-    return nodes >= 0 and nodes < max_nodes
-"""
-
 NEW_MODULES = ('curve_minimizer_support', 'curve_objective_model',
                'curve_sample_dispatch', 'spiral_grouped_lane',
                'spiral_grouped_roundoff_proof')
@@ -479,25 +459,14 @@ def verify_semantics(root, *, _operation=None):
     # The standalone helper remains reviewed and tested even though the
     # search solver no longer imports, captures, or restricts this model.
     room = body(root, 'curve_objective_model', '_objective_followup_room', _operation=_operation)
-    _fragment_checks([_node_edge(
-        room, 'equal', FOLLOWUP_ROOM,
-        'complete overflow-safe integer followup admission')])
+    _runtime_source(room, 'complete overflow-safe integer followup admission')
+    _semantic_edges('followup', {'room': room})
     recheck = body(root, 'curve_objective_model', '_objective_recheck_room', _operation=_operation)
-    _fragment_checks([_node_edge(
-        recheck, 'equal', RECHECK_ROOM,
-        'complete integer cached-closure recheck admission')])
+    _runtime_source(recheck, 'complete integer cached-closure recheck admission')
+    _semantic_edges('recheck', {'recheck': recheck})
     fee = body(root, 'map', '_query_node_step_cost', _operation=_operation)
-    _fragment_checks([
-        _node_edge(fee, 'contains', 'var fixed = 26 if goal else 20',
-                   'reviewed goal node fee'),
-        _node_edge(fee, 'contains', 'fixed += 16', 'stored dispatch logical fee'),
-        _node_edge(fee, 'contains', 'if witness:\n    fixed += 14',
-                   'retained containing-model logical fee'),
-        _node_edge(fee, 'contains', 'if witness:\n    fixed += 26',
-                   'witness frontier logical fee'),
-        _node_edge(fee, 'contains', 'return 100 * lanes + fixed',
-                   'original profile record work convention'),
-    ])
+    _runtime_source(fee, 'reviewed goal node fee')
+    _semantic_edges('fee', {'fee': fee})
     # The exact reviewed raw inverse establishes the same immediate bracket
     # without re-evaluating predecessors. Keep every outer admission above.
     try:

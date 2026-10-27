@@ -120,6 +120,17 @@ def test_each_semantic_group_keeps_its_length() raises:
     assert_equal(
         doc.text(doc.at(doc.item(doc.root, 10), "kind")), "before-loop"
     )
+    doc = _doc("followup", '{"room":' + _one("_objective_followup_room") + "}")
+    assert_equal(doc.length(doc.root), 1)
+    assert_equal(doc.text(doc.at(doc.item(doc.root, 0), "kind")), "equal")
+    doc = _doc("recheck", '{"recheck":' + _one("_objective_recheck_room") + "}")
+    assert_equal(doc.length(doc.root), 1)
+    doc = _doc("fee", '{"fee":' + _one("_query_node_step_cost") + "}")
+    assert_equal(doc.length(doc.root), 5)
+    assert_equal(
+        doc.text(doc.at(doc.item(doc.root, 4), "label")),
+        "original profile record work convention",
+    )
 
 
 def test_an_unknown_semantic_group_is_refused() raises:

@@ -72,7 +72,7 @@ def semantic_edge_payload(group: String, payload: String) raises -> String:
 
     Args:
         group: `helper`, `guards`, `origin`, `work`, `model`, `support`,
-            or `dispatch`.
+            `dispatch`, `followup`, `recheck`, or `fee`.
         payload: JSON objects with `source` and `name` for that group.
 
     Returns:
@@ -599,6 +599,94 @@ def semantic_edge_payload(group: String, payload: String) raises -> String:
             "before-loop",
             "terms += extra",
             "dispatch debit must precede optional attempts",
+        )
+    elif group == "followup":
+        var follow_source: String
+        var follow_name: String
+        follow_source, follow_name = _pair(doc, "room")
+        _add(
+            doc,
+            items,
+            follow_source,
+            follow_name,
+            "equal",
+            (
+                "\ndef _objective_followup_room(\n    nodes: Int, terms: Int,"
+                " max_nodes: Int, max_terms: Int,\n    reference_work: Int,"
+                " center_work: Int,\n) -> Bool:\n    if nodes < 0 or nodes >"
+                " max_nodes or terms < 0 or terms > max_terms or reference_work"
+                " < 0 or center_work < 0:\n        return False\n    var"
+                " remaining = max_terms - terms\n    return (\n       "
+                " max_nodes - nodes >= 4\n        and center_work <="
+                " remaining\n        and reference_work <= (remaining -"
+                " center_work) // 8\n    )\n"
+            ),
+            "complete overflow-safe integer followup admission",
+        )
+    elif group == "recheck":
+        var recheck_source: String
+        var recheck_name: String
+        recheck_source, recheck_name = _pair(doc, "recheck")
+        _add(
+            doc,
+            items,
+            recheck_source,
+            recheck_name,
+            "equal",
+            (
+                "\ndef _objective_recheck_room(nodes: Int, max_nodes: Int) ->"
+                " Bool:\n    return nodes >= 0 and nodes < max_nodes\n"
+            ),
+            "complete integer cached-closure recheck admission",
+        )
+    elif group == "fee":
+        var fee_source: String
+        var fee_name: String
+        fee_source, fee_name = _pair(doc, "fee")
+        _add(
+            doc,
+            items,
+            fee_source,
+            fee_name,
+            "contains",
+            "var fixed = 26 if goal else 20",
+            "reviewed goal node fee",
+        )
+        _add(
+            doc,
+            items,
+            fee_source,
+            fee_name,
+            "contains",
+            "fixed += 16",
+            "stored dispatch logical fee",
+        )
+        _add(
+            doc,
+            items,
+            fee_source,
+            fee_name,
+            "contains",
+            "if witness:\n    fixed += 14",
+            "retained containing-model logical fee",
+        )
+        _add(
+            doc,
+            items,
+            fee_source,
+            fee_name,
+            "contains",
+            "if witness:\n    fixed += 26",
+            "witness frontier logical fee",
+        )
+        _add(
+            doc,
+            items,
+            fee_source,
+            fee_name,
+            "contains",
+            "return 100 * lanes + fixed",
+            "original profile record work convention",
         )
     else:
         raise Error("optional runtime edge group changed")

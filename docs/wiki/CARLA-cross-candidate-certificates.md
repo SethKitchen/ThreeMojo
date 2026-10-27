@@ -175,6 +175,8 @@ A missing edge or a moved guard is refused.
 It builds the grouped, model, support, and dispatch checks in that order.
 It returns the optional-runtime result after those edge checks.
 
+It checks the followup room, the recheck room, and the node fee.
+
 Mojo skips hidden and non-production paths, then keeps a file whose text contains a watched name.
 The objective-model file keeps its own helper names.
 Every other production module leaves those names out.
