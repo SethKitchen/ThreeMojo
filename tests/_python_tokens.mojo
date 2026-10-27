@@ -22,18 +22,26 @@ comptime _OP = 55
 
 
 def _push(
-    mut kinds: List[Int], mut texts: List[String], kind: Int, var text: String
+    mut kinds: List[Int],
+    mut texts: List[String],
+    mut lines: List[Int],
+    kind: Int,
+    var text: String,
+    line: Int,
 ):
     """Append one token.
 
     Args:
         kinds: The token kinds.
         texts: The token texts, in the same order.
+        lines: The 1-based line of each token.
         kind: The Python token number.
         text: The token text.
+        line: The 1-based line of this token.
     """
     kinds.append(kind)
     texts.append(text^)
+    lines.append(line)
 
 
 def _tokenize(
@@ -53,6 +61,28 @@ def _tokenize(
         Error: The source has an unclosed string, a bad indent, or an
             unclosed bracket.
     """
+    var lines = List[Int]()
+    _tokenize_lines(source, kinds, texts, lines)
+
+
+def _tokenize_lines(
+    source: String,
+    mut kinds: List[Int],
+    mut texts: List[String],
+    mut lines: List[Int],
+) raises:
+    """Tokenize `source` and record each token's 1-based line.
+
+    Args:
+        source: Mojo source that uses spaces and ASCII quotes.
+        kinds: The token kinds, replaced by this call.
+        texts: The token texts, replaced by this call.
+        lines: The 1-based line of each token, replaced by this call.
+
+    Raises:
+        Error: The source has an unclosed string, a bad indent, or an
+            unclosed bracket.
+    """
     var text = source
     if not text.endswith("\n"):
         text += "\n"
@@ -61,6 +91,7 @@ def _tokenize(
     levels.append(0)
     var index = 0
     var depth = 0
+    var line_no = 1
     while index < len(data):
         var line_start = index
         var column = 0
@@ -74,12 +105,12 @@ def _tokenize(
         if depth == 0 and not blank:
             if column > levels[len(levels) - 1]:
                 var spaces = String(text[byte=line_start:index])
-                _push(kinds, texts, _INDENT, spaces^)
+                _push(kinds, texts, lines, _INDENT, spaces^, line_no)
                 levels.append(column)
             else:
                 while column < levels[len(levels) - 1]:
                     _ = levels.pop()
-                    _push(kinds, texts, _DEDENT, String())
+                    _push(kinds, texts, lines, _DEDENT, String(), line_no)
                 if column != levels[len(levels) - 1]:
                     raise Error("invalid source tokens: bad indent")
         while index < len(data):
@@ -91,6 +122,7 @@ def _tokenize(
                 continue
             if byte == 10:
                 index += 1
+                line_no += 1
                 continue
             if byte == 35 and depth == 0:
                 while index < len(data) and data[index] != 10:
@@ -99,6 +131,7 @@ def _tokenize(
             if byte == 34 or byte == 39:
                 var quote = byte
                 var mark = index
+                var string_line = line_no
                 index += 1
                 var triple = (
                     index + 1 < len(data)
@@ -125,11 +158,13 @@ def _tokenize(
                         break
                     if data[index] == 10 and not triple:
                         raise Error("invalid source tokens: unclosed string")
+                    if data[index] == 10:
+                        line_no += 1
                     index += 1
                 if not closed:
                     raise Error("invalid source tokens: unclosed string")
                 var literal = String(text[byte=mark:index])
-                _push(kinds, texts, _STRING, literal^)
+                _push(kinds, texts, lines, _STRING, literal^, string_line)
                 continue
             var name_start = (
                 (byte >= 65 and byte <= 90)
@@ -151,7 +186,7 @@ def _tokenize(
                         break
                     index += 1
                 var name = String(text[byte=mark:index])
-                _push(kinds, texts, _NAME, name^)
+                _push(kinds, texts, lines, _NAME, name^, line_no)
                 continue
             var number_start = (byte >= 48 and byte <= 57) or (
                 byte == 46
@@ -202,7 +237,14 @@ def _tokenize(
                             if end > index + 1:
                                 index = end
                                 var prefixed = String(text[byte=mark:index])
-                                _push(kinds, texts, _NUMBER, prefixed^)
+                                _push(
+                                    kinds,
+                                    texts,
+                                    lines,
+                                    _NUMBER,
+                                    prefixed^,
+                                    line_no,
+                                )
                                 continue
                 if (
                     index < len(data)
@@ -239,7 +281,7 @@ def _tokenize(
                         ):
                             index += 1
                 var number = String(text[byte=mark:index])
-                _push(kinds, texts, _NUMBER, number^)
+                _push(kinds, texts, lines, _NUMBER, number^, line_no)
                 continue
             var three = String()
             if index + 2 < len(data):
@@ -251,7 +293,7 @@ def _tokenize(
                 or three == ">>="
                 or three == "..."
             ):
-                _push(kinds, texts, _OP, three^)
+                _push(kinds, texts, lines, _OP, three^, line_no)
                 index += 3
                 continue
             var two = String()
@@ -276,7 +318,7 @@ def _tokenize(
                 or two == "//"
                 or two == "**"
             ):
-                _push(kinds, texts, _OP, two^)
+                _push(kinds, texts, lines, _OP, two^, line_no)
                 index += 2
                 continue
             if byte == 40 or byte == 91 or byte == 123:
@@ -286,17 +328,18 @@ def _tokenize(
                 if depth < 0:
                     raise Error("invalid source tokens: extra closer")
             var operator = String(chr(Int(byte)))
-            _push(kinds, texts, _OP, operator^)
+            _push(kinds, texts, lines, _OP, operator^, line_no)
             index += 1
         if index < len(data) and data[index] == 10:
-            index += 1
             if depth == 0 and not blank:
-                _push(kinds, texts, _NEWLINE, String("\n"))
+                _push(kinds, texts, lines, _NEWLINE, String("\n"), line_no)
+            index += 1
+            line_no += 1
     if depth != 0:
         raise Error("invalid source tokens: unclosed bracket")
     while len(levels) > 1:
         _ = levels.pop()
-        _push(kinds, texts, _DEDENT, String())
+        _push(kinds, texts, lines, _DEDENT, String(), line_no)
 
 
 def token_sha256(source: String) raises -> String:
@@ -323,6 +366,331 @@ def token_sha256(source: String) raises -> String:
         doc.append(rows, pair)
     doc.root = rows
     return sha256_hex(doc.dumps().as_bytes())
+
+
+def _kept_lines(source: String) -> List[String]:
+    """Split `source` into lines that keep their newlines.
+
+    Args:
+        source: The original module text.
+
+    Returns:
+        Each physical line, including a trailing newline when present.
+    """
+    var lines = List[String]()
+    var data = source.as_bytes()
+    var start = 0
+    var index = 0
+    while index < len(data):
+        if data[index] == 10:
+            lines.append(String(source[byte = start : index + 1]))
+            start = index + 1
+        index += 1
+    if start < len(data):
+        lines.append(String(source[byte=start:]))
+    return lines^
+
+
+def _leading_indent(line: String) -> String:
+    """Return the leading spaces and tabs of a content line.
+
+    Args:
+        line: One line without its newline.
+
+    Returns:
+        The leading whitespace, or empty when the line is blank.
+    """
+    var data = line.as_bytes()
+    var index = 0
+    while index < len(data) and (data[index] == 32 or data[index] == 9):
+        index += 1
+    if index == len(data):
+        return String("")
+    return String(line[byte=:index])
+
+
+def _only_whitespace(line: String) -> Bool:
+    """Return whether `line` is empty or holds only spaces and tabs.
+
+    Args:
+        line: One line without its newline.
+
+    Returns:
+        True when the line has no other characters.
+    """
+    var data = line.as_bytes()
+    var index = 0
+    while index < len(data):
+        if data[index] != 32 and data[index] != 9:
+            return False
+        index += 1
+    return True
+
+
+def _dedent(text: String) -> String:
+    """Remove the common leading whitespace, as Python `textwrap.dedent` does.
+
+    Args:
+        text: The declaration slice.
+
+    Returns:
+        The same text with the shared indent removed.
+    """
+    var parts = List[String]()
+    var data = text.as_bytes()
+    var start = 0
+    var index = 0
+    while index < len(data):
+        if data[index] == 10:
+            parts.append(String(text[byte=start:index]))
+            start = index + 1
+        index += 1
+    parts.append(String(text[byte=start:]))
+    var margin = String("")
+    var have_margin = False
+    var row = 0
+    while row < len(parts):
+        var part = parts[row]
+        if not _only_whitespace(part):
+            var indent = _leading_indent(part)
+            if not have_margin:
+                margin = indent
+                have_margin = True
+            elif indent.startswith(margin):
+                pass
+            elif margin.startswith(indent):
+                margin = indent
+            else:
+                var margin_bytes = margin.as_bytes()
+                var indent_bytes = indent.as_bytes()
+                var count = 0
+                var limit = len(margin_bytes)
+                if len(indent_bytes) < limit:
+                    limit = len(indent_bytes)
+                while (
+                    count < limit and margin_bytes[count] == indent_bytes[count]
+                ):
+                    count += 1
+                var next_margin = String("")
+                var margin_data = margin.as_bytes()
+                var copy_at = 0
+                while copy_at < count:
+                    next_margin += chr(Int(margin_data[copy_at]))
+                    copy_at += 1
+                margin = next_margin^
+        row += 1
+    var out = String("")
+    row = 0
+    while row < len(parts):
+        if row > 0:
+            out += "\n"
+        var line = parts[row]
+        if _only_whitespace(line):
+            line = String("")
+        elif margin.byte_length() > 0 and line.startswith(margin):
+            var next_line = String("")
+            var line_data = line.as_bytes()
+            var copy_at = margin.byte_length()
+            while copy_at < len(line_data):
+                next_line += chr(Int(line_data[copy_at]))
+                copy_at += 1
+            line = next_line^
+        out += line
+        row += 1
+    return out
+
+
+def _clear_decorator(mut decorators: List[Int], depth: Int):
+    """Forget a decorator recorded at `depth`.
+
+    Args:
+        decorators: The first decorator token at each depth, or -1.
+        depth: The scope depth being left or entered.
+    """
+    while len(decorators) <= depth:
+        decorators.append(-1)
+    decorators[depth] = -1
+
+
+def _note_decorator(mut decorators: List[Int], depth: Int, token: Int):
+    """Record the first decorator at `depth`.
+
+    Args:
+        decorators: The first decorator token at each depth, or -1.
+        depth: The scope depth of the decorator.
+        token: The `@` token index.
+    """
+    while len(decorators) <= depth:
+        decorators.append(-1)
+    if decorators[depth] < 0:
+        decorators[depth] = token
+
+
+def _take_decorator(mut decorators: List[Int], depth: Int) -> Int:
+    """Return and clear the decorator at `depth`.
+
+    Args:
+        decorators: The first decorator token at each depth, or -1.
+        depth: The scope depth of the following declaration.
+
+    Returns:
+        The `@` token index, or -1 when there is no decorator.
+    """
+    while len(decorators) <= depth:
+        decorators.append(-1)
+    var value = decorators[depth]
+    decorators[depth] = -1
+    return value
+
+
+def declaration_text(
+    source: String, name: String, owners: List[String]
+) raises -> String:
+    """Return one dedented declaration, including its first decorator.
+
+    Args:
+        source: Mojo source.
+        name: The function name.
+        owners: The enclosing struct names, from the outside inward.
+
+    Returns:
+        The declaration text, with the shared indent removed.
+
+    Raises:
+        Error: The function is missing, repeated, owned by another scope,
+            or has no indented body.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    var lines = List[Int]()
+    _tokenize_lines(source, kinds, texts, lines)
+    var scope_kinds = List[String]()
+    var scope_names = List[String]()
+    var pending_kind = String("")
+    var pending_name = String("")
+    var has_pending = False
+    var decorators = List[Int]()
+    var statement = List[Int]()
+    var hits = 0
+    var begin = 0
+    var signature = 0
+    var saved_kinds = List[String]()
+    var saved_names = List[String]()
+    var index = 0
+    while index < len(kinds):
+        var kind = kinds[index]
+        if kind == _INDENT:
+            if has_pending:
+                scope_kinds.append(pending_kind)
+                scope_names.append(pending_name)
+            else:
+                scope_kinds.append("block")
+                scope_names.append("")
+            has_pending = False
+            _clear_decorator(decorators, len(scope_kinds))
+        elif kind == _DEDENT:
+            if len(scope_kinds) == 0:
+                raise Error("unmatched source scope")
+            _clear_decorator(decorators, len(scope_kinds))
+            _ = scope_kinds.pop()
+            _ = scope_names.pop()
+            has_pending = False
+        elif kind == _NEWLINE:
+            if len(statement) > 0:
+                var first = statement[0]
+                var words0 = texts[first]
+                var last = texts[statement[len(statement) - 1]]
+                var depth = len(scope_kinds)
+                if words0 == "@":
+                    _note_decorator(decorators, depth, first)
+                else:
+                    var preceding = _take_decorator(decorators, depth)
+                    if (
+                        len(statement) >= 2
+                        and words0 == "def"
+                        and texts[statement[1]] == name
+                    ):
+                        hits += 1
+                        if hits == 1:
+                            if preceding >= 0:
+                                begin = preceding
+                            else:
+                                begin = first
+                            signature = index
+                            saved_kinds.clear()
+                            saved_names.clear()
+                            var slot = 0
+                            while slot < len(scope_kinds):
+                                saved_kinds.append(scope_kinds[slot])
+                                saved_names.append(scope_names[slot])
+                                slot += 1
+                if last == ":":
+                    if len(statement) >= 2 and (
+                        words0 == "def"
+                        or words0 == "struct"
+                        or words0 == "trait"
+                        or words0 == "class"
+                    ):
+                        pending_kind = words0
+                        pending_name = texts[statement[1]]
+                        has_pending = True
+                    else:
+                        pending_kind = "block"
+                        pending_name = ""
+                        has_pending = True
+                else:
+                    has_pending = False
+            statement.clear()
+        else:
+            statement.append(index)
+        index += 1
+    if hits != 1:
+        raise Error("missing or ambiguous actual guard declaration: " + name)
+    if len(saved_kinds) != len(owners):
+        raise Error("guard caller owner/scope changed: " + name)
+    var slot = 0
+    while slot < len(owners):
+        if saved_kinds[slot] != "struct" or saved_names[slot] != owners[slot]:
+            raise Error("guard caller owner/scope changed: " + name)
+        slot += 1
+    var body = signature + 1
+    if body >= len(kinds) or kinds[body] != _INDENT:
+        raise Error("unsupported guard function body: " + name)
+    var end = body + 1
+    var nest = 1
+    while end < len(kinds) and nest > 0:
+        if kinds[end] == _INDENT:
+            nest += 1
+        elif kinds[end] == _DEDENT:
+            nest -= 1
+        end += 1
+    if nest != 0:
+        raise Error("unclosed guard function body: " + name)
+    var kept = _kept_lines(source)
+    var first_line = lines[begin] - 1
+    var last_line = lines[end - 1] - 1
+    if last_line > len(kept):
+        last_line = len(kept)
+    if first_line < 0 or last_line < first_line:
+        raise Error("empty actual guard function: " + name)
+    var piece = String("")
+    var line = first_line
+    while line < last_line:
+        piece += kept[line]
+        line += 1
+    var result = _dedent(piece)
+    var content = result.as_bytes()
+    var cursor = 0
+    var blank = True
+    while cursor < len(content):
+        var byte = content[cursor]
+        if byte != 32 and byte != 9 and byte != 10 and byte != 13:
+            blank = False
+            break
+        cursor += 1
+    if blank:
+        raise Error("empty actual guard function: " + name)
+    return result
 
 
 def token_words(source: String) raises -> List[String]:

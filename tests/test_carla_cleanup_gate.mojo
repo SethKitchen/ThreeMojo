@@ -5,10 +5,11 @@
 
 """A changed reviewed cleanup record fails the gate."""
 
-from std.testing import TestSuite, assert_raises
+from std.testing import TestSuite, assert_equal, assert_raises
 
 from std.os import makedirs
 from std.pathlib import Path
+from tests._python_tokens import declaration_text
 from tools.carla_cleanup_gate import (
     cleanup_digest,
     cleanup_record,
@@ -84,6 +85,29 @@ def test_a_changed_stored_word_is_refused() raises:
         )
     ):
         cleanup_words(source, "geometry", "extensions/carla/geometry.mojo")
+
+
+def test_a_struct_method_keeps_its_declaration() raises:
+    """A module function and a struct method keep the Python declaration text.
+    """
+    var source = String(
+        "def first():\n    return 1\n\nstruct Owner:\n    def second():\n"
+        + "        return 2\n"
+    )
+    var none = List[String]()
+    assert_equal(
+        declaration_text(source, "first", none),
+        "def first():\n    return 1\n\n",
+    )
+    var owner = List[String]()
+    owner.append("Owner")
+    assert_equal(
+        declaration_text(source, "second", owner),
+        "def second():\n    return 2\n",
+    )
+    var wrong = List[String]()
+    with assert_raises(contains="guard caller owner/scope changed: second"):
+        _ = declaration_text(source, "second", wrong)
 
 
 def test_a_repeated_premise_fragment_is_refused() raises:

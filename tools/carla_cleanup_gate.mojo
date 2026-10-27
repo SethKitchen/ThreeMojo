@@ -11,6 +11,7 @@
     carla_cleanup_gate --tokens DIR
     carla_cleanup_gate --words PATH --kind trig|geometry --label PATH
     carla_cleanup_gate --premises DIR
+    carla_cleanup_gate --declaration PATH --name NAME [--owner NAME]
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -21,6 +22,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import (
+    declaration_text,
     stored_float_array,
     stored_scalar,
     stored_word_sha256,
@@ -361,6 +363,7 @@ def _usage():
             " | --bytes PATH --sha HEX | --sha-of PATH | --tokens DIR"
             " | --words PATH --kind trig|geometry --label PATH"
             " | --premises DIR"
+            " | --declaration PATH --name NAME [--owner NAME]"
         ),
         file=stderr,
     )
@@ -383,6 +386,9 @@ def main() raises:
     var kind = String("")
     var label = String("")
     var premises = String("")
+    var declaration = String("")
+    var decl_name = String("")
+    var owners = List[String]()
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -398,6 +404,9 @@ def main() raises:
             or word == "--kind"
             or word == "--label"
             or word == "--premises"
+            or word == "--declaration"
+            or word == "--name"
+            or word == "--owner"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -420,8 +429,14 @@ def main() raises:
                 kind = value
             elif word == "--label":
                 label = value
-            else:
+            elif word == "--premises":
                 premises = value
+            elif word == "--declaration":
+                declaration = value
+            elif word == "--name":
+                decl_name = value
+            else:
+                owners.append(value)
             index += 2
             continue
         _usage()
@@ -442,6 +457,12 @@ def main() raises:
         modes += 1
     if premises.byte_length() > 0:
         modes += 1
+    if (
+        declaration.byte_length() > 0
+        or decl_name.byte_length() > 0
+        or len(owners) > 0
+    ):
+        modes += 1
     if modes != 1:
         _usage()
     if previous.byte_length() > 0 and migration.byte_length() == 0:
@@ -456,7 +477,21 @@ def main() raises:
         kind.byte_length() > 0 or label.byte_length() > 0
     ):
         _usage()
+    if declaration.byte_length() == 0 and (
+        decl_name.byte_length() > 0 or len(owners) > 0
+    ):
+        _usage()
+    if declaration.byte_length() > 0 and decl_name.byte_length() == 0:
+        _usage()
     try:
+        if declaration.byte_length() > 0:
+            print(
+                declaration_text(
+                    Path(declaration).read_text(), decl_name, owners
+                ),
+                end="",
+            )
+            return
         if premises.byte_length() > 0:
             cleanup_premises(premises)
             return

@@ -212,26 +212,44 @@ def _gate_premises(groups):
         raise ValueError(message)
 
 
+def _declaration(text, name, owner):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='cleanup-declaration-') as directory:
+        source = Path(directory) / 'source.mojo'
+        source.write_text(text)
+        arguments = ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+                     'carla_cleanup_gate', '--declaration', str(source),
+                     '--name', name]
+        for part in owner:
+            arguments.extend(['--owner', part])
+        result = subprocess.run(arguments, capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def verify_premises(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
-    # Import here so the enclosing guard can call this verifier without a
-    # module initialization cycle. Its lexical parser checks actual owners.
-    if __package__:
-        from . import sum2_guard_contracts as guard
-    else:
-        import sum2_guard_contracts as guard
     line = _typed_source.historical_text(root, SOURCE_PATHS[0], _observe_text(root, SOURCE_PATHS[0],
                          (root/SOURCE_PATHS[0]).read_text(), _operation=_operation), _operation=_operation)
     arc = _typed_source.historical_text(root, SOURCE_PATHS[1], _observe_text(root, SOURCE_PATHS[1],
                          (root/SOURCE_PATHS[1]).read_text(), _operation=_operation), _operation=_operation)
     junction = _typed_source.historical_text(root, SOURCE_PATHS[2], _observe_text(root, SOURCE_PATHS[2],
                          (root/SOURCE_PATHS[2]).read_text(), _operation=_operation), _operation=_operation)
-    line_context = guard.declaration(line, '_rounded_line_axis_context', ())
-    arc_context = guard.declaration(arc, '_rounded_arc_context', ())
-    bounds = guard.declaration(arc, 'bounds', ('_RoundedBox',))
-    center = guard.declaration(arc, 'center', ('_RoundedArc',))
-    outward = guard.declaration(junction, '_outward_float', ())
+    line_context = _declaration(line, '_rounded_line_axis_context', ())
+    arc_context = _declaration(arc, '_rounded_arc_context', ())
+    bounds = _declaration(arc, 'bounds', ('_RoundedBox',))
+    center = _declaration(arc, 'center', ('_RoundedArc',))
+    outward = _declaration(junction, '_outward_float', ())
     _gate_premises((
         (line_context, (
             'road._check_lane(section, lane)',
