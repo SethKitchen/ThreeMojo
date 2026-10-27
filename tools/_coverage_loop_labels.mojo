@@ -164,5 +164,8 @@ def coverage_loop_labels() -> String:
         + '"current":"current-generated","native_source":"native-source.mojo",'
         + '"qualification":"qualification.json",'
         + '"raw_suffix":".raw.txt","out_suffix":".out",'
-        + '"reduced_suffix":".txt.gz"}}'
+        + '"reduced_suffix":".txt.gz"},'
+        + '"profile":{"call":"call","return":"return","full":"full","typed":"typed",'
+        + '"pending":"pending","active":"active","closed":"closed",'
+        + '"generated":"generated_receipt","full_count":1,"typed_count":1}}'
     )

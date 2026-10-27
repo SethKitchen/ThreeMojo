@@ -322,8 +322,9 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
     from carla_lane_oracle import typed_boundary_contracts as typed
     root = ROOT if mutable_source is None else Path(mutable_source).resolve()
     stage = Path(stage).resolve()
-    expected = proofs.read_receipt(stage/'loop-proofs.json')['receipt']
+    expected = proofs.read_receipt(stage / _commands()['receipt'])['receipt']
     admission = _loop_labels()['admission']
+    profile = _loop_labels()['profile']
     require(proofs.maintained_inputs(root, exclude=stage) == expected['root_inputs'],
             admission['fixture'])
     if mutable_source is not None:
@@ -338,15 +339,15 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
         require(sys.getprofile() is None, admission['unprofiled'])
         counts, owners, binding_maps = defaultdict(int), [], []
         def profile(frame, event, value):
-            if event not in ('call', 'return'):
+            if event not in (profile['call'], profile['return']):
                 return
-            if event == 'call' and frame.f_code is audit.verify.__code__:
-                counts['full'] += 1
-            if event == 'call' and frame.f_code is typed.verify_sources.__code__:
-                counts['typed'] += 1
-            if event == 'return' and frame.f_code is audit._receipt_operation_enter.__code__:
+            if event == profile['call'] and frame.f_code is audit.verify.__code__:
+                counts[profile['full']] += 1
+            if event == profile['call'] and frame.f_code is typed.verify_sources.__code__:
+                counts[profile['typed']] += 1
+            if event == profile['return'] and frame.f_code is audit._receipt_operation_enter.__code__:
                 owners.append(value)
-            if (event == 'return' and frame.f_code is audit._InvariantInputs._receipt_bindings.__code__
+            if (event == profile['return'] and frame.f_code is audit._InvariantInputs._receipt_bindings.__code__
                     and type(value) is dict):
                 binding_maps.append(dict(value))
             if callback is not None:
@@ -367,17 +368,17 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
     for attempt in range(3):
         supplements = []
         def pending_supplements(frame, event, value, owners):
-            if attempt != 0 or event != 'return':
+            if attempt != 0 or event != profile['return']:
                 return
             if (not supplements and frame.f_code is
                     audit._InvariantInputs._receipt_inputs_check.__code__):
-                require(len(owners) == 1 and owners[0]._state == 'pending',
+                require(len(owners) == 1 and owners[0]._state == profile['pending'],
                         admission['pending'])
                 owner = owners[0]
                 supplements.append('scaled')
                 scaled = audit.scaled_float32_proof_bindings(
                     root, include_roots=(stage,), _operation=owner)
-                require(scaled and owner._state == ('active' if current_cohort else 'pending')
+                require(scaled and owner._state == (profile['active'] if current_cohort else profile['pending'])
                         and owner._scaled_resolver_paths == audit.scaled_float32.NATIVE_CLOSURE,
                         admission['scaled'])
                 observed = (owner._raw.keys() if current_cohort else
@@ -388,7 +389,7 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
             elif (supplements == ['scaled'] and frame.f_code is
                     audit._InvariantInputs._receipt_bindings.__code__):
                 owner = owners[0]
-                require(owner._state == 'active', admission['render_state'])
+                require(owner._state == profile['active'], admission['render_state'])
                 supplements.append('render')
                 # Current render fixtures themselves require typed admission.
                 # Exercise their owned include path after the normal root gate.
@@ -406,8 +407,10 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
         require(proofs.canonical(actual) == proofs.canonical(expected),
                 admission['receipt'])
         if attempt > 0:
-            require(dict(counts) == {'full': 1, 'typed': 1}, admission['replay'])
-        require(len(owners) == 1 and owners[0]._state == 'closed'
+            require(dict(counts) == {profile['full']: profile['full_count'],
+                                      profile['typed']: profile['typed_count']},
+                    admission['replay'])
+        require(len(owners) == 1 and owners[0]._state == profile['closed']
                 and not owners[0]._failed and owners[0]._owner_frame is None,
                 admission['closed'])
         require(binding_maps, admission['binding'])
@@ -427,15 +430,15 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
     mutation = labels['mutation']
     conditioned_refusals = []
     def conditioned_authority_mutation(frame, event, value, owners):
-        if (conditioned_refusals or event != 'return'
+        if (conditioned_refusals or event != profile['return']
                 or frame.f_code is not audit._InvariantInputs._receipt_bindings.__code__):
             return
         require(len(owners) == 1 and frame.f_locals.get('self') is owners[0]
-                and owners[0]._kind == 'generated_receipt' and owners[0]._state == 'active'
+                and owners[0]._kind == profile['generated'] and owners[0]._state == profile['active']
                 and not owners[0]._capturing,
                 conditioned['active'])
         owner = owners[0]
-        conditioned_refusals.append('active')
+        conditioned_refusals.append(profile['active'])
         old_bindings = audit.conditioned_cubic.BINDING_INPUTS
         try:
             audit.conditioned_cubic.BINDING_INPUTS = {**old_bindings, 'unreviewed': mutation['blank']}
@@ -465,7 +468,7 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
         else:
             raise RuntimeError(conditioned['receipt'])
     require(conditioned_refusals == conditioned['steps']
-            and len(owners) == 1 and owners[0]._failed and owners[0]._state == 'closed'
+            and len(owners) == 1 and owners[0]._failed and owners[0]._state == profile['closed']
             and owners[0]._owner_frame is None and owners[0]._receipt_seed is None,
             conditioned['close'])
     print(conditioned['print'], flush=True)
@@ -501,10 +504,10 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
             replace_file(path, data, location)
             restored.append(lambda: replace_file(path, raw, location))
         def profile(frame, event, value, owners):
-            if fired or event != 'return' or frame.f_code is not audit._InvariantInputs._receipt_bindings.__code__:
+            if fired or event != profile['return'] or frame.f_code is not audit._InvariantInputs._receipt_bindings.__code__:
                 return
             fired.append(True)
-            require(len(owners) == 1 and owners[0]._state == 'active', mutation['admission'])
+            require(len(owners) == 1 and owners[0]._state == profile['active'], mutation['admission'])
             owner = owners[0]
             if fault.startswith('source') and fault != 'source-root':
                 target = root/source_name
@@ -583,7 +586,7 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
                             current = current.f_back
                         require(current is not None, mutation['nested_absent'])
                         inner = current.f_locals.get('_operation')
-                        require(inner is not owner and inner._kind == 'generated_receipt',
+                        require(inner is not owner and inner._kind == profile['generated'],
                                 mutation['nested_reused'])
                         inner_seen.append(inner)
                         try:
@@ -597,7 +600,7 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
                     return original_read(path, *args, **kwargs)
                 with patch.object(Path, 'read_text', nested_read):
                     inner_result = derive()
-                require(len(inner_seen) == 1 and inner_seen[0]._state == 'closed'
+                require(len(inner_seen) == 1 and inner_seen[0]._state == profile['closed']
                         and not inner_seen[0]._failed
                         and proofs.canonical(inner_result) == proofs.canonical(expected),
                         mutation['nested_fresh'])
@@ -617,7 +620,7 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
                 else:
                     raise RuntimeError(mutation['receipt_prefix'] + fault)
             require(fired == [True] and len(owners) == 1 and owners[0]._failed
-                    and owners[0]._state == 'closed' and owners[0]._owner_frame is None,
+                    and owners[0]._state == profile['closed'] and owners[0]._owner_frame is None,
                     mutation['close_prefix'] + fault)
         finally:
             for restore in reversed(restored):

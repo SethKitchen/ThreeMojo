@@ -70,6 +70,12 @@ def test_coverage_loop_qualification_labels_stay_reviewed() raises:
     assert_equal(doc.text(doc.at(commands, "receipt")), "loop-proofs.json")
     assert_equal(doc.text(doc.at(commands, "raw_suffix")), ".raw.txt")
     assert_equal(doc.text(doc.at(commands, "reduced_suffix")), ".txt.gz")
+    var profile = doc.at(doc.root, "profile")
+    assert_equal(doc.text(doc.at(profile, "call")), "call")
+    assert_equal(doc.text(doc.at(profile, "return")), "return")
+    assert_equal(doc.text(doc.at(profile, "full")), "full")
+    assert_equal(doc.text(doc.at(profile, "generated")), "generated_receipt")
+    assert_equal(doc.text(doc.at(profile, "full_count")), "1")
     assert_equal(
         doc.text(doc.at(doc.root, "pass_line")),
         (
