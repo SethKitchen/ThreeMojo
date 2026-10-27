@@ -186,6 +186,7 @@ One frontier loop keeps the current-cell work debit.
 The fresh producer follows that debit.
 The dispatch setup stays after the depth refusal.
 A moved debit or a changed cut is refused.
+It checks the fresh producer and the search memos in that order.
 
 Mojo checks the live lane-center edges.
 The proof memo and the translated memo keep the station and scale words.

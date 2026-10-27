@@ -265,39 +265,6 @@ REMOVED_SEARCH_NAMES = frozenset(('cached_model', 'reused_domain', 'reused_delta
     'reused_lower', 'reused_tolerance', 'reused_center_s', 'reused_center_work',
     'reused_center', 'ideal_center', 'reused_support', 'needs_model', 'packed_model'))
 
-FRESH_PRODUCER = """
-if certificate.terms > max_terms - work:
-    raise Error("Lane refinement exhausted its quadrature work limit")
-certificate.terms += work
-var point_domain: Tuple[_Jet, _Jet, _Jet]
-if frozen:
-    point_domain = _frozen_arc_center(frozen.value(), lo, hi, Vector3(0, 0, 0))
-else:
-    point_domain = _lane_jet_with_proof(road, section, lane, lo, hi, low, high, spiral_proof)
-var natural = _scaled_point_distance_box(point_domain, location, scale).low
-"""
-
-FAST_MEMO = """
-if external_witness and cached_fast and _same_cache_key(cached_fast.value()[0], cached_fast.value()[1], station_word, scale_word):
-    fast_center = cached_fast.value()[2]
-else:
-    fast_center = _try_proof_expansion_jet(road, section, lane, center_s, location, scale, low, high, spiral_proof)
-    if external_witness and fast_center:
-        cached_fast = (station_word, scale_word, fast_center.value())
-"""
-EXPANSION_MEMO = """
-if external_witness and cached_expansion and _same_cache_key(cached_expansion.value()[0], cached_expansion.value()[1], station_word, scale_word):
-    center = cached_expansion.value()[2]
-else:
-    if frozen:
-        center = _frozen_arc_expansion(frozen.value(), center_s, location, scale)
-    else:
-        center = _expansion_distance_jet(road, section, lane, center_s, location, scale)
-    if external_witness:
-        cached_expansion = (station_word, scale_word, center)
-"""
-
-
 @lru_cache(maxsize=256)
 def executable_names(text):
     return frozenset(_lexical_directory('--names', [text])[0])
@@ -416,25 +383,34 @@ def verify_no_containing_model_consumers(root, *, _operation=None):
     _observed_consumers(chosen)
 
 
-def _fresh_items(run):
-    loop = 'one original search frontier loop'
-    items = [_node_edge(run, 'fresh', FRESH_PRODUCER, 'fresh', source_label=loop)]
-    for name in ('cached_fast', 'cached_expansion'):
-        items.append(_node_edge(
-            run, 'contains',
-            'var ' + name + ': Optional[Tuple[UInt64, UInt64, _Jet]] = None',
-            'exact expansion memo lifetime is one search invocation'))
-    for fragment, label in ((FAST_MEMO, 'proof'), (EXPANSION_MEMO, 'translated')):
-        items.append(_node_edge(
-            run, 'sequence',
-            'var station_word = bitcast[DType.uint64](center_s)\n'
-            + 'var scale_word = bitcast[DType.uint64](scale)\n' + fragment,
-            'exact station/scale ' + label + ' expansion memo and fresh fallback'))
-    return items
+def _search_edges(source, name, mode):
+    """Check the fresh producer, and the search predicates when requested."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='search-edges-') as directory:
+        path = Path(directory) / 'source.mojo'
+        path.write_text(source)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_runtime_search_edges', str(path), name, mode],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        if message.startswith('invalid checker fragment:'):
+            message = 'optional runtime contract: ' + message
+        raise ValueError(message)
 
 
 def verify_fresh_producer(run):
-    _fragment_checks(_fresh_items(run))
+    _search_edges(
+        _runtime_source(run, 'one original search frontier loop'),
+        run._runtime_name, 'fresh')
 
 
 def verify_search_semantics(run):
@@ -443,35 +419,9 @@ def verify_search_semantics(run):
     Actual source admission must precede the exact center predecessor.
     Historical AST fixtures can exercise diagnostics but grant no source edge.
     """
-    loop = 'one original search frontier loop'
-    items = _fresh_items(run)
-    items.extend((
-        _node_edge(run, 'contains',
-                   'var sampled_cuts: Optional[Tuple[Float64, Float64, Int]] = None',
-                   'cut lifetime is one search invocation'),
-        _node_edge(run, 'contains', 'var best = certificate.s',
-                   'incumbent is the validated actual certificate witness'),
-        _node_edge(run, 'contains', 'var best_point = certificate.point.copy()',
-                   'retain actual witness point'),
-        _node_edge(run, 'expression',
-                   '_minimizer_support(domain, center, center_s, best, lo, hi)',
-                   'support receives same ideal and actual witness'),
-        _node_edge(run, 'sequence', GROUPED_ADMISSION,
-                   'grouped caller must retain recheck and prepaid original fallback'),
-        _node_edge(
-            run, 'expression',
-            '_try_grouped_lane_jet(road, section, lane, lo, hi, certificate.nodes, certificate.terms, max_nodes, max_terms)',
-            'one guarded grouped caller edge'),
-        _node_edge(
-            run, 'setup',
-            'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',
-            'depth refusal precedes dispatch setup', source_label=loop),
-        _node_edge(
-            run, 'expression',
-            'bitcast[DType.float64](bitcast[DType.uint64](split_at) - UInt64(1))',
-            'split predecessor preserves every stored owner station'),
-    ))
-    _fragment_checks(items)
+    _search_edges(
+        _runtime_source(run, 'one original search frontier loop'),
+        run._runtime_name, 'search')
 
 
 def verify_semantics(root, *, _operation=None):
