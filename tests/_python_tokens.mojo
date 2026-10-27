@@ -2093,6 +2093,94 @@ def _last_normalized_line_is_decorator(text: String) -> Bool:
     return data[start] == 64
 
 
+def _routing_token(
+    doc: PyJson, row: Int, index: Int, kind: String, text: String
+) raises -> Bool:
+    """Return whether one routing pair is `kind` and `text`.
+
+    Args:
+        doc: The routing document.
+        row: The statement list.
+        index: The pair position.
+        kind: The token kind name.
+        text: The token text.
+
+    Returns:
+        True when the pair matches.
+
+    Raises:
+        Error: The pair is not a list.
+    """
+    var pair = doc.item(row, index)
+    if doc.length(pair) < 2:
+        return False
+    return (
+        doc.text(doc.item(pair, 0)) == kind
+        and doc.text(doc.item(pair, 1)) == text
+    )
+
+
+def strip_try_only_routing(routing_json: String) raises -> String:
+    """Remove the default-false `require_reuse` parameter from one declaration.
+
+    Args:
+        routing_json: The canonical routing JSON.
+
+    Returns:
+        The same JSON with that one parameter span removed.
+
+    Raises:
+        Error: The declaration is missing or repeated, or the parameter span
+            is missing or repeated.
+    """
+    var doc = PyJson.parse(routing_json)
+    var found = -1
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        var row = doc.item(doc.root, index)
+        if (
+            doc.length(row) >= 2
+            and _routing_token(doc, row, 0, "NAME", "def")
+            and _routing_token(doc, row, 1, "NAME", "_lane_jet_model_proof")
+        ):
+            if found >= 0:
+                raise Error("missing try-only routing declaration")
+            found = index
+        index += 1
+    if found < 0:
+        raise Error("missing try-only routing declaration")
+    var row = doc.item(doc.root, found)
+    var length = doc.length(row)
+    var places = 0
+    var at = -1
+    index = 0
+    while index + 6 <= length:
+        if (
+            _routing_token(doc, row, index, "NAME", "require_reuse")
+            and _routing_token(doc, row, index + 1, "OP", ":")
+            and _routing_token(doc, row, index + 2, "NAME", "Bool")
+            and _routing_token(doc, row, index + 3, "OP", "=")
+            and _routing_token(doc, row, index + 4, "NAME", "False")
+            and _routing_token(doc, row, index + 5, "OP", ",")
+        ):
+            places += 1
+            at = index
+        index += 1
+    if places != 1:
+        raise Error("try-only routing parameter changed")
+    var kept = doc.new_list()
+    index = 0
+    while index < length:
+        if index == at:
+            index += 6
+            continue
+        doc.append(kept, doc.item(row, index))
+        index += 1
+    doc.set_item(doc.root, found, kept)
+    return doc.dumps()
+
+
 def selected_block(source: String, begin: String, end: String) raises -> String:
     """Return one normalized source block between two markers.
 

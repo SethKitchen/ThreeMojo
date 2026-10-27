@@ -18,6 +18,7 @@ from tests._python_tokens import (
     moment_words_json,
     normalized_block,
     selected_block,
+    strip_try_only_routing,
     replace_token_fragment,
     ideal_function_source,
     python_syntax_json,
@@ -206,6 +207,25 @@ def test_a_moment_table_keeps_its_hex_words() raises:
     with assert_raises(contains="wrong table declaration shape"):
         _ = moment_words_json(
             source.replace("Array[UInt64, 2]", "Array[UInt64, 1]"), 2
+        )
+
+
+def test_the_try_only_parameter_is_removed() raises:
+    """One default-false parameter is deleted from the proof declaration."""
+    var routing = String(
+        '[[["NAME","def"],["NAME","_lane_jet_model_proof"],'
+        + '["NAME","require_reuse"],["OP",":"],["NAME","Bool"],'
+        + '["OP","="],["NAME","False"],["OP",","],["OP",")"]]]'
+    )
+    assert_equal(
+        strip_try_only_routing(routing),
+        '[[["NAME","def"],["NAME","_lane_jet_model_proof"],["OP",")"]]]',
+    )
+    with assert_raises(contains="missing try-only routing declaration"):
+        _ = strip_try_only_routing('[[["NAME","def"],["NAME","other"]]]')
+    with assert_raises(contains="try-only routing parameter changed"):
+        _ = strip_try_only_routing(
+            '[[["NAME","def"],["NAME","_lane_jet_model_proof"],["OP",")"]]]'
         )
 
 

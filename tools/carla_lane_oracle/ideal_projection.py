@@ -394,6 +394,29 @@ def moment_words(text, count):
     return json.loads(result.stdout)
 
 
+def strip_try_only(routing_json):
+    """Remove the default-false try-only parameter from one routing document."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='strip-try-') as directory:
+        payload = Path(directory) / 'routing.json'
+        payload.write_text(routing_json)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--strip-try', str(payload)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def selected_block(text, begin, end):
     """Return one normalized source block between two markers."""
     import os

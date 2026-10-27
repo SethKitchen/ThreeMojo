@@ -295,17 +295,10 @@ def verify_inputs(root):
             except sampled.CheckError as error:
                 raise CheckError(
                     'source routing changed: ' + name + ': ' + str(error)) from error
-            rows = json.loads(current)
-            declarations = [row for row in rows if row[:2] ==
-                            [['NAME', 'def'], ['NAME', '_lane_jet_model_proof']]]
-            require(len(declarations) == 1, 'missing try-only routing declaration')
-            row = declarations[0]
-            parameter = [['NAME', 'require_reuse'], ['OP', ':'], ['NAME', 'Bool'],
-                         ['OP', '='], ['NAME', 'False'], ['OP', ',']]
-            positions = [i for i in range(len(row)) if row[i:i+len(parameter)] == parameter]
-            require(len(positions) == 1, 'try-only routing parameter changed')
-            del row[positions[0]:positions[0]+len(parameter)]
-            current = json.dumps(rows, separators=(',', ':'))
+            try:
+                current = ideal_projection.strip_try_only(current)
+            except ValueError as error:
+                raise CheckError(str(error)) from error
         require(current == expected, 'source routing changed: ' + name)
     try:
         source_contracts.verify_group(root, 'stored_arithmetic')

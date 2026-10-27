@@ -27,6 +27,7 @@
     carla_cleanup_gate --table PATH --count N
     carla_cleanup_gate --moment-source PATH
     carla_cleanup_gate --block DIR
+    carla_cleanup_gate --strip-try PATH
     carla_cleanup_gate --literals PATH --name NAME --kind array --size N
     carla_cleanup_gate --literals PATH --name NAME --kind scalar
 
@@ -47,6 +48,7 @@ from tests._python_tokens import (
     moment_words_json,
     normalized_block,
     selected_block,
+    strip_try_only_routing,
     replace_token_fragment,
     python_syntax_json,
     declaration_text,
@@ -453,6 +455,7 @@ def _usage():
             " | --ideal PATH --name NAME | --syntax PATH"
             " | --slice PATH --name NAME | --fragment DIR | --normalize PATH"
             " | --table PATH --count N | --moment-source PATH | --block DIR"
+            " | --strip-try PATH"
             " | --literals PATH --name NAME --kind array --size N"
             " | --literals PATH --name NAME --kind scalar"
         ),
@@ -497,6 +500,7 @@ def main() raises:
     var table_count = String("")
     var moment_source_path = String("")
     var block = String("")
+    var strip_try = String("")
     var literals = String("")
     var literal_size = String("")
     var arguments = argv()
@@ -534,6 +538,7 @@ def main() raises:
             or word == "--count"
             or word == "--moment-source"
             or word == "--block"
+            or word == "--strip-try"
             or word == "--literals"
             or word == "--size"
         ):
@@ -600,6 +605,8 @@ def main() raises:
                 moment_source_path = value
             elif word == "--block":
                 block = value
+            elif word == "--strip-try":
+                strip_try = value
             elif word == "--literals":
                 literals = value
             elif word == "--size":
@@ -662,6 +669,8 @@ def main() raises:
     if moment_source_path.byte_length() > 0:
         modes += 1
     if block.byte_length() > 0:
+        modes += 1
+    if strip_try.byte_length() > 0:
         modes += 1
     if significant.byte_length() > 0:
         modes += 1
@@ -744,6 +753,12 @@ def main() raises:
                 )
             else:
                 _usage()
+            return
+        if strip_try.byte_length() > 0:
+            print(
+                strip_try_only_routing(Path(strip_try).read_text()),
+                end="",
+            )
             return
         if block.byte_length() > 0:
             print(
