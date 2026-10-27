@@ -34,28 +34,6 @@ except ModuleNotFoundError:
     from tools.carla_lane_oracle.source_contracts import verify_group, verify_qualifiers
 
 ROOT = Path(__file__).resolve().parents[2]
-PRIMITIVE_GRAPH_SHA256 = 'e2e0257a0f42a95bac586638fc5d532f4bc69b882127201bbf343006f2143484'
-REFERENCE_MODULE_GRAPHS = {
-    "curve_bounds.mojo": "51f99d745612d217762d8f39bde1ded5b269d239f05cb765532de631cc64791f",
-    "curve_trig.mojo": "4ca47db55caa96ba9ad6c6f43fa65d30a8fefe419f555d46a1a948a2fc606ecc",
-    "curve_interval.mojo": "32b7bce9ad0b996fa87a7bc63ff0c905065751d164f7d673342234716523fd8e"
-}
-SHARED_GRAPHS = {
-    "curve_trig.mojo:_expression_polynomial": "031856283e36ac8dbaef6e455eb6a1502c0c465f70ba809ace51ec5782abb04a",
-    "curve_trig.mojo:_jet_polynomial": "9a773f471ac8ac236f808d0f072ac5372315a3dd2683b16c41899a1b56cfd470",
-    "curve_trig.mojo:_sincos_expression": "89921637fc52fad38092e2c283d238287b3f33035dcc0a33a2b07fddc6042509",
-    "curve_trig.mojo:_sincos_branch_expression": "8ba6cc52dff85cbca95fa9c58142de28140c97d711911bd1f437b11ca2bc857f",
-    "curve_trig.mojo:_sincos_branch": "a99d1be1594ceeea7edf3709312217af35035b590dd621c57c3e6bdf97a26a8a",
-    "curve_trig.mojo:_sincos_jet": "f76f149a0ee85c2e5e3b1dc6b1d8a9cd68a053582fbe4c9d8e562b1848c91b3f",
-    "curve_trig.mojo:_uncertain_expression": "c883bc5e3e7046309b145f178f73848cecc20013551852a80f993f793c1ff00f",
-    "curve_trig.mojo:_uncertain": "e32b28fd29a051ebb13cb14f22cc61a12f137124cc9b9938adf113e606baa21e",
-    "curve_bounds.mojo:_sample_index": "91a5c643d73e15e2b5d3838fff658dc2986e0b28852a0c66ceacdd84e71ca01e",
-    "curve_bounds.mojo:_intersect_ideal_bounds": "0f6d271eb25f2e19f9cfd4c4f8f93691f4452cb50ac5303d7ff898398f8deda3",
-    "curve_bounds.mojo:_lane_jet": "c1d76e057272bbb71d1066e4669a3b7d0e5e87c4497e9d96abf21edc007e2f85",
-    "curve_bounds.mojo:_lane_jet_model": "470c29ee518a71ecc8c6bce3268d38da93d8c27770b9bdf6e6c82989a1032ab0",
-    "curve_bounds.mojo:_lane_jet_model_proof": "17eea195f5bcd6e90781bbc3370f16e5404b67620aad1807b24101ceaebd7218",
-    "curve_bounds.mojo:_reference_jet_capture": "0ebd93d524b35c30cdd27fabc23dd40f1a53241477b0689c37b07b18bce5ad05"
-}
 IMPORTS = '''from extensions.carla.curve_interval import (
     _stored_difference,
     _stored_half,
@@ -166,6 +144,24 @@ def _sampled_text(mode, text, name='', index=None, replacement=None):
                 message = message[len(prefix):]
         raise CheckError(message)
     return result.stdout
+
+
+def _graph_pins():
+    """Return the reference, primitive, and shared graph digests."""
+    import json
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sampled_graph_pins'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    return json.loads(result.stdout)
 
 
 def _copy_plan():
@@ -456,20 +452,22 @@ def verify(root):
                 from . import ideal_projection
             else:
                 import ideal_projection
+            graphs = _graph_pins()
+            reference_graphs = graphs['reference']
             ideal_projection.moment_guard('--names', {
-                'names': list(REFERENCE_MODULE_GRAPHS),
+                'names': list(reference_graphs),
                 'expected': ['curve_bounds.mojo', 'curve_trig.mojo',
                              'curve_interval.mojo'],
                 'message': 'wrong reference-module closure',
             })
         except ValueError as error:
             raise CheckError(str(error)) from error
-        for filename, expected_hash in REFERENCE_MODULE_GRAPHS.items():
+        for filename, expected_hash in reference_graphs.items():
             reference_graph = (dump(reviewed_reference_tree(texts[filename], root, _operation=_operation))
                                if filename == 'curve_bounds.mojo' else graph(texts[filename]))
             actual = hashlib.sha256(reference_graph.encode()).hexdigest()
             require(actual == expected_hash, 'reference module changed; renewed review required: ' + filename)
-        require(primitive_graph(texts['curve_interval.mojo']) == PRIMITIVE_GRAPH_SHA256,
+        require(primitive_graph(texts['curve_interval.mojo']) == graphs['primitive'],
                 'Jet primitive graph changed; renewed derivative-independence review required')
         # Complete stored helper/interval closure and lexical qualifiers are
         # independent of the unchanged primitive-class AST hash.
@@ -486,7 +484,7 @@ def verify(root):
         _sampled_text('--helper-fields', texts['curve_interval.mojo'])
         target_tree = syntax_tree(target)
         reference_trees = {'curve_bounds.mojo': reviewed_reference_tree(bounds, root, _operation=_operation), 'curve_trig.mojo': syntax_tree(trig)}
-        for key, expected_hash in SHARED_GRAPHS.items():
+        for key, expected_hash in graphs['shared'].items():
             filename, name = key.split(':', 1)
             node = unique_function(reference_trees[filename], name)
             actual = hashlib.sha256(dump(node).encode()).hexdigest()
@@ -592,8 +590,8 @@ def verify(root):
         if owns:
             _operation.finish(root)
         return _sampled_result(
-            str(root.resolve()), len(SHARED_GRAPHS),
-            len(REFERENCE_MODULE_GRAPHS), PRIMITIVE_GRAPH_SHA256,
+            str(root.resolve()), len(graphs['shared']),
+            len(reference_graphs), graphs['primitive'],
             physical_sources, current_edges)
     finally:
         if owns:

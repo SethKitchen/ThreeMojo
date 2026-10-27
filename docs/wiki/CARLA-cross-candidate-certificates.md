@@ -109,6 +109,8 @@ Seventeen helpers stay at the top level.
 Three reviewed helpers keep their bodies.
 An extra helper or a changed body is refused.
 
+It keeps the reference, primitive, and shared graph digests.
+
 Mojo checks the sampled value copies.
 Ten helpers match their renamed jet sources.
 It names the eight copied helpers and their sampled names.
