@@ -387,6 +387,40 @@ def decimal_words(literals):
     return [int(item, 16) for item in json.loads(result.stdout)]
 
 
+def derive_rows(nodes, weights, cosine, sine):
+    """Return the 64 derived moment rows for four stored word lists."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    def spell(words):
+        return [f'0x{word:016X}' for word in words]
+
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({
+        'nodes': spell(nodes), 'weights': spell(weights),
+        'cosine': spell(cosine), 'sine': spell(sine),
+    }, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-rows-') as directory:
+        path = Path(directory) / 'words.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_gate',
+             '--rows', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = 'spiral moment derive: '
+        if message.startswith(prefix):
+            message = message[len(prefix):]
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def declaration(text, name, owner=()):
     """Return one declaration selected by the cleanup gate."""
     import os

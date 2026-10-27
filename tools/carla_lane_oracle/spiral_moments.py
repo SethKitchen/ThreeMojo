@@ -253,6 +253,7 @@ def verify_inputs(root):
     require(set(pins['routing']) == set(ROUTING_PATHS), 'wrong routing pin set')
     require(pins['dependencies'] == DEPENDENCIES, 'wrong dependency closure pin')
     constants = {}
+    stored_words = {}
     for name, record in pins['arrays'].items():
         require(set(record) == {'path', 'words'}, 'wrong array pin keys: ' + name)
         path, size = ARRAY_SPECS[name]
@@ -263,9 +264,11 @@ def verify_inputs(root):
         require([hexword(word) for word in words] == record['words'],
                 'stored constant words changed: ' + name)
         constants[name] = [fraction_of_word(word) for word in words]
+        stored_words[name] = words
     require(set(constants) == {'_GL_NODES', '_GL_WEIGHTS',
                                '_COS_COEFFICIENTS', '_SIN_COEFFICIENTS'},
             'wrong constant-array set')
+    constants['_words'] = stored_words
     scalar_names = []
     scalar_literals = []
     scalar_records = []
@@ -371,29 +374,13 @@ def derive_coefficients(constants):
     S[k,n] = sum(p<n,i) w[i]*(p+q[i]/2)**(2*k).
     M[k,n] = S[k,n]/(2*n**(2*k+1)). This is algebraic common work only.
     """
-    sums = [F(0) for _ in range(22)]
-    rows = []
-    for count in range(1, 65):
-        for node, weight in zip(constants['node_sums'], constants['_GL_WEIGHTS']):
-            square = (F(count - 1) + node / 2) ** 2
-            power = F(1)
-            for index in range(22):
-                sums[index] += weight * power
-                power *= square
-        moments = [value / (2 * count ** (2 * index + 1))
-                   for index, value in enumerate(sums)]
-        require(moments[0] == F(1) + F(3, 1 << 55), 'zeroth moment drift')
-        row = {'count': count}
-        for side, key, parity in [('cosine', '_COS_COEFFICIENTS', 0),
-                                  ('sine', '_SIN_COEFFICIENTS', 1)]:
-            row[side] = []
-            for index, coefficient in enumerate(constants[key]):
-                exact = coefficient * moments[2 * index + parity]
-                endpoints = bracket(exact)
-                row[side].append({'exact': str(exact),
-                                  'words': [hexword(word) for word in endpoints]})
-        rows.append(row)
-    return rows
+    stored = constants['_words']
+    try:
+        return ideal_projection.derive_rows(
+            stored['_GL_NODES'], stored['_GL_WEIGHTS'],
+            stored['_COS_COEFFICIENTS'], stored['_SIN_COEFFICIENTS'])
+    except ValueError as error:
+        raise CheckError(str(error)) from error
 
 
 def words_from_rows(rows):

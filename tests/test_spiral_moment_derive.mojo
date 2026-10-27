@@ -8,7 +8,9 @@
 from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
+from tools._python_json import PyJson
 from tools._spiral_moment_derive import (
+    coefficient_rows_json,
     derive_endpoints,
     stored_coefficient_words,
     stored_scalar_word,
@@ -82,6 +84,35 @@ def test_derived_endpoints_match_the_live_table() raises:
             raise Error("endpoint " + String(index))
         index += 1
     assert_equal(canonical_table(derived), text)
+
+
+def test_derived_rows_keep_the_first_exact_value() raises:
+    """The first cosine row keeps its exact value and its two words."""
+    var geometry = Path(_GEOMETRY).read_text()
+    var trig = Path(_TRIG).read_text()
+    var rows = coefficient_rows_json(
+        stored_coefficient_words(geometry, "_GL_NODES", 5),
+        stored_coefficient_words(geometry, "_GL_WEIGHTS", 5),
+        stored_coefficient_words(trig, "_COS_COEFFICIENTS", 11),
+        stored_coefficient_words(trig, "_SIN_COEFFICIENTS", 11),
+    )
+    var doc = PyJson.parse(rows)
+    assert_equal(doc.length(doc.root), 64)
+    var first = doc.item(doc.root, 0)
+    var coefficient = doc.item(doc.at(first, "cosine"), 0)
+    var cosine = stored_coefficient_words(trig, "_COS_COEFFICIENTS", 11)
+    var zeroth = Fraction(1) + Fraction.of(BigInt(3), BigInt.power_of_two(55))
+    var value = fraction_of_word(cosine[0]) * zeroth
+    var text = value.numerator.to_string()
+    if value.denominator != BigInt(1):
+        text += "/" + value.denominator.to_string()
+    assert_equal(doc.text(doc.at(coefficient, "exact")), text)
+    var pair = doc.at(coefficient, "words")
+    assert_equal(doc.text(doc.item(pair, 0)), "0x3FF0000000000000")
+    assert_equal(doc.text(doc.item(pair, 1)), "0x3FF0000000000001")
+    var empty = List[UInt64]()
+    with assert_raises(contains="wrong constant-array shape"):
+        _ = coefficient_rows_json(empty, empty, empty, empty)
 
 
 def test_equivalent_spellings_keep_the_stored_words() raises:

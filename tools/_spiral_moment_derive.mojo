@@ -11,6 +11,7 @@ The moments share one unscaled prefix sum across the counts 1 through 64.
 
 from tools._bigint import BigInt
 from tools._fraction import Fraction
+from tools._python_json import PyJson
 from tools._spiral_moment_words import (
     bracket,
     decimal_word,
@@ -550,12 +551,30 @@ def _moment(sum: Fraction, index: Int, count: Int) raises -> Fraction:
     return sum / Fraction(divisor)
 
 
+def _fraction_text(value: Fraction) -> String:
+    """Return `n/d`, or `n` when the denominator is one.
+
+    Args:
+        value: The exact coefficient.
+
+    Returns:
+        The text `str(Fraction)` would produce.
+    """
+    var text = value.numerator.to_string()
+    if value.denominator != BigInt(1):
+        text += "/"
+        text += value.denominator.to_string()
+    return text
+
+
 def _append_side(
     mut words: List[UInt64],
     coefficients: List[Fraction],
     sums: List[Fraction],
     parity: Int,
     count: Int,
+    mut exacts: List[String],
+    keep_exact: Bool,
 ) raises:
     """Append one side's tight endpoints.
 
@@ -565,6 +584,8 @@ def _append_side(
         sums: The 22 unscaled prefix sums.
         parity: 0 for cosine and 1 for sine.
         count: The sample count.
+        exacts: The exact spellings, when `keep_exact` is true.
+        keep_exact: True when the caller records each exact value.
 
     Raises:
         Error: An endpoint does not fit in binary64.
@@ -574,17 +595,21 @@ def _append_side(
         var exact = coefficients[index] * _moment(
             sums[2 * index + parity], 2 * index + parity, count
         )
+        if keep_exact:
+            exacts.append(_fraction_text(exact))
         var pair = bracket(exact)
         words.append(pair[0])
         words.append(pair[1])
         index += 1
 
 
-def derive_endpoints(
+def _derive_words(
     nodes: List[UInt64],
     weights: List[UInt64],
     cosine: List[UInt64],
     sine: List[UInt64],
+    mut exacts: List[String],
+    keep_exact: Bool,
 ) raises -> List[UInt64]:
     """Return the 2816 tight endpoints for counts 1 through 64.
 
@@ -593,6 +618,8 @@ def derive_endpoints(
         weights: The five stored Gauss-Legendre weights.
         cosine: The eleven stored cosine coefficients.
         sine: The eleven stored sine coefficients.
+        exacts: The exact spellings, when `keep_exact` is true.
+        keep_exact: True when each exact coefficient is recorded.
 
     Returns:
         Low then high for cosine 0 through 10, then sine 0 through 10,
@@ -646,7 +673,219 @@ def derive_endpoints(
         var moment = _moment(sums[0], 0, count)
         if moment != zeroth:
             _fail("zeroth moment drift")
-        _append_side(words, cosine_values, sums, 0, count)
-        _append_side(words, sine_values, sums, 1, count)
+        _append_side(words, cosine_values, sums, 0, count, exacts, keep_exact)
+        _append_side(words, sine_values, sums, 1, count, exacts, keep_exact)
         count += 1
     return words^
+
+
+def derive_endpoints(
+    nodes: List[UInt64],
+    weights: List[UInt64],
+    cosine: List[UInt64],
+    sine: List[UInt64],
+) raises -> List[UInt64]:
+    """Return the 2816 tight endpoints for counts 1 through 64.
+
+    Args:
+        nodes: The five stored Gauss-Legendre nodes.
+        weights: The five stored Gauss-Legendre weights.
+        cosine: The eleven stored cosine coefficients.
+        sine: The eleven stored sine coefficients.
+
+    Returns:
+        Low then high for cosine 0 through 10, then sine 0 through 10,
+        for each count from 1 through 64.
+
+    Raises:
+        Error: A list has the wrong length, the zeroth moment drifts,
+        or an endpoint does not fit in binary64.
+    """
+    var exacts = List[String]()
+    return _derive_words(nodes, weights, cosine, sine, exacts, False)
+
+
+def _hex_word(word: UInt64) -> String:
+    """Return `word` as `0x` and sixteen uppercase hexadecimal digits.
+
+    Args:
+        word: One coefficient encoding.
+
+    Returns:
+        The canonical literal.
+    """
+    var digits = "0123456789ABCDEF"
+    var text = String("0x")
+    var shift = 60
+    while shift >= 0:
+        var nibble = Int((word >> UInt64(shift)) & 15)
+        text += String(digits[byte = nibble : nibble + 1])
+        shift -= 4
+    return text
+
+
+def _parse_word(text: String) raises -> UInt64:
+    """Return one `0x` word.
+
+    Args:
+        text: A hexadecimal encoding, with an optional `0x` prefix.
+
+    Returns:
+        The encoding.
+
+    Raises:
+        Error: The text is not one to sixteen hexadecimal digits.
+    """
+    var data = text.as_bytes()
+    var index = 0
+    if len(data) >= 2 and data[0] == 48 and (data[1] == 120 or data[1] == 88):
+        index = 2
+    if index >= len(data):
+        _fail("malformed coefficient word")
+    var value = UInt64(0)
+    var digits = 0
+    while index < len(data):
+        var byte = data[index]
+        var nibble = -1
+        if byte >= 48 and byte <= 57:
+            nibble = Int(byte) - 48
+        elif byte >= 65 and byte <= 70:
+            nibble = Int(byte) - 55
+        elif byte >= 97 and byte <= 102:
+            nibble = Int(byte) - 87
+        if nibble < 0 or digits == 16:
+            _fail("malformed coefficient word")
+        value = (value << 4) | UInt64(nibble)
+        digits += 1
+        index += 1
+    return value
+
+
+def _word_list(doc: PyJson, key: String) raises -> List[UInt64]:
+    """Return one hex list from a derivation payload.
+
+    Args:
+        doc: The payload document.
+        key: `nodes`, `weights`, `cosine`, or `sine`.
+
+    Returns:
+        The encodings in order.
+
+    Raises:
+        Error: A word is malformed.
+    """
+    var node = doc.at(doc.root, key)
+    var count = doc.length(node)
+    var words = List[UInt64]()
+    var index = 0
+    while index < count:
+        words.append(_parse_word(doc.text(doc.item(node, index))))
+        index += 1
+    return words^
+
+
+def _side_list(
+    mut doc: PyJson,
+    exacts: List[String],
+    words: List[UInt64],
+    exact_at: Int,
+    word_at: Int,
+) raises -> Int:
+    """Return eleven coefficient records.
+
+    Args:
+        doc: The output document.
+        exacts: The exact spellings.
+        words: The endpoint encodings.
+        exact_at: The first exact spelling for this side.
+        word_at: The first encoding for this side.
+
+    Returns:
+        The JSON list node.
+
+    Raises:
+        Error: A record cannot be stored.
+    """
+    var side = doc.new_list()
+    var index = 0
+    while index < 11:
+        var item = doc.new_dict()
+        doc.set(item, "exact", doc.new_str(exacts[exact_at + index]))
+        var pair = doc.new_list()
+        doc.append(pair, doc.new_str(_hex_word(words[word_at + 2 * index])))
+        doc.append(pair, doc.new_str(_hex_word(words[word_at + 2 * index + 1])))
+        doc.set(item, "words", pair)
+        doc.append(side, item)
+        index += 1
+    return side
+
+
+def coefficient_rows_json(
+    nodes: List[UInt64],
+    weights: List[UInt64],
+    cosine: List[UInt64],
+    sine: List[UInt64],
+) raises -> String:
+    """Return the 64 derived rows as JSON.
+
+    Args:
+        nodes: The five stored Gauss-Legendre nodes.
+        weights: The five stored Gauss-Legendre weights.
+        cosine: The eleven stored cosine coefficients.
+        sine: The eleven stored sine coefficients.
+
+    Returns:
+        A JSON list. Each row has `count`, `cosine`, and `sine`. Each
+        coefficient has `exact` and two `words`.
+
+    Raises:
+        Error: A list has the wrong length, the zeroth moment drifts,
+        or an endpoint does not fit in binary64.
+    """
+    var exacts = List[String]()
+    var words = _derive_words(nodes, weights, cosine, sine, exacts, True)
+    if len(exacts) != 1408 or len(words) != 2816:
+        _fail("wrong derived table shape")
+    var doc = PyJson()
+    var rows = doc.new_list()
+    var count = 1
+    while count <= 64:
+        var row = doc.new_dict()
+        var base = (count - 1) * 22
+        doc.set(row, "count", doc.new_int(count))
+        doc.set(
+            row,
+            "cosine",
+            _side_list(doc, exacts, words, base, base * 2),
+        )
+        doc.set(
+            row,
+            "sine",
+            _side_list(doc, exacts, words, base + 11, base * 2 + 22),
+        )
+        doc.append(rows, row)
+        count += 1
+    doc.root = rows
+    return doc.dumps()
+
+
+def coefficient_rows_payload(payload: String) raises -> String:
+    """Return the derived rows for one JSON word document.
+
+    Args:
+        payload: JSON with `nodes`, `weights`, `cosine`, and `sine`.
+
+    Returns:
+        The 64 count rows. Each coefficient has its exact value and two words.
+
+    Raises:
+        Error: A word list has the wrong length, a word is malformed,
+        or an endpoint does not fit in binary64.
+    """
+    var doc = PyJson.parse(payload)
+    return coefficient_rows_json(
+        _word_list(doc, "nodes"),
+        _word_list(doc, "weights"),
+        _word_list(doc, "cosine"),
+        _word_list(doc, "sine"),
+    )

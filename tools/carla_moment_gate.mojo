@@ -6,6 +6,7 @@
 """Check the moment producer tokens and stored coefficient bounds.
 
     carla_moment_gate --module PATH --interval PATH --geometry PATH --trig PATH
+    carla_moment_gate --rows PATH
 
 The program checks the texts it is given. It does not roll a successor
 back to a historical source. The caller does that before it starts the
@@ -17,7 +18,10 @@ from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
 from tools._fraction import Fraction
-from tools._spiral_moment_derive import stored_coefficient_words
+from tools._spiral_moment_derive import (
+    coefficient_rows_payload,
+    stored_coefficient_words,
+)
 from tools._spiral_moment_words import fraction_of_word
 
 
@@ -124,7 +128,7 @@ def _usage():
     print(
         (
             "usage: carla_moment_gate --module PATH --interval PATH"
-            " --geometry PATH --trig PATH"
+            " --geometry PATH --trig PATH | --rows PATH"
         ),
         file=stderr,
     )
@@ -132,11 +136,12 @@ def _usage():
 
 
 def main() raises:
-    """Check four source files and print the pass record."""
+    """Check four source files, or print the derived moment rows."""
     var module = String("")
     var interval = String("")
     var geometry = String("")
     var trig = String("")
+    var rows = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -146,6 +151,7 @@ def main() raises:
             or word == "--interval"
             or word == "--geometry"
             or word == "--trig"
+            or word == "--rows"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -156,11 +162,27 @@ def main() raises:
                 interval = value
             elif word == "--geometry":
                 geometry = value
+            elif word == "--rows":
+                rows = value
             else:
                 trig = value
             index += 2
             continue
         _usage()
+    if rows.byte_length() > 0:
+        if (
+            module.byte_length() > 0
+            or interval.byte_length() > 0
+            or geometry.byte_length() > 0
+            or trig.byte_length() > 0
+        ):
+            _usage()
+        try:
+            print(coefficient_rows_payload(Path(rows).read_text()), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if (
         module.byte_length() == 0
         or interval.byte_length() == 0
