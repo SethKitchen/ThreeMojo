@@ -372,9 +372,12 @@ def _town_key(
         Error: If an input file cannot be read.
     """
     var hasher = Sha256()
-    hasher.update(Span(town.as_bytes()))
-    hasher.update(Span(String(max_size).as_bytes()))
-    hasher.update(Span(python_repr(tile).as_bytes()))
+    var town_bytes = town
+    var size_bytes = String(max_size)
+    var tile_bytes = python_repr(tile)
+    hasher.update(town_bytes.as_bytes())
+    hasher.update(size_bytes.as_bytes())
+    hasher.update(tile_bytes.as_bytes())
     _hash_file(hasher, layout + "/" + town + ".jsonl")
     _hash_file(hasher, maps + "/" + town + ".xodr")
     _hash_dir(hasher, raw)
@@ -391,8 +394,13 @@ def _hash_file(mut hasher: Sha256, path: String) raises:
     Raises:
         Error: If the file cannot be read.
     """
-    hasher.update(Span(String(path).as_bytes()))
-    hasher.update(Span(Path(path).read_bytes()))
+    var slash = path.rfind("/")
+    var base = path
+    if slash >= 0:
+        base = String(path[byte = slash + 1 :])
+    hasher.update(base.as_bytes())
+    var raw = Path(path).read_bytes()
+    hasher.update(Span(raw))
 
 
 def _hash_dir(mut hasher: Sha256, directory: String) raises:
@@ -411,14 +419,18 @@ def _hash_dir(mut hasher: Sha256, directory: String) raises:
     var names = sorted_strings(found^)
     for name in names:
         var path = directory + "/" + name
-        hasher.update(Span(String(name).as_bytes()))
+        var label = name
+        hasher.update(label.as_bytes())
         if islink(path):
-            hasher.update(Span(Path(path).read_bytes()))
+            var raw = Path(path).read_bytes()
+            hasher.update(Span(raw))
         elif isdir(path):
-            hasher.update(Span(String("/").as_bytes()))
+            var mark = String("/")
+            hasher.update(mark.as_bytes())
             _hash_dir(hasher, path)
         else:
-            hasher.update(Span(Path(path).read_bytes()))
+            var raw = Path(path).read_bytes()
+            hasher.update(Span(raw))
 
 
 def _copy_dir(source: String, destination: String) raises:
@@ -509,6 +521,9 @@ def _remember_town(
         var partial = cache + ".partial"
         var removed = run_program(["rm", "-rf", partial], 30.0)
         if removed.status != 0:
+            return
+        var made = run_program(["mkdir", "-p", partial], 30.0)
+        if made.status != 0:
             return
         _copy_dir(out_dir, partial + "/tree")
         Path(partial + "/result.txt").write_text(result)
