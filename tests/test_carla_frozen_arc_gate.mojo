@@ -5,10 +5,14 @@
 
 """A changed frozen ARC producer record fails the gate."""
 
+from std.os import makedirs
+from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools.carla_frozen_arc_gate import (
     frozen_arc_digest,
+    frozen_arc_places,
+    frozen_arc_prior,
     frozen_arc_record,
     frozen_arc_token,
 )
@@ -39,6 +43,31 @@ def test_a_changed_successor_token_is_refused() raises:
         )
     ):
         frozen_arc_token("def changed():\n    pass\n", "00")
+
+
+def test_a_different_prior_pin_is_refused() raises:
+    """A runtime pin predecessor that differs from the cleanup record fails closed.
+    """
+    with assert_raises(
+        contains=(
+            "frozen ARC producer contract: runtime pin predecessor differs"
+            " from accepted cleanup"
+        )
+    ):
+        frozen_arc_prior("aa", "bb")
+
+
+def test_a_wrong_runtime_placement_is_refused() raises:
+    """A placement outside the reviewed set fails closed."""
+    var directory = "/tmp/frozen-places-test"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/labels.json").write_text("[]")
+    with assert_raises(
+        contains=(
+            "frozen ARC producer contract: wrong runtime successor placements"
+        )
+    ):
+        frozen_arc_places(directory)
 
 
 def main() raises:

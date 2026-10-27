@@ -118,6 +118,53 @@ def _gate_digest(payload, expected, kind):
         raise ValueError(message)
 
 
+def _gate_prior(actual, expected):
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
+         '--prior', actual, '--cleanup', expected],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
+def _gate_places(transitions, pins):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    rows = []
+    for item in transitions:
+        rows.append({
+            'group': item['group'],
+            'path': item['path'],
+            'actual': pins['groups'][item['group']][item['path']],
+            'expected': item['after'],
+        })
+    with tempfile.TemporaryDirectory(prefix='frozen-places-') as directory:
+        folder = Path(directory)
+        (folder / 'labels.json').write_text(json.dumps(rows))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
+             '--places', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
@@ -129,8 +176,7 @@ def read_record(root):
 
 def verify_runtime_pin_successor(root, prior_digest):
     record = read_record(root)
-    require(prior_digest == record['runtime_pins_before_sha256'],
-            'runtime pin predecessor differs from accepted cleanup')
+    _gate_prior(prior_digest, record['runtime_pins_before_sha256'])
     if __package__:
         from . import coverage_invariant_contracts as invariant
     else:
@@ -139,14 +185,8 @@ def verify_runtime_pin_successor(root, prior_digest):
     _gate_digest(payload, record['runtime_pins_after_sha256'], 'after')
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
     transitions = record['runtime_token_successors']
-    require(len(transitions) == 3 and
-            {(item['group'], item['path']) for item in transitions} == {
-                ('eligibility', SOURCE_PATH), ('optional_runtime', SOURCE_PATH),
-                ('translation', SOURCE_PATH)},
-            'wrong runtime successor placements')
+    _gate_places(transitions, pins)
     for item in transitions:
-        require(pins['groups'][item['group']][item['path']] == item['after'],
-                'runtime successor token mismatch')
         pins['groups'][item['group']][item['path']] = item['before']
     predecessor = (json.dumps(pins, indent=2)+'\n').encode()
     _gate_digest(predecessor, prior_digest, 'before')
@@ -219,14 +259,8 @@ def _runtime_pin_predecessor(payload, record, prior_digest):
     _gate_digest(payload, record['runtime_pins_after_sha256'], 'after')
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
     transitions = record['runtime_token_successors']
-    require(len(transitions) == 3 and
-            {(item['group'], item['path']) for item in transitions} == {
-                ('eligibility', SOURCE_PATH), ('optional_runtime', SOURCE_PATH),
-                ('translation', SOURCE_PATH)},
-            'wrong runtime successor placements')
+    _gate_places(transitions, pins)
     for item in transitions:
-        require(pins['groups'][item['group']][item['path']] == item['after'],
-                'runtime successor token mismatch')
         pins['groups'][item['group']][item['path']] = item['before']
     predecessor = (json.dumps(pins, indent=2)+'\n').encode()
     _gate_digest(predecessor, prior_digest, 'before')
@@ -238,8 +272,7 @@ def _verified_pin_pair(root, prior_digest, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
     record = read_record(root)
-    require(prior_digest == record['runtime_pins_before_sha256'],
-            'runtime pin predecessor differs from accepted cleanup')
+    _gate_prior(prior_digest, record['runtime_pins_before_sha256'])
     if __package__:
         from . import coverage_invariant_contracts as invariant
     else:

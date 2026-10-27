@@ -8,6 +8,8 @@
     carla_frozen_arc_gate --migration PATH [--previous PATH]
     carla_frozen_arc_gate --bytes PATH --sha HEX --kind after|before|guard
     carla_frozen_arc_gate --source PATH --token HEX
+    carla_frozen_arc_gate --prior HEX --cleanup HEX
+    carla_frozen_arc_gate --places DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -18,7 +20,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
-from tools._python_json import MISSING, PY_DICT, PY_INT, PY_STR, PyJson
+from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PY_STR, PyJson
 from tools._sha256 import sha256_hex
 
 
@@ -146,13 +148,100 @@ def frozen_arc_token(text: String, expected: String) raises:
         )
 
 
+def frozen_arc_prior(actual: String, expected: String) raises:
+    """Require the runtime pin predecessor to match the cleanup record.
+
+    Args:
+        actual: The digest supplied by the caller.
+        expected: The digest stored in the producer record.
+
+    Raises:
+        Error: The digests differ.
+    """
+    if actual != expected:
+        _fail("runtime pin predecessor differs from accepted cleanup")
+
+
+def _place_group(index: Int) -> String:
+    """Return one reviewed runtime-successor group.
+
+    Args:
+        index: The group position, from 0 through 2.
+
+    Returns:
+        The group name.
+    """
+    if index == 0:
+        return "eligibility"
+    if index == 1:
+        return "optional_runtime"
+    return "translation"
+
+
+def _places_match(doc: PyJson) raises -> Bool:
+    """Return whether the rows are the three reviewed placements.
+
+    Args:
+        doc: The placement list.
+
+    Returns:
+        True when the rows are exactly the reviewed group and path pairs.
+
+    Raises:
+        Error: A row cannot be read.
+    """
+    if doc.kind(doc.root) != PY_LIST or doc.length(doc.root) != 3:
+        return False
+    var seen = String("")
+    var index = 0
+    while index < 3:
+        var row = doc.item(doc.root, index)
+        var group = doc.text(doc.at(row, "group"))
+        var path = doc.text(doc.at(row, "path"))
+        if path != "extensions/carla/curve_frozen_arc.mojo":
+            return False
+        var slot = 0
+        var found = False
+        while slot < 3:
+            if group == _place_group(slot):
+                found = True
+                break
+            slot += 1
+        if not found or seen.find(String(slot)) >= 0:
+            return False
+        seen = seen + String(slot)
+        index += 1
+    return seen.byte_length() == 3
+
+
+def frozen_arc_places(directory: String) raises:
+    """Require the runtime successor placements and their token values.
+
+    Args:
+        directory: A directory whose `labels.json` lists the placements.
+
+    Raises:
+        Error: The placement set changed, or a token value changed.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if not _places_match(doc):
+        _fail("wrong runtime successor placements")
+    var index = 0
+    while index < 3:
+        var row = doc.item(doc.root, index)
+        if doc.text(doc.at(row, "actual")) != doc.text(doc.at(row, "expected")):
+            _fail("runtime successor token mismatch")
+        index += 1
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_frozen_arc_gate --migration PATH [--previous PATH]"
             " | --bytes PATH --sha HEX --kind after|before|guard"
-            " | --source PATH --token HEX"
+            " | --source PATH --token HEX | --prior HEX --cleanup HEX"
+            " | --places DIR"
         ),
         file=stderr,
     )
@@ -172,6 +261,9 @@ def main() raises:
     var kind = String("")
     var source = String("")
     var token = String("")
+    var prior = String("")
+    var cleanup = String("")
+    var places = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -184,6 +276,9 @@ def main() raises:
             or word == "--kind"
             or word == "--source"
             or word == "--token"
+            or word == "--prior"
+            or word == "--cleanup"
+            or word == "--places"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -200,8 +295,14 @@ def main() raises:
                 kind = value
             elif word == "--source":
                 source = value
-            else:
+            elif word == "--token":
                 token = value
+            elif word == "--prior":
+                prior = value
+            elif word == "--cleanup":
+                cleanup = value
+            else:
+                places = value
             index += 2
             continue
         _usage()
@@ -212,7 +313,13 @@ def main() raises:
         modes += 1
     if source.byte_length() > 0:
         modes += 1
+    if prior.byte_length() > 0 or cleanup.byte_length() > 0:
+        modes += 1
+    if places.byte_length() > 0:
+        modes += 1
     if modes != 1:
+        _usage()
+    if (prior.byte_length() == 0) != (cleanup.byte_length() == 0):
         _usage()
     if payload.byte_length() > 0 and (
         digest.byte_length() == 0
@@ -224,6 +331,12 @@ def main() raises:
     if previous.byte_length() > 0 and migration.byte_length() == 0:
         _usage()
     try:
+        if places.byte_length() > 0:
+            frozen_arc_places(places)
+            return
+        if prior.byte_length() > 0:
+            frozen_arc_prior(prior, cleanup)
+            return
         if source.byte_length() > 0:
             frozen_arc_token(Path(source).read_text(), token)
             return
