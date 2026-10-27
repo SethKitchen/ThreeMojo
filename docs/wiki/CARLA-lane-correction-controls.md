@@ -22,6 +22,8 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_y_gate.mojo` checks the five Y-finiteness token digests.
 
+`tools/carla_speed_gate.mojo` checks the speed-parser record, its module token, and its correctness tests.
+
 ## Lane poses
 
 The pose follows the derivative of the actual lane-center expression.
