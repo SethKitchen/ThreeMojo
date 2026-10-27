@@ -110,6 +110,27 @@ def _gate(migration, previous=None):
         raise ValueError(message)
 
 
+def _gate_digest(payload, expected):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='cleanup-digest-') as directory:
+        target = Path(directory) / 'guard'
+        target.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--bytes', str(target), '--sha', expected],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
@@ -297,8 +318,7 @@ def verify(root, *, _operation=None):
     operation_args = {} if _operation is None else {'_operation': _operation}
     record = read_record(root)
     _, guard_payload = frozen._verified_pin_pair(root, record['runtime_pins_after_sha256'], **operation_args)
-    require(hashlib.sha256(guard_payload).hexdigest() == record['guard_pins_after_sha256'],
-            'unreviewed dependency pin successor: sum2-guard-pins.json')
+    _gate_digest(guard_payload, record['guard_pins_after_sha256'])
     for path, transition in record['sources'].items():
         text = accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
         if (path == 'extensions/carla/junction_bounds.mojo'

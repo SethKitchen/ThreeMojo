@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_cleanup_gate import cleanup_record
+from tools.carla_cleanup_gate import cleanup_digest, cleanup_record
 
 
 def test_a_changed_record_is_refused() raises:
@@ -16,6 +16,17 @@ def test_a_changed_record_is_refused() raises:
         contains="reviewed cleanup source contract: unreviewed migration record"
     ):
         cleanup_record(String("").as_bytes(), String("").as_bytes(), False)
+
+
+def test_a_changed_guard_pin_is_refused() raises:
+    """Bytes that are not the recorded guard pin fail closed."""
+    with assert_raises(
+        contains=(
+            "reviewed cleanup source contract: unreviewed dependency pin"
+            " successor: sum2-guard-pins.json"
+        )
+    ):
+        cleanup_digest(String("nope").as_bytes(), "00")
 
 
 def main() raises:

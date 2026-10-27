@@ -6,6 +6,7 @@
 """Check the reviewed cleanup migration record.
 
     carla_cleanup_gate --migration PATH [--previous PATH]
+    carla_cleanup_gate --bytes PATH --sha HEX
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -148,10 +149,27 @@ def cleanup_record(
     _require_previous(doc, previous)
 
 
+def cleanup_digest(payload: Span[UInt8, _], expected: String) raises:
+    """Require the guard-pin successor digest.
+
+    Args:
+        payload: The reconstructed guard-pin bytes.
+        expected: The required SHA-256 hex digest.
+
+    Raises:
+        Error: The digest changed.
+    """
+    if sha256_hex(payload) != expected:
+        _fail("unreviewed dependency pin successor: sum2-guard-pins.json")
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
-        "usage: carla_cleanup_gate --migration PATH [--previous PATH]",
+        (
+            "usage: carla_cleanup_gate --migration PATH [--previous PATH]"
+            " | --bytes PATH --sha HEX"
+        ),
         file=stderr,
     )
     exit(2)
@@ -165,25 +183,42 @@ def main() raises:
     """
     var migration = String("")
     var previous = String("")
+    var payload = String("")
+    var digest = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
-        if word == "--migration" or word == "--previous":
+        if (
+            word == "--migration"
+            or word == "--previous"
+            or word == "--bytes"
+            or word == "--sha"
+        ):
             if index + 1 >= len(arguments):
                 _usage()
             var value = arguments[index + 1]
             if word == "--migration":
                 migration = value
-            else:
+            elif word == "--previous":
                 previous = value
+            elif word == "--bytes":
+                payload = value
+            else:
+                digest = value
             index += 2
             continue
         _usage()
-    if migration.byte_length() == 0:
+    if (migration.byte_length() == 0) == (payload.byte_length() == 0):
+        _usage()
+    if previous.byte_length() > 0 and migration.byte_length() == 0:
+        _usage()
+    if payload.byte_length() > 0 and digest.byte_length() == 0:
         _usage()
     try:
-        if previous.byte_length() == 0:
+        if payload.byte_length() > 0:
+            cleanup_digest(Path(payload).read_bytes(), digest)
+        elif previous.byte_length() == 0:
             cleanup_record(
                 Path(migration).read_bytes(), String("").as_bytes(), False
             )
