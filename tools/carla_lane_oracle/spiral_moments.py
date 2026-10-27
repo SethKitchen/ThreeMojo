@@ -38,13 +38,10 @@ else:
     import sum2_guard_contracts
 F = Fraction
 ROOT = Path(__file__).resolve().parents[2]
-PACKAGE = Path('tools/carla_lane_oracle')
-PINS = PACKAGE / 'spiral-moment-pins.json'
-DATA = Path('extensions/carla/spiral_moment_table_data.mojo')
 SIGN = 1 << 63
 INFINITY = 0x7FF0000000000000
 MAX_FINITE = INFINITY - 1
-WORD_COUNT = 64 * 22 * 2
+_MOMENT_FILES = None
 DEPENDENCIES = {
     'group': 'stored_arithmetic',
     'pin_file': 'tools/carla_lane_oracle/runtime-source-pins.json',
@@ -303,6 +300,39 @@ def _routing_paths():
     return dict(_name_spec()['routing_paths'])
 
 
+def _moment_files():
+    """Return the pin file, the stored table, and the word count."""
+    global _MOMENT_FILES
+    if _MOMENT_FILES is not None:
+        return _MOMENT_FILES
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_files'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    _MOMENT_FILES = json.loads(result.stdout)
+    return _MOMENT_FILES
+
+
+def _pins():
+    return Path(_moment_files()['pins'])
+
+
+def _table():
+    return Path(_moment_files()['table'])
+
+
+def _word_count():
+    return _moment_files()['words']
+
+
 def __getattr__(name):
     if name == 'ARRAY_SPECS':
         return _array_specs()
@@ -314,6 +344,12 @@ def __getattr__(name):
         return _block_boundaries()
     if name == 'ROUTING_PATHS':
         return _routing_paths()
+    if name == 'PINS':
+        return _pins()
+    if name == 'DATA':
+        return _table()
+    if name == 'WORD_COUNT':
+        return _word_count()
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
@@ -326,7 +362,7 @@ def _require_moment_pins(pins):
 
 
 def verify_inputs(root):
-    pins = json.loads(_typed_source.historical_text(root, root / PINS, (root / PINS).read_text(encoding='utf-8')),
+    pins = json.loads(_typed_source.historical_text(root, root / _pins(), (root / _pins()).read_text(encoding='utf-8')),
                       object_pairs_hook=source_contracts.unique_keys)
     _require_moment_pins(pins)
     constants = {}
@@ -507,7 +543,7 @@ def parse_table(data):
     except UnicodeDecodeError as error:
         raise CheckError('table is not UTF-8') from error
     try:
-        words = ideal_projection.moment_words(text, WORD_COUNT)
+        words = ideal_projection.moment_words(text, _word_count())
     except ValueError as error:
         raise CheckError(str(error)) from error
     return ideal_projection.hex_integers(words)
@@ -531,7 +567,7 @@ def make_report(root, rows, pins):
         payload, str(root.resolve()), projection, DEPENDENCIES,
         pins['routing'], pins['blocks'])
     blobs = [
-        _typed_source.historical_bytes(root, root / PINS, (root / PINS).read_bytes()),
+        _typed_source.historical_bytes(root, root / _pins(), (root / _pins()).read_bytes()),
         _typed_source.historical_bytes(
             root, root / source_contracts.PINS,
             (root / source_contracts.PINS).read_bytes()),
@@ -563,13 +599,13 @@ def main(argv=None):
         constants, pins = verify_inputs(root)
         rows = derive_coefficients(constants)
         if not args.generate:
-            verify_table((root / DATA).read_bytes(), rows)
+            verify_table((root / _table()).read_bytes(), rows)
         report = make_report(root, rows, pins)
         if args.generate or args.report:
             output = args.output or Path(os.environ.get('CARLA_LANE_ORACLE_OUTPUT',
                                                         str(root / 'out/carla-lane-oracle')))
             # Never let an output option overwrite tracked source inputs/tools.
-            protected = [root / DATA, root / PINS, Path(__file__).resolve(),
+            protected = [root / _table(), root / _pins(), Path(__file__).resolve(),
                          root / source_contracts.PINS, root / sum2_guard_contracts.PINS] + [root / path for path in DEPENDENCIES['paths']] + [root / record['path']
                          for group in ('arrays', 'scalars', 'blocks', 'routing')
                          for record in pins[group].values()]
@@ -580,7 +616,7 @@ def main(argv=None):
             products = {'spiral-moment-report.json': invariant._indent_json(report)}
             if args.generate:
                 products.update({
-                    DATA.name: generate_source(rows),
+                    _table().name: generate_source(rows),
                     'spiral_moment_words.be64': ideal_projection.payload_bytes(
                         _moment_payload(rows)['be64']),
                     'spiral_moment_exact_coefficients.json': invariant._indent_json({'counts': rows}),

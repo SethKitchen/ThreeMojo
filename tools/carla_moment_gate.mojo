@@ -145,6 +145,19 @@ def moment_sources() -> String:
     )
 
 
+def moment_files() -> String:
+    """Return the pin file, the stored table, and the word count.
+
+    Returns:
+        JSON with `pins`, `table`, and `words`.
+    """
+    return (
+        '{"pins":"tools/carla_lane_oracle/spiral-moment-pins.json",'
+        + '"table":"extensions/carla/spiral_moment_table_data.mojo",'
+        + '"words":2816}'
+    )
+
+
 def _usage():
     """Print the command usage and stop."""
     print(

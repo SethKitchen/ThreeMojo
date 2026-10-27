@@ -20,6 +20,8 @@ It keeps the spiral-domain proof path.
 
 It keeps the moment proof path and the interval path.
 
+It keeps the moment pin file, the stored table, and the word count.
+
 `tools/carla_selection_gate.mojo` checks the selection-producer token digests and the phase-constant bounds.
 
 It keeps the two selection producer digests.
