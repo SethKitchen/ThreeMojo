@@ -1861,6 +1861,41 @@ def project_sum2_source(source: String) raises -> String:
     return _rewrite_stored_half(projected)
 
 
+def commute_legacy_source(source: String) raises -> String:
+    """Swap each legacy half-rate product to rate times one half.
+
+    Args:
+        source: The historical ideal spiral source.
+
+    Returns:
+        JSON with the swapped `source` and the swap `count`.
+
+    Raises:
+        Error: The source is not the ideal spiral declaration.
+    """
+    var normalized = ideal_function_source(source, "_spiral_expression")
+    var needle = "Expression . constant ( 0.5 ) * rate"
+    var replacement = "rate * Expression . constant ( 0.5 )"
+    var data = normalized.as_bytes()
+    var out = String("")
+    var count = 0
+    var index = 0
+    while index < len(data):
+        if _starts_at(normalized, index, needle):
+            out += replacement
+            count += 1
+            index += needle.byte_length()
+        else:
+            out += chr(Int(data[index]))
+            index += 1
+    var doc = PyJson()
+    var root = doc.new_dict()
+    doc.set(root, "source", doc.new_str(out))
+    doc.set(root, "count", doc.new_int(count))
+    doc.root = root
+    return doc.dumps()
+
+
 def _starts_at(source: String, index: Int, prefix: String) -> Bool:
     """Return whether `source` has `prefix` at a byte index.
 

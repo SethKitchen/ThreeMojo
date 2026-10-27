@@ -95,17 +95,27 @@ class ProjectHalf(ast.NodeTransformer):
         return node
 
 
-class CommuteLegacyRateHalf(ast.NodeTransformer):
-    def __init__(self):
-        self.count = 0
-
-    def visit_BinOp(self, node):
-        node = self.generic_visit(node)
-        if (isinstance(node.op, ast.Mult) and dump(node.left) == dump(half_constant())
-                and isinstance(node.right, ast.Name) and node.right.id == 'rate'):
-            self.count += 1
-            node.left, node.right = node.right, node.left
-        return node
+def commute_legacy_text(text):
+    """Swap each legacy half-rate product to rate times one half."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='commute-legacy-') as directory:
+        path = Path(directory) / 'source.mojo'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--commute-legacy', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
 
 
 def project_sum2_text(text):
@@ -279,7 +289,13 @@ def _gate(payload, kind):
 def verify_projection(legacy, current, helper_text):
     _gate(legacy.encode(), 'legacy')
     verify_helper_projection(helper_text)
-    left = function_tree(legacy, '_spiral_expression')
+    legacy_half = commute_legacy_text(legacy)
+    left = ast.parse(legacy_half['source']).body[0]
+    left._mojo_type_parameters = [
+        ('NAME', 'derivatives'), ('OP', ':'), ('NAME', 'Bool')]
+    require(left.name == '_spiral_expression', 'changed ideal generic declaration')
+    require(legacy_half['count'] == 2,
+            'expected exactly two historical rate-half commutations')
     # A caller inspecting a complete module supplies its unique actual AST
     # declaration, never a text slice that could select a docstring decoy.
     current_tree = (copy.deepcopy(current) if isinstance(current, ast.FunctionDef)
@@ -288,8 +304,6 @@ def verify_projection(legacy, current, helper_text):
             getattr(current_tree, '_mojo_type_parameters', None) ==
             [('NAME', 'derivatives'), ('OP', ':'), ('NAME', 'Bool')],
             'changed ideal generic declaration')
-    commute = CommuteLegacyRateHalf()
-    left = commute.visit(left)
     if isinstance(current, str):
         projected = project_sum2_text(current)
         right = ast.parse(projected['source']).body[0]
@@ -299,13 +313,12 @@ def verify_projection(legacy, current, helper_text):
         project = ProjectHalf()
         right = project.visit(project_sum2(current_tree))
         arguments = project.arguments
-    require(commute.count == 2, 'expected exactly two historical rate-half commutations')
     require(arguments == CALL_ARGUMENTS, 'expected exactly five reviewed stored-half calls')
     require(dump(left) == dump(right), 'ideal expression differs beyond reviewed half projection')
     projected_bytes = dump(left).encode()
     _gate(projected_bytes, 'projected')
     projected = PROJECTED_SHA256
-    return {'helper_projections': len(arguments), 'rate_half_commutations': commute.count,
+    return {'helper_projections': len(arguments), 'rate_half_commutations': legacy_half['count'],
             'projected_ast_sha256': projected, 'sum2_auxiliary_declarations': 4,
             'sum2_term_definitions': 2, 'sum2_auxiliary_updates': 4, 'sum2_error_writes': 2,
             'sum2_environment_guards': 1}

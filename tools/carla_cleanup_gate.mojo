@@ -24,6 +24,7 @@
     carla_cleanup_gate --ideal PATH --name NAME
     carla_cleanup_gate --stored-half PATH
     carla_cleanup_gate --project-sum2 PATH
+    carla_cleanup_gate --commute-legacy PATH
     carla_cleanup_gate --syntax PATH
     carla_cleanup_gate --slice PATH --name NAME
     carla_cleanup_gate --fragment DIR
@@ -52,6 +53,7 @@ from tests._python_tokens import (
     ideal_function_source,
     constant_literals_json,
     check_stored_half,
+    commute_legacy_source,
     project_sum2_source,
     function_slice,
     moment_payload_json,
@@ -531,19 +533,17 @@ def _usage():
         (
             "usage: carla_cleanup_gate --migration PATH [--previous PATH] |"
             " --bytes PATH --sha HEX | --sha-of PATH | --sha-texts PATH |"
-            " --token-sha PATH |"
-            " --tokens DIR | --words PATH --kind trig|geometry --label PATH |"
-            " --premises DIR | --declaration PATH --name NAME [--owner NAME] |"
-            " --bounds PATH --name NAME [--owner NAME] | --significant-json DIR"
-            " | --names DIR | --moves PATH | --statements PATH | --starts PATH"
-            " | --routing PATH --constants PATH | --ideal PATH --name NAME |"
-            " --stored-half PATH | --project-sum2 PATH |"
-            " --syntax PATH | --slice PATH --name NAME | --fragment DIR |"
-            " --normalize PATH | --table PATH --count N | --moment-source PATH"
-            " | --moment-payload PATH"
-            " | --verify-table DIR"
-            " | --block DIR | --strip-try PATH | --pin-rows PATH"
-            " | --decimal PATH | --literals PATH --name NAME"
+            " --token-sha PATH | --tokens DIR | --words PATH --kind"
+            " trig|geometry --label PATH | --premises DIR | --declaration PATH"
+            " --name NAME [--owner NAME] | --bounds PATH --name NAME [--owner"
+            " NAME] | --significant-json DIR | --names DIR | --moves PATH |"
+            " --statements PATH | --starts PATH | --routing PATH --constants"
+            " PATH | --ideal PATH --name NAME | --stored-half PATH |"
+            " --project-sum2 PATH | --commute-legacy PATH | --syntax PATH |"
+            " --slice PATH --name NAME | --fragment DIR | --normalize PATH |"
+            " --table PATH --count N | --moment-source PATH | --moment-payload"
+            " PATH | --verify-table DIR | --block DIR | --strip-try PATH |"
+            " --pin-rows PATH | --decimal PATH | --literals PATH --name NAME"
             " --kind array --size N | --literals PATH --name NAME --kind scalar"
         ),
         file=stderr,
@@ -583,6 +583,7 @@ def main() raises:
     var ideal = String("")
     var stored_half = String("")
     var project_sum2 = String("")
+    var commute_legacy = String("")
     var syntax = String("")
     var slice_path = String("")
     var fragment = String("")
@@ -629,6 +630,7 @@ def main() raises:
             or word == "--ideal"
             or word == "--stored-half"
             or word == "--project-sum2"
+            or word == "--commute-legacy"
             or word == "--syntax"
             or word == "--slice"
             or word == "--fragment"
@@ -700,6 +702,8 @@ def main() raises:
                 stored_half = value
             elif word == "--project-sum2":
                 project_sum2 = value
+            elif word == "--commute-legacy":
+                commute_legacy = value
             elif word == "--syntax":
                 syntax = value
             elif word == "--slice":
@@ -782,6 +786,8 @@ def main() raises:
     if stored_half.byte_length() > 0:
         modes += 1
     if project_sum2.byte_length() > 0:
+        modes += 1
+    if commute_legacy.byte_length() > 0:
         modes += 1
     if syntax.byte_length() > 0:
         modes += 1
@@ -981,6 +987,12 @@ def main() raises:
             return
         if project_sum2.byte_length() > 0:
             print(project_sum2_source(Path(project_sum2).read_text()), end="")
+            return
+        if commute_legacy.byte_length() > 0:
+            print(
+                commute_legacy_source(Path(commute_legacy).read_text()),
+                end="",
+            )
             return
         if starts.byte_length() > 0:
             print(top_level_starts_json(Path(starts).read_text()), end="")
