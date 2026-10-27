@@ -129,7 +129,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 88</summary>
+<summary>Implemented: 89</summary>
 
 - [x] [Literal loop receipt](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#constant-loop-outcome-proofs): `tools/coverage_loop_seal.mojo` writes and checks the sealed loop receipt [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
@@ -234,6 +234,8 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [x] [Runtime-view record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_runtime_view_gate.mojo` checks the runtime-view record and its bound tests [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Coverage-followup record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_followup_gate.mojo` checks the coverage-followup record, the prior invariant digest, and the component records [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Rounded LINE singleton record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_singleton_gate.mojo` checks the rounded LINE singleton migration digest and its schema [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Neutral CARLA texture plan](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_texture_plan.mojo` names a neutral texture and chooses its fitted size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

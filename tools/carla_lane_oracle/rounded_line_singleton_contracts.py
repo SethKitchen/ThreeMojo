@@ -10,7 +10,6 @@ if __package__:
 else:
     import source_contracts as _typed_source
 
-import hashlib
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 import io
 import json
@@ -32,14 +31,31 @@ def require(value, message):
         raise ValueError('rounded LINE singleton contract: ' + message)
 
 
+def _gate(payload):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='singleton-gate-') as directory:
+        record = Path(directory) / 'migration.json'
+        record.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_singleton_gate',
+             '--migration', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root / MIGRATION, (root / MIGRATION).read_bytes())
-    require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256,
-            'unreviewed migration record')
-    record = json.loads(payload, object_pairs_hook=source.unique_keys)
-    require(record['schema'] == 1, 'wrong schema')
-    return record
-
+    _gate(payload)
+    return json.loads(payload, object_pairs_hook=source.unique_keys)
 
 
 def _reviewed_text(root, path, record):
