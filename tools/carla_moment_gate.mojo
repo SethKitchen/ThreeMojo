@@ -8,6 +8,7 @@
     carla_moment_gate --module PATH --interval PATH --geometry PATH --trig PATH
     carla_moment_gate --rows PATH
     carla_moment_gate --node-sums PATH
+    carla_moment_gate --fractions PATH
 
 The program checks the texts it is given. It does not roll a successor
 back to a historical source. The caller does that before it starts the
@@ -25,6 +26,7 @@ from tools._spiral_moment_derive import (
 )
 from tools._spiral_moment_words import (
     fraction_of_word,
+    fraction_texts_payload,
     rounded_node_sums_payload,
 )
 
@@ -133,6 +135,7 @@ def _usage():
         (
             "usage: carla_moment_gate --module PATH --interval PATH"
             " --geometry PATH --trig PATH | --rows PATH | --node-sums PATH"
+            " | --fractions PATH"
         ),
         file=stderr,
     )
@@ -140,13 +143,14 @@ def _usage():
 
 
 def main() raises:
-    """Check four source files, or print derived rows or node sums."""
+    """Check four source files, or print rows, node sums, or fractions."""
     var module = String("")
     var interval = String("")
     var geometry = String("")
     var trig = String("")
     var rows = String("")
     var node_sums = String("")
+    var fractions = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -158,6 +162,7 @@ def main() raises:
             or word == "--trig"
             or word == "--rows"
             or word == "--node-sums"
+            or word == "--fractions"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -172,22 +177,36 @@ def main() raises:
                 rows = value
             elif word == "--node-sums":
                 node_sums = value
+            elif word == "--fractions":
+                fractions = value
             else:
                 trig = value
             index += 2
             continue
         _usage()
-    if rows.byte_length() > 0 or node_sums.byte_length() > 0:
+    var single = 0
+    if rows.byte_length() > 0:
+        single += 1
+    if node_sums.byte_length() > 0:
+        single += 1
+    if fractions.byte_length() > 0:
+        single += 1
+    if single > 0:
         if (
-            module.byte_length() > 0
+            single != 1
+            or module.byte_length() > 0
             or interval.byte_length() > 0
             or geometry.byte_length() > 0
             or trig.byte_length() > 0
-            or (rows.byte_length() > 0 and node_sums.byte_length() > 0)
         ):
             _usage()
         try:
-            if node_sums.byte_length() > 0:
+            if fractions.byte_length() > 0:
+                print(
+                    fraction_texts_payload(Path(fractions).read_text()),
+                    end="",
+                )
+            elif node_sums.byte_length() > 0:
                 print(
                     rounded_node_sums_payload(Path(node_sums).read_text()),
                     end="",

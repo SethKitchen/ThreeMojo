@@ -448,3 +448,65 @@ def rounded_node_sums_payload(payload: String) raises -> String:
         out.append(rows, out.new_str(_hex_word(word)))
     out.root = rows
     return out.dumps()
+
+
+def _fraction_text(value: Fraction) -> String:
+    """Return `n/d`, or `n` when the denominator is one.
+
+    Args:
+        value: The exact coefficient.
+
+    Returns:
+        The text `str(Fraction)` would produce.
+    """
+    var text = value.numerator.to_string()
+    if value.denominator != BigInt(1):
+        text += "/"
+        text += value.denominator.to_string()
+    return text
+
+
+def fraction_texts(words: List[UInt64]) raises -> List[String]:
+    """Return the exact fraction spelling of each binary64 word.
+
+    Args:
+        words: Finite binary64 encodings.
+
+    Returns:
+        One `n` or `n/d` spelling per word, in order.
+
+    Raises:
+        Error: A word is not finite.
+    """
+    var texts = List[String]()
+    for word in words:
+        texts.append(_fraction_text(fraction_of_word(word)))
+    return texts^
+
+
+def fraction_texts_payload(payload: String) raises -> String:
+    """Return exact fraction spellings for one JSON word list.
+
+    Args:
+        payload: A JSON list of `0x` words.
+
+    Returns:
+        A JSON list of `n` or `n/d` spellings.
+
+    Raises:
+        Error: A word is malformed or not finite.
+    """
+    var doc = PyJson.parse(payload)
+    var count = doc.length(doc.root)
+    var words = List[UInt64]()
+    var index = 0
+    while index < count:
+        words.append(_parse_word(doc.text(doc.item(doc.root, index))))
+        index += 1
+    var texts = fraction_texts(words)
+    var out = PyJson()
+    var rows = out.new_list()
+    for text in texts:
+        out.append(rows, out.new_str(text))
+    out.root = rows
+    return out.dumps()

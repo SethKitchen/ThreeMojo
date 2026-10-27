@@ -451,6 +451,34 @@ def rounded_node_sums(nodes, weights):
     return [int(item, 16) for item in json.loads(result.stdout)]
 
 
+def fraction_texts(words):
+    """Return the exact fraction spelling of each binary64 word."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps(
+        [f'0x{word:016X}' for word in words], separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='fraction-texts-') as directory:
+        path = Path(directory) / 'words.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_gate',
+             '--fractions', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = 'spiral moment word: '
+        if message.startswith(prefix):
+            message = message[len(prefix):]
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def verify_moment_table(text, words):
     """Return the table words when they match the derived canonical source."""
     import os

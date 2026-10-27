@@ -189,6 +189,13 @@ def nearest_even(value):
     return low if low % 2 == 0 else high
 
 
+def _fraction_texts(words):
+    try:
+        return ideal_projection.fraction_texts(words)
+    except ValueError as error:
+        raise CheckError(str(error)) from error
+
+
 def _rounded_words(literals):
     try:
         return ideal_projection.decimal_words(literals)
@@ -253,6 +260,8 @@ def verify_inputs(root):
     require(pins['dependencies'] == DEPENDENCIES, 'wrong dependency closure pin')
     constants = {}
     stored_words = {}
+    flat_words = []
+    flat_names = []
     for name, record in pins['arrays'].items():
         require(set(record) == {'path', 'words'}, 'wrong array pin keys: ' + name)
         path, size = ARRAY_SPECS[name]
@@ -262,8 +271,16 @@ def verify_inputs(root):
                             name, len(record['words']))
         require([hexword(word) for word in words] == record['words'],
                 'stored constant words changed: ' + name)
-        constants[name] = [fraction_of_word(word) for word in words]
         stored_words[name] = words
+        flat_words.extend(words)
+        flat_names.append(name)
+    texts = _fraction_texts(flat_words)
+    require(len(texts) == len(flat_words), 'invalid UInt64 word')
+    cursor = 0
+    for name in flat_names:
+        size = len(stored_words[name])
+        constants[name] = [F(text) for text in texts[cursor:cursor + size]]
+        cursor += size
     require(set(constants) == {'_GL_NODES', '_GL_WEIGHTS',
                                '_COS_COEFFICIENTS', '_SIN_COEFFICIENTS'},
             'wrong constant-array set')
@@ -365,7 +382,7 @@ def verify_inputs(root):
         raise CheckError(str(error)) from error
     require([hexword(word) for word in sums] == pins['rounded_node_sums'],
             'rounded 1 + node words changed')
-    constants['node_sums'] = [fraction_of_word(word) for word in sums]
+    constants['node_sums'] = [F(text) for text in _fraction_texts(sums)]
     return constants, pins
 
 

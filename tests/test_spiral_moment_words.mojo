@@ -16,9 +16,28 @@ from tools._spiral_moment_words import (
     bracket,
     decimal_word,
     fraction_of_word,
+    fraction_texts,
     nearest_even,
     verify_bracket,
 )
+
+
+def test_fraction_spellings_match_binary64_words() raises:
+    """Zero, one, and a negative one keep their exact spellings."""
+    var words = List[UInt64]()
+    words.append(0)
+    words.append(SIGN)
+    words.append(UInt64(0x3FF0000000000000))
+    words.append(UInt64(0xBFF0000000000000))
+    var texts = fraction_texts(words)
+    assert_equal(texts[0], "0")
+    assert_equal(texts[1], "0")
+    assert_equal(texts[2], "1")
+    assert_equal(texts[3], "-1")
+    var bad = List[UInt64]()
+    bad.append(UInt64(0x7FF0000000000000))
+    with assert_raises(contains="nonfinite binary64 word"):
+        _ = fraction_texts(bad)
 
 
 def test_stored_words_round_trip() raises:
