@@ -1896,6 +1896,220 @@ def commute_legacy_source(source: String) raises -> String:
     return doc.dumps()
 
 
+def _store_operator(text: String) -> Bool:
+    """Return whether `text` binds the name on its left.
+
+    Args:
+        text: One operator token.
+
+    Returns:
+        True for `=` and the augmented assignments, not for `==`.
+    """
+    if text == "=" or text == "+=" or text == "-=" or text == "*=":
+        return True
+    if text == "/=" or text == "%=" or text == "**=" or text == "//=":
+        return True
+    if text == "&=" or text == "|=" or text == "^=" or text == "<<=":
+        return True
+    if text == ">>=" or text == "@=":
+        return True
+    return False
+
+
+def _binding_shadow(
+    source: String,
+    name: String,
+    allowed: String,
+    allow_definition: Bool,
+) raises:
+    """Reject a binding that shadows one reviewed helper name.
+
+    Args:
+        source: Mojo source to scan.
+        name: The helper name that must not be shadowed.
+        allowed: An import module that may bind `name`. Empty allows none.
+        allow_definition: True when one function or struct of `name` is kept.
+
+    Raises:
+        Error: An import, declaration, assignment, parameter, or exception
+            binds `name`.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var count = len(kinds)
+    var index = 0
+    var definitions = 0
+    while index < count:
+        if texts[index] == "from":
+            var module = String("")
+            index += 1
+            while index < count and texts[index] != "import":
+                if kinds[index] == _NAME or texts[index] == ".":
+                    module += texts[index]
+                index += 1
+            if index < count and texts[index] == "import":
+                index += 1
+            var depth = 0
+            while index < count:
+                if texts[index] == "(":
+                    depth += 1
+                elif texts[index] == ")":
+                    if depth > 0:
+                        depth -= 1
+                elif texts[index] == "*":
+                    raise Error(
+                        "wildcard import can shadow reviewed helper: " + name
+                    )
+                elif kinds[index] == _NAME and texts[index] != "as":
+                    var bound = texts[index]
+                    if (
+                        index + 2 < count
+                        and texts[index + 1] == "as"
+                        and kinds[index + 2] == _NAME
+                    ):
+                        bound = texts[index + 2]
+                        index += 2
+                    if bound == name and module != allowed:
+                        raise Error(
+                            "reviewed helper import alias shadows: " + name
+                        )
+                elif texts[index] == "\n" and depth == 0:
+                    break
+                index += 1
+        elif texts[index] == "import":
+            index += 1
+            while index < count and texts[index] != "\n":
+                if kinds[index] == _NAME:
+                    var bound = texts[index]
+                    var dotted = False
+                    while (
+                        index + 2 < count
+                        and texts[index + 1] == "."
+                        and kinds[index + 2] == _NAME
+                    ):
+                        dotted = True
+                        index += 2
+                    if (
+                        not dotted
+                        and index + 2 < count
+                        and texts[index + 1] == "as"
+                        and kinds[index + 2] == _NAME
+                    ):
+                        bound = texts[index + 2]
+                        index += 2
+                    elif (
+                        dotted
+                        and index + 2 < count
+                        and texts[index + 1] == "as"
+                        and kinds[index + 2] == _NAME
+                    ):
+                        bound = texts[index + 2]
+                        index += 2
+                    if bound == name:
+                        raise Error(
+                            "reviewed helper module alias shadows: " + name
+                        )
+                index += 1
+        elif (
+            texts[index] == "def"
+            or texts[index] == "struct"
+            or texts[index] == "class"
+        ):
+            index += 1
+            if index < count and kinds[index] == _NAME:
+                if texts[index] == name:
+                    definitions += 1
+                    if not allow_definition or definitions > 1:
+                        raise Error(
+                            "reviewed helper declaration shadows: " + name
+                        )
+                index += 1
+            if index < count and texts[index] == "[":
+                var depth = 1
+                index += 1
+                while index < count and depth > 0:
+                    if texts[index] == "[":
+                        depth += 1
+                    elif texts[index] == "]":
+                        depth -= 1
+                    index += 1
+            if index < count and texts[index] == "(":
+                var depth = 1
+                var at_parameter = True
+                index += 1
+                while index < count and depth > 0:
+                    if texts[index] == "(" or texts[index] == "[":
+                        depth += 1
+                        at_parameter = False
+                    elif texts[index] == ")" or texts[index] == "]":
+                        depth -= 1
+                        at_parameter = depth == 1
+                    elif texts[index] == ",":
+                        at_parameter = depth == 1
+                    elif (
+                        at_parameter
+                        and depth == 1
+                        and kinds[index] == _NAME
+                        and texts[index] == name
+                    ):
+                        raise Error(
+                            "reviewed helper parameter shadows: " + name
+                        )
+                    elif texts[index] == ":" or texts[index] == "=":
+                        at_parameter = False
+                    index += 1
+        elif texts[index] == "except":
+            index += 1
+            while index < count and texts[index] != "\n":
+                if (
+                    texts[index] == "as"
+                    and index + 1 < count
+                    and texts[index + 1] == name
+                ):
+                    raise Error(
+                        "reviewed helper exception binding shadows: " + name
+                    )
+                index += 1
+        elif (
+            texts[index] == "var"
+            and index + 1 < count
+            and texts[index + 1] == name
+        ):
+            raise Error("reviewed helper assignment shadows: " + name)
+        elif (
+            texts[index] == "del"
+            and index + 1 < count
+            and texts[index + 1] == name
+        ):
+            raise Error("reviewed helper assignment shadows: " + name)
+        elif (
+            kinds[index] == _NAME and texts[index] == name and index + 1 < count
+        ):
+            if _store_operator(texts[index + 1]):
+                raise Error("reviewed helper assignment shadows: " + name)
+        index += 1
+
+
+def binding_shadow_payload(payload: String) raises:
+    """Reject a binding recorded in one JSON shadow document.
+
+    Args:
+        payload: JSON with `source`, `name`, `allowed`, and `allow_definition`.
+
+    Raises:
+        Error: The source binds `name` outside the allowed import or definition.
+    """
+    var doc = PyJson.parse(payload)
+    var allow = doc.flag(doc.at(doc.root, "allow_definition"))
+    _binding_shadow(
+        doc.text(doc.at(doc.root, "source")),
+        doc.text(doc.at(doc.root, "name")),
+        doc.text(doc.at(doc.root, "allowed")),
+        allow,
+    )
+
+
 def _starts_at(source: String, index: Int, prefix: String) -> Bool:
     """Return whether `source` has `prefix` at a byte index.
 

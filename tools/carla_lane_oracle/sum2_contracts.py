@@ -31,9 +31,11 @@ import json
 from pathlib import Path
 
 if __package__:
-    from .ideal_projection import declaration, selected_block, verify_projection
+    from .ideal_projection import (
+        binding_shadow, declaration, selected_block, verify_projection)
 else:
-    from ideal_projection import declaration, selected_block, verify_projection
+    from ideal_projection import (
+        binding_shadow, declaration, selected_block, verify_projection)
 
 
 def _syntax_tree(text):
@@ -317,28 +319,12 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def verify_binding(tree, name, allowed_definition=None, allowed_import=None):
+def verify_binding(text, name, allowed_module='', allow_definition=False):
     """Reject every lexical binding form that could replace a reviewed helper."""
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
-            require(not any(alias.name == '*' for alias in node.names),
-                    'wildcard import can shadow reviewed helper: ' + name)
-            if node is not allowed_import:
-                require(not any((alias.asname or alias.name) == name for alias in node.names),
-                        'reviewed helper import alias shadows: ' + name)
-        elif isinstance(node, ast.Import):
-            require(not any((alias.asname or alias.name.split('.')[0]) == name
-                            for alias in node.names),
-                    'reviewed helper module alias shadows: ' + name)
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            require(node.name != name or node is allowed_definition,
-                    'reviewed helper declaration shadows: ' + name)
-        elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
-            require(node.id != name, 'reviewed helper assignment shadows: ' + name)
-        elif isinstance(node, ast.arg):
-            require(node.arg != name, 'reviewed helper parameter shadows: ' + name)
-        elif isinstance(node, ast.ExceptHandler):
-            require(node.name != name, 'reviewed helper exception binding shadows: ' + name)
+    try:
+        binding_shadow(text, name, allowed_module, allow_definition)
+    except ValueError as error:
+        raise ValueError(str(error)) from error
 
 
 def verify(root, *, _operation=None):
@@ -400,11 +386,13 @@ def verify(root, *, _operation=None):
                 [(name, None) for name in helpers],
                 'Sum2 direct helper import changed: ' + module)
         for helper in helpers:
-            verify_binding(trees[module], helper, allowed_import=matches[0])
+            verify_binding(
+                texts[module], helper,
+                allowed_module='extensions.carla.curve_sum2')
     pins = json.loads(_typed_source.historical_text(root, root / 'tools/carla_lane_oracle/spiral-moment-pins.json', source._observe_text(root, (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').relative_to(root).as_posix(), (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').read_text(), _operation=_operation), _operation=_operation))
     interval = _typed_source.historical_text(root, root / 'extensions/carla/curve_interval.mojo', source._observe_text(root, (root / 'extensions/carla/curve_interval.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_interval.mojo').read_text(), _operation=_operation), _operation=_operation)
     interval_tree = _syntax_tree(interval)
-    half = c.unique_function(interval_tree, '_stored_half')
+    _ = c.unique_function(interval_tree, '_stored_half')
     half_imports = [node for node in trees['curve_bounds'].body
                     if isinstance(node, ast.ImportFrom)
                     and any(alias.name == '_stored_half' or alias.asname == '_stored_half'
@@ -414,8 +402,10 @@ def verify(root, *, _operation=None):
             and [(alias.name, alias.asname) for alias in half_imports[0].names
                  if alias.name == '_stored_half' or alias.asname == '_stored_half']
                 == [('_stored_half', None)], 'stored-half direct import changed')
-    verify_binding(trees['curve_bounds'], '_stored_half', allowed_import=half_imports[0])
-    verify_binding(interval_tree, '_stored_half', allowed_definition=half)
+    verify_binding(
+        texts['curve_bounds'], '_stored_half',
+        allowed_module='extensions.carla.curve_interval')
+    verify_binding(interval, '_stored_half', allow_definition=True)
     projection = verify_projection(
         pins['ideal_projection']['legacy_normalized_source'],
         selected_block(

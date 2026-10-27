@@ -88,6 +88,8 @@ It rewrites each stored-half call into a product with one half.
 
 It swaps each legacy half-rate product into rate times one half.
 
+It rejects a binding that shadows a reviewed helper.
+
 It derives the stored moment rows in exact arithmetic.
 
 It checks the stored moment table against the derived words.

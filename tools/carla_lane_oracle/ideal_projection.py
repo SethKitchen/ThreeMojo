@@ -118,6 +118,34 @@ def commute_legacy_text(text):
     return json.loads(result.stdout)
 
 
+def binding_shadow(text, name, allowed_module='', allow_definition=False):
+    """Reject a binding that shadows one reviewed helper name."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({
+        'source': text,
+        'name': name,
+        'allowed': allowed_module,
+        'allow_definition': allow_definition,
+    }, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='binding-shadow-') as directory:
+        path = Path(directory) / 'payload.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--binding', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def project_sum2_text(text):
     """Return the projected spiral source and its stored-half arguments."""
     import os
