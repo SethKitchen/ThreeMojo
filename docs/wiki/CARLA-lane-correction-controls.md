@@ -18,6 +18,8 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_selection_gate.mojo` checks the selection-producer token digests and the phase-constant bounds.
 
+It keeps the two selection producer digests.
+
 It checks the producer names before that gate.
 
 It restores one selection function inside its line span.

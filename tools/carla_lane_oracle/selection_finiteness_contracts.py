@@ -14,10 +14,36 @@ if __package__:
     from . import source_contracts
 else:
     import source_contracts
-EXPECTED={
-'extensions/carla/spiral_grouped_roundoff_proof.mojo':'a8f3beca23c8d6a84d01f5eebecb0a01cd2102aad4e226ed6a782722733a86b7',
-'extensions/carla/spiral_roundoff_proof.mojo':'634c4f0f448b472301a42ad6065655f60cf78121f12bafa64085a1e67108fc0f'}
 INTERVAL='e2e87c519ed45fb4ec77d9a54aad08406461b17805287874c9b05ddb6bf49b11'
+_EXPECTED = None
+
+
+def _expected():
+    """Return the two selection producer digests in reviewed order."""
+    global _EXPECTED
+    if _EXPECTED is not None:
+        return _EXPECTED
+    import json
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_selection_producers'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _EXPECTED = json.loads(result.stdout)
+    return _EXPECTED
+
+
+def __getattr__(name):
+    if name == 'EXPECTED':
+        return _expected()
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 def _scalar(text,name):
     # Lazy imports avoid a cycle with maintained migration verifiers.
@@ -44,7 +70,7 @@ def verify_text(modules, interval, trig):
         import ideal_projection
     ideal_projection.moment_guard('--names', {
         'names': list(modules),
-        'expected': list(EXPECTED),
+        'expected': list(_expected()),
         'message': 'Wrong selection producer set',
     })
     root = Path(__file__).resolve().parents[2]
@@ -87,7 +113,7 @@ def _producer_text(root, path, *, _operation=None):
         import ideal_projection
     if (path == 'extensions/carla/spiral_grouped_roundoff_proof.mojo'
             and not ideal_projection.texts_match(
-                ideal_projection.token_sha256(text), EXPECTED[path])):
+                ideal_projection.token_sha256(text), _expected()[path])):
         if __package__:
             from . import grouped_y_finiteness_contracts as grouped_y
         else:
@@ -103,7 +129,7 @@ def verify(root, *, _operation=None):
             from . import full_audit_cleanup_contracts as full_audit
         else:
             import full_audit_cleanup_contracts as full_audit
-    modules = {p:_producer_text(root,p, _operation=_operation) for p in EXPECTED}
+    modules = {p:_producer_text(root,p, _operation=_operation) for p in _expected()}
     interval = (root/'extensions/carla/curve_interval.mojo').read_text()
     if _operation is not None:
         interval = _typed_source.historical_text(root, 'extensions/carla/curve_interval.mojo', full_audit._observe_text(
@@ -266,12 +292,12 @@ def predecessor_text(root, path, *, _operation=None):
         import ideal_projection
     ideal_projection.moment_guard('--member', {
         'name': path,
-        'names': list(EXPECTED),
+        'names': list(_expected()),
         'message': 'Wrong selection predecessor module',
     })
     ideal_projection.moment_guard('--names', {
         'names': list(record['modules']),
-        'expected': list(EXPECTED),
+        'expected': list(_expected()),
         'message': 'Wrong selection predecessor module',
     })
     item=record['modules'][path]

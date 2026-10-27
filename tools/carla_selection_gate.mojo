@@ -105,6 +105,21 @@ def selection_finiteness(
     return _PASS
 
 
+def selection_producers() -> String:
+    """Return the two selection producer digests in reviewed order.
+
+    Returns:
+        A JSON object. The grouped proof is the first key.
+    """
+    return (
+        '{"extensions/carla/spiral_grouped_roundoff_proof.mojo":"'
+        + _GROUPED
+        + '","extensions/carla/spiral_roundoff_proof.mojo":"'
+        + _ROUNDOFF
+        + '"}'
+    )
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -118,7 +133,11 @@ def _usage():
 
 
 def main() raises:
-    """Check four source files and print the pass record."""
+    """Check four source files and print the pass record.
+
+    Raises:
+        Error: The command is invalid, or a selection check fails.
+    """
     var grouped = String("")
     var roundoff = String("")
     var interval = String("")
