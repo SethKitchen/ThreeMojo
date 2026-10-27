@@ -286,6 +286,24 @@ def _fields(kinds: List[Int], texts: List[String], name: String) raises:
         index += 1
 
 
+def stored_helper_fields(source: String) raises:
+    """Require the stored helpers to avoid derivative reads.
+
+    Args:
+        source: The `curve_interval` module.
+
+    Raises:
+        Error: A helper is missing or reads a derivative field.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _load(source, kinds, texts)
+    _fields(kinds, texts, "_without_derivatives")
+    _fields(kinds, texts, "_stored_difference")
+    _fields(kinds, texts, "_stored_blend_error")
+    _fields(kinds, texts, "_stored_half")
+
+
 def stored_jet_gate(source: String) raises:
     """Require the stored jet aliases and the derivative-field gate.
 

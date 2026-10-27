@@ -158,6 +158,9 @@ def _sampled_text(mode, text, name=''):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
+        for prefix in ('sampled value gate: ', 'sampled jet gate: '):
+            if message.startswith(prefix):
+                message = message[len(prefix):]
         raise CheckError(message)
     return result.stdout
 
@@ -359,13 +362,7 @@ def verify(root):
             sum2_contracts.verify(root, _operation=_operation)
         except ValueError as error:
             raise CheckError(str(error)) from error
-        interval_tree = syntax_tree(texts['curve_interval.mojo'])
-        for helper in ('_stored_difference', '_stored_half', '_stored_blend_error',
-                       '_without_derivatives'):
-            for node in ast.walk(unique_function(interval_tree, helper)):
-                require(not (isinstance(node, ast.Attribute) and
-                            node.attr in ('first', 'second', 'derivatives')),
-                        'derivative-field/flag read in stored helper: ' + helper)
+        _sampled_text('--helper-fields', texts['curve_interval.mojo'])
         target_tree = syntax_tree(target)
         reference_trees = {'curve_bounds.mojo': reviewed_reference_tree(bounds, root, _operation=_operation), 'curve_trig.mojo': syntax_tree(trig)}
         for key, expected_hash in SHARED_GRAPHS.items():
@@ -373,17 +370,13 @@ def verify(root):
             node = unique_function(reference_trees[filename], name)
             actual = hashlib.sha256(dump(node).encode()).hexdigest()
             require(actual == expected_hash, 'shared generic or full-Jet bridge changed: ' + key)
-        for node in ast.walk(target_tree):
-            require(not (isinstance(node, ast.Attribute) and node.attr in ('first', 'second', 'derivatives', 'sqrt')),
-                    'derivative-field/flag read or sqrt in value-only graph')
+        _sampled_text('--value-fields', target)
         try:
             for filename, text in texts.items():
                 verify_qualifiers(root, filename, text, _operation=_operation)
         except ValueError as error:
             raise CheckError(str(error)) from error
-        actual_imports = [dump(n) for n in target_tree.body if isinstance(n, ast.ImportFrom)]
-        expected_imports = [dump(n) for n in ast.parse(IMPORTS).body]
-        require(actual_imports == expected_imports, 'sampled graph imports changed')
+        _sampled_text('--value-imports', target)
         expected = {}
         for name in COPIES:
             old = _sampled_text(

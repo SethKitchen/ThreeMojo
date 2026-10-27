@@ -232,6 +232,37 @@ def _fields(kinds: List[Int], texts: List[String]) raises:
         index += 1
 
 
+def sampled_value_imports(source: String) raises:
+    """Require the reviewed sampled-value imports.
+
+    Args:
+        source: The `lane_value_bounds` module.
+
+    Raises:
+        Error: An import changed.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _load(source, kinds, texts)
+    if not _same(_imports(kinds, texts), _expected()):
+        _fail("sampled graph imports changed")
+
+
+def sampled_value_fields(source: String) raises:
+    """Require the value graph to avoid derivative and square-root reads.
+
+    Args:
+        source: The `lane_value_bounds` module.
+
+    Raises:
+        Error: The value graph reads a derivative or `sqrt`.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _load(source, kinds, texts)
+    _fields(kinds, texts)
+
+
 def sampled_value_gate(source: String) raises:
     """Require the reviewed sampled-value imports and field gate.
 
@@ -242,12 +273,8 @@ def sampled_value_gate(source: String) raises:
         Error: An import changed, or the value graph reads a derivative
         or `sqrt`.
     """
-    var kinds = List[Int]()
-    var texts = List[String]()
-    _load(source, kinds, texts)
-    if not _same(_imports(kinds, texts), _expected()):
-        _fail("sampled graph imports changed")
-    _fields(kinds, texts)
+    sampled_value_imports(source)
+    sampled_value_fields(source)
 
 
 def _ident_start(byte: UInt8) -> Bool:

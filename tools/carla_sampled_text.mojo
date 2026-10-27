@@ -17,10 +17,13 @@ derivative intersection. The caller supplies the source.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
+from tools._sampled_jet_gate import stored_helper_fields
 from tools._sampled_value_gate import (
     drop_derivative_intersection,
     extract_sampled_function,
     rename_sampled_identifiers,
+    sampled_value_fields,
+    sampled_value_imports,
 )
 
 
@@ -29,7 +32,8 @@ def _usage():
     print(
         (
             "usage: carla_sampled_text --extract PATH --name NAME | --rename"
-            " PATH | --drop-intersection PATH --name first|second"
+            " PATH | --drop-intersection PATH --name first|second |"
+            " --helper-fields PATH | --value-fields PATH | --value-imports PATH"
         ),
         file=stderr,
     )
@@ -45,6 +49,9 @@ def main() raises:
     var extract = String("")
     var rename = String("")
     var drop = String("")
+    var helper_fields = String("")
+    var value_fields = String("")
+    var value_imports = String("")
     var name = String("")
     var arguments = argv()
     var index = 1
@@ -54,6 +61,9 @@ def main() raises:
             word == "--extract"
             or word == "--rename"
             or word == "--drop-intersection"
+            or word == "--helper-fields"
+            or word == "--value-fields"
+            or word == "--value-imports"
             or word == "--name"
         ):
             if index + 1 >= len(arguments):
@@ -65,6 +75,12 @@ def main() raises:
                 rename = value
             elif word == "--drop-intersection":
                 drop = value
+            elif word == "--helper-fields":
+                helper_fields = value
+            elif word == "--value-fields":
+                value_fields = value
+            elif word == "--value-imports":
+                value_imports = value
             else:
                 name = value
             index += 2
@@ -76,6 +92,12 @@ def main() raises:
     if rename.byte_length() > 0:
         modes += 1
     if drop.byte_length() > 0:
+        modes += 1
+    if helper_fields.byte_length() > 0:
+        modes += 1
+    if value_fields.byte_length() > 0:
+        modes += 1
+    if value_imports.byte_length() > 0:
         modes += 1
     if modes != 1:
         _usage()
@@ -97,6 +119,15 @@ def main() raises:
                 drop_derivative_intersection(Path(drop).read_text(), name),
                 end="",
             )
+            return
+        if helper_fields.byte_length() > 0:
+            stored_helper_fields(Path(helper_fields).read_text())
+            return
+        if value_fields.byte_length() > 0:
+            sampled_value_fields(Path(value_fields).read_text())
+            return
+        if value_imports.byte_length() > 0:
+            sampled_value_imports(Path(value_imports).read_text())
             return
         print(rename_sampled_identifiers(Path(rename).read_text()), end="")
     except error:
