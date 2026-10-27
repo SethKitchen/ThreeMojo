@@ -100,6 +100,8 @@ It checks the ideal spiral declaration before projecting it.
 
 It compares the Sum2 recurrence, leaf, and caller graphs.
 
+It compares the scalar environment call with its stored statement.
+
 It counts one stored statement or expression in a runtime helper.
 
 It checks the fresh guard and the helper body against the stored fragment.

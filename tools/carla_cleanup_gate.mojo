@@ -31,6 +31,7 @@
     carla_cleanup_gate --function-dump PATH
     carla_cleanup_gate --plain-dump PATH
     carla_cleanup_gate --sum2-dump PATH
+    carla_cleanup_gate --statement-dump PATH
     carla_cleanup_gate --fragment-count PATH
     carla_cleanup_gate --syntax PATH
     carla_cleanup_gate --slice PATH --name NAME
@@ -59,6 +60,7 @@ from tests._python_expr import (
     function_dump,
     heading_sources,
     plain_function_dump,
+    statement_dump,
     sum2_graph_dump,
     fragment_count,
 )
@@ -557,7 +559,8 @@ def _usage():
             " PATH | --ideal PATH --name NAME | --stored-half PATH |"
             " --project-sum2 PATH | --commute-legacy PATH | --binding PATH |"
             " --imports PATH | --heading PATH | --function-dump PATH |"
-            " --plain-dump PATH | --sum2-dump PATH | --fragment-count PATH |"
+            " --plain-dump PATH | --sum2-dump PATH | --statement-dump PATH |"
+            " --fragment-count PATH |"
             " --syntax PATH |"
             " --slice PATH --name NAME | --fragment DIR | --normalize PATH |"
             " --table PATH --count N | --moment-source PATH | --moment-payload"
@@ -609,6 +612,7 @@ def main() raises:
     var function_path = String("")
     var plain_path = String("")
     var sum2_dump = String("")
+    var statement_path = String("")
     var fragment_count_path = String("")
     var syntax = String("")
     var slice_path = String("")
@@ -663,6 +667,7 @@ def main() raises:
             or word == "--function-dump"
             or word == "--plain-dump"
             or word == "--sum2-dump"
+            or word == "--statement-dump"
             or word == "--fragment-count"
             or word == "--syntax"
             or word == "--slice"
@@ -749,6 +754,8 @@ def main() raises:
                 plain_path = value
             elif word == "--sum2-dump":
                 sum2_dump = value
+            elif word == "--statement-dump":
+                statement_path = value
             elif word == "--fragment-count":
                 fragment_count_path = value
             elif word == "--syntax":
@@ -847,6 +854,8 @@ def main() raises:
     if plain_path.byte_length() > 0:
         modes += 1
     if sum2_dump.byte_length() > 0:
+        modes += 1
+    if statement_path.byte_length() > 0:
         modes += 1
     if fragment_count_path.byte_length() > 0:
         modes += 1
@@ -1072,6 +1081,9 @@ def main() raises:
             return
         if sum2_dump.byte_length() > 0:
             print(sum2_graph_dump(Path(sum2_dump).read_text()), end="")
+            return
+        if statement_path.byte_length() > 0:
+            print(statement_dump(Path(statement_path).read_text()), end="")
             return
         if fragment_count_path.byte_length() > 0:
             print(fragment_count(Path(fragment_count_path).read_text()), end="")

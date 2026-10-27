@@ -365,6 +365,28 @@ def _graph_dump(text, name, rename=''):
     return dump
 
 
+def _statement_dump(text):
+    """Return the normalized dump of one statement."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='statement-dump-') as directory:
+        path = Path(directory) / 'source.mojo'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--statement-dump', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def _require_function(text, name):
     """Require one top-level function to be present."""
     import os
@@ -421,7 +443,7 @@ def verify(root, *, _operation=None):
                         '_sum2_error_checked', '_sum2_error')
             == _graph_dump(HELPER, '_sum2_error'),
             'Sum2 checked arithmetic leaf changed')
-    sentinel = c.dump(ast.parse('_require_sum2_environment()').body[0])
+    sentinel = _statement_dump('_require_sum2_environment()')
     for module, name, expected in (
             ('lane_geometry', '_lane_spiral', SCALAR),
             ('spiral_roundoff_proof', '_sum2_envelope_error', ENVELOPE),

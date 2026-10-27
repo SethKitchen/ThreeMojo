@@ -9,7 +9,12 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from std.os import makedirs
 from std.pathlib import Path
-from tests._python_expr import expression_dump, function_dump, plain_function_dump
+from tests._python_expr import (
+    expression_dump,
+    function_dump,
+    plain_function_dump,
+    statement_dump,
+)
 from tests._python_tokens import (
     declaration_place,
     declaration_text,
@@ -505,11 +510,16 @@ def test_a_function_dump_matches_cpython() raises:
 def test_an_if_and_for_dump_matches_cpython() raises:
     """If, for, and a decorator dump match CPython."""
     assert_equal(
-        plain_function_dump("def f():\n    if a < 1 or not b:\n        return None\n"),
+        plain_function_dump(
+            "def f():\n    if a < 1 or not b:\n        return None\n"
+        ),
         '["FunctionDef",[["name","f"],["args",["arguments",[["posonlyargs",[]],["args",[]],["kwonlyargs",[]],["kw_defaults",[]],["defaults",[]]]]],["body",[["If",[["test",["BoolOp",[["op",["Or",[]]],["values",[["Compare",[["left",["Name",[["id","a"],["ctx",["Load",[]]]]]],["ops",[["Lt",[]]]],["comparators",[["Constant",[["value",1]]]]]]],["UnaryOp",[["op",["Not",[]]],["operand",["Name",[["id","b"],["ctx",["Load",[]]]]]]]]]]]]],["body",[["Return",[["value",["Constant",[]]]]]]],["orelse",[]]]]]],["decorator_list",[]]]]',
     )
     assert_equal(
-        plain_function_dump("@no_inline\ndef f():\n    for piece in range(pieces):\n        x = piece\n"),
+        plain_function_dump(
+            "@no_inline\ndef f():\n    for piece in range(pieces):\n        x ="
+            " piece\n"
+        ),
         '["FunctionDef",[["name","f"],["args",["arguments",[["posonlyargs",[]],["args",[]],["kwonlyargs",[]],["kw_defaults",[]],["defaults",[]]]]],["body",[["For",[["target",["Name",[["id","piece"],["ctx",["Store",[]]]]]],["iter",["Call",[["func",["Name",[["id","range"],["ctx",["Load",[]]]]]],["args",[["Name",[["id","pieces"],["ctx",["Load",[]]]]]]],["keywords",[]]]]],["body",[["Assign",[["targets",[["Name",[["id","x"],["ctx",["Store",[]]]]]]],["value",["Name",[["id","piece"],["ctx",["Load",[]]]]]]]]]],["orelse",[]]]]]],["decorator_list",[["Name",[["id","no_inline"],["ctx",["Load",[]]]]]]]]]',
     )
 
@@ -518,9 +528,18 @@ def test_an_if_expression_and_annotation_match_cpython() raises:
     """An if-expression and an annotation dump match CPython."""
     assert_equal(
         plain_function_dump(
-            "def f():\n    fixed = 26 if goal else 20\n    point_domain: Tuple[Int, Int]\n    x: Int = 1\n"
+            "def f():\n    fixed = 26 if goal else 20\n    point_domain:"
+            " Tuple[Int, Int]\n    x: Int = 1\n"
         ),
         '["FunctionDef",[["name","f"],["args",["arguments",[["posonlyargs",[]],["args",[]],["kwonlyargs",[]],["kw_defaults",[]],["defaults",[]]]]],["body",[["Assign",[["targets",[["Name",[["id","fixed"],["ctx",["Store",[]]]]]]],["value",["IfExp",[["test",["Name",[["id","goal"],["ctx",["Load",[]]]]]],["body",["Constant",[["value",26]]]],["orelse",["Constant",[["value",20]]]]]]]]],["AnnAssign",[["target",["Name",[["id","point_domain"],["ctx",["Store",[]]]]]],["annotation",["Subscript",[["value",["Name",[["id","Tuple"],["ctx",["Load",[]]]]]],["slice",["Tuple",[["elts",[["Name",[["id","Int"],["ctx",["Load",[]]]]],["Name",[["id","Int"],["ctx",["Load",[]]]]]]],["ctx",["Load",[]]]]]],["ctx",["Load",[]]]]]],["simple",1]]],["AnnAssign",[["target",["Name",[["id","x"],["ctx",["Store",[]]]]]],["annotation",["Name",[["id","Int"],["ctx",["Load",[]]]]]],["value",["Constant",[["value",1]]]],["simple",1]]]]],["decorator_list",[]]]]',
+    )
+
+
+def test_a_statement_dump_matches_cpython() raises:
+    """One expression statement dump matches CPython's normalized AST."""
+    assert_equal(
+        statement_dump("_require_sum2_environment()"),
+        '["Expr",[["value",["Call",[["func",["Name",[["id","_require_sum2_environment"],["ctx",["Load",[]]]]]],["args",[]],["keywords",[]]]]]]]',
     )
 
 

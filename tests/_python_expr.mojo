@@ -1381,6 +1381,28 @@ def expression_dump(source: String) raises -> String:
     return parser._dump(node)
 
 
+def statement_dump(source: String) raises -> String:
+    """Return the normalized dump of one statement.
+
+    Args:
+        source: A Python statement.
+
+    Returns:
+        The dump, with the same fields CPython 3.12 keeps.
+
+    Raises:
+        Error: The statement is missing or uses an unsupported form.
+    """
+    var parser = _parser(source)
+    var node = parser._parse_statement()
+    while not parser._done():
+        var kind = parser._kind_at()
+        if kind != _NEWLINE and kind != _DEDENT and kind != _INDENT:
+            raise Error("heading correspondence: unsupported expression")
+        parser.index += 1
+    return parser._dump(node)
+
+
 def function_dump(source: String) raises -> String:
     """Return the normalized dump of one function, including its generic mark.
 
