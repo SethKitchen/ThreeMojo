@@ -1745,6 +1745,7 @@ def _start(
             OpaquePointer[MutAnyOrigin](unsafe_from_address=mask.address()),
             OpaquePointer[MutAnyOrigin](unsafe_from_address=replaced.address()),
         )
+        hold.reset_actions()
         report[0] = Int32(plan.run())
         _ = external_call["write", Int](
             Int32(report_pipe[1]),

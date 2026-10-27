@@ -20,6 +20,12 @@ program takes each one with `take_signal` at a point where it can act on
 it. An environment variable carries the signals that were blocked before
 the first start, and a child gets the signal mask of that first start.
 
+On macOS, `hold_signals` does not use the mask. It adds each signal to a
+`kqueue` and then ignores it. The action of a signal is the same in every
+thread, so no thread can take the default action. The `kqueue` records a
+signal even when the program ignores it, and `take_signal` reads it from
+there. A child gets the first action of each signal back before `execv`.
+
 A child is started with `fork` and `execv`, as Python's `subprocess` does:
 it gets a new session, the other descriptors close, and the program is
 found on `PATH` in the parent. A failed `execv` reaches the parent as an
@@ -58,6 +64,15 @@ comptime ENOTDIR = 20
 
 comptime WNOHANG = 1
 """`waitpid` returns at once when the child has not ended."""
+
+comptime _SIG_DFL = 0
+"""The default action of a signal, as a `signal` handler."""
+comptime _SIG_IGN = 1
+"""The action that ignores a signal, as a `signal` handler."""
+comptime _EVFILT_SIGNAL = -6
+"""The macOS `kqueue` filter that records signals."""
+comptime _EV_ADD = 1
+"""The macOS `kevent` flag that adds an event."""
 
 comptime _MARK = "THREEMOJO_HELD_SIGNALS"
 """The environment variable that marks the second start."""
@@ -408,16 +423,22 @@ struct SignalHold(Copyable, Movable):
     """The signals that this program takes itself, and their first state."""
 
     var numbers: List[Int]
-    """The signals, blocked in every thread when `active`."""
+    """The signals that `take_signal` takes when `active`."""
     var first_blocked: List[Int]
     """The ones that were blocked before the first start."""
+    var first_ignored: List[Int]
+    """On macOS, the ones that the program ignored before the hold."""
+    var queue: Int
+    """On macOS, the `kqueue` that records `numbers`, or -1."""
     var active: Bool
-    """True when every thread blocks `numbers`."""
+    """True when no thread takes the default action of `numbers`."""
 
     def __init__(out self):
         """Hold no signal: a child gets the current mask."""
         self.numbers = List[Int]()
         self.first_blocked = List[Int]()
+        self.first_ignored = List[Int]()
+        self.queue = -1
         self.active = False
 
     def child_mask(self) -> SignalSet:
@@ -431,6 +452,20 @@ struct SignalHold(Copyable, Movable):
             if number not in self.first_blocked:
                 mask.remove(number)
         return mask^
+
+    def reset_actions(self):
+        """Give a child the first action of each held signal, on macOS.
+
+        Call it in the child, between `fork` and `execv`: it allocates
+        nothing. On Linux the hold does not change an action.
+        """
+        comptime if not CompilationTarget.is_linux():
+            if self.active:
+                for number in self.numbers:
+                    if number not in self.first_ignored:
+                        _ = external_call["signal", Int](
+                            c_int(number), _SIG_DFL
+                        )
 
 
 def _executable() -> String:
@@ -463,7 +498,9 @@ def hold_signals(numbers: List[Int]) raises -> SignalHold:
     The first start blocks the signals in its one thread, marks the
     environment, and replaces itself with `execv`. The second start removes
     the mark and returns. When `execv` fails, the program goes on with the
-    signals unblocked, and their default actions apply.
+    signals unblocked, and their default actions apply. On macOS, the
+    program instead ignores the signals and records them in a `kqueue`,
+    and it does not start again.
 
     Args:
         numbers: The signals.
@@ -476,6 +513,9 @@ def hold_signals(numbers: List[Int]) raises -> SignalHold:
     """
     var hold = SignalHold()
     hold.numbers = numbers.copy()
+    comptime if not CompilationTarget.is_linux():
+        _queue_signals(hold)
+        return hold^
     var mark = getenv(_MARK, _UNSET)
     if mark != _UNSET:
         _ = unsetenv(_MARK)
@@ -527,6 +567,50 @@ def hold_signals(numbers: List[Int]) raises -> SignalHold:
     return hold^
 
 
+def _queue_signals(mut hold: SignalHold):
+    """Record `hold.numbers` in a new `kqueue`, then ignore them (macOS).
+
+    A signal is added to the queue before the program ignores it, so a
+    signal between the two steps takes its default action and is not lost.
+    When a step fails, the signals keep their default actions.
+
+    Args:
+        hold: The signals to hold. It gets the queue, the first mask and
+            the first actions.
+    """
+    var queue = Int(external_call["kqueue", c_int]())
+    if queue < 0:
+        return
+    var mask = current_mask()
+    for number in hold.numbers:
+        if mask.has(number):
+            hold.first_blocked.append(number)
+    # A `struct kevent`: ident, then filter, flags and fflags, data, udata.
+    var change = List[Int64](length=4, fill=0)
+    change[1] = Int64(UInt16(Int16(_EVFILT_SIGNAL))) | (Int64(_EV_ADD) << 16)
+    for number in hold.numbers:
+        change[0] = Int64(number)
+        if (
+            external_call["kevent", c_int](
+                c_int(queue),
+                _at(Int(change.unsafe_ptr())),
+                c_int(1),
+                _at(0),
+                c_int(0),
+                _at(0),
+            )
+            != 0
+        ):
+            close_fd(queue)
+            return
+    for number in hold.numbers:
+        var before = external_call["signal", Int](c_int(number), _SIG_IGN)
+        if before == _SIG_IGN:
+            hold.first_ignored.append(number)
+    hold.queue = queue
+    hold.active = True
+
+
 def take_signal(hold: SignalHold) -> Int:
     """Take one held signal that is pending.
 
@@ -538,6 +622,18 @@ def take_signal(hold: SignalHold) -> Int:
     """
     if not hold.active:
         return 0
+    comptime if not CompilationTarget.is_linux():
+        var event = List[Int64](length=4, fill=0)
+        var no_wait = List[Int64](length=2, fill=0)
+        var count = external_call["kevent", c_int](
+            c_int(hold.queue),
+            _at(0),
+            c_int(0),
+            _at(Int(event.unsafe_ptr())),
+            c_int(1),
+            _at(Int(no_wait.unsafe_ptr())),
+        )
+        return Int(event[0]) if count == 1 else 0
     var pending = SignalSet()
     _ = external_call["sigpending", c_int](_at(pending.address()))
     for number in hold.numbers:
@@ -715,6 +811,7 @@ def spawn(
         _ = external_call["pthread_sigmask", c_int](
             mask_how_set(), _at(mask.address()), _at(0)
         )
+        hold.reset_actions()
         _close_from(3, pipe[1])
         report[0] = Int32(plan.run())
         _ = external_call["write", Int](
