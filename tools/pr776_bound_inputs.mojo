@@ -68,7 +68,7 @@ def pr776_bound_inputs(root: String) raises:
     _input(
         base,
         "tools/carla_lane_oracle/test_main_rebase_successor.py",
-        "2ca5e9f72a38766945e182fbe004e3e64011efa897e22445ab7372102634a792",
+        "2703f53a7e97665590595428491ff05428c2cbff3b7ffc514a8561e10ce8168e",
     )
     _input(
         base,

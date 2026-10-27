@@ -43,6 +43,8 @@ class MainRebaseSuccessorControls(unittest.TestCase):
         for path, digest in MAIN_INPUTS.items():
             with self.subTest(path=path):
                 raw = (ROOT/path).read_bytes()
+                # A reviewed PR780 successor keeps main's bytes as its exact predecessor.
+                raw = owner.pr780_successor.predecessor_bytes(path, raw)
                 if path == 'tools/carla_lane_oracle/test_expectation_binding_successor.py':
                     # Preserve main's exact evidence through its one reviewed
                     # inverse; physical admission still pins current bytes.

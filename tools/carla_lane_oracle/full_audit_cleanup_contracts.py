@@ -158,7 +158,7 @@ PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
  'tools/carla_lane_oracle/border_parser_contracts.py': '734d7b24aaf4e9f537cd7f0d7c7b8094d9c29106770b66c4a7a24cab74604dd4',
  'tools/carla_lane_oracle/pr760_arithmetic_stage.py': PR760_STAGE_SHA256,
- 'tools/carla_lane_oracle/pr780_source_successor.py': '33ceab36b9d2d29730724c19fd37b50043c10473defcb662d36f6ca85b9d05e9',
+ 'tools/carla_lane_oracle/pr780_source_successor.py': '3d3452a0659002ccf4aeca7e4282c2a4686f2df269f62ceb1e9a92d454c97ae5',
  'tools/carla_lane_oracle/scaled_float32_contracts.py': 'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',
  'tools/affected.py': 'dcf533b9cd995902f53578aa93b98a32ca732643ccfa6ab7e30f95fd8b321eb3',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
@@ -1291,44 +1291,37 @@ def provenance_after_sha256(edge):
 
 def _helper_entry_census(root, *, _operation=None):
     """Observe actual source bytes that determine the compiled entry contexts."""
+    # The reads stay in this frame: controls patch them by their caller.
     previous = _use_dir_cache()
     try:
-        return _helper_entry_census_body(root, _operation=_operation)
+        known = {path.as_posix() for path in _sibling('cache_key').input_paths(root)
+                 if path.suffix == '.mojo'}
+        _operation_known_paths(root, known, _operation=_operation)
+        image = {}
+        for path in sorted(known):
+            raw = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
+            require(type(raw) is bytes, 'render entry source is not physical bytes: ' + path)
+            image[path] = raw
+        entries = tuple(_sibling('affected').entry_directories(
+            {path: _physical_text(raw) for path, raw in image.items() if b'main' in raw}))
+        return entries, image
     finally:
         _restore_dir_cache(previous)
-
-
-def _helper_entry_census_body(root, *, _operation=None):
-    known = {path.as_posix() for path in _sibling('cache_key').input_paths(root)
-             if path.suffix == '.mojo'}
-    _operation_known_paths(root, known, _operation=_operation)
-    image = {}
-    for path in sorted(known):
-        raw = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
-        require(type(raw) is bytes, 'render entry source is not physical bytes: ' + path)
-        image[path] = raw
-    entries = tuple(_sibling('affected').entry_directories(
-        {path: _physical_text(raw) for path, raw in image.items() if b'main' in raw}))
-    return entries, image
 
 
 def _helper_entry_census_finish(root, image, *, _operation=None):
     """Keep all entry-classifying reads, then finish with a fresh path census."""
     previous = _use_dir_cache()
     try:
-        _helper_entry_census_finish_body(root, image, _operation=_operation)
+        for path, raw in image.items():
+            actual = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
+            require(type(actual) is bytes and actual == raw, 'render entry source changed: ' + path)
+        known = {path.as_posix() for path in _sibling('cache_key').input_paths(root)
+                 if path.suffix == '.mojo'}
+        _operation_known_paths(root, known, _operation=_operation)
+        require(known == set(image), 'render entry path census changed')
     finally:
         _restore_dir_cache(previous)
-
-
-def _helper_entry_census_finish_body(root, image, *, _operation=None):
-    for path, raw in image.items():
-        actual = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
-        require(type(actual) is bytes and actual == raw, 'render entry source changed: ' + path)
-    known = {path.as_posix() for path in _sibling('cache_key').input_paths(root)
-             if path.suffix == '.mojo'}
-    _operation_known_paths(root, known, _operation=_operation)
-    require(known == set(image), 'render entry path census changed')
 
 
 def _include_entry_context(location, source_image, *, _operation=None):

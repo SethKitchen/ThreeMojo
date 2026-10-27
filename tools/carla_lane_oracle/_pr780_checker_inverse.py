@@ -787,7 +787,7 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                          '    _plain_seed = '
                                          'canonical(_receipt_seed) if cleanup '
                                          'is None else None\n')))},
- 'full_audit_cleanup_contracts.py': {'after_sha256': 'aa350af69e75bea2c8ba6343c764a7a49ac53919a8ed0b74ad32cf61074f1a8f',
+ 'full_audit_cleanup_contracts.py': {'after_sha256': 'af301e011ef1edb4e42f4e0e11bf52abc08d5d94f866369d87062edd528d5406',
                                      'before_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
                                      'edits': ((56,
                                                 57,
@@ -806,7 +806,7 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                 (),
                                                 (' '
                                                  "'tools/carla_lane_oracle/pr780_source_successor.py': "
-                                                 "'33ceab36b9d2d29730724c19fd37b50043c10473defcb662d36f6ca85b9d05e9',\n",)),
+                                                 "'3d3452a0659002ccf4aeca7e4282c2a4686f2df269f62ceb1e9a92d454c97ae5',\n",)),
                                                (162,
                                                 163,
                                                 (" 'tools/affected.py': "
@@ -1208,53 +1208,133 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '*, roots, entries, _known, '
                                                  '_snapshots):\n')),
                                                (1293,
-                                                1301,
-                                                (),
-                                                ('    previous = '
-                                                 '_use_dir_cache()\n',
-                                                 '    try:\n',
-                                                 '        return '
-                                                 '_helper_entry_census_body(root, '
+                                                1309,
+                                                ('    known = {path.as_posix() '
+                                                 'for path in '
+                                                 "_sibling('cache_key').input_paths(root)\n",
+                                                 '             if path.suffix '
+                                                 "== '.mojo'}\n",
+                                                 '    '
+                                                 '_operation_known_paths(root, '
+                                                 'known, '
                                                  '_operation=_operation)\n',
-                                                 '    finally:\n',
-                                                 '        '
-                                                 '_restore_dir_cache(previous)\n',
-                                                 '\n',
-                                                 '\n',
-                                                 'def '
-                                                 '_helper_entry_census_body(root, '
-                                                 '*, _operation=None):\n')),
-                                               (1310,
-                                                1311,
-                                                ('        {path: '
+                                                 '    image = {}\n',
+                                                 '    for path in '
+                                                 'sorted(known):\n',
+                                                 '        raw = '
+                                                 '_observe_bytes(root, path, '
+                                                 '_regular(root, '
+                                                 'path).read_bytes(), '
+                                                 '_operation=_operation)\n',
+                                                 '        require(type(raw) is '
+                                                 "bytes, 'render entry source "
+                                                 "is not physical bytes: ' + "
+                                                 'path)\n',
+                                                 '        image[path] = raw\n',
+                                                 '    entries = '
+                                                 "tuple(_sibling('affected').entry_directories(\n",
+                                                 '        {path: '
                                                  '_physical_text(raw) for '
                                                  'path, raw in '
-                                                 'image.items()}))\n',),
-                                                ('        {path: '
+                                                 'image.items()}))\n',
+                                                 '    return entries, image\n'),
+                                                ('    # The reads stay in this '
+                                                 'frame: controls patch them '
+                                                 'by their caller.\n',
+                                                 '    previous = '
+                                                 '_use_dir_cache()\n',
+                                                 '    try:\n',
+                                                 '        known = '
+                                                 '{path.as_posix() for path in '
+                                                 "_sibling('cache_key').input_paths(root)\n",
+                                                 '                 if '
+                                                 "path.suffix == '.mojo'}\n",
+                                                 '        '
+                                                 '_operation_known_paths(root, '
+                                                 'known, '
+                                                 '_operation=_operation)\n',
+                                                 '        image = {}\n',
+                                                 '        for path in '
+                                                 'sorted(known):\n',
+                                                 '            raw = '
+                                                 '_observe_bytes(root, path, '
+                                                 '_regular(root, '
+                                                 'path).read_bytes(), '
+                                                 '_operation=_operation)\n',
+                                                 '            '
+                                                 'require(type(raw) is bytes, '
+                                                 "'render entry source is not "
+                                                 "physical bytes: ' + path)\n",
+                                                 '            image[path] = '
+                                                 'raw\n',
+                                                 '        entries = '
+                                                 "tuple(_sibling('affected').entry_directories(\n",
+                                                 '            {path: '
                                                  '_physical_text(raw) for '
                                                  'path, raw in image.items() '
-                                                 "if b'main' in raw}))\n",)),
-                                               (1316,
+                                                 "if b'main' in raw}))\n",
+                                                 '        return entries, '
+                                                 'image\n',
+                                                 '    finally:\n',
+                                                 '        '
+                                                 '_restore_dir_cache(previous)\n')),
+                                               (1313,
                                                 1324,
-                                                (),
+                                                ('    for path, raw in '
+                                                 'image.items():\n',
+                                                 '        actual = '
+                                                 '_observe_bytes(root, path, '
+                                                 '_regular(root, '
+                                                 'path).read_bytes(), '
+                                                 '_operation=_operation)\n',
+                                                 '        require(type(actual) '
+                                                 'is bytes and actual == raw, '
+                                                 "'render entry source "
+                                                 "changed: ' + path)\n",
+                                                 '    known = {path.as_posix() '
+                                                 'for path in '
+                                                 "_sibling('cache_key').input_paths(root)\n",
+                                                 '             if path.suffix '
+                                                 "== '.mojo'}\n",
+                                                 '    '
+                                                 '_operation_known_paths(root, '
+                                                 'known, '
+                                                 '_operation=_operation)\n',
+                                                 '    require(known == '
+                                                 "set(image), 'render entry "
+                                                 "path census changed')\n"),
                                                 ('    previous = '
                                                  '_use_dir_cache()\n',
                                                  '    try:\n',
-                                                 '        '
-                                                 '_helper_entry_census_finish_body(root, '
-                                                 'image, '
+                                                 '        for path, raw in '
+                                                 'image.items():\n',
+                                                 '            actual = '
+                                                 '_observe_bytes(root, path, '
+                                                 '_regular(root, '
+                                                 'path).read_bytes(), '
                                                  '_operation=_operation)\n',
+                                                 '            '
+                                                 'require(type(actual) is '
+                                                 'bytes and actual == raw, '
+                                                 "'render entry source "
+                                                 "changed: ' + path)\n",
+                                                 '        known = '
+                                                 '{path.as_posix() for path in '
+                                                 "_sibling('cache_key').input_paths(root)\n",
+                                                 '                 if '
+                                                 "path.suffix == '.mojo'}\n",
+                                                 '        '
+                                                 '_operation_known_paths(root, '
+                                                 'known, '
+                                                 '_operation=_operation)\n',
+                                                 '        require(known == '
+                                                 "set(image), 'render entry "
+                                                 "path census changed')\n",
                                                  '    finally:\n',
                                                  '        '
-                                                 '_restore_dir_cache(previous)\n',
-                                                 '\n',
-                                                 '\n',
-                                                 'def '
-                                                 '_helper_entry_census_finish_body(root, '
-                                                 'image, *, '
-                                                 '_operation=None):\n')),
-                                               (3157,
-                                                3158,
+                                                 '_restore_dir_cache(previous)\n')),
+                                               (3150,
+                                                3151,
                                                 (),
                                                 ('        retained = '
                                                  'pr780_successor.predecessor_bytes(path, '
@@ -1264,8 +1344,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  "pr780_successor.reviewed_edge(path)['after_sha256'] "
                                                  'else '
                                                  "raw.decode('utf-8')\n",)),
-                                               (3159,
-                                                3160,
+                                               (3152,
+                                                3153,
                                                 ('                 else '
                                                  'pr760_stage.predecessor_source(path, '
                                                  "raw.decode('utf-8'))\n",
@@ -1279,8 +1359,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  'path in '
                                                  'pr760_stage.CARLA_REGISTRY_PATHS '
                                                  'else retained)\n',)),
-                                               (3181,
-                                                3182,
+                                               (3174,
+                                                3175,
                                                 ('        if path in tests and '
                                                  'typed_boundary.is_current(path, '
                                                  'raw):\n',),
@@ -1290,8 +1370,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  'pr780_successor.reviewed_edge(path) '
                                                  'is not None and sha(raw) == '
                                                  "pr780_successor.reviewed_edge(path)['after_sha256']):\n",)),
-                                               (3190,
-                                                3191,
+                                               (3183,
+                                                3184,
                                                 ('    texts = {path: '
                                                  "raw.decode('utf-8') for "
                                                  'path, raw in '
@@ -1305,8 +1385,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  "else raw.decode('utf-8')) "
                                                  'for path, raw in '
                                                  'sources.items()}\n',)),
-                                               (3303,
-                                                3309,
+                                               (3296,
+                                                3302,
                                                 (),
                                                 ('    # A reviewed PR780 '
                                                  'successor extends a helper '
@@ -1326,8 +1406,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '                for path, '
                                                  'digest in '
                                                  'bindings.items()}\n')),
-                                               (3614,
-                                                3617,
+                                               (3607,
+                                                3610,
                                                 (),
                                                 ('    extension = '
                                                  'pr780_successor.reviewed_edge(path)\n',
@@ -1337,21 +1417,21 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '        text = '
                                                  'pr780_successor.predecessor_bytes(path, '
                                                  "text.encode('utf-8')).decode('utf-8')\n")),
-                                               (3705,
-                                                3708,
+                                               (3698,
+                                                3701,
                                                 (),
                                                 ('    extension = '
                                                  'pr780_successor.reviewed_edge(path)\n',
                                                  '    if edge is None and '
                                                  'extension is None:\n',
                                                  '        return text\n')),
-                                               (3709,
-                                                3710,
+                                               (3702,
+                                                3703,
                                                 ('        return text\n',),
                                                 ('        edge = '
                                                  'extension\n',)),
-                                               (3726,
-                                                3733,
+                                               (3719,
+                                                3726,
                                                 ('        new_endpoint = path '
                                                  'in '
                                                  'pr760_stage.CARLA_REGISTRY_PATHS '
@@ -1389,8 +1469,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '                 '
                                                  'source.token_sha256(text) == '
                                                  "edge['after_token_sha256'])):\n")),
-                                               (3736,
-                                                3738,
+                                               (3729,
+                                                3731,
                                                 ('        require((sha(raw) == '
                                                  "edge['after_sha256']) if "
                                                  'new_endpoint else '
@@ -1404,8 +1484,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  'new_endpoint else '
                                                  'typed_boundary.is_current(path, '
                                                  'raw),\n')),
-                                               (3938,
-                                                3942,
+                                               (3931,
+                                                3935,
                                                 (),
                                                 ('                else:\n',
                                                  '                    '
@@ -1419,13 +1499,13 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  'historical = '
                                                  'pr780_successor.predecessor_bytes(path, '
                                                  'historical)\n')),
-                                               (4107,
-                                                4108,
+                                               (4100,
+                                                4101,
                                                 (),
                                                 ('    extensions = '
                                                  "pr780_successor._data_snapshot()['edges']\n",)),
-                                               (4111,
-                                                4114,
+                                               (4104,
+                                                4107,
                                                 ('                   '
                                                  'source.token_sha256(text) == '
                                                  "pr760_stage.EDGES[p]['after_token_sha256'])}\n",),
@@ -1438,8 +1518,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '==\n',
                                                  '                   '
                                                  "extensions[p]['after_token_sha256'])}\n")),
-                                               (4237,
-                                                4243,
+                                               (4230,
+                                                4236,
                                                 ('            projected = '
                                                  '(pr760_stage.predecessor_source(path, '
                                                  "current.decode('utf-8'))\n",),
@@ -1459,16 +1539,16 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '            projected = '
                                                  '(pr760_stage.predecessor_source(path, '
                                                  "retained.decode('utf-8'))\n")),
-                                               (4245,
-                                                4246,
+                                               (4238,
+                                                4239,
                                                 ('                if '
                                                  'qualification else '
                                                  "current.decode('utf-8'))\n",),
                                                 ('                if '
                                                  'qualification else '
                                                  "retained.decode('utf-8'))\n",)),
-                                               (4249,
-                                                4250,
+                                               (4242,
+                                                4243,
                                                 ('            if current_image '
                                                  'and (path in '
                                                  'pr760_stage.EXAMPLE_PATHS or '
@@ -1478,8 +1558,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  'pr760_stage.EXAMPLE_PATHS or '
                                                  'qualification or current != '
                                                  'retained):\n',)),
-                                               (4280,
-                                                4285,
+                                               (4273,
+                                                4278,
                                                 ('        if '
                                                  'result.get(station.MODULE) '
                                                  '== '
@@ -1495,16 +1575,16 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  "extension['before_sha256']\n",
                                                  '        if station_digest == '
                                                  "typed_boundary.EDGES[station.MODULE]['after_sha256']:\n")),
-                                               (4353,
-                                                4354,
+                                               (4346,
+                                                4347,
                                                 (' '
                                                  "'tools/carla_lane_oracle/source_contracts.py': "
                                                  "'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',\n",),
                                                 (' '
                                                  "'tools/carla_lane_oracle/source_contracts.py': "
                                                  "'f4cf5b03da59b5a5070f9cdf8e26b486d4e1cd965eed172578018619ea788afe',\n",)),
-                                               (4373,
-                                                4376,
+                                               (4366,
+                                                4369,
                                                 (' '
                                                  "'tools/carla_lane_oracle/test_pr760_physical_image.py': "
                                                  "'1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',\n",
@@ -1520,24 +1600,24 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  ' '
                                                  "'tools/carla_lane_oracle/test_typed_boundary_contracts.py': "
                                                  "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'}\n")),
-                                               (4380,
-                                                4381,
+                                               (4373,
+                                                4374,
                                                 ('    return '
                                                  "{'tools/carla_lane_oracle/test_pr776_input_successors.py': "
                                                  "'af0d9aff27b4f06ce8b102979825d84c177ec78b349dbbb1de4a98423c03f132',\n",),
                                                 ('    return '
                                                  "{'tools/carla_lane_oracle/test_pr776_input_successors.py': "
                                                  "'148a021e1d8173122f231f4e6839d4dfd7bb2bb14d76d70e3725ff310620d2aa',\n",)),
-                                               (4389,
-                                                4390,
+                                               (4382,
+                                                4383,
                                                 ('    """Recover exact earlier '
                                                  'comparison bytes for five '
                                                  'named PR776 inputs.\n',),
                                                 ('    """Recover exact earlier '
                                                  'comparison bytes for six '
                                                  'named PR776 inputs.\n',)),
-                                               (4398,
-                                                4401,
+                                               (4391,
+                                                4394,
                                                 (),
                                                 ('    extension = '
                                                  'pr780_successor.reviewed_edge(path)\n',
@@ -1547,20 +1627,20 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '        raw = '
                                                  'pr780_successor.predecessor_bytes(path, '
                                                  'raw)\n')),
-                                               (4782,
-                                                4783,
+                                               (4775,
+                                                4776,
                                                 ('                                                          '
                                                  "'1c1565c05cb702df67319cb69641f83c8a761d38ccf06a11de91b037dfe5b1ce',\n",),
                                                 ('                                                          '
                                                  "'6df971f2bf09c710a4e6ababc6adeea8995fd2e86c3e6866e548d5b193ae3669',\n",)),
-                                               (4784,
-                                                4785,
+                                               (4777,
+                                                4778,
                                                 ('                                                            '
                                                  '128,\n',),
                                                 ('                                                            '
                                                  '129,\n',)),
-                                               (4801,
-                                                4804,
+                                               (4794,
+                                                4797,
                                                 ('                                                             '
                                                  '"\'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py\'):\\n",\n',),
                                                 ('                                                             '
@@ -1569,8 +1649,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  "'                        '\n",
                                                  '                                                             '
                                                  '"\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\'):\\n",\n')),
-                                               (4810,
-                                                4812,
+                                               (4803,
+                                                4805,
                                                 ('                                                           '
                                                  '(239,\n',
                                                  '                                                            '
@@ -1579,14 +1659,14 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '(240,\n',
                                                  '                                                            '
                                                  '245,\n')),
-                                               (4817,
-                                                4818,
+                                               (4810,
+                                                4811,
                                                 ('                                                             '
                                                  "'raw) if path ==\\n',\n",),
                                                 ('                                                             '
                                                  "'raw) if path in (\\n',\n",)),
-                                               (4819,
-                                                4822,
+                                               (4812,
+                                                4815,
                                                 ('                                                             '
                                                  '"\'tools/carla_lane_oracle/test_expectation_binding_successor.py\' '
                                                  '"\n',),
@@ -1597,8 +1677,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '                                                             '
                                                  '"\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\') '
                                                  '"\n')),
-                                               (4838,
-                                                4849,
+                                               (4831,
+                                                4842,
                                                 ('                                                               '
                                                  "'inputs[water])\\n')),))}\n",),
                                                 ('                                                               '
@@ -1627,8 +1707,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  "'\n",
                                                  '                                                                 '
                                                  "'raw)\\n')),))}\n")),
-                                               (4885,
-                                                4888,
+                                               (4878,
+                                                4881,
                                                 (),
                                                 ('    extension = '
                                                  'pr780_successor.reviewed_edge(path)\n',
@@ -1638,8 +1718,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '        raw = '
                                                  'pr780_successor.predecessor_bytes(path, '
                                                  'raw)\n')),
-                                               (4890,
-                                                4893,
+                                               (4883,
+                                                4886,
                                                 (),
                                                 ('        raw = '
                                                  'pr776_predecessor_bytes(path, '
@@ -1648,8 +1728,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  "'tools/carla_lane_oracle/test_typed_boundary_contracts.py'\n",
                                                  '            and sha(raw) == '
                                                  "'8dee4d9c4bf42214fb2f10fbdcf71a4ba04398095d8c62a16233ad6fc038fce7'):\n")),
-                                               (5485,
-                                                5490,
+                                               (5478,
+                                                5483,
                                                 (),
                                                 ('    extension_path = '
                                                  "'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'\n",
@@ -1662,13 +1742,13 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '        raw = '
                                                  'pr780_successor.predecessor_bytes(extension_path, '
                                                  'raw)\n')),
-                                               (5577,
-                                                5578,
+                                               (5570,
+                                                5571,
                                                 (),
                                                 ('        extension_data = '
                                                  'pr780_successor._data_snapshot()\n',)),
-                                               (5579,
-                                                5587,
+                                               (5572,
+                                                5580,
                                                 (),
                                                 ('        extended_pins = '
                                                  '{path: '
@@ -1695,8 +1775,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  "                    'PR780 "
                                                  'source successor predecessor '
                                                  "join changed: ' + path)\n")),
-                                               (5589,
-                                                5590,
+                                               (5582,
+                                                5583,
                                                 ('            require(sha(raw) '
                                                  '== successor_pins.get(path, '
                                                  'digest),\n',),
@@ -1704,8 +1784,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '== extended_pins.get(path, '
                                                  'successor_pins.get(path, '
                                                  'digest)),\n',)),
-                                               (5591,
-                                                5596,
+                                               (5584,
+                                                5589,
                                                 ('            if path in '
                                                  'successor_pins:\n',
                                                  '                '
@@ -1736,8 +1816,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  "'PR780/PR776 successor "
                                                  "misses fixed PR760 input: ' "
                                                  '+ path)\n')),
-                                               (5597,
-                                                5604,
+                                               (5590,
+                                                5597,
                                                 ('            '
                                                  'require(sha(observe(path)) '
                                                  "== digest, 'PR776 bound "
@@ -1764,8 +1844,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  'require(sha(observe(path)) '
                                                  "== digest, 'PR780 bound "
                                                  "input changed: ' + path)\n")),
-                                               (5620,
-                                                5622,
+                                               (5613,
+                                                5615,
                                                 ('                              '
                                                  'if path == '
                                                  "'tools/carla_lane_oracle/test_witness_format_contracts.py' "
@@ -1777,8 +1857,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '                              '
                                                  'else prior_inputs.get(path, '
                                                  "image[path]).decode('utf-8'))\n")),
-                                               (5637,
-                                                5638,
+                                               (5630,
+                                                5631,
                                                 ('        helper_texts = '
                                                  '{path: previous.get(path, '
                                                  "image[path].decode('utf-8'))\n",),
@@ -1786,8 +1866,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                                  '{path: previous.get(path, '
                                                  'prior_inputs.get(path, '
                                                  "image[path]).decode('utf-8'))\n",)),
-                                               (5691,
-                                                5697,
+                                               (5684,
+                                                5690,
                                                 ('        observed = '
                                                  'inventory(root, '
                                                  '_snapshots=image, '
@@ -1852,7 +1932,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '36d120038099886a4e3aadb9c5493d7b8a9cf6497569101ffedd2b92bec6ab33':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '60a5ffc3564afb6f59389d4ad14c934ecc4db6bc64431af3efe01e5ed44f9591':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)

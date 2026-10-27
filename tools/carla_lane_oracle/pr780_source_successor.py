@@ -18315,6 +18315,43 @@ EDGES = json.loads(r'''
         ]
       }
     ]
+  },
+  "tools/carla_lane_oracle/test_main_rebase_successor.py": {
+    "before_sha256": "2ca5e9f72a38766945e182fbe004e3e64011efa897e22445ab7372102634a792",
+    "after_sha256": "2703f53a7e97665590595428491ff05428c2cbff3b7ffc514a8561e10ce8168e",
+    "before_token_sha256": "37aacea9b14d4507130af4c73e47892ef4d5340813b1a221db765aec9379c6a5",
+    "after_token_sha256": "b208fbec1a3325401316ce2bd088a34f5ccf4b6bac1b6c7017fbd28b076b7664",
+    "edits": [
+      {
+        "start": 45,
+        "stop": 47,
+        "before": [],
+        "after": [
+          "                # A reviewed PR780 successor keeps main's bytes as its exact predecessor.\n",
+          "                raw = owner.pr780_successor.predecessor_bytes(path, raw)\n"
+        ]
+      }
+    ]
+  },
+  "tools/carla_lane_oracle/test_shared_helper_contracts.py": {
+    "before_sha256": "63645797e8134e48b9a9bcfe01b33fcba83ac9c140e696af23937c43296ca494",
+    "after_sha256": "e7a600c523f2c85ad82051ab3c85bee3a88c82ea3555849e5dd45728bbca5715",
+    "before_token_sha256": "44335a69c3c21ac57fc2925684cd62a5ffb1703180e6ea152bc0043fdc21eb03",
+    "after_token_sha256": "0d1e9c36c7cc9ae93e08ff4d2f29a079ec251365af2ded3d353bcd19b6d8bb3d",
+    "edits": [
+      {
+        "start": 147,
+        "stop": 150,
+        "before": [
+          "        self.assertTrue(cleanup.typed_boundary.is_current(fixture, raw))\n"
+        ],
+        "after": [
+          "        # #792 extended the typed endpoint; the PR780 predecessor is that endpoint.\n",
+          "        self.assertTrue(cleanup.typed_boundary.is_current(\n",
+          "            fixture, cleanup.pr780_successor.predecessor_bytes(fixture, raw)))\n"
+        ]
+      }
+    ]
   }
 }
 ''')
@@ -18565,16 +18602,18 @@ EDGE_SHA256 = {'core/deform.mojo': 'b6afec67eea77b1a76cae98df1b4399de366b2a82878
  'tests/test_wide_line_workers.mojo': '2df16a02373e7f1145573f41df89971d8483ddddd1439607c114642f3a0e2b09',
  'tests/test_wide_lines.mojo': '7682cd7250d40b39523caf930ca435d094260c23881fcea0a0d37fdc3029ec5f',
  'tools/carla_lane_oracle/source_contracts.py': 'a4d9eedbdb156c45a4edd507002a2fb169e261ff5f0bc1cd4830c559c4dd2685',
+ 'tools/carla_lane_oracle/test_main_rebase_successor.py': '598b7f235d6dd347551dfbdcca7390a73016e23ff16a970246e07dbfe48a6459',
  'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': '39c4e84ee8f2480d1039369011c39ab38c055f71fae6bf0962778b558be9b82f',
  'tools/carla_lane_oracle/test_pr760_physical_image.py': 'fb6a9d7dfab6f5d7e620e6d42ae9dd47ee8fbd609e65a2f82a7e56e888734970',
  'tools/carla_lane_oracle/test_pr776_input_successors.py': 'dde181f02ca49efaa0550a5f9d24847dfc618d14113e2caea7aea3422edd7042',
+ 'tools/carla_lane_oracle/test_shared_helper_contracts.py': 'eb63c115282ae3e667a35e52d57657e8cfe63c64081fa87e25cd601b661cf3ed',
  'tools/carla_lane_oracle/test_typed_boundary_contracts.py': '0be305bc14258206747f94b71996e5e9d29650e7a0a49ccc9dc2ea97b3ce2f89',
  'tools/carla_lane_oracle/test_typed_owned_operations.py': '56a59b04408d344079048ccc8a32e3a5c0e1af4505cb06aa281c01364738b1eb',
  'tools/carla_lane_oracle/test_witness_format_contracts.py': '554b6db980e099747c3d536eaf722f210f0f17d3f78983cf08bb180c588a22ae',
  'tools/carla_lane_oracle/translated_parameter_resolution.py': '1c63297c0097ce50b9f314ba321e7f4d04c009f6379552a84adefb62a2a7f375',
  'tools/compile_fail_expectations.json': 'a15d4cff3d89429312350a4da95604569da83be105f69a0690025904c2cfbc84',
  'tools/test_conditioned_coverage_loops.py': 'f88451e7313fd84cc788847b1c960dc395b98736779a92c81a1d056ff2977520'}
-DATA_SHA256 = 'f3c989dba24709a0498fd430fe07fcc268e0917f46f1bf30ed6cb3e6711c6d06'
+DATA_SHA256 = '9cff2d265781e51594d630fd0352ba3ad4244f3e3143c7d21a434c54e3e67eee'
 # END FIXED PR780 SUCCESSOR DATA
 
 
@@ -18590,7 +18629,7 @@ def sha(raw):
 def _index_snapshot():
     """Authenticate and detach the fixed per-edge digests and bound inputs."""
     require(type(DATA_SHA256) is str, 'authority digest selector is not a builtin string')
-    require(DATA_SHA256 == 'f3c989dba24709a0498fd430fe07fcc268e0917f46f1bf30ed6cb3e6711c6d06', 'authority digest selector changed')
+    require(DATA_SHA256 == '9cff2d265781e51594d630fd0352ba3ad4244f3e3143c7d21a434c54e3e67eee', 'authority digest selector changed')
     encoded = json.dumps({'edges': EDGE_SHA256, 'bound_inputs': BOUND_INPUTS},
                          sort_keys=True, separators=(',', ':'))
     require(sha(encoded) == DATA_SHA256, 'fixed source inverse data changed')
