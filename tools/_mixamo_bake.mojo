@@ -81,18 +81,26 @@ def fbx_files(folder: String, only: String = "") raises -> List[String]:
     return paths^
 
 
+def _taken(name: String, taken: List[String]) -> Bool:
+    """Return whether a clip so far has the name."""
+    for other in taken:  # pragma: no branch
+        if other == name:
+            return True
+    return False
+
+
 def _unique(name: String, taken: List[String]) -> String:
-    """Return a name that no clip so far has."""
+    """Return a name that no clip so far has.
+
+    The first of `name`, `name 2`, `name 3` and so on that is free. A flag
+    loop around the search crashed the Mojo 1.2.0 compiler for
+    `arm64-apple-macosx` in LLVM's dominator tree construction.
+    """
     var candidate = name
     var number = 2
-    var again = True
-    while again:
-        again = False
-        for other in taken:  # pragma: no branch
-            if other == candidate:
-                candidate = name + " " + String(number)
-                number += 1
-                again = True
+    while _taken(candidate, taken):
+        candidate = name + " " + String(number)
+        number += 1
     return candidate^
 
 

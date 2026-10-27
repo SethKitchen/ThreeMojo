@@ -52,7 +52,7 @@ from tools._mixamo import (
     url_encode,
     write_index,
 )
-from tools._mixamo_bake import bake_mixamo, fbx_files
+from tools._mixamo_bake import _unique, bake_mixamo, fbx_files
 from tools.mixamo import run
 from units.si import FOOT, Length
 
@@ -735,6 +735,16 @@ def test_the_files_of_a_folder_are_found_in_order() raises:
     assert_equal(len(some), 1)
     assert_true(some[0].endswith("/c walk.fbx"))
     remove_tree(folder)
+
+
+def test_a_taken_clip_name_gets_the_first_free_number() raises:
+    var taken = List[String]()
+    assert_equal(_unique("Walk", taken), "Walk")
+    taken.append("Walk")
+    taken.append("Walk 3")
+    assert_equal(_unique("Walk", taken), "Walk 2")
+    taken.append("Walk 2")
+    assert_equal(_unique("Walk", taken), "Walk 4")
 
 
 def test_a_folder_of_files_is_baked_onto_the_humanoid() raises:
