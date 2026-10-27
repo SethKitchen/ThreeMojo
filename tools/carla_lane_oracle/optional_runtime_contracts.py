@@ -327,17 +327,50 @@ def _observed_consumers(items):
         raise ValueError(message)
 
 
+def _production_paths(roots, paths):
+    """Return which relative paths stay in the production scan."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    if not paths:
+        return []
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps(
+        {'roots': list(roots), 'paths': list(paths)}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='production-paths-') as directory:
+        record = Path(directory) / 'paths.json'
+        record.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_production_paths', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    flags = json.loads(result.stdout)
+    if len(flags) != len(paths):
+        raise ValueError('optional runtime contract: production path set changed')
+    return flags
+
+
 def verify_no_containing_model_consumers(root, *, _operation=None):
-    chosen = []
+    found = []
     for path in sorted(root.rglob('*.mojo')):
-        relative = path.relative_to(root)
-        if relative.parts[0] in guard.NONPRODUCTION or any(
-                part.startswith('.') for part in relative.parts):
+        found.append((path, path.relative_to(root).as_posix()))
+    keep = _production_paths(guard.NONPRODUCTION, [relative for _, relative in found])
+    chosen = []
+    for (path, relative), kept in zip(found, keep):
+        if not kept:
             continue
         text = _typed_source.historical_text(root, path, source._observe_text(root, (path).relative_to(root).as_posix(), path.read_text(), _operation=_operation), _operation=_operation)
         if not any(name in text for name in MODEL_NAMES | REMOVED_SEARCH_NAMES):
             continue
-        chosen.append((relative.as_posix(), text))
+        chosen.append((relative, text))
     _observed_consumers(chosen)
 
 
