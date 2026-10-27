@@ -1665,6 +1665,56 @@ def python_syntax_json(source: String) raises -> String:
     return doc.dumps()
 
 
+def normalized_block(source: String) -> String:
+    """Drop comments and blank lines, and keep the remaining indentation.
+
+    Args:
+        source: A source block. A `#` starts a comment, including inside text.
+
+    Returns:
+        The kept lines, separated by newlines, with one final newline.
+    """
+    var data = source.as_bytes()
+    var out = String("")
+    var index = 0
+    while index < len(data):
+        var start = index
+        var hash = -1
+        while index < len(data) and data[index] != 10 and data[index] != 13:
+            if hash < 0 and data[index] == 35:
+                hash = index
+            index += 1
+        var end = index if hash < 0 else hash
+        while end > start and (
+            data[end - 1] == 9
+            or data[end - 1] == 11
+            or data[end - 1] == 12
+            or data[end - 1] == 32
+        ):
+            end -= 1
+        var left = start
+        while left < end and (
+            data[left] == 9
+            or data[left] == 11
+            or data[left] == 12
+            or data[left] == 32
+        ):
+            left += 1
+        if left < end:
+            if out.byte_length() > 0:
+                out += "\n"
+            var cursor = start
+            while cursor < end:
+                out += chr(Int(data[cursor]))
+                cursor += 1
+        if index < len(data) and data[index] == 13:
+            index += 1
+        if index < len(data) and data[index] == 10:
+            index += 1
+    out += "\n"
+    return out
+
+
 def _decimal_literal(text: String) -> Bool:
     """Return whether `text` is one decimal literal.
 

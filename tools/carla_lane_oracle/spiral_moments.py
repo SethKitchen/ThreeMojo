@@ -210,8 +210,7 @@ def decimal_word(token):
 
 def normalized_block(text):
     """Keep indentation and operation spelling; ignore comments/blank lines."""
-    lines = [line.split('#', 1)[0].rstrip() for line in text.splitlines()]
-    return '\n'.join(line for line in lines if line.strip()) + '\n'
+    return ideal_projection.normalized_block(text)
 
 
 def selected_block(text, begin, end):

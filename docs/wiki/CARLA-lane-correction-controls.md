@@ -72,6 +72,8 @@ It replaces one executable token fragment for the cleanup mutation tests.
 
 It reads the decimal literals in one stored array or scalar declaration.
 
+It drops comments and blank lines from one source block.
+
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.

@@ -14,6 +14,7 @@ from tests._python_tokens import (
     declaration_text,
     constant_literals_json,
     function_slice,
+    normalized_block,
     replace_token_fragment,
     ideal_function_source,
     python_syntax_json,
@@ -157,6 +158,15 @@ def test_a_top_level_function_slice_stops_at_the_next_def() raises:
         _ = function_slice(source + "def first():\n    return 0\n", "first")
     with assert_raises(contains="missing or ambiguous function: absent"):
         _ = function_slice(source, "absent")
+
+
+def test_a_source_block_drops_comments_and_blank_lines() raises:
+    """Indentation stays, and a comment or a blank line does not."""
+    assert_equal(
+        normalized_block("    a  # c\n\n  \n    b\n"),
+        "    a\n    b\n",
+    )
+    assert_equal(normalized_block("   \n# only\n"), "\n")
 
 
 def test_a_constant_array_literal_list_is_exact() raises:

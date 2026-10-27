@@ -23,6 +23,7 @@
     carla_cleanup_gate --syntax PATH
     carla_cleanup_gate --slice PATH --name NAME
     carla_cleanup_gate --fragment DIR
+    carla_cleanup_gate --normalize PATH
     carla_cleanup_gate --literals PATH --name NAME --kind array --size N
     carla_cleanup_gate --literals PATH --name NAME --kind scalar
 
@@ -39,6 +40,7 @@ from tests._python_tokens import (
     ideal_function_source,
     constant_literals_json,
     function_slice,
+    normalized_block,
     replace_token_fragment,
     python_syntax_json,
     declaration_text,
@@ -443,7 +445,7 @@ def _usage():
             " | --statements PATH | --starts PATH"
             " | --routing PATH --constants PATH"
             " | --ideal PATH --name NAME | --syntax PATH"
-            " | --slice PATH --name NAME | --fragment DIR"
+            " | --slice PATH --name NAME | --fragment DIR | --normalize PATH"
             " | --literals PATH --name NAME --kind array --size N"
             " | --literals PATH --name NAME --kind scalar"
         ),
@@ -483,6 +485,7 @@ def main() raises:
     var syntax = String("")
     var slice_path = String("")
     var fragment = String("")
+    var normalize = String("")
     var literals = String("")
     var literal_size = String("")
     var arguments = argv()
@@ -515,6 +518,7 @@ def main() raises:
             or word == "--syntax"
             or word == "--slice"
             or word == "--fragment"
+            or word == "--normalize"
             or word == "--literals"
             or word == "--size"
         ):
@@ -571,6 +575,8 @@ def main() raises:
                 slice_path = value
             elif word == "--fragment":
                 fragment = value
+            elif word == "--normalize":
+                normalize = value
             elif word == "--literals":
                 literals = value
             elif word == "--size":
@@ -625,6 +631,8 @@ def main() raises:
     if slice_path.byte_length() > 0:
         modes += 1
     if fragment.byte_length() > 0:
+        modes += 1
+    if normalize.byte_length() > 0:
         modes += 1
     if significant.byte_length() > 0:
         modes += 1
@@ -707,6 +715,9 @@ def main() raises:
                 )
             else:
                 _usage()
+            return
+        if normalize.byte_length() > 0:
+            print(normalized_block(Path(normalize).read_text()), end="")
             return
         if fragment.byte_length() > 0:
             print(
