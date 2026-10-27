@@ -403,10 +403,33 @@ def reviewed_reference_tree(text, root=ROOT, *, _operation=None):
         _try_only_gate(text)
     except ValueError as error:
         raise CheckError(str(error)) from error
-    tree = syntax_tree(_sampled_text(
-        '--replace-function', _sampled_text('--strip-try-only', text),
-        '_try_lane_envelope_capture', replacement=previous))
+    tree = syntax_tree(_restored_reference(text, previous))
     return tree
+
+
+def _restored_reference(text, replacement):
+    """Strip the try-only refusal and restore the historical capture."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='restore-reference-') as directory:
+        folder = Path(directory)
+        source = folder / 'source.mojo'
+        previous = folder / 'replacement.mojo'
+        source.write_text(text)
+        previous.write_text(replacement)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_restore_reference', str(source), str(previous)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    return result.stdout
 
 
 def _source_digests(blobs):

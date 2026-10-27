@@ -20,6 +20,7 @@ from tests._python_tokens import (
     sampled_top_level,
     stored_half_tail,
     replace_function,
+    restore_reference_capture,
     strip_try_only_refusal,
 )
 from tests._python_expr import (
@@ -427,6 +428,42 @@ def test_try_only_refusal_is_removed_from_the_proof() raises:
         _ = strip_try_only_refusal(
             "def _lane_jet_model_proof():\n    return 1\n"
         )
+
+
+def test_reference_capture_restore_strips_then_replaces() raises:
+    """The historical capture is restored after the try-only refusal is gone."""
+    var source = (
+        "def _lane_jet_model_proof(\n"
+        "    ideal_translation: Bool = False,\n"
+        "    require_reuse: Bool = False,\n"
+        "):\n"
+        "    if reused:\n"
+        "        point = reused.value()\n"
+        "    elif require_reuse:\n"
+        "        return _unknown_point()\n"
+        "    else:\n"
+        "        point = fallback()\n"
+        "def _try_lane_envelope_capture():\n    return old\n"
+    )
+    var replacement = (
+        "def _try_lane_envelope_capture():\n    return historical\n"
+    )
+    var restored = restore_reference_capture(source, replacement)
+    assert_equal(
+        restored,
+        replace_function(
+            strip_try_only_refusal(source),
+            "_try_lane_envelope_capture",
+            replacement,
+        ),
+    )
+    if restored.find("require_reuse") >= 0 or restored.find("return old") >= 0:
+        raise Error("old refusal or capture remained")
+    if (
+        restored.find("return historical") < 0
+        or restored.find("fallback()") < 0
+    ):
+        raise Error("historical capture or fallback missing")
 
 
 def test_one_function_is_replaced_without_moving_its_neighbors() raises:

@@ -43,6 +43,8 @@ It keeps the copied helper projections.
 
 It keeps the constant and lane projection dumps.
 
+It keeps the restored lane-envelope capture.
+
 Any dependency edit requires renewed source review. It rejects derivative
 field/flag reads, square roots, missing/extra helpers and
 source divergence. It uses explicit failures under optimized Python. It does
