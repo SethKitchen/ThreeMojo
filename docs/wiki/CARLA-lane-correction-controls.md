@@ -50,6 +50,8 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_selection_record_gate.mojo` checks the selection predecessor record.
 
+`tools/carla_ideal_gate.mojo` checks the historical ideal source digest and the projected graph digest.
+
 ## Lane poses
 
 The pose follows the derivative of the actual lane-center expression.

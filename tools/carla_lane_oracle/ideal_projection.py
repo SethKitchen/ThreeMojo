@@ -8,7 +8,6 @@ and does not claim to parse or certify arbitrary Mojo programs.
 """
 import ast
 import copy
-import hashlib
 import io
 import json
 import tokenize
@@ -240,9 +239,29 @@ def project_sum2(tree):
     return tree
 
 
+def _gate(payload, kind):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='ideal-gate-') as directory:
+        target = Path(directory) / 'payload'
+        target.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_ideal_gate',
+             '--bytes', str(target), '--kind', kind],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def verify_projection(legacy, current, helper_text):
-    require(hashlib.sha256(legacy.encode()).hexdigest() == LEGACY_SHA256,
-            'historical ideal source changed')
+    _gate(legacy.encode(), 'legacy')
     verify_helper_projection(helper_text)
     left = function_tree(legacy, '_spiral_expression')
     # A caller inspecting a complete module supplies its unique actual AST
@@ -259,8 +278,9 @@ def verify_projection(legacy, current, helper_text):
     require(commute.count == 2, 'expected exactly two historical rate-half commutations')
     require(project.arguments == CALL_ARGUMENTS, 'expected exactly five reviewed stored-half calls')
     require(dump(left) == dump(right), 'ideal expression differs beyond reviewed half projection')
-    projected = hashlib.sha256(dump(left).encode()).hexdigest()
-    require(projected == PROJECTED_SHA256, 'projected ideal polynomial graph changed')
+    projected_bytes = dump(left).encode()
+    _gate(projected_bytes, 'projected')
+    projected = PROJECTED_SHA256
     return {'helper_projections': len(project.arguments), 'rate_half_commutations': commute.count,
             'projected_ast_sha256': projected, 'sum2_auxiliary_declarations': 4,
             'sum2_term_definitions': 2, 'sum2_auxiliary_updates': 4, 'sum2_error_writes': 2,
