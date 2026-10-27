@@ -7590,17 +7590,13 @@ _TYPED_CHECKER_SOURCE_EDITS = {
          ),
         ),
         (63, 64,
-         (
-
-         ),
+         (),
          (
           '\n',
          ),
         ),
         (68, 103,
-         (
-
-         ),
+         (),
          (
           '\n',
           'def _gate(migration, prior=None, components=None):\n',
@@ -7654,9 +7650,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "    require(type(record['schema']) is int and record['schema'] == 1\n",
           "            and set(record['sources']) == set(SOURCE_PATHS), 'wrong exact successor set')\n",
          ),
-         (
-
-         ),
+         (),
         ),
         (108, 114,
          (
@@ -7676,9 +7670,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
          ),
         ),
         (115, 137,
-         (
-
-         ),
+         (),
          (
           '\n',
           'def _gate_digest(payload, expected, kind, label):\n',
@@ -7722,10 +7714,8 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "    _gate_digest(payload, record['before_sha256'], 'before', filename)\n",
          ),
         ),
-        (156, 169,
-         (
-
-         ),
+        (156, 195,
+         (),
          (
           '\n',
           'def _source_view(root, path, physical_text, *, _operation=None):\n',
@@ -7740,17 +7730,53 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "    # For unrelated modules cache_key's historical API is an identity function.\n",
           '    return cache_key.reviewed_text(root, path, historical, _operation=_operation)\n',
           '\n',
-         ),
-        ),
-        (180, 181,
-         (
-          "        require(source.token_sha256(accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else cache_key.reviewed_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), **operation_args)) == item['after_token_sha256'],\n",
-         ),
-         (
-          "        require(source.token_sha256(accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _source_view(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), **operation_args)) == item['after_token_sha256'],\n",
+          '\n',
+          'def _gate_tokens(pairs):\n',
+          '    import json\n',
+          '    import os\n',
+          '    import subprocess\n',
+          '    import tempfile\n',
+          '    from pathlib import Path\n',
+          '    root = Path(__file__).resolve().parents[2]\n',
+          "    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))\n",
+          "    with tempfile.TemporaryDirectory(prefix='followup-tokens-') as directory:\n",
+          '        folder = Path(directory)\n',
+          '        labels = []\n',
+          '        for index, (body, token, name) in enumerate(pairs):\n',
+          "            (folder / f'{index}.text').write_text(body)\n",
+          "            labels.append({'path': name, 'token': token})\n",
+          "        (folder / 'labels.json').write_text(json.dumps(labels))\n",
+          '        result = subprocess.run(\n',
+          "            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_followup_gate',\n",
+          "             '--tokens', str(folder)],\n",
+          '            capture_output=True, text=True)\n',
+          '    if result.returncode != 0:\n',
+          '        lines = [line.strip() for line in result.stderr.splitlines()\n',
+          "                 if line.strip() and 'Crashpad' not in line]\n",
+          '        message = lines[-1] if lines else result.stdout.strip()\n',
+          '        raise ValueError(message)\n',
+          '\n',
          ),
         ),
         (205, 206,
+         (),
+         (
+          '    pairs = []\n',
+         ),
+        ),
+        (207, 211,
+         (
+          "        require(source.token_sha256(accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else cache_key.reviewed_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), **operation_args)) == item['after_token_sha256'],\n",
+          "                'complete successor changed: ' + path)\n",
+         ),
+         (
+          '        text = accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _source_view(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), **operation_args)\n',
+          "        pairs.append((text, item['after_token_sha256'], path))\n",
+          '    if pairs:\n',
+          '        _gate_tokens(pairs)\n',
+         ),
+        ),
+        (234, 235,
          (
           "    require(hashlib.sha256(payload).hexdigest() == record['after_sha256'],\n",
           "            'unreviewed runtime pin successor: ' + filename)\n",
@@ -7759,7 +7785,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "    _gate_digest(payload, record['after_sha256'], 'after', filename)\n",
          ),
         ),
-        (217, 218,
+        (246, 247,
          (
           "    require(hashlib.sha256(payload).hexdigest() == record['before_sha256'],\n",
           "            'historical pin reconstruction failed')\n",

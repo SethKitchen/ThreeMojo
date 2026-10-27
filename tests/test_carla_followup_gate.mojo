@@ -5,9 +5,15 @@
 
 """A changed coverage-followup record fails the gate."""
 
+from std.os import makedirs
+from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_followup_gate import followup_digest, followup_record
+from tools.carla_followup_gate import (
+    followup_digest,
+    followup_record,
+    followup_tokens,
+)
 
 
 def test_a_changed_record_is_refused() raises:
@@ -31,6 +37,23 @@ def test_a_changed_pin_reconstruction_is_refused() raises:
             "before",
             "runtime-source-pins.json",
         )
+
+
+def test_a_changed_successor_token_is_refused() raises:
+    """A text that does not have the recorded token digest fails closed."""
+    var directory = "/tmp/followup-token-test"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/labels.json").write_text(
+        '[{"path":"module.mojo","token":"00"}]'
+    )
+    Path(directory + "/0.text").write_text("def changed():\n    pass\n")
+    with assert_raises(
+        contains=(
+            "coverage followup successor: complete successor changed:"
+            " module.mojo"
+        )
+    ):
+        followup_tokens(directory)
 
 
 def main() raises:

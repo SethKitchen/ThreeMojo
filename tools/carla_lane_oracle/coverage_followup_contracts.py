@@ -168,6 +168,32 @@ def _source_view(root, path, physical_text, *, _operation=None):
     return cache_key.reviewed_text(root, path, historical, _operation=_operation)
 
 
+def _gate_tokens(pairs):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='followup-tokens-') as directory:
+        folder = Path(directory)
+        labels = []
+        for index, (body, token, name) in enumerate(pairs):
+            (folder / f'{index}.text').write_text(body)
+            labels.append({'path': name, 'token': token})
+        (folder / 'labels.json').write_text(json.dumps(labels))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_followup_gate',
+             '--tokens', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def verify(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
@@ -177,9 +203,12 @@ def verify(root, *, _operation=None):
         predecessor_pin_pair(root)
     else:
         _predecessor_pin_pair(root, _operation=_operation)
+    pairs = []
     for path,item in record['sources'].items():
-        require(source.token_sha256(accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _source_view(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), **operation_args)) == item['after_token_sha256'],
-                'complete successor changed: ' + path)
+        text = accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _source_view(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), **operation_args)
+        pairs.append((text, item['after_token_sha256'], path))
+    if pairs:
+        _gate_tokens(pairs)
     if __package__:
         from . import raw_cut_inverse_contracts as raw
         from . import moment_finiteness_contracts as moment

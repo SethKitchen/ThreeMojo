@@ -233,7 +233,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Runtime-view record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_runtime_view_gate.mojo` checks the runtime-view record and its bound tests [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Coverage-followup record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_followup_gate.mojo` checks the coverage-followup record, the prior invariant digest, the component records, and the pin digests [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Coverage-followup record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_followup_gate.mojo` checks the coverage-followup record, the prior invariant digest, the component records, the pin digests, and the successor tokens [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Rounded LINE singleton record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_singleton_gate.mojo` checks the rounded LINE singleton migration digest and its schema [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

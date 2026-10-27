@@ -7,6 +7,7 @@
 
     carla_followup_gate --migration PATH [--prior PATH] [--components DIR]
     carla_followup_gate --bytes PATH --sha HEX --kind after|before --label TEXT
+    carla_followup_gate --tokens DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -17,7 +18,8 @@ A prior without a component directory checks only that prior digest.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_json import PY_DICT, PY_INT, PY_STR, MISSING, PyJson
+from tests._python_tokens import token_sha256
+from tools._python_json import PY_DICT, PY_INT, PY_LIST, PY_STR, MISSING, PyJson
 from tools._sha256 import sha256_hex
 
 
@@ -211,13 +213,37 @@ def followup_digest(
     _fail("unreviewed runtime pin successor: " + label)
 
 
+def followup_tokens(directory: String) raises:
+    """Require each successor text to have its recorded token digest.
+
+    Args:
+        directory: A directory with `labels.json` and `N.text` files.
+
+    Raises:
+        Error: A token digest changed, or the directory cannot be read.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("complete successor changed")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var row = doc.item(doc.root, index)
+        var path = doc.text(doc.at(row, "path"))
+        var expected = doc.text(doc.at(row, "token"))
+        var text = Path(directory + "/" + String(index) + ".text").read_text()
+        if token_sha256(text) != expected:
+            _fail("complete successor changed: " + path)
+        index += 1
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_followup_gate --migration PATH [--prior PATH]"
             " [--components DIR] | --bytes PATH --sha HEX --kind after|before"
-            " --label TEXT"
+            " --label TEXT | --tokens DIR"
         ),
         file=stderr,
     )
@@ -237,6 +263,7 @@ def main() raises:
     var digest = String("")
     var kind = String("")
     var label = String("")
+    var tokens = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -249,6 +276,7 @@ def main() raises:
             or word == "--sha"
             or word == "--kind"
             or word == "--label"
+            or word == "--tokens"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -265,17 +293,34 @@ def main() raises:
                 digest = value
             elif word == "--kind":
                 kind = value
-            else:
+            elif word == "--label":
                 label = value
+            else:
+                tokens = value
             index += 2
             continue
         _usage()
-    if (migration.byte_length() == 0) == (payload.byte_length() == 0):
+    var modes = 0
+    if migration.byte_length() > 0:
+        modes += 1
+    if payload.byte_length() > 0:
+        modes += 1
+    if tokens.byte_length() > 0:
+        modes += 1
+    if modes != 1:
         _usage()
     if payload.byte_length() > 0 and (
         digest.byte_length() == 0
         or label.byte_length() == 0
         or (kind != "after" and kind != "before")
+        or tokens.byte_length() > 0
+    ):
+        _usage()
+    if tokens.byte_length() > 0 and (
+        migration.byte_length() > 0
+        or prior.byte_length() > 0
+        or components.byte_length() > 0
+        or payload.byte_length() > 0
     ):
         _usage()
     if migration.byte_length() > 0 and (
@@ -283,6 +328,9 @@ def main() raises:
     ):
         _usage()
     try:
+        if tokens.byte_length() > 0:
+            followup_tokens(tokens)
+            return
         if payload.byte_length() > 0:
             followup_digest(Path(payload).read_bytes(), digest, kind, label)
             return
