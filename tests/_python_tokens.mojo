@@ -917,6 +917,133 @@ def _token_name(kind: Int) -> String:
     return "OP"
 
 
+def ideal_function_source(source: String, name: String) raises -> String:
+    """Return one generic function with `var`, `comptime`, and its parameter list removed.
+
+    Args:
+        source: Mojo source that starts at `def NAME[`.
+        name: The function name.
+
+    Returns:
+        Source Python's parser accepts as that function.
+
+    Raises:
+        Error: The declaration is not `def NAME[derivatives: Bool]`, or the
+            source cannot be tokenized.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    try:
+        _tokenize(source, kinds, texts)
+    except error:
+        _ = String(error)
+        raise Error("unsupported ideal source syntax")
+    var kept_kinds = List[Int]()
+    var kept_texts = List[String]()
+    var index = 0
+    while index < len(kinds):
+        if not (
+            kinds[index] == _NAME
+            and (texts[index] == "var" or texts[index] == "comptime")
+        ):
+            kept_kinds.append(kinds[index])
+            kept_texts.append(texts[index])
+        index += 1
+    if (
+        len(kept_kinds) < 3
+        or kept_kinds[0] != _NAME
+        or kept_texts[0] != "def"
+        or kept_kinds[1] != _NAME
+        or kept_texts[1] != name
+        or kept_kinds[2] != _OP
+        or kept_texts[2] != "["
+    ):
+        raise Error("unsupported ideal function declaration")
+    var begin = 2
+    var end = begin + 1
+    var depth = 1
+    while end < len(kept_kinds) and depth > 0:
+        if kept_texts[end] == "[":
+            depth += 1
+        elif kept_texts[end] == "]":
+            depth -= 1
+        end += 1
+    if depth != 0:
+        raise Error("unclosed ideal generic declaration")
+    var parameters = List[String]()
+    var parameter_kinds = List[String]()
+    var token = begin + 1
+    while token < end - 1:
+        if (
+            kept_kinds[token] != _NEWLINE
+            and kept_kinds[token] != _INDENT
+            and kept_kinds[token] != _DEDENT
+        ):
+            parameter_kinds.append(_token_name(kept_kinds[token]))
+            parameters.append(kept_texts[token])
+        token += 1
+    if len(parameters) > 0 and parameters[len(parameters) - 1] == ",":
+        _ = parameters.pop()
+        _ = parameter_kinds.pop()
+    var expected_kinds = List[String]()
+    expected_kinds.append("NAME")
+    expected_kinds.append("OP")
+    expected_kinds.append("NAME")
+    var expected_texts = List[String]()
+    expected_texts.append("derivatives")
+    expected_texts.append(":")
+    expected_texts.append("Bool")
+    var same = len(parameters) == len(expected_texts)
+    var check = 0
+    while same and check < len(parameters):
+        if (
+            parameter_kinds[check] != expected_kinds[check]
+            or parameters[check] != expected_texts[check]
+        ):
+            same = False
+        check += 1
+    if not same:
+        raise Error("changed ideal generic declaration")
+    var out_kinds = List[Int]()
+    var out_texts = List[String]()
+    token = 0
+    while token < begin:
+        out_kinds.append(kept_kinds[token])
+        out_texts.append(kept_texts[token])
+        token += 1
+    token = end
+    while token < len(kept_kinds):
+        out_kinds.append(kept_kinds[token])
+        out_texts.append(kept_texts[token])
+        token += 1
+    var out = String("")
+    var indents = List[String]()
+    indents.append("")
+    var need_indent = False
+    token = 0
+    while token < len(out_kinds):
+        var kind = out_kinds[token]
+        if kind == _NEWLINE:
+            out += "\n"
+            need_indent = True
+        elif kind == _DEDENT:
+            if len(indents) > 1:
+                _ = indents.pop()
+        elif kind == _INDENT:
+            indents.append(out_texts[token])
+        else:
+            if need_indent:
+                out += indents[len(indents) - 1]
+                need_indent = False
+            elif out.byte_length() > 0:
+                var data = out.as_bytes()
+                if data[len(data) - 1] != 10:
+                    out += " "
+            out += out_texts[token]
+        token += 1
+    return out
+
+
 def module_statements_json(source: String) raises -> String:
     """Return the top-level statements, without the module docstring.
 

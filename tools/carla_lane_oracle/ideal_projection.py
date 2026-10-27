@@ -38,6 +38,28 @@ def dump(node):
     return json.dumps(normalized_node(node), separators=(',', ':'), ensure_ascii=True)
 
 
+def _ideal_source(text, name):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='ideal-function-') as directory:
+        source = Path(directory) / 'source.mojo'
+        source.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--ideal', str(source), '--name', name],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def function_tree(text, name):
     """Adapt the one already source-bound generic function for AST comparison.
 
@@ -45,32 +67,13 @@ def function_tree(text, name):
     arithmetic projection. No transformation here authorizes their removal.
     """
     try:
-        tokens = [(t.type, t.string) for t in
-                  tokenize.generate_tokens(io.StringIO(text).readline)
-                  if not (t.type == tokenize.NAME and t.string in ('var', 'comptime'))]
-        head = [(kind, word) for kind, word in tokens
-                if kind not in (tokenize.COMMENT, tokenize.NL)]
-        require(head[:3] == [(tokenize.NAME, 'def'), (tokenize.NAME, name),
-                              (tokenize.OP, '[')], 'unsupported ideal function declaration')
-        begin = next(i for i, token in enumerate(tokens) if token == (tokenize.OP, '['))
-        end, depth = begin + 1, 1
-        while end < len(tokens) and depth:
-            depth += (tokens[end][1] == '[') - (tokens[end][1] == ']')
-            end += 1
-        require(depth == 0, 'unclosed ideal generic declaration')
-        parameters = [(tokenize.tok_name[k], v) for k, v in tokens[begin+1:end-1]
-                      if k not in (tokenize.NL, tokenize.COMMENT)]
-        if parameters and parameters[-1][1] == ',':
-            parameters.pop()
-        require(parameters == [('NAME', 'derivatives'), ('OP', ':'), ('NAME', 'Bool')],
-                'changed ideal generic declaration')
-        del tokens[begin:end]
-        tree = ast.parse(tokenize.untokenize(tokens))
-    except (SyntaxError, tokenize.TokenError, IndentationError, StopIteration) as error:
+        tree = ast.parse(_ideal_source(text, name))
+    except SyntaxError as error:
         raise ValueError('unsupported ideal source syntax') from error
     require(len(tree.body) == 1 and isinstance(tree.body[0], ast.FunctionDef)
             and tree.body[0].name == name, 'ambiguous ideal function declaration')
-    tree.body[0]._mojo_type_parameters = parameters
+    tree.body[0]._mojo_type_parameters = [
+        ('NAME', 'derivatives'), ('OP', ':'), ('NAME', 'Bool')]
     return tree.body[0]
 
 

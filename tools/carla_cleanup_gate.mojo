@@ -19,6 +19,7 @@
     carla_cleanup_gate --statements PATH
     carla_cleanup_gate --starts PATH
     carla_cleanup_gate --routing PATH --constants PATH
+    carla_cleanup_gate --ideal PATH --name NAME
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -30,6 +31,7 @@ from std.sys import argv, exit, stderr
 
 from tests._python_tokens import (
     declaration_place,
+    ideal_function_source,
     declaration_text,
     stored_float_array,
     stored_scalar,
@@ -431,6 +433,7 @@ def _usage():
             " | --significant-json DIR | --names DIR | --moves PATH"
             " | --statements PATH | --starts PATH"
             " | --routing PATH --constants PATH"
+            " | --ideal PATH --name NAME"
         ),
         file=stderr,
     )
@@ -464,6 +467,7 @@ def main() raises:
     var starts = String("")
     var routing = String("")
     var constants = String("")
+    var ideal = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -490,6 +494,7 @@ def main() raises:
             or word == "--starts"
             or word == "--routing"
             or word == "--constants"
+            or word == "--ideal"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -534,8 +539,10 @@ def main() raises:
                 starts = value
             elif word == "--routing":
                 routing = value
-            else:
+            elif word == "--constants":
                 constants = value
+            else:
+                ideal = value
             index += 2
             continue
         _usage()
@@ -563,8 +570,11 @@ def main() raises:
     if (
         declaration.byte_length() == 0
         and bounds.byte_length() == 0
+        and ideal.byte_length() == 0
         and (decl_name.byte_length() > 0 or len(owners) > 0)
     ):
+        modes += 1
+    if ideal.byte_length() > 0:
         modes += 1
     if significant.byte_length() > 0:
         modes += 1
@@ -595,11 +605,14 @@ def main() raises:
     if (
         declaration.byte_length() == 0
         and bounds.byte_length() == 0
+        and ideal.byte_length() == 0
         and (decl_name.byte_length() > 0 or len(owners) > 0)
     ):
         _usage()
     if (
-        declaration.byte_length() > 0 or bounds.byte_length() > 0
+        declaration.byte_length() > 0
+        or bounds.byte_length() > 0
+        or ideal.byte_length() > 0
     ) and decl_name.byte_length() == 0:
         _usage()
     try:
@@ -610,6 +623,12 @@ def main() raises:
                 module_routing_json(
                     Path(routing).read_text(), Path(constants).read_text()
                 ),
+                end="",
+            )
+            return
+        if ideal.byte_length() > 0:
+            print(
+                ideal_function_source(Path(ideal).read_text(), decl_name),
                 end="",
             )
             return

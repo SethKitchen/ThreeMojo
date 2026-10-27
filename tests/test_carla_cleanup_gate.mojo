@@ -12,6 +12,7 @@ from std.pathlib import Path
 from tests._python_tokens import (
     declaration_place,
     declaration_text,
+    ideal_function_source,
     significant_json,
     module_routing_json,
     module_statements_json,
@@ -105,6 +106,22 @@ def test_a_nested_def_is_not_a_top_level_start() raises:
         + "from a import b\n"
     )
     assert_equal(top_level_starts_json(source), "[[1,0],[4,0]]")
+
+
+def test_an_ideal_generic_parameter_list_is_removed() raises:
+    """`var` and the `derivatives: Bool` list are removed."""
+    var source = String(
+        "def _stored_half[\n"
+        + "    derivatives: Bool\n"
+        + "](value: Int) -> Int:\n"
+        + "    var result = value\n"
+        + "    return result\n"
+    )
+    var plain = ideal_function_source(source, "_stored_half")
+    if plain.find("var ") >= 0 or plain.find("derivatives") >= 0:
+        raise Error(plain)
+    if plain.find("def _stored_half") < 0 or plain.find("return result") < 0:
+        raise Error(plain)
 
 
 def test_a_stored_word_routing_masks_the_right_hand_side() raises:
