@@ -516,26 +516,36 @@ def _projection_recipe():
     return _PROJECTION_RECIPE
 
 
+def _project_batch(bounds, trig):
+    """Return the copied helpers and the value dispatchers."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps(
+        {'bounds': bounds, 'trig': trig}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='sampled-projection-') as directory:
+        path = Path(directory) / 'sources.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_sampled_projection', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    return json.loads(result.stdout)
+
+
 def _project_sampled(bounds, trig, texts, names, copies):
     """Project the reviewed helpers, using Python only for the syntax texts."""
     recipe = _projection_recipe()
-    modules = {
-        recipe['bounds_module']: bounds,
-        recipe['trig_module']: trig,
-    }
-    expected = {}
+    expected = _project_batch(bounds, trig)
     for name in copies:
-        filename = (recipe['trig_module'] if name.startswith(recipe['trig_prefix'])
-                    else recipe['bounds_module'])
-        old = _sampled_text('--extract', modules[filename], name)
-        new = _sampled_text('--rename', old)
-        blend = recipe['blend']
-        if name == blend['name']:
-            # Remove only these two complete assignments, never value/error.
-            for field in blend['fields']:
-                new = _sampled_text('--drop-intersection', new, field)
-        expected[names[name]] = _sampled_text('--decorators', texts[filename], name) + new
-    expected.update(_sampled_declarations())
+        require(names[name] in expected, _sampled_closure()['step'])
     # Project complete parsed declarations, never raw prefix/tail slices.
     # Remove precisely the three complete non-sampled branches of the reference
     # capture. The new leading guard rejects those kinds; the independent broad
@@ -551,14 +561,8 @@ def _project_sampled(bounds, trig, texts, names, copies):
 
     for step in recipe['steps']:
         kind = step['kind']
-        if kind == 'project':
-            old = renamed_source(step['module'], step['name'])
-            _sampled_text('--check-roles', old, step['role'])
-            expected[step['target']] = _sampled_text(step['mode'], old)
-        elif kind == 'rename':
-            for name, filename in step['pairs']:
-                expected[names[name]] = with_decorators(
-                    filename, name, renamed_source(filename, name))
+        if kind == 'project' or kind == 'rename':
+            continue
         elif kind == 'constant':
             constant = renamed_source(step['module'], step['name'])
             _sampled_text('--check-roles', constant, step['role'])

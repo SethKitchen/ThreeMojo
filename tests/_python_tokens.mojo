@@ -2138,19 +2138,26 @@ def project_lane_value(source: String) raises -> String:
     return signature
 
 
-def decorator_prefix(source: String, name: String) raises -> String:
-    """Return the decorator lines immediately above one top-level function.
+def _top_level_heads(
+    source: String,
+    mut starts: List[Int],
+    mut firsts: List[String],
+    mut names: List[String],
+) raises:
+    """Record each top-level statement head in `source`.
 
     Args:
-        source: Mojo source that contains the function.
-        name: The function name.
-
-    Returns:
-        The decorator text, including its trailing newline, or an empty string.
+        source: Mojo source.
+        starts: Byte offsets of the statement heads. This call replaces them.
+        firsts: The first token of each head. This call replaces them.
+        names: The function name, or empty. This call replaces them.
 
     Raises:
-        Error: The function is missing or ambiguous.
+        Error: The source cannot be tokenized.
     """
+    starts.clear()
+    firsts.clear()
+    names.clear()
     var kinds = List[Int]()
     var texts = List[String]()
     var lines = List[Int]()
@@ -2160,9 +2167,6 @@ def decorator_prefix(source: String, name: String) raises -> String:
     _tokenize_lines(
         source, kinds, texts, lines, start_cols, end_lines, end_cols
     )
-    var starts = List[Int]()
-    var firsts = List[String]()
-    var names = List[String]()
     var indent = 0
     var bracket = 0
     var in_statement = False
@@ -2215,6 +2219,50 @@ def decorator_prefix(source: String, name: String) raises -> String:
                 in_statement = True
                 nested = False
         index += 1
+
+
+def _decorator_span(
+    source: String,
+    starts: List[Int],
+    firsts: List[String],
+    found: Int,
+) -> String:
+    """Return the decorator text that ends at one function head.
+
+    Args:
+        source: Mojo source.
+        starts: Byte offsets of the statement heads.
+        firsts: The first token of each head.
+        found: The function head.
+
+    Returns:
+        The decorator text, including its trailing newline, or empty.
+    """
+    var first = found
+    while first > 0 and firsts[first - 1] == "@":
+        first -= 1
+    if first == found:
+        return String("")
+    return String(source[byte = starts[first] : starts[found]])
+
+
+def decorator_prefix(source: String, name: String) raises -> String:
+    """Return the decorator lines immediately above one top-level function.
+
+    Args:
+        source: Mojo source that contains the function.
+        name: The function name.
+
+    Returns:
+        The decorator text, including its trailing newline, or an empty string.
+
+    Raises:
+        Error: The function is missing or ambiguous.
+    """
+    var starts = List[Int]()
+    var firsts = List[String]()
+    var names = List[String]()
+    _top_level_heads(source, starts, firsts, names)
     var found = -1
     var hits = 0
     var cursor = 0
@@ -2225,12 +2273,49 @@ def decorator_prefix(source: String, name: String) raises -> String:
         cursor += 1
     if hits != 1:
         raise Error("missing or ambiguous function: " + name)
-    var first = found
-    while first > 0 and firsts[first - 1] == "@":
-        first -= 1
-    if first == found:
-        return String("")
-    return String(source[byte = starts[first] : starts[found]])
+    return _decorator_span(source, starts, firsts, found)
+
+
+def decorator_prefix_json(source: String) raises -> String:
+    """Return every top-level function's decorator prefix.
+
+    Args:
+        source: Mojo source.
+
+    Returns:
+        A JSON object. Each key is a function that occurs once. The value
+        is its decorator text, or an empty string.
+
+    Raises:
+        Error: The source cannot be tokenized.
+    """
+    var starts = List[Int]()
+    var firsts = List[String]()
+    var names = List[String]()
+    _top_level_heads(source, starts, firsts, names)
+    var doc = PyJson()
+    var root = doc.new_dict()
+    var cursor = 0
+    while cursor < len(names):
+        var name = names[cursor]
+        if name.byte_length() > 0:
+            var hits = 0
+            var found = cursor
+            var scan = 0
+            while scan < len(names):
+                if names[scan] == name:
+                    hits += 1
+                    found = scan
+                scan += 1
+            if hits == 1:
+                doc.set(
+                    root,
+                    name,
+                    doc.new_str(_decorator_span(source, starts, firsts, found)),
+                )
+        cursor += 1
+    doc.root = root
+    return doc.dumps()
 
 
 def replace_function(
