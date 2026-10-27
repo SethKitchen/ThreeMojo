@@ -2729,6 +2729,46 @@ def fragment_count(payload: String) raises -> String:
     return String(count)
 
 
+def require_fragment_checks(payload: String) raises:
+    """Require each fragment check, in order.
+
+    Args:
+        payload: A JSON list of fragment checks. Each object has `source`,
+            `name`, `kind`, `fragment`, `label`, and `expected`. `call` is
+            included for a `before-call` check. `message` replaces `label`
+            when the count differs.
+
+    Raises:
+        Error: A fragment cannot be read, or a count differs.
+    """
+    var doc = PyJson.parse(payload)
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        var item = doc.item(doc.root, index)
+        var one = doc.new_dict()
+        doc.set(one, "source", doc.copy_node(doc.at(item, "source")))
+        doc.set(one, "name", doc.copy_node(doc.at(item, "name")))
+        doc.set(one, "kind", doc.copy_node(doc.at(item, "kind")))
+        doc.set(one, "fragment", doc.copy_node(doc.at(item, "fragment")))
+        doc.set(one, "label", doc.copy_node(doc.at(item, "label")))
+        var call = doc.get(item, "call")
+        if call != MISSING:
+            doc.set(one, "call", doc.copy_node(call))
+        var saved = doc.root
+        doc.root = one
+        var text = doc.dumps()
+        doc.root = saved
+        var found = Int(fragment_count(text))
+        if found != Int(doc.text(doc.at(item, "expected"))):
+            var message = doc.text(doc.at(item, "label"))
+            var mismatch = doc.get(item, "message")
+            if mismatch != MISSING:
+                message = doc.text(mismatch)
+            raise Error("optional runtime contract: " + message)
+        index += 1
+
+
 def assignment_dump(source: String, name: String) raises -> String:
     """Return the dump of one function-body assignment.
 

@@ -179,36 +179,50 @@ def body_from_source(text, name):
     return _RuntimeFunction(name, _without_moves(source))
 
 
-def _fragment_count(source, name, kind, fragment, label, call=''):
+def _fragment_checks(items):
     import json
     import os
     import subprocess
     import tempfile
     from pathlib import Path
+    if not items:
+        return
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = {
-        'source': source, 'name': name, 'kind': kind, 'fragment': fragment,
-        'label': label,
-    }
-    if call:
-        payload['call'] = call
-    payload = json.dumps(payload, separators=(',', ':'))
-    with tempfile.TemporaryDirectory(prefix='fragment-count-') as directory:
-        path = Path(directory) / 'payload.json'
+    payload = json.dumps(items, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='fragment-checks-') as directory:
+        path = Path(directory) / 'checks.json'
         path.write_text(payload)
         result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--fragment-count', str(path)],
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_fragment_checks', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         if message.startswith('invalid checker fragment:'):
-            raise ValueError('optional runtime contract: ' + message)
+            message = 'optional runtime contract: ' + message
         raise ValueError(message)
-    return int(result.stdout)
+
+
+def _edge(source, name, kind, fragment, label, expected=1, message=None, call=''):
+    item = {
+        'source': source, 'name': name, 'kind': kind, 'fragment': fragment,
+        'label': label, 'expected': expected,
+    }
+    if message is not None:
+        item['message'] = message
+    if call:
+        item['call'] = call
+    return item
+
+
+def _node_edge(node, kind, fragment, label, expected=1, message=None, call='',
+               source_label=None):
+    return _edge(
+        _runtime_source(node, source_label or label), node._runtime_name, kind,
+        fragment, label, expected, message, call)
 
 
 def _runtime_source(node, label):
@@ -218,27 +232,26 @@ def _runtime_source(node, label):
 
 
 def contains(node, text, label, count=1):
-    source = _runtime_source(node, label)
-    require(_fragment_count(source, node._runtime_name, 'contains', text, label) == count, label)
+    _fragment_checks([_node_edge(node, 'contains', text, label, count)])
 
 
 def expression(node, text, label, count=1):
-    source = _runtime_source(node, label)
-    require(_fragment_count(source, node._runtime_name, 'expression', text, label) == count, label)
+    _fragment_checks([_node_edge(node, 'expression', text, label, count)])
 
 
 def sequence(node, text, label):
     """Bind adjacent statements in one suite, without textual sentinels."""
-    source = _runtime_source(node, label)
-    require(_fragment_count(source, node._runtime_name, 'sequence', text, label) == 1, label)
+    _fragment_checks([_node_edge(node, 'sequence', text, label)])
+
+
+def _fresh_item(node):
+    fragment = 'if not _sum2_supported_environment():\n    return None'
+    label = 'fresh invocation guard missing or moved: ' + node.name
+    return _node_edge(node, 'first', fragment, node.name, message=label)
 
 
 def fresh_guard(node):
-    fragment = 'if not _sum2_supported_environment():\n    return None'
-    label = 'fresh invocation guard missing or moved: ' + node.name
-    source = _runtime_source(node, label)
-    require(_fragment_count(
-        source, node._runtime_name, 'first', fragment, node.name) == 1, label)
+    _fragment_checks([_fresh_item(node)])
 
 
 # Removal is a scheduling decision, not a rejection of the standalone model's
@@ -328,16 +341,25 @@ def verify_no_containing_model_consumers(root, *, _operation=None):
     _observed_consumers(chosen)
 
 
-def verify_fresh_producer(run):
-    source = _runtime_source(run, 'one original search frontier loop')
-    _fragment_count(source, run._runtime_name, 'fresh', FRESH_PRODUCER, 'fresh')
+def _fresh_items(run):
+    loop = 'one original search frontier loop'
+    items = [_node_edge(run, 'fresh', FRESH_PRODUCER, 'fresh', source_label=loop)]
     for name in ('cached_fast', 'cached_expansion'):
-        contains(run, 'var ' + name + ': Optional[Tuple[UInt64, UInt64, _Jet]] = None',
-                 'exact expansion memo lifetime is one search invocation')
+        items.append(_node_edge(
+            run, 'contains',
+            'var ' + name + ': Optional[Tuple[UInt64, UInt64, _Jet]] = None',
+            'exact expansion memo lifetime is one search invocation'))
     for fragment, label in ((FAST_MEMO, 'proof'), (EXPANSION_MEMO, 'translated')):
-        sequence(run, 'var station_word = bitcast[DType.uint64](center_s)\n'
-                 + 'var scale_word = bitcast[DType.uint64](scale)\n' + fragment,
-                 'exact station/scale ' + label + ' expansion memo and fresh fallback')
+        items.append(_node_edge(
+            run, 'sequence',
+            'var station_word = bitcast[DType.uint64](center_s)\n'
+            + 'var scale_word = bitcast[DType.uint64](scale)\n' + fragment,
+            'exact station/scale ' + label + ' expansion memo and fresh fallback'))
+    return items
+
+
+def verify_fresh_producer(run):
+    _fragment_checks(_fresh_items(run))
 
 
 def verify_search_semantics(run):
@@ -346,32 +368,43 @@ def verify_search_semantics(run):
     Actual source admission must precede the exact center predecessor.
     Historical AST fixtures can exercise diagnostics but grant no source edge.
     """
-    verify_fresh_producer(run)
-    contains(run, 'var sampled_cuts: Optional[Tuple[Float64, Float64, Int]] = None', 'cut lifetime is one search invocation')
-    contains(run, 'var best = certificate.s', 'incumbent is the validated actual certificate witness')
-    contains(run, 'var best_point = certificate.point.copy()', 'retain actual witness point')
-    expression(run, '_minimizer_support(domain, center, center_s, best, lo, hi)',
-               'support receives same ideal and actual witness')
-    sequence(run, GROUPED_ADMISSION,
-             'grouped caller must retain recheck and prepaid original fallback')
-    expression(run, '_try_grouped_lane_jet(road, section, lane, lo, hi, certificate.nodes, certificate.terms, max_nodes, max_terms)',
-               'one guarded grouped caller edge')
-    source = _runtime_source(run, 'one original search frontier loop')
-    _fragment_count(
-        source, run._runtime_name, 'setup',
-        'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',
-        'depth refusal precedes dispatch setup')
-    expression(run, 'bitcast[DType.float64](bitcast[DType.uint64](split_at) - UInt64(1))',
-               'split predecessor preserves every stored owner station')
+    loop = 'one original search frontier loop'
+    items = _fresh_items(run)
+    items.extend((
+        _node_edge(run, 'contains',
+                   'var sampled_cuts: Optional[Tuple[Float64, Float64, Int]] = None',
+                   'cut lifetime is one search invocation'),
+        _node_edge(run, 'contains', 'var best = certificate.s',
+                   'incumbent is the validated actual certificate witness'),
+        _node_edge(run, 'contains', 'var best_point = certificate.point.copy()',
+                   'retain actual witness point'),
+        _node_edge(run, 'expression',
+                   '_minimizer_support(domain, center, center_s, best, lo, hi)',
+                   'support receives same ideal and actual witness'),
+        _node_edge(run, 'sequence', GROUPED_ADMISSION,
+                   'grouped caller must retain recheck and prepaid original fallback'),
+        _node_edge(
+            run, 'expression',
+            '_try_grouped_lane_jet(road, section, lane, lo, hi, certificate.nodes, certificate.terms, max_nodes, max_terms)',
+            'one guarded grouped caller edge'),
+        _node_edge(
+            run, 'setup',
+            'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',
+            'depth refusal precedes dispatch setup', source_label=loop),
+        _node_edge(
+            run, 'expression',
+            'bitcast[DType.float64](bitcast[DType.uint64](split_at) - UInt64(1))',
+            'split predecessor preserves every stored owner station'),
+    ))
+    _fragment_checks(items)
 
 
 def verify_semantics(root, *, _operation=None):
     helper = body(root, 'lane_refinement', '_same_cache_key', _operation=_operation)
-    require(_fragment_count(
-        helper._runtime_source, helper._runtime_name, 'body',
+    _fragment_checks([_node_edge(
+        helper, 'body',
         'return SIMD[DType.uint64, 2](station, scale) == SIMD[DType.uint64, 2](other_station, other_scale)',
-        'exact UInt64 pair helper comparison') == 1,
-        'exact UInt64 pair helper comparison')
+        'exact UInt64 pair helper comparison')])
     model = body(root, 'curve_objective_model', '_try_objective_model', _operation=_operation)
     restrict = body(root, 'curve_objective_model', '_restrict_objective_model', _operation=_operation)
     cut = body(root, 'curve_sample_dispatch', '_sample_dispatch_cut', _operation=_operation)
@@ -379,117 +412,164 @@ def verify_semantics(root, *, _operation=None):
     lane = body(root, 'spiral_grouped_lane', '_try_grouped_lane_jet', _operation=_operation)
     raw = body(root, 'spiral_grouped_roundoff_proof', '_try_spiral_grouped_roundoff_envelope', _operation=_operation)
     metered = body(root, 'spiral_grouped_roundoff_proof', '_try_spiral_grouped_roundoff_envelope_metered', _operation=_operation)
-    for node in (model, restrict, cut, cuts, lane, raw, metered):
-        fresh_guard(node)
+    _fragment_checks([_fresh_item(node) for node in
+                      (model, restrict, cut, cuts, lane, raw, metered)])
 
     # Exact guarded raw -> private origin -> checked Sum2 leaf edge. The
     # global inventory also rejects any new direct or alias route to it.
     origin = body(root, 'spiral_grouped_roundoff_proof', '_grouped_origin_error', _operation=_operation)
-    contains(origin, 'var error = _sum2_error_checked(magnitude.high, inherited.high, count)',
-             'grouped origin must use the canonical checked error arguments')
-    contains(raw, 'var x_error = _grouped_origin_error(x_ideal, x_magnitude, x_inherited, 5 * pieces, geometry.x)',
-             'complete X stored-term count and origin')
-    contains(raw, 'var y_error = _grouped_origin_error(y_ideal, y_magnitude, y_inherited, 5 * pieces, geometry.y)',
-             'complete Y stored-term count and origin')
-    contains(raw, 'var distance = _ValueJet(d.value, _Interval.whole(), _Interval.whole(), d.error)',
-             'retain original ideal distance and uniform scalar error')
-    contains(raw, 'var copies = (high - low) * multiplicity', 'actual group multiplicity')
-    contains(raw, 'var multiplicity = 1 if weight == 2 else 2', 'stored symmetric weight multiplicity')
+    _fragment_checks([
+        _node_edge(origin, 'contains',
+                   'var error = _sum2_error_checked(magnitude.high, inherited.high, count)',
+                   'grouped origin must use the canonical checked error arguments'),
+        _node_edge(raw, 'contains',
+                   'var x_error = _grouped_origin_error(x_ideal, x_magnitude, x_inherited, 5 * pieces, geometry.x)',
+                   'complete X stored-term count and origin'),
+        _node_edge(raw, 'contains',
+                   'var y_error = _grouped_origin_error(y_ideal, y_magnitude, y_inherited, 5 * pieces, geometry.y)',
+                   'complete Y stored-term count and origin'),
+        _node_edge(raw, 'contains',
+                   'var distance = _ValueJet(d.value, _Interval.whole(), _Interval.whole(), d.error)',
+                   'retain original ideal distance and uniform scalar error'),
+        _node_edge(raw, 'contains', 'var copies = (high - low) * multiplicity',
+                   'actual group multiplicity'),
+        _node_edge(raw, 'contains', 'var multiplicity = 1 if weight == 2 else 2',
+                   'stored symmetric weight multiplicity'),
+    ])
     work = body(root, 'spiral_grouped_roundoff_proof', '_spiral_grouped_roundoff_work', _operation=_operation)
-    contains(work, 'return 3 * min(4, pieces)', 'whole count work bound')
-    contains(lane, 'if nodes < 0 or nodes >= max_nodes or terms < 0 or terms > max_terms or max_terms - terms < 24:\n    return None',
-             'whole optional union admission')
-    contains(lane, 'if counts[0] < 1 or counts[1] > 64 or counts[1] < counts[0] or counts[1] - counts[0] > 1:\n    return None',
-             'complete at-most-two count domain')
-    contains(lane, 'var extra = _spiral_grouped_roundoff_work(counts[0])', 'first count debit')
-    contains(lane, 'if counts[1] != counts[0]:\n    extra += _spiral_grouped_roundoff_work(counts[1])',
-             'second count debit')
-    _fragment_count(
-        _runtime_source(lane, 'atomic whole-count debit must precede both raw envelopes'),
-        lane._runtime_name, 'before-call',
-        'terms += extra',
-        'atomic whole-count debit must precede both raw envelopes',
-        '_try_spiral_grouped_roundoff_envelope')
-    expression(lane, '_lane_jet_model_proof[False](road, section, lane, low, high, Vector3(0, 0, 0), proof, low, high, captured, require_reuse=True)',
-               'try-only reconstruction cannot invoke hidden GL')
-    contains(metered, 'if work + fallback_work > max_terms - terms:\n    return None',
-             'standalone adapter preserves independent fallback reservation')
+    _fragment_checks([
+        _node_edge(work, 'contains', 'return 3 * min(4, pieces)',
+                   'whole count work bound'),
+        _node_edge(lane, 'contains',
+                   'if nodes < 0 or nodes >= max_nodes or terms < 0 or terms > max_terms or max_terms - terms < 24:\n    return None',
+                   'whole optional union admission'),
+        _node_edge(lane, 'contains',
+                   'if counts[0] < 1 or counts[1] > 64 or counts[1] < counts[0] or counts[1] - counts[0] > 1:\n    return None',
+                   'complete at-most-two count domain'),
+        _node_edge(lane, 'contains',
+                   'var extra = _spiral_grouped_roundoff_work(counts[0])',
+                   'first count debit'),
+        _node_edge(lane, 'contains',
+                   'if counts[1] != counts[0]:\n    extra += _spiral_grouped_roundoff_work(counts[1])',
+                   'second count debit'),
+        _node_edge(lane, 'before-call', 'terms += extra',
+                   'atomic whole-count debit must precede both raw envelopes',
+                   call='_try_spiral_grouped_roundoff_envelope'),
+        _node_edge(lane, 'expression',
+                   '_lane_jet_model_proof[False](road, section, lane, low, high, Vector3(0, 0, 0), proof, low, high, captured, require_reuse=True)',
+                   'try-only reconstruction cannot invoke hidden GL'),
+        _node_edge(metered, 'contains',
+                   'if work + fallback_work > max_terms - terms:\n    return None',
+                   'standalone adapter preserves independent fallback reservation'),
+    ])
 
     # Model data is meaningful only for the same ideal producer and owner.
     # Complete caller/source bindings cover producer smoothness and lifetime.
-    expression(model, 'low >= high', 'model ordered owner')
-    expression(model, 'center_s < low', 'model center inside owner low')
-    expression(model, 'center_s > high', 'model center inside owner high')
+    items = [
+        _node_edge(model, 'expression', 'low >= high', 'model ordered owner'),
+        _node_edge(model, 'expression', 'center_s < low', 'model center inside owner low'),
+        _node_edge(model, 'expression', 'center_s > high', 'model center inside owner high'),
+    ]
     for field in ('value', 'first', 'second'):
-        expression(model, 'not _model_interval(domain.' + field + ')', 'model finite whole-owner ' + field)
-    expression(model, 'not isfinite(domain.error)', 'model uniform error finite')
-    expression(model, 'domain.error < 0.0', 'model uniform error nonnegative')
-    expression(restrict, 'low < model.low', 'restriction cannot widen owner low')
-    expression(restrict, 'high > model.high', 'restriction cannot widen owner high')
-    expression(restrict, 'bitcast[DType.uint64](scale) != model.scale_word', 'exact normalization scale word')
-    contains(restrict, 'return _Jet(value, first, model.domain.second, model.domain.error)',
-             'restriction retains whole-owner curvature and error')
-    contains(restrict, 'var value = model.center.value + model.center.first * delta + _Interval.point(0.5) * model.domain.second * delta.square()',
-             'same-ideal Taylor value restriction')
+        items.append(_node_edge(
+            model, 'expression', 'not _model_interval(domain.' + field + ')',
+            'model finite whole-owner ' + field))
+    items.extend((
+        _node_edge(model, 'expression', 'not isfinite(domain.error)',
+                   'model uniform error finite'),
+        _node_edge(model, 'expression', 'domain.error < 0.0',
+                   'model uniform error nonnegative'),
+        _node_edge(restrict, 'expression', 'low < model.low',
+                   'restriction cannot widen owner low'),
+        _node_edge(restrict, 'expression', 'high > model.high',
+                   'restriction cannot widen owner high'),
+        _node_edge(restrict, 'expression',
+                   'bitcast[DType.uint64](scale) != model.scale_word',
+                   'exact normalization scale word'),
+        _node_edge(restrict, 'contains',
+                   'return _Jet(value, first, model.domain.second, model.domain.error)',
+                   'restriction retains whole-owner curvature and error'),
+        _node_edge(
+            restrict, 'contains',
+            'var value = model.center.value + model.center.first * delta + _Interval.point(0.5) * model.domain.second * delta.square()',
+            'same-ideal Taylor value restriction'),
+    ))
+    _fragment_checks(items)
 
     support = body(root, 'curve_minimizer_support', '_minimizer_support', _operation=_operation)
+    items = []
     for text, label in (('best < low', 'actual witness lower containment'),
                         ('best > high', 'actual witness upper containment'),
                         ('not isfinite(best)', 'actual witness finite station')):
-        expression(support, text, label)
-    contains(support, 'var twice_error = _Interval.point(2.0) * _Interval.point(domain.error)',
-             'support uses uniform whole-domain error')
-    contains(support, 'var four_error = _Interval.point(4.0) * _Interval.point(domain.error)',
-             'convex support uses uniform whole-domain error')
-    _fragment_count(
-        _runtime_source(support, 'translated center error cannot replace world error'),
-        support._runtime_name, 'no-attribute',
-        'center.error', 'translated center error cannot replace world error')
+        items.append(_node_edge(support, 'expression', text, label))
+    items.extend((
+        _node_edge(support, 'contains',
+                   'var twice_error = _Interval.point(2.0) * _Interval.point(domain.error)',
+                   'support uses uniform whole-domain error'),
+        _node_edge(support, 'contains',
+                   'var four_error = _Interval.point(4.0) * _Interval.point(domain.error)',
+                   'convex support uses uniform whole-domain error'),
+        _node_edge(support, 'no-attribute', 'center.error',
+                   'translated center error cannot replace world error'),
+    ))
+    _fragment_checks(items)
 
     predicate = body(root, 'curve_sample_dispatch', '_sample_dispatch_predicate', _operation=_operation)
-    require(_fragment_count(
-        predicate._runtime_source, predicate._runtime_name, 'body',
-        'return min(max(station - origin, 0.0), length) > local',
-        'exact stored subtraction/clamp dispatch predicate') == 1,
-        'exact stored subtraction/clamp dispatch predicate')
-    contains(cuts, 'var before_index = _sample_index(geometry, min(max(before - record.s, 0.0), geometry.length))',
-             'actual predecessor sample index')
-    contains(cuts, 'var after_index = _sample_index(geometry, min(max(station - record.s, 0.0), geometry.length))',
-             'actual cut sample index')
-    contains(cuts, 'if before_index != threshold_at - 1 or after_index != threshold_at:\n    return None',
-             'both actual indices must match original owners')
-    contains(cuts, 'var node_reserve = 3 * count + 2', 'dispatch node reserve includes descendants and rechecks')
-    contains(cuts, 'var term_reserve = 16 * count', 'dispatch probe and descendant term reserve')
-    contains(cuts, 'if max_nodes < node_reserve or max_terms < 0 or nodes < 0 or nodes > max_nodes - node_reserve or terms < 0 or terms > max_terms or term_reserve > max_terms - terms:\n    return None',
-             'complete dispatch followup reserve before optional work')
-    contains(cuts, 'var extra = 8 * count', 'complete optional dispatch debit')
-    contains(cuts, 'if count < 1 or count > 2:\n    return None', 'at most two invocation-local cuts')
-    sequence(cuts, DISPATCH_ADMISSION, 'bounded count and complete reserve must precede dispatch debit')
-    source = _runtime_source(cuts, 'dispatch debit must precede optional attempts')
+    debit = 'dispatch debit must precede optional attempts'
+    items = [
+        _node_edge(predicate, 'body',
+                   'return min(max(station - origin, 0.0), length) > local',
+                   'exact stored subtraction/clamp dispatch predicate'),
+        _node_edge(cuts, 'contains',
+                   'var before_index = _sample_index(geometry, min(max(before - record.s, 0.0), geometry.length))',
+                   'actual predecessor sample index'),
+        _node_edge(cuts, 'contains',
+                   'var after_index = _sample_index(geometry, min(max(station - record.s, 0.0), geometry.length))',
+                   'actual cut sample index'),
+        _node_edge(cuts, 'contains',
+                   'if before_index != threshold_at - 1 or after_index != threshold_at:\n    return None',
+                   'both actual indices must match original owners'),
+        _node_edge(cuts, 'contains', 'var node_reserve = 3 * count + 2',
+                   'dispatch node reserve includes descendants and rechecks'),
+        _node_edge(cuts, 'contains', 'var term_reserve = 16 * count',
+                   'dispatch probe and descendant term reserve'),
+        _node_edge(cuts, 'contains',
+                   'if max_nodes < node_reserve or max_terms < 0 or nodes < 0 or nodes > max_nodes - node_reserve or terms < 0 or terms > max_terms or term_reserve > max_terms - terms:\n    return None',
+                   'complete dispatch followup reserve before optional work'),
+        _node_edge(cuts, 'contains', 'var extra = 8 * count',
+                   'complete optional dispatch debit'),
+        _node_edge(cuts, 'contains', 'if count < 1 or count > 2:\n    return None',
+                   'at most two invocation-local cuts'),
+        _node_edge(cuts, 'sequence', DISPATCH_ADMISSION,
+                   'bounded count and complete reserve must precede dispatch debit'),
+    ]
     for statement in ('nodes += 1', 'terms += extra'):
-        _fragment_count(
-            source, cuts._runtime_name, 'before-loop',
-            statement, 'dispatch debit must precede optional attempts')
+        items.append(_node_edge(cuts, 'before-loop', statement, debit, source_label=debit))
+    _fragment_checks(items)
 
     verify_no_containing_model_consumers(root, _operation=_operation)
     # The standalone helper remains reviewed and tested even though the
     # search solver no longer imports, captures, or restricts this model.
     room = body(root, 'curve_objective_model', '_objective_followup_room', _operation=_operation)
-    require(_fragment_count(
-        room._runtime_source, room._runtime_name, 'equal', FOLLOWUP_ROOM,
-        'complete overflow-safe integer followup admission') == 1,
-        'complete overflow-safe integer followup admission')
+    _fragment_checks([_node_edge(
+        room, 'equal', FOLLOWUP_ROOM,
+        'complete overflow-safe integer followup admission')])
     recheck = body(root, 'curve_objective_model', '_objective_recheck_room', _operation=_operation)
-    require(_fragment_count(
-        recheck._runtime_source, recheck._runtime_name, 'equal', RECHECK_ROOM,
-        'complete integer cached-closure recheck admission') == 1,
-        'complete integer cached-closure recheck admission')
+    _fragment_checks([_node_edge(
+        recheck, 'equal', RECHECK_ROOM,
+        'complete integer cached-closure recheck admission')])
     fee = body(root, 'map', '_query_node_step_cost', _operation=_operation)
-    contains(fee, 'var fixed = 26 if goal else 20', 'reviewed goal node fee')
-    contains(fee, 'fixed += 16', 'stored dispatch logical fee')
-    contains(fee, 'if witness:\n    fixed += 14', 'retained containing-model logical fee')
-    contains(fee, 'if witness:\n    fixed += 26', 'witness frontier logical fee')
-    contains(fee, 'return 100 * lanes + fixed', 'original profile record work convention')
+    _fragment_checks([
+        _node_edge(fee, 'contains', 'var fixed = 26 if goal else 20',
+                   'reviewed goal node fee'),
+        _node_edge(fee, 'contains', 'fixed += 16', 'stored dispatch logical fee'),
+        _node_edge(fee, 'contains', 'if witness:\n    fixed += 14',
+                   'retained containing-model logical fee'),
+        _node_edge(fee, 'contains', 'if witness:\n    fixed += 26',
+                   'witness frontier logical fee'),
+        _node_edge(fee, 'contains', 'return 100 * lanes + fixed',
+                   'original profile record work convention'),
+    ])
     # The exact reviewed raw inverse establishes the same immediate bracket
     # without re-evaluating predecessors. Keep every outer admission above.
     try:

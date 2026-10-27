@@ -160,7 +160,7 @@ Each consumer imports its helpers directly.
 The stored-half import keeps its own name.
 A wildcard, an alias, or a shadowing binding is refused.
 
-Mojo checks the optional runtime edges.
+Mojo checks the optional runtime edges in order.
 Fresh helpers keep the environment guard.
 The grouped debit, dispatch reserve, and model rooms stay in place.
 A missing edge or a moved guard is refused.
