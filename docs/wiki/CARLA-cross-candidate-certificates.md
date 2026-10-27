@@ -157,6 +157,8 @@ Three consumers keep that rate, heading, and ideal u.
 The eligibility phase keeps the original half product.
 A changed graph or a stored-half edit is refused.
 
+It keeps the three heading consumer names.
+
 Mojo checks the reviewed Sum2 caller graphs.
 The recurrence and the checked leaf match the arithmetic checkpoint.
 The scalar spiral keeps the environment call and the reviewed body.

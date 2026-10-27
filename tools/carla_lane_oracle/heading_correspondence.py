@@ -18,12 +18,35 @@ else:
     import source_contracts as _typed_source
 
 import json
+_CONSUMERS = None
 
-CONSUMERS = {
-    'spiral_domain_proof.mojo': '_spiral_proof_branch',
-    'spiral_moment_proof.mojo': '_try_spiral_moment_expansion',
-    'spiral_moment_table.mojo': '_try_spiral_moment_expansion',
-}
+
+def _consumers():
+    """Return the three heading consumers in reviewed order."""
+    global _CONSUMERS
+    if _CONSUMERS is not None:
+        return _CONSUMERS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_heading_consumers'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _CONSUMERS = json.loads(result.stdout)
+    return _CONSUMERS
+
+
+def __getattr__(name):
+    if name == 'CONSUMERS':
+        return _consumers()
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def _heading_graph(fresh, consumers, eligibility):
@@ -84,8 +107,8 @@ def verify(root, *, _operation=None):
     path = root/'extensions/carla'
     fresh = _typed_source.historical_text(root, path/'curve_bounds.mojo', source._observe_text(root, 'extensions/carla/curve_bounds.mojo', (path/'curve_bounds.mojo').read_text(), _operation=_operation), _operation=_operation)
     consumers = []
-    for filename, name in CONSUMERS.items():
+    for filename, name in _consumers().items():
         consumers.append((filename, name, _typed_source.historical_text(root, path/filename, source._observe_text(root, 'extensions/carla/' + filename, (path/filename).read_text(), _operation=_operation), _operation=_operation)))
     eligibility = _typed_source.historical_text(root, path/'spiral_moment_proof.mojo', source._observe_text(root, 'extensions/carla/spiral_moment_proof.mojo', (path/'spiral_moment_proof.mojo').read_text(), _operation=_operation), _operation=_operation)
     _heading_graph(fresh, consumers, eligibility)
-    return _heading_result(len(CONSUMERS))
+    return _heading_result(len(_consumers()))
