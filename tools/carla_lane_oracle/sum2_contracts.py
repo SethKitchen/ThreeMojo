@@ -28,13 +28,6 @@ else:
 import json
 from pathlib import Path
 
-if __package__:
-    from .ideal_projection import (
-        selected_block, stored_half_tail, verify_projection)
-else:
-    from ideal_projection import (
-        selected_block, stored_half_tail, verify_projection)
-
 
 # Initial accepted arithmetic checkpoint. The guarded and final format/doc
 # source bindings are preserved in sum2-correspondence-migration.json.
@@ -216,6 +209,29 @@ def _sum2_result(projection, guard):
     return json.loads(result.stdout)
 
 
+def _sum2_projection(payload):
+    """Return the ideal projection record for the Sum2 spiral."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='sum2-projection-') as directory:
+        path = Path(directory) / 'projection.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_moment_projection', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def verify(root, *, _operation=None):
     # Lazy import avoids a checker-module cycle; no source is executed.
     if __package__:
@@ -251,9 +267,11 @@ def verify(root, *, _operation=None):
         if str(error).startswith('missing or ambiguous function: '):
             raise c.CheckError(str(error)) from error
         raise
-    projection = verify_projection(
-        pins['ideal_projection']['legacy_normalized_source'],
-        selected_block(
-            texts[helpers['bounds']], plan['spiral_begin'], plan['spiral_end']),
-        stored_half_tail(interval))
+    projection = _sum2_projection({
+        'legacy': pins['ideal_projection']['legacy_normalized_source'],
+        'bounds': texts[helpers['bounds']],
+        'begin': plan['spiral_begin'],
+        'end': plan['spiral_end'],
+        'interval': interval,
+    })
     return _sum2_result(projection, guard_result)

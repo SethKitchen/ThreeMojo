@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._python_tokens import stored_half_tail
-from tools._moment_projection import moment_projection
+from tools._moment_projection import moment_projection, moment_sum2_projection
 from tools._python_json import PyJson
 
 
@@ -66,6 +66,53 @@ def test_the_live_ideal_projection_matches() raises:
     assert_equal(
         result.text(result.at(result.root, "rate_half_commutations")), "2"
     )
+    assert_equal(
+        result.text(result.at(result.root, "projected_ast_sha256")),
+        "f0f94e038fd4a783b3ed400ffd32801ca0c3bdc54980e2c408d44f50211b9e06",
+    )
+
+
+def test_a_missing_sum2_spiral_marker_is_refused() raises:
+    """The spiral marker is required before the projection."""
+    var doc = PyJson()
+    var root = doc.new_dict()
+    doc.set(root, "legacy", doc.new_str("legacy"))
+    doc.set(root, "bounds", doc.new_str("def f():\n    return 1\n"))
+    doc.set(root, "begin", doc.new_str("def _spiral_expression["))
+    doc.set(root, "end", doc.new_str("def _other("))
+    doc.set(root, "interval", doc.new_str("interval"))
+    doc.root = root
+    with assert_raises(contains="missing or ambiguous source-block start"):
+        _ = moment_sum2_projection(doc.dumps())
+
+
+def test_the_sum2_ideal_spiral_matches() raises:
+    """The live bounds module and interval produce the reviewed record."""
+    var pins = PyJson.parse(
+        Path("tools/carla_lane_oracle/spiral-moment-pins.json").read_text()
+    )
+    var projection = pins.at(pins.root, "ideal_projection")
+    var doc = PyJson()
+    var root = doc.new_dict()
+    doc.set(
+        root,
+        "legacy",
+        doc.new_str(pins.text(pins.at(projection, "legacy_normalized_source"))),
+    )
+    doc.set(
+        root,
+        "bounds",
+        doc.new_str(Path("extensions/carla/curve_bounds.mojo").read_text()),
+    )
+    doc.set(root, "begin", doc.new_str("def _spiral_expression["))
+    doc.set(root, "end", doc.new_str("def _sample_index("))
+    doc.set(
+        root,
+        "interval",
+        doc.new_str(Path("extensions/carla/curve_interval.mojo").read_text()),
+    )
+    doc.root = root
+    var result = PyJson.parse(moment_sum2_projection(doc.dumps()))
     assert_equal(
         result.text(result.at(result.root, "projected_ast_sha256")),
         "f0f94e038fd4a783b3ed400ffd32801ca0c3bdc54980e2c408d44f50211b9e06",

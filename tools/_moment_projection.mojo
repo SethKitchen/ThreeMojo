@@ -10,7 +10,11 @@ stored-half helper. This check returns the reviewed projection record.
 """
 
 from tests._python_expr import ideal_current_matches, ideal_legacy_dump
-from tests._python_tokens import check_stored_half
+from tests._python_tokens import (
+    check_stored_half,
+    selected_block,
+    stored_half_tail,
+)
 from tools._projection_result import projection_result, require_source_text
 from tools._python_json import PyJson
 from tools.carla_ideal_gate import ideal_digest, ideal_digests
@@ -64,3 +68,35 @@ def moment_projection(payload: String) raises -> String:
     return projection_result(
         digests.text(digests.at(digests.root, "projected"))
     )
+
+
+def moment_sum2_projection(payload: String) raises -> String:
+    """Project the Sum2 ideal spiral from its module and interval.
+
+    Args:
+        payload: A JSON object with `legacy`, `bounds`, `begin`, `end`,
+            and `interval`. `bounds` is the live bounds module. `begin`
+            and `end` select the spiral. `interval` is the interval module.
+
+    Returns:
+        The reviewed projection record.
+
+    Raises:
+        Error: A marker, the stored-half helper, or the projection changed.
+    """
+    var doc = PyJson.parse(payload)
+    var current = selected_block(
+        doc.text(doc.at(doc.root, "bounds")),
+        doc.text(doc.at(doc.root, "begin")),
+        doc.text(doc.at(doc.root, "end")),
+    )
+    var helper = stored_half_tail(doc.text(doc.at(doc.root, "interval")))
+    var inner = PyJson()
+    var body = inner.new_dict()
+    inner.set(
+        body, "legacy", inner.new_str(doc.text(doc.at(doc.root, "legacy")))
+    )
+    inner.set(body, "current", inner.new_str(current))
+    inner.set(body, "helper", inner.new_str(helper))
+    inner.root = body
+    return moment_projection(inner.dumps())

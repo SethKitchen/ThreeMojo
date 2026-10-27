@@ -7,14 +7,16 @@
 
     carla_moment_projection PATH
 
-PATH is a JSON object with the legacy spiral, the live spiral, and the
-stored-half helper. The command prints the projection record.
+PATH is a JSON object. The direct form has `legacy`, `current`, and
+`helper`. The Sum2 form has `bounds` and selects the spiral from that
+module. The command prints the projection record.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._moment_projection import moment_projection
+from tools._moment_projection import moment_projection, moment_sum2_projection
+from tools._python_json import MISSING, PyJson
 
 
 def _usage():
@@ -33,7 +35,12 @@ def main() raises:
     if len(arguments) != 2:
         _usage()
     try:
-        print(moment_projection(Path(arguments[1]).read_text()), end="")
+        var text = Path(arguments[1]).read_text()
+        var doc = PyJson.parse(text)
+        if doc.get(doc.root, "bounds") == MISSING:
+            print(moment_projection(text), end="")
+        else:
+            print(moment_sum2_projection(text), end="")
     except error:
         print(String(error), file=stderr)
         exit(1)

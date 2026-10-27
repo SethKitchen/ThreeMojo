@@ -192,6 +192,8 @@ It keeps the roundoff predecessor and the stored-half name.
 
 It keeps the ideal spiral block markers.
 
+It checks the Sum2 ideal spiral in one call.
+
 It returns the Sum2 result counts after those caller checks.
 
 One comparison refuses a changed caller graph.
