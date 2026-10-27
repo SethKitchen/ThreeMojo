@@ -112,6 +112,8 @@ It refuses a center error used as the world error.
 
 It requires the stored-half declaration before the projection.
 
+It binds each runtime helper from its moved declaration.
+
 It derives the stored moment rows in exact arithmetic.
 
 It checks the stored moment table against the derived words.

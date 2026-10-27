@@ -166,17 +166,22 @@ def _without_moves(text):
     return result.stdout
 
 
+class _RuntimeFunction:
+    """One moved helper declaration checked by the Mojo fragment gate."""
+
+    def __init__(self, name, source):
+        self.name = name
+        self._runtime_name = name
+        self._runtime_source = source
+
+
 def body_from_source(text, name):
-    """Parse a supplied semantic fixture; this grants no source admission."""
+    """Bind one moved declaration; this grants no source admission."""
     source = _declaration(text, name, ())
     # The historical AST adapter has no lane-search move arguments. Remove
     # only postfix move sigils before argument delimiters for this semantic
     # view; complete lexical contracts separately retain every move token.
-    moved = _without_moves(source)
-    node = sampled.unique_function(_syntax_tree(moved), name)
-    node._runtime_source = moved
-    node._runtime_name = name
-    return node
+    return _RuntimeFunction(name, _without_moves(source))
 
 
 def _fragment_count(source, name, kind, fragment, label, call=''):
