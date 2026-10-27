@@ -190,26 +190,6 @@ def nearest_even(value):
     return low if low % 2 == 0 else high
 
 
-def _sha256_texts(texts):
-    try:
-        return ideal_projection.sha256_texts(texts)
-    except ValueError as error:
-        raise CheckError(str(error)) from error
-
-
-def _byte_digests(blobs):
-    texts = []
-    for blob in blobs:
-        try:
-            text = blob.decode('utf-8')
-        except UnicodeDecodeError:
-            return [digest(blob) for blob in blobs]
-        if text.encode() != blob:
-            return [digest(blob) for blob in blobs]
-        texts.append(text)
-    return _sha256_texts(texts)
-
-
 def _fraction_texts(words):
     try:
         return ideal_projection.fraction_texts(words)
@@ -482,8 +462,24 @@ def verify_table(data, rows):
 
 def make_report(root, rows, pins):
     payload = _moment_payload(rows)
-    require(payload['byte_count'] == WORD_COUNT * 8, 'wrong derived table shape')
-    pin_digests = _byte_digests([
+    projection = pins['ideal_projection']
+    meta = {
+        'byte_count': payload['byte_count'],
+        'source_sha256': payload['source_sha256'],
+        'be64_sha256': payload['be64_sha256'],
+        'root': str(root.resolve()),
+        'ideal_half_projection': {
+            'helper_projections': projection['helper_projections'],
+            'rate_half_commutations': projection['rate_half_commutations'],
+            'projected_ast_sha256': projection['projected_ast_sha256'],
+        },
+        'dependency_scope': DEPENDENCIES,
+        'routing_sha256': {
+            name: record['sha256'] for name, record in pins['routing'].items()},
+        'source_block_sha256': {
+            name: record['sha256'] for name, record in pins['blocks'].items()},
+    }
+    blobs = [
         _typed_source.historical_bytes(root, root / PINS, (root / PINS).read_bytes()),
         _typed_source.historical_bytes(
             root, root / source_contracts.PINS,
@@ -491,28 +487,11 @@ def make_report(root, rows, pins):
         _typed_source.historical_bytes(
             root, root / sum2_guard_contracts.PINS,
             (root / sum2_guard_contracts.PINS).read_bytes()),
-    ])
-    require(len(pin_digests) == 3, 'wrong derived table shape')
-    return {
-        'scope': 'fixed-count quadrant-zero ideal stored-polynomial coefficients and tight endpoints only',
-        'counts': 64, 'coefficients': 1408, 'words': WORD_COUNT,
-        'payload_bytes': payload['byte_count'],
-        'zeroth_moment': str(F(1) + F(3, 1 << 55)),
-        'source_sha256': payload['source_sha256'],
-        'words_be64_sha256': payload['be64_sha256'],
-        'pin_file_sha256': pin_digests[0],
-        'dependency_pin_file_sha256': pin_digests[1],
-        'environment_guard_pin_sha256': pin_digests[2],
-        'environment_guard_scope': 'Invocation-local predicate and caller source contracts only; no native FP-state/codegen qualification',
-        'checked_source_root': str(root.resolve()),
-        'ideal_half_projection': {key: pins['ideal_projection'][key] for key in
-                                  ('helper_projections', 'rate_half_commutations', 'projected_ast_sha256')},
-        'dependency_scope': DEPENDENCIES,
-        'routing_sha256': {name: record['sha256'] for name, record in pins['routing'].items()},
-        'source_block_sha256': {name: record['sha256'] for name, record in pins['blocks'].items()},
-        'not_certified': ['rounded geometry/error graphs', 'branch eligibility',
-                          'native execution/codegen', 'query correctness/performance'],
-    }
+    ]
+    try:
+        return json.loads(ideal_projection.moment_report(meta, blobs))
+    except ValueError as error:
+        raise CheckError(str(error)) from error
 
 
 def main(argv=None):
