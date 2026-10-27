@@ -6,8 +6,6 @@ The caller separately binds complete source text and its helper dependency
 closure. The lexical adapter below is used only for the two fixed declarations
 and does not claim to parse or certify arbitrary Mojo programs.
 """
-import ast
-import copy
 import json
 
 LEGACY_SHA256 = '270a3cde3b012388ee8fcb6a4ecc59d837d1583f6c406f942ff98fdccd9f5733'
@@ -18,22 +16,6 @@ CALL_ARGUMENTS = ['step', 'rate', 'step', 'step', 'rate']
 def require(condition, message):
     if not condition:
         raise ValueError(message)
-
-
-def normalized_node(node):
-    if isinstance(node, ast.AST):
-        fields = [(key, normalized_node(value)) for key, value in ast.iter_fields(node)
-                  if value is not None and not (key == 'type_params' and not value)]
-        if hasattr(node, '_mojo_type_parameters'):
-            fields.append(('mojo_type_parameters', node._mojo_type_parameters))
-        return (type(node).__name__, fields)
-    if isinstance(node, list):
-        return [normalized_node(value) for value in node]
-    return node
-
-
-def dump(node):
-    return json.dumps(normalized_node(node), separators=(',', ':'), ensure_ascii=True)
 
 
 def _ideal_source(text, name):
@@ -56,43 +38,6 @@ def _ideal_source(text, name):
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
     return result.stdout
-
-
-def function_tree(text, name):
-    """Adapt the one already source-bound generic function for AST comparison.
-
-    Qualifiers are retained by the source/routing/dependency checks, not this
-    arithmetic projection. No transformation here authorizes their removal.
-    """
-    try:
-        tree = ast.parse(_ideal_source(text, name))
-    except SyntaxError as error:
-        raise ValueError('unsupported ideal source syntax') from error
-    require(len(tree.body) == 1 and isinstance(tree.body[0], ast.FunctionDef)
-            and tree.body[0].name == name, 'ambiguous ideal function declaration')
-    tree.body[0]._mojo_type_parameters = [
-        ('NAME', 'derivatives'), ('OP', ':'), ('NAME', 'Bool')]
-    return tree.body[0]
-
-
-def half_constant():
-    return ast.Call(func=ast.Attribute(value=ast.Name(id='Expression', ctx=ast.Load()),
-                                     attr='constant', ctx=ast.Load()),
-                    args=[ast.Constant(value=0.5)], keywords=[])
-
-
-class ProjectHalf(ast.NodeTransformer):
-    def __init__(self):
-        self.arguments = []
-
-    def visit_Call(self, node):
-        node = self.generic_visit(node)
-        if isinstance(node.func, ast.Name) and node.func.id == '_stored_half':
-            require(len(node.args) == 1 and not node.keywords
-                    and isinstance(node.args[0], ast.Name), 'unreviewed stored-half call shape')
-            self.arguments.append(node.args[0].id)
-            return ast.BinOp(left=node.args[0], op=ast.Mult(), right=half_constant())
-        return node
 
 
 def commute_legacy_text(text):
@@ -245,101 +190,6 @@ def verify_helper_projection(helper_text):
     check_stored_half(helper_text)
 
 
-def project_sum2(tree):
-    """Erase only the reviewed error auxiliaries and inline immutable terms.
-
-    This is an ideal-value/derivative projection, never a floating execution
-    equivalence. Every admitted statement is exact, occurs once at its fixed
-    nesting level, and all auxiliary uses must disappear. The caller compares
-    the complete surviving function with the frozen historical ideal graph.
-    """
-    tree = copy.deepcopy(tree)
-    guard = ast.parse("""if not _sum2_supported_environment():
-    unknown = Expression(_Interval.whole(), _Interval.whole(), _Interval.whole(), inf[DType.float64]())
-    return (unknown, unknown, unknown)
-""").body[0]
-    require(len(tree.body) == 19 and dump(tree.body[1]) == dump(guard),
-            'fresh Sum2 environment refusal changed or moved')
-    # Correspondence is conditional on this exact successful live check.
-    # Its complete false branch returns only unknown fields/infinite error.
-    tree.body.pop(1)
-    declarations = [f'{axis}_{kind} = _Interval.point(0.0)'
-                    for kind in ('magnitude', 'inherited') for axis in ('x', 'y')]
-    # Production order is x/y magnitudes followed by x/y inherited errors.
-    terms = {axis: ast.parse(
-        f'_stored_half(step) * Expression.constant(weights[i]) * trig[{index}]',
-        mode='eval').body for axis, index in (('x', 1), ('y', 0))}
-    updates = [f'{axis}_magnitude = {axis}_magnitude + '
-               f'_Interval.point(term_{axis}.rounded_value().magnitude())'
-               for axis in ('x', 'y')]
-    updates += [f'{axis}_inherited = {axis}_inherited + _Interval.point(term_{axis}.error)'
-                for axis in ('x', 'y')]
-    errors = [f'{axis}.error = _sum2_error_checked({axis}_magnitude.high, '
-              f'{axis}_inherited.high, 5 * pieces)' for axis in ('x', 'y')]
-    require(len(tree.body) == 18 and isinstance(tree.body[13], ast.While),
-            'Sum2 complete ideal statement layout changed')
-    outer = tree.body[13]
-    require(len(outer.body) == 4 and isinstance(outer.body[2], ast.While),
-            'Sum2 complete outer-loop layout changed')
-    inner = outer.body[2]
-    require(len(inner.body) == 12, 'Sum2 complete node-loop layout changed')
-    require([dump(n) for n in tree.body[8:12]] ==
-            [dump(ast.parse(s).body[0]) for s in declarations],
-            'Sum2 declarations reordered or changed')
-    require([dump(n) for n in tree.body[14:16]] ==
-            [dump(ast.parse(s).body[0]) for s in errors],
-            'Sum2 final error writes reordered or changed')
-    require([dump(n) for n in inner.body[7:11]] ==
-            [dump(ast.parse(s).body[0]) for s in updates],
-            'Sum2 auxiliary updates reordered or changed')
-    for offset, axis in enumerate(('x', 'y')):
-        expected = ast.Assign(targets=[ast.Name(id='term_' + axis, ctx=ast.Store())],
-                              value=terms[axis])
-        require(dump(inner.body[3 + offset]) == dump(expected),
-                'Sum2 immutable term definition moved or changed')
-        require(dump(inner.body[5 + offset]) ==
-                dump(ast.parse(f'{axis} = {axis} + term_{axis}').body[0]),
-                'Sum2 ideal term accumulation moved or changed')
-    erase = {dump(ast.parse(source).body[0]): (source, depth)
-             for sources, depth in ((declarations, 0), (updates, 2), (errors, 0))
-             for source in sources}
-    for axis, value in terms.items():
-        node = ast.Assign(targets=[ast.Name(id='term_' + axis, ctx=ast.Store())], value=value)
-        erase[dump(node)] = ('term_' + axis, 2)
-    seen = {source: 0 for source, depth in erase.values()}
-    sums = {axis: 0 for axis in ('x', 'y')}
-
-    def statements(body, depth):
-        result = []
-        for node in body:
-            key = dump(node)
-            if key in erase:
-                name, wanted_depth = erase[key]
-                require(depth == wanted_depth, 'Sum2 auxiliary statement moved: ' + name)
-                seen[name] += 1
-                require(seen[name] == 1, 'duplicate Sum2 auxiliary: ' + name)
-                continue
-            for axis in ('x', 'y'):
-                expected = ast.parse(f'{axis} = {axis} + term_{axis}').body[0]
-                if key == dump(expected):
-                    require(depth == 2, 'Sum2 ideal accumulation moved')
-                    sums[axis] += 1
-                    node.value.right = copy.deepcopy(terms[axis])
-            if isinstance(node, (ast.For, ast.While, ast.If)):
-                node.body = statements(node.body, depth + 1)
-                node.orelse = statements(node.orelse, depth + 1)
-            result.append(node)
-        return result
-
-    tree.body = statements(tree.body, 0)
-    require(all(count == 1 for count in seen.values()), 'missing or changed Sum2 auxiliary statement')
-    require(sums == {'x': 1, 'y': 1}, 'missing or changed Sum2 ideal term use')
-    forbidden = {'term_x', 'term_y', 'x_magnitude', 'y_magnitude', 'x_inherited', 'y_inherited'}
-    require(not any(isinstance(node, ast.Name) and node.id in forbidden
-                    for node in ast.walk(tree)), 'Sum2 auxiliary escapes ideal projection')
-    return tree
-
-
 def _gate(payload, kind):
     import os
     import subprocess
@@ -370,29 +220,15 @@ def verify_projection(legacy, current, helper_text):
             'changed ideal generic declaration')
     require(legacy_half['count'] == 2,
             'expected exactly two historical rate-half commutations')
-    # A caller inspecting a complete module supplies its unique actual AST
-    # declaration, never a text slice that could select a docstring decoy.
-    # String inputs keep the declaration check and skip the Python parse.
-    if isinstance(current, str):
-        ideal = _ideal_source(current, '_spiral_expression')
-        require(ideal.startswith('def _spiral_expression ')
-                or ideal.startswith('def _spiral_expression('),
-                'changed ideal generic declaration')
-        projected = project_sum2_text(current)
-        arguments = projected['arguments']
-        right_dump = _projected_dump(projected['source'])
-    else:
-        current_tree = (copy.deepcopy(current) if isinstance(current, ast.FunctionDef)
-                        else function_tree(current, '_spiral_expression'))
-        require(current_tree.name == '_spiral_expression' and
-                getattr(current_tree, '_mojo_type_parameters', None) ==
-                [('NAME', 'derivatives'), ('OP', ':'), ('NAME', 'Bool')],
-                'changed ideal generic declaration')
-        project = ProjectHalf()
-        right = project.visit(project_sum2(current_tree))
-        right._mojo_type_parameters = current_tree._mojo_type_parameters
-        arguments = project.arguments
-        right_dump = dump(right)
+    # The caller supplies the ideal spiral as source text.
+    require(isinstance(current, str), 'changed ideal generic declaration')
+    ideal = _ideal_source(current, '_spiral_expression')
+    require(ideal.startswith('def _spiral_expression ')
+            or ideal.startswith('def _spiral_expression('),
+            'changed ideal generic declaration')
+    projected = project_sum2_text(current)
+    arguments = projected['arguments']
+    right_dump = _projected_dump(projected['source'])
     require(arguments == CALL_ARGUMENTS, 'expected exactly five reviewed stored-half calls')
     require(left_dump == right_dump, 'ideal expression differs beyond reviewed half projection')
     projected_bytes = left_dump.encode()

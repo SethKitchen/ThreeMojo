@@ -102,6 +102,8 @@ It compares the projected ideal spiral with the historical half-rate form.
 
 It checks the ideal spiral declaration before projecting it.
 
+It projects the ideal spiral from its source text.
+
 It checks the lane proof refusal before routing.
 
 It compares the Sum2 recurrence, leaf, and caller graphs.
