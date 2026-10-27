@@ -580,6 +580,60 @@ def cleanup_paths() raises -> String:
     return doc.dumps()
 
 
+def cleanup_protected_tail() raises -> String:
+    """Return the protected inputs that follow the invariant closure.
+
+    Returns:
+        A JSON list in reviewed order.
+
+    Raises:
+        Error: The list cannot be written.
+    """
+    var doc = PyJson()
+    var names = doc.new_list()
+    doc.append(
+        names,
+        doc.new_str("tools/carla_lane_oracle/coverage-followup-migration.json"),
+    )
+    doc.append(
+        names,
+        doc.new_str("tools/carla_lane_oracle/raw-cut-inverse-migration.json"),
+    )
+    doc.append(
+        names,
+        doc.new_str("tools/carla_lane_oracle/moment-finiteness-contract.json"),
+    )
+    doc.append(
+        names,
+        doc.new_str("tools/carla_lane_oracle/envelope-budget-contract.json"),
+    )
+    doc.append(names, doc.new_str("tests/test_carla_raw_cut_successor.mojo"))
+    doc.append(
+        names, doc.new_str("tests/test_carla_envelope_budget_dominance.mojo")
+    )
+    doc.append(names, doc.new_str("extensions/carla/spiral_moment_proof.mojo"))
+    doc.append(
+        names, doc.new_str("tools/carla_lane_oracle/lane-order-migration.json")
+    )
+    doc.append(names, doc.new_str("tests/test_carla_lane_order_successor.mojo"))
+    doc.append(
+        names,
+        doc.new_str(
+            "tools/carla_lane_oracle/selection-finiteness-contract.json"
+        ),
+    )
+    doc.append(
+        names, doc.new_str("tests/test_spiral_selection_finite_contract.mojo")
+    )
+    doc.append(names, doc.new_str("tests/_reference_roundoff_selection.mojo"))
+    doc.append(names, doc.new_str("tests/_reference_grouped_selection.mojo"))
+    doc.append(
+        names, doc.new_str("extensions/carla/spiral_roundoff_proof.mojo")
+    )
+    doc.root = names
+    return doc.dumps()
+
+
 def _usage():
     """Print the command usage and stop."""
     print(

@@ -96,6 +96,8 @@ It keeps the five reviewed premise fragment lists.
 
 It keeps the three successor paths and the two premise paths.
 
+It keeps the fourteen extra cleanup inputs.
+
 The singleton, frozen ARC, dispatch, raw-cut, and optional-runtime contracts use that declaration text.
 
 It also builds the significant token lists for the singleton, frozen ARC, dispatch, raw-cut, and selection contracts.

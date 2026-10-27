@@ -71,26 +71,37 @@ def _ensure_paths():
     PREMISE_PATHS = tuple(data['premises'])
 
 
+_PROTECTED_TAIL = None
+
+
+def _protected_tail():
+    """Return the protected inputs that follow the invariant closure."""
+    global _PROTECTED_TAIL
+    if _PROTECTED_TAIL is not None:
+        return _PROTECTED_TAIL
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_protected'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _PROTECTED_TAIL = tuple(json.loads(result.stdout))
+    return _PROTECTED_TAIL
+
+
 def _protected_inputs():
     """Return the protected inputs, including the Mojo path tables."""
     _ensure_paths()
     return (*cache_key.PROTECTED_INPUTS, *accepted.PROTECTED_INPUTS, MIGRATION, 'tools/carla_lane_oracle/runtime-source-pins.json',
             *SOURCE_PATHS, *PREMISE_PATHS, *frozen.PROTECTED_INPUTS,
-            *invariant.PROTECTED_INPUTS,
-            'tools/carla_lane_oracle/coverage-followup-migration.json',
-            'tools/carla_lane_oracle/raw-cut-inverse-migration.json',
-            'tools/carla_lane_oracle/moment-finiteness-contract.json',
-            'tools/carla_lane_oracle/envelope-budget-contract.json',
-            'tests/test_carla_raw_cut_successor.mojo',
-            'tests/test_carla_envelope_budget_dominance.mojo',
-            'extensions/carla/spiral_moment_proof.mojo',
-            'tools/carla_lane_oracle/lane-order-migration.json',
-            'tests/test_carla_lane_order_successor.mojo',
-            'tools/carla_lane_oracle/selection-finiteness-contract.json',
-            'tests/test_spiral_selection_finite_contract.mojo',
-            'tests/_reference_roundoff_selection.mojo',
-            'tests/_reference_grouped_selection.mojo',
-            'extensions/carla/spiral_roundoff_proof.mojo')
+            *invariant.PROTECTED_INPUTS, *_protected_tail())
 
 
 def __getattr__(name):
