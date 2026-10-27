@@ -150,5 +150,7 @@ def coverage_loop_labels() -> String:
         + '"bound":"Invalid compiler/integration bound",'
         + '"fixture_identity":"Fixture identity is not unique: ",'
         + '"diagnostic":"Diagnostic loop identity is missing",'
-        + '"failed_capture":"Cannot record a failed native capture"}}'
+        + '"failed_capture":"Cannot record a failed native capture"},'
+        + '"runtime_seconds":5,'
+        + '"integration_seconds":180}'
     )

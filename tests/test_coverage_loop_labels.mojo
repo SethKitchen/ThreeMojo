@@ -61,6 +61,8 @@ def test_coverage_loop_qualification_labels_stay_reviewed() raises:
     )
     assert_equal(doc.text(doc.item(doc.at(admission, "steps"), 0)), "scaled")
     assert_equal(doc.text(doc.item(doc.at(admission, "steps"), 1)), "render")
+    assert_equal(doc.text(doc.at(doc.root, "runtime_seconds")), "5")
+    assert_equal(doc.text(doc.at(doc.root, "integration_seconds")), "180")
     assert_equal(
         doc.text(doc.at(doc.root, "pass_line")),
         (

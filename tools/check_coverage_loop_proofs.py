@@ -95,6 +95,10 @@ def __getattr__(name):
         return _loop_drivers()['compile_error']
     if name == 'SOURCE':
         return _loop_drivers()['source']
+    if name == 'RUNTIME_SECONDS':
+        return _loop_labels()['runtime_seconds']
+    if name == 'INTEGRATION_SECONDS':
+        return _loop_labels()['integration_seconds']
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
@@ -110,10 +114,8 @@ def copy_native_tool_dependencies(root, destination):
                 labels['copy_message'] + name)
 
 
-RUNTIME_SECONDS = 5
 # This new finite harness-only bound includes compilation and capture setup.
 # It does not replace the runtime alarm or change production capture budgets.
-INTEGRATION_SECONDS = 180
 
 
 def require(condition, message):
@@ -189,12 +191,15 @@ def mojo_verify(root, stage, compiler, flags, mojo, suites=None, *, success=True
 
 def capture_with_compiler_budget(command, output, capture, *, mojo, loop_proof=None,
                                  source_root=None, success=True,
-                                 seconds=INTEGRATION_SECONDS):
+                                 seconds=None):
     """Retain the real sealed raw command and its owned-group supervision."""
     require_runtime_alarm()
     admission = _loop_labels()['admission']
+    if seconds is None:
+        seconds = _loop_labels()['integration_seconds']
     require((loop_proof is None) == (source_root is None), admission['proof_pair'])
-    require(type(seconds) in (int, float) and 0 < seconds <= INTEGRATION_SECONDS,
+    require(type(seconds) in (int, float)
+            and 0 < seconds <= _loop_labels()['integration_seconds'],
             admission['bound'])
     deadline = time.monotonic() + seconds
     inherited = coverage_io.shared_deadline()
