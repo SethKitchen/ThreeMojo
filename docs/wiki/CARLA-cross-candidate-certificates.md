@@ -190,6 +190,8 @@ It returns the optional-runtime result after those edge checks.
 
 It keeps the five optional-runtime module names.
 
+It keeps the ten optional-runtime declaration groups.
+
 It checks the followup room, the recheck room, and the node fee.
 
 Mojo skips hidden and non-production paths, then keeps a file whose text contains a watched name.

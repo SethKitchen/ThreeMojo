@@ -450,63 +450,63 @@ def _semantic_edges(group, nodes):
         raise ValueError(message)
 
 
-def verify_semantics(root, *, _operation=None):
-    helper = body(root, 'lane_refinement', '_same_cache_key', _operation=_operation)
-    _runtime_source(helper, 'exact UInt64 pair helper comparison')
-    _semantic_edges('helper', {'helper': helper})
-    model = body(root, 'curve_objective_model', '_try_objective_model', _operation=_operation)
-    restrict = body(root, 'curve_objective_model', '_restrict_objective_model', _operation=_operation)
-    cut = body(root, 'curve_sample_dispatch', '_sample_dispatch_cut', _operation=_operation)
-    cuts = body(root, 'curve_sample_dispatch', '_try_sample_dispatch_cuts', _operation=_operation)
-    lane = body(root, 'spiral_grouped_lane', '_try_grouped_lane_jet', _operation=_operation)
-    raw = body(root, 'spiral_grouped_roundoff_proof', '_try_spiral_grouped_roundoff_envelope', _operation=_operation)
-    metered = body(root, 'spiral_grouped_roundoff_proof', '_try_spiral_grouped_roundoff_envelope_metered', _operation=_operation)
-    for node in (model, restrict, cut, cuts, lane, raw, metered):
-        _runtime_source(node, node._runtime_name)
-    _semantic_edges('guards', {
-        'model': model, 'restrict': restrict, 'cut': cut, 'cuts': cuts,
-        'lane': lane, 'raw': raw, 'metered': metered,
-    })
+_SEMANTIC_PLAN = None
 
+
+def _semantic_plan():
+    """Return the optional-runtime declaration groups in reviewed order."""
+    global _SEMANTIC_PLAN
+    if _SEMANTIC_PLAN is not None:
+        return _SEMANTIC_PLAN
+    import json
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+         'carla_optional_runtime_schedule'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _SEMANTIC_PLAN = json.loads(result.stdout)
+    return _SEMANTIC_PLAN
+
+
+def _run_semantic_steps(root, steps, operation):
+    """Bind each declaration, then check that group's edges."""
+    nodes = {}
+    for step in steps:
+        for item in step['bind']:
+            nodes[item['key']] = body(
+                root, item['module'], item['name'], _operation=operation)
+        for item in step['bind']:
+            node = nodes[item['key']]
+            label = item['label'] if 'label' in item else node._runtime_name
+            _runtime_source(node, label)
+        for item in step['check'] if 'check' in step else ():
+            _runtime_source(nodes[item['key']], item['label'])
+        edges = {}
+        for key in step['edges']:
+            edges[key] = nodes[key]
+        _semantic_edges(step['group'], edges)
+
+
+def verify_semantics(root, *, _operation=None):
     # Exact guarded raw -> private origin -> checked Sum2 leaf edge. The
     # global inventory also rejects any new direct or alias route to it.
-    origin = body(root, 'spiral_grouped_roundoff_proof', '_grouped_origin_error', _operation=_operation)
-    _runtime_source(origin, 'grouped origin must use the canonical checked error arguments')
-    _runtime_source(raw, 'complete X stored-term count and origin')
-    _semantic_edges('origin', {'origin': origin, 'raw': raw})
-    work = body(root, 'spiral_grouped_roundoff_proof', '_spiral_grouped_roundoff_work', _operation=_operation)
-    _runtime_source(work, 'whole count work bound')
-    _runtime_source(lane, 'whole optional union admission')
-    _runtime_source(metered, 'standalone adapter preserves independent fallback reservation')
-    _semantic_edges('work', {'work': work, 'lane': lane, 'metered': metered})
-
     # Model data is meaningful only for the same ideal producer and owner.
     # Complete caller/source bindings cover producer smoothness and lifetime.
-    _runtime_source(model, 'model ordered owner')
-    _runtime_source(restrict, 'restriction cannot widen owner low')
-    _semantic_edges('model', {'model': model, 'restrict': restrict})
-
-    support = body(root, 'curve_minimizer_support', '_minimizer_support', _operation=_operation)
-    _runtime_source(support, 'actual witness lower containment')
-    _semantic_edges('support', {'support': support})
-
-    predicate = body(root, 'curve_sample_dispatch', '_sample_dispatch_predicate', _operation=_operation)
-    _runtime_source(predicate, 'exact stored subtraction/clamp dispatch predicate')
-    _runtime_source(cuts, 'actual predecessor sample index')
-    _semantic_edges('dispatch', {'predicate': predicate, 'cuts': cuts})
-
+    plan = _semantic_plan()
+    _run_semantic_steps(root, plan['before'], _operation)
     verify_no_containing_model_consumers(root, _operation=_operation)
     # The standalone helper remains reviewed and tested even though the
     # search solver no longer imports, captures, or restricts this model.
-    room = body(root, 'curve_objective_model', '_objective_followup_room', _operation=_operation)
-    _runtime_source(room, 'complete overflow-safe integer followup admission')
-    _semantic_edges('followup', {'room': room})
-    recheck = body(root, 'curve_objective_model', '_objective_recheck_room', _operation=_operation)
-    _runtime_source(recheck, 'complete integer cached-closure recheck admission')
-    _semantic_edges('recheck', {'recheck': recheck})
-    fee = body(root, 'map', '_query_node_step_cost', _operation=_operation)
-    _runtime_source(fee, 'reviewed goal node fee')
-    _semantic_edges('fee', {'fee': fee})
+    _run_semantic_steps(root, plan['after'], _operation)
     # The exact reviewed raw inverse establishes the same immediate bracket
     # without re-evaluating predecessors. Keep every outer admission above.
     try:
