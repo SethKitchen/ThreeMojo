@@ -1644,6 +1644,122 @@ def syntax_tree_source(source: String) raises -> String:
     return out
 
 
+def _emit_token_source(kinds: List[Int], texts: List[String]) -> String:
+    """Return source rebuilt from tokens, with original indents.
+
+    Args:
+        kinds: The token kinds.
+        texts: The token texts.
+
+    Returns:
+        The source text.
+    """
+    var out = String("")
+    var indents = List[String]()
+    indents.append("")
+    var need_indent = False
+    var index = 0
+    while index < len(kinds):
+        var kind = kinds[index]
+        if kind == _NEWLINE:
+            out += "\n"
+            need_indent = True
+        elif kind == _DEDENT:
+            if len(indents) > 1:
+                _ = indents.pop()
+        elif kind == _INDENT:
+            indents.append(texts[index])
+        else:
+            if need_indent:
+                out += indents[len(indents) - 1]
+                need_indent = False
+            elif out.byte_length() > 0:
+                var data = out.as_bytes()
+                if data[len(data) - 1] != 10:
+                    out += " "
+            out += texts[index]
+        index += 1
+    return out
+
+
+def _is_point_call(kinds: List[Int], texts: List[String], index: Int) -> Bool:
+    """Return whether tokens at `index` are `_Interval.point(NUMBER)`.
+
+    Args:
+        kinds: The token kinds.
+        texts: The token texts.
+        index: The first token.
+
+    Returns:
+        True when the six-token call is present.
+    """
+    if index + 5 >= len(kinds):
+        return False
+    if kinds[index] != _NAME or texts[index] != "_Interval":
+        return False
+    if kinds[index + 1] != _OP or texts[index + 1] != ".":
+        return False
+    if kinds[index + 2] != _NAME or texts[index + 2] != "point":
+        return False
+    if kinds[index + 3] != _OP or texts[index + 3] != "(":
+        return False
+    if kinds[index + 4] != _NUMBER:
+        return False
+    return kinds[index + 5] == _OP and texts[index + 5] == ")"
+
+
+def project_constant_heading(source: String) raises -> String:
+    """Project one renamed constant heading onto unknown intervals.
+
+    Args:
+        source: The renamed `_constant_sincos_value` declaration.
+
+    Returns:
+        The declaration with `zero` replaced by `unknown` and the zero
+        constructor replaced by `_Interval.whole()`.
+
+    Raises:
+        Error: The zero constructor or its four field arguments are absent.
+    """
+    var kinds = List[Int]()
+    var texts = List[String]()
+    _tokenize(source, kinds, texts)
+    var out_kinds = List[Int]()
+    var out_texts = List[String]()
+    var zeros = 0
+    var points = 0
+    var index = 0
+    while index < len(kinds):
+        if _is_point_call(kinds, texts, index):
+            points += 1
+            out_kinds.append(_NAME)
+            out_texts.append("_Interval")
+            out_kinds.append(_OP)
+            out_texts.append(".")
+            out_kinds.append(_NAME)
+            out_texts.append("whole")
+            out_kinds.append(_OP)
+            out_texts.append("(")
+            out_kinds.append(_OP)
+            out_texts.append(")")
+            index += 6
+            continue
+        if kinds[index] == _NAME and texts[index] == "zero":
+            zeros += 1
+            out_kinds.append(_NAME)
+            out_texts.append("unknown")
+            index += 1
+            continue
+        out_kinds.append(kinds[index])
+        out_texts.append(texts[index])
+        index += 1
+    if points != 1:
+        raise Error("constant heading derivative constructor changed")
+    if zeros != 5:
+        raise Error("constant heading field projection changed")
+    return _emit_token_source(out_kinds, out_texts)
+
+
 def _name_byte(byte: UInt8) -> Bool:
     """Return whether `byte` can appear inside an identifier.
 

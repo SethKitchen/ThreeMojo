@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._process import run_program
-from tests._python_tokens import sampled_top_level
+from tests._python_tokens import project_constant_heading, sampled_top_level
 from tests._python_expr import (
     body_role_json,
     body_statement_json,
@@ -265,6 +265,31 @@ def test_top_level_helpers_reject_an_extra_name_or_statement() raises:
             "_value_geometry_distance"
         ),
     )
+
+
+def test_constant_heading_projection_uses_unknown_intervals() raises:
+    """The zero constructor and its four field names become unknown."""
+    var source = (
+        "def _constant_sincos_value(heading: Float64):\n"
+        "    # zero stays in this comment\n"
+        "    var result = _sincos_expression(_ValueJet.constant(heading))\n"
+        "    var zero = _Interval.point(0.0)\n"
+        "    return (\n"
+        "        _ValueJet(result[0].rounded_value(), zero, zero, 0.0),\n"
+        "        _ValueJet(result[1].rounded_value(), zero, zero, 0.0),\n"
+        "    )\n"
+    )
+    var projected = project_constant_heading(source)
+    if projected.find("whole") < 0:
+        raise Error("unknown constructor missing")
+    if projected.find("point") >= 0:
+        raise Error("zero constructor remained")
+    if projected.find("unknown") < 0:
+        raise Error("unknown interval missing")
+    with assert_raises(
+        contains="constant heading derivative constructor changed"
+    ):
+        _ = project_constant_heading("def demo():\n    return 1\n")
 
 
 def main() raises:

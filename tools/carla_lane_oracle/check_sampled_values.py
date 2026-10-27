@@ -447,21 +447,20 @@ def verify(root):
         require(_sampled_text('--body-dump', constant._mojo_source, index=2) == dump(ast.parse(
             'zero = _Interval.point(0.0)').body[0]),
                 'constant heading derivative constructor changed')
-        constant.body[2] = ast.parse('unknown = _Interval.whole()').body[0]
         elements = json.loads(_sampled_text('--return-elts', constant._mojo_source, index=3))
-        returned = constant.body[3].value
-        require(isinstance(elements, list) and len(elements) == 2
-                and isinstance(returned, ast.Tuple) and len(returned.elts) == 2,
+        require(isinstance(elements, list) and len(elements) == 2,
                 'constant heading result shape changed')
-        for index, item in enumerate(returned.elts):
+        for index, _item in enumerate(elements):
             required = ast.parse('_ValueJet(result[' + str(index) +
                 '].rounded_value(), zero, zero, 0.0)', mode='eval').body
             require(elements[index] == dump(required), 'constant heading field projection changed')
-            # Only derivative constructor fields change. Coefficient enclosure,
-            # exact-zero scalar error, result ordering and guards are retained.
-            item.args[1:3] = [ast.Name(id='unknown', ctx=ast.Load()),
-                              ast.Name(id='unknown', ctx=ast.Load())]
-        expected['_constant_sincos_value'] = constant
+        # Only derivative constructor fields change. Coefficient enclosure,
+        # exact-zero scalar error, result ordering and guards are retained.
+        projected = unique_function(syntax_tree(_sampled_text(
+            '--project-constant', constant._mojo_source)), '_constant_sincos_value')
+        projected.decorator_list = copy.deepcopy(unique_function(
+            reference_trees['curve_trig.mojo'], '_constant_sincos_jet').decorator_list)
+        expected['_constant_sincos_value'] = projected
 
         expected['_sampled_lane_value_bound'] = '''def _sampled_lane_value_bound(
             road: Road, section: Int, lane: Int, low: Float64, high: Float64
