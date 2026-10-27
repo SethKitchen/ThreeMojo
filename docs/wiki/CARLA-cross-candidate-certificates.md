@@ -129,6 +129,7 @@ The cached-proof refusal is removed.
 Arc and line move under the geometry flag.
 The sampled call replaces the proof dispatch.
 A changed layout or a changed body is refused.
+It returns the sampled value result after those body checks.
 
 Mojo checks the sampled qualifier pins.
 The trig and interval modules match the live pins.

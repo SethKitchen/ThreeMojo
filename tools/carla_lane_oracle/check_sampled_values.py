@@ -310,6 +310,37 @@ def reviewed_reference_tree(text, root=ROOT, *, _operation=None):
     return tree
 
 
+def _sampled_result(root, shared, modules, primitive, sources, successors):
+    """Return the sampled-value result in historical field order."""
+    import ast
+    import os
+    import subprocess
+    import tempfile
+    payload = json.dumps({
+        'root': root, 'shared': shared, 'modules': modules,
+        'primitive': primitive, 'sources': sources,
+        'successors': successors,
+    }, separators=(',', ':'))
+    repo = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='sampled-value-result-') as directory:
+        path = Path(directory) / 'result.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(repo / 'tools' / 'tool.sh'), mojo,
+             'carla_sampled_value_result', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = 'KeyError: '
+        if message.startswith(prefix):
+            raise KeyError(ast.literal_eval(message[len(prefix):])) from None
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 @source.lexical_memo_scope()
 def verify(root):
     if __package__:
@@ -479,12 +510,10 @@ def verify(root):
             for name, path in paths.items()}
         if owns:
             _operation.finish(root)
-        return {'status': 'PASS', 'repo_root': str(root.resolve()), 'copied_functions': 8, 'dispatch_functions': 6, 'additional_source_pairs': 3, 'shared_generic_and_bridge_functions': len(SHARED_GRAPHS),
-                'complete_reference_modules': len(REFERENCE_MODULE_GRAPHS),
-                'primitive_graph_sha256': PRIMITIVE_GRAPH_SHA256,
-                'source_sha256': physical_sources,
-                'typed_boundary_successors': current_edges,
-                'scope': 'Current typed/conditioned source admission; historical sampled/ARC/LINE correspondence and SPIRAL bridge with stored-arithmetic closure; source binding is not mathematical/runtime qualification. Separate eligibility/translation/support source gate, native/codegen/budget/coverage/performance remain required'}
+        return _sampled_result(
+            str(root.resolve()), len(SHARED_GRAPHS),
+            len(REFERENCE_MODULE_GRAPHS), PRIMITIVE_GRAPH_SHA256,
+            physical_sources, current_edges)
     finally:
         if owns:
             _operation.close()
