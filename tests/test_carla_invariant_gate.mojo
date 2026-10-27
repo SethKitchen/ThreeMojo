@@ -5,9 +5,15 @@
 
 """A changed coverage-invariant record fails the gate."""
 
+from std.os import makedirs
+from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_invariant_gate import invariant_digest, invariant_record
+from tools.carla_invariant_gate import (
+    invariant_digest,
+    invariant_pair,
+    invariant_record,
+)
 
 
 def test_a_changed_record_is_refused() raises:
@@ -44,6 +50,19 @@ def test_a_changed_reconstruction_is_refused() raises:
         invariant_digest(
             String("nope").as_bytes(), "00", "before", "sum2-guard-pins.json"
         )
+
+
+def test_a_reordered_pin_pair_is_refused() raises:
+    """A pin-file order other than runtime then guard fails closed."""
+    var directory = "/tmp/invariant-pair-test"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/labels.json").write_text(
+        '["sum2-guard-pins.json","runtime-source-pins.json"]'
+    )
+    with assert_raises(
+        contains="coverage invariant successor: wrong fixed ordered pin pair"
+    ):
+        invariant_pair(directory)
 
 
 def main() raises:

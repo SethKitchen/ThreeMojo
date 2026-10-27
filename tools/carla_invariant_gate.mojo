@@ -7,6 +7,7 @@
 
     carla_invariant_gate --migration PATH [--prior PATH] [--components DIR]
     carla_invariant_gate --bytes PATH --sha HEX --kind after|before --label TEXT
+    carla_invariant_gate --pair DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -17,7 +18,7 @@ A prior without a component directory checks only that frozen digest.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_json import MISSING, PY_DICT, PY_INT, PY_STR, PyJson
+from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PY_STR, PyJson
 from tools._sha256 import sha256_hex
 
 
@@ -210,13 +211,32 @@ def invariant_digest(
     _fail("unreviewed guarded pin successor: " + label)
 
 
+def invariant_pair(directory: String) raises:
+    """Require the fixed runtime then guard pin order.
+
+    Args:
+        directory: A directory whose `labels.json` is the pin-file names in order.
+
+    Raises:
+        Error: The names are not the reviewed pair, or the list cannot be read.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if (
+        doc.kind(doc.root) != PY_LIST
+        or doc.length(doc.root) != 2
+        or doc.text(doc.item(doc.root, 0)) != "runtime-source-pins.json"
+        or doc.text(doc.item(doc.root, 1)) != "sum2-guard-pins.json"
+    ):
+        _fail("wrong fixed ordered pin pair")
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_invariant_gate --migration PATH [--prior PATH]"
             " [--components DIR] | --bytes PATH --sha HEX --kind after|before"
-            " --label TEXT"
+            " --label TEXT | --pair DIR"
         ),
         file=stderr,
     )
@@ -236,6 +256,7 @@ def main() raises:
     var digest = String("")
     var kind = String("")
     var label = String("")
+    var pair = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -248,6 +269,7 @@ def main() raises:
             or word == "--sha"
             or word == "--kind"
             or word == "--label"
+            or word == "--pair"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -264,12 +286,21 @@ def main() raises:
                 digest = value
             elif word == "--kind":
                 kind = value
-            else:
+            elif word == "--label":
                 label = value
+            else:
+                pair = value
             index += 2
             continue
         _usage()
-    if (migration.byte_length() == 0) == (payload.byte_length() == 0):
+    var modes = 0
+    if migration.byte_length() > 0:
+        modes += 1
+    if payload.byte_length() > 0:
+        modes += 1
+    if pair.byte_length() > 0:
+        modes += 1
+    if modes != 1:
         _usage()
     if payload.byte_length() > 0 and (
         digest.byte_length() == 0
@@ -282,6 +313,9 @@ def main() raises:
     ):
         _usage()
     try:
+        if pair.byte_length() > 0:
+            invariant_pair(pair)
+            return
         if payload.byte_length() > 0:
             invariant_digest(Path(payload).read_bytes(), digest, kind, label)
             return
