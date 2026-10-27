@@ -253,7 +253,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Envelope budget record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Selection predecessor record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_selection_record_gate.mojo` checks the selection predecessor record [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Selection predecessor record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_selection_record_gate.mojo` checks the selection predecessor record and the restored token [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Ideal projection digests](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_ideal_gate.mojo` checks the historical ideal source digest and the projected graph digest [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

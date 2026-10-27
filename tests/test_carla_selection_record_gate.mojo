@@ -7,13 +7,22 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_selection_record_gate import selection_record
+from tools.carla_selection_record_gate import (
+    selection_record,
+    selection_restored,
+)
 
 
 def test_a_changed_record_is_refused() raises:
     """Bytes that are not the reviewed record fail closed."""
     with assert_raises(contains="Unreviewed selection predecessor record"):
         selection_record(String("").as_bytes())
+
+
+def test_a_changed_restored_token_is_refused() raises:
+    """A restored module that does not have the recorded token fails closed."""
+    with assert_raises(contains="Selection predecessor reconstruction failed"):
+        selection_restored("def changed():\n    pass\n", "00")
 
 
 def main() raises:

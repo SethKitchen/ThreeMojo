@@ -125,6 +125,27 @@ def _gate_record(payload):
         raise ValueError(message)
 
 
+def _gate_restored(text, expected):
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='selection-restored-') as directory:
+        target = Path(directory) / 'restored.mojo'
+        target.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_selection_record_gate', '--source', str(target),
+             '--token', expected],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def predecessor_text(root, path, *, _operation=None):
     """Verify both actual producers before reconstructing one legacy module."""
 # #333 explicit historical provenance views; current inputs remain operation-owned.
@@ -150,6 +171,5 @@ def predecessor_text(root, path, *, _operation=None):
     first=tokens[span[0]].start[0]-1;last=tokens[span[1]-1].start[0]-1
     lines=text.splitlines(keepends=True)
     restored=''.join(lines[:first])+item['before_complete_function']+''.join(lines[last:])
-    if source_contracts.token_sha256(restored)!=item['before_token_sha256']:
-        raise ValueError('Selection predecessor reconstruction failed')
+    _gate_restored(restored, item['before_token_sha256'])
     return restored

@@ -48,7 +48,7 @@ constant bits. Their README lists the four commands and report directory.
 
 `tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record.
 
-`tools/carla_selection_record_gate.mojo` checks the selection predecessor record.
+`tools/carla_selection_record_gate.mojo` checks the selection predecessor record and the restored token.
 
 `tools/carla_ideal_gate.mojo` checks the historical ideal source digest and the projected graph digest.
 
