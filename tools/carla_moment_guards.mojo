@@ -17,6 +17,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._moment_guards import (
+    require_member,
     require_name_set,
     require_same_count,
     require_separate_output,
@@ -27,8 +28,8 @@ def _usage():
     """Print the command usage and stop."""
     print(
         (
-            "usage: carla_moment_guards --count PATH | --names PATH | --output"
-            " PATH"
+            "usage: carla_moment_guards --count PATH | --names PATH | --member"
+            " PATH | --output PATH"
         ),
         file=stderr,
     )
@@ -45,7 +46,12 @@ def main() raises:
     if len(arguments) != 3:
         _usage()
     var mode = arguments[1]
-    if mode != "--count" and mode != "--names" and mode != "--output":
+    if (
+        mode != "--count"
+        and mode != "--names"
+        and mode != "--member"
+        and mode != "--output"
+    ):
         _usage()
     try:
         var text = Path(arguments[2]).read_text()
@@ -53,6 +59,8 @@ def main() raises:
             require_same_count(text)
         elif mode == "--names":
             require_name_set(text)
+        elif mode == "--member":
+            require_member(text)
         else:
             require_separate_output(text)
     except error:

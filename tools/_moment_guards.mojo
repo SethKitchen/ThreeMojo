@@ -110,6 +110,22 @@ def require_name_set(payload: String) raises:
         _fail(doc.text(doc.at(doc.root, "message")))
 
 
+def require_member(payload: String) raises:
+    """Require one name to be in a list.
+
+    Args:
+        payload: JSON with `name`, `names`, and `message`.
+
+    Raises:
+        Error: `name` is absent. The text is `message`.
+    """
+    var doc = PyJson.parse(payload)
+    if not _contains(
+        doc, doc.at(doc.root, "names"), doc.text(doc.at(doc.root, "name"))
+    ):
+        _fail(doc.text(doc.at(doc.root, "message")))
+
+
 def require_separate_output(payload: String) raises:
     """Require every output path to stay outside the repository inputs.
 

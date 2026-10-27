@@ -38,8 +38,15 @@ def verify_text(modules, interval, trig):
     import os
     import subprocess
     import tempfile
-    if set(modules) != set(EXPECTED):
-        raise ValueError('Wrong selection producer set')
+    if __package__:
+        from . import ideal_projection
+    else:
+        import ideal_projection
+    ideal_projection.moment_guard('--names', {
+        'names': list(modules),
+        'expected': list(EXPECTED),
+        'message': 'Wrong selection producer set',
+    })
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='selection-gate-') as directory:
@@ -234,8 +241,20 @@ def predecessor_text(root, path, *, _operation=None):
     payload=_typed_source.historical_bytes(root, root/'tools/carla_lane_oracle/selection-finiteness-contract.json', (root/'tools/carla_lane_oracle/selection-finiteness-contract.json').read_bytes(), _operation=_operation)
     _gate_record(payload)
     record=json.loads(payload,object_pairs_hook=source_contracts.unique_keys)
-    if path not in EXPECTED or set(record['modules'])!=set(EXPECTED):
-        raise ValueError('Wrong selection predecessor module')
+    if __package__:
+        from . import ideal_projection
+    else:
+        import ideal_projection
+    ideal_projection.moment_guard('--member', {
+        'name': path,
+        'names': list(EXPECTED),
+        'message': 'Wrong selection predecessor module',
+    })
+    ideal_projection.moment_guard('--names', {
+        'names': list(record['modules']),
+        'expected': list(EXPECTED),
+        'message': 'Wrong selection predecessor module',
+    })
     item=record['modules'][path]
     name=('_try_spiral_grouped_roundoff_envelope' if path.endswith('/spiral_grouped_roundoff_proof.mojo')
           else '_try_spiral_roundoff_envelope')
@@ -243,8 +262,8 @@ def predecessor_text(root, path, *, _operation=None):
     body, first, last = _declaration_bounds(text, name, ())
     current_doc, recorded_doc = _significant_documents([
         body, item['after_complete_function']])
-    if current_doc != recorded_doc:
-        raise ValueError('Selection complete successor body changed')
+    ideal_projection.require_same_text(
+        current_doc, recorded_doc, 'Selection complete successor body changed')
     restored=_replace_span(text, first, last, item['before_complete_function'])
     _gate_restored(restored, item['before_token_sha256'])
     return restored

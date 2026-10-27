@@ -8,6 +8,7 @@
 from std.testing import TestSuite, assert_raises
 
 from tools._moment_guards import (
+    require_member,
     require_name_set,
     require_same_count,
     require_separate_output,
@@ -48,6 +49,23 @@ def test_a_changed_moment_count_or_name_is_refused() raises:
             + '"expected":["_GL_NODES","_GL_WEIGHTS","_COS_COEFFICIENTS","_SIN_COEFFICIENTS"],'
             + '"message":"wrong constant-array set"}'
         )
+
+
+def test_a_listed_name_is_accepted() raises:
+    """A name that occurs in the list is accepted."""
+    require_member(
+        '{"name":"a","names":["b","a","a"],"message":"missing name"}'
+    )
+
+
+def test_an_unlisted_name_is_refused() raises:
+    """A name outside the list keeps its message."""
+    with assert_raises(contains="missing name"):
+        require_member(
+            '{"name":"c","names":["a","b"],"message":"missing name"}'
+        )
+    with assert_raises(contains="missing name"):
+        require_member('{"name":"a","names":[],"message":"missing name"}')
 
 
 def test_separate_output_paths_hold() raises:

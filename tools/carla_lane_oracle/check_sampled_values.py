@@ -326,8 +326,19 @@ def verify(root):
         # Deliberately conservative closure: imports, aliases, all helper setup,
         # branch dispatch and every shared operation in all three reference
         # modules are bound. Any dependency change needs renewed source review.
-        require(set(REFERENCE_MODULE_GRAPHS) == {'curve_bounds.mojo', 'curve_trig.mojo', 'curve_interval.mojo'},
-                'wrong reference-module closure')
+        try:
+            if __package__:
+                from . import ideal_projection
+            else:
+                import ideal_projection
+            ideal_projection.moment_guard('--names', {
+                'names': list(REFERENCE_MODULE_GRAPHS),
+                'expected': ['curve_bounds.mojo', 'curve_trig.mojo',
+                             'curve_interval.mojo'],
+                'message': 'wrong reference-module closure',
+            })
+        except ValueError as error:
+            raise CheckError(str(error)) from error
         for filename, expected_hash in REFERENCE_MODULE_GRAPHS.items():
             reference_graph = (dump(reviewed_reference_tree(texts[filename], root, _operation=_operation))
                                if filename == 'curve_bounds.mojo' else graph(texts[filename]))

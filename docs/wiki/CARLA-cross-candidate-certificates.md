@@ -104,6 +104,7 @@ The road-info import is the reviewed alias.
 An import edit, a derivative read, or a square-root read is refused.
 
 Mojo checks the sampled value helper set.
+The reference module names stay the reviewed set.
 Seventeen helpers stay at the top level.
 Three reviewed helpers keep their bodies.
 An extra helper or a changed body is refused.
