@@ -8,6 +8,7 @@
     carla_raw_cut_gate --migration PATH [--module PATH]
     carla_raw_cut_gate --predecessor PATH --sha HEX
     carla_raw_cut_gate --fixture PATH --token HEX
+    carla_raw_cut_gate --successor HEX --recorded HEX
 
 The program checks the texts it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -119,12 +120,27 @@ def raw_cut_fixture(text: String, expected: String) raises:
         _fail("independent exact-word native fixture changed")
 
 
+def raw_cut_binding(successor: String, recorded: String) raises:
+    """Require the successor token to match the recorded predecessor.
+
+    Args:
+        successor: The accepted predecessor's after token.
+        recorded: The raw-cut record's before token.
+
+    Raises:
+        Error: The tokens differ.
+    """
+    if successor != recorded:
+        _fail("successor is not bound to accepted predecessor")
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_raw_cut_gate --migration PATH [--module PATH]"
             " | --predecessor PATH --sha HEX | --fixture PATH --token HEX"
+            " | --successor HEX --recorded HEX"
         ),
         file=stderr,
     )
@@ -143,6 +159,8 @@ def main() raises:
     var digest = String("")
     var fixture = String("")
     var token = String("")
+    var successor = String("")
+    var recorded = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -154,6 +172,8 @@ def main() raises:
             or word == "--sha"
             or word == "--fixture"
             or word == "--token"
+            or word == "--successor"
+            or word == "--recorded"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -168,8 +188,12 @@ def main() raises:
                 digest = value
             elif word == "--fixture":
                 fixture = value
-            else:
+            elif word == "--token":
                 token = value
+            elif word == "--successor":
+                successor = value
+            else:
+                recorded = value
             index += 2
             continue
         _usage()
@@ -180,7 +204,11 @@ def main() raises:
         modes += 1
     if fixture.byte_length() > 0:
         modes += 1
+    if successor.byte_length() > 0 or recorded.byte_length() > 0:
+        modes += 1
     if modes != 1:
+        _usage()
+    if (successor.byte_length() == 0) != (recorded.byte_length() == 0):
         _usage()
     if predecessor.byte_length() > 0 and (
         digest.byte_length() == 0 or module.byte_length() > 0
@@ -195,6 +223,9 @@ def main() raises:
     ):
         _usage()
     try:
+        if successor.byte_length() > 0:
+            raw_cut_binding(successor, recorded)
+            return
         if fixture.byte_length() > 0:
             raw_cut_fixture(Path(fixture).read_text(), token)
             return

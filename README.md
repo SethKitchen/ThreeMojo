@@ -229,7 +229,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Speed-parser record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_speed_gate.mojo` checks the speed-parser record, its module token, and its correctness tests [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Raw-cut inverse record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_raw_cut_gate.mojo` checks the raw-cut inverse record, the dispatch module token, the predecessor digest, and the fixture token [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Raw-cut inverse record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_raw_cut_gate.mojo` checks the raw-cut inverse record, the dispatch module token, the predecessor digest, the fixture token, and the successor binding [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Runtime-view record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_runtime_view_gate.mojo` checks the runtime-view record and its bound tests [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

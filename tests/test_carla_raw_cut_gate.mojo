@@ -8,6 +8,7 @@
 from std.testing import TestSuite, assert_raises
 
 from tools.carla_raw_cut_gate import (
+    raw_cut_binding,
     raw_cut_digest,
     raw_cut_fixture,
     raw_cut_record,
@@ -41,6 +42,18 @@ def test_a_changed_fixture_token_is_refused() raises:
         )
     ):
         raw_cut_fixture("def changed():\n    pass\n", "00")
+
+
+def test_an_unbound_successor_is_refused() raises:
+    """A successor token that differs from the recorded predecessor fails closed.
+    """
+    with assert_raises(
+        contains=(
+            "raw cut inverse contract: successor is not bound to accepted"
+            " predecessor"
+        )
+    ):
+        raw_cut_binding("aa", "bb")
 
 
 def main() raises:

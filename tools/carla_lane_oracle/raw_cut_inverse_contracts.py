@@ -52,6 +52,23 @@ def _gate(migration, module=None):
         raise ValueError(message)
 
 
+def _gate_binding(successor, recorded):
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_raw_cut_gate',
+         '--successor', successor, '--recorded', recorded],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def _gate_fixture(text, expected):
     import os
     import subprocess
@@ -135,8 +152,8 @@ def verify_premises(root, *, _operation=None):
     predecessor_text = _typed_source.historical_text(root, 'tools/carla_lane_oracle/curve-support-dispatch-migration.json', predecessor_text, _operation=_operation)
     predecessor = json.loads(predecessor_text,
                              object_pairs_hook=source.unique_keys)
-    require(predecessor['sources'][SOURCE_PATH]['after_token_sha256'] ==
-            record['before_token_sha256'], 'successor is not bound to accepted predecessor')
+    _gate_binding(predecessor['sources'][SOURCE_PATH]['after_token_sha256'],
+                  record['before_token_sha256'])
     fixture = (root/'tests/test_carla_raw_cut_successor.mojo').read_text()
     if _operation is not None:
         fixture = full_audit._observe_text(root, 'tests/test_carla_raw_cut_successor.mojo', fixture, _operation=_operation)
