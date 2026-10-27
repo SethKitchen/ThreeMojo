@@ -7,7 +7,11 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools._moment_pin_shape import require_moment_pin_shape
+from tools._moment_pin_shape import (
+    require_legacy_digest,
+    require_moment_pin_shape,
+    require_projection_result,
+)
 
 
 def _pins() -> String:
@@ -170,6 +174,31 @@ def test_a_changed_moment_pin_shape_is_refused() raises:
                 '"sum2_environment_guards":1',
                 '"sum2_environment_guards":1,"extra":1',
             )
+        )
+
+
+def test_the_projection_result_pins_hold() raises:
+    """A matching legacy digest and result pin set is accepted."""
+    require_legacy_digest('{"actual":"aa","expected":"aa"}')
+    require_projection_result(
+        '{"projection":{"helper_projections":5,"projected_ast_sha256":"bb"},'
+        + '"result":{"projected_ast_sha256":"bb","helper_projections":5}}'
+    )
+
+
+def test_a_changed_projection_result_pin_is_refused() raises:
+    """A changed digest or result pin keeps its message."""
+    with assert_raises(contains="historical ideal pin digest changed"):
+        require_legacy_digest('{"actual":"aa","expected":"bb"}')
+    with assert_raises(contains="historical ideal pin digest changed"):
+        require_legacy_digest('{"actual":5,"expected":"bb"}')
+    with assert_raises(contains="wrong ideal-projection result pins"):
+        require_projection_result(
+            '{"projection":{"helper_projections":4},"result":{"helper_projections":5}}'
+        )
+    with assert_raises(contains="wrong ideal-projection result pins"):
+        require_projection_result(
+            '{"projection":{"helper_projections":5},"result":{"helper_projections":5,"extra":1}}'
         )
 
 

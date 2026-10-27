@@ -377,8 +377,11 @@ def verify_inputs(root):
     except ValueError as error:
         raise CheckError('stored-half dependency closure: ' + str(error)) from error
     projection = pins['ideal_projection']
-    require(projection['legacy_sha256'] == ideal_projection.LEGACY_SHA256,
-            'historical ideal pin digest changed')
+    try:
+        ideal_projection.require_legacy_digest(
+            projection['legacy_sha256'], ideal_projection.LEGACY_SHA256)
+    except ValueError as error:
+        raise CheckError(str(error)) from error
     interval = _typed_source.historical_text(root, root / DEPENDENCIES['paths'][0], (root / DEPENDENCIES['paths'][0]).read_text(encoding='utf-8'))
     try:
         helper = ideal_projection.stored_half_tail(interval)
@@ -389,8 +392,11 @@ def verify_inputs(root):
             projection['legacy_normalized_source'], blocks['ideal_spiral'], helper)
     except ValueError as error:
         raise CheckError('ideal half projection: ' + str(error)) from error
-    require(all(projection[key] == value for key, value in result.items()),
-            'wrong ideal-projection result pins')
+    try:
+        ideal_projection.require_projection_result(
+            {key: projection[key] for key in result}, result)
+    except ValueError as error:
+        raise CheckError(str(error)) from error
     # Diagnose this record's own projection obligations before the cache-key
     # successor rechecks its immutable historical hash. Keep the complete
     # interval/helper dependency check above, and all transitive checks here.

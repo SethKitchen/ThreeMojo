@@ -6,7 +6,8 @@
 """Check the stored-moment pin shape before any source is read.
 
 The expected paths and dependency closure come from the caller. This check
-only compares the pin document with that specification.
+only compares the pin document with that specification. The legacy digest
+and the projection result pins use the same comparison.
 """
 
 from tools._python_json import PY_INT, PY_LIST, PyJson, py_equal
@@ -238,3 +239,42 @@ def require_moment_pin_shape(payload: String) raises:
         ),
     ):
         _fail("wrong ideal-projection pin set")
+
+
+def require_legacy_digest(payload: String) raises:
+    """Require the legacy pin digest to match its expected text.
+
+    Args:
+        payload: JSON with `actual` and `expected`.
+
+    Raises:
+        Error: The digest differs.
+    """
+    var doc = PyJson.parse(payload)
+    if not py_equal(
+        doc,
+        doc.at(doc.root, "actual"),
+        doc,
+        doc.at(doc.root, "expected"),
+    ):
+        _fail("historical ideal pin digest changed")
+
+
+def require_projection_result(payload: String) raises:
+    """Require each projection result pin to match.
+
+    Args:
+        payload: JSON with `projection` and `result`. Both objects carry the
+            result keys only.
+
+    Raises:
+        Error: A result pin differs.
+    """
+    var doc = PyJson.parse(payload)
+    if not py_equal(
+        doc,
+        doc.at(doc.root, "projection"),
+        doc,
+        doc.at(doc.root, "result"),
+    ):
+        _fail("wrong ideal-projection result pins")

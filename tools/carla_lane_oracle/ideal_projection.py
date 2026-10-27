@@ -345,6 +345,54 @@ def require_moment_pins(pins, spec):
         raise ValueError(message)
 
 
+def require_legacy_digest(actual, expected):
+    """Require the legacy pin digest to match `expected`."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({'actual': actual, 'expected': expected},
+                         separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='legacy-digest-') as directory:
+        path = Path(directory) / 'digest.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_pins',
+             '--legacy', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
+def require_projection_result(projection, result_pins):
+    """Require each projection result pin to match."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({'projection': projection, 'result': result_pins},
+                         separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='projection-result-') as directory:
+        path = Path(directory) / 'result.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_pins',
+             '--result', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def require_stored_words(words, expected, message):
     """Require each word to match its pinned ``0x`` spelling."""
     import os
