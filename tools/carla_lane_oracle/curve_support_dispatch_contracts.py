@@ -248,6 +248,33 @@ def _declaration(text, name, owner):
     return result.stdout
 
 
+def _premise_fallback(matched, path, name, owner):
+    """Return `seed`, `lane`, or `none` for one differing premise."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({
+        'matched': matched, 'path': path, 'name': name, 'owner': list(owner),
+    }, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='premise-fallback-') as directory:
+        record = Path(directory) / 'fallback.json'
+        record.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_premise_fallback', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout.strip()
+
+
 def verify_premises(root, *, _operation=None):
     # Deliberately independent of complete-module successor digest checks.
     # Bind operation graphs, local guards, full caller bodies, and declarations.
@@ -286,8 +313,9 @@ def verify_premises(root, *, _operation=None):
         current_doc, recorded_doc = _significant_documents([actual, item['source']])
         matched = _dispatch_query('--match', {
             'actual': current_doc, 'expected': recorded_doc}) == 'true'
-        if not matched and (item['path'], item['name'], tuple(item['owner'])) == (
-                'extensions/carla/map.mojo', '_try_winner_seed', ()):
+        fallback = _premise_fallback(
+            matched, item['path'], item['name'], tuple(item['owner']))
+        if fallback == 'seed':
             try:
                 if __package__:
                     from . import seed_count_contracts as seed_count
@@ -301,7 +329,7 @@ def verify_premises(root, *, _operation=None):
                     'actual': current_doc, 'expected': recorded_doc}) == 'true'
             except (ValueError, OSError) as error:
                 require(False, 'reviewed Map caller premise changed: ' + str(error))
-        if not matched and item['path'] == 'extensions/carla/lane_refinement.mojo':
+        if fallback == 'lane':
             try:
                 if __package__:
                     from . import lane_control_contracts as lane
