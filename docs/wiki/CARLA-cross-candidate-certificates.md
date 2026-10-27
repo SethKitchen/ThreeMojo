@@ -187,6 +187,8 @@ Lane refinement leaves the removed search names out.
 A comment or a string stays allowed.
 A new executable name is refused.
 
+It keeps the watched model names and the removed search names.
+
 Mojo checks the live lane-search edges.
 One frontier loop keeps the current-cell work debit.
 The fresh producer follows that debit.

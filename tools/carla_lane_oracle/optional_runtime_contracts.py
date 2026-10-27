@@ -215,13 +215,6 @@ def fresh_guard(node):
 # mathematics. Keep its proof and integer admission obligations below. A new
 # production consumer, including an alias/re-export in a new namespace, needs
 # a separate review; comments, docstrings and test-only callers are inert here.
-MODEL_NAMES = frozenset(('curve_objective_model', '_ObjectiveModel',
-    '_try_objective_model', '_restrict_objective_model',
-    '_objective_followup_room', '_objective_recheck_room'))
-REMOVED_SEARCH_NAMES = frozenset(('cached_model', 'reused_domain', 'reused_delta',
-    'reused_lower', 'reused_tolerance', 'reused_center_s', 'reused_center_work',
-    'reused_center', 'ideal_center', 'reused_support', 'needs_model', 'packed_model'))
-
 @lru_cache(maxsize=256)
 def executable_names(text):
     return frozenset(_lexical_directory('--names', [text])[0])
@@ -282,6 +275,26 @@ def _production_paths(roots, paths):
     return flags
 
 
+def _watched_names():
+    """Return the model names and the removed search names."""
+    import json
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+         'carla_watched_model_names'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _model_mentions(names, texts):
     """Return which texts contain one of `names`."""
     import json
@@ -331,7 +344,7 @@ def verify_no_containing_model_consumers(root, *, _operation=None):
         text = _typed_source.historical_text(root, path, source._observe_text(root, (path).relative_to(root).as_posix(), path.read_text(), _operation=_operation), _operation=_operation)
         texts.append(text)
         relatives.append(relative)
-    hits = _model_mentions(MODEL_NAMES | REMOVED_SEARCH_NAMES, texts)
+    hits = _model_mentions(_watched_names(), texts)
     chosen = []
     for relative, text, hit in zip(relatives, texts, hits):
         if not hit:
