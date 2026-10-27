@@ -26,6 +26,8 @@ It keeps the moment pin file, the stored table, and the word count.
 
 It keeps the two selection producer digests.
 
+It uses those producer paths for the grouped and roundoff flags.
+
 It checks the producer names before that gate.
 
 It restores one selection function inside its line span.

@@ -77,10 +77,7 @@ def verify_text(modules, interval, trig):
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='selection-gate-') as directory:
         folder = Path(directory)
-        names = {
-            '--grouped': 'extensions/carla/spiral_grouped_roundoff_proof.mojo',
-            '--roundoff': 'extensions/carla/spiral_roundoff_proof.mojo',
-        }
+        names = dict(zip(('--grouped', '--roundoff'), _expected()))
         command = ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_selection_gate']
         for flag, path in names.items():
             target = folder / flag.strip('-') 
@@ -111,7 +108,7 @@ def _producer_text(root, path, *, _operation=None):
         from . import ideal_projection
     else:
         import ideal_projection
-    if (path == 'extensions/carla/spiral_grouped_roundoff_proof.mojo'
+    if (path == next(iter(_expected()))
             and not ideal_projection.texts_match(
                 ideal_projection.token_sha256(text), _expected()[path])):
         if __package__:
