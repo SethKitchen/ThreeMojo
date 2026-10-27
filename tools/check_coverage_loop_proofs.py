@@ -252,18 +252,25 @@ def diagnostic_manifest(masked, module, lines):
 
     Never mutate the original manifest/origin or claim an aggregate gate.
     """
-    rows = []
-    seen = set()
-    for row in masked.splitlines():
-        fields = row.split()
-        if fields and fields[0] == b'P':
-            rows.append(row)
-        elif (len(fields) >= 3 and fields[0] in {b'B', b'R'}
-              and fields[1].decode() == module and int(fields[2]) in lines):
-            rows.append(row)
-            seen.add(int(fields[2]))
-    require(seen == set(lines), _loop_labels()['admission']['diagnostic'])
-    return b'\n'.join(rows) + b'\n'
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[1]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='diagnostic-manifest-') as directory:
+        path = Path(directory) / 'manifest.txt'
+        path.write_bytes(masked)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_diagnostic_manifest', str(path), module,
+             *[str(line) for line in lines]],
+            capture_output=True)
+    if result.returncode != 0:
+        errors = [line.strip() for line in result.stderr.splitlines()
+                  if line.strip() and b'Crashpad' not in line]
+        message = (errors[-1] if errors else result.stdout).decode()
+        raise RuntimeError(message)
+    return result.stdout
 
 
 def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_source=None):
