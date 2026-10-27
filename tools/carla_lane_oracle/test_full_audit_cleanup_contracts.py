@@ -27,7 +27,27 @@ import rounded_line_selector_contracts as selector
 import rounded_line_singleton_contracts as singleton
 import source_contracts as source
 import sum2_guard_contracts as guard
-from _token_fragment import replace_token_fragment
+
+
+def replace_token_fragment(source, before, after):
+    """Replace one executable token fragment through the cleanup gate."""
+    import os
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='token-fragment-') as directory:
+        folder = Path(directory)
+        (folder / 'source.text').write_text(source)
+        (folder / 'before.text').write_text(before)
+        (folder / 'after.text').write_text(after)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--fragment', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line for line in result.stderr.splitlines()
+                 if 'Crashpad' not in line]
+        raise AssertionError('\n'.join(lines))
+    return result.stdout
 
 # Complete consumer-first commands measured approximately 392/429/281/596
 # seconds on the reviewed current graph. Keep all faster routes at 120 seconds.
