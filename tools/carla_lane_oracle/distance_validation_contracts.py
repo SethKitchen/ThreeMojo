@@ -6,7 +6,40 @@ else:
     import source_contracts as _typed_source
 
 from pathlib import Path
-MODULE='extensions/carla/spiral_domain_proof.mojo'
+_MODULE_PATH = None
+
+
+def _module_path():
+    """Return the spiral-domain proof path."""
+    global _MODULE_PATH
+    if _MODULE_PATH is not None:
+        return _MODULE_PATH
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_distance_module'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _MODULE_PATH = result.stdout
+    return _MODULE_PATH
+
+
+def _ensure_module():
+    """Bind the spiral-domain path before a source read."""
+    global MODULE
+    MODULE = _module_path()
+
+
+def __getattr__(name):
+    if name == 'MODULE':
+        return _module_path()
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 def verify_text(module, interval):
     import json
@@ -33,6 +66,7 @@ def verify_text(module, interval):
     return json.loads(result.stdout)
 
 def verify(root, *, _operation=None):
+    _ensure_module()
     root=Path(root)
     if _operation is not None:
         if __package__:

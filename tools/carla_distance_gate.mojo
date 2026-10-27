@@ -55,6 +55,15 @@ def distance_validation(module: String, interval: String) raises -> String:
     return _PASS
 
 
+def distance_module() -> String:
+    """Return the spiral-domain proof path.
+
+    Returns:
+        The repository path.
+    """
+    return "extensions/carla/spiral_domain_proof.mojo"
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -65,7 +74,11 @@ def _usage():
 
 
 def main() raises:
-    """Check two source files and print the pass record."""
+    """Check two source files and print the pass record.
+
+    Raises:
+        Error: The command is invalid, or a distance check fails.
+    """
     var module = String("")
     var interval = String("")
     var arguments = argv()
