@@ -553,6 +553,33 @@ def decimal_words_json(payload: String) raises -> String:
     return out.dumps()
 
 
+def cleanup_paths() raises -> String:
+    """Return the successor paths and the premise paths.
+
+    Returns:
+        JSON with `sources` and `premises` in reviewed order.
+
+    Raises:
+        Error: The lists cannot be written.
+    """
+    var doc = PyJson()
+    var spec = doc.new_dict()
+    var sources = doc.new_list()
+    var index = 0
+    while index < 3:
+        doc.append(sources, doc.new_str(_named(0, index)))
+        index += 1
+    doc.set(spec, "sources", sources)
+    var premises = doc.new_list()
+    index = 0
+    while index < 2:
+        doc.append(premises, doc.new_str(_named(1, index)))
+        index += 1
+    doc.set(spec, "premises", premises)
+    doc.root = spec
+    return doc.dumps()
+
+
 def _usage():
     """Print the command usage and stop."""
     print(

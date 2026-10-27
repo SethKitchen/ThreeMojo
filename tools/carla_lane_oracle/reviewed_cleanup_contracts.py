@@ -37,27 +37,72 @@ else:
 
 MIGRATION = 'tools/carla_lane_oracle/reviewed-cleanup-migration.json'
 MIGRATION_SHA256 = '01753344fe01d885eb3bbaf253815bca01816c57c09b6e7cc1c3a233808b42a9'
-SOURCE_PATHS = tuple('extensions/carla/' + name + '.mojo' for name in
-                     ('curve_rounded_line', 'curve_rounded_arc', 'junction_bounds'))
 # A fixture that invokes the protected guard must carry its complete inputs.
-PREMISE_PATHS = ('extensions/carla/road_info.mojo', 'extensions/carla/curve_trig.mojo')
-PROTECTED_INPUTS = (*cache_key.PROTECTED_INPUTS, *accepted.PROTECTED_INPUTS, MIGRATION, 'tools/carla_lane_oracle/runtime-source-pins.json',
-                    *SOURCE_PATHS, *PREMISE_PATHS, *frozen.PROTECTED_INPUTS,
-                    *invariant.PROTECTED_INPUTS,
-                    'tools/carla_lane_oracle/coverage-followup-migration.json',
-                    'tools/carla_lane_oracle/raw-cut-inverse-migration.json',
-                    'tools/carla_lane_oracle/moment-finiteness-contract.json',
-                    'tools/carla_lane_oracle/envelope-budget-contract.json',
-                    'tests/test_carla_raw_cut_successor.mojo',
-                    'tests/test_carla_envelope_budget_dominance.mojo',
-                    'extensions/carla/spiral_moment_proof.mojo',
-                    'tools/carla_lane_oracle/lane-order-migration.json',
-                    'tests/test_carla_lane_order_successor.mojo',
-                    'tools/carla_lane_oracle/selection-finiteness-contract.json',
-                    'tests/test_spiral_selection_finite_contract.mojo',
-                    'tests/_reference_roundoff_selection.mojo',
-                    'tests/_reference_grouped_selection.mojo',
-                    'extensions/carla/spiral_roundoff_proof.mojo')
+_CLEANUP_PATHS = None
+
+
+def _cleanup_paths():
+    """Return the successor paths and the premise paths."""
+    global _CLEANUP_PATHS
+    if _CLEANUP_PATHS is not None:
+        return _CLEANUP_PATHS
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_paths'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _CLEANUP_PATHS = json.loads(result.stdout)
+    return _CLEANUP_PATHS
+
+
+def _ensure_paths():
+    """Bind the successor and premise paths before a source read."""
+    global SOURCE_PATHS, PREMISE_PATHS
+    data = _cleanup_paths()
+    SOURCE_PATHS = tuple(data['sources'])
+    PREMISE_PATHS = tuple(data['premises'])
+
+
+def _protected_inputs():
+    """Return the protected inputs, including the Mojo path tables."""
+    _ensure_paths()
+    return (*cache_key.PROTECTED_INPUTS, *accepted.PROTECTED_INPUTS, MIGRATION, 'tools/carla_lane_oracle/runtime-source-pins.json',
+            *SOURCE_PATHS, *PREMISE_PATHS, *frozen.PROTECTED_INPUTS,
+            *invariant.PROTECTED_INPUTS,
+            'tools/carla_lane_oracle/coverage-followup-migration.json',
+            'tools/carla_lane_oracle/raw-cut-inverse-migration.json',
+            'tools/carla_lane_oracle/moment-finiteness-contract.json',
+            'tools/carla_lane_oracle/envelope-budget-contract.json',
+            'tests/test_carla_raw_cut_successor.mojo',
+            'tests/test_carla_envelope_budget_dominance.mojo',
+            'extensions/carla/spiral_moment_proof.mojo',
+            'tools/carla_lane_oracle/lane-order-migration.json',
+            'tests/test_carla_lane_order_successor.mojo',
+            'tools/carla_lane_oracle/selection-finiteness-contract.json',
+            'tests/test_spiral_selection_finite_contract.mojo',
+            'tests/_reference_roundoff_selection.mojo',
+            'tests/_reference_grouped_selection.mojo',
+            'extensions/carla/spiral_roundoff_proof.mojo')
+
+
+def __getattr__(name):
+    if name == 'SOURCE_PATHS':
+        _ensure_paths()
+        return SOURCE_PATHS
+    if name == 'PREMISE_PATHS':
+        _ensure_paths()
+        return PREMISE_PATHS
+    if name == 'PROTECTED_INPUTS':
+        return _protected_inputs()
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def _check_operation(root, operation):
@@ -238,6 +283,7 @@ def _declaration(text, name, owner):
 def verify_premises(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
+    _ensure_paths()
     line = _typed_source.historical_text(root, SOURCE_PATHS[0], _observe_text(root, SOURCE_PATHS[0],
                          (root/SOURCE_PATHS[0]).read_text(), _operation=_operation), _operation=_operation)
     arc = _typed_source.historical_text(root, SOURCE_PATHS[1], _observe_text(root, SOURCE_PATHS[1],

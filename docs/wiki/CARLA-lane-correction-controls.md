@@ -78,6 +78,8 @@ It selects each reviewed declaration and checks that each premise fragment occur
 
 It keeps the five reviewed premise fragment lists.
 
+It keeps the three successor paths and the two premise paths.
+
 The singleton, frozen ARC, dispatch, raw-cut, and optional-runtime contracts use that declaration text.
 
 It also builds the significant token lists for the singleton, frozen ARC, dispatch, raw-cut, and selection contracts.
