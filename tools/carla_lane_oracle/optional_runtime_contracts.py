@@ -28,9 +28,36 @@ except ModuleNotFoundError:
     from tools.carla_lane_oracle import sum2_guard_contracts as guard, source_contracts
     from tools.carla_lane_oracle import full_audit_cleanup_contracts as full_audit
 
-NEW_MODULES = ('curve_minimizer_support', 'curve_objective_model',
-               'curve_sample_dispatch', 'spiral_grouped_lane',
-               'spiral_grouped_roundoff_proof')
+_NEW_MODULES = None
+
+
+def _new_modules():
+    """Return the five optional-runtime module names in reviewed order."""
+    global _NEW_MODULES
+    if _NEW_MODULES is not None:
+        return _NEW_MODULES
+    import json
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_optional_runtime_modules'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _NEW_MODULES = json.loads(result.stdout)
+    return _NEW_MODULES
+
+
+def __getattr__(name):
+    if name == 'NEW_MODULES':
+        return tuple(_new_modules())
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def require(condition, message):
@@ -498,7 +525,7 @@ def verify_semantics(root, *, _operation=None):
     else:
         from ideal_projection import verify_try_only_reference
     verify_try_only_reference(_typed_source.historical_text(root, root / 'extensions/carla/curve_bounds.mojo', source._observe_text(root, (root / 'extensions/carla/curve_bounds.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_bounds.mojo').read_text(), _operation=_operation), _operation=_operation), root, _operation=_operation)
-    return _optional_runtime_result(list(NEW_MODULES))
+    return _optional_runtime_result(_new_modules())
 
 
 def _optional_runtime_result(modules):
