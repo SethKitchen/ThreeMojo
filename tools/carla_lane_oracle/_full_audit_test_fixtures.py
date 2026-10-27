@@ -9,7 +9,9 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -136,6 +138,13 @@ def copy_current_root(case, source, *, destination=None):
              *cleanup.SOURCE_PATHS, *admitted}
     # The accepted-successor consumer also binds this proof document.
     paths.add('tools/carla_lane_oracle/grouped-y-proof.md')
+    # The ported gates run tools/tool.sh beside their module, with the root's
+    # .venv compiler by default. A copy omits both: name the source checkout's
+    # compiler, and write a runner below that forwards to the source's.
+    compiler = source/'.venv'/'bin'/'mojo'
+    if 'MOJO' not in os.environ and compiler.exists():
+        os.environ['MOJO'] = str(compiler.absolute())
+        case.addCleanup(os.environ.pop, 'MOJO', None)
     # Supplemental witness-format proof inputs are physically copied too.
     paths.update(cleanup.witness_format.BOUND_INPUTS)
     paths.update(cleanup.scaled_float32_proof_bindings(source))
@@ -167,6 +176,17 @@ def copy_current_root(case, source, *, destination=None):
         shutil.copyfile(original, target)
         if name in admitted and cleanup.sha(target.read_bytes()) != admitted[name]:
             raise AssertionError('fixture admitted input copy changed: ' + name)
+    # The copied gate sources are the source's bytes, so the gate programs the
+    # source checkout builds answer for the copy too. They are built here, so
+    # a timed check in the copy does not pay for the first build.
+    source_runner = str((source/'tools'/'tool.sh').absolute())
+    runner = destination/'tools'/'tool.sh'
+    runner.parent.mkdir(parents=True, exist_ok=True)
+    runner.write_text('exec sh ' + shlex.quote(source_runner) + ' "$@"\n')
+    if 'MOJO' in os.environ:
+        for gate in ('carla_distance_gate', 'carla_moment_gate', 'carla_selection_gate'):
+            subprocess.run(['sh', source_runner, os.environ['MOJO'], '--build', gate],
+                           check=True, capture_output=True)
     cleanup.verify(destination, exact=True)
     return destination
 
