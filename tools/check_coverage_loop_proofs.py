@@ -370,7 +370,9 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
     print(_loop_labels()['owner_print'], flush=True)
     # A restored live-table mutation must still poison this real active owner.
     # This uses no writable source fixture and runs in the maintained entrypoint.
-    conditioned = _loop_labels()['conditioned']
+    labels = _loop_labels()
+    conditioned = labels['conditioned']
+    mutation = labels['mutation']
     conditioned_refusals = []
     def conditioned_authority_mutation(frame, event, value, owners):
         if (conditioned_refusals or event != 'return'
@@ -384,7 +386,7 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
         conditioned_refusals.append('active')
         old_bindings = audit.conditioned_cubic.BINDING_INPUTS
         try:
-            audit.conditioned_cubic.BINDING_INPUTS = {**old_bindings, 'unreviewed': '0'*64}
+            audit.conditioned_cubic.BINDING_INPUTS = {**old_bindings, 'unreviewed': mutation['blank']}
             try:
                 audit._typed_boundary_bindings(root, _operation=owner)
             except audit._OperationCoherenceError as error:
@@ -421,27 +423,25 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
     # These mutations require only the separately admitted writable source and
     # generated stage. The complete positive producer relation is rechecked
     # before every case. No saved source receipt is modified or rebound.
-    source_name = 'extensions/carla/curve_rounded_arc.mojo'
-    include_name = 'extensions/animals/anatomy/render.mojo'
+    source_name = mutation['source']
+    include_name = mutation['include']
     def replace_file(path, data, location):
         require(path.is_file() and not path.is_symlink()
                 and path.resolve().is_relative_to(location) and path.stat().st_nlink == 1,
-                'Mutation target is not an ordinary owned fixture file')
+                mutation['ordinary'])
         original = ROOT/path.relative_to(location)
         if original.exists():
             require((path.stat().st_dev, path.stat().st_ino)
                     != (original.stat().st_dev, original.stat().st_ino),
-                    'Fixture aliases a sealed source inode')
+                    mutation['inode'])
         path.unlink()
         with path.open('xb') as stream:
             stream.write(data)
-    faults = ('source', 'source-transient-read', 'include', 'include-entry', 'authority',
-              'seed', 'include-root', 'source-root', 'public-borrow',
-              'lookup-shadow', 'compiled-shadow', 'symlink', 'origin', 'checker', 'nested-owner')
+    faults = mutation['faults']
     completed = []
     for fault in faults:
         require(proofs.maintained_inputs(root, exclude=stage) == expected['root_inputs'],
-                'Source fixture was not restored before next control')
+                mutation['restored_before'])
         proofs.check_capture_inputs({'receipt': expected}, root, stage)
         restored, fired, caught = [], [], []
         def write(path, data, location):
@@ -452,30 +452,31 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
             if fired or event != 'return' or frame.f_code is not audit._InvariantInputs._receipt_bindings.__code__:
                 return
             fired.append(True)
-            require(len(owners) == 1 and owners[0]._state == 'active', 'Mutation missed real current admission')
+            require(len(owners) == 1 and owners[0]._state == 'active', mutation['admission'])
             owner = owners[0]
             if fault.startswith('source') and fault != 'source-root':
                 target = root/source_name
                 raw = target.read_bytes()
-                write(target, raw+b'\n# changed after current admission\n', root)
+                write(target, raw + mutation['changed_source'].encode(), root)
                 if fault == 'source-transient-read':
                     consumed = target.read_bytes()
                     restored.pop()()
                     try:
                         audit._observe_bytes(root, source_name, consumed, _operation=owner)
                     except ValueError as error:
-                        require('consumed operation bytes changed: '+source_name in str(error),
-                                'Transient read did not reach the consumed-byte comparison')
+                        require(mutation['consumed_prefix'] + source_name in str(error),
+                                mutation['transient'])
                         caught.append(True)
                     else:
-                        raise RuntimeError('Restored transient source observation was accepted')
+                        raise RuntimeError(mutation['accepted_transient'])
             elif fault in ('include', 'include-entry'):
                 target = stage/include_name
-                suffix = b'\ndef main():\n    pass\n' if fault == 'include-entry' else b'\n# unsealed bytes\n'
+                suffix = (mutation['include_entry'] if fault == 'include-entry'
+                          else mutation['unsealed']).encode()
                 write(target, target.read_bytes()+suffix, stage)
             elif fault == 'authority':
                 old = typed.BINDING_INPUTS
-                typed.BINDING_INPUTS = {**old, 'unreviewed': '0'*64}
+                typed.BINDING_INPUTS = {**old, 'unreviewed': mutation['blank']}
                 restored.append(lambda: setattr(typed, 'BINDING_INPUTS', old))
             elif fault == 'seed':
                 owner._owner_frame.f_locals['_receipt_seed']['flags'] += ' changed'
@@ -486,19 +487,19 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
                     elif fault == 'source-root':
                         owner._receipt_bindings(root/'foreign', (stage,))
                     else:
-                        result = proofs.reviewed_nonempty_loops(root, 'extensions/carla/map',
+                        result = proofs.reviewed_nonempty_loops(root, mutation['map'],
                             include_roots=(stage,), _operation=owner)
-                        require(result == {} and owner._failed, 'Direct public borrower was admitted')
-                        raise ValueError('Expected sticky public refusal')
+                        require(result == {} and owner._failed, mutation['borrower'])
+                        raise ValueError(mutation['sticky_public'])
                 except ValueError:
                     caught.append(True)
                 else:
-                    raise RuntimeError('Foreign current owner context was accepted')
+                    raise RuntimeError(mutation['foreign'])
             elif fault in ('lookup-shadow', 'compiled-shadow'):
-                target = stage/('tests/render.mojo' if fault == 'lookup-shadow'
-                                else 'extensions/carla/map.mojopkg')
-                require(not target.exists(), 'Shadow control collides with maintained input')
-                target.write_bytes(b'def main():\n    pass\n')
+                target = stage/(mutation['lookup_shadow'] if fault == 'lookup-shadow'
+                                else mutation['compiled_shadow'])
+                require(not target.exists(), mutation['shadow_collision'])
+                target.write_bytes(mutation['shadow_body'].encode())
                 restored.append(target.unlink)
             elif fault == 'symlink':
                 target = stage/include_name
@@ -512,13 +513,13 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
                 restored.append(restore_link)
             elif fault == 'origin':
                 target = stage/(source_name+'.cov-origin')
-                write(target, target.read_bytes()+b'\nchanged', stage)
+                write(target, target.read_bytes() + mutation['origin_change'].encode(), stage)
             elif fault == 'checker':
-                name = 'tools/carla_lane_oracle/full_audit_cleanup_contracts.py'
+                name = mutation['checker']
                 require(owner._checker_receipt and name in owner._executing and name not in owner._raw,
-                        'Current owner did not retain its separate supplied-checker domain')
+                        mutation['checker_domain'])
                 target = root/name
-                write(target, target.read_bytes()+b'\n# changed supplied checker after admission\n', root)
+                write(target, target.read_bytes() + mutation['checker_change'].encode(), root)
             elif fault == 'nested-owner':
                 from unittest.mock import patch
                 original_read = Path.read_text
@@ -528,33 +529,33 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
                         current = sys._getframe(1)
                         while current is not None and current.f_code is not proofs.build_receipt.__code__:
                             current = current.f_back
-                        require(current is not None, 'Nested receipt frame is absent')
+                        require(current is not None, mutation['nested_absent'])
                         inner = current.f_locals.get('_operation')
                         require(inner is not owner and inner._kind == 'generated_receipt',
-                                'Nested receipt reused the outer owner')
+                                mutation['nested_reused'])
                         inner_seen.append(inner)
                         try:
                             audit._operation_check(owner, root)
                         except ValueError as error:
-                            require('nearer independent operation blocks borrowing' in str(error),
-                                    'Nested-owner control missed its frame boundary')
+                            require(mutation['nearer'] in str(error),
+                                    mutation['nested_boundary'])
                             caught.append(True)
                         else:
-                            raise RuntimeError('Nested receipt borrowed the outer admission')
+                            raise RuntimeError(mutation['nested_borrowed'])
                     return original_read(path, *args, **kwargs)
                 with patch.object(Path, 'read_text', nested_read):
                     inner_result = derive()
                 require(len(inner_seen) == 1 and inner_seen[0]._state == 'closed'
                         and not inner_seen[0]._failed
                         and proofs.canonical(inner_result) == proofs.canonical(expected),
-                        'Fresh nested receipt failed independently of refused outer reuse')
+                        mutation['nested_fresh'])
             if caught:
                 try:
                     audit._operation_check(owner, root)
                 except ValueError:
                     pass
                 else:
-                    raise RuntimeError('Caught refusal did not poison the current owner')
+                    raise RuntimeError(mutation['poison'])
         try:
             with trace(profile) as (_, owners, _):
                 try:
@@ -562,16 +563,16 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
                 except ValueError:
                     pass
                 else:
-                    raise RuntimeError('Current generated mutation received a receipt: '+fault)
+                    raise RuntimeError(mutation['receipt_prefix'] + fault)
             require(fired == [True] and len(owners) == 1 and owners[0]._failed
                     and owners[0]._state == 'closed' and owners[0]._owner_frame is None,
-                    'Current mutation did not fail and close its actual owner: '+fault)
+                    mutation['close_prefix'] + fault)
         finally:
             for restore in reversed(restored):
                 restore()
         completed.append(fault)
     require(proofs.maintained_inputs(root, exclude=stage) == expected['root_inputs'],
-            'Current source mutation controls did not restore the fixture')
+            mutation['fixture_restored'])
     proofs.check_capture_inputs({'receipt': expected}, root, stage)
     print(_loop_labels()['refusals_print'], ', '.join(completed), flush=True)
     result = dict(_loop_labels()['owner'])

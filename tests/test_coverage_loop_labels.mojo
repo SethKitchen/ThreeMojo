@@ -44,6 +44,15 @@ def test_coverage_loop_qualification_labels_stay_reviewed() raises:
     assert_equal(
         doc.text(doc.at(doc.root, "mutation_key")), "current_mutation_controls"
     )
+    var mutation = doc.at(doc.root, "mutation")
+    var faults = doc.at(mutation, "faults")
+    assert_equal(doc.length(faults), 15)
+    assert_equal(doc.text(doc.item(faults, 0)), "source")
+    assert_equal(doc.text(doc.item(faults, 14)), "nested-owner")
+    assert_equal(
+        doc.text(doc.at(mutation, "source")),
+        "extensions/carla/curve_rounded_arc.mojo",
+    )
     assert_equal(
         doc.text(doc.at(doc.root, "pass_line")),
         (
