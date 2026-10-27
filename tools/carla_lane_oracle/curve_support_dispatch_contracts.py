@@ -53,14 +53,31 @@ def require(condition, message):
         raise ValueError('curve support/dispatch contract: ' + message)
 
 
+def _gate(payload):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='dispatch-gate-') as directory:
+        record = Path(directory) / 'migration.json'
+        record.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_gate',
+             '--migration', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
-    require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256,
-            'unreviewed migration record')
-    record = json.loads(payload, object_pairs_hook=source.unique_keys)
-    require(record['schema'] == 1 and set(record['sources']) == set(SOURCE_PATHS),
-            'wrong successor schema or source set')
-    return record
+    _gate(payload)
+    return json.loads(payload, object_pairs_hook=source.unique_keys)
 
 
 
