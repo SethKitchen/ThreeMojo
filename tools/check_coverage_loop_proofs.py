@@ -34,20 +34,47 @@ import coverage_loop_proofs as proofs
 ROOT = Path(__file__).resolve().parent.parent
 # Coverage tools import these shared leaves. Keep the small native fixture
 # isolated: do not copy all core sources or add the repository include root.
-NATIVE_TOOL_DEPENDENCIES = (
-    'core/__init__.mojo', 'core/search.mojo', 'core/binary.mojo',
-)
+_LOOP_LABELS = None
+
+
+def _loop_labels():
+    """Return the coverage-loop qualification labels."""
+    global _LOOP_LABELS
+    if _LOOP_LABELS is not None:
+        return _LOOP_LABELS
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[1]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+         'carla_coverage_loop_labels'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _LOOP_LABELS = json.loads(result.stdout)
+    return _LOOP_LABELS
+
+
+def __getattr__(name):
+    if name == 'NATIVE_TOOL_DEPENDENCIES':
+        return tuple(_loop_labels()['dependencies'])
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 def copy_native_tool_dependencies(root, destination):
     """Copy the explicit coverage-tool leaf closure into the native fixture."""
-    for name in NATIVE_TOOL_DEPENDENCIES:
+    labels = _loop_labels()
+    for name in labels['dependencies']:
         source = Path(root) / name
         target = Path(destination) / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
         require(target.read_bytes() == source.read_bytes(),
-                'Native tool dependency copy changed: ' + name)
+                labels['copy_message'] + name)
 
 
 RUNTIME_SECONDS = 5
@@ -606,10 +633,8 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
          'check_coverage_include_root', '--mojo', mojo, '--stage', str(stage),
          '--compiler', compiler, '--flags', flags], cwd=ROOT)
     owner_result = check_generated_receipt_owner(stage, mojo, compiler, flags)
-    require(owner_result == {'fresh_receipts': 3, 'counted_receipts': 2,
-                             'full_per_counted_receipt': 1, 'typed_per_counted_receipt': 1,
-                             'conditioned_authority_refusal': True},
-            'Maintained generated owner controls did not complete')
+    labels = _loop_labels()
+    require(owner_result == labels['owner'], labels['owner_message'])
     # Reuse this genuine stage for root-only borrowing and final-stage guards.
     # Test-module import support is local to this explicit maintained entrypoint.
     saved_path = list(sys.path)
@@ -620,10 +645,8 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
         sys.path[:] = saved_path
     root_only = owner_controls.check_generated_root_only_borrowing(
         ROOT, stage, mojo, compiler, flags)
-    require(root_only == {'completed': [
-        'root-only-seed-and-shared-positive', 'root-only-wrong-nonempty-root',
-        'root-only-stage-tamper-at-finish'], 'fresh_receipts': 3},
-        'Maintained root-only receipt controls did not complete')
+    require(root_only == _loop_labels()['root_only'],
+            _loop_labels()['root_message'])
     return 6
 
 
@@ -647,29 +670,16 @@ def main():
         work = Path(directory)
         current_rows = check_current_generated_include_root(
             work/'current-generated', mojo, compiler, flags)
-        print('Current generated include-root theorems:', current_rows, flush=True)
+        print(_loop_labels()['theorems'], current_rows, flush=True)
         require_runtime_alarm()
         run(['sh', str(ROOT / 'tools/tool.sh'), mojo,
              'check_coverage_loop_fixture', '--mojo', mojo])
-        results = {
-            'entry-probe-mutation': 'rejected contradictory actual native probe',
-            'shadowed-range': 'native empty custom iterable; both obligations retained; T remains missing',
-            'native-alias-drift': 'rejected original/staged mismatch',
-            'generation-byte-correspondence': 'native LF, CRLF, CR and UTF-8 pairs verified',
-            'production-wrapper': (
-                'actual sealed raw capture and full original-manifest report; '
-                'prebuilt executables retain 5s; raw main retains alarm(5); '
-                'exact stdout and reduced evidence parity'),
-            'test_production_hang': {'status': 142, 'success_receipt': False},
-            'test_production_compile_error': {'success_receipt': False},
-            'production-deadline': {'status': 124, 'success_receipt': False},
-            'interrupted-generation': 'old origin index invalidated before failing writes',
-        }
+        results = _loop_labels()['results']
         if args.output:
             args.output.mkdir(parents=True, exist_ok=True)
             (args.output / 'native-source.mojo').write_text(SOURCE)
             (args.output / 'qualification.json').write_text(json.dumps(results, indent=2) + '\n')
-        print('PASS: unchanged native loop streams; constant reachable outcomes; dynamic-empty negative; raw/reduced report parity; actual native entry-probe mutation rejected; shadowed range stays unknown')
+        print(_loop_labels()['pass_line'])
 
 
 if __name__ == '__main__':

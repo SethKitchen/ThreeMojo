@@ -1,0 +1,50 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md
+
+"""The coverage-loop qualification labels stay reviewed."""
+
+from std.testing import TestSuite, assert_equal, assert_false, assert_true
+
+from tools._coverage_loop_labels import coverage_loop_labels
+from tools._python_json import PyJson
+
+
+def test_coverage_loop_qualification_labels_stay_reviewed() raises:
+    """The receipt counts, the pass line, and the result order stay reviewed."""
+    var doc = PyJson.parse(coverage_loop_labels())
+    var dependencies = doc.at(doc.root, "dependencies")
+    assert_equal(doc.length(dependencies), 3)
+    assert_equal(doc.text(doc.item(dependencies, 0)), "core/__init__.mojo")
+    assert_equal(doc.text(doc.item(dependencies, 1)), "core/search.mojo")
+    assert_equal(doc.text(doc.item(dependencies, 2)), "core/binary.mojo")
+    var owner = doc.at(doc.root, "owner")
+    assert_equal(doc.text(doc.at(owner, "fresh_receipts")), "3")
+    assert_equal(doc.text(doc.at(owner, "counted_receipts")), "2")
+    assert_true(doc.flag(doc.at(owner, "conditioned_authority_refusal")))
+    var completed = doc.at(doc.at(doc.root, "root_only"), "completed")
+    assert_equal(doc.length(completed), 3)
+    assert_equal(
+        doc.text(doc.item(completed, 0)), "root-only-seed-and-shared-positive"
+    )
+    var results = doc.at(doc.root, "results")
+    assert_equal(doc.key(results, 0), "entry-probe-mutation")
+    assert_equal(doc.key(results, 8), "interrupted-generation")
+    var hang = doc.at(results, "test_production_hang")
+    assert_equal(doc.text(doc.at(hang, "status")), "142")
+    assert_false(doc.flag(doc.at(hang, "success_receipt")))
+    assert_equal(
+        doc.text(doc.at(doc.root, "pass_line")),
+        (
+            "PASS: unchanged native loop streams; constant reachable"
+            " outcomes; dynamic-empty negative; raw/reduced report parity;"
+            " actual native entry-probe mutation rejected; shadowed range"
+            " stays unknown"
+        ),
+    )
+
+
+def main() raises:
+    """Run the coverage-loop label tests."""
+    TestSuite.discover_tests[__functions_in_module()]().run()
