@@ -447,11 +447,12 @@ def _dependency_choice(token, expected, path):
 def verify_dependency(path, text, expected):
     # A fixed whole-module fingerprint admits only equivalent stored words.
     # Historical pins remain unchanged; other dependencies retain exact tokens.
+    pins = _dependency_pins()
     choice = _dependency_choice(ideal_projection.token_sha256(text), expected, path)
-    if choice == 'trig':
-        _gate_words(text, 'trig', path)
-    elif choice == 'geometry':
-        _gate_words(text, 'geometry', path)
+    if choice == pins['trig_choice']:
+        _gate_words(text, pins['trig_choice'], path)
+    elif choice == pins['geometry_choice']:
+        _gate_words(text, pins['geometry_choice'], path)
 
 
 def verify(root, *, _operation=None):

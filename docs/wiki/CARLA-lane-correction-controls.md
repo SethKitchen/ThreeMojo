@@ -120,6 +120,8 @@ It keeps the fourteen extra cleanup inputs.
 
 It keeps the trig and geometry dependency paths and tokens.
 
+It keeps the trig and geometry choice names.
+
 It keeps the five premise declarations and the junction path.
 
 It keeps the winner-sign record and the runtime pin path.

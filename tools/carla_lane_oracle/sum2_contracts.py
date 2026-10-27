@@ -248,6 +248,6 @@ def verify(root, *, _operation=None):
     projection = verify_projection(
         pins['ideal_projection']['legacy_normalized_source'],
         selected_block(
-            texts['curve_bounds'], 'def _spiral_expression[', 'def _sample_index('),
+            texts[helpers['bounds']], plan['spiral_begin'], plan['spiral_end']),
         stored_half_tail(interval))
     return _sum2_result(projection, guard_result)

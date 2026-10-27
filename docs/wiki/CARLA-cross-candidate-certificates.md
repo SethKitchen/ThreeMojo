@@ -180,6 +180,8 @@ It keeps the four Sum2 module names and the five caller comparisons.
 
 It keeps the roundoff predecessor and the stored-half name.
 
+It keeps the ideal spiral block markers.
+
 It returns the Sum2 result counts after those caller checks.
 
 One comparison refuses a changed caller graph.

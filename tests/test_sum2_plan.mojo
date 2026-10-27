@@ -66,6 +66,10 @@ def test_sum2_modules_and_caller_comparisons_stay_reviewed() raises:
     assert_equal(doc.text(doc.at(doc.root, "stored_half")), "_stored_half")
     assert_equal(doc.text(doc.at(doc.root, "half_key")), "bounds")
     assert_equal(doc.text(doc.at(doc.root, "interval_key")), "interval")
+    assert_equal(
+        doc.text(doc.at(doc.root, "spiral_begin")), "def _spiral_expression["
+    )
+    assert_equal(doc.text(doc.at(doc.root, "spiral_end")), "def _sample_index(")
 
 
 def main() raises:

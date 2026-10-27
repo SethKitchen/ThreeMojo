@@ -20,5 +20,6 @@ def cleanup_dependency_pins() -> String:
         '{"trig_path":"extensions/carla/curve_trig.mojo",'
         + '"trig_token":"523d5700201b957152eaa79ae6cce9ca8cb9a2a0098d5b105584667360a6de7f",'
         + '"geometry_path":"extensions/carla/geometry.mojo",'
-        + '"geometry_token":"a1979bd37d0ea725f452e0a0a269c7aaef3cda485b291e8fe79b49b35850adcb"}'
+        + '"geometry_token":"a1979bd37d0ea725f452e0a0a269c7aaef3cda485b291e8fe79b49b35850adcb",'
+        + '"trig_choice":"trig","geometry_choice":"geometry"}'
     )
