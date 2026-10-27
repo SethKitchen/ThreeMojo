@@ -239,7 +239,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Frozen ARC producer record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record, the pin digests, the successor token, and the runtime placements [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Coverage-invariant record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the pin digests, and the ordered pin pair [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Coverage-invariant record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the pin digests, the ordered pin pair, and the pin placements [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Support and dispatch record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch record, its pin digests, its reference tokens, and the predecessor edge [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 

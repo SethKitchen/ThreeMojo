@@ -128,6 +128,52 @@ def _gate_pair(names):
         raise ValueError(message)
 
 
+def _gate_places(rows):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='invariant-places-') as directory:
+        folder = Path(directory)
+        (folder / 'labels.json').write_text(json.dumps(rows))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_invariant_gate',
+             '--places', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
+def _apply_transitions(pins, transitions):
+    rows = []
+    seen = set()
+    for change in transitions:
+        pointer = tuple(change['pointer'])
+        duplicate = pointer in seen
+        actual = ''
+        if not duplicate:
+            ref = pins
+            for part in pointer[:-1]:
+                ref = ref[part]
+            actual = ref[pointer[-1]]
+            seen.add(pointer)
+        rows.append({'duplicate': duplicate, 'actual': actual,
+                     'expected': change['after']})
+    _gate_places(rows)
+    for change in transitions:
+        pointer = tuple(change['pointer'])
+        ref = pins
+        for part in pointer[:-1]:
+            ref = ref[part]
+        ref[pointer[-1]] = change['before']
+
+
 def predecessor_pins(root, filename):
     """Verify active bytes, reverse every admitted edit, verify historical bytes."""
     filename = str(filename).split('/')[-1]
@@ -139,16 +185,7 @@ def predecessor_pins(root, filename):
     payload = followup.predecessor_pins(root, filename)
     _gate_digest(payload, record['after_sha256'], 'after', filename)
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
-    seen = set()
-    for change in record['transitions']:
-        pointer = tuple(change['pointer'])
-        require(pointer not in seen, 'duplicate pin placement')
-        seen.add(pointer)
-        ref = pins
-        for part in pointer[:-1]:
-            ref = ref[part]
-        require(ref[pointer[-1]] == change['after'], 'active pin placement mismatch')
-        ref[pointer[-1]] = change['before']
+    _apply_transitions(pins, record['transitions'])
     original = (json.dumps(pins, indent=2)+'\n').encode()
     _gate_digest(original, record['before_sha256'], 'before', filename)
     return original
@@ -201,16 +238,7 @@ def _verify_owned(root, *, _operation):
 def _pin_predecessor(payload, record, filename):
     _gate_digest(payload, record['after_sha256'], 'after', filename)
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
-    seen = set()
-    for change in record['transitions']:
-        pointer = tuple(change['pointer'])
-        require(pointer not in seen, 'duplicate pin placement')
-        seen.add(pointer)
-        ref = pins
-        for part in pointer[:-1]:
-            ref = ref[part]
-        require(ref[pointer[-1]] == change['after'], 'active pin placement mismatch')
-        ref[pointer[-1]] = change['before']
+    _apply_transitions(pins, record['transitions'])
     original = (json.dumps(pins, indent=2)+'\n').encode()
     _gate_digest(original, record['before_sha256'], 'before', filename)
     return original

@@ -12,6 +12,7 @@ from std.testing import TestSuite, assert_raises
 from tools.carla_invariant_gate import (
     invariant_digest,
     invariant_pair,
+    invariant_places,
     invariant_record,
 )
 
@@ -63,6 +64,20 @@ def test_a_reordered_pin_pair_is_refused() raises:
         contains="coverage invariant successor: wrong fixed ordered pin pair"
     ):
         invariant_pair(directory)
+
+
+def test_a_repeated_pin_placement_is_refused() raises:
+    """A repeated pointer fails closed before later values are checked."""
+    var directory = "/tmp/invariant-places-test"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/labels.json").write_text(
+        '[{"duplicate":false,"actual":"aa","expected":"aa"},'
+        + '{"duplicate":true,"actual":"","expected":"bb"}]'
+    )
+    with assert_raises(
+        contains="coverage invariant successor: duplicate pin placement"
+    ):
+        invariant_places(directory)
 
 
 def main() raises:

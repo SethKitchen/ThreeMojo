@@ -8,6 +8,7 @@
     carla_invariant_gate --migration PATH [--prior PATH] [--components DIR]
     carla_invariant_gate --bytes PATH --sha HEX --kind after|before --label TEXT
     carla_invariant_gate --pair DIR
+    carla_invariant_gate --places DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -18,7 +19,15 @@ A prior without a component directory checks only that frozen digest.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PY_STR, PyJson
+from tools._python_json import (
+    MISSING,
+    PY_BOOL,
+    PY_DICT,
+    PY_INT,
+    PY_LIST,
+    PY_STR,
+    PyJson,
+)
 from tools._sha256 import sha256_hex
 
 
@@ -230,13 +239,37 @@ def invariant_pair(directory: String) raises:
         _fail("wrong fixed ordered pin pair")
 
 
+def invariant_places(directory: String) raises:
+    """Require each pin placement to be unique and current.
+
+    Args:
+        directory: A directory whose `labels.json` lists the placements in order.
+
+    Raises:
+        Error: A placement is repeated or its current value changed.
+    """
+    var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("active pin placement mismatch")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var row = doc.item(doc.root, index)
+        var duplicate = doc.at(row, "duplicate")
+        if doc.kind(duplicate) == PY_BOOL and doc.flag(duplicate):
+            _fail("duplicate pin placement")
+        if doc.text(doc.at(row, "actual")) != doc.text(doc.at(row, "expected")):
+            _fail("active pin placement mismatch")
+        index += 1
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_invariant_gate --migration PATH [--prior PATH]"
             " [--components DIR] | --bytes PATH --sha HEX --kind after|before"
-            " --label TEXT | --pair DIR"
+            " --label TEXT | --pair DIR | --places DIR"
         ),
         file=stderr,
     )
@@ -257,6 +290,7 @@ def main() raises:
     var kind = String("")
     var label = String("")
     var pair = String("")
+    var places = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -270,6 +304,7 @@ def main() raises:
             or word == "--kind"
             or word == "--label"
             or word == "--pair"
+            or word == "--places"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -288,8 +323,10 @@ def main() raises:
                 kind = value
             elif word == "--label":
                 label = value
-            else:
+            elif word == "--pair":
                 pair = value
+            else:
+                places = value
             index += 2
             continue
         _usage()
@@ -299,6 +336,8 @@ def main() raises:
     if payload.byte_length() > 0:
         modes += 1
     if pair.byte_length() > 0:
+        modes += 1
+    if places.byte_length() > 0:
         modes += 1
     if modes != 1:
         _usage()
@@ -313,6 +352,9 @@ def main() raises:
     ):
         _usage()
     try:
+        if places.byte_length() > 0:
+            invariant_places(places)
+            return
         if pair.byte_length() > 0:
             invariant_pair(pair)
             return
