@@ -322,6 +322,29 @@ def hex_words(words):
     return json.loads(result.stdout)
 
 
+def require_moment_pins(pins, spec):
+    """Require the moment pin document to match `spec`."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({'pins': pins, 'spec': spec}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-pins-') as directory:
+        path = Path(directory) / 'pins.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_pins',
+             str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def require_stored_words(words, expected, message):
     """Require each word to match its pinned ``0x`` spelling."""
     import os

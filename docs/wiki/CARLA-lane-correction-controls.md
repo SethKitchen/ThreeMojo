@@ -142,6 +142,8 @@ It rounds one exact fraction to binary64.
 
 It spells each stored word as `0x` and 16 uppercase digits.
 
+It checks the moment pin sets, paths, and dependency closure.
+
 It writes the canonical stored-moment table source.
 
 It returns one normalized source block between two markers.

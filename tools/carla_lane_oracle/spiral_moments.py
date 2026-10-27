@@ -91,8 +91,6 @@ DEPENDENCIES = {
     'additional_groups': ['canonical_accumulation'],
     'guard_pin_file': str(sum2_guard_contracts.PINS),
 }
-PIN_KEYS = {'schema', 'scope', 'arrays', 'scalars', 'blocks', 'rounded_node_sums',
-            'ideal_projection', 'routing', 'dependencies'}
 
 
 class CheckError(ValueError):
@@ -271,25 +269,33 @@ def parse_array(text, name, size):
     return _rounded_words(literals)
 
 
+def _require_moment_pins(pins):
+    spec = {
+        'arrays': {name: {'path': path, 'size': size}
+                   for name, (path, size) in ARRAY_SPECS.items()},
+        'scalars': {name: 1 for name in SCALAR_NAMES},
+        'scalar_path': 'extensions/carla/curve_trig.mojo',
+        'block_paths': BLOCK_PATHS,
+        'boundaries': {name: {'begin': begin, 'end': end}
+                       for name, (begin, end) in BLOCK_BOUNDARIES.items()},
+        'routing_paths': ROUTING_PATHS,
+        'dependencies': DEPENDENCIES,
+    }
+    try:
+        ideal_projection.require_moment_pins(pins, spec)
+    except ValueError as error:
+        raise CheckError(str(error)) from error
+
+
 def verify_inputs(root):
     pins = json.loads(_typed_source.historical_text(root, root / PINS, (root / PINS).read_text(encoding='utf-8')),
                       object_pairs_hook=source_contracts.unique_keys)
-    require(set(pins) == PIN_KEYS, 'wrong top-level pin set')
-    require(type(pins['schema']) is int and pins['schema'] == 3, 'unsupported pin schema')
-    require(set(pins['arrays']) == set(ARRAY_SPECS), 'wrong constant-array pin set')
-    require(set(pins['scalars']) == SCALAR_NAMES, 'wrong scalar pin set')
-    require(set(pins['blocks']) == set(BLOCK_PATHS), 'wrong operation-graph pin set')
-    require(set(pins['routing']) == set(ROUTING_PATHS), 'wrong routing pin set')
-    require(pins['dependencies'] == DEPENDENCIES, 'wrong dependency closure pin')
+    _require_moment_pins(pins)
     constants = {}
     stored_words = {}
     flat_words = []
     flat_names = []
     for name, record in pins['arrays'].items():
-        require(set(record) == {'path', 'words'}, 'wrong array pin keys: ' + name)
-        path, size = ARRAY_SPECS[name]
-        require(record['path'] == path and len(record['words']) == size,
-                'wrong array pin path/shape: ' + name)
         words = parse_array(_typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8')),
                             name, len(record['words']))
         _require_stored_words(words, record['words'],
@@ -312,9 +318,6 @@ def verify_inputs(root):
     scalar_literals = []
     scalar_records = []
     for name, record in pins['scalars'].items():
-        require(set(record) == {'path', 'word'}, 'wrong scalar pin keys: ' + name)
-        require(record['path'] == 'extensions/carla/curve_trig.mojo',
-                'wrong scalar pin path: ' + name)
         text = _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))
         try:
             literal = ideal_projection.scalar_literal(text, name)
@@ -331,11 +334,6 @@ def verify_inputs(root):
     blocks = {}
     block_items = []
     for name, record in pins['blocks'].items():
-        require(set(record) == {'path', 'begin', 'end', 'normalized_source', 'sha256'},
-                'wrong operation pin keys: ' + name)
-        require((record['begin'], record['end']) == BLOCK_BOUNDARIES[name],
-                'wrong source-block boundary pin: ' + name)
-        require(record['path'] == BLOCK_PATHS[name], 'wrong operation pin path: ' + name)
         block_items.append((name, record))
     for name, record in block_items:
         try:
@@ -347,9 +345,6 @@ def verify_inputs(root):
             raise CheckError(str(error)) from error
     routing_items = []
     for name, record in pins['routing'].items():
-        require(set(record) == {'path', 'normalized_tokens', 'sha256'},
-                'wrong routing pin keys: ' + name)
-        require(record['path'] == ROUTING_PATHS[name], 'wrong routing pin path: ' + name)
         routing_items.append((name, record))
     for name, record in routing_items:
         expected = record['normalized_tokens']
@@ -382,11 +377,6 @@ def verify_inputs(root):
     except ValueError as error:
         raise CheckError('stored-half dependency closure: ' + str(error)) from error
     projection = pins['ideal_projection']
-    require(set(projection) == {'legacy_normalized_source', 'legacy_sha256',
-                               'helper_projections', 'rate_half_commutations',
-                               'projected_ast_sha256', 'sum2_auxiliary_declarations',
-                               'sum2_term_definitions', 'sum2_auxiliary_updates',
-                               'sum2_error_writes', 'sum2_environment_guards'}, 'wrong ideal-projection pin set')
     require(projection['legacy_sha256'] == ideal_projection.LEGACY_SHA256,
             'historical ideal pin digest changed')
     interval = _typed_source.historical_text(root, root / DEPENDENCIES['paths'][0], (root / DEPENDENCIES['paths'][0]).read_text(encoding='utf-8'))
