@@ -2771,26 +2771,51 @@ def verify(path, root, build, compiler, flags, **settings):
     return saved
 
 
+_GATED_MASK = None
+
+
 def masked_manifest(raw, envelope):
-    """Preserve all original entries except the explicit outcome masks."""
-    receipt = envelope['receipt']
-    if sha256(raw) != receipt['manifest_sha256']:
-        raise ValueError('Loop-proof manifest binding mismatch')
-    manifest_records(raw)
-    masks = {(proof['module'], str(proof['line'])): proof for proof in receipt['proofs']}
-    rows = ['P ' + SCHEMA + ' ' + envelope['sha256']]
-    used = set()
-    for line in raw.decode('utf-8').splitlines():
-        fields = line.split()
-        key = tuple(fields[1:3])
-        if fields and fields[0] == 'B' and key in masks:
-            proof = masks[key]
-            line = ' '.join(['R', *key, proof['required'], proof['kind'], str(proof['cardinality'])])
-            used.add(key)
-        rows.append(line)
-    if used != set(masks):
-        raise ValueError('Loop proof does not identify one original branch')
-    return ('\n'.join(rows) + '\n').encode('utf-8')
+    """Preserve all original entries except the explicit outcome masks.
+
+    The same manifest and envelope are not masked again. A changed input
+    is masked again. A failed mask is not kept.
+
+    Args:
+        raw: The original manifest bytes.
+        envelope: The receipt envelope.
+
+    Returns:
+        The masked manifest bytes.
+
+    Raises:
+        ValueError: The manifest or a proof does not match.
+    """
+    global _GATED_MASK
+    key = (raw, canonical(envelope))
+    cached = _GATED_MASK
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[1]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='coverage-mask-') as directory:
+        folder = Path(directory)
+        manifest = folder / 'manifest.txt'
+        payload = folder / 'envelope.json'
+        manifest.write_bytes(raw)
+        payload.write_text(json.dumps(envelope), encoding='utf-8')
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'coverage_mask',
+             str(manifest), str(payload)],
+            capture_output=True)
+    if result.returncode != 0:
+        errors = [line.strip() for line in result.stderr.splitlines()
+                  if line.strip() and b'Crashpad' not in line]
+        message = (errors[-1] if errors else result.stdout).decode()
+        raise ValueError(message)
+    _GATED_MASK = (key, result.stdout)
+    return result.stdout
 
 
 def capture_receipt_path(capture):
