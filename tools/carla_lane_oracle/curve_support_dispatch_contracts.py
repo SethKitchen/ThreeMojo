@@ -13,11 +13,6 @@ else:
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 
-if __package__:
-    from . import source_contracts as source
-else:
-    import source_contracts as source
-
 
 _MIGRATION_RECORDS = None
 
@@ -253,7 +248,7 @@ def read_record(root):
     if _GATED_DISPATCH != payload:
         _gate(payload)
         _GATED_DISPATCH = payload
-    return json.loads(payload, object_pairs_hook=source.unique_keys)
+    return json.loads(payload)
 
 
 

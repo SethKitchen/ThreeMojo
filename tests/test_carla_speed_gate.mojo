@@ -5,6 +5,7 @@
 
 """A changed speed-parser record fails the gate."""
 
+from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools.carla_speed_gate import speed_parser
@@ -17,6 +18,18 @@ def test_a_changed_record_is_refused() raises:
         contains="reviewed speed parser successor: unreviewed exact edge"
     ):
         speed_parser(empty, empty, "", empty, empty)
+
+
+def test_the_reviewed_record_passes_the_digest_before_lineage() raises:
+    """The reviewed record passes the digest and the repeated-key check."""
+    var migration = Path(
+        "tools/carla_lane_oracle/speed-parser-successor.json"
+    ).read_bytes()
+    var empty = String("").as_bytes()
+    with assert_raises(
+        contains="reviewed speed parser successor: prior accepted lineage changed"
+    ):
+        speed_parser(migration, empty, "", empty, empty)
 
 
 def main() raises:

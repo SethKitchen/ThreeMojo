@@ -15,6 +15,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
+from tools._duplicate_pin_keys import reject_duplicate_pin_keys
 from tools._migration_records import migration_records
 from tools._python_json import PY_INT, PyJson
 from tools._record_paths import record_paths
@@ -78,6 +79,7 @@ def speed_parser(
     """
     if sha256_hex(migration) != _MIGRATION_SHA256:
         _fail("unreviewed exact edge")
+    reject_duplicate_pin_keys(migration)
     var doc = PyJson.parse(String(from_utf8_lossy=migration))
     var schema = doc.at(doc.root, "schema")
     if (

@@ -96,6 +96,8 @@ It checks the successor record, then returns the earlier grouped module in one c
 
 `tools/carla_speed_gate.mojo` checks the speed-parser record, its module token, and its correctness tests.
 
+It checks that record digest before it checks a repeated key.
+
 It keeps the speed-limit module and its two correctness tests.
 
 It reads those paths before the migration record in one check.
@@ -334,6 +336,8 @@ A changed text is checked again.
 A failed check is not kept.
 
 `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch record, the predecessor edge, and the operation graphs.
+
+It checks that record digest before it checks a repeated key.
 
 It checks every historical dispatch pin in one check.
 

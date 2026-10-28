@@ -32,6 +32,19 @@ def test_a_changed_record_is_refused() raises:
         contains="curve support/dispatch contract: unreviewed migration record"
     ):
         dispatch_record(String("").as_bytes())
+    with assert_raises(
+        contains="curve support/dispatch contract: unreviewed migration record"
+    ):
+        dispatch_record(String('{"a":1,"a":2}').as_bytes())
+
+
+def test_the_reviewed_dispatch_record_passes() raises:
+    """The reviewed record passes the digest and the repeated-key check."""
+    dispatch_record(
+        Path(
+            "tools/carla_lane_oracle/curve-support-dispatch-migration.json"
+        ).read_bytes()
+    )
 
 
 def test_listed_pins_keep_their_order() raises:

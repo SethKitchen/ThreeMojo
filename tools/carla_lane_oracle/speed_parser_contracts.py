@@ -9,10 +9,6 @@ else:
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 from pathlib import Path
-if __package__:
-    from . import source_contracts as source
-else:
-    import source_contracts as source
 
 _MIGRATION_RECORDS = None
 
@@ -249,4 +245,4 @@ def verify(root, *, _operation=None):
     lexical = _typed_source.historical_bytes(root, root/TESTS[0], (root/TESTS[0]).read_bytes(), _operation=_operation)
     xml = _typed_source.historical_bytes(root, root/TESTS[1], (root/TESTS[1]).read_bytes(), _operation=_operation)
     _gate(raw, accepted, module, lexical, xml)
-    return json.loads(raw, object_pairs_hook=source.unique_keys)
+    return json.loads(raw)

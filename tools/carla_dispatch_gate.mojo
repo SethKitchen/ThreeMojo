@@ -27,6 +27,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import significant_graph_pairs, token_sha256
+from tools._duplicate_pin_keys import reject_duplicate_pin_keys
 from tools.carla_grouped_gate import grouped_table_identity
 from tools._migration_records import migration_records
 from tools._lane_declarations import declaration_token_checks
@@ -103,6 +104,7 @@ def dispatch_record(migration: Span[UInt8, _]) raises:
     """
     if sha256_hex(migration) != _MIGRATION_SHA256:
         _fail("unreviewed migration record")
+    reject_duplicate_pin_keys(migration)
     var doc = PyJson.parse(String(from_utf8_lossy=migration))
     var schema = doc.get(doc.root, "schema")
     var one = PyJson.parse("1")
