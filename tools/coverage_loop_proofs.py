@@ -2700,15 +2700,47 @@ def build_receipt(root, build, compiler, flags, *, mojo=None, capture_cache=None
             _operation.close()
 
 
+_GATED_RECEIPT_KEYS = None
+
+
+def _refuse_duplicate_receipt_keys(text):
+    """Refuse a repeated receipt key before the document is parsed.
+
+    The same text is not checked again. A changed text is checked again.
+    A failed check is not kept.
+    """
+    global _GATED_RECEIPT_KEYS
+    if _GATED_RECEIPT_KEYS == text:
+        return
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[1]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='receipt-keys-') as directory:
+        target = Path(directory) / 'receipt.json'
+        target.write_text(text, encoding='utf-8')
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'receipt_keys',
+             str(target)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = 'coverage_io: '
+        if message.startswith(prefix):
+            message = message[len(prefix):]
+        if message.startswith('Duplicate receipt key:'):
+            raise ValueError(message)
+        return
+    _GATED_RECEIPT_KEYS = text
+
+
 def _load_json(path):
-    def pairs(items):
-        result = {}
-        for key, value in items:
-            if key in result:
-                raise ValueError('Duplicate receipt key: ' + key)
-            result[key] = value
-        return result
-    return json.loads(Path(path).read_text(encoding='utf-8'), object_pairs_hook=pairs)
+    text = Path(path).read_text(encoding='utf-8')
+    _refuse_duplicate_receipt_keys(text)
+    return json.loads(text)
 
 
 def read_receipt(path):

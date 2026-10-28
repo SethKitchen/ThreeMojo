@@ -10,7 +10,7 @@ never replaces a production observation or grants a source admission.
 import hashlib
 import json
 
-EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c542b70755f8db3539c89216b6656db379d2d6c54',
+EDGES = {'coverage_loop_proofs.py': {'after_sha256': '8fcf2f3673be5532237250903e8cc9448eec59c314df95973afec3b2298e9941',
                              'before_sha256': '21e3a9637a69c6abbf27e9c8dd193a1addf7ed8537dd8f2734c35ff1a468304d',
                              'edits': ((45,
                                         49,
@@ -786,7 +786,67 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'ec5d25f4bfb5bddce07a1b6c54
                                          'as cleanup\n',
                                          '    _plain_seed = '
                                          'canonical(_receipt_seed) if cleanup '
-                                         'is None else None\n')))},
+                                         'is None else None\n')),
+(2702,
+ 2745,
+ (
+  'def _load_json(path):\n',
+  '    def pairs(items):\n',
+  '        result = {}\n',
+  '        for key, value in items:\n',
+  '            if key in result:\n',
+  "                raise ValueError('Duplicate receipt key: ' + key)\n",
+  '            result[key] = value\n',
+  '        return result\n',
+  "    return json.loads(Path(path).read_text(encoding='utf-8'), object_pairs_hook=pairs)\n",
+  '\n',
+  '\n',
+ ),
+ (
+  '_GATED_RECEIPT_KEYS = None\n',
+  '\n',
+  '\n',
+  'def _refuse_duplicate_receipt_keys(text):\n',
+  '    """Refuse a repeated receipt key before the document is parsed.\n',
+  '\n',
+  '    The same text is not checked again. A changed text is checked again.\n',
+  '    A failed check is not kept.\n',
+  '    """\n',
+  '    global _GATED_RECEIPT_KEYS\n',
+  '    if _GATED_RECEIPT_KEYS == text:\n',
+  '        return\n',
+  '    import os\n',
+  '    import subprocess\n',
+  '    import tempfile\n',
+  '    root = Path(__file__).resolve().parents[1]\n',
+  "    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))\n",
+  "    with tempfile.TemporaryDirectory(prefix='receipt-keys-') as directory:\n",
+  "        target = Path(directory) / 'receipt.json'\n",
+  "        target.write_text(text, encoding='utf-8')\n",
+  '        result = subprocess.run(\n',
+  "            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'receipt_keys',\n",
+  "             str(target)],\n",
+  '            capture_output=True, text=True)\n',
+  '    if result.returncode != 0:\n',
+  '        lines = [line.strip() for line in result.stderr.splitlines()\n',
+  "                 if line.strip() and 'Crashpad' not in line]\n",
+  '        message = lines[-1] if lines else result.stdout.strip()\n',
+  "        prefix = 'coverage_io: '\n",
+  '        if message.startswith(prefix):\n',
+  '            message = message[len(prefix):]\n',
+  "        if message.startswith('Duplicate receipt key:'):\n",
+  '            raise ValueError(message)\n',
+  '        return\n',
+  '    _GATED_RECEIPT_KEYS = text\n',
+  '\n',
+  '\n',
+  'def _load_json(path):\n',
+  "    text = Path(path).read_text(encoding='utf-8')\n",
+  '    _refuse_duplicate_receipt_keys(text)\n',
+  '    return json.loads(text)\n',
+  '\n',
+  '\n',
+ )))},
  'full_audit_cleanup_contracts.py': {'after_sha256': '88618aa8704b9557b8b143bf20e8b8edb13592bfede9281ee8eb7b84be942583',
                                      'before_sha256': 'f62dbe69ddd5d15bd79aa4b0a8237d9475fe1a00cea06c2f7124c59af237c833',
                                      'edits': ((11,
@@ -1949,7 +2009,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != 'cb8ae3b3dba3cab00c176b84aa87e857d96de8596080603a8b97f4ac413b49ef':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != 'fb146040482e538b55c3e383a7ee498849b6ac9d0af28a35e8f2e0e638380a39':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)
