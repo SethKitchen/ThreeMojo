@@ -239,6 +239,31 @@ def _moment_route_batch(mode, payload):
     return result.stdout
 
 
+def _route_currents(loaded_routes):
+    """Return the live routing documents.
+
+    When one route is the ideal caller and the sampled closure is not
+    loaded, that closure is read after the routing documents.
+    """
+    caller = _moment_plan()['ideal_caller']
+    project = False
+    for name, _record, _source in loaded_routes:
+        if name == caller:
+            project = True
+    mode = '--currents'
+    if project and ideal_projection._SAMPLED_CLOSURE is None:
+        mode = '--currents-closure'
+    parsed = json.loads(_moment_route_batch(mode, [{
+        'name': name,
+        'source': source,
+    } for name, _record, source in loaded_routes]))
+    if mode == '--currents':
+        return parsed
+    if ideal_projection._SAMPLED_CLOSURE is None:
+        ideal_projection._SAMPLED_CLOSURE = parsed['closure']
+    return parsed['currents']
+
+
 _DERIVED_ROWS = None
 
 
@@ -831,10 +856,7 @@ def verify_inputs(root, *, _then_rows=False):
     for name, record in routing_items:
         loaded_routes.append((name, record, _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))))
     try:
-        currents = json.loads(_moment_route_batch('--currents', [{
-            'name': name,
-            'source': source,
-        } for name, record, source in loaded_routes]))
+        currents = _route_currents(loaded_routes)
     except ValueError as error:
         raise CheckError(str(error)) from error
     projected = None

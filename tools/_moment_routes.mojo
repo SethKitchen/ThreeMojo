@@ -12,6 +12,7 @@ each live routing document and compares that document with its pin.
 from tests._python_tokens import module_routing_json, require_text_digest
 from tools._moment_route import _routing_constants, moment_route_accept
 from tools._python_json import MISSING, PyJson
+from tools._sampled_closure import sampled_closure
 from tools._spiral_moment_try import try_only_refusal
 
 
@@ -70,6 +71,25 @@ def moment_route_currents(payload: String) raises -> String:
         index += 1
     out.root = result
     return out.dumps()
+
+
+def moment_currents_then_closure(payload: String) raises -> String:
+    """Return the live routing documents, then the sampled closure.
+
+    Args:
+        payload: A JSON list. Each item has `name` and `source`.
+
+    Returns:
+        JSON with `currents` and `closure`. `currents` is the routing
+        object. `closure` is the sampled reference names.
+
+    Raises:
+        Error: A source routing is unsupported. The routing documents
+            are built before the closure is read.
+    """
+    var currents = moment_route_currents(payload)
+    var closure = sampled_closure()
+    return '{"currents":' + currents + ',"closure":' + closure + "}"
 
 
 def moment_route_accepts(payload: String) raises:

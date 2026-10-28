@@ -482,6 +482,8 @@ It checks every stored-moment route digest before the source read.
 
 It compares every stored-moment route after that read.
 
+It reads the sampled closure after those live routing documents in one check.
+
 It checks the try-only refusal before the route pins in one check.
 
 It keeps every stored-moment operation block in one check.
