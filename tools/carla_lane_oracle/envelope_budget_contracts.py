@@ -6,10 +6,6 @@ else:
     import source_contracts as _typed_source
 
 from pathlib import Path
-if __package__:
-    from . import source_contracts
-else:
-    import source_contracts
 MODULE='extensions/carla/curve_bounds.mojo'
 EXPECTED='9bc62290a6bdeca43c4d695a0f0ce6592d69f49386d83ce7342b667c73680fce'
 
@@ -22,8 +18,11 @@ def verify_text(text, *, root=None, _operation=None):
         text = full_audit._observe_text(root, MODULE, text, _operation=_operation)
     actual_root = Path(root) if root is not None else Path(__file__).resolve().parents[2]
     text = _typed_source.historical_text(actual_root, MODULE, text, _operation=_operation)
-    checked = text
-    if source_contracts.token_sha256(text) != EXPECTED:
+    try:
+        _gate_admission(text, text, EXPECTED)
+    except ValueError as error:
+        if str(error) != 'Reviewed budget admission, routing or arithmetic changed':
+            raise
         if __package__:
             from . import full_audit_cleanup_contracts as full_audit
         else:
@@ -31,9 +30,9 @@ def verify_text(text, *, root=None, _operation=None):
         actual_root = Path(root) if root is not None else Path(__file__).resolve().parents[2]
         try:
             checked = full_audit.reviewed_text(actual_root, MODULE, text, _operation=_operation)
-        except (ValueError, OSError) as error:
-            raise ValueError('Reviewed budget admission, routing or arithmetic changed') from error
-    _gate_admission(checked, text, EXPECTED)
+        except (ValueError, OSError) as nested:
+            raise ValueError('Reviewed budget admission, routing or arithmetic changed') from nested
+        _gate_admission(checked, text, EXPECTED)
     return {'status':'PASS','source_token_sha256':EXPECTED,'intervening_counter_uses':0,'retained_capacity_and_debit':True}
 
 def verify(root, *, _operation=None):

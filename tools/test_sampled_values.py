@@ -2813,5 +2813,83 @@ class InvariantRecordGateTests(unittest.TestCase):
             invariant._GATED_INVARIANT = saved_gates
 
 
+class EnvelopeAdmissionTests(unittest.TestCase):
+    def test_a_token_failure_reads_the_reviewed_source(self):
+        from pathlib import Path
+        from unittest.mock import patch
+        from tools.carla_lane_oracle import envelope_budget_contracts as env
+        from tools.carla_lane_oracle import full_audit_cleanup_contracts as audit
+        token = 'Reviewed budget admission, routing or arithmetic changed'
+        calls = []
+
+        def admission(checked, source, digest):
+            calls.append((checked, source, digest))
+            if checked == 'live':
+                raise ValueError(token)
+
+        def reviewed(root, module, text, _operation=None):
+            self.assertEqual(text, 'live')
+            self.assertEqual(module, env.MODULE)
+            return 'reviewed'
+
+        with patch.object(
+            env._typed_source, 'historical_text',
+            lambda root, path, text, _operation=None: text,
+        ), patch.object(env, '_gate_admission', admission), patch.object(
+            audit, 'reviewed_text', reviewed,
+        ):
+            result = env.verify_text('live', root=Path('envelope-root'))
+        self.assertEqual(result['source_token_sha256'], env.EXPECTED)
+        self.assertEqual(
+            calls,
+            [('live', 'live', env.EXPECTED), ('reviewed', 'live', env.EXPECTED)],
+        )
+
+    def test_a_gap_failure_does_not_read_the_reviewed_source(self):
+        from pathlib import Path
+        from unittest.mock import patch
+        from tools.carla_lane_oracle import envelope_budget_contracts as env
+        from tools.carla_lane_oracle import full_audit_cleanup_contracts as audit
+
+        def admission(checked, source, digest):
+            raise ValueError('Intervening span can access budget parameters')
+
+        def reviewed(root, module, text, _operation=None):
+            raise AssertionError('reviewed source was read')
+
+        with patch.object(
+            env._typed_source, 'historical_text',
+            lambda root, path, text, _operation=None: text,
+        ), patch.object(env, '_gate_admission', admission), patch.object(
+            audit, 'reviewed_text', reviewed,
+        ):
+            with self.assertRaisesRegex(
+                ValueError, 'Intervening span can access budget parameters',
+            ):
+                env.verify_text('live', root=Path('envelope-root'))
+
+    def test_a_rejected_reviewed_source_keeps_the_token_message(self):
+        from pathlib import Path
+        from unittest.mock import patch
+        from tools.carla_lane_oracle import envelope_budget_contracts as env
+        from tools.carla_lane_oracle import full_audit_cleanup_contracts as audit
+        token = 'Reviewed budget admission, routing or arithmetic changed'
+
+        def admission(checked, source, digest):
+            raise ValueError(token)
+
+        def reviewed(root, module, text, _operation=None):
+            raise ValueError('not the reviewed text')
+
+        with patch.object(
+            env._typed_source, 'historical_text',
+            lambda root, path, text, _operation=None: text,
+        ), patch.object(env, '_gate_admission', admission), patch.object(
+            audit, 'reviewed_text', reviewed,
+        ):
+            with self.assertRaisesRegex(ValueError, token):
+                env.verify_text('live', root=Path('envelope-root'))
+
+
 if __name__ == '__main__':
     unittest.main()

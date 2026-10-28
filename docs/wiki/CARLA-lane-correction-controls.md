@@ -930,6 +930,8 @@ It selects that capture function from the module before the gap check and the su
 
 It checks the admission token before that gap in one check.
 
+A token failure reads the reviewed source before that gap check.
+
 It checks the predecessor record, then returns the earlier capture function in one check.
 
 `tools/carla_selection_record_gate.mojo` checks the selection predecessor record and the restored token.
