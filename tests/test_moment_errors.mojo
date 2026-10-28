@@ -79,6 +79,13 @@ def test_a_signed_zero_is_marked_before_rounding() raises:
     )
 
 
+def test_an_unsupported_literal_is_nearest_before_another_failure() raises:
+    """An unsupported literal is nearest, and it is not rounded first."""
+    assert_equal(
+        signed_classified_word('{"token":"nope","zero":false}'), "nearest"
+    )
+
+
 def test_an_unsigned_literal_is_still_rounded() raises:
     """A non-zero fraction still rounds `1.0` after the sign check."""
     assert_equal(

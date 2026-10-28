@@ -101,16 +101,28 @@ def signed_classified_word(payload: String) raises -> String:
 
     Returns:
         `signed` when the zero fraction keeps a negative token sign.
+        `nearest` when the literal is not a finite decimal word.
         Otherwise the unsigned decimal encoding of the rounded word.
 
     Raises:
-        Error: A field is absent, or the literal is not finite. The sign
-            is checked before the literal is rounded.
+        Error: A field is absent, or the literal fails for another
+            reason. The sign is checked before the literal is rounded.
     """
     var doc = PyJson.parse(payload)
     if signed_zero_word(payload) == "true":
         return "signed"
-    return classified_decimal_word(doc.text(doc.at(doc.root, "token")))
+    try:
+        return classified_decimal_word(doc.text(doc.at(doc.root, "token")))
+    except error:
+        var message = String(error)
+        var marker = String("spiral moment word: ")
+        var stripped = message
+        if message.startswith(marker):
+            var rest = message[byte = marker.byte_length() :]
+            stripped = String(rest)
+        if stripped == "unsupported decimal word":
+            return "nearest"
+        raise Error(stripped)
 
 
 def constant_error_text(payload: String) raises -> String:

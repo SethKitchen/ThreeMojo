@@ -274,6 +274,8 @@ It rounds one literal and classifies that word in one check.
 
 It checks a signed zero before that rounded word in one check.
 
+It classifies an unsupported literal as nearest in that same check.
+
 It rounds one plus each stored node before the moment rows.
 
 It reads the exact fraction of each stored binary64 word.

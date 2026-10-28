@@ -171,15 +171,11 @@ def decimal_word(token):
     try:
         result = ideal_projection.signed_classified_word(token, not value)
     except ValueError as error:
-        try:
-            result = _moment_error('--result', {'error': str(error)})
-        except ValueError as classified:
-            raise CheckError(str(classified)) from error
-        if result != 'nearest':
-            raise CheckError(result) from error
-        return nearest_even(value)
+        raise CheckError(str(error)) from error
     if result == 'signed':
         return SIGN
+    if result == 'nearest':
+        return nearest_even(value)
     return int(result)
 
 
