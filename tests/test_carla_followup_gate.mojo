@@ -7,11 +7,13 @@
 
 from std.os import makedirs
 from std.pathlib import Path
-from std.testing import TestSuite, assert_raises
+from std.testing import TestSuite, assert_equal, assert_raises
 
+from tools._sha256 import sha256_hex
 from tools.carla_followup_gate import (
     followup_digest,
     followup_pair,
+    followup_pin_predecessor,
     followup_places,
     followup_record,
     followup_tokens,
@@ -83,6 +85,49 @@ def test_a_repeated_pin_placement_is_refused() raises:
         contains="coverage followup successor: duplicate pin placement"
     ):
         followup_places(directory)
+
+
+def test_a_restored_followup_pin_matches_its_predecessor() raises:
+    """The historical value replaces the active value in one check."""
+    var payload = String('{"group":{"path":"new"}}')
+    var restored = "{\n  \"group\": {\n    \"path\": \"old\"\n  }\n}\n"
+    var request = (
+        '{"after":"'
+        + sha256_hex(payload.as_bytes())
+        + '","before":"'
+        + sha256_hex(restored.as_bytes())
+        + '","label":"runtime-source-pins.json","transitions":[{"pointer":'
+        + '["group","path"],"after":"new","before":"old"}]}'
+    )
+    assert_equal(followup_pin_predecessor(payload.as_bytes(), request), restored)
+
+
+def test_a_wrong_followup_digest_fails_before_a_repeated_key() raises:
+    """A repeated key is not reported when the pin digest is wrong."""
+    var payload = String('{"a":1,"a":2}')
+    var request = (
+        '{"after":"00","before":"00","label":"runtime-source-pins.json",'
+        + '"transitions":[]}'
+    )
+    with assert_raises(
+        contains=(
+            "coverage followup successor: unreviewed runtime pin successor:"
+            " runtime-source-pins.json"
+        )
+    ):
+        _ = followup_pin_predecessor(payload.as_bytes(), request)
+
+
+def test_a_repeated_followup_key_fails_before_placement() raises:
+    """A repeated key fails after the digest and before placement."""
+    var payload = String('{"a":1,"a":2}')
+    var request = (
+        '{"after":"'
+        + sha256_hex(payload.as_bytes())
+        + '","before":"00","label":"runtime-source-pins.json","transitions":[]}'
+    )
+    with assert_raises(contains="duplicate runtime source pin key: a"):
+        _ = followup_pin_predecessor(payload.as_bytes(), request)
 
 
 def main() raises:

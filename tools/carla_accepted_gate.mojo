@@ -28,8 +28,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
-from tools._carla_assets import dumps_indent
-from tools._duplicate_pin_keys import reject_duplicate_pin_keys
+from tools._pin_restore import restore_reviewed_pin
 from tools._python_json import (
     MISSING,
     PY_BOOL,
@@ -38,7 +37,6 @@ from tools._python_json import (
     PY_LIST,
     PY_STR,
     PyJson,
-    loads,
 )
 from tools._sha256 import sha256_hex
 
@@ -347,134 +345,6 @@ def accepted_places(directory: String) raises:
         index += 1
 
 
-def _joined_pointer(request: PyJson, pointer: Int) raises -> String:
-    """Join one pointer into a single lookup key.
-
-    Args:
-        request: The predecessor request.
-        pointer: The pointer list.
-
-    Returns:
-        The parts separated by newlines.
-
-    Raises:
-        Error: A pointer part cannot be read.
-    """
-    var key = String("")
-    var count = request.length(pointer)
-    var index = 0
-    while index < count:
-        if index > 0:
-            key += "\n"
-        key += request.text(request.item(pointer, index))
-        index += 1
-    return key
-
-
-def _pin_at(pins: PyJson, request: PyJson, pointer: Int) raises -> String:
-    """Return the string at one pin pointer.
-
-    Args:
-        pins: The active pin document.
-        request: The predecessor request.
-        pointer: The pointer list.
-
-    Returns:
-        The current string at that pointer.
-
-    Raises:
-        Error: A pointer key is absent.
-    """
-    var node = pins.root
-    var count = request.length(pointer)
-    var index = 0
-    while index < count:
-        node = pins.at(node, request.text(request.item(pointer, index)))
-        index += 1
-    return pins.text(node)
-
-
-def _require_pin_places(pins: PyJson, request: PyJson, transitions: Int) raises:
-    """Require each pin placement to be unique and current.
-
-    Args:
-        pins: The active pin document.
-        request: The predecessor request.
-        transitions: The transition list in `request`.
-
-    Raises:
-        Error: A placement is repeated, its current value changed, or a
-            pointer key is absent.
-    """
-    var seen = List[String]()
-    var duplicates = List[Bool]()
-    var actuals = List[String]()
-    var expecteds = List[String]()
-    var count = request.length(transitions)
-    var index = 0
-    while index < count:
-        var change = request.item(transitions, index)
-        var pointer = request.at(change, "pointer")
-        var key = _joined_pointer(request, pointer)
-        var duplicate = False
-        var seen_index = 0
-        while seen_index < len(seen):
-            if seen[seen_index] == key:
-                duplicate = True
-            seen_index += 1
-        var actual = String("")
-        if not duplicate:
-            actual = _pin_at(pins, request, pointer)
-            seen.append(key)
-        duplicates.append(duplicate)
-        actuals.append(actual)
-        expecteds.append(request.text(request.at(change, "after")))
-        index += 1
-    index = 0
-    while index < len(duplicates):
-        if duplicates[index]:
-            _fail("duplicate pin placement")
-        if actuals[index] != expecteds[index]:
-            _fail("active pin placement mismatch")
-        index += 1
-
-
-def _write_pin_transitions(
-    mut pins: PyJson, request: PyJson, transitions: Int
-) raises:
-    """Write each transition's historical value back into the pins.
-
-    Args:
-        pins: The active pin document.
-        request: The predecessor request.
-        transitions: The transition list in `request`.
-
-    Raises:
-        Error: A pointer is empty or a pointer key is absent.
-    """
-    var count = request.length(transitions)
-    var index = 0
-    while index < count:
-        var change = request.item(transitions, index)
-        var pointer = request.at(change, "pointer")
-        var parts = request.length(pointer)
-        if parts == 0:
-            raise Error("pin transition pointer is empty")
-        var parent = pins.root
-        var cursor = 0
-        while cursor < parts - 1:
-            parent = pins.at(
-                parent, request.text(request.item(pointer, cursor))
-            )
-            cursor += 1
-        pins.set(
-            parent,
-            request.text(request.item(pointer, parts - 1)),
-            pins.adopt(request, request.at(change, "before")),
-        )
-        index += 1
-
-
 def accepted_pin_predecessor(
     payload: Span[UInt8, _], request: String
 ) raises -> String:
@@ -494,21 +364,12 @@ def accepted_pin_predecessor(
             repeated key is refused before the pin is placed. The restored
             digest is checked after the placements.
     """
-    var spec = PyJson.parse(request)
-    var after = spec.text(spec.at(spec.root, "after"))
-    var label = spec.text(spec.at(spec.root, "label"))
-    if sha256_hex(payload) != after:
-        _fail("unreviewed runtime pin successor: " + label)
-    reject_duplicate_pin_keys(payload)
-    var pins = loads(payload)
-    var transitions = spec.at(spec.root, "transitions")
-    _require_pin_places(pins, spec, transitions)
-    _write_pin_transitions(pins, spec, transitions)
-    var predecessor = dumps_indent(pins, pins.root, 2) + "\n"
-    var before = spec.text(spec.at(spec.root, "before"))
-    if sha256_hex(predecessor.as_bytes()) != before:
-        _fail("historical pins failed reconstruction")
-    return predecessor
+    return restore_reviewed_pin(
+        payload,
+        request,
+        "accepted source successor: ",
+        "historical pins failed reconstruction",
+    )
 
 
 def _usage():

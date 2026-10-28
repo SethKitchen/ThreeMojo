@@ -186,12 +186,44 @@ def predecessor_pins(root, filename):
     filename = str(filename).split('/')[-1]
     record = read_record(root)['pin_files'][filename]
     payload = accepted.predecessor_pins(root, filename)
-    _gate_digest(payload, record['after_sha256'], 'after', filename)
-    pins = json.loads(payload, object_pairs_hook=source.unique_keys)
-    _apply_transitions(pins, record['transitions'])
-    payload = (json.dumps(pins,indent=2)+'\n').encode()
-    _gate_digest(payload, record['before_sha256'], 'before', filename)
-    return payload
+    return _restore_pin(payload, record, filename)
+
+def _restore_pin(payload, record, filename):
+    """Rebuild one coverage-followup pin predecessor.
+
+    The rebuild checks the pin digest, then a repeated key, then the
+    placements. The restored bytes are checked after that rebuild.
+    """
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    request = json.dumps({
+        'after': record['after_sha256'],
+        'before': record['before_sha256'],
+        'label': filename,
+        'transitions': record['transitions'],
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='followup-predecessor-') as directory:
+        folder = Path(directory)
+        (folder / 'payload').write_bytes(payload)
+        (folder / 'request.json').write_text(request)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_followup_gate',
+             '--predecessor', str(folder)],
+            capture_output=True)
+    if result.returncode != 0:
+        failed = [line.strip() for line in result.stderr.splitlines()
+                  if line.strip() and b'Crashpad' not in line]
+        message = (failed[-1] if failed else result.stdout).decode(
+            'utf-8', 'replace').strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 
 def _source_view(root, path, physical_text, *, _operation=None):
     """Keep supplied physical views only for the helper's named authority domain."""
@@ -270,12 +302,7 @@ def accepts_predecessor_source(root,path,expected, *, _operation=None):
 
 
 def _pin_predecessor(payload, record, filename):
-    _gate_digest(payload, record['after_sha256'], 'after', filename)
-    pins = json.loads(payload, object_pairs_hook=source.unique_keys)
-    _apply_transitions(pins, record['transitions'])
-    payload = (json.dumps(pins,indent=2)+'\n').encode()
-    _gate_digest(payload, record['before_sha256'], 'before', filename)
-    return payload
+    return _restore_pin(payload, record, filename)
 
 
 def predecessor_pin_pair(root):

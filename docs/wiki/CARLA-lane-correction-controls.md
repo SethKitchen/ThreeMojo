@@ -120,6 +120,14 @@ A failed speed check is not kept.
 
 `tools/carla_followup_gate.mojo` checks the coverage-followup record, the pin digests, the ordered pin pair, and the pin placements.
 
+It rebuilds one coverage-followup pin predecessor in one check.
+
+It checks that pin digest before it checks a repeated key.
+
+It refuses a repeated key before the pin is placed.
+
+It checks the restored pin bytes after the placements.
+
 `tools/carla_singleton_gate.mojo` checks the rounded LINE singleton record, the lane text token, the consumer graphs, and the selector path.
 
 It translates universal newlines before that lane text comparison.

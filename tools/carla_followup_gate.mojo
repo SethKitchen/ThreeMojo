@@ -10,9 +10,12 @@
     carla_followup_gate --tokens DIR
     carla_followup_gate --pair DIR
     carla_followup_gate --places DIR
+    carla_followup_gate --predecessor DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
+`--predecessor` reads `payload` and `request.json` from `DIR` and prints
+the earlier pin.
 An absent prior skips the prior digest and the component digests.
 A prior without a component directory checks only that prior digest.
 """
@@ -21,6 +24,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
+from tools._pin_restore import restore_reviewed_pin
 from tools._python_json import (
     MISSING,
     PY_BOOL,
@@ -290,6 +294,33 @@ def followup_places(directory: String) raises:
         index += 1
 
 
+def followup_pin_predecessor(
+    payload: Span[UInt8, _], request: String
+) raises -> String:
+    """Rebuild one coverage-followup pin predecessor.
+
+    Args:
+        payload: The active pin bytes.
+        request: JSON with `after`, `before`, `label`, and `transitions`.
+
+    Returns:
+        The predecessor as `json.dumps` writes it with `indent=2`, plus a
+        newline.
+
+    Raises:
+        Error: The digest, a repeated key, a placement, or the restored
+            bytes changed. The digest is checked before a repeated key. A
+            repeated key is refused before the pin is placed. The restored
+            digest is checked after the placements.
+    """
+    return restore_reviewed_pin(
+        payload,
+        request,
+        "coverage followup successor: ",
+        "historical pin reconstruction failed",
+    )
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -306,9 +337,28 @@ def _usage():
 def main() raises:
     """Check the coverage-followup record and print nothing on success.
 
+    `--predecessor` prints the earlier pin.
+
     Raises:
         Error: The command is invalid.
     """
+    var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--predecessor":
+        try:
+            var folder = String(arguments[2])
+            if not folder.endswith("/"):
+                folder += "/"
+            print(
+                followup_pin_predecessor(
+                    Path(folder + "payload").read_bytes(),
+                    Path(folder + "request.json").read_text(),
+                ),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var migration = String("")
     var prior = String("")
     var components = String("")
@@ -319,7 +369,6 @@ def main() raises:
     var tokens = String("")
     var pair = String("")
     var places = String("")
-    var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
