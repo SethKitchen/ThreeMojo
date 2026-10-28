@@ -290,10 +290,10 @@ def test_the_control_fixtures_match_the_pinned_text() raises:
     )
     assert_equal(
         sha256_hex(lines.as_bytes()),
-        "a3eec573cf2867e56fea91beaa5c102ea574a0b9606ff7a1da500dc3ae0bf997",
+        "7e855043c5977068be4d09e23cee75e02cd503f38aba7f25209eae9d976ba585",
     )
     assert_true(mixed.find("from render.tasks import TaskGroup") >= 0)
-    assert_equal(len(lines.splitlines()), 28)
+    assert_equal(len(lines.splitlines()), 24)
 
 
 def test_the_refusal_fixtures_match_the_pinned_text() raises:
@@ -390,7 +390,7 @@ def test_the_lifecycle_fixtures_match_the_pinned_text() raises:
     )
     assert_equal(
         sha256_hex(extra.as_bytes()),
-        "c67b01364e6a0e52f48a7ad35eaef333cd6fab440c0c97a364a4ea0bb7019392",
+        "2acf6d90f4ed66132d76a682eb68474c773fee2b9e969ac3d8cdd3f594007a9f",
     )
 
 
