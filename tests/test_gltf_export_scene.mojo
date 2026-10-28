@@ -60,14 +60,8 @@ from lights.light import (
     point_light,
     spot_light,
 )
-from loaders.gltf import (
-    GltfModel,
-    MODE_LINES,
-    MODE_LINE_LOOP,
-    MODE_LINE_STRIP,
-    load_gltf,
-    split_glb,
-)
+from loaders.gltf import GltfModel, load_gltf, split_glb
+from loaders.gltf_format import MODE_LINES, MODE_LINE_LOOP, MODE_LINE_STRIP
 from loaders.json import NO_NODE, JsonDocument, parse_json
 from materials.material import (
     BASIC,

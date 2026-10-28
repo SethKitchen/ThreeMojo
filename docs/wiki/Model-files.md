@@ -997,7 +997,7 @@ A curve time is in FBX ticks, 46186158000 each second. A key comes at each time 
 
 The angles of an `R` curve node are in degrees and turn in the `RotationOrder` of the model. The pre-rotation turns first, and the post-rotation is undone last, in `ZYX`, as `generateTransform` does. When an angle changes by 180 degrees or more between two keys, three.js adds keys between them by `slerp` and drops the second key. This loader does the same. Every track is `LINEAR`, as in three.js.
 
-The stacks come in the order that three.js meets them. A JavaScript object puts an id from 0 to 2^32 - 2 first, in numeric order. `js_key_order` gives that order.
+The stacks come in the order that three.js meets them. A JavaScript object puts an id from 0 to 2^32 - 2 first, in numeric order. `js_id_places` in `loaders/js_object.mojo` gives that order.
 
 ### Differences from three.js
 

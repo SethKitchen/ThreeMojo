@@ -37,13 +37,15 @@ from exporters.gltf import (
 )
 from loaders.bytes import encode_base64
 from loaders.gltf import (
-    COMPONENT_UNSIGNED_INT,
-    COMPONENT_UNSIGNED_SHORT,
     GltfModel,
     decode_base64,
     load_gltf,
     read_gltf,
     split_glb,
+)
+from loaders.gltf_format import (
+    COMPONENT_UNSIGNED_INT,
+    COMPONENT_UNSIGNED_SHORT,
 )
 from loaders.json import parse_json
 from materials.material import (

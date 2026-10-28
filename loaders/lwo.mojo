@@ -75,6 +75,7 @@ from core.buffer_geometry import (
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from loaders.image_file import decode_image
+from loaders.js_object import js_key_places
 from loaders.lwo_iff import LwoTree, LwoValue, parse_lwo_tree
 from loaders.utf8 import byte_slice
 from materials.material import (
@@ -645,7 +646,7 @@ struct _MaterialParser:
         mut params: _Params,
     ) raises:
         """three.js's `parseTextureNodes`."""
-        var order = js_order(names)
+        var order = js_key_places(names)
         for k in order:
             var name = names[k]
             var node = nodes[k]
@@ -854,26 +855,6 @@ struct _MaterialParser:
                 if params.has("reflectivity"):
                     out.reflectivity = _physical_reflectivity(p.reflectivity)
         return out^
-
-
-def js_order(names: List[String]) -> List[Int]:
-    """Return the places of keys in the order JavaScript walks them.
-
-    Args:
-        names: The keys, each once, in the order they were added.
-
-    Returns:
-        Their places, array indices first.
-    """
-    from loaders.three_mf import js_key_order
-
-    var ordered = js_key_order(names)
-    var out = List[Int]()
-    for name in ordered:
-        for k in range(len(names)):  # pragma: no branch
-            if names[k] == name:
-                out.append(k)
-    return out^
 
 
 def _at(value: LwoValue, i: Int) -> String:

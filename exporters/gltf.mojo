@@ -185,7 +185,7 @@ from exporters.common import (
 from exporters.json_writer import JsonWriter
 from loaders.bytes import encode_base64
 from loaders.file_path import path_directory, path_name
-from loaders.gltf import (
+from loaders.gltf_format import (
     COMPONENT_BYTE,
     COMPONENT_FLOAT,
     COMPONENT_SHORT,

@@ -32,9 +32,9 @@ from exporters.common import (
     WORLD_POINTS,
     WorldKind,
     WorldOptions,
-    format_js_float32,
     world_meshes,
 )
+from exporters.numbers import format_js_float32
 from exporters.gltf import GltfExportOptions, export_gltf, write_gltf
 from exporters.obj import export_obj
 from loaders.js_number import js_linear_to_srgb

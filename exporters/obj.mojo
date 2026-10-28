@@ -50,9 +50,9 @@ from exporters.common import (
     WORLD_POINTS,
     WorldMesh,
     WorldOptions,
-    format_js_float32,
     world_meshes,
 )
+from exporters.numbers import format_js_float32
 from loaders.js_number import js_linear_to_srgb, js_number_text
 from loaders.js_text import split_fields
 from objects.line import SEGMENTS, STRIP

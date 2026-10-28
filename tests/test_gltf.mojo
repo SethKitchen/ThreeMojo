@@ -25,11 +25,6 @@ from lights.light import directional_light
 from loaders.json import parse_json
 from loaders.gltf import (
     _Loader,
-    COMPONENT_BYTE,
-    COMPONENT_SHORT,
-    COMPONENT_UNSIGNED_BYTE,
-    COMPONENT_UNSIGNED_INT,
-    COMPONENT_UNSIGNED_SHORT,
     GltfModel,
     _integer_component,
     decode_base64,
@@ -37,6 +32,13 @@ from loaders.gltf import (
     load_gltf,
     read_gltf,
     split_glb,
+)
+from loaders.gltf_format import (
+    COMPONENT_BYTE,
+    COMPONENT_SHORT,
+    COMPONENT_UNSIGNED_BYTE,
+    COMPONENT_UNSIGNED_INT,
+    COMPONENT_UNSIGNED_SHORT,
 )
 from materials.material import DOUBLE_SIDE, FRONT_SIDE, NO_TEXTURE, STANDARD
 from math.vector3 import Vector3

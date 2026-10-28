@@ -32,7 +32,8 @@ from geometries.convex_object_breaker import (
     ConvexObjectBreaker,
 )
 from geometries.utils import merge_geometries
-from loaders.gltf import _Loader, COMPONENT_UNSIGNED_INT
+from loaders.gltf import _Loader
+from loaders.gltf_format import COMPONENT_UNSIGNED_INT
 from loaders.json import parse_json
 from materials.material import Material, MaterialId, PHONG, BACK_SIDE
 from math.bounds import Plane

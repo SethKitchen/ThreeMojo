@@ -28,7 +28,7 @@ from core.deform import morphed_positions, skin_carriers, skin_pose
 from core.object3d import NodeId
 from core.scene import Scene
 from loaders.fbx import FbxModel, load_fbx, read_fbx
-from loaders.fbx_animation import js_key_order
+from loaders.js_object import js_id_places
 from loaders.fbx_tree import parse_fbx_text
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
@@ -867,8 +867,8 @@ def two_materials(mapping: String, indices: String) raises -> String:
     return text^
 
 
-def test_js_key_order() raises:
-    var order = js_key_order([5, 9000000000, 3, -1, 4294967294, 4294967295])
+def test_js_id_places() raises:
+    var order = js_id_places([5, 9000000000, 3, -1, 4294967294, 4294967295])
     var expected: List[Int] = [2, 0, 4, 1, 3, 5]
     assert_equal(len(order), 6)
     for at in range(6):

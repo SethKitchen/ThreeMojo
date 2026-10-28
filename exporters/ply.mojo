@@ -44,11 +44,11 @@ from core.scene import Scene
 from exporters.common import (
     WORLD_POINTS,
     WorldOptions,
-    format_js_float32,
     push_f32,
     push_word,
     world_meshes,
 )
+from exporters.numbers import format_js_float32
 from loaders.ply import (
     PLY_ASCII,
     PLY_BINARY_BIG_ENDIAN,

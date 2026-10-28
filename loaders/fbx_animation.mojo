@@ -60,6 +60,7 @@ from animation.keyframe_track import (
 from core.object3d import NodeId
 from core.ordinal import require_positive
 from loaders.fbx_tree import NO_FBX_NODE, FbxDocument, object_name
+from loaders.js_object import js_id_places
 from math.euler import ZYX, Euler, EulerOrder
 from math.quaternion import Quaternion, append_quaternion
 from math.vector3 import Vector3
@@ -70,10 +71,6 @@ from units.si import SECOND, Angle, Duration
 # How many FBX ticks make one second: three.js's
 # `convertFBXTimeToSeconds`.
 comptime FBX_TICKS_PER_SECOND = Float64(46186158000)
-# The largest id a JavaScript object orders as an array index: three.js
-# meets the stacks in that order, which puts such ids first and in
-# numeric order.
-comptime _LARGEST_INDEX = 4294967294
 
 
 struct FbxAnimatedModel(Copyable, Movable):
@@ -230,35 +227,6 @@ def _first_parent(parents: Dict[Int, List[_Link]], id: Int) raises -> Int:
     return found[0].id
 
 
-def js_key_order(ids: List[Int]) -> List[Int]:
-    """Return places in a list of ids in the order a JavaScript object
-    meets them as keys: the ids from zero to 2^32 - 2 first, in numeric
-    order, then the rest in the order given.
-
-    three.js keeps the FBX objects in objects keyed by id, so this is the
-    order it meets them in.
-
-    Args:
-        ids: The ids, in file order.
-
-    Returns:
-        The places in `ids`, in the order met.
-    """
-    var small = List[Int]()
-    var rest = List[Int]()
-    for place in range(len(ids)):
-        if ids[place] >= 0 and ids[place] <= _LARGEST_INDEX:
-            # Insertion sort: a file has few stacks.
-            var at = len(small)
-            while at > 0 and ids[small[at - 1]] > ids[place]:
-                at -= 1
-            small.insert(at, place)
-        else:
-            rest.append(place)
-    small.extend(rest^)
-    return small^
-
-
 def read_fbx_animations(
     document: FbxDocument,
     objects: Int,
@@ -346,7 +314,7 @@ def read_fbx_animations(
     var ids = List[Int]()
     for stack in stacks:
         ids.append(document.integer(stack, 0))
-    for place in js_key_order(ids):
+    for place in js_id_places(ids):
         var below = _links(children, ids[place])
         if not _has_layer(below, layers):
             raise Error("FBX: an animation stack has no layer")

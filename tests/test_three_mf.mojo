@@ -21,13 +21,13 @@ from core.scene import Scene
 from loaders.three_mf import (
     DEFAULT_MATERIAL_NAME,
     ThreeMfModel,
-    js_key_order,
     parse_3mf,
     read_3mf,
     three_mf_transform,
     three_mf_unit,
     three_mf_wrap,
 )
+from loaders.js_object import js_key_order, js_key_places
 from loaders.zip import ZIP_STORED, ZipEntry, zip_archive
 from materials.material import PHONG, STANDARD
 from render.framebuffer import Color
@@ -286,6 +286,8 @@ def test_javascript_key_order() raises:
             "a",
         ],
     )
+    var places: List[Int] = [8, 2, 1, 7, 0, 3, 4, 5, 6, 9, 10]
+    assert_equal(js_key_places(keys), places)
 
 
 # ---------------------------------------------------------------------------

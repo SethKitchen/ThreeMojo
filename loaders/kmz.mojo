@@ -37,7 +37,7 @@ from core.object3d import NO_PARENT, Object3D
 from core.scene import Scene
 from loaders.collada import ColladaModel, load_collada
 from loaders.file_path import path_directory
-from loaders.three_mf import js_key_order
+from loaders.js_object import js_key_order
 from loaders.xml import NO_ELEMENT, XmlDocument, parse_xml
 from loaders.zip import ZipEntry, unzip
 from std.pathlib import Path

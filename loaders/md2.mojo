@@ -53,7 +53,7 @@ from core.buffer_geometry import (
 from core.ordinal import require_positive
 from loaders.bytes import ascii_digit
 from loaders.js_text import is_js_word
-from loaders.three_mf import js_key_order
+from loaders.js_object import js_key_order
 from std.memory import bitcast
 from std.pathlib import Path
 from units.si import SECOND, Duration

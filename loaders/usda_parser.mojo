@@ -65,7 +65,7 @@ from loaders.json import (
     STRING,
     parse_json,
 )
-from loaders.three_mf import js_key_order
+from loaders.js_object import js_key_order
 from loaders.usd_specs import (
     SPEC_ATTRIBUTE,
     SPEC_PRIM,

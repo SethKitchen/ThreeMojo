@@ -287,6 +287,51 @@ from objects.points import Points
 from render.framebuffer import Color, FloatColor
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render import ktx2
+from loaders.gltf_format import (
+    COMPONENT_BYTE,
+    COMPONENT_FLOAT,
+    COMPONENT_SHORT,
+    COMPONENT_UNSIGNED_BYTE,
+    COMPONENT_UNSIGNED_INT,
+    COMPONENT_UNSIGNED_SHORT,
+    DRACO_MESH_COMPRESSION,
+    EMISSIVE_STRENGTH,
+    FILTER_LINEAR,
+    FILTER_LINEAR_MIPMAP_LINEAR,
+    GLB_BIN_CHUNK,
+    GLB_CHUNK_HEADER_BYTES,
+    GLB_HEADER_BYTES,
+    GLB_JSON_CHUNK,
+    GLB_MAGIC,
+    GLB_VERSION,
+    GPU_INSTANCING,
+    LIGHTS_PUNCTUAL,
+    MATERIALS_ANISOTROPY,
+    MATERIALS_BUMP,
+    MATERIALS_CLEARCOAT,
+    MATERIALS_DISPERSION,
+    MATERIALS_IOR,
+    MATERIALS_IRIDESCENCE,
+    MATERIALS_SHEEN,
+    MATERIALS_SPECULAR,
+    MATERIALS_TRANSMISSION,
+    MATERIALS_UNLIT,
+    MATERIALS_VARIANTS,
+    MATERIALS_VOLUME,
+    MESHOPT_COMPRESSION,
+    MESH_QUANTIZATION,
+    MODE_LINES,
+    MODE_LINE_LOOP,
+    MODE_POINTS,
+    MODE_TRIANGLES,
+    TEXTURE_BASISU,
+    TEXTURE_TRANSFORM,
+    TEXTURE_WEBP,
+    WRAP_CLAMP,
+    WRAP_MIRROR,
+    WRAP_REPEAT,
+    filter_of_gl,
+)
 from render.texture import (
     Alpha,
     BILINEAR,
@@ -315,23 +360,6 @@ from units.si import Angle, Duration, Length, METER, NANOMETER, RADIAN, SECOND
 
 # How long a clip of a still pose lasts: one frame at 30 frames a second.
 comptime _STILL_POSE_SECONDS = Float32(1.0 / 30.0)
-
-# The binary container's header: the magic `glTF`, the version, and the
-# two chunk types, as little-endian words.
-comptime GLB_MAGIC = 0x46546C67
-comptime GLB_VERSION = 2
-comptime GLB_HEADER_BYTES = 12
-comptime GLB_CHUNK_HEADER_BYTES = 8
-comptime GLB_JSON_CHUNK = 0x4E4F534A
-comptime GLB_BIN_CHUNK = 0x004E4942
-
-# The accessor component types glTF names, by their GL constants.
-comptime COMPONENT_BYTE = 5120
-comptime COMPONENT_UNSIGNED_BYTE = 5121
-comptime COMPONENT_SHORT = 5122
-comptime COMPONENT_UNSIGNED_SHORT = 5123
-comptime COMPONENT_UNSIGNED_INT = 5125
-comptime COMPONENT_FLOAT = 5126
 
 
 def require_sparse_indices(index_type: Int) raises:
@@ -391,27 +419,6 @@ def require_gltf_mesh(mesh: Int, count: Int) raises:
         raise Error("glTF: a node names a mesh that is not there")
 
 
-# The primitive modes that are read: points, the three kinds of line, and
-# triangles. glTF names them by their GL constants.
-comptime MODE_POINTS = 0
-comptime MODE_LINES = 1
-comptime MODE_LINE_LOOP = 2
-comptime MODE_LINE_STRIP = 3
-comptime MODE_TRIANGLES = 4
-
-# The sampler's wrap and filter constants.
-comptime WRAP_REPEAT = 10497
-comptime WRAP_CLAMP = 33071
-comptime WRAP_MIRROR = 33648
-comptime FILTER_NEAREST = 9728
-comptime FILTER_LINEAR = 9729
-# The four minification filters that read a mipmap chain.
-comptime FILTER_NEAREST_MIPMAP_NEAREST = 9984
-comptime FILTER_LINEAR_MIPMAP_NEAREST = 9985
-comptime FILTER_NEAREST_MIPMAP_LINEAR = 9986
-comptime FILTER_LINEAR_MIPMAP_LINEAR = 9987
-
-
 @fieldwise_init
 struct GltfSampler(ImplicitlyCopyable):
     """A glTF sampler as a texture reads it: its two wraps and its two
@@ -435,55 +442,6 @@ struct GltfSampler(ImplicitlyCopyable):
         self.min_filter = LINEAR_MIPMAP_LINEAR
 
 
-def gl_filter(filter: Filter) -> Int:
-    """Return a filter as glTF's GL constant.
-
-    Args:
-        filter: Any of the six named filters.
-
-    Returns:
-        The constant: `FILTER_NEAREST` for `NEAREST`, and so on.
-    """
-    if filter == NEAREST:
-        return FILTER_NEAREST
-    if filter == BILINEAR:
-        return FILTER_LINEAR
-    if filter == NEAREST_MIPMAP_NEAREST:
-        return FILTER_NEAREST_MIPMAP_NEAREST
-    if filter == LINEAR_MIPMAP_NEAREST:
-        return FILTER_LINEAR_MIPMAP_NEAREST
-    if filter == NEAREST_MIPMAP_LINEAR:
-        return FILTER_NEAREST_MIPMAP_LINEAR
-    return FILTER_LINEAR_MIPMAP_LINEAR
-
-
-def filter_of_gl(code: Int) raises -> Filter:
-    """Return a glTF filter constant as a filter.
-
-    Args:
-        code: One of glTF's six filter constants.
-
-    Returns:
-        The filter.
-
-    Raises:
-        Error: If the constant is none of the six.
-    """
-    if code == FILTER_NEAREST:
-        return NEAREST
-    if code == FILTER_LINEAR:
-        return BILINEAR
-    if code == FILTER_NEAREST_MIPMAP_NEAREST:
-        return NEAREST_MIPMAP_NEAREST
-    if code == FILTER_LINEAR_MIPMAP_NEAREST:
-        return LINEAR_MIPMAP_NEAREST
-    if code == FILTER_NEAREST_MIPMAP_LINEAR:
-        return NEAREST_MIPMAP_LINEAR
-    if code == FILTER_LINEAR_MIPMAP_LINEAR:
-        return LINEAR_MIPMAP_LINEAR
-    raise Error("glTF: a filter that is not known")
-
-
 # What a material's `alphaCutoff` is when `MASK` names none.
 comptime DEFAULT_ALPHA_CUTOFF = Float32(0.5)
 
@@ -492,30 +450,6 @@ comptime DEFAULT_ALPHA_CUTOFF = Float32(0.5)
 # infinite projection, which a `PerspectiveCamera` cannot hold.
 comptime DEFAULT_ASPECT = Float32(1)
 comptime DEFAULT_FAR = Float32(2e6)
-
-# The extensions this loader reads. A file that requires any other is
-# refused, as three.js's `GLTFLoader` refuses one it has no plugin for.
-comptime EMISSIVE_STRENGTH = "KHR_materials_emissive_strength"
-comptime MATERIALS_IOR = "KHR_materials_ior"
-comptime MATERIALS_SPECULAR = "KHR_materials_specular"
-comptime MATERIALS_CLEARCOAT = "KHR_materials_clearcoat"
-comptime MATERIALS_SHEEN = "KHR_materials_sheen"
-comptime MATERIALS_IRIDESCENCE = "KHR_materials_iridescence"
-comptime MATERIALS_ANISOTROPY = "KHR_materials_anisotropy"
-comptime MATERIALS_UNLIT = "KHR_materials_unlit"
-comptime MATERIALS_TRANSMISSION = "KHR_materials_transmission"
-comptime MATERIALS_VOLUME = "KHR_materials_volume"
-comptime MATERIALS_DISPERSION = "KHR_materials_dispersion"
-comptime TEXTURE_TRANSFORM = "KHR_texture_transform"
-comptime LIGHTS_PUNCTUAL = "KHR_lights_punctual"
-comptime MESH_QUANTIZATION = "KHR_mesh_quantization"
-comptime GPU_INSTANCING = "EXT_mesh_gpu_instancing"
-comptime DRACO_MESH_COMPRESSION = "KHR_draco_mesh_compression"
-comptime MATERIALS_BUMP = "EXT_materials_bump"
-comptime TEXTURE_BASISU = "KHR_texture_basisu"
-comptime MESHOPT_COMPRESSION = "EXT_meshopt_compression"
-comptime MATERIALS_VARIANTS = "KHR_materials_variants"
-comptime TEXTURE_WEBP = "EXT_texture_webp"
 
 # A spot light's cone when `KHR_lights_punctual` names none: no inner cone,
 # and an outer one of a quarter of a half turn, the specification's.
