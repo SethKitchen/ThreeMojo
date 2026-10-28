@@ -7,12 +7,14 @@
 
 from std.os import makedirs
 from std.pathlib import Path
-from std.testing import TestSuite, assert_raises
+from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._python_tokens import token_sha256
+from tools._sha256 import sha256_hex
 from tools.carla_accepted_gate import (
     accepted_digest,
     accepted_pair,
+    accepted_pin_predecessor,
     accepted_places,
     accepted_record,
     accepted_sources,
@@ -119,6 +121,67 @@ def test_a_repeated_pin_placement_is_refused() raises:
         contains="accepted source successor: duplicate pin placement"
     ):
         accepted_places(directory)
+
+
+def _request(payload: String, before: String) -> String:
+    """Return one predecessor request for `payload`.
+
+    Args:
+        payload: The active pin text.
+        before: The required predecessor digest.
+
+    Returns:
+        The request JSON.
+    """
+    return (
+        '{"after":"'
+        + sha256_hex(payload.as_bytes())
+        + '","before":"'
+        + before
+        + '","label":"runtime-source-pins.json","transitions":[{"pointer":'
+        + '["group","path"],"after":"new","before":"old"}]}'
+    )
+
+
+def test_a_restored_accepted_pin_matches_its_predecessor() raises:
+    """The historical value replaces the active value in one check."""
+    var payload = String('{"group":{"path":"new"}}')
+    var restored = "{\n  \"group\": {\n    \"path\": \"old\"\n  }\n}\n"
+    assert_equal(
+        accepted_pin_predecessor(
+            payload.as_bytes(),
+            _request(payload, sha256_hex(restored.as_bytes())),
+        ),
+        restored,
+    )
+
+
+def test_a_wrong_digest_fails_before_a_repeated_key() raises:
+    """A repeated key is not reported when the pin digest is wrong."""
+    var payload = String('{"a":1,"a":2}')
+    with assert_raises(
+        contains=(
+            "accepted source successor: unreviewed runtime pin successor:"
+            " runtime-source-pins.json"
+        )
+    ):
+        _ = accepted_pin_predecessor(
+            payload.as_bytes(), _request(payload, "00").replace(
+                sha256_hex(payload.as_bytes()), "00"
+            )
+        )
+
+
+def test_a_repeated_accepted_key_fails_before_placement() raises:
+    """A repeated key fails after the digest and before placement."""
+    var payload = String('{"a":1,"a":2}')
+    var request = (
+        '{"after":"'
+        + sha256_hex(payload.as_bytes())
+        + '","before":"00","label":"runtime-source-pins.json","transitions":[]}'
+    )
+    with assert_raises(contains="duplicate runtime source pin key: a"):
+        _ = accepted_pin_predecessor(payload.as_bytes(), request)
 
 
 def main() raises:

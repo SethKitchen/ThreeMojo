@@ -972,6 +972,14 @@ It returns the eight ideal-projection result counts.
 
 `tools/carla_accepted_gate.mojo` checks the accepted successor record, the pin digests, the ordered pin pair, and the pin placements.
 
+It rebuilds one accepted pin predecessor in one check.
+
+It checks that pin digest before it checks a repeated key.
+
+It refuses a repeated key before the pin is placed.
+
+It checks the restored pin bytes after the placements.
+
 ## Lane poses
 
 The pose follows the derivative of the actual lane-center expression.
