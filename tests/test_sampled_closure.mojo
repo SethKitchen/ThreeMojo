@@ -8,7 +8,7 @@
 from std.testing import TestSuite, assert_equal, assert_true
 
 from tools._python_json import PyJson
-from tools._sampled_closure import sampled_closure
+from tools._sampled_closure import sampled_closure, strip_sampled_gates
 
 
 def test_sampled_reference_names_stay_in_reviewed_order() raises:
@@ -73,6 +73,18 @@ def test_sampled_reference_names_stay_in_reviewed_order() raises:
             "from extensions.carla.curve_interval import ("
         )
     )
+
+
+def test_a_value_gate_prefix_is_removed_after_the_closure() raises:
+    """The stored value-gate prefix is removed from a text-check failure."""
+    assert_equal(
+        strip_sampled_gates("sampled value gate: missing helper"),
+        "missing helper",
+    )
+    assert_equal(
+        strip_sampled_gates("sampled jet gate: changed alias"), "changed alias"
+    )
+    assert_equal(strip_sampled_gates("other failure"), "other failure")
 
 
 def main() raises:

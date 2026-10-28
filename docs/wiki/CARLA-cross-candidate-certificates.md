@@ -435,6 +435,8 @@ It slices the stored-half declaration from its marker.
 
 It requires one Jet primitive declaration.
 
+It strips a sampled gate prefix after that text check in one check.
+
 That declaration keeps one Bool parameter.
 
 Mojo checks the live sampled module graphs.

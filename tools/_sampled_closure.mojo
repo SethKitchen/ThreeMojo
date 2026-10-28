@@ -9,6 +9,8 @@ The graph digests stay in their own table. This list is the separate
 reviewed order those digests must match.
 """
 
+from tools._python_json import PyJson
+
 
 def sampled_closure() -> String:
     """Return the sampled reference names and the closure groups.
@@ -55,3 +57,28 @@ def sampled_closure() -> String:
         " extensions.carla.road import Road\\nfrom extensions.carla.road_info"
         ' import info_index\\nfrom math.vector3 import Vector3\\n"}'
     )
+
+
+def strip_sampled_gates(message: String) raises -> String:
+    """Remove a sampled gate prefix from one text-check failure.
+
+    Args:
+        message: The text-check failure.
+
+    Returns:
+        The message without a leading value-gate or jet-gate prefix.
+
+    Raises:
+        Error: The closure labels cannot be read. The text check has
+            already failed before these labels are read.
+    """
+    var doc = PyJson.parse(sampled_closure())
+    var value_gate = doc.text(doc.at(doc.root, "value_gate"))
+    var jet_gate = doc.text(doc.at(doc.root, "jet_gate"))
+    if message.startswith(value_gate):
+        var rest = message[byte = value_gate.byte_length() :]
+        return String(rest)
+    if message.startswith(jet_gate):
+        var rest = message[byte = jet_gate.byte_length() :]
+        return String(rest)
+    return message

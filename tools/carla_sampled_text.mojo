@@ -68,6 +68,7 @@ from tests._python_tokens import (
     project_union_value,
     sampled_top_level,
 )
+from tools._sampled_closure import strip_sampled_gates
 from tools._sampled_jet_gate import stored_helper_fields
 from tools._sampled_value_gate import (
     drop_derivative_intersection,
@@ -130,10 +131,15 @@ def main() raises:
     var with_path = String("")
     var name = String("")
     var index_text = String("")
+    var strip_gates = False
     var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
+        if word == "--strip-gates":
+            strip_gates = True
+            index += 1
+            continue
         if (
             word == "--extract"
             or word == "--rename"
@@ -418,5 +424,8 @@ def main() raises:
             return
         print(rename_sampled_identifiers(Path(rename).read_text()), end="")
     except error:
-        print(String(error), file=stderr)
+        var message = String(error)
+        if strip_gates:
+            message = strip_sampled_gates(message)
+        print(message, file=stderr)
         exit(1)

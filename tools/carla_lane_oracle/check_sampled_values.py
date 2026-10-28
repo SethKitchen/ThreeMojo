@@ -88,7 +88,7 @@ def _sampled_text(mode, text, name='', index=None, replacement=None):
         path = Path(directory) / 'source.mojo'
         path.write_text(text)
         command = ['sh', str(root / 'tools' / 'tool.sh'), mojo,
-                   'carla_sampled_text', mode, str(path)]
+                   'carla_sampled_text', '--strip-gates', mode, str(path)]
         if name:
             command.extend(['--name', name])
         if index is not None:
@@ -102,10 +102,6 @@ def _sampled_text(mode, text, name='', index=None, replacement=None):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        closure = _sampled_closure()
-        for prefix in (closure['value_gate'], closure['jet_gate']):
-            if message.startswith(prefix):
-                message = message[len(prefix):]
         raise CheckError(message)
     return result.stdout
 
