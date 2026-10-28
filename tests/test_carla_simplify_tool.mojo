@@ -8,13 +8,88 @@
 `border` false matches version 0.1.11. `border` true keeps every open
 edge, as version 0.2.0 does with `preserve_border`. Replay matches
 `replay_simplification` from version 0.1.11.
+
+The x86-64 wheels round each product, as this port does, so there a
+simplified mesh is the same bit for bit. The arm64 wheels fuse
+multiply-adds, so a collapsed vertex can differ in its last digits. Its
+triangles and collapses are still the same.
 """
 
+from std.sys import CompilationTarget
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tests._tree import tool_mojo
 from tools._process import run_program
+from tools._python_float import parse_float
+from tools._python_json import PY_FLOAT, PY_INT, PyJson
 from tools.carla_simplify import simplify_text
+
+# How far a coordinate may differ from the installed simplifier's, relative
+# to its size and at least 1: the arm64 wheels differ by about 1e-14.
+comptime POINT_TOLERANCE = 1.0e-12
+
+
+def _assert_same_indices(
+    got: PyJson, have: Int, want: PyJson, wanted: Int, name: String
+) raises:
+    """Assert that two lists of index pairs or triples are the same."""
+    assert_equal(got.length(have), want.length(wanted), name)
+    for row in range(want.length(wanted)):
+        var a = got.item(have, row)
+        var b = want.item(wanted, row)
+        assert_equal(got.length(a), want.length(b), name)
+        for column in range(want.length(b)):
+            var x = got.item(a, column)
+            var y = want.item(b, column)
+            assert_true(got.kind(x) == PY_INT, name)
+            assert_true(want.kind(y) == PY_INT, name)
+            assert_equal(got.text(x), want.text(y), name)
+
+
+def _coordinate(doc: PyJson, node: Int) raises -> Float64:
+    """Return a coordinate, written as a float or an integer."""
+    if doc.kind(node) == PY_FLOAT:
+        return doc.number(node)
+    assert_true(doc.kind(node) == PY_INT, "a coordinate is a number")
+    return parse_float(doc.text(node))
+
+
+def _assert_same_mesh(actual: String, expected: String) raises:
+    """Assert that a simplified mesh is the installed simplifier's: the
+    same triangles and collapses, and points within `POINT_TOLERANCE`, and
+    on x86-64 the same text."""
+    var got = PyJson.parse(actual)
+    var want = PyJson.parse(expected)
+    _assert_same_indices(
+        got,
+        got.at(got.root, "triangles"),
+        want,
+        want.at(want.root, "triangles"),
+        "triangles",
+    )
+    _assert_same_indices(
+        got,
+        got.at(got.root, "collapses"),
+        want,
+        want.at(want.root, "collapses"),
+        "collapses",
+    )
+    var have = got.at(got.root, "points")
+    var wanted = want.at(want.root, "points")
+    assert_equal(got.length(have), want.length(wanted), "points")
+    for row in range(want.length(wanted)):
+        var a = got.item(have, row)
+        var b = want.item(wanted, row)
+        assert_equal(got.length(a), want.length(b), "points")
+        for column in range(want.length(b)):
+            var x = _coordinate(got, got.item(a, column))
+            var y = _coordinate(want, want.item(b, column))
+            assert_true(
+                abs(x - y) <= POINT_TOLERANCE * max(1.0, abs(y)),
+                "point " + String(row) + ": " + String(x) + " " + String(y),
+            )
+    comptime if CompilationTarget.is_x86():
+        assert_equal(actual, expected)
 
 
 def _python(script: String) raises -> String:
@@ -70,7 +145,7 @@ def test_collapses_match_the_installed_simplifier() raises:
         if pending.byte_length() == 0:
             pending = text
             continue
-        assert_equal(simplify_text(pending), text)
+        _assert_same_mesh(simplify_text(pending), text)
         pending = ""
         count += 1
     assert_equal(count, 4)
