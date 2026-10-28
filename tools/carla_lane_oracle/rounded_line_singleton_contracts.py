@@ -156,33 +156,6 @@ def _gate_selector(actual, expected):
         raise ValueError(message)
 
 
-def _significant_documents(texts):
-    import json
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    if not texts:
-        return []
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='significant-json-') as directory:
-        folder = Path(directory)
-        for index, text in enumerate(texts):
-            (folder / f'{index}.text').write_text(text)
-        (folder / 'count').write_text(str(len(texts)))
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--significant-json', str(folder)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    return json.loads(result.stdout)
-
-
 def _significant_graphs(pairs):
     """Compare every source pair by its significant tokens."""
     if not pairs:
@@ -234,14 +207,33 @@ def _same_text(actual, expected):
     return ideal_projection.texts_match(actual, expected)
 
 
-def _texts_match_all(pairs):
+def _significant_matches(pairs):
+    """Return whether each source pair has the same significant tokens."""
     if not pairs:
         return []
-    if __package__:
-        from . import ideal_projection
-    else:
-        import ideal_projection
-    return ideal_projection.texts_match_all(pairs)
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps([
+        {'actual': actual, 'source': source} for actual, source in pairs
+    ], separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='significant-match-') as directory:
+        path = Path(directory) / 'pairs.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_source',
+             '--token-match', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return [flag == 'true' for flag in json.loads(result.stdout)]
 
 
 def _selected_minima(items):
@@ -304,9 +296,7 @@ def _reviewed_text(root, path, record):
     text = _typed_source.historical_text(root, root/path, (root/path).read_text())
     if not _same_text(path, _singleton_paths()['rounded_line']):
         return text
-    current_doc, recorded_doc = _significant_documents([
-        text, record['modules'][path]['source']])
-    if _same_text(current_doc, recorded_doc):
+    if _significant_matches([(text, record['modules'][path]['source'])])[0]:
         return text
     if __package__:
         from . import rounded_line_selector_contracts as successor
@@ -450,11 +440,8 @@ def verify_premises(root):
     for path, item in record['modules'].items():
         actual = _reviewed_text(root, path, record)
         checked.append((path, actual, item['source'], item['token_sha256']))
-    module_docs = _significant_documents(
-        [text for _, actual, source, _ in checked for text in (actual, source)])
-    matched_flags = _texts_match_all([
-        (module_docs[index * 2], module_docs[index * 2 + 1])
-        for index in range(len(checked))])
+    matched_flags = _significant_matches([
+        (actual, source) for _, actual, source, _ in checked])
     pending = []
     for index, (path, actual, _, token) in enumerate(checked):
         if not matched_flags[index]:
@@ -469,8 +456,7 @@ def verify_premises(root):
     prepared = []
     for (path, text, expected), actual in zip(scope_items, prefixes):
         if path == labels['lane']:
-            current_doc, recorded_doc = _significant_documents([actual, expected])
-            if not _same_text(current_doc, recorded_doc):
+            if not _significant_matches([(actual, expected)])[0]:
                 # Only a changed consumed scope requests complete current admission.
                 text = full_audit.reviewed_text(root, path, text)
                 actual = _import_scope(text)
@@ -494,11 +480,8 @@ def verify_premises(root):
     for index, (item, selected, _text) in enumerate(loaded):
         if selected:
             selected_pairs.append((index, declared[index], item['source']))
-    selected_docs = _significant_documents([
-        text for _index, actual, source in selected_pairs for text in (actual, source)])
-    selected_flags = _texts_match_all([
-        (selected_docs[index * 2], selected_docs[index * 2 + 1])
-        for index in range(len(selected_pairs))])
+    selected_flags = _significant_matches([
+        (actual, source) for _index, actual, source in selected_pairs])
     selected_match = {
         index: flag for (index, _actual, _source), flag in zip(selected_pairs, selected_flags)}
     restores = []

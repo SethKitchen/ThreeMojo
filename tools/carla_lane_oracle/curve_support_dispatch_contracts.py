@@ -180,33 +180,6 @@ def _gate_edge(recorded, expected):
         raise ValueError(message)
 
 
-def _significant_documents(texts):
-    import json
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    if not texts:
-        return []
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='significant-json-') as directory:
-        folder = Path(directory)
-        for index, text in enumerate(texts):
-            (folder / f'{index}.text').write_text(text)
-        (folder / 'count').write_text(str(len(texts)))
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--significant-json', str(folder)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    return json.loads(result.stdout)
-
-
 def _significant_graphs(pairs):
     """Compare every source pair by its significant tokens."""
     if not pairs:
@@ -268,13 +241,33 @@ def _dispatch_query(mode, payload):
     return result.stdout.strip()
 
 
-def _match_flags(pairs):
-    """Return whether each actual text equals its expected text."""
+def _significant_matches(pairs):
+    """Return whether each source pair has the same significant tokens."""
     if not pairs:
         return []
     import json
-    return json.loads(_dispatch_query('--match', [
-        {'actual': actual, 'expected': expected} for actual, expected in pairs]))
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps([
+        {'actual': actual, 'source': source} for actual, source in pairs
+    ], separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='dispatch-token-match-') as directory:
+        path = Path(directory) / 'pairs.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_source',
+             '--token-match', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
 
 
 _DISPATCH_LABELS = None
@@ -515,12 +508,9 @@ def verify_premises(root, *, _operation=None):
         'name': item['name'],
         'owner': list(item['owner']),
     } for item, _physical_text, text in loaded])
-    premise_docs = _significant_documents([
-        text for index, (item, _physical_text, _text) in enumerate(loaded)
-        for text in (declared[index], item['source'])])
-    matched_flags = _match_flags([
-        (premise_docs[index * 2], premise_docs[index * 2 + 1])
-        for index in range(len(loaded))])
+    matched_flags = _significant_matches([
+        (declared[index], item['source'])
+        for index, (item, _physical_text, _text) in enumerate(loaded)])
     fallbacks = _premise_fallbacks([
         (matched_flags[index] == 'true', item['path'], item['name'], tuple(item['owner']))
         for index, (item, _physical_text, _text) in enumerate(loaded)])
@@ -546,12 +536,9 @@ def verify_premises(root, *, _operation=None):
                 'name': item['name'],
                 'owner': [],
             } for _index, item, predecessor in seed_rows])
-            seed_docs = _significant_documents([
-                text for position, (_index, item, _predecessor) in enumerate(seed_rows)
-                for text in (declared_seeds[position], item['source'])])
-            seed_flags = _match_flags([
-                (seed_docs[position * 2], seed_docs[position * 2 + 1])
-                for position in range(len(seed_rows))])
+            seed_flags = _significant_matches([
+                (declared_seeds[position], item['source'])
+                for position, (_index, item, _predecessor) in enumerate(seed_rows)])
         except (ValueError, OSError) as error:
             require(False, labels['seed_message'] + str(error))
         for position, (index, _item, _predecessor) in enumerate(seed_rows):

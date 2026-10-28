@@ -7,14 +7,17 @@
 
     carla_dispatch_source --choice PATH
     carla_dispatch_source --match PATH
+    carla_dispatch_source --token-match PATH
 
 `--choice` prints `current` or `restore`. `--match` prints `true` or
 `false` for one pair. A list prints those results in order.
+`--token-match` compares each source pair by its significant tokens.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
+from tests._python_tokens import significant_match_flags
 from tools._dispatch_source import (
     reviewed_source_choice,
     reviewed_source_choices,
@@ -27,7 +30,10 @@ from tools._python_json import PY_LIST, PyJson
 def _usage():
     """Print the command usage and stop."""
     print(
-        "usage: carla_dispatch_source --choice PATH | --match PATH",
+        (
+            "usage: carla_dispatch_source --choice PATH | --match PATH |"
+            " --token-match PATH"
+        ),
         file=stderr,
     )
     exit(2)
@@ -43,10 +49,13 @@ def main() raises:
     if len(arguments) != 3:
         _usage()
     var mode = arguments[1]
-    if mode != "--choice" and mode != "--match":
+    if mode != "--choice" and mode != "--match" and mode != "--token-match":
         _usage()
     try:
         var text = Path(arguments[2]).read_text()
+        if mode == "--token-match":
+            print(significant_match_flags(text), end="")
+            return
         var doc = PyJson.parse(text)
         if doc.kind(doc.root) == PY_LIST:
             if mode == "--choice":

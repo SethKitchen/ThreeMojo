@@ -759,6 +759,43 @@ def significant_graph_pairs(
         index += 1
 
 
+def significant_match_flags(payload: String) raises -> String:
+    """Return whether each source pair has the same significant tokens.
+
+    Args:
+        payload: A JSON list. Each item has `actual` and `source`.
+
+    Returns:
+        A JSON list of `true` or `false`, in the same order.
+
+    Raises:
+        Error: The payload is not a list, a field is absent, or a source cannot be tokenized.
+    """
+    var doc = PyJson.parse(payload)
+    if doc.kind(doc.root) != PY_LIST:
+        raise Error("significant match payload is not a list")
+    var count = doc.length(doc.root)
+    var actuals = List[String]()
+    var sources = List[String]()
+    var index = 0
+    while index < count:
+        var row = doc.item(doc.root, index)
+        actuals.append(significant_json(doc.text(doc.at(row, "actual"))))
+        sources.append(significant_json(doc.text(doc.at(row, "source"))))
+        index += 1
+    var out = PyJson()
+    var rows = out.new_list()
+    index = 0
+    while index < count:
+        var flag = String("false")
+        if actuals[index] == sources[index]:
+            flag = "true"
+        out.append(rows, out.new_str(flag))
+        index += 1
+    out.root = rows
+    return out.dumps()
+
+
 def significant_json(source: String) raises -> String:
     """Return the canonical significant-token JSON.
 

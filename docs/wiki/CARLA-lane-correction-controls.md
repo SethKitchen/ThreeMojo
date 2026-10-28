@@ -82,6 +82,8 @@ It restores every changed rounded LINE declaration in one check.
 
 It compares every rounded LINE module text in one check.
 
+It compares every rounded LINE source pair by its tokens in one check.
+
 It checks every rounded LINE consumer graph in one check.
 
 It keeps the consumer import scope before the first definition.
@@ -153,6 +155,8 @@ It compares each premise text before the predecessor fallback.
 It reads every dispatch premise declaration in one check.
 
 It compares every dispatch premise text in one check.
+
+It compares every dispatch premise declaration by its tokens in one check.
 
 It chooses every dispatch premise fallback in one check.
 

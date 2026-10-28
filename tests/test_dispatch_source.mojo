@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_equal, assert_raises
 
-from tests._python_tokens import token_sha256
+from tests._python_tokens import significant_match_flags, token_sha256
 from tools._dispatch_source import (
     reviewed_source_choice,
     reviewed_source_choices,
@@ -109,6 +109,19 @@ def test_premise_text_lists_keep_their_order() raises:
     assert_equal(
         texts_match_all(
             '[{"actual":"same","expected":"same"},{"actual":"left","expected":"right"}]'
+        ),
+        '["true","false"]',
+    )
+
+
+def test_significant_token_pairs_ignore_a_comment() raises:
+    """A comment does not change a match, and the next pair keeps its result."""
+    assert_equal(
+        significant_match_flags(
+            '[{"actual":"def center():\\n    return 1\\n",'
+            + '"source":"def center():\\n    # note\\n    return 1\\n"},'
+            + '{"actual":"def center():\\n    return 1\\n",'
+            + '"source":"def center():\\n    return 2\\n"}]'
         ),
         '["true","false"]',
     )
