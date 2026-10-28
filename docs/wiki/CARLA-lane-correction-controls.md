@@ -164,6 +164,8 @@ It checks every dispatch reference declaration token in one check.
 
 It chooses every dispatch premise fallback in one check.
 
+It compares every dispatch premise and chooses its fallback in one check.
+
 It checks every Map seed premise in one check.
 
 It reads every dispatch reference declaration in one check.

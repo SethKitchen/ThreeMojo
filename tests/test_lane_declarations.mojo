@@ -9,6 +9,7 @@ from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tests._python_tokens import replace_firsts
 from tools._lane_declarations import (
+    declaration_fallbacks,
     declaration_match_flags,
     declaration_texts_and_flags,
     lane_control_prepare,
@@ -160,6 +161,69 @@ def test_texts_and_flags_compare_only_the_selected_items() raises:
     assert_equal(parsed.text(parsed.item(flags, 0)), "true")
     assert_equal(parsed.text(parsed.item(flags, 1)), "false")
     assert_true(parsed.text(parsed.item(declared, 1)).find("return 2") >= 0)
+
+
+def test_empty_declaration_fallbacks_stay_empty() raises:
+    """No premises produce no flags and no choices."""
+    var parsed = PyJson.parse(declaration_fallbacks("[]"))
+    assert_equal(parsed.length(parsed.at(parsed.root, "flags")), 0)
+    assert_equal(parsed.length(parsed.at(parsed.root, "fallbacks")), 0)
+
+
+def test_a_missing_declaration_fails_before_its_fallback() raises:
+    """A missing function is reported before the path is required."""
+    var payload = (
+        '[{"source":"def f():\\n    return 1\\n","name":"absent",'
+        + '"owner":[],"expected":"def f():\\n    return 1\\n"}]'
+    )
+    with assert_raises(
+        contains="missing or ambiguous actual guard declaration: absent"
+    ):
+        _ = declaration_fallbacks(payload)
+
+
+def test_a_fallback_requires_the_path_after_the_comparison() raises:
+    """A readable declaration still requires `path` for its fallback."""
+    var payload = (
+        '[{"source":"def f():\\n    return 1\\n","name":"f","owner":[],'
+        + '"expected":"def f():\\n    return 1\\n"}]'
+    )
+    with assert_raises(contains="KeyError: 'path'"):
+        _ = declaration_fallbacks(payload)
+
+
+def test_declaration_fallbacks_keep_match_and_choice() raises:
+    """A match stays `none`, and a changed seed or lane chooses that predecessor.
+    """
+    var payload = (
+        '[{"source":"def _try_winner_seed():\\n    return 1\\n",'
+        + '"name":"_try_winner_seed","owner":[],'
+        + '"expected":"def _try_winner_seed():\\n    return 1\\n",'
+        + '"path":"extensions/carla/map.mojo"},'
+        + '{"source":"struct Map:\\n    def _try_winner_seed(self):\\n       '
+        ' return 1\\n",'
+        + '"name":"_try_winner_seed","owner":["Map"],'
+        + '"expected":"def _try_winner_seed(self):\\n    return 2\\n",'
+        + '"path":"extensions/carla/map.mojo"},'
+        + '{"source":"def _try_winner_seed():\\n    return 1\\n",'
+        + '"name":"_try_winner_seed","owner":[],'
+        + '"expected":"def _try_winner_seed():\\n    return 2\\n",'
+        + '"path":"extensions/carla/map.mojo"},'
+        + '{"source":"def lane():\\n    return 1\\n","name":"lane","owner":[],'
+        + '"expected":"def lane():\\n    return 2\\n",'
+        + '"path":"extensions/carla/lane_refinement.mojo"}]'
+    )
+    var parsed = PyJson.parse(declaration_fallbacks(payload))
+    var flags = parsed.at(parsed.root, "flags")
+    var choices = parsed.at(parsed.root, "fallbacks")
+    assert_equal(parsed.text(parsed.item(flags, 0)), "true")
+    assert_equal(parsed.text(parsed.item(choices, 0)), "none")
+    assert_equal(parsed.text(parsed.item(flags, 1)), "false")
+    assert_equal(parsed.text(parsed.item(choices, 1)), "none")
+    assert_equal(parsed.text(parsed.item(flags, 2)), "false")
+    assert_equal(parsed.text(parsed.item(choices, 2)), "seed")
+    assert_equal(parsed.text(parsed.item(flags, 3)), "false")
+    assert_equal(parsed.text(parsed.item(choices, 3)), "lane")
 
 
 def main() raises:

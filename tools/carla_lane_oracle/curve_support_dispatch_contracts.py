@@ -512,34 +512,41 @@ def _declarations(items):
     return json.loads(result.stdout)
 
 
-def _premise_fallbacks(items):
-    """Return `seed`, `lane`, or `none` for each premise."""
+def _declaration_fallbacks(items):
+    """Compare each premise declaration and choose its fallback."""
     if not items:
-        return []
+        return [], []
     import json
     import os
     import subprocess
     import tempfile
     from pathlib import Path
+    payload = json.dumps([
+        {
+            'source': source,
+            'name': name,
+            'owner': list(owner),
+            'expected': expected,
+            'path': path,
+        }
+        for source, name, owner, expected, path in items
+    ], separators=(',', ':'))
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps([
-        {'matched': matched, 'path': path, 'name': name, 'owner': list(owner)}
-        for matched, path, name, owner in items
-    ], separators=(',', ':'))
-    with tempfile.TemporaryDirectory(prefix='premise-fallback-') as directory:
-        record = Path(directory) / 'fallback.json'
-        record.write_text(payload)
+    with tempfile.TemporaryDirectory(prefix='declaration-fallbacks-') as directory:
+        path = Path(directory) / 'declarations.json'
+        path.write_text(payload)
         result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
-             'carla_premise_fallback', str(record)],
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_declarations',
+             '--fallbacks', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    return parsed['flags'], parsed['fallbacks']
 
 
 def verify_premises(root, *, _operation=None):
@@ -573,12 +580,9 @@ def verify_premises(root, *, _operation=None):
         physical_text = _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation)
         text = _typed_source.historical_text(root, item['path'], physical_text, _operation=_operation)
         loaded.append((item, physical_text, text))
-    matched_flags = _declaration_matches([
-        (text, item['name'], item['owner'], item['source'])
+    matched_flags, fallbacks = _declaration_fallbacks([
+        (text, item['name'], item['owner'], item['source'], item['path'])
         for item, _physical_text, text in loaded])
-    fallbacks = _premise_fallbacks([
-        (matched_flags[index] == 'true', item['path'], item['name'], tuple(item['owner']))
-        for index, (item, _physical_text, _text) in enumerate(loaded)])
     seed_matched = {}
     if any(flag == labels['seed'] for flag in fallbacks):
         if __package__:

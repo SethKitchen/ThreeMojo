@@ -16,6 +16,7 @@ from tests._python_tokens import (
     significant_json,
     token_sha256,
 )
+from tools._premise_fallback import premise_fallbacks
 from tools._python_json import MISSING, PY_LIST, PyJson
 
 
@@ -167,6 +168,54 @@ def declaration_token_checks(payload: String, prefix: String) raises:
         if digest != doc.text(doc.at(item, "token")):
             raise Error(prefix + doc.text(doc.at(item, "label")))
         index += 1
+
+
+def declaration_fallbacks(payload: String) raises -> String:
+    """Compare each declaration, then choose its premise fallback.
+
+    Args:
+        payload: A JSON list. Each item has `source`, `name`, `owner`,
+            `expected`, and `path`.
+
+    Returns:
+        JSON with `flags` and `fallbacks`, in the same order.
+
+    Raises:
+        Error: A function cannot be read, a source cannot be tokenized, or a required field is missing.
+    """
+    var flags_text = declaration_match_flags(payload)
+    var flags = PyJson.parse(flags_text)
+    var doc = PyJson.parse(payload)
+    var request = PyJson()
+    var rows = request.new_list()
+    var count = flags.length(flags.root)
+    var index = 0
+    while index < count:
+        var item = doc.item(doc.root, index)
+        var row = request.new_dict()
+        var matched = flags.text(flags.item(flags.root, index)) == "true"
+        request.set(row, "matched", request.new_bool(matched))
+        request.set(
+            row, "path", request.new_str(doc.text(doc.at(item, "path")))
+        )
+        request.set(
+            row, "name", request.new_str(doc.text(doc.at(item, "name")))
+        )
+        var owners = request.new_list()
+        var owner = doc.at(item, "owner")
+        var owner_count = doc.length(owner)
+        var slot = 0
+        while slot < owner_count:
+            request.append(
+                owners, request.new_str(doc.text(doc.item(owner, slot)))
+            )
+            slot += 1
+        request.set(row, "owner", owners)
+        request.append(rows, row)
+        index += 1
+    request.root = rows
+    var choices = premise_fallbacks(request.dumps())
+    return '{"flags":' + flags_text + ',"fallbacks":' + choices + "}"
 
 
 def restored_declaration_graphs(
