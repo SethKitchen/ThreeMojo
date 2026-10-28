@@ -194,6 +194,8 @@ It reuses one coverage-invariant record gate when the same bytes are read again.
 The migration file, the prior record, and each component are still read.
 A changed byte is checked again.
 A failed check is not kept.
+The first record read checks the ordered pin pair with the component digests.
+That pair check also covers the component gate for those same bytes.
 
 It compares every coverage-invariant successor digest in one check.
 

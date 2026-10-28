@@ -1470,6 +1470,57 @@ class InvariantRecordGateTests(unittest.TestCase):
                 invariant.MIGRATION = saved_migration
             invariant._GATED_PAIR = saved_pair
 
+    def test_a_paired_component_gate_covers_the_plain_gate(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import coverage_invariant_contracts as invariant
+        from tools.carla_lane_oracle import curve_support_dispatch_contracts as curve
+        from tools.carla_lane_oracle import grouped_table_contracts as grouped
+        from tools.carla_lane_oracle import lane_control_contracts as lane
+        saved_gates = invariant._GATED_INVARIANT
+        calls = []
+
+        def read_record(root, _then_pair=False):
+            calls.append(_then_pair)
+            return {'sources': {}}
+
+        try:
+            invariant._GATED_INVARIANT = set()
+            ok = Mock(returncode=0, stdout='', stderr='')
+            components = [('a.json', b'abc')]
+            with patch('subprocess.run', return_value=ok) as run:
+                invariant._gate(b'migration', b'prior', components, _then_pair=True)
+                invariant._gate(b'migration', b'prior', components)
+                self.assertEqual(run.call_count, 1)
+                invariant._gate(b'other', b'prior', components)
+                invariant._gate(b'other', b'prior', components, _then_pair=True)
+                self.assertEqual(run.call_count, 3)
+            failed = Mock(returncode=1, stdout='', stderr='wrong fixed ordered pin pair\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'wrong fixed ordered pin pair'):
+                    invariant._gate(b'bad', b'prior', components, _then_pair=True)
+                self.assertEqual(run.call_count, 1)
+            with patch('subprocess.run', return_value=ok) as run:
+                invariant._gate(b'bad', b'prior', components)
+                self.assertEqual(run.call_count, 1)
+            with patch.object(invariant, 'read_record', read_record), patch.object(
+                invariant, 'predecessor_pin_pair', lambda root: (b'runtime', b'guard')
+            ), patch.object(
+                invariant, '_predecessor_pin_pair',
+                lambda root, _operation=None: (b'runtime', b'guard'),
+            ), patch.object(
+                invariant, '_matches_then_dispatch',
+                return_value={'flags': [], 'matched': False},
+            ), patch.object(curve, 'verify', lambda *args, **kwargs: None), patch.object(
+                grouped, 'verify', lambda *args, **kwargs: None
+            ), patch.object(lane, 'verify', lambda *args, **kwargs: None), patch(
+                'tools.carla_lane_oracle.full_audit_cleanup_contracts._operation_enter',
+                lambda root, kind, _operation=None, **kwargs: (None, False),
+            ):
+                invariant.verify(Path('invariant-verify'))
+            self.assertEqual(calls, [True])
+        finally:
+            invariant._GATED_INVARIANT = saved_gates
+
 
 if __name__ == '__main__':
     unittest.main()

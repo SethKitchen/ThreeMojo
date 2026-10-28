@@ -222,6 +222,8 @@ def _gate(migration, prior=None, components=None, *, _then_pair=False):
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
     _GATED_INVARIANT.add(key)
+    if _then_pair and prior is not None and component_key is not None:
+        _GATED_INVARIANT.add((migration, prior, component_key, False))
 
 
 def _gate_digest(payload, expected, kind, label):
@@ -497,7 +499,7 @@ def verify(root, *, _operation=None):
     operation_args = {} if _operation is None else {'_operation': _operation}
     try:
         with source.lexical_memo_scope():
-            record = read_record(root)
+            record = read_record(root, _then_pair=True)
             (predecessor_pin_pair(root) if _operation is None else
              _predecessor_pin_pair(root, _operation=_operation))
             loaded = []
