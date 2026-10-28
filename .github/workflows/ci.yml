@@ -115,7 +115,8 @@ jobs:
       CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}
     name: lint (standard library only)
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # This aggregate hang guard does not change any per-test timeout.
+    timeout-minutes: 240
 
     steps:
       # The whole history, so that the merge base with the base branch exists.
@@ -266,7 +267,9 @@ jobs:
       CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}
     name: check-cpu (macOS, Apple Silicon) lint
     runs-on: macos-latest
-    timeout-minutes: 120
+    # The Mac lints one file at a time, which takes about three and a half
+    # hours. This aggregate hang guard does not change any per-test timeout.
+    timeout-minutes: 240
 
     steps:
       # The whole history, so that the merge base with the base branch exists.
