@@ -8,6 +8,7 @@
     carla_runtime_boundary_gate --migration PATH
     carla_runtime_boundary_gate --bytes PATH --sha HEX [--token HEX] --label TEXT
     carla_runtime_boundary_gate --bytes-all DIR
+    carla_runtime_boundary_gate --checked-edges DIR
     carla_runtime_boundary_gate --steps DIR
     carla_runtime_boundary_gate --extend --path TEXT --step-sha HEX --edge-sha HEX --step-token HEX --edge-token HEX
     carla_runtime_boundary_gate --extends PATH
@@ -22,6 +23,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
+from tools._merged_edge import merged_edges
 from tools._python_json import (
     MISSING,
     PY_DICT,
@@ -251,6 +253,24 @@ def runtime_boundary_bytes_all(directory: String) raises:
         index += 1
 
 
+def runtime_boundary_checked_edges(directory: String) raises -> String:
+    """Check every file digest, then write each path on its edge.
+
+    Args:
+        directory: A directory with `labels.json` and one file per item.
+            Each item has `name`, `sha`, `label`, `path`, and `edge`.
+            `token` is optional.
+
+    Returns:
+        The edges with each path written first, in the same order.
+
+    Raises:
+        Error: A digest changed, or an edge cannot be read.
+    """
+    runtime_boundary_bytes_all(directory)
+    return merged_edges(Path(directory + "/labels.json").read_text())
+
+
 def _known_module(name: String) -> Bool:
     """Return whether the path is one reviewed boundary module.
 
@@ -391,7 +411,8 @@ def _usage():
         (
             "usage: carla_runtime_boundary_gate --migration PATH"
             " | --bytes PATH --sha HEX [--token HEX] --label TEXT"
-            " | --bytes-all DIR | --steps DIR | --extend --path TEXT"
+            " | --bytes-all DIR | --checked-edges DIR | --steps DIR"
+            " | --extend --path TEXT"
             " --step-sha HEX"
             " --edge-sha HEX --step-token HEX --edge-token HEX"
             " | --extends PATH"
@@ -414,6 +435,7 @@ def main() raises:
     var label = String("")
     var steps = String("")
     var bytes_all = String("")
+    var checked_edges = String("")
     var extend = False
     var module_path = String("")
     var step_sha = String("")
@@ -437,6 +459,7 @@ def main() raises:
             or word == "--label"
             or word == "--steps"
             or word == "--bytes-all"
+            or word == "--checked-edges"
             or word == "--path"
             or word == "--step-sha"
             or word == "--edge-sha"
@@ -461,6 +484,8 @@ def main() raises:
                 steps = value
             elif word == "--bytes-all":
                 bytes_all = value
+            elif word == "--checked-edges":
+                checked_edges = value
             elif word == "--path":
                 module_path = value
             elif word == "--step-sha":
@@ -484,6 +509,8 @@ def main() raises:
     if steps.byte_length() > 0:
         modes += 1
     if bytes_all.byte_length() > 0:
+        modes += 1
+    if checked_edges.byte_length() > 0:
         modes += 1
     if extend:
         modes += 1
@@ -517,6 +544,8 @@ def main() raises:
             return
         if migration.byte_length() > 0:
             runtime_boundary_record(Path(migration).read_bytes())
+        elif checked_edges.byte_length() > 0:
+            print(runtime_boundary_checked_edges(checked_edges), end="")
         elif bytes_all.byte_length() > 0:
             runtime_boundary_bytes_all(bytes_all)
         else:

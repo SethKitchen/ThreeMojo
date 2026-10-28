@@ -321,6 +321,43 @@ def _merged_edges(items):
         {'path': path, 'edge': edge} for path, edge in items])
 
 
+def _checked_edges(items):
+    """Check every file digest, then write each path on its edge."""
+    if not items:
+        return []
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='runtime-boundary-checked-') as directory:
+        folder = Path(directory)
+        rows = []
+        for index, (path, edge, payload, digest, token, label) in enumerate(items):
+            name = str(index)
+            (folder / name).write_bytes(payload)
+            row = {
+                'name': name, 'sha': digest, 'label': label,
+                'path': path, 'edge': edge,
+            }
+            if token is not None:
+                row['token'] = token
+            rows.append(row)
+        (folder / 'labels.json').write_text(json.dumps(rows, separators=(',', ':')))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_runtime_boundary_gate', '--checked-edges', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 _RUNTIME_MESSAGES = None
 
 
@@ -411,10 +448,7 @@ def verify(root, *, _operation=None):
         checked.append((
             path, edge, actual, current['after_sha256'], current['after_token_sha256'],
             _runtime_messages()['runtime_consumer'] + path))
-    _gate_bytes_all([
-        (actual, digest, token, label)
-        for _path, _edge, actual, digest, token, label in checked])
-    merged = _merged_edges([(path, edge) for path, edge, _actual, _digest, _token, _label in checked])
+    merged = _checked_edges(checked)
     for (path, _edge, _actual, _digest, _token, _label), edge in zip(checked, merged):
         edges[path] = edge
     tests = []

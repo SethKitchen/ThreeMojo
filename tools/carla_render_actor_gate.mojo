@@ -8,6 +8,7 @@
     carla_render_actor_gate --migration PATH
     carla_render_actor_gate --bytes PATH --sha HEX [--token HEX] --label TEXT
     carla_render_actor_gate --bytes-all DIR
+    carla_render_actor_gate --checked-edges DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -18,6 +19,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
+from tools._merged_edge import merged_edges
 from tools._python_json import (
     MISSING,
     PY_DICT,
@@ -208,6 +210,24 @@ def render_actor_bytes_all(directory: String) raises:
         index += 1
 
 
+def render_actor_checked_edges(directory: String) raises -> String:
+    """Check every file digest, then write each path on its edge.
+
+    Args:
+        directory: A directory with `labels.json` and one file per item.
+            Each item has `name`, `sha`, `label`, `path`, and `edge`.
+            `token` is optional.
+
+    Returns:
+        The edges with each path written first, in the same order.
+
+    Raises:
+        Error: A digest changed, or an edge cannot be read.
+    """
+    render_actor_bytes_all(directory)
+    return merged_edges(Path(directory + "/labels.json").read_text())
+
+
 def render_actor_paths() raises -> String:
     """Return the render-actor module and its bound tests.
 
@@ -238,7 +258,7 @@ def _usage():
         (
             "usage: carla_render_actor_gate --migration PATH"
             " | --bytes PATH --sha HEX [--token HEX] --label TEXT"
-            " | --bytes-all DIR"
+            " | --bytes-all DIR | --checked-edges DIR"
         ),
         file=stderr,
     )
@@ -257,6 +277,7 @@ def main() raises:
     var token = String("")
     var label = String("")
     var bytes_all = String("")
+    var checked_edges = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -268,6 +289,7 @@ def main() raises:
             or word == "--token"
             or word == "--label"
             or word == "--bytes-all"
+            or word == "--checked-edges"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -282,8 +304,10 @@ def main() raises:
                 token = value
             elif word == "--label":
                 label = value
-            else:
+            elif word == "--bytes-all":
                 bytes_all = value
+            else:
+                checked_edges = value
             index += 2
             continue
         _usage()
@@ -294,6 +318,8 @@ def main() raises:
         modes += 1
     if bytes_all.byte_length() > 0:
         modes += 1
+    if checked_edges.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if payload.byte_length() > 0 and (
@@ -303,6 +329,8 @@ def main() raises:
     try:
         if migration.byte_length() > 0:
             render_actor_record(Path(migration).read_bytes())
+        elif checked_edges.byte_length() > 0:
+            print(render_actor_checked_edges(checked_edges), end="")
         elif bytes_all.byte_length() > 0:
             render_actor_bytes_all(bytes_all)
         else:
