@@ -501,12 +501,23 @@ def verify_premises(root):
         for index in range(len(selected_pairs))])
     selected_match = {
         index: flag for (index, _actual, _source), flag in zip(selected_pairs, selected_flags)}
-    prepared = []
-    for index, (item, selected, text) in enumerate(loaded):
-        actual = declared[index]
-        if selected and not selected_match[index]:
+    restores = []
+    for index, (item, _selected, text) in enumerate(loaded):
+        if index in selected_match and not selected_match[index]:
             text = full_audit.reviewed_text(root, item['path'], text)
-            actual = _declaration(text, item['name'], tuple(item['owner']))
+            restores.append((index, item, text))
+    restored = {}
+    if restores:
+        texts = _declarations([{
+            'source': text,
+            'name': item['name'],
+            'owner': list(item['owner']),
+        } for _index, item, text in restores])
+        for (index, _item, _text), actual in zip(restores, texts):
+            restored[index] = actual
+    prepared = []
+    for index, (item, _selected, _text) in enumerate(loaded):
+        actual = restored[index] if index in restored else declared[index]
         prepared.append((actual, item['source'],
                          labels['declaration'] + item['name']))
     if prepared:
