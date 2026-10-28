@@ -109,7 +109,7 @@ def require(condition, message):
 
 
 def _graphs_then_result(payload):
-    """Check the caller graphs, then return the Sum2 projection result."""
+    """Read the Sum2 checkpoints, then return the projection result."""
     import ast
     import os
     import subprocess
@@ -122,7 +122,7 @@ def _graphs_then_result(payload):
         path.write_text(text)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sum2_result',
-             '--graphs', str(path)],
+             '--with-checkpoints', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -250,7 +250,6 @@ def verify(root, *, _operation=None):
     try:
         return _graphs_then_result({
             'texts': texts,
-            'checkpoints': _checkpoints(),
             'interval': interval,
             'legacy': pins['ideal_projection']['legacy_normalized_source'],
             'bounds': texts[helpers['bounds']],

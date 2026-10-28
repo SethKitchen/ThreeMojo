@@ -11,6 +11,7 @@ environment guard are copied from the checks that just ran.
 
 from tools._json_tools import quote_ascii
 from tools._moment_projection import moment_sum2_projection
+from tools._sum2_checkpoints import sum2_checkpoints
 from tools.carla_sum2_graphs import sum2_graphs_and_imports
 from tools._python_json import (
     PY_BOOL,
@@ -154,3 +155,26 @@ def sum2_graphs_then_result(payload: String) raises -> String:
     except error:
         raise Error("sum2 graph: " + String(error))
     return sum2_projected_result(payload)
+
+
+def sum2_checkpoints_then_result(payload: String) raises -> String:
+    """Read the Sum2 checkpoints, then check the caller graphs.
+
+    Args:
+        payload: JSON with the graph fields and the projection fields,
+            except `checkpoints`. The graph fields are `texts` and
+            `interval`. The projection fields are `legacy`, `bounds`,
+            `begin`, `end`, `interval`, and `environment_guard`.
+
+    Returns:
+        The result JSON in historical field order.
+
+    Raises:
+        Error: The checkpoints cannot be written, a caller graph changed,
+            or the projection changed. The checkpoints are read before
+            the graphs. A graph error starts with `sum2 graph: `.
+    """
+    var checkpoints = PyJson.parse(sum2_checkpoints())
+    var doc = PyJson.parse(payload)
+    doc.set(doc.root, "checkpoints", doc.adopt(checkpoints, checkpoints.root))
+    return sum2_graphs_then_result(doc.dumps())

@@ -8,16 +8,19 @@
     carla_sum2_result PATH
     carla_sum2_result --projected PATH
     carla_sum2_result --graphs PATH
+    carla_sum2_result --with-checkpoints PATH
 
 `PATH` is JSON with `projection` and `environment_guard`. The program
 prints the result. `--projected` projects the Sum2 spiral first.
 `--graphs` checks the caller graphs before that projection.
+`--with-checkpoints` reads the checkpoints before those graphs.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._sum2_result import (
+    sum2_checkpoints_then_result,
     sum2_graphs_then_result,
     sum2_projected_result,
     sum2_result,
@@ -27,7 +30,10 @@ from tools._sum2_result import (
 def _usage():
     """Print the command usage and stop."""
     print(
-        "usage: carla_sum2_result PATH | --projected PATH | --graphs PATH",
+        (
+            "usage: carla_sum2_result PATH | --projected PATH | --graphs PATH |"
+            " --with-checkpoints PATH"
+        ),
         file=stderr,
     )
     exit(2)
@@ -44,6 +50,16 @@ def main() raises:
         try:
             print(
                 sum2_graphs_then_result(Path(arguments[2]).read_text()),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--with-checkpoints":
+        try:
+            print(
+                sum2_checkpoints_then_result(Path(arguments[2]).read_text()),
                 end="",
             )
         except error:

@@ -8,6 +8,7 @@
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._sum2_result import (
+    sum2_checkpoints_then_result,
     sum2_graphs_then_result,
     sum2_projected_result,
     sum2_result,
@@ -50,6 +51,12 @@ def test_a_missing_graph_fails_before_the_sum2_projection() raises:
     """A missing caller text fails before the spiral projection."""
     with assert_raises(contains="sum2 graph: KeyError: 'texts'"):
         _ = sum2_graphs_then_result("{}")
+
+
+def test_the_checkpoints_are_read_before_the_graphs() raises:
+    """A stored checkpoint supplies the caller text that is still missing."""
+    with assert_raises(contains="sum2 graph: KeyError: 'curve_sum2'"):
+        _ = sum2_checkpoints_then_result('{"texts":{}}')
 
 
 def main() raises:
