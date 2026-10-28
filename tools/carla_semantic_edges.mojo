@@ -15,6 +15,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_expr import require_fragment_checks
+from tools._optional_runtime_messages import prefix_fragment_error
 from tools._semantic_edges import semantic_edge_payload
 
 
@@ -38,5 +39,5 @@ def main() raises:
             semantic_edge_payload(arguments[1], Path(arguments[2]).read_text())
         )
     except error:
-        print(String(error), file=stderr)
+        print(prefix_fragment_error(String(error)), file=stderr)
         exit(1)

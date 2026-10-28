@@ -15,6 +15,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_expr import require_fragment_checks
+from tools._optional_runtime_messages import prefix_fragment_error
 
 
 def _usage():
@@ -35,5 +36,5 @@ def main() raises:
     try:
         require_fragment_checks(Path(arguments[1]).read_text())
     except error:
-        print(String(error), file=stderr)
+        print(prefix_fragment_error(String(error)), file=stderr)
         exit(1)

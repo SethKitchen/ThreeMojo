@@ -9,6 +9,7 @@ from std.testing import TestSuite, assert_equal
 
 from tools._optional_runtime_messages import (
     optional_runtime_messages,
+    prefix_fragment_error,
     prefix_move_error,
 )
 from tools._python_json import PyJson
@@ -55,6 +56,15 @@ def test_a_bad_move_keeps_the_contract_prefix() raises:
         "optional runtime contract: unsupported move-token placement",
     )
     assert_equal(prefix_move_error("other failure"), "other failure")
+
+
+def test_a_fragment_failure_keeps_the_contract_prefix() raises:
+    """The fragment failure is prefixed after the contract messages are read."""
+    assert_equal(
+        prefix_fragment_error("invalid checker fragment: label"),
+        "optional runtime contract: invalid checker fragment: label",
+    )
+    assert_equal(prefix_fragment_error("other failure"), "other failure")
 
 
 def main() raises:

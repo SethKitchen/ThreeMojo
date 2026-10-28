@@ -239,9 +239,6 @@ def _fragment_checks(items):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        contract = _runtime_contract()
-        if message.startswith(contract['fragment']):
-            message = contract['prefix'] + message
         raise ValueError(message)
 
 
@@ -455,9 +452,6 @@ def _search_edges(source, name, mode):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        contract = _runtime_contract()
-        if message.startswith(contract['fragment']):
-            message = contract['prefix'] + message
         raise ValueError(message)
 
 
@@ -502,9 +496,6 @@ def _semantic_edges(group, nodes):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        contract = _runtime_contract()
-        if message.startswith(contract['fragment']):
-            message = contract['prefix'] + message
         raise ValueError(message)
 
 

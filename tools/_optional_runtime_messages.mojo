@@ -50,3 +50,24 @@ def prefix_move_error(message: String) raises -> String:
     if message != move:
         return message
     return messages.text(messages.at(messages.root, "prefix")) + message
+
+
+def prefix_fragment_error(message: String) raises -> String:
+    """Add the contract prefix to one invalid fragment failure.
+
+    Args:
+        message: The fragment failure.
+
+    Returns:
+        The message with the contract prefix when it starts with the
+        fragment marker. Every other message stays unchanged.
+
+    Raises:
+        Error: The contract messages cannot be read. The fragment check
+            has already failed before these messages are read.
+    """
+    var messages = PyJson.parse(optional_runtime_messages())
+    var marker = messages.text(messages.at(messages.root, "fragment"))
+    if not message.startswith(marker):
+        return message
+    return messages.text(messages.at(messages.root, "prefix")) + message
