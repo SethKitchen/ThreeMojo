@@ -18,8 +18,9 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._bigint import BigInt
-from tools._python_float import parse_float, python_repr
-from tools._python_json import PY_DICT, PY_FLOAT, PY_INT, PY_LIST, PyJson
+from tools._python_float import python_repr
+from tools._python_json import PY_DICT, PY_INT, PY_LIST, PyJson
+from tools._town_json import json_number
 
 
 def spline_text(text: String) raises -> String:
@@ -90,7 +91,7 @@ def _matrix(doc: PyJson, node: Int) raises -> List[Float64]:
         if doc.kind(line) != PY_LIST or doc.length(line) != 4:
             raise Error("matrix is not 4 by 4")
         for col in range(4):
-            out.append(_number(doc, doc.item(line, col)))
+            out.append(json_number(doc, doc.item(line, col)))
     return out^
 
 
@@ -109,9 +110,9 @@ def _vectors(
         var point = doc.item(node, index)
         if doc.kind(point) != PY_LIST or doc.length(point) != 3:
             raise Error("vector is not 3 numbers")
-        xs.append(_number(doc, doc.item(point, 0)))
-        ys.append(_number(doc, doc.item(point, 1)))
-        zs.append(_number(doc, doc.item(point, 2)))
+        xs.append(json_number(doc, doc.item(point, 0)))
+        ys.append(json_number(doc, doc.item(point, 1)))
+        zs.append(json_number(doc, doc.item(point, 2)))
 
 
 def _triangles(doc: PyJson, node: Int) raises -> List[Int]:
@@ -271,16 +272,6 @@ def _triangles_json(values: List[Int]) -> String:
         out += "]"
     out += "]"
     return out^
-
-
-def _number(doc: PyJson, node: Int) raises -> Float64:
-    """Return a JSON number as a float."""
-    var kind = doc.kind(node)
-    if kind == PY_FLOAT:
-        return doc.number(node)
-    if kind == PY_INT:
-        return parse_float(doc.text(node))
-    raise Error("coordinate is not a number")
 
 
 def _whole(doc: PyJson, node: Int) raises -> Int:

@@ -38,6 +38,7 @@ from tools.carla_gltf_compact import compact_gltf, gltf_text
 from tools.carla_gltf_read import read_text
 from tools.carla_simplify import simplify_text
 from tools.carla_simplify_target import target_text
+from tools._town_json import json_int
 
 
 def decimate_files(
@@ -120,7 +121,7 @@ def _decimate(
     for slot in range(len(places)):
         if fixed[slot]:
             continue
-        var target = _whole(
+        var target = json_int(
             chosen, chosen.item(targets, slot), "target is not an integer"
         )
         _simplify_one(doc, data, source, places[slot], target, folder)
@@ -143,7 +144,9 @@ def _simplify_one(
     var indices = _read(
         doc,
         source,
-        _whole(doc, doc.at(primitive, "indices"), "indices is not an integer"),
+        json_int(
+            doc, doc.at(primitive, "indices"), "indices is not an integer"
+        ),
         folder,
     )
     var attributes = doc.at(primitive, "attributes")
@@ -155,7 +158,7 @@ def _simplify_one(
     var points = _read(
         doc,
         source,
-        _whole(doc, position, "position is not an integer"),
+        json_int(doc, position, "position is not an integer"),
         folder,
     )
     var request = String('{"points":')
@@ -225,11 +228,11 @@ def _simplify_one(
         var name = doc.key(attributes, index)
         if name == "POSITION" or name == "NORMAL":
             continue
-        var accessor_index = _whole(
+        var accessor_index = json_int(
             doc, doc.value(attributes, index), "accessor is not an integer"
         )
         var accessor = doc.item(doc.at(doc.root, "accessors"), accessor_index)
-        var component = _whole(
+        var component = json_int(
             doc,
             doc.at(accessor, "componentType"),
             "componentType is not an integer",
@@ -245,7 +248,7 @@ def _simplify_one(
         gather += _flat(values, values.at(values.root, "values"), True)
         gather += ',"width":'
         gather += String(
-            _whole(
+            json_int(
                 values,
                 values.at(values.root, "width"),
                 "width is not an integer",
@@ -311,7 +314,7 @@ def _append(
     if parsed.kind(bytes) != PY_LIST:
         raise Error("append bytes are not a list")
     for index in range(parsed.length(bytes)):
-        var value = _whole(
+        var value = json_int(
             parsed, parsed.item(bytes, index), "byte is not an integer"
         )
         if value < 0 or value > 255:
@@ -325,7 +328,7 @@ def _append(
         doc.at(doc.root, "accessors"),
         doc.adopt(parsed, parsed.at(parsed.root, "accessor")),
     )
-    return _whole(
+    return json_int(
         parsed, parsed.at(parsed.root, "index"), "index is not an integer"
     )
 
@@ -389,11 +392,11 @@ def _targets(
 
 def _triangles(doc: PyJson, primitive: Int) raises -> Int:
     """Return the triangle count of one primitive."""
-    var index = _whole(
+    var index = json_int(
         doc, doc.at(primitive, "indices"), "indices is not an integer"
     )
     var accessor = doc.item(doc.at(doc.root, "accessors"), index)
-    var count = _whole(
+    var count = json_int(
         doc, doc.at(accessor, "count"), "count is not an integer"
     )
     return count // 3
@@ -408,7 +411,7 @@ def _fixed(doc: PyJson, primitive: Int, count: Int, keep: Int) raises -> Bool:
         return False
     var material = doc.item(
         doc.at(doc.root, "materials"),
-        _whole(doc, material_index, "material is not an integer"),
+        json_int(doc, material_index, "material is not an integer"),
     )
     var alpha = doc.find(material, "alphaMode")
     if alpha == MISSING or doc.kind(alpha) != PY_STR:
@@ -513,13 +516,6 @@ def _int_text(doc: PyJson, node: Int) raises -> String:
     if doc.kind(node) != PY_INT:
         raise Error("value is not an integer")
     return doc.text(node)
-
-
-def _whole(doc: PyJson, node: Int, message: String) raises -> Int:
-    """Return a JSON integer, or raise `message`."""
-    if doc.kind(node) != PY_INT:
-        raise Error(message)
-    return Int(parse_float(doc.text(node)))
 
 
 def _argument(text: String, name: String) raises -> Int:

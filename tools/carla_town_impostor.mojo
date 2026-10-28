@@ -24,18 +24,11 @@ from tools._python_float import (
     append_ascii,
     ascii_text,
     cached_repr,
-    parse_float,
     python_repr,
 )
-from tools._python_json import (
-    MISSING,
-    PY_DICT,
-    PY_FLOAT,
-    PY_INT,
-    PY_LIST,
-    PyJson,
-)
+from tools._python_json import MISSING, PY_DICT, PY_LIST, PyJson
 from tools._python_math import round_half_even
+from tools._town_json import json_index, json_number, json_vec3
 
 
 def impostor_text(text: String) raises -> String:
@@ -74,12 +67,12 @@ def _frame(doc: PyJson, root: Int) raises -> String:
         if doc.kind(parts) != PY_LIST:
             raise Error("parts are not a list")
         for index in range(doc.length(parts)):
-            _vec3(doc, doc.item(parts, index), px, py, pz)
+            json_vec3(doc, doc.item(parts, index), px, py, pz)
     else:
-        _vec3(doc, doc.at(root, "positions"), px, py, pz)
+        json_vec3(doc, doc.at(root, "positions"), px, py, pz)
     if len(px) == 0:
         raise Error("positions are empty")
-    var size = _whole(doc, doc.at(root, "size"))
+    var size = json_index(doc, doc.at(root, "size"))
     var low_x = px[0]
     var low_y = py[0]
     var low_z = pz[0]
@@ -285,46 +278,10 @@ def _rgba(
             var pixel = doc.item(line, column)
             if doc.kind(pixel) != PY_LIST or doc.length(pixel) != 4:
                 raise Error("pixel is not 4 numbers")
-            red.append(_number(doc, doc.item(pixel, 0)))
-            green.append(_number(doc, doc.item(pixel, 1)))
-            blue.append(_number(doc, doc.item(pixel, 2)))
-            alpha.append(_number(doc, doc.item(pixel, 3)))
-
-
-def _vec3(
-    doc: PyJson,
-    node: Int,
-    mut xs: List[Float64],
-    mut ys: List[Float64],
-    mut zs: List[Float64],
-) raises:
-    """Read a list of 3-vectors."""
-    if doc.kind(node) != PY_LIST:
-        raise Error("vectors are not a list")
-    for index in range(doc.length(node)):
-        var point = doc.item(node, index)
-        if doc.kind(point) != PY_LIST or doc.length(point) != 3:
-            raise Error("vector is not 3 numbers")
-        xs.append(_number(doc, doc.item(point, 0)))
-        ys.append(_number(doc, doc.item(point, 1)))
-        zs.append(_number(doc, doc.item(point, 2)))
-
-
-def _number(doc: PyJson, node: Int) raises -> Float64:
-    """Return a JSON number as a float."""
-    var kind = doc.kind(node)
-    if kind == PY_FLOAT:
-        return doc.number(node)
-    if kind == PY_INT:
-        return parse_float(doc.text(node))
-    raise Error("coordinate is not a number")
-
-
-def _whole(doc: PyJson, node: Int) raises -> Int:
-    """Return a JSON integer."""
-    if doc.kind(node) != PY_INT:
-        raise Error("index is not an integer")
-    return Int(parse_float(doc.text(node)))
+            red.append(json_number(doc, doc.item(pixel, 0)))
+            green.append(json_number(doc, doc.item(pixel, 1)))
+            blue.append(json_number(doc, doc.item(pixel, 2)))
+            alpha.append(json_number(doc, doc.item(pixel, 3)))
 
 
 def _light() raises -> String:

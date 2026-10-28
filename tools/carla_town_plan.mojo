@@ -17,17 +17,10 @@ is lowered.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float
-from tools._python_json import (
-    PY_BOOL,
-    PY_DICT,
-    PY_INT,
-    PY_LIST,
-    PY_STR,
-    PyJson,
-)
+from tools._python_json import PY_BOOL, PY_DICT, PY_LIST, PyJson
 from tools.carla_town_budget import far_budget, kind_of, near_budget
 from tools.carla_town_share import share_text
+from tools._town_json import json_named_int, json_quote, json_text
 
 
 comptime GRID = "WorldGridMaterial"
@@ -52,7 +45,7 @@ def plan_text(text: String) raises -> String:
     var doc = PyJson.parse(text)
     if doc.kind(doc.root) != PY_DICT:
         raise Error("plan request is not an object")
-    var mode = _text(
+    var mode = json_text(
         doc, doc.at(doc.root, "mode"), "mode is not select or jobs"
     )
     if mode == "select":
@@ -75,10 +68,10 @@ def _select(doc: PyJson) raises -> String:
             raise Error("row is not an object")
         if not _flag(doc, doc.at(row, "visible"), "visible is not a bool"):
             continue
-        var mesh = _text(doc, doc.at(row, "mesh"), "mesh is not text")
+        var mesh = json_text(doc, doc.at(row, "mesh"), "mesh is not text")
         if kind_of(mesh) == "skip":
             continue
-        if _starts(mesh, "/Engine/") and not _ends(mesh, "/Cube"):
+        if mesh.startswith("/Engine/") and not mesh.endswith("/Cube"):
             continue
         if not first:
             out += ","
@@ -106,9 +99,11 @@ def _jobs(doc: PyJson) raises -> String:
         var row = doc.item(rows, index)
         if doc.kind(row) != PY_DICT:
             raise Error("row is not an object")
-        var mesh = _text(doc, doc.at(row, "mesh"), "mesh is not text")
-        var count = _whole(doc, doc.at(row, "copies"), "copies")
-        var triangles = _whole(doc, doc.at(row, "triangles"), "triangles")
+        var mesh = json_text(doc, doc.at(row, "mesh"), "mesh is not text")
+        var count = json_named_int(doc, doc.at(row, "copies"), "copies")
+        var triangles = json_named_int(
+            doc, doc.at(row, "triangles"), "triangles"
+        )
         if count < 0:
             raise Error("copies is negative")
         if triangles < 0:
@@ -128,9 +123,13 @@ def _jobs(doc: PyJson) raises -> String:
             var indices = step.at(step.root, "indices")
             for item in range(step.length(indices)):
                 use.append(
-                    _whole(step, step.item(indices, item), "grass index")
+                    json_named_int(
+                        step, step.item(indices, item), "grass index"
+                    )
                 )
-            grass = _whole(step, step.at(step.root, "next"), "grass count")
+            grass = json_named_int(
+                step, step.at(step.root, "next"), "grass count"
+            )
         else:
             for item in range(count):
                 use.append(item)
@@ -149,7 +148,7 @@ def _jobs(doc: PyJson) raises -> String:
         if index > 0:
             out += ","
         out += '{"kind":'
-        out += _quote(key_kind[index])
+        out += json_quote(key_kind[index])
         out += ',"lod":'
         out += String(key_lod[index])
         out += ',"count":'
@@ -191,7 +190,9 @@ def _job(
         raise Error("materials are not a list")
     var first = -1
     for index in range(doc.length(names)):
-        var name = _text(doc, doc.item(names, index), "material is not text")
+        var name = json_text(
+            doc, doc.item(names, index), "material is not text"
+        )
         if name != GRID and first < 0:
             first = index
     var far_limit = far_budget(kind, triangles, mesh)
@@ -199,7 +200,7 @@ def _job(
     if kind == "building":
         goal = _goal(far_limit, far_factor)
     var out = String('{"kind":')
-    out += _quote(kind)
+    out += json_quote(kind)
     out += ',"lamp_glass":'
     if _has(mesh, "_glass_") and _has(mesh, "/StreetLights/"):
         out += "true"
@@ -213,7 +214,9 @@ def _job(
     out += '],"parts":['
     var wrote = False
     for index in range(doc.length(names)):
-        var name = _text(doc, doc.item(names, index), "material is not text")
+        var name = json_text(
+            doc, doc.item(names, index), "material is not text"
+        )
         if name == GRID:
             continue
         if wrote:
@@ -222,7 +225,7 @@ def _job(
         out += '{"index":'
         out += String(index)
         out += ',"material":'
-        out += _quote(name)
+        out += json_quote(name)
         out += ',"levels":['
         out += _level(0, "lower", near_factor, 0)
         out += ","
@@ -248,7 +251,7 @@ def _level(lod: Int, action: String, factor: String, goal: Int) -> String:
     var out = String('{"lod":')
     out += String(lod)
     out += ',"action":'
-    out += _quote(action)
+    out += json_quote(action)
     out += ',"factor":'
     out += factor
     if action == "baked":
@@ -267,7 +270,7 @@ def _factors(
         if index > 0:
             request += ","
         request += '{"kind":'
-        request += _quote(kinds[index])
+        request += json_quote(kinds[index])
         request += ',"lod":'
         request += String(lods[index])
         request += ',"count":'
@@ -290,7 +293,7 @@ def _goal(limit: Int, factor: String) raises -> Int:
     request += factor
     request += "}"
     var doc = PyJson.parse(share_text(request))
-    return _whole(doc, doc.at(doc.root, "goal"), "goal")
+    return json_named_int(doc, doc.at(doc.root, "goal"), "goal")
 
 
 def _lookup(
@@ -325,65 +328,11 @@ def _add(
     counts.append(amount)
 
 
-def _text(doc: PyJson, node: Int, message: String) raises -> String:
-    """Return a JSON string, or raise `message`."""
-    if doc.kind(node) != PY_STR:
-        raise Error(message)
-    return doc.text(node)
-
-
 def _flag(doc: PyJson, node: Int, message: String) raises -> Bool:
     """Return a JSON bool, or raise `message`."""
     if doc.kind(node) != PY_BOOL:
         raise Error(message)
     return doc.flag(node)
-
-
-def _whole(doc: PyJson, node: Int, message: String) raises -> Int:
-    """Return a JSON integer, or raise `message`."""
-    if doc.kind(node) != PY_INT:
-        raise Error(message + " is not an integer")
-    return Int(parse_float(doc.text(node)))
-
-
-def _quote(text: String) -> String:
-    """Return one JSON string."""
-    var out = String('"')
-    var raw = text.as_bytes()
-    for index in range(len(raw)):
-        var byte = raw[index]
-        if byte == 34 or byte == 92:
-            out += "\\"
-            out += chr(Int(byte))
-        else:
-            out += chr(Int(byte))
-    out += '"'
-    return out
-
-
-def _starts(text: String, prefix: String) -> Bool:
-    """Return whether `text` begins with `prefix`."""
-    var raw = text.as_bytes()
-    var head = prefix.as_bytes()
-    if len(raw) < len(head):
-        return False
-    for index in range(len(head)):
-        if raw[index] != head[index]:
-            return False
-    return True
-
-
-def _ends(text: String, suffix: String) -> Bool:
-    """Return whether `text` ends with `suffix`."""
-    var raw = text.as_bytes()
-    var tail = suffix.as_bytes()
-    if len(raw) < len(tail):
-        return False
-    var start = len(raw) - len(tail)
-    for index in range(len(tail)):
-        if raw[start + index] != tail[index]:
-            return False
-    return True
 
 
 def _has(text: String, needle: String) -> Bool:

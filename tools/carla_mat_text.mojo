@@ -40,12 +40,12 @@ def mat_text(path: String) raises -> String:
     var lines = _lines(text)
     for index in range(len(lines)):
         var line = lines[index]
-        var eq = _find(line, "=")
+        var eq = line.find("=")
         if eq < 0:
             continue
         var key = String(line[byte=:eq])
         var value = String(line[byte = eq + 1 :])
-        if _starts(key, "Other"):
+        if key.startswith("Other"):
             tree.append(others, tree.string(value))
         else:
             tree.set(obj, key, tree.string(value))
@@ -199,7 +199,7 @@ def _parent(text: String) -> String:
 def _parent_line(line: String) -> String:
     """Return the parent path when `line` is a parent declaration."""
     var prefix = String("Parent = ")
-    if not _starts(line, prefix):
+    if not line.startswith(prefix):
         return String("")
     var raw = line.as_bytes()
     var index = prefix.byte_length()
@@ -413,30 +413,7 @@ def _space(raw: Span[UInt8, _], index: Int) -> Int:
 
 def _has(text: String, needle: String) -> Bool:
     """Return whether `needle` occurs in `text`."""
-    return _find(text, needle) >= 0
-
-
-def _find(text: String, needle: String) -> Int:
-    """Return the first byte index of `needle`, or -1."""
-    var raw = text.as_bytes()
-    var head = needle.as_bytes()
-    if len(head) == 0:
-        return 0
-    var last = len(raw) - len(head)
-    for index in range(last + 1):
-        var same = True
-        for offset in range(len(head)):
-            if raw[index + offset] != head[offset]:
-                same = False
-                break
-        if same:
-            return index
-    return -1
-
-
-def _starts(text: String, prefix: String) -> Bool:
-    """Return whether `text` begins with `prefix`."""
-    return _starts_at(text, 0, prefix)
+    return text.find(needle) >= 0
 
 
 def _starts_at(text: String, index: Int, prefix: String) -> Bool:

@@ -15,17 +15,8 @@ and points every primitive at that copy.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._json_tools import quote_ascii
-from tools._python_json import (
-    MISSING,
-    PY_BOOL,
-    PY_DICT,
-    PY_FLOAT,
-    PY_INT,
-    PY_LIST,
-    PY_STR,
-    PyJson,
-)
+from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PY_STR, PyJson
+from tools._town_json import json_dump
 
 
 def dedupe_text(path: String) raises -> String:
@@ -47,7 +38,7 @@ def dedupe_text(path: String) raises -> String:
     if doc.kind(doc.root) != PY_DICT:
         raise Error("glTF is not an object")
     _dedupe(doc)
-    return _dump(doc, doc.root)
+    return json_dump(doc, doc.root)
 
 
 def _dedupe(mut doc: PyJson) raises:
@@ -120,38 +111,6 @@ def _index(doc: PyJson, node: Int, limit: Int) raises -> Int:
     if value < 0 or value >= limit:
         raise Error("material index out of range")
     return value
-
-
-def _dump(doc: PyJson, node: Int) raises -> String:
-    """Return JSON in insertion order, as `json.dumps` writes it."""
-    var kind = doc.kind(node)
-    if kind == PY_STR:
-        return quote_ascii(doc.text(node))
-    if kind == PY_INT or kind == PY_FLOAT:
-        return doc.text(node)
-    if kind == PY_BOOL:
-        return "true" if doc.flag(node) else "false"
-    if kind == PY_LIST:
-        var out = String("[")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ", "
-            out += _dump(doc, doc.item(node, index))
-        out += "]"
-        return out
-    if kind == PY_DICT:
-        var out = String("{")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ", "
-            out += quote_ascii(doc.key(node, index))
-            out += ": "
-            out += _dump(doc, doc.value(node, index))
-        out += "}"
-        return out
-    return "null"
 
 
 def main() raises:

@@ -31,6 +31,7 @@ from tools._python_json import (
 )
 from tools.carla_image_resize import resize_text, unit_bytes
 from tools.carla_mask_channel import mask_text
+from tools._town_json import json_int
 
 
 def pack_text(text: String) raises -> String:
@@ -521,7 +522,7 @@ def _flag(doc: PyJson, node: Int) raises -> Bool:
 
 def _positive(doc: PyJson, node: Int) raises -> Int:
     """Return a size that is at least one."""
-    var value = _whole(doc, node, "size is not an integer")
+    var value = json_int(doc, node, "size is not an integer")
     if value < 1:
         raise Error("size is not positive")
     return value
@@ -533,20 +534,13 @@ def _bytes(doc: PyJson, node: Int, expect: Int) raises -> List[Int]:
         raise Error("pixels do not match the image")
     var out = List[Int]()
     for index in range(expect):
-        var value = _whole(
+        var value = json_int(
             doc, doc.item(node, index), "pixel is not an integer"
         )
         if value < 0 or value > 255:
             raise Error("pixel is out of range")
         out.append(value)
     return out^
-
-
-def _whole(doc: PyJson, node: Int, message: String) raises -> Int:
-    """Return a JSON integer, or raise `message`."""
-    if doc.kind(node) != PY_INT:
-        raise Error(message)
-    return Int(parse_float(doc.text(node)))
 
 
 @no_inline

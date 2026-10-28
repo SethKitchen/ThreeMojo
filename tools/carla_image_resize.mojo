@@ -23,6 +23,7 @@ from std.sys import argv, exit, stderr
 
 from tools._python_float import append_ascii, ascii_text, parse_float
 from tools._python_json import PY_DICT, PY_FLOAT, PY_INT, PY_LIST, PyJson
+from tools._town_json import json_int
 
 
 comptime PRECISION = 22
@@ -54,11 +55,13 @@ def resize_text(text: String) raises -> String:
         lanczos = True
     elif mode != "box":
         raise Error("mode is not lanczos, box, or bytes")
-    var width = _whole(doc, doc.at(root, "width"), "size is not an integer")
-    var height = _whole(doc, doc.at(root, "height"), "size is not an integer")
-    var bands = _whole(doc, doc.at(root, "bands"), "size is not an integer")
-    var out_w = _whole(doc, doc.at(root, "out_width"), "size is not an integer")
-    var out_h = _whole(
+    var width = json_int(doc, doc.at(root, "width"), "size is not an integer")
+    var height = json_int(doc, doc.at(root, "height"), "size is not an integer")
+    var bands = json_int(doc, doc.at(root, "bands"), "size is not an integer")
+    var out_w = json_int(
+        doc, doc.at(root, "out_width"), "size is not an integer"
+    )
+    var out_h = json_int(
         doc, doc.at(root, "out_height"), "size is not an integer"
     )
     if width < 1 or height < 1 or out_w < 1 or out_h < 1:
@@ -342,7 +345,7 @@ def _pixels(doc: PyJson, node: Int, expect: Int) raises -> List[Int]:
         raise Error("pixels do not match the image")
     var out = List[Int]()
     for index in range(expect):
-        var value = _whole(
+        var value = json_int(
             doc, doc.item(node, index), "pixel is not an integer"
         )
         if value < 0 or value > 255:
@@ -374,13 +377,6 @@ def _trunc(value: Float64) -> Int:
     if value < 0.0:
         return -Int(-value)
     return Int(value)
-
-
-def _whole(doc: PyJson, node: Int, message: String) raises -> Int:
-    """Return a JSON integer, or raise `message`."""
-    if doc.kind(node) != PY_INT:
-        raise Error(message)
-    return Int(parse_float(doc.text(node)))
 
 
 def _sin(value: Float64) -> Float64:

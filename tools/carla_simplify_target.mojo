@@ -28,6 +28,7 @@ from tools._python_json import (
     PY_LIST,
     PyJson,
 )
+from tools._town_json import json_int
 
 
 def target_text(text: String) raises -> String:
@@ -60,12 +61,14 @@ def target_text(text: String) raises -> String:
 
 def _share(doc: PyJson, root: Int) raises -> String:
     """Return the town mesh's action and its raw target."""
-    var budget = _whole(doc, doc.at(root, "budget"), "budget is not an integer")
-    var triangles = _whole(
+    var budget = json_int(
+        doc, doc.at(root, "budget"), "budget is not an integer"
+    )
+    var triangles = json_int(
         doc, doc.at(root, "triangles"), "count is not an integer"
     )
-    var total = _whole(doc, doc.at(root, "total"), "count is not an integer")
-    var keep = _whole(doc, doc.at(root, "keep"), "keep is not an integer")
+    var total = json_int(doc, doc.at(root, "total"), "count is not an integer")
+    var keep = json_int(doc, doc.at(root, "keep"), "keep is not an integer")
     if budget < 0 or triangles < 0 or total < 0 or keep < 0:
         raise Error("count is negative")
     var factor = _number(doc, doc.at(root, "factor"))
@@ -109,11 +112,13 @@ def _share(doc: PyJson, root: Int) raises -> String:
 
 def _collapse(doc: PyJson, root: Int) raises -> String:
     """Return whether a bordered mesh stays whole, and its target."""
-    var triangles = _whole(
+    var triangles = json_int(
         doc, doc.at(root, "triangles"), "count is not an integer"
     )
-    var target = _whole(doc, doc.at(root, "target"), "count is not an integer")
-    var keep = _whole(doc, doc.at(root, "keep"), "keep is not an integer")
+    var target = json_int(
+        doc, doc.at(root, "target"), "count is not an integer"
+    )
+    var keep = json_int(doc, doc.at(root, "keep"), "keep is not an integer")
     if triangles < 0 or target < 0 or keep < 0:
         raise Error("count is negative")
     var small = _flag(doc, doc.at(root, "small"))
@@ -136,10 +141,12 @@ def _collapse(doc: PyJson, root: Int) raises -> String:
 
 def _weld(doc: PyJson, root: Int) raises -> String:
     """Return whether a far mesh stays whole, and its target."""
-    var triangles = _whole(
+    var triangles = json_int(
         doc, doc.at(root, "triangles"), "count is not an integer"
     )
-    var target = _whole(doc, doc.at(root, "target"), "count is not an integer")
+    var target = json_int(
+        doc, doc.at(root, "target"), "count is not an integer"
+    )
     if triangles < 0 or target < 0:
         raise Error("count is negative")
     var gate = target
@@ -161,15 +168,17 @@ def _vehicle(doc: PyJson, root: Int) raises -> String:
         raise Error("vehicle arrays are not lists")
     if doc.length(counts) != doc.length(fixed):
         raise Error("vehicle arrays differ in length")
-    var budget = _whole(doc, doc.at(root, "budget"), "budget is not an integer")
-    var keep = _whole(doc, doc.at(root, "keep"), "keep is not an integer")
+    var budget = json_int(
+        doc, doc.at(root, "budget"), "budget is not an integer"
+    )
+    var keep = json_int(doc, doc.at(root, "keep"), "keep is not an integer")
     if budget < 0 or keep < 0:
         raise Error("count is negative")
     var total = 0
     var held = 0
     var count = doc.length(counts)
     for index in range(count):
-        var triangles = _whole(
+        var triangles = json_int(
             doc, doc.item(counts, index), "count is not an integer"
         )
         if triangles < 0:
@@ -196,7 +205,7 @@ def _vehicle(doc: PyJson, root: Int) raises -> String:
         if _flag(doc, doc.item(fixed, index)):
             out += "0"
         else:
-            var triangles = _whole(
+            var triangles = json_int(
                 doc, doc.item(counts, index), "count is not an integer"
             )
             var target = _trunc(_fmul(Float64(triangles), ratio))
@@ -236,13 +245,6 @@ def _number(doc: PyJson, node: Int) raises -> Float64:
     if kind == PY_INT:
         return parse_float(doc.text(node))
     raise Error("factor is not a number")
-
-
-def _whole(doc: PyJson, node: Int, message: String) raises -> Int:
-    """Return a JSON integer, or raise `message`."""
-    if doc.kind(node) != PY_INT:
-        raise Error(message)
-    return Int(parse_float(doc.text(node)))
 
 
 @no_inline

@@ -20,16 +20,10 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._bigint import BigInt
-from tools._python_float import parse_float, python_repr
-from tools._python_json import (
-    MISSING,
-    PY_DICT,
-    PY_FLOAT,
-    PY_INT,
-    PY_LIST,
-    PyJson,
-)
+from tools._python_float import python_repr
+from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PyJson
 from tools._zlib import crc32
+from tools._town_json import json_number, json_vec2, json_vec3
 
 
 def cards_text(text: String) raises -> String:
@@ -60,13 +54,13 @@ def cards_text(text: String) raises -> String:
     var nzs = List[Float64]()
     var us = List[Float64]()
     var vs = List[Float64]()
-    _vec3(doc, doc.at(root, "positions"), xs, ys, zs)
-    _vec3(doc, doc.at(root, "normals"), nxs, nys, nzs)
-    _vec2(doc, doc.at(root, "uvs"), us, vs)
+    json_vec3(doc, doc.at(root, "positions"), xs, ys, zs)
+    json_vec3(doc, doc.at(root, "normals"), nxs, nys, nzs)
+    json_vec2(doc, doc.at(root, "uvs"), us, vs)
     if len(xs) != len(nxs) or len(xs) != len(us):
         raise Error("attributes differ in length")
     var faces = _triangles(doc, doc.at(root, "triangles"), len(xs))
-    var keep = _number(doc, doc.at(root, "keep"))
+    var keep = json_number(doc, doc.at(root, "keep"))
     var seed = _seed(doc, doc.at(root, "seed"))
     var count = len(xs)
     var label = _components(count, faces)
@@ -473,39 +467,6 @@ def _vec2_json(us: List[Float64], vs: List[Float64]) raises -> String:
     return out^
 
 
-def _vec3(
-    doc: PyJson,
-    node: Int,
-    mut xs: List[Float64],
-    mut ys: List[Float64],
-    mut zs: List[Float64],
-) raises:
-    """Read a list of 3-vectors."""
-    if doc.kind(node) != PY_LIST:
-        raise Error("vectors are not a list")
-    for index in range(doc.length(node)):
-        var point = doc.item(node, index)
-        if doc.kind(point) != PY_LIST or doc.length(point) != 3:
-            raise Error("vector is not 3 numbers")
-        xs.append(_number(doc, doc.item(point, 0)))
-        ys.append(_number(doc, doc.item(point, 1)))
-        zs.append(_number(doc, doc.item(point, 2)))
-
-
-def _vec2(
-    doc: PyJson, node: Int, mut xs: List[Float64], mut ys: List[Float64]
-) raises:
-    """Read a list of 2-vectors."""
-    if doc.kind(node) != PY_LIST:
-        raise Error("vectors are not a list")
-    for index in range(doc.length(node)):
-        var point = doc.item(node, index)
-        if doc.kind(point) != PY_LIST or doc.length(point) != 2:
-            raise Error("vector is not 2 numbers")
-        xs.append(_number(doc, doc.item(point, 0)))
-        ys.append(_number(doc, doc.item(point, 1)))
-
-
 def _triangles(doc: PyJson, node: Int, count: Int) raises -> List[Int]:
     """Return triangle indices, three per triangle."""
     if doc.kind(node) != PY_LIST:
@@ -559,16 +520,6 @@ def _seed(doc: PyJson, node: Int) raises -> List[UInt32]:
     for limb in value.limbs:
         out.append(limb)
     return out^
-
-
-def _number(doc: PyJson, node: Int) raises -> Float64:
-    """Return a JSON number as a float."""
-    var kind = doc.kind(node)
-    if kind == PY_FLOAT:
-        return doc.number(node)
-    if kind == PY_INT:
-        return parse_float(doc.text(node))
-    raise Error("coordinate is not a number")
 
 
 def _whole(doc: PyJson, node: Int) raises -> Int:

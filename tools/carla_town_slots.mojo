@@ -139,7 +139,7 @@ def _object_path(full_name: String) raises -> List[String]:
     Raises:
         Error: If `full_name` has no class and path.
     """
-    var space = _find(full_name, " ")
+    var space = full_name.find(" ")
     if space < 0:
         raise Error("object path has no class")
     var cls = String(full_name[byte=0:space])
@@ -164,24 +164,6 @@ def _object_path(full_name: String) raises -> List[String]:
     out.append(package)
     out.append(name)
     return out^
-
-
-def _find(text: String, needle: String) -> Int:
-    """Return the first byte index of `needle`, or -1."""
-    var raw = text.as_bytes()
-    var head = needle.as_bytes()
-    if len(head) == 0:
-        return 0
-    var last = len(raw) - len(head)
-    for index in range(last + 1):
-        var same = True
-        for offset in range(len(head)):
-            if raw[index + offset] != head[offset]:
-                same = False
-                break
-        if same:
-            return index
-    return -1
 
 
 def _rfind(text: String, needle: String) -> Int:

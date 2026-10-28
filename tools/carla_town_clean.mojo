@@ -81,7 +81,7 @@ def _file(directory: String, name: String) raises -> String:
     var hit = _find(name)
     if hit.found:
         return "unclean file name: " + directory + "/" + name
-    if not (_ends(name, ".gltf") or _ends(name, ".xodr")):
+    if not (name.endswith(".gltf") or name.endswith(".xodr")):
         return String("")
     var text = Path(directory + "/" + name).read_text()
     var found = _find(text)
@@ -162,19 +162,6 @@ def _lower(byte: UInt8) -> UInt8:
     if byte >= 65 and byte <= 90:
         return byte + 32
     return byte
-
-
-def _ends(text: String, suffix: String) -> Bool:
-    """Return whether `text` ends with `suffix`."""
-    var raw = text.as_bytes()
-    var tail = suffix.as_bytes()
-    if len(raw) < len(tail):
-        return False
-    var start = len(raw) - len(tail)
-    for index in range(len(tail)):
-        if raw[start + index] != tail[index]:
-            return False
-    return True
 
 
 def main() raises:

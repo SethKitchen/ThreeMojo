@@ -26,6 +26,7 @@ from tools._python_json import (
     PY_LIST,
     PyJson,
 )
+from tools._town_json import json_int
 
 
 def collapse_text(text: String) raises -> String:
@@ -50,7 +51,7 @@ def collapse_text(text: String) raises -> String:
     var mapping = doc.at(root, "mapping")
     if doc.kind(mapping) != PY_LIST:
         raise Error("mapping is not a list")
-    var count = _whole(doc, doc.at(root, "count"), "count is not an integer")
+    var count = json_int(doc, doc.at(root, "count"), "count is not an integer")
     if count < 0:
         raise Error("count is negative")
     var source = List[Int]()
@@ -79,12 +80,12 @@ def _gather(doc: PyJson, root: Int) raises -> String:
     var values = doc.at(root, "values")
     if doc.kind(source) != PY_LIST or doc.kind(values) != PY_LIST:
         raise Error("gather arrays are not lists")
-    var width = _whole(doc, doc.at(root, "width"), "width is not an integer")
+    var width = json_int(doc, doc.at(root, "width"), "width is not an integer")
     if width < 1:
         raise Error("width is not positive")
     var out = String('{"values":[')
     for corner in range(doc.length(source)):
-        var old = _whole(
+        var old = json_int(
             doc, doc.item(source, corner), "index is not an integer"
         )
         if old < 0:
@@ -112,17 +113,10 @@ def _number(doc: PyJson, node: Int) raises -> Float64:
 
 def _index(doc: PyJson, node: Int, count: Int) raises -> Int:
     """Return a new-corner index inside `count`."""
-    var value = _whole(doc, node, "index is not an integer")
+    var value = json_int(doc, node, "index is not an integer")
     if value < 0 or value >= count:
         raise Error("index out of range")
     return value
-
-
-def _whole(doc: PyJson, node: Int, message: String) raises -> Int:
-    """Return a JSON integer, or raise `message`."""
-    if doc.kind(node) != PY_INT:
-        raise Error(message)
-    return Int(parse_float(doc.text(node)))
 
 
 def main() raises:

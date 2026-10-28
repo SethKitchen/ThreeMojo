@@ -18,8 +18,9 @@ from std.math import sqrt
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float, python_repr
-from tools._python_json import PY_DICT, PY_FLOAT, PY_INT, PY_LIST, PyJson
+from tools._python_float import python_repr
+from tools._python_json import PY_DICT, PY_LIST, PyJson
+from tools._town_json import json_index, json_triangles, json_vec3
 
 
 def choose_text(text: String) raises -> String:
@@ -51,8 +52,8 @@ def _source(doc: PyJson, root: Int) raises -> String:
     var px = List[Float64]()
     var py = List[Float64]()
     var pz = List[Float64]()
-    _vec3(doc, doc.at(root, "positions"), px, py, pz)
-    var faces = _triangles(doc, doc.at(root, "triangles"), len(px))
+    json_vec3(doc, doc.at(root, "positions"), px, py, pz)
+    var faces = json_triangles(doc, doc.at(root, "triangles"), len(px))
     var out = String('{"centers":[')
     var normals = String('"normals":[')
     var count = len(faces) // 3
@@ -114,10 +115,10 @@ def _choose(doc: PyJson, root: Int) raises -> String:
     var fx = List[Float64]()
     var fy = List[Float64]()
     var fz = List[Float64]()
-    _vec3(doc, doc.at(root, "centers"), cx, cy, cz)
-    _vec3(doc, doc.at(root, "normals"), nx, ny, nz)
-    _vec3(doc, doc.at(root, "queries"), qx, qy, qz)
-    _vec3(doc, doc.at(root, "faces"), fx, fy, fz)
+    json_vec3(doc, doc.at(root, "centers"), cx, cy, cz)
+    json_vec3(doc, doc.at(root, "normals"), nx, ny, nz)
+    json_vec3(doc, doc.at(root, "queries"), qx, qy, qz)
+    json_vec3(doc, doc.at(root, "faces"), fx, fy, fz)
     if len(cx) != len(nx) or len(qx) != len(fx):
         raise Error("choose arrays differ in length")
     var near = doc.at(root, "near")
@@ -212,7 +213,7 @@ def _abs(value: Float64) -> Float64:
 
 def _index(doc: PyJson, node: Int, count: Int) raises -> Int:
     """Return a neighbor index inside `count`."""
-    var value = _whole(doc, node)
+    var value = json_index(doc, node)
     if value < 0 or value >= count:
         raise Error("index out of range")
     return value
@@ -226,59 +227,6 @@ def _xyz(x: Float64, y: Float64, z: Float64) raises -> String:
     out += ","
     out += python_repr(z)
     return out^
-
-
-def _vec3(
-    doc: PyJson,
-    node: Int,
-    mut xs: List[Float64],
-    mut ys: List[Float64],
-    mut zs: List[Float64],
-) raises:
-    """Read a list of 3-vectors."""
-    if doc.kind(node) != PY_LIST:
-        raise Error("vectors are not a list")
-    for index in range(doc.length(node)):
-        var point = doc.item(node, index)
-        if doc.kind(point) != PY_LIST or doc.length(point) != 3:
-            raise Error("vector is not 3 numbers")
-        xs.append(_number(doc, doc.item(point, 0)))
-        ys.append(_number(doc, doc.item(point, 1)))
-        zs.append(_number(doc, doc.item(point, 2)))
-
-
-def _triangles(doc: PyJson, node: Int, count: Int) raises -> List[Int]:
-    """Return triangle indices."""
-    if doc.kind(node) != PY_LIST:
-        raise Error("triangles are not a list")
-    var out = List[Int]()
-    for index in range(doc.length(node)):
-        var triangle = doc.item(node, index)
-        if doc.kind(triangle) != PY_LIST or doc.length(triangle) != 3:
-            raise Error("triangle is not three indices")
-        for corner in range(3):
-            var face = _whole(doc, doc.item(triangle, corner))
-            if face < 0 or face >= count:
-                raise Error("index out of range")
-            out.append(face)
-    return out^
-
-
-def _number(doc: PyJson, node: Int) raises -> Float64:
-    """Return a JSON number as a float."""
-    var kind = doc.kind(node)
-    if kind == PY_FLOAT:
-        return doc.number(node)
-    if kind == PY_INT:
-        return parse_float(doc.text(node))
-    raise Error("coordinate is not a number")
-
-
-def _whole(doc: PyJson, node: Int) raises -> Int:
-    """Return a JSON integer."""
-    if doc.kind(node) != PY_INT:
-        raise Error("index is not an integer")
-    return Int(parse_float(doc.text(node)))
 
 
 @no_inline

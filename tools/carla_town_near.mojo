@@ -21,14 +21,8 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._python_float import parse_float, python_repr
-from tools._python_json import (
-    MISSING,
-    PY_DICT,
-    PY_FLOAT,
-    PY_INT,
-    PY_LIST,
-    PyJson,
-)
+from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PyJson
+from tools._town_json import json_number, json_vec3
 
 
 comptime LEAF = 16
@@ -84,14 +78,14 @@ def near_text(text: String) raises -> String:
     var qx = List[Float64]()
     var qy = List[Float64]()
     var qz = List[Float64]()
-    _vec3(doc, doc.at(root, "centers"), xs, ys, zs)
+    json_vec3(doc, doc.at(root, "centers"), xs, ys, zs)
     var corners = doc.get(root, "corners")
     var report = False
     if corners != MISSING:
         _means(doc, corners, qx, qy, qz)
         report = True
     else:
-        _vec3(doc, doc.at(root, "queries"), qx, qy, qz)
+        json_vec3(doc, doc.at(root, "queries"), qx, qy, qz)
     var count = _whole(doc, doc.at(root, "count"))
     if count < 1:
         raise Error("count is not positive")
@@ -827,15 +821,15 @@ def _means(
         var triangle = doc.item(node, index)
         if doc.kind(triangle) != PY_LIST or doc.length(triangle) != 3:
             raise Error("corner triangle is not 3 points")
-        var x0 = _number(doc, _corner(doc, triangle, 0, 0))
-        var y0 = _number(doc, _corner(doc, triangle, 0, 1))
-        var z0 = _number(doc, _corner(doc, triangle, 0, 2))
-        var x1 = _number(doc, _corner(doc, triangle, 1, 0))
-        var y1 = _number(doc, _corner(doc, triangle, 1, 1))
-        var z1 = _number(doc, _corner(doc, triangle, 1, 2))
-        var x2 = _number(doc, _corner(doc, triangle, 2, 0))
-        var y2 = _number(doc, _corner(doc, triangle, 2, 1))
-        var z2 = _number(doc, _corner(doc, triangle, 2, 2))
+        var x0 = json_number(doc, _corner(doc, triangle, 0, 0))
+        var y0 = json_number(doc, _corner(doc, triangle, 0, 1))
+        var z0 = json_number(doc, _corner(doc, triangle, 0, 2))
+        var x1 = json_number(doc, _corner(doc, triangle, 1, 0))
+        var y1 = json_number(doc, _corner(doc, triangle, 1, 1))
+        var z1 = json_number(doc, _corner(doc, triangle, 1, 2))
+        var x2 = json_number(doc, _corner(doc, triangle, 2, 0))
+        var y2 = json_number(doc, _corner(doc, triangle, 2, 1))
+        var z2 = json_number(doc, _corner(doc, triangle, 2, 2))
         xs.append(_fdiv(_fadd(_fadd(x0, x1), x2), 3.0))
         ys.append(_fdiv(_fadd(_fadd(y0, y1), y2), 3.0))
         zs.append(_fdiv(_fadd(_fadd(z0, z1), z2), 3.0))
@@ -847,35 +841,6 @@ def _corner(doc: PyJson, triangle: Int, point: Int, axis: Int) raises -> Int:
     if doc.kind(vertex) != PY_LIST or doc.length(vertex) != 3:
         raise Error("corner is not 3 numbers")
     return doc.item(vertex, axis)
-
-
-def _vec3(
-    doc: PyJson,
-    node: Int,
-    mut xs: List[Float64],
-    mut ys: List[Float64],
-    mut zs: List[Float64],
-) raises:
-    """Read a list of 3-vectors."""
-    if doc.kind(node) != PY_LIST:
-        raise Error("vectors are not a list")
-    for index in range(doc.length(node)):
-        var point = doc.item(node, index)
-        if doc.kind(point) != PY_LIST or doc.length(point) != 3:
-            raise Error("vector is not 3 numbers")
-        xs.append(_number(doc, doc.item(point, 0)))
-        ys.append(_number(doc, doc.item(point, 1)))
-        zs.append(_number(doc, doc.item(point, 2)))
-
-
-def _number(doc: PyJson, node: Int) raises -> Float64:
-    """Return a JSON number as a float."""
-    var kind = doc.kind(node)
-    if kind == PY_FLOAT:
-        return doc.number(node)
-    if kind == PY_INT:
-        return parse_float(doc.text(node))
-    raise Error("coordinate is not a number")
 
 
 def _whole(doc: PyJson, node: Int) raises -> Int:

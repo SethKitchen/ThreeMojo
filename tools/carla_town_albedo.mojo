@@ -27,6 +27,7 @@ from tools._python_json import (
     PyJson,
 )
 from tools.carla_image import image_file, unit_text
+from tools._town_json import json_index, json_member
 
 
 def albedo_text(text: String) raises -> String:
@@ -49,8 +50,8 @@ def albedo_text(text: String) raises -> String:
     var doc = PyJson.parse(text)
     if doc.kind(doc.root) != PY_DICT:
         raise Error("albedo request is not an object")
-    var out_dir = _text(doc, _member(doc, doc.root, "out_dir"))
-    var material = _member(doc, doc.root, "material")
+    var out_dir = _text(doc, json_member(doc, doc.root, "out_dir"))
+    var material = json_member(doc, doc.root, "material")
     if doc.kind(material) != PY_DICT:
         raise Error("material is not an object")
     var factor = _factor(doc, material)
@@ -93,17 +94,19 @@ def _image(doc: PyJson, material: Int, out_dir: String) raises -> String:
         return ""
     if doc.kind(texture) != PY_DICT:
         raise Error("texture is not an object")
-    var index = _whole(doc, _member(doc, texture, "index"))
-    var textures = _member(doc, doc.root, "textures")
-    var images = _member(doc, doc.root, "images")
+    var index = json_index(doc, json_member(doc, texture, "index"))
+    var textures = json_member(doc, doc.root, "textures")
+    var images = json_member(doc, doc.root, "images")
     if doc.kind(textures) != PY_LIST or doc.kind(images) != PY_LIST:
         raise Error("textures are not a list")
     if index < 0 or index >= doc.length(textures):
         raise Error("texture index is out of range")
-    var source = _whole(doc, _member(doc, doc.item(textures, index), "source"))
+    var source = json_index(
+        doc, json_member(doc, doc.item(textures, index), "source")
+    )
     if source < 0 or source >= doc.length(images):
         raise Error("image index is out of range")
-    var uri = _text(doc, _member(doc, doc.item(images, source), "uri"))
+    var uri = _text(doc, json_member(doc, doc.item(images, source), "uri"))
     var opened = PyJson.parse(image_file(_join(out_dir, uri)))
     var unit = PyJson.parse(
         unit_text(
@@ -133,21 +136,6 @@ def _join(directory: String, uri: String) -> String:
     if base[len(base) - 1] == 47:
         return directory + uri
     return directory + "/" + uri
-
-
-def _member(doc: PyJson, node: Int, key: String) raises -> Int:
-    """Return a member, or raise `KeyError` text when it is absent."""
-    var found = doc.get(node, key)
-    if found == MISSING:
-        raise Error("KeyError: '" + key + "'")
-    return found
-
-
-def _whole(doc: PyJson, node: Int) raises -> Int:
-    """Return a JSON integer."""
-    if doc.kind(node) != PY_INT:
-        raise Error("index is not an integer")
-    return Int(parse_float(doc.text(node)))
 
 
 def _number(doc: PyJson, node: Int) raises -> Float64:

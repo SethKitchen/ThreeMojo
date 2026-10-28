@@ -19,8 +19,9 @@ from std.sys import argv, exit, stderr
 
 from tools._bigint import BigInt
 from tools._fraction import Fraction
-from tools._python_float import parse_float, python_repr
-from tools._python_json import PY_DICT, PY_FLOAT, PY_INT, PY_LIST, PyJson
+from tools._python_float import python_repr
+from tools._python_json import PY_DICT, PY_LIST, PyJson
+from tools._town_json import json_index, json_number, json_vec2, json_vec3
 
 
 def buffer_text(text: String) raises -> String:
@@ -67,14 +68,14 @@ def buffer_text(text: String) raises -> String:
     var indices = List[Int]()
     for index in range(doc.length(groups)):
         var group = doc.item(groups, index)
-        lods.append(_whole(doc, doc.at(group, "lod")))
+        lods.append(json_index(doc, doc.at(group, "lod")))
         kinds.append(doc.text(doc.at(group, "kind")))
         var cell = doc.at(group, "cell")
         if doc.kind(cell) != PY_LIST or doc.length(cell) != 2:
             raise Error("cell is not two integers")
-        cell_x.append(_whole(doc, doc.item(cell, 0)))
-        cell_y.append(_whole(doc, doc.item(cell, 1)))
-        materials.append(_whole(doc, doc.at(group, "material")))
+        cell_x.append(json_index(doc, doc.item(cell, 0)))
+        cell_y.append(json_index(doc, doc.item(cell, 1)))
+        materials.append(json_index(doc, doc.at(group, "material")))
         pos_at.append(len(px))
         nrm_at.append(len(nx))
         uv_at.append(len(us))
@@ -394,7 +395,7 @@ def _lamps(doc: PyJson, node: Int) raises -> String:
             if not first:
                 out += ","
             first = False
-            out += python_repr(_round3(_number(doc, doc.item(head, axis))))
+            out += python_repr(_round3(json_number(doc, doc.item(head, axis))))
     out += "]"
     return out^
 
@@ -427,7 +428,7 @@ def _chunks3(
     var added = 0
     for index in range(doc.length(node)):
         var before = len(xs)
-        _vec3(doc, doc.item(node, index), xs, ys, zs)
+        json_vec3(doc, doc.item(node, index), xs, ys, zs)
         added += len(xs) - before
     return added
 
@@ -441,7 +442,7 @@ def _chunks2(
     var added = 0
     for index in range(doc.length(node)):
         var before = len(xs)
-        _vec2(doc, doc.item(node, index), xs, ys)
+        json_vec2(doc, doc.item(node, index), xs, ys)
         added += len(xs) - before
     return added
 
@@ -466,46 +467,13 @@ def _chunk_tris(
             if doc.kind(triangle) != PY_LIST or doc.length(triangle) != 3:
                 raise Error("triangle is not three indices")
             for corner in range(3):
-                var value = _whole(doc, doc.item(triangle, corner)) + base
+                var value = json_index(doc, doc.item(triangle, corner)) + base
                 if value < 0 or value > 4294967295:
                     raise Error("index does not fit in uint32")
                 indices.append(value)
             added += 1
         base += doc.length(cloud)
     return added
-
-
-def _vec3(
-    doc: PyJson,
-    node: Int,
-    mut xs: List[Float64],
-    mut ys: List[Float64],
-    mut zs: List[Float64],
-) raises:
-    """Read a list of 3-vectors."""
-    if doc.kind(node) != PY_LIST:
-        raise Error("vectors are not a list")
-    for index in range(doc.length(node)):
-        var point = doc.item(node, index)
-        if doc.kind(point) != PY_LIST or doc.length(point) != 3:
-            raise Error("vector is not 3 numbers")
-        xs.append(_number(doc, doc.item(point, 0)))
-        ys.append(_number(doc, doc.item(point, 1)))
-        zs.append(_number(doc, doc.item(point, 2)))
-
-
-def _vec2(
-    doc: PyJson, node: Int, mut xs: List[Float64], mut ys: List[Float64]
-) raises:
-    """Read a list of 2-vectors."""
-    if doc.kind(node) != PY_LIST:
-        raise Error("vectors are not a list")
-    for index in range(doc.length(node)):
-        var point = doc.item(node, index)
-        if doc.kind(point) != PY_LIST or doc.length(point) != 2:
-            raise Error("vector is not 2 numbers")
-        xs.append(_number(doc, doc.item(point, 0)))
-        ys.append(_number(doc, doc.item(point, 1)))
 
 
 def _stored(value: Float64) -> Float64:
@@ -534,23 +502,6 @@ def _pad(mut data: List[UInt8]):
     """Append zero bytes until the length is a multiple of four."""
     while len(data) % 4 != 0:
         data.append(0)
-
-
-def _number(doc: PyJson, node: Int) raises -> Float64:
-    """Return a JSON number as a float."""
-    var kind = doc.kind(node)
-    if kind == PY_FLOAT:
-        return doc.number(node)
-    if kind == PY_INT:
-        return parse_float(doc.text(node))
-    raise Error("coordinate is not a number")
-
-
-def _whole(doc: PyJson, node: Int) raises -> Int:
-    """Return a JSON integer."""
-    if doc.kind(node) != PY_INT:
-        raise Error("index is not an integer")
-    return Int(parse_float(doc.text(node)))
 
 
 def main() raises:

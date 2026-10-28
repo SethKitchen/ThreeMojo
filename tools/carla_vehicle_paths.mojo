@@ -54,7 +54,11 @@ def blueprint_path(root: String, relative: String) raises -> String:
     for index in range(len(ordered)):
         var name = ordered[index]
         var low = _lower(name)
-        if _starts(low, "bp_") and _ends(low, ".uasset") and not _wheel(low):
+        if (
+            low.startswith("bp_")
+            and low.endswith(".uasset")
+            and not _wheel(low)
+        ):
             return _join(folder, name)
     raise Error("not found")
 
@@ -86,8 +90,8 @@ def package_path(content: String, game_path: String) raises -> String:
     var found = List[String]()
     for name in listdir(folder):
         if (
-            _starts(name, stem)
-            and _ends(name, ".uasset")
+            name.startswith(stem)
+            and name.endswith(".uasset")
             and not _excluded(name)
         ):
             found.append(name)
@@ -122,7 +126,7 @@ def gltf_path(raw: String, content: String, package: String) raises -> String:
             slash += String(rel[byte = index : index + 1])
     var parts = _split(slash)
     var stem = parts[len(parts) - 1]
-    if _ends(stem, ".uasset"):
+    if stem.endswith(".uasset"):
         var end = stem.byte_length() - 7
         var trimmed = String(stem[byte=0:end])
         stem = trimmed
@@ -158,7 +162,7 @@ def folder_candidates(content: String, text: String) raises -> String:
         if doc.kind(item) != PY_STR:
             raise Error("name is not text")
         var game = doc.text(item)
-        if _find(game, "/Pedestrian/") >= 0:
+        if game.find("/Pedestrian/") >= 0:
             continue
         var package = package_path(content, game)
         if package.byte_length() == 0:
@@ -177,7 +181,7 @@ def folder_candidates(content: String, text: String) raises -> String:
         var sorted_files = _sorted(files)
         for file_index in range(len(sorted_files)):
             var file = sorted_files[file_index]
-            if not _ends(file, ".uasset") or _excluded(file):
+            if not file.endswith(".uasset") or _excluded(file):
                 continue
             if not first:
                 out += ","
@@ -228,15 +232,15 @@ def _after_game(game_path: String) -> String:
 
 def _wheel(low: String) -> Bool:
     """Return whether a lowercased name is a wheel `.uasset`."""
-    if not _ends(low, "w.uasset") or low.byte_length() < 9:
+    if not low.endswith("w.uasset") or low.byte_length() < 9:
         return False
     var stem = String(low[byte = : low.byte_length() - 8])
-    if _ends(stem, "_f") or _ends(stem, "_r"):
+    if stem.endswith("_f") or stem.endswith("_r"):
         return True
     if stem.byte_length() < 3:
         return False
     var tail = String(stem[byte = stem.byte_length() - 3 :])
-    if not _starts(tail, "_"):
+    if not tail.startswith("_"):
         return False
     var mid = String(tail[byte=1:2])
     var end = String(tail[byte=2:3])
@@ -267,7 +271,7 @@ def _quote(text: String) -> String:
 def _excluded(name: String) -> Bool:
     """Return whether a file name is a skeleton or a physics asset."""
     var low = _lower(name)
-    return _find(low, "skeleton") >= 0 or _find(low, "physics") >= 0
+    return low.find("skeleton") >= 0 or low.find("physics") >= 0
 
 
 def _relpath(path: String, start: String) raises -> String:
@@ -296,7 +300,7 @@ def _relpath(path: String, start: String) raises -> String:
 def _abspath(path: String) raises -> String:
     """Return an absolute path with `.` and `..` removed."""
     var full = path
-    if not _starts(path, "/"):
+    if not path.startswith("/"):
         full = _join(String(cwd()), path)
     var absolute = True
     var stack = List[String]()
@@ -341,13 +345,13 @@ def _join_all(base: String, parts: List[String]) -> String:
 
 def _join(base: String, part: String) -> String:
     """Join two path parts, as `os.path.join` does."""
-    if _starts(part, "/"):
+    if part.startswith("/"):
         return part
     if part.byte_length() == 0:
-        if _ends(base, "/"):
+        if base.endswith("/"):
             return base
         return base + "/"
-    if base.byte_length() == 0 or _ends(base, "/"):
+    if base.byte_length() == 0 or base.endswith("/"):
         return base + part
     return base + "/" + part
 
@@ -427,49 +431,6 @@ def _lower(text: String) -> String:
         else:
             out += chr(code)
     return out
-
-
-def _find(text: String, needle: String) -> Int:
-    """Return the first byte index of `needle`, or -1."""
-    var raw = text.as_bytes()
-    var head = needle.as_bytes()
-    if len(head) == 0:
-        return 0
-    var last = len(raw) - len(head)
-    for index in range(last + 1):
-        var same = True
-        for offset in range(len(head)):
-            if raw[index + offset] != head[offset]:
-                same = False
-                break
-        if same:
-            return index
-    return -1
-
-
-def _starts(text: String, prefix: String) -> Bool:
-    """Return whether `text` begins with `prefix`."""
-    var raw = text.as_bytes()
-    var head = prefix.as_bytes()
-    if len(raw) < len(head):
-        return False
-    for index in range(len(head)):
-        if raw[index] != head[index]:
-            return False
-    return True
-
-
-def _ends(text: String, suffix: String) -> Bool:
-    """Return whether `text` ends with `suffix`."""
-    var raw = text.as_bytes()
-    var tail = suffix.as_bytes()
-    if len(raw) < len(tail):
-        return False
-    var start = len(raw) - len(tail)
-    for index in range(len(tail)):
-        if raw[start + index] != tail[index]:
-            return False
-    return True
 
 
 def _usage() raises:

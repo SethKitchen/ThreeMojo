@@ -21,18 +21,22 @@ from std.sys import argv, exit, stderr
 from tools._python_float import parse_float, python_repr
 from tools._python_json import (
     MISSING,
-    PY_BOOL,
     PY_DICT,
     PY_FLOAT,
     PY_INT,
     PY_LIST,
-    PY_NONE,
-    PY_STR,
     PyJson,
 )
 from tools.carla_town_bend import bend_text
 from tools.carla_town_place import cell_text, place_rigid
 from tools.carla_town_spline import spline_text
+from tools._town_json import (
+    json_compact,
+    json_member,
+    json_named_int,
+    json_quote,
+    json_text,
+)
 
 
 def group_text(text: String) raises -> String:
@@ -55,11 +59,11 @@ def group_text(text: String) raises -> String:
     if doc.kind(doc.root) != PY_DICT:
         raise Error("group request is not an object")
     var tile = _number(
-        doc, _member(doc, doc.root, "tile"), "tile is not a number"
+        doc, json_member(doc, doc.root, "tile"), "tile is not a number"
     )
     if not (tile > 0.0):
         raise Error("tile is not positive")
-    var parts = _member(doc, doc.root, "parts")
+    var parts = json_member(doc, doc.root, "parts")
     if doc.kind(parts) != PY_LIST:
         raise Error("parts are not a list")
     var index_of = Dict[String, Int]()
@@ -120,25 +124,31 @@ def _place_part(
     mut triangles: List[List[String]],
 ) raises:
     """Place one part's copies into the groups."""
-    var lod = _whole(doc, _member(doc, part, "lod"), "lod")
-    var kind = _text(doc, _member(doc, part, "kind"), "kind is not text")
-    var material = _whole(doc, _member(doc, part, "material"), "material")
+    var lod = json_named_int(doc, json_member(doc, part, "lod"), "lod")
+    var kind = json_text(
+        doc, json_member(doc, part, "kind"), "kind is not text"
+    )
+    var material = json_named_int(
+        doc, json_member(doc, part, "material"), "material"
+    )
     var point_values = _vec3(
-        doc, _member(doc, part, "positions"), "positions are not a list"
+        doc, json_member(doc, part, "positions"), "positions are not a list"
     )
     var normal_values = _vec3(
-        doc, _member(doc, part, "normals"), "normals are not a list"
+        doc, json_member(doc, part, "normals"), "normals are not a list"
     )
-    var tri_values = _tris(doc, _member(doc, part, "triangles"))
-    var uv_json = _compact(doc, _listed(doc, part, "uvs", "uvs are not a list"))
-    var copies = _member(doc, part, "copies")
+    var tri_values = _tris(doc, json_member(doc, part, "triangles"))
+    var uv_json = json_compact(
+        doc, _listed(doc, part, "uvs", "uvs are not a list")
+    )
+    var copies = json_member(doc, part, "copies")
     if doc.kind(copies) != PY_LIST:
         raise Error("copies are not a list")
     for index in range(doc.length(copies)):
         var copy = doc.item(copies, index)
         if doc.kind(copy) != PY_DICT:
             raise Error("copy is not an object")
-        var matrix_node = _member(doc, copy, "matrix")
+        var matrix_node = json_member(doc, copy, "matrix")
         var matrix = _matrix(doc, matrix_node)
         var placed = _place_copy(
             doc,
@@ -206,7 +216,7 @@ def _place_copy(
         var bent = bend_text(_bend_request(doc, spline, points, normals))
         placed = spline_text(
             _spline_request(
-                _compact(doc, matrix_node),
+                json_compact(doc, matrix_node),
                 _array_of(bent, "points"),
                 _array_of(bent, "normals"),
                 _triangles_json(triangles),
@@ -273,7 +283,7 @@ def _emit(
         out += '{"lod":'
         out += String(lods[index])
         out += ',"kind":'
-        out += _quote(kinds[index])
+        out += json_quote(kinds[index])
         out += ',"cell":['
         out += String(columns[index])
         out += ","
@@ -302,23 +312,23 @@ def _bend_request(
     out += ',"normals":'
     out += _vec3_json(normals)
     out += ',"forward_axis":'
-    out += _compact(doc, _member(doc, spline, "forward_axis"))
+    out += json_compact(doc, json_member(doc, spline, "forward_axis"))
     out += ',"start":'
-    out += _compact(doc, _member(doc, spline, "start"))
+    out += json_compact(doc, json_member(doc, spline, "start"))
     out += ',"end":'
-    out += _compact(doc, _member(doc, spline, "end"))
+    out += json_compact(doc, json_member(doc, spline, "end"))
     out += ',"start_tangent":'
-    out += _compact(doc, _member(doc, spline, "start_tangent"))
+    out += json_compact(doc, json_member(doc, spline, "start_tangent"))
     out += ',"end_tangent":'
-    out += _compact(doc, _member(doc, spline, "end_tangent"))
+    out += json_compact(doc, json_member(doc, spline, "end_tangent"))
     out += ',"start_roll":'
-    out += _compact(doc, _member(doc, spline, "start_roll"))
+    out += json_compact(doc, json_member(doc, spline, "start_roll"))
     out += ',"end_roll":'
-    out += _compact(doc, _member(doc, spline, "end_roll"))
+    out += json_compact(doc, json_member(doc, spline, "end_roll"))
     out += ',"start_scale":'
-    out += _compact(doc, _member(doc, spline, "start_scale"))
+    out += json_compact(doc, json_member(doc, spline, "start_scale"))
     out += ',"end_scale":'
-    out += _compact(doc, _member(doc, spline, "end_scale"))
+    out += json_compact(doc, json_member(doc, spline, "end_scale"))
     out += "}"
     return out
 
@@ -477,21 +487,13 @@ def _tris(doc: PyJson, node: Int) raises -> List[Int]:
         if doc.kind(line) != PY_LIST or doc.length(line) != 3:
             raise Error("a triangle needs three indexes")
         for column in range(3):
-            out.append(_whole(doc, doc.item(line, column), "index"))
+            out.append(json_named_int(doc, doc.item(line, column), "index"))
     return out^
-
-
-def _member(doc: PyJson, node: Int, key: String) raises -> Int:
-    """Return a member, or raise `KeyError` text when it is absent."""
-    var found = doc.get(node, key)
-    if found == MISSING:
-        raise Error("KeyError: '" + key + "'")
-    return found
 
 
 def _listed(doc: PyJson, node: Int, key: String, message: String) raises -> Int:
     """Return a member that must be a list."""
-    var found = _member(doc, node, key)
+    var found = json_member(doc, node, key)
     if doc.kind(found) != PY_LIST:
         raise Error(message)
     return found
@@ -505,69 +507,6 @@ def _number(doc: PyJson, node: Int, message: String) raises -> Float64:
     if kind == PY_INT:
         return parse_float(doc.text(node))
     raise Error(message)
-
-
-def _whole(doc: PyJson, node: Int, message: String) raises -> Int:
-    """Return a JSON integer, or raise `message`."""
-    if doc.kind(node) != PY_INT:
-        raise Error(message + " is not an integer")
-    return Int(parse_float(doc.text(node)))
-
-
-def _text(doc: PyJson, node: Int, message: String) raises -> String:
-    """Return a JSON string, or raise `message`."""
-    if doc.kind(node) != PY_STR:
-        raise Error(message)
-    return doc.text(node)
-
-
-def _compact(doc: PyJson, node: Int) raises -> String:
-    """Return JSON with no spaces, in insertion order."""
-    var kind = doc.kind(node)
-    if kind == PY_DICT:
-        var out = String("{")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ","
-            out += _quote(doc.key(node, index))
-            out += ":"
-            out += _compact(doc, doc.value(node, index))
-        out += "}"
-        return out
-    if kind == PY_LIST:
-        var out = String("[")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ","
-            out += _compact(doc, doc.item(node, index))
-        out += "]"
-        return out
-    if kind == PY_STR:
-        return _quote(doc.text(node))
-    if kind == PY_BOOL:
-        if doc.flag(node):
-            return "true"
-        return "false"
-    if kind == PY_NONE:
-        return "null"
-    return doc.text(node)
-
-
-def _quote(text: String) -> String:
-    """Return one JSON string."""
-    var out = String('"')
-    var raw = text.as_bytes()
-    for index in range(len(raw)):
-        var byte = raw[index]
-        if byte == 34 or byte == 92:
-            out += "\\"
-            out += chr(Int(byte))
-        else:
-            out += chr(Int(byte))
-    out += '"'
-    return out
 
 
 def main() raises:

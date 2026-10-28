@@ -22,16 +22,15 @@ from tools._bigint import BigInt
 from tools._python_float import parse_float, python_repr
 from tools._python_json import (
     MISSING,
-    PY_BOOL,
     PY_DICT,
     PY_FLOAT,
     PY_INT,
     PY_LIST,
-    PY_NONE,
     PY_STR,
     PyJson,
 )
 from tools.carla_town_frame import frame_json
+from tools._town_json import json_compact, json_number
 
 
 @fieldwise_init
@@ -78,10 +77,10 @@ def heads_text(text: String) raises -> String:
     var zs = List[Float64]()
     var raw = List[Int]()
     _read_primitives(doc, root, xs, ys, zs, raw)
-    if _ends(mesh, "_glass_ext"):
+    if mesh.endswith("_glass_ext"):
         return _glass(xs, ys, zs, raw)
-    if _ends(mesh, "/SM_Lights/SM_StreetLightWall") or _ends(
-        mesh, "/Chainbarrier/SM_LightPost"
+    if mesh.endswith("/SM_Lights/SM_StreetLightWall") or mesh.endswith(
+        "/Chainbarrier/SM_LightPost"
     ):
         return _top(xs, ys, zs)
     return "null"
@@ -114,9 +113,9 @@ def _read_primitives(
             var point = doc.item(positions, point_index)
             if doc.kind(point) != PY_LIST or doc.length(point) != 3:
                 raise Error("position is not a 3-vector")
-            xs.append(_number(doc, doc.item(point, 0)))
-            ys.append(_number(doc, doc.item(point, 1)))
-            zs.append(_number(doc, doc.item(point, 2)))
+            xs.append(json_number(doc, doc.item(point, 0)))
+            ys.append(json_number(doc, doc.item(point, 1)))
+            zs.append(json_number(doc, doc.item(point, 2)))
         var triangle_count = doc.length(triangles)
         for triangle_index in range(triangle_count):
             var triangle = doc.item(triangles, triangle_index)
@@ -381,16 +380,6 @@ def _json_heads(values: List[Float64]) raises -> String:
     return out^
 
 
-def _number(doc: PyJson, node: Int) raises -> Float64:
-    """Return a JSON number as a float."""
-    var kind = doc.kind(node)
-    if kind == PY_FLOAT:
-        return doc.number(node)
-    if kind == PY_INT:
-        return parse_float(doc.text(node))
-    raise Error("coordinate is not a number")
-
-
 def _whole(doc: PyJson, node: Int) raises -> Int:
     """Return a JSON integer."""
     if doc.kind(node) != PY_INT:
@@ -439,19 +428,19 @@ def _placed_copies(doc: PyJson, root: Int) raises -> String:
     var matrices = doc.at(root, "matrices")
     if doc.kind(matrices) != PY_LIST:
         raise Error("matrices are not a list")
-    var heads_json = _compact(doc, heads)
+    var heads_json = json_compact(doc, heads)
     var out = String("[")
     var first = True
     for index in range(doc.length(matrices)):
         var frame = PyJson.parse(
-            frame_json(_compact(doc, doc.item(matrices, index)))
+            frame_json(json_compact(doc, doc.item(matrices, index)))
         )
         var request = String('{"heads":')
         request += heads_json
         request += ',"linear":'
-        request += _compact(frame, frame.at(frame.root, "linear"))
+        request += json_compact(frame, frame.at(frame.root, "linear"))
         request += ',"move":'
-        request += _compact(frame, frame.at(frame.root, "move"))
+        request += json_compact(frame, frame.at(frame.root, "move"))
         request += "}"
         var placed_doc = PyJson.parse(request)
         var one = _placed(placed_doc, placed_doc.root)
@@ -463,55 +452,6 @@ def _placed_copies(doc: PyJson, root: Int) raises -> String:
         var end = one.byte_length() - 1
         out += String(one[byte=1:end])
     out += "]"
-    return out
-
-
-def _compact(doc: PyJson, node: Int) raises -> String:
-    """Return JSON with no spaces, in insertion order."""
-    var kind = doc.kind(node)
-    if kind == PY_DICT:
-        var out = String("{")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ","
-            out += _quote(doc.key(node, index))
-            out += ":"
-            out += _compact(doc, doc.value(node, index))
-        out += "}"
-        return out
-    if kind == PY_LIST:
-        var out = String("[")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ","
-            out += _compact(doc, doc.item(node, index))
-        out += "]"
-        return out
-    if kind == PY_STR:
-        return _quote(doc.text(node))
-    if kind == PY_BOOL:
-        if doc.flag(node):
-            return "true"
-        return "false"
-    if kind == PY_NONE:
-        return "null"
-    return doc.text(node)
-
-
-def _quote(text: String) -> String:
-    """Return one JSON string."""
-    var out = String('"')
-    var raw = text.as_bytes()
-    for index in range(len(raw)):
-        var byte = raw[index]
-        if byte == 34 or byte == 92:
-            out += "\\"
-            out += chr(Int(byte))
-        else:
-            out += chr(Int(byte))
-    out += '"'
     return out
 
 
@@ -592,19 +532,6 @@ def _fmul(left: Float64, right: Float64) -> Float64:
 def _fadd(left: Float64, right: Float64) -> Float64:
     """Return one sum, rounded before the next operation."""
     return left + right
-
-
-def _ends(text: String, suffix: String) -> Bool:
-    """Return whether `text` ends with `suffix`."""
-    var raw = text.as_bytes()
-    var tail = suffix.as_bytes()
-    if len(raw) < len(tail):
-        return False
-    var start = len(raw) - len(tail)
-    for index in range(len(tail)):
-        if raw[start + index] != tail[index]:
-            return False
-    return True
 
 
 def main() raises:

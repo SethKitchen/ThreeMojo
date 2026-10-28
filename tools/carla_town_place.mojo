@@ -471,18 +471,6 @@ def answer(text: String) raises -> String:
     raise Error("usage: carla_town_place matrix|apply|serve")
 
 
-def _starts(text: String, prefix: String) -> Bool:
-    """Return whether `text` begins with `prefix`."""
-    var raw = text.as_bytes()
-    var head = prefix.as_bytes()
-    if len(raw) < len(head):
-        return False
-    for index in range(len(head)):
-        if raw[index] != head[index]:
-            return False
-    return True
-
-
 def _write_stdout(text: String) raises:
     """Write `text` to standard output."""
     var raw = text.as_bytes()
@@ -537,11 +525,11 @@ def serve() raises:
         if line.byte_length() == 0:
             return
         try:
-            if _starts(line, "apply\t"):
+            if line.startswith("apply\t"):
                 _write_stdout(
                     apply_text(Path(String(line[byte=6:])).read_text()) + "\n"
                 )
-            elif _starts(line, "cell\t"):
+            elif line.startswith("cell\t"):
                 _write_stdout(_cell_line(String(line[byte=5:])) + "\n")
             else:
                 _write_stdout(answer(line) + "\n")

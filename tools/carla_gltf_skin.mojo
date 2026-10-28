@@ -15,17 +15,8 @@ data goes. The bone nodes stay, as named markers of the wheels.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._json_tools import quote_ascii
-from tools._python_json import (
-    MISSING,
-    PY_BOOL,
-    PY_DICT,
-    PY_FLOAT,
-    PY_INT,
-    PY_LIST,
-    PY_STR,
-    PyJson,
-)
+from tools._python_json import MISSING, PY_DICT, PY_LIST, PyJson
+from tools._town_json import json_dump
 
 
 def strip_text(path: String) raises -> String:
@@ -47,7 +38,7 @@ def strip_text(path: String) raises -> String:
     if doc.kind(doc.root) != PY_DICT:
         raise Error("glTF is not an object")
     _strip(doc)
-    return _dump(doc, doc.root)
+    return json_dump(doc, doc.root)
 
 
 def _strip(mut doc: PyJson) raises:
@@ -88,54 +79,10 @@ def _strip(mut doc: PyJson) raises:
 def _skin_key(key: String) -> Bool:
     """Return whether an attribute is joints, weights or vertex colors."""
     return (
-        _starts(key, "JOINTS_")
-        or _starts(key, "WEIGHTS_")
-        or _starts(key, "COLOR_")
+        key.startswith("JOINTS_")
+        or key.startswith("WEIGHTS_")
+        or key.startswith("COLOR_")
     )
-
-
-def _starts(text: String, prefix: String) -> Bool:
-    """Return whether `text` begins with `prefix`."""
-    var raw = text.as_bytes()
-    var head = prefix.as_bytes()
-    if len(raw) < len(head):
-        return False
-    for index in range(len(head)):
-        if raw[index] != head[index]:
-            return False
-    return True
-
-
-def _dump(doc: PyJson, node: Int) raises -> String:
-    """Return JSON in insertion order, as `json.dumps` writes it."""
-    var kind = doc.kind(node)
-    if kind == PY_STR:
-        return quote_ascii(doc.text(node))
-    if kind == PY_INT or kind == PY_FLOAT:
-        return doc.text(node)
-    if kind == PY_BOOL:
-        return "true" if doc.flag(node) else "false"
-    if kind == PY_LIST:
-        var out = String("[")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ", "
-            out += _dump(doc, doc.item(node, index))
-        out += "]"
-        return out
-    if kind == PY_DICT:
-        var out = String("{")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ", "
-            out += quote_ascii(doc.key(node, index))
-            out += ": "
-            out += _dump(doc, doc.value(node, index))
-        out += "}"
-        return out
-    return "null"
 
 
 def main() raises:

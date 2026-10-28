@@ -52,7 +52,7 @@ def _walk(mut tree: JsonTree, obj: Int, path: String, suffix: String) raises:
             files.append(child)
     for index in range(len(files)):
         var name = files[index]
-        if not _ends(name, suffix):
+        if not name.endswith(suffix):
             continue
         var stem = String(
             name[byte = : name.byte_length() - suffix.byte_length()]
@@ -66,22 +66,9 @@ def _walk(mut tree: JsonTree, obj: Int, path: String, suffix: String) raises:
 
 def _join(directory: String, name: String) -> String:
     """Join a directory and a file name."""
-    if directory.byte_length() == 0 or _ends(directory, "/"):
+    if directory.byte_length() == 0 or directory.endswith("/"):
         return directory + name
     return directory + "/" + name
-
-
-def _ends(text: String, suffix: String) -> Bool:
-    """Return whether `text` ends with `suffix`."""
-    var raw = text.as_bytes()
-    var tail = suffix.as_bytes()
-    if len(raw) < len(tail):
-        return False
-    var start = len(raw) - len(tail)
-    for index in range(len(tail)):
-        if raw[start + index] != tail[index]:
-            return False
-    return True
 
 
 def main() raises:

@@ -322,7 +322,7 @@ def _drive(arguments: List[String]) raises:
                 client.append(value)
             index += 2
             continue
-        if _starts(word, "--"):
+        if word.startswith("--"):
             raise Error("unknown argument " + word)
         towns.append(word)
         index += 1
@@ -343,18 +343,6 @@ def _port(text: String) raises -> Int:
             raise Error("port is not an integer")
         value = value * 10 + Int(byte - 48)
     return value
-
-
-def _starts(text: String, prefix: String) -> Bool:
-    """Return whether `text` starts with `prefix`."""
-    var raw = text.as_bytes()
-    var want = prefix.as_bytes()
-    if len(raw) < len(want):
-        return False
-    for index in range(len(want)):
-        if raw[index] != want[index]:
-            return False
-    return True
 
 
 def main() raises:

@@ -22,7 +22,6 @@ from tools._python_json import (
     MISSING,
     PY_BOOL,
     PY_DICT,
-    PY_INT,
     PY_LIST,
     PY_NONE,
     PY_STR,
@@ -30,6 +29,7 @@ from tools._python_json import (
 )
 from tools.carla_gltf_material import plan_material
 from tools.carla_texture_store import store_text
+from tools._town_json import json_int, json_text
 
 
 @fieldwise_init
@@ -81,13 +81,13 @@ def rebuild_text(text: String) raises -> String:
             )
         )
     )
-    var out_dir = _text(doc, doc.at(root, "out_dir"), "out_dir is not text")
-    var limit = _whole(
+    var out_dir = json_text(doc, doc.at(root, "out_dir"), "out_dir is not text")
+    var limit = json_int(
         doc, doc.at(root, "max_size"), "max_size is not an integer"
     )
     if limit < 0:
         raise Error("max_size is negative")
-    var next = _whole(
+    var next = json_int(
         doc, doc.at(root, "texture_count"), "texture_count is not an integer"
     )
     if next < 0:
@@ -156,11 +156,13 @@ def _textures(
         raise Error("textures are not a list")
     for index in range(plan.length(steps)):
         var step = plan.item(steps, index)
-        var kind = _text(
+        var kind = json_text(
             plan, plan.at(step, "kind"), "texture kind is not text"
         )
         if kind == "color" or kind == "normal" or kind == "orm":
-            var stem = _text(plan, plan.at(step, "stem"), "stem is not text")
+            var stem = json_text(
+                plan, plan.at(step, "stem"), "stem is not text"
+            )
             var source = _path(paths, pngs, stem)
             var color = kind == "color"
             var slot = _color_index(
@@ -177,10 +179,10 @@ def _textures(
                     material.root, "occlusionTexture", _index(material, slot)
                 )
         elif kind == "masked":
-            var color_stem = _text(
+            var color_stem = json_text(
                 plan, plan.at(step, "color"), "color is not text"
             )
-            var mask_stem = _text(
+            var mask_stem = json_text(
                 plan, plan.at(step, "mask"), "mask is not text"
             )
             var slot = _masked_index(
@@ -347,7 +349,7 @@ def _cached(
 def _stored(text: String) raises -> String:
     """Return the URI from a texture-store result."""
     var doc = PyJson.parse(text)
-    return _text(doc, doc.at(doc.root, "uri"), "uri is not text")
+    return json_text(doc, doc.at(doc.root, "uri"), "uri is not text")
 
 
 def _index(mut material: PyJson, slot: Int) -> Int:
@@ -364,7 +366,7 @@ def _path(doc: PyJson, pngs: Int, stem: String) raises -> String:
     var node = doc.get(pngs, stem)
     if node == MISSING:
         raise Error("texture stem is missing")
-    return _text(doc, node, "texture path is not text")
+    return json_text(doc, node, "texture path is not text")
 
 
 def _plan_request(
@@ -397,7 +399,7 @@ def _optional(doc: PyJson, root: Int, key: String) raises -> String:
     var node = doc.get(root, key)
     if node == MISSING or doc.kind(node) == PY_NONE:
         return ""
-    return _text(doc, node, key + " is not text")
+    return json_text(doc, node, key + " is not text")
 
 
 def _copy_key(mut material: PyJson, plan: PyJson, key: String) raises:
@@ -455,11 +457,13 @@ def _cache(doc: PyJson, node: Int) raises -> List[_Saved]:
             raise Error("cache row is not an object")
         rows.append(
             _Saved(
-                _text(doc, doc.at(item, "op"), "cache op is not text"),
-                _text(doc, doc.at(item, "source"), "cache source is not text"),
+                json_text(doc, doc.at(item, "op"), "cache op is not text"),
+                json_text(
+                    doc, doc.at(item, "source"), "cache source is not text"
+                ),
                 _flag(doc, doc.at(item, "color"), "cache color is not a bool"),
-                _text(doc, doc.at(item, "mask"), "cache mask is not text"),
-                _whole(
+                json_text(doc, doc.at(item, "mask"), "cache mask is not text"),
+                json_int(
                     doc, doc.at(item, "index"), "cache index is not an integer"
                 ),
             )
@@ -519,25 +523,11 @@ def _quote(text: String) -> String:
     return out
 
 
-def _text(doc: PyJson, node: Int, message: String) raises -> String:
-    """Return a JSON string, or raise `message`."""
-    if doc.kind(node) != PY_STR:
-        raise Error(message)
-    return doc.text(node)
-
-
 def _flag(doc: PyJson, node: Int, message: String) raises -> Bool:
     """Return a JSON bool, or raise `message`."""
     if doc.kind(node) != PY_BOOL:
         raise Error(message)
     return doc.flag(node)
-
-
-def _whole(doc: PyJson, node: Int, message: String) raises -> Int:
-    """Return a JSON integer, or raise `message`."""
-    if doc.kind(node) != PY_INT:
-        raise Error(message)
-    return Int(parse_float(doc.text(node)))
 
 
 def _lower(text: String) -> String:

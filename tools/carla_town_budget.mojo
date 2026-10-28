@@ -33,7 +33,7 @@ def kind_of(mesh_path: String) -> String:
     Returns:
         A scenery kind, or `skip`.
     """
-    if _starts(mesh_path, "/Engine/"):
+    if mesh_path.startswith("/Engine/"):
         return "prop"
     var parts = _split(mesh_path, "/")
     var folder = String("")
@@ -152,7 +152,7 @@ def object_fields(full_name: String) raises -> List[String]:
     Raises:
         Error: If `full_name` has no class and path.
     """
-    var space = _find(full_name, " ")
+    var space = full_name.find(" ")
     if space < 0:
         raise Error("object path has no class")
     var cls = String(full_name[byte=0:space])
@@ -233,37 +233,7 @@ def _lower(text: String) -> String:
 
 def _has(text: String, needle: String) -> Bool:
     """Return whether `needle` occurs in `text`."""
-    return _find(text, needle) >= 0
-
-
-def _starts(text: String, prefix: String) -> Bool:
-    """Return whether `text` begins with `prefix`."""
-    var raw = text.as_bytes()
-    var head = prefix.as_bytes()
-    if len(raw) < len(head):
-        return False
-    for index in range(len(head)):
-        if raw[index] != head[index]:
-            return False
-    return True
-
-
-def _find(text: String, needle: String) -> Int:
-    """Return the first index of `needle`, or -1."""
-    var raw = text.as_bytes()
-    var head = needle.as_bytes()
-    if len(head) == 0:
-        return 0
-    var last = len(raw) - len(head)
-    for index in range(last + 1):
-        var same = True
-        for offset in range(len(head)):
-            if raw[index + offset] != head[offset]:
-                same = False
-                break
-        if same:
-            return index
-    return -1
+    return text.find(needle) >= 0
 
 
 def _rfind(text: String, needle: String) -> Int:
@@ -290,7 +260,7 @@ def _split(text: String, separator: String) -> List[String]:
     var rows = List[String]()
     var start = 0
     while True:
-        var at = _find(String(text[byte=start:]), separator)
+        var at = String(text[byte=start:]).find(separator)
         if at < 0:
             rows.append(String(text[byte=start:]))
             return rows^

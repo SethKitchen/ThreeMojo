@@ -31,6 +31,7 @@ from tools._python_json import (
     PY_STR,
     PyJson,
 )
+from tools._town_json import json_member
 
 
 def record_text(text: String) raises -> String:
@@ -70,21 +71,21 @@ def _one(doc: PyJson, node: Int) raises -> String:
     if doc.kind(node) != PY_DICT:
         raise Error("record is not an object")
     var result = String('{"id":')
-    result += _integer(doc, _member(doc, node, "id"))
+    result += _integer(doc, json_member(doc, node, "id"))
     result += ',"name":'
-    result += quote_ascii(_text(doc, _member(doc, node, "name")))
+    result += quote_ascii(_text(doc, json_member(doc, node, "name")))
     result += ',"label":'
-    result += quote_ascii(_text(doc, _member(doc, node, "label")))
+    result += quote_ascii(_text(doc, json_member(doc, node, "label")))
     result += ',"location":'
-    result += _vector(doc, _member(doc, node, "location"))
+    result += _vector(doc, json_member(doc, node, "location"))
     result += ',"rotation":'
-    result += _vector(doc, _member(doc, node, "rotation"))
+    result += _vector(doc, json_member(doc, node, "rotation"))
     result += ',"box_center":'
-    result += _vector(doc, _member(doc, node, "box_center"))
+    result += _vector(doc, json_member(doc, node, "box_center"))
     result += ',"box_extent":'
-    result += _vector(doc, _member(doc, node, "box_extent"))
+    result += _vector(doc, json_member(doc, node, "box_extent"))
     result += ',"box_rotation":'
-    result += _vector(doc, _member(doc, node, "box_rotation"))
+    result += _vector(doc, json_member(doc, node, "box_rotation"))
     result += "}"
     return result
 
@@ -154,14 +155,6 @@ def _text(doc: PyJson, node: Int) raises -> String:
     if doc.kind(node) != PY_STR:
         raise Error("text is not a string")
     return doc.text(node)
-
-
-def _member(doc: PyJson, node: Int, key: String) raises -> Int:
-    """Return a member, or raise when it is absent."""
-    var found = doc.get(node, key)
-    if found == MISSING:
-        raise Error("KeyError: '" + key + "'")
-    return found
 
 
 def main() raises:

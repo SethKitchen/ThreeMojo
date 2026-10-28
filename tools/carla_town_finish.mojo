@@ -19,8 +19,9 @@ from std.math import isinf, isnan, sqrt
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float, python_repr
-from tools._python_json import PY_DICT, PY_FLOAT, PY_INT, PY_LIST, PyJson
+from tools._python_float import python_repr
+from tools._python_json import PY_DICT, PY_LIST, PyJson
+from tools._town_json import json_number, json_triangles
 
 
 def finish_text(text: String) raises -> String:
@@ -53,7 +54,7 @@ def _prepare(doc: PyJson, root: Int) raises -> String:
     var py = List[Float64]()
     var pz = List[Float64]()
     _vec3(doc, doc.at(root, "points"), px, py, pz)
-    var faces = _triangles(doc, doc.at(root, "triangles"), len(px))
+    var faces = json_triangles(doc, doc.at(root, "triangles"), len(px))
     var box = doc.get(root, "box")
     if box != -1 and not doc.is_none(box):
         var bx = List[Float64]()
@@ -290,17 +291,17 @@ def _vec3(
         if doc.kind(point) != PY_LIST:
             raise Error("vector is not 3 numbers")
         if doc.length(point) == 3 and doc.kind(doc.item(point, 0)) != PY_LIST:
-            xs.append(_number(doc, doc.item(point, 0)))
-            ys.append(_number(doc, doc.item(point, 1)))
-            zs.append(_number(doc, doc.item(point, 2)))
+            xs.append(json_number(doc, doc.item(point, 0)))
+            ys.append(json_number(doc, doc.item(point, 1)))
+            zs.append(json_number(doc, doc.item(point, 2)))
         elif doc.length(point) == 3:
             for corner in range(3):
                 var inner = doc.item(point, corner)
                 if doc.kind(inner) != PY_LIST or doc.length(inner) != 3:
                     raise Error("vector is not 3 numbers")
-                xs.append(_number(doc, doc.item(inner, 0)))
-                ys.append(_number(doc, doc.item(inner, 1)))
-                zs.append(_number(doc, doc.item(inner, 2)))
+                xs.append(json_number(doc, doc.item(inner, 0)))
+                ys.append(json_number(doc, doc.item(inner, 1)))
+                zs.append(json_number(doc, doc.item(inner, 2)))
         else:
             raise Error("vector is not 3 numbers")
 
@@ -316,51 +317,17 @@ def _vec2(
         if doc.kind(point) != PY_LIST:
             raise Error("vector is not 2 numbers")
         if doc.length(point) == 2 and doc.kind(doc.item(point, 0)) != PY_LIST:
-            xs.append(_number(doc, doc.item(point, 0)))
-            ys.append(_number(doc, doc.item(point, 1)))
+            xs.append(json_number(doc, doc.item(point, 0)))
+            ys.append(json_number(doc, doc.item(point, 1)))
         elif doc.length(point) == 3:
             for corner in range(3):
                 var inner = doc.item(point, corner)
                 if doc.kind(inner) != PY_LIST or doc.length(inner) != 2:
                     raise Error("vector is not 2 numbers")
-                xs.append(_number(doc, doc.item(inner, 0)))
-                ys.append(_number(doc, doc.item(inner, 1)))
+                xs.append(json_number(doc, doc.item(inner, 0)))
+                ys.append(json_number(doc, doc.item(inner, 1)))
         else:
             raise Error("vector is not 2 numbers")
-
-
-def _triangles(doc: PyJson, node: Int, count: Int) raises -> List[Int]:
-    """Return triangle indices."""
-    if doc.kind(node) != PY_LIST:
-        raise Error("triangles are not a list")
-    var out = List[Int]()
-    for index in range(doc.length(node)):
-        var triangle = doc.item(node, index)
-        if doc.kind(triangle) != PY_LIST or doc.length(triangle) != 3:
-            raise Error("triangle is not three indices")
-        for corner in range(3):
-            var face = _whole(doc, doc.item(triangle, corner))
-            if face < 0 or face >= count:
-                raise Error("index out of range")
-            out.append(face)
-    return out^
-
-
-def _number(doc: PyJson, node: Int) raises -> Float64:
-    """Return a JSON number as a float."""
-    var kind = doc.kind(node)
-    if kind == PY_FLOAT:
-        return doc.number(node)
-    if kind == PY_INT:
-        return parse_float(doc.text(node))
-    raise Error("coordinate is not a number")
-
-
-def _whole(doc: PyJson, node: Int) raises -> Int:
-    """Return a JSON integer."""
-    if doc.kind(node) != PY_INT:
-        raise Error("index is not an integer")
-    return Int(parse_float(doc.text(node)))
 
 
 @no_inline

@@ -886,7 +886,7 @@ def main() raises:
                 out_root = value
             index += 2
             continue
-        if _starts(argument, "--"):
+        if argument.startswith("--"):
             _usage()
         towns.append(argument)
         index += 1
@@ -1139,7 +1139,7 @@ def _load_mesh(raw: String, mesh: String) raises -> List[_Prim]:
         Error: If a present mesh cannot be read.
     """
     var out = List[_Prim]()
-    if _starts(mesh, "/Engine/"):
+    if mesh.startswith("/Engine/"):
         out.append(_prim_from(PyJson.parse(cube_text()), mesh + "#0"))
         return out^
     var path = export_path(raw, mesh, ".gltf")
@@ -1968,15 +1968,3 @@ def _lower_ascii(text: String) -> String:
             value += 32
         out.append(UInt8(value))
     return String(unsafe_from_utf8=Span(out))
-
-
-def _starts(text: String, prefix: String) -> Bool:
-    """Return whether `text` begins with `prefix`."""
-    var raw = text.as_bytes()
-    var head = prefix.as_bytes()
-    if len(raw) < len(head):
-        return False
-    for index in range(len(head)):
-        if raw[index] != head[index]:
-            return False
-    return True
