@@ -13,6 +13,43 @@ from tests._python_tokens import token_sha256
 from tools._python_json import PyJson
 
 
+def _accept_one(doc: PyJson, node: Int, declarations: Int) raises -> String:
+    """Return whether one candidate is the reviewed predecessor.
+
+    Args:
+        doc: The parsed document.
+        node: One candidate object with `owner`, `path`, `name`, and
+            `expected`.
+        declarations: The shared declaration list.
+
+    Returns:
+        `true` when `owner` is empty, one declaration matches, and the
+        token digests match. Otherwise `false`.
+
+    Raises:
+        Error: A declaration cannot be read.
+    """
+    if doc.length(doc.at(node, "owner")) > 0:
+        return "false"
+    var path = doc.text(doc.at(node, "path"))
+    var name = doc.text(doc.at(node, "name"))
+    var count = doc.length(declarations)
+    var index = 0
+    while index < count:
+        var item = doc.item(declarations, index)
+        if (
+            doc.text(doc.at(item, "path")) == path
+            and doc.text(doc.at(item, "name")) == name
+        ):
+            var expected = token_sha256(doc.text(doc.at(node, "expected")))
+            var before = token_sha256(doc.text(doc.at(item, "before")))
+            if expected == before:
+                return "true"
+            return "false"
+        index += 1
+    return "false"
+
+
 def accept_lane_predecessor(payload: String) raises -> String:
     """Return whether the expected source is the reviewed predecessor.
 
@@ -29,26 +66,37 @@ def accept_lane_predecessor(payload: String) raises -> String:
         Error: A declaration cannot be read.
     """
     var doc = PyJson.parse(payload)
-    if doc.length(doc.at(doc.root, "owner")) > 0:
-        return "false"
-    var path = doc.text(doc.at(doc.root, "path"))
-    var name = doc.text(doc.at(doc.root, "name"))
+    return _accept_one(doc, doc.root, doc.at(doc.root, "declarations"))
+
+
+def accept_lane_predecessors(payload: String) raises -> String:
+    """Return whether each candidate is the reviewed predecessor.
+
+    Args:
+        payload: JSON with `declarations` and `items`. Each item has
+            `owner`, `path`, `name`, and `expected`.
+
+    Returns:
+        A JSON list of `true` or `false`, in item order.
+
+    Raises:
+        Error: A declaration cannot be read.
+    """
+    var doc = PyJson.parse(payload)
     var declarations = doc.at(doc.root, "declarations")
-    var count = doc.length(declarations)
+    var items = doc.at(doc.root, "items")
+    var out = PyJson()
+    var rows = out.new_list()
+    var count = doc.length(items)
     var index = 0
     while index < count:
-        var item = doc.item(declarations, index)
-        if (
-            doc.text(doc.at(item, "path")) == path
-            and doc.text(doc.at(item, "name")) == name
-        ):
-            var expected = token_sha256(doc.text(doc.at(doc.root, "expected")))
-            var before = token_sha256(doc.text(doc.at(item, "before")))
-            if expected == before:
-                return "true"
-            return "false"
+        out.append(
+            rows,
+            out.new_str(_accept_one(doc, doc.item(items, index), declarations)),
+        )
         index += 1
-    return "false"
+    out.root = rows
+    return out.dumps()
 
 
 def _is_minimum(doc: PyJson, node: Int) raises -> String:

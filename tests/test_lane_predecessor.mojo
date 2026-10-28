@@ -9,6 +9,7 @@ from std.testing import TestSuite, assert_equal
 
 from tools._lane_predecessor import (
     accept_lane_predecessor,
+    accept_lane_predecessors,
     selected_lane_minimum,
     selected_lane_minima,
 )
@@ -151,6 +152,25 @@ def test_the_rounded_lane_minimum_is_selected() raises:
             + '"name":"_rounded_axis_lane_minimum","owner":["Box"]}'
         ),
         "false",
+    )
+
+
+def test_lane_predecessors_keep_their_order() raises:
+    """An owned candidate stays false after an unowned match."""
+    var declarations = String(
+        '[{"path":"lane.mojo","name":"_run","before":"def _run():\\n   '
+        ' pass\\n"}]'
+    )
+    assert_equal(
+        accept_lane_predecessors(
+            '{"declarations":'
+            + declarations
+            + ',"items":[{"owner":[],"path":"lane.mojo","name":"_run",'
+            + '"expected":"def _run():\\n    pass\\n"},'
+            + '{"owner":["Box"],"path":"lane.mojo","name":"_run",'
+            + '"expected":"def _run():\\n    pass\\n"}]}'
+        ),
+        '["true","false"]',
     )
 
 

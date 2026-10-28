@@ -18,10 +18,11 @@ from std.sys import argv, exit, stderr
 
 from tools._lane_predecessor import (
     accept_lane_predecessor,
+    accept_lane_predecessors,
     selected_lane_minimum,
     selected_lane_minima,
 )
-from tools._python_json import PY_LIST, PyJson
+from tools._python_json import MISSING, PY_LIST, PyJson
 
 
 def _usage():
@@ -55,7 +56,11 @@ def main() raises:
             else:
                 print(selected_lane_minimum(text), end="")
         else:
-            print(accept_lane_predecessor(text), end="")
+            var doc = PyJson.parse(text)
+            if doc.get(doc.root, "items") == MISSING:
+                print(accept_lane_predecessor(text), end="")
+            else:
+                print(accept_lane_predecessors(text), end="")
     except error:
         print(String(error), file=stderr)
         exit(1)

@@ -148,6 +148,8 @@ It reads every dispatch reference declaration in one check.
 
 It selects the Map seed or the lane predecessor after that comparison.
 
+It checks every lane predecessor in one check.
+
 It keeps the two dispatch sources and the five protected paths.
 
 It keeps the dispatch path, the choice names, and the premise messages.

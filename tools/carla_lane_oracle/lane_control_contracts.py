@@ -279,8 +279,10 @@ def verify(root, *, _operation=None):
     return record
 
 
-def accepts_predecessor(root, path, name, owner, expected_source, *, _operation=None):
-    """Delegate only an exact historical declaration to this reviewed successor."""
+def accepts_predecessors(root, items, *, _operation=None):
+    """Return whether each historical declaration is this reviewed successor."""
+    if not items:
+        return []
     if _operation is not None:
         _check_operation(root, _operation)
     record = verify(root, **({} if _operation is None else {'_operation': _operation}))
@@ -289,13 +291,13 @@ def accepts_predecessor(root, path, name, owner, expected_source, *, _operation=
     import subprocess
     import tempfile
     payload = json.dumps({
-        'owner': list(owner),
-        'path': path,
-        'name': name,
-        'expected': expected_source,
         'declarations': [
             {'path': item['path'], 'name': item['name'], 'before': item['before']}
             for item in record['declarations']
+        ],
+        'items': [
+            {'owner': list(owner), 'path': path, 'name': name, 'expected': expected}
+            for path, name, owner, expected in items
         ],
     }, separators=(',', ':'))
     root_path = Path(__file__).resolve().parents[2]
@@ -312,7 +314,13 @@ def accepts_predecessor(root, path, name, owner, expected_source, *, _operation=
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return result.stdout.strip() == 'true'
+    return [flag == 'true' for flag in json.loads(result.stdout)]
+
+
+def accepts_predecessor(root, path, name, owner, expected_source, *, _operation=None):
+    """Delegate only an exact historical declaration to this reviewed successor."""
+    return accepts_predecessors(
+        root, [(path, name, owner, expected_source)], _operation=_operation)[0]
 
 
 if __name__ == '__main__':

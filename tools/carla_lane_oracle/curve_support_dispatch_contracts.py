@@ -512,21 +512,31 @@ def verify_premises(root, *, _operation=None):
             require(False, labels['seed_message'] + str(error))
         for position, (index, _item, _predecessor) in enumerate(seed_rows):
             seed_matched[index] = seed_flags[position] == 'true'
+    lane_matched = {}
+    if any(flag == labels['lane'] for flag in fallbacks):
+        if __package__:
+            from . import lane_control_contracts as lane
+        else:
+            import lane_control_contracts as lane
+        lane_rows = [
+            (index, item) for index, (item, _physical_text, _text) in enumerate(loaded)
+            if fallbacks[index] == labels['lane']]
+        try:
+            lane_flags = lane.accepts_predecessors(root, [
+                (item['path'], item['name'], tuple(item['owner']), item['source'])
+                for _index, item in lane_rows
+            ], **operation_args)
+        except RuntimeError as error:
+            require(False, labels['lane_message'] + str(error))
+        for (index, _item), flag in zip(lane_rows, lane_flags):
+            lane_matched[index] = flag
     for index, (item, _physical_text, _text) in enumerate(loaded):
         matched = matched_flags[index] == 'true'
         fallback = fallbacks[index]
         if fallback == labels['seed']:
             matched = seed_matched[index]
         if fallback == labels['lane']:
-            try:
-                if __package__:
-                    from . import lane_control_contracts as lane
-                else:
-                    import lane_control_contracts as lane
-                matched = lane.accepts_predecessor(root, item['path'], item['name'],
-                                                  tuple(item['owner']), item['source'], **operation_args)
-            except RuntimeError as error:
-                require(False, labels['lane_message'] + str(error))
+            matched = lane_matched[index]
         require(matched, labels['premise_function'] + item['name'])
     pairs = []
     references = []
