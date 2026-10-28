@@ -381,7 +381,7 @@ CPU test groups use imported source size. Coverage groups use `tools/coverage_sh
 
 `make coverage` runs each raw capture with `tools/native_test_support.mojo`. A suite that links the C fixture is built and then run in that capture's process group. `tools/coverage_hit_aot.mojo` runs a compiled capture. It builds the suite and keeps the source path as the program name. `tools/coverage_io.mojo` captures one suite, keeps each probe record once, checks the loop proof, and replays the captures to the reporter.
 
-`tools/coverage_loop_begin.mojo` writes the generation checkpoint before the producer runs. The proof checker asks that program for the same checkpoint.
+`tools/coverage_loop_begin.mojo` writes the generation checkpoint before the producer runs. The proof checker asks that program for the same checkpoint. It checks the origin records in Mojo.
 
 The loop receipt binds `tools/coverage_hit_aot.mojo`. The Python file `tools/coverage_hit_aot.py` is removed. `tools/check_coverage_loop_fixture.mojo` checks the constant-loop fixture, a shadowed range, physical line endings, the production capture, and generated-stage mutations. `tools/check_coverage_include_root.mojo` instruments the lane modules and checks the six closed loop proofs.
 

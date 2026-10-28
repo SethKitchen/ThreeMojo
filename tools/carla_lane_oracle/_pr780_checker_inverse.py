@@ -10,7 +10,7 @@ never replaces a production observation or grants a source admission.
 import hashlib
 import json
 
-EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a59681346e80986c9ea049c50bec0c538963df21',
+EDGES = {'coverage_loop_proofs.py': {'after_sha256': '9c8d7c21cd3befc0927bcf90f2f89d9ab80bab406ddc3f4f8bda82199a275991',
                              'before_sha256': '21e3a9637a69c6abbf27e9c8dd193a1addf7ed8537dd8f2734c35ff1a468304d',
                              'edits': ((45,
                                         49,
@@ -32,8 +32,116 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          "'tools/coverage_write_interposer.c',\n",
                                          "    'tools/run_suite.mojo', "
                                          "'Makefile',\n")),
-                                       (283,
-                                        286,
+                                       (90,
+ 135,
+ (
+  'def generation_origins(root, build, manifest, compiler, flags, mojo):\n',
+  '    """Validate a trusted producer\'s exact input/output/manifest pairing."""\n',
+  "    index = (build / 'origins.ready').read_bytes()\n",
+  '    fields, offset = _origin_header(index, 0)\n',
+  "    if len(fields) != 4 or fields[0] != b'COVORIGIN_INDEX2':\n",
+  "        raise ValueError('Missing or incomplete instrumentation generation')\n",
+  '    count, size, checkpoint_size = map(_origin_length, fields[1:])\n',
+  '    if count < 1 or count > len(index):\n',
+  "        raise ValueError('Invalid generation module count')\n",
+  '    recorded_manifest, offset = _origin_part(index, offset, size)\n',
+  '    if recorded_manifest != manifest:\n',
+  "        raise ValueError('Generation manifest does not match the original manifest')\n",
+  '    checkpoint, offset = _origin_part(index, offset, checkpoint_size)\n',
+  '    names = []\n',
+  '    for _ in range(count):\n',
+  '        length, offset = _origin_header(index, offset)\n',
+  '        if len(length) != 1:\n',
+  "            raise ValueError('Invalid generation source identity')\n",
+  '        name, offset = _origin_part(index, offset, _origin_length(length[0]))\n',
+  "        names.append(name.decode('utf-8'))\n",
+  '    if offset != len(index) or len(set(names)) != len(names):\n',
+  "        raise ValueError('Trailing or duplicate generation records')\n",
+  "    expected_checkpoint = canonical(generation_checkpoint(root, build, compiler, flags, mojo, names)) + b'\\n'\n",
+  "    if checkpoint != expected_checkpoint or (build / 'generation-inputs.json').read_bytes() != checkpoint:\n",
+  "        raise ValueError('Stale or modified generation origin checkpoint; regenerate with current sources/tools/compiler')\n",
+  "    expected_files = {name + '.cov-origin' for name in names}\n",
+  "    actual_files = {path.relative_to(build).as_posix() for path in build.rglob('*.cov-origin')}\n",
+  '    if actual_files != expected_files:\n',
+  "        raise ValueError('Missing or extra generation origin records; rebuild the stage')\n",
+  '    origins, fragments = {}, []\n',
+  '    for name in names:\n',
+  "        if not name.endswith('.mojo'):\n",
+  "            raise ValueError('Invalid generation module identity')\n",
+  '        original = relative_source(root, name).read_bytes()\n',
+  '        generated = relative_source(build, name).read_bytes()\n',
+  "        raw = relative_source(build, name + '.cov-origin').read_bytes()\n",
+  '        header, cursor = _origin_header(raw, 0)\n',
+  "        if len(header) != 5 or header[0] != b'COVORIGIN1':\n",
+  "            raise ValueError('Malformed source generation origin')\n",
+  '        parts = []\n',
+  '        for length in header[1:]:\n',
+  '            part, cursor = _origin_part(raw, cursor, _origin_length(length))\n',
+  '            parts.append(part)\n',
+  "        if cursor != len(raw) or parts[0].decode('utf-8') != name:\n",
+  "            raise ValueError('Trailing or mixed-module generation origin')\n",
+  '        if original != parts[1] or generated != parts[2]:\n',
+  "            raise ValueError('Source/staged bytes do not match their generation origin: ' + name)\n",
+  '        fragment = parts[3]\n',
+  "        if any(record[1] != name.removesuffix('.mojo') for record in manifest_records(fragment)):\n",
+  "            raise ValueError('Generation fragment identifies another module')\n",
+  '        fragments.append(fragment)\n',
+  "        origins[name] = {'source': sha256(original), 'instrumented': sha256(generated),\n",
+  "                         'origin_sha256': sha256(raw), 'fragment_sha256': sha256(fragment)}\n",
+  "    if b''.join(fragments) != manifest:\n",
+  "        raise ValueError('Generation fragments do not reconstruct the original manifest')\n",
+  "    return {'index_sha256': sha256(index), 'checkpoint_sha256': sha256(checkpoint), 'modules': origins}\n",
+  '\n',
+ ),
+ (
+  'def generation_origins(root, build, manifest, compiler, flags, mojo):\n',
+  '    """Validate a trusted producer\'s exact input/output/manifest pairing.\n',
+  '\n',
+  '    The origin index is checked in Mojo. This function still receives the\n',
+  '    manifest bytes from its caller.\n',
+  '\n',
+  '    Args:\n',
+  '        root: The repository root.\n',
+  '        build: The build directory.\n',
+  '        manifest: The original manifest bytes.\n',
+  '        compiler: The compiler text.\n',
+  '        flags: The flag text.\n',
+  '        mojo: The producer command.\n',
+  '\n',
+  '    Returns:\n',
+  '        The generation record.\n',
+  '\n',
+  '    Raises:\n',
+  '        ValueError: The stage does not match its sources.\n',
+  '    """\n',
+  '    import subprocess\n',
+  '    import tempfile\n',
+  '    repo = Path(__file__).resolve().parents[1]\n',
+  "    program = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))\n",
+  "    with tempfile.TemporaryDirectory(prefix='coverage-origins-') as directory:\n",
+  "        manifest_path = Path(directory) / 'manifest.txt'\n",
+  '        manifest_path.write_bytes(manifest)\n',
+  '        result = subprocess.run(\n',
+  "            ['sh', str(repo / 'tools' / 'tool.sh'), program, 'coverage_origins',\n",
+  "             '--root', str(Path(root).resolve()),\n",
+  "             '--build', str(Path(build).resolve()),\n",
+  "             '--manifest', str(manifest_path),\n",
+  "             '--compiler', compiler, '--flags', flags,\n",
+  "             '--mojo', _mojo_command(mojo)],\n",
+  '            capture_output=True, text=True)\n',
+  '    if result.returncode != 0:\n',
+  '        errors = [line.strip() for line in result.stderr.splitlines()\n',
+  "                  if line.strip() and 'Crashpad' not in line]\n",
+  '        message = errors[-1] if errors else result.stdout.strip()\n',
+  "        prefix = 'coverage_origins: '\n",
+  '        if message.startswith(prefix):\n',
+  '            message = message[len(prefix):]\n',
+  '        raise ValueError(message)\n',
+  '    return json.loads(result.stdout)\n',
+  '\n',
+ )),
+(271,
+                                        274,
                                         ("        if words[0] in {'def', "
                                          "'struct', 'trait'} or words[:2] == "
                                          "['async', 'def']:\n",
@@ -47,14 +155,14 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          'asynchronous:\n',
                                          "            kind = 'def' if "
                                          'asynchronous else words[0]\n')),
-                                       (287,
-                                        288,
+                                       (275,
+                                        276,
                                         ('            name_position = 2 if '
                                          "words[0] == 'async' else 1\n",),
                                         ('            name_position = 2 if '
                                          'asynchronous else 1\n',)),
-                                       (375,
-                                        407,
+                                       (363,
+                                        395,
                                         (),
                                         ('def _typed_endpoint(name, raw):\n',
                                          '    """Return the exact typed '
@@ -114,8 +222,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          'type(raw) is str else prior\n',
                                          '\n',
                                          '\n')),
-                                       (418,
-                                        420,
+                                       (406,
+                                        408,
                                         ('    if item is None or not '
                                          'typed.is_current(name, current):\n',),
                                         ('    endpoint = _typed_endpoint(name, '
@@ -123,24 +231,24 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          '    if item is None or not '
                                          'typed.is_current(name, '
                                          'endpoint):\n')),
-                                       (421,
-                                        422,
+                                       (409,
+                                        410,
                                         ('    previous = '
                                          'typed.historical_source(name, '
                                          'current)\n',),
                                         ('    previous = '
                                          'typed.historical_source(name, '
                                          'endpoint)\n',)),
-                                       (426,
-                                        427,
+                                       (414,
+                                        415,
                                         ('    after, after_first, after_last = '
                                          'seed._function_span(current, '
                                          'function, owner)\n',),
                                         ('    after, after_first, after_last = '
                                          'seed._function_span(endpoint, '
                                          'function, owner)\n',)),
-                                       (446,
-                                        457,
+                                       (434,
+                                        445,
                                         (),
                                         ('    if endpoint is not current:\n',
                                          '        # A reviewed successor keeps '
@@ -166,28 +274,28 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          'in new_rows]:\n',
                                          '            return None\n',
                                          '        new_rows = final_rows\n')),
-                                       (494,
-                                        495,
+                                       (482,
+                                        483,
                                         ('            '
                                          "'1e95ebc085e03a44e4daaef20a94b724dedc4240a2099227e82be54d32b045f6',\n",),
                                         ('            '
                                          "'2d9d5401b3dabf53c1c19f0a8098009275e19edb978f5ae369596fe7ac6557a0',\n",)),
-                                       (496,
-                                        497,
+                                       (484,
+                                        485,
                                         ('        (154, '
                                          "'reviewed-nonempty-iterator', 1, "
                                          "None, 'number.as_bytes()',\n",),
                                         ('        (150, '
                                          "'reviewed-nonempty-iterator', 1, "
                                          "None, 'number.as_bytes()',\n",)),
-                                       (546,
-                                        547,
+                                       (534,
+                                        535,
                                         ('        '
                                          "'058c0e6fbfce95ee97c79247622185de968c8de5e0ad23240d667da13776404f',\n",),
                                         ('        '
                                          "'81d104e6b65fe1539bf9c244330ae53b6d337ad081529cb0c5f7bcde27887db5',\n",)),
-                                       (1222,
-                                        1272,
+                                       (1210,
+                                        1260,
                                         (),
                                         ('# PR780, the Mojo 1.2 port and PR791 '
                                          'change thirteen imported helpers, '
@@ -303,8 +411,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          '}\n',
                                          '\n',
                                          '\n')),
-                                       (1278,
-                                        1291,
+                                       (1266,
+                                        1279,
                                         (),
                                         ('\n',
                                          '\n',
@@ -330,8 +438,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          'density dependency successor '
                                          "endpoints')\n",
                                          '    return dependencies\n')),
-                                       (1297,
-                                        1318,
+                                       (1285,
+                                        1306,
                                         ('    filename = '
                                          "Path(__file__).resolve().parent/'carla_lane_oracle/pr760_arithmetic_stage.py'\n",
                                          '    '
@@ -406,8 +514,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          '            continue\n',
                                          '        live = getattr(stage, name, '
                                          'None)\n')),
-                                       (1340,
-                                        1358,
+                                       (1328,
+                                        1346,
                                         ('        snapshots = {}\n',),
                                         ('        # The generated receipt '
                                          'authenticates its direct producer, '
@@ -451,8 +559,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          '        snapshots, '
                                          'dependency_sha256, successor = {}, '
                                          '{}, []\n')),
-                                       (1361,
-                                        1367,
+                                       (1349,
+                                        1355,
                                         ('            if sha256(value) != '
                                          'expected:\n',),
                                         ('            digest = sha256(value)\n',
@@ -466,8 +574,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          'expected)\n',
                                          '            elif digest != '
                                          'expected:\n')),
-                                       (1369,
-                                        1384,
+                                       (1357,
+                                        1372,
                                         (),
                                         ('            dependency_sha256[name] '
                                          '= digest\n',
@@ -501,8 +609,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          '                    return {}\n',
                                          '                added[name] = '
                                          'value\n')),
-                                       (1389,
-                                        1391,
+                                       (1377,
+                                        1379,
                                         ('        if '
                                          'sha256(stage.predecessor_source(groom, '
                                          'snapshots[groom].decode()).encode()) '
@@ -516,22 +624,22 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          'physical_groom.decode()).encode()) '
                                          '!= '
                                          'GUARDED_LOOP_SOURCE_SHA256[groom]:\n')),
-                                       (1392,
-                                        1393,
+                                       (1380,
+                                        1381,
                                         ('        paths = {name for name in '
                                          'snapshots if '
                                          "name.endswith('.mojo')}\n",),
                                         ('        paths = {name for name in '
                                          "snapshots if name.endswith('.mojo')} "
                                          '| set(added)\n',)),
-                                       (1418,
-                                        1419,
+                                       (1406,
+                                        1407,
                                         ('        for name, value in '
                                          'snapshots.items():\n',),
                                         ('        for name, value in '
                                          '(snapshots | added).items():\n',)),
-                                       (1425,
-                                        1427,
+                                       (1413,
+                                        1415,
                                         ('        if '
                                          'cleanup.executing_checker_bindings() '
                                          '!= executing or not '
@@ -541,22 +649,22 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          '!= executing or not resolver_ok()\n',
                                          '                or dependency_pins() '
                                          '!= successor_pins):\n')),
-                                       (1432,
-                                        1433,
+                                       (1420,
+                                        1421,
                                         ("            'proof_id': proof_id, "
                                          "'dependency_sha256': "
                                          'dict(DENSITY760_INPUTS),\n',),
                                         ("            'proof_id': proof_id, "
                                          "'dependency_sha256': "
                                          'dict(dependency_sha256),\n',)),
-                                       (1496,
-                                        1497,
+                                       (1484,
+                                        1485,
                                         ('        '
                                          "'5cc066092d9b0302c60a6676459efc855e220dc319d1f88b5eb84df768f489f9',\n",),
                                         ('        '
                                          "'990d94c815315c910b12c1b126c076183fc35cdeb9f64a26d1f7e574f424bccd',\n",)),
-                                       (1498,
-                                        1519,
+                                       (1486,
+                                        1507,
                                         (),
                                         ('\n',
                                          '\n',
@@ -595,8 +703,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          '        '
                                          "'2557d496f1dc49c204314d389bd105c9eaaab4c7762920b7b0d5f97613d4c3cd',\n",
                                          '}, 4056)\n')),
-                                       (1569,
-                                        1574,
+                                       (1557,
+                                        1562,
                                         ('        if actual == '
                                          'STRAND_CAP_FORMATTED_SUCCESSOR[0]:\n',),
                                         ('        if actual == '
@@ -609,39 +717,39 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          'STRAND_CAP_SPLAT_WORKERS_SUCCESSOR[1]\n',
                                          '        elif actual == '
                                          'STRAND_CAP_FORMATTED_SUCCESSOR[0]:\n')),
-                                       (1703,
-                                        1705,
+                                       (1691,
+                                        1693,
                                         ('        if typed.is_current(name, '
                                          'raw):\n',),
                                         ('        endpoint = '
                                          '_typed_endpoint(name, raw)\n',
                                          '        if typed.is_current(name, '
                                          'endpoint):\n')),
-                                       (1715,
-                                        1716,
+                                       (1703,
+                                        1704,
                                         ('            checked = '
                                          'typed.historical_source(name, '
                                          "raw.decode('utf-8'))\n",),
                                         ('            checked = '
                                          'typed.historical_source(name, '
                                          "endpoint.decode('utf-8'))\n",)),
-                                       (1912,
-                                        1913,
+                                       (1900,
+                                        1901,
                                         ('            if '
                                          'typed.is_current(name, current):\n',),
                                         ('            if '
                                          'typed.is_current(name, '
                                          '_typed_endpoint(name, '
                                          'current)):\n',)),
-                                       (1922,
-                                        1923,
+                                       (1910,
+                                        1911,
                                         ('        if (typed.is_current(name, '
                                          'current) and _operation is None\n',),
                                         ('        if (typed.is_current(name, '
                                          '_typed_endpoint(name, current)) and '
                                          '_operation is None\n',)),
-                                       (1957,
-                                        1960,
+                                       (1945,
+                                        1948,
                                         (),
                                         ('        if not typed_current:\n',
                                          '            typed_current = '
@@ -649,8 +757,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          '                module_path, '
                                          '_typed_endpoint(module_path, '
                                          'current))\n')),
-                                       (2181,
-                                        2182,
+                                       (2169,
+                                        2170,
                                         ('            or not '
                                          'typed.is_current(name, '
                                          'current)):\n',),
@@ -658,15 +766,15 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          'typed.is_current(name, '
                                          '_typed_endpoint(name, '
                                          'current))):\n',)),
-                                       (2244,
-                                        2245,
+                                       (2232,
+                                        2233,
                                         ('        if typed.is_current(name, '
                                          'current):\n',),
                                         ('        if typed.is_current(name, '
                                          '_typed_endpoint(name, '
                                          'current)):\n',)),
-(2442,
- 2556,
+(2430,
+ 2544,
  (
   'def generation_checkpoint(root, build, compiler, flags, mojo, sources):\n',
   '    root, build = Path(root).resolve(), Path(build).resolve()\n',
@@ -812,8 +920,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
   '    return _run_coverage_begin(root, build, compiler, flags, mojo, sources)\n',
   '\n',
  )),
-                                       (2578,
-                                        2578,
+                                       (2566,
+                                        2566,
                                         ('    runner = '
                                          "(['@ROOT@/tools/native_test_support.py', "
                                          "'run'] if profile == 'raw'\n",
@@ -821,8 +929,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          "['@ROOT@/tools/coverage_hit_aot.py', "
                                          "'--profile', profile])\n"),
                                         ()),
-                                       (2579,
-                                        2589,
+                                       (2567,
+                                        2577,
                                         ('    return '
                                          "[contract['python']['path'], "
                                          "*runner, '--root', '@BUILD@',\n",),
@@ -848,8 +956,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          "*compiler, 'coverage_hit_aot',\n",
                                          "            '--profile', profile, "
                                          "'--root', '@BUILD@',\n")),
-                                       (2705,
-                                        2722,
+                                       (2693,
+                                        2710,
                                         ("        'execution': "
                                          'execution_contract(root, build, '
                                          'inputs, mojo=mojo,\n',
@@ -934,8 +1042,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
                                          '    _plain_seed = '
                                          'canonical(_receipt_seed) if cleanup '
                                          'is None else None\n')),
-(2789,
- 2832,
+(2777,
+ 2820,
  (
   'def _load_json(path):\n',
   '    def pairs(items):\n',
@@ -994,8 +1102,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': '74a9689e11eeeb34b9520924a5
   '\n',
   '\n',
  )),
-(2860,
- 2906,
+(2848,
+ 2894,
  (
   'def masked_manifest(raw, envelope):\n',
   '    """Preserve all original entries except the explicit outcome masks."""\n',
@@ -2306,7 +2414,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '9e8938067edb71ba67afee2b1d7e229f52b457467910e98f96e188cb2ef3c6f6':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '803089ee057b6497c1044994c0d39c8d440742b098ce4b2dfbd413bbc3e620b0':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)

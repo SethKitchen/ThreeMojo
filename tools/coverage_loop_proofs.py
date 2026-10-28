@@ -89,61 +89,49 @@ def _origin_part(raw, offset, size):
 
 
 def generation_origins(root, build, manifest, compiler, flags, mojo):
-    """Validate a trusted producer's exact input/output/manifest pairing."""
-    index = (build / 'origins.ready').read_bytes()
-    fields, offset = _origin_header(index, 0)
-    if len(fields) != 4 or fields[0] != b'COVORIGIN_INDEX2':
-        raise ValueError('Missing or incomplete instrumentation generation')
-    count, size, checkpoint_size = map(_origin_length, fields[1:])
-    if count < 1 or count > len(index):
-        raise ValueError('Invalid generation module count')
-    recorded_manifest, offset = _origin_part(index, offset, size)
-    if recorded_manifest != manifest:
-        raise ValueError('Generation manifest does not match the original manifest')
-    checkpoint, offset = _origin_part(index, offset, checkpoint_size)
-    names = []
-    for _ in range(count):
-        length, offset = _origin_header(index, offset)
-        if len(length) != 1:
-            raise ValueError('Invalid generation source identity')
-        name, offset = _origin_part(index, offset, _origin_length(length[0]))
-        names.append(name.decode('utf-8'))
-    if offset != len(index) or len(set(names)) != len(names):
-        raise ValueError('Trailing or duplicate generation records')
-    expected_checkpoint = canonical(generation_checkpoint(root, build, compiler, flags, mojo, names)) + b'\n'
-    if checkpoint != expected_checkpoint or (build / 'generation-inputs.json').read_bytes() != checkpoint:
-        raise ValueError('Stale or modified generation origin checkpoint; regenerate with current sources/tools/compiler')
-    expected_files = {name + '.cov-origin' for name in names}
-    actual_files = {path.relative_to(build).as_posix() for path in build.rglob('*.cov-origin')}
-    if actual_files != expected_files:
-        raise ValueError('Missing or extra generation origin records; rebuild the stage')
-    origins, fragments = {}, []
-    for name in names:
-        if not name.endswith('.mojo'):
-            raise ValueError('Invalid generation module identity')
-        original = relative_source(root, name).read_bytes()
-        generated = relative_source(build, name).read_bytes()
-        raw = relative_source(build, name + '.cov-origin').read_bytes()
-        header, cursor = _origin_header(raw, 0)
-        if len(header) != 5 or header[0] != b'COVORIGIN1':
-            raise ValueError('Malformed source generation origin')
-        parts = []
-        for length in header[1:]:
-            part, cursor = _origin_part(raw, cursor, _origin_length(length))
-            parts.append(part)
-        if cursor != len(raw) or parts[0].decode('utf-8') != name:
-            raise ValueError('Trailing or mixed-module generation origin')
-        if original != parts[1] or generated != parts[2]:
-            raise ValueError('Source/staged bytes do not match their generation origin: ' + name)
-        fragment = parts[3]
-        if any(record[1] != name.removesuffix('.mojo') for record in manifest_records(fragment)):
-            raise ValueError('Generation fragment identifies another module')
-        fragments.append(fragment)
-        origins[name] = {'source': sha256(original), 'instrumented': sha256(generated),
-                         'origin_sha256': sha256(raw), 'fragment_sha256': sha256(fragment)}
-    if b''.join(fragments) != manifest:
-        raise ValueError('Generation fragments do not reconstruct the original manifest')
-    return {'index_sha256': sha256(index), 'checkpoint_sha256': sha256(checkpoint), 'modules': origins}
+    """Validate a trusted producer's exact input/output/manifest pairing.
+
+    The origin index is checked in Mojo. This function still receives the
+    manifest bytes from its caller.
+
+    Args:
+        root: The repository root.
+        build: The build directory.
+        manifest: The original manifest bytes.
+        compiler: The compiler text.
+        flags: The flag text.
+        mojo: The producer command.
+
+    Returns:
+        The generation record.
+
+    Raises:
+        ValueError: The stage does not match its sources.
+    """
+    import subprocess
+    import tempfile
+    repo = Path(__file__).resolve().parents[1]
+    program = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='coverage-origins-') as directory:
+        manifest_path = Path(directory) / 'manifest.txt'
+        manifest_path.write_bytes(manifest)
+        result = subprocess.run(
+            ['sh', str(repo / 'tools' / 'tool.sh'), program, 'coverage_origins',
+             '--root', str(Path(root).resolve()),
+             '--build', str(Path(build).resolve()),
+             '--manifest', str(manifest_path),
+             '--compiler', compiler, '--flags', flags,
+             '--mojo', _mojo_command(mojo)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        errors = [line.strip() for line in result.stderr.splitlines()
+                  if line.strip() and 'Crashpad' not in line]
+        message = errors[-1] if errors else result.stdout.strip()
+        prefix = 'coverage_origins: '
+        if message.startswith(prefix):
+            message = message[len(prefix):]
+        raise ValueError(message)
+    return json.loads(result.stdout)
 
 
 def canonical(value):
