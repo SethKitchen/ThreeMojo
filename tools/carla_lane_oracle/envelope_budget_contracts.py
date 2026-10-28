@@ -88,6 +88,30 @@ def _gate_span(text):
         raise ValueError(message)
 
 
+def _gate_successor(actual, expected):
+    """Require the live capture function to match the recorded successor."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps(
+        {'actual': actual, 'expected': expected}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='envelope-successor-') as directory:
+        target = Path(directory) / 'successor.json'
+        target.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_envelope_gate',
+             '--successor', str(target)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def _gate_token(text, expected):
     import os
     import subprocess
@@ -119,6 +143,5 @@ def historical_function(text, *, root=None):
     _gate(payload)
     record = json.loads(payload, object_pairs_hook=source_contracts.unique_keys)
     actual = sum2_guard_contracts.declaration(text,'_try_lane_envelope_capture',())
-    if sum2_guard_contracts.significant(actual) != sum2_guard_contracts.significant(record['after_complete_function']):
-        raise ValueError('Envelope budget successor function changed')
+    _gate_successor(actual, record['after_complete_function'])
     return record['before_complete_function']

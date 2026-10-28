@@ -924,6 +924,8 @@ It keeps the runtime-boundary contract prefix.
 
 It refuses `terms` or `max_terms` between the two capacity checks.
 
+It requires the successor function to keep the same significant tokens.
+
 `tools/carla_selection_record_gate.mojo` checks the selection predecessor record and the restored token.
 
 It reads the declaration line span before restoring that function.

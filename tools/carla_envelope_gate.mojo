@@ -8,17 +8,20 @@
     carla_envelope_gate --migration PATH
     carla_envelope_gate --source PATH --token HEX
     carla_envelope_gate --span PATH
+    carla_envelope_gate --successor PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
 `--span` reads one capture function and refuses a counter name between
-the two capacity checks.
+the two capacity checks. `--successor` reads `actual` and `expected`
+function text and requires the same significant tokens.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tests._python_tokens import token_names, token_sha256
+from tests._python_tokens import significant_json, token_names, token_sha256
+from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
 
 
@@ -84,12 +87,29 @@ def envelope_budget_span(text: String) raises:
             raise Error("Intervening span can access budget parameters")
 
 
+def envelope_successor(payload: String) raises:
+    """Require two capture functions to have the same significant tokens.
+
+    Args:
+        payload: JSON with `actual` and `expected` function text.
+
+    Raises:
+        Error: A field is absent, a function cannot be tokenized, or the
+            significant tokens differ.
+    """
+    var doc = PyJson.parse(payload)
+    var actual = significant_json(doc.text(doc.at(doc.root, "actual")))
+    var expected = significant_json(doc.text(doc.at(doc.root, "expected")))
+    if actual != expected:
+        raise Error("Envelope budget successor function changed")
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_envelope_gate --migration PATH"
-            " | --source PATH --token HEX | --span PATH"
+            " | --source PATH --token HEX | --span PATH | --successor PATH"
         ),
         file=stderr,
     )
@@ -106,6 +126,7 @@ def main() raises:
     var source = String("")
     var token = String("")
     var span = String("")
+    var successor = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -115,6 +136,7 @@ def main() raises:
             or word == "--source"
             or word == "--token"
             or word == "--span"
+            or word == "--successor"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -125,6 +147,8 @@ def main() raises:
                 source = value
             elif word == "--span":
                 span = value
+            elif word == "--successor":
+                successor = value
             else:
                 token = value
             index += 2
@@ -137,6 +161,8 @@ def main() raises:
         modes += 1
     if span.byte_length() > 0:
         modes += 1
+    if successor.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if source.byte_length() > 0 and token.byte_length() == 0:
@@ -145,12 +171,17 @@ def main() raises:
         _usage()
     if span.byte_length() > 0 and token.byte_length() > 0:
         _usage()
+    if successor.byte_length() > 0 and token.byte_length() > 0:
+        _usage()
     try:
         if source.byte_length() > 0:
             envelope_token(Path(source).read_text(), token)
             return
         if span.byte_length() > 0:
             envelope_budget_span(Path(span).read_text())
+            return
+        if successor.byte_length() > 0:
+            envelope_successor(Path(successor).read_text())
             return
         envelope_record(Path(migration).read_bytes())
     except error:
