@@ -144,6 +144,8 @@ It keeps the six extra coverage-invariant inputs.
 
 It keeps the pin file names, the prior record, and the successor message.
 
+It reads those labels before the migration record in one check.
+
 It keeps the coverage-invariant contract prefix.
 
 It keeps a component name inside its directory.

@@ -228,9 +228,41 @@ def _invariant_labels():
     return _INVARIANT_LABELS
 
 
+def _labels_with_migration():
+    """Return the invariant labels after the migration path is bound."""
+    global _INVARIANT_LABELS, MIGRATION, MIGRATION_SHA256
+    if (
+        _INVARIANT_LABELS is not None
+        and 'MIGRATION' in globals()
+        and MIGRATION is not None
+    ):
+        return _INVARIANT_LABELS
+    import json
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_invariant_labels',
+         '--with-migration'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    data = json.loads(result.stdout)
+    if _INVARIANT_LABELS is None:
+        _INVARIANT_LABELS = data['labels']
+    if not ('MIGRATION' in globals() and MIGRATION is not None):
+        MIGRATION = data['migration']['path']
+        MIGRATION_SHA256 = data['migration']['sha']
+    return _INVARIANT_LABELS
+
+
 def read_record(root):
-    labels = _invariant_labels()
-    _ensure_migration()
+    labels = _labels_with_migration()
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
     record = json.loads(payload, object_pairs_hook=source.unique_keys)

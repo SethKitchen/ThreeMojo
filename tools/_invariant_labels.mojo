@@ -10,6 +10,9 @@ pin file is runtime, which pin file is the guard, and which message a
 changed successor uses.
 """
 
+from tools._migration_records import migration_records
+from tools._python_json import PyJson
+
 
 def invariant_labels() -> String:
     """Return the pin file names, the prior record, and the messages.
@@ -24,4 +27,28 @@ def invariant_labels() -> String:
         + '"successor":"complete successor changed: ",'
         + '"prior":"tools/carla_lane_oracle/frozen-arc-producer-migration.json",'
         + '"oracle":"tools/carla_lane_oracle"}'
+    )
+
+
+def invariant_labels_with_migration() raises -> String:
+    """Read the invariant labels, then the migration record.
+
+    Returns:
+        JSON with `labels` and `migration`. `labels` is first.
+
+    Raises:
+        Error: The migration record cannot be read. The labels are read
+            before the migration record.
+    """
+    var labels = invariant_labels()
+    var records = PyJson.parse(migration_records())
+    var item = records.at(records.root, "invariant")
+    return (
+        '{"labels":'
+        + labels
+        + ',"migration":{"path":"'
+        + records.text(records.at(item, "path"))
+        + '","sha":"'
+        + records.text(records.at(item, "sha"))
+        + '"}}'
     )
