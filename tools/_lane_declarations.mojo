@@ -13,6 +13,7 @@ from tests._python_tokens import (
     declaration_text,
     replace_firsts,
     significant_json,
+    token_sha256,
 )
 from tools._python_json import PyJson
 
@@ -96,6 +97,30 @@ def declaration_match_flags(payload: String) raises -> String:
         index += 1
     out.root = rows
     return out.dumps()
+
+
+def declaration_token_checks(payload: String, prefix: String) raises:
+    """Read each declaration, then require its token digest.
+
+    Args:
+        payload: A JSON list. Each item has `source`, `name`, `owner`, `token`, and `label`.
+        prefix: The contract prefix, including its trailing space.
+
+    Raises:
+        Error: A function cannot be read, or a token digest changed.
+    """
+    var declared = PyJson.parse(lane_declarations(payload))
+    var doc = PyJson.parse(payload)
+    var count = declared.length(declared.root)
+    var index = 0
+    while index < count:
+        var item = doc.item(doc.root, index)
+        var digest = token_sha256(
+            declared.text(declared.item(declared.root, index))
+        )
+        if digest != doc.text(doc.at(item, "token")):
+            raise Error(prefix + doc.text(doc.at(item, "label")))
+        index += 1
 
 
 def lane_control_prepare(payload: String) raises -> String:

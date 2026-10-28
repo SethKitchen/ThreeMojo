@@ -400,6 +400,41 @@ def reviewed_source(root, path, expected, *, _operation=None):
     _gate_edge(record['before_token_sha256'], expected)
     return record['before_source']
 
+def _declaration_tokens(items):
+    """Read each declaration and require its recorded token digest."""
+    if not items:
+        return
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps([
+        {
+            'source': source,
+            'name': name,
+            'owner': list(owner),
+            'token': token,
+            'label': label,
+        }
+        for source, name, owner, token, label in items
+    ], separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='declaration-tokens-') as directory:
+        path = Path(directory) / 'declarations.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_gate',
+             '--declaration-tokens', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def _gate_tokens(pairs):
     import json
     import os
@@ -594,21 +629,14 @@ def verify_premises(root, *, _operation=None):
         if fallback == labels['lane']:
             matched = lane_matched[index]
         require(matched, labels['premise_function'] + item['name'])
-    pairs = []
     references = []
     for item in record['reference_functions']:
         text = _typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation)
         references.append((item, text))
-    reference_declarations = _declarations([{
-        'source': text,
-        'name': item['name'],
-        'owner': [],
-    } for item, text in references])
-    for index, (item, _text) in enumerate(references):
-        pairs.append((reference_declarations[index], item['token_sha256'],
-                      labels['reference'] + item['name']))
-    if pairs:
-        _gate_tokens(pairs)
+    _declaration_tokens([
+        (text, item['name'], [], item['token_sha256'],
+         labels['reference'] + item['name'])
+        for item, text in references])
     return record
 
 

@@ -8,6 +8,7 @@
     carla_dispatch_gate --migration PATH
     carla_dispatch_gate --bytes PATH --sha HEX --label TEXT
     carla_dispatch_gate --tokens DIR
+    carla_dispatch_gate --declaration-tokens PATH
     carla_dispatch_gate --edge HEX --expected HEX
     carla_dispatch_gate --graphs DIR
     carla_dispatch_gate --source-graphs PATH
@@ -22,6 +23,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import significant_graph_pairs, token_sha256
+from tools._lane_declarations import declaration_token_checks
 from tools._python_json import MISSING, PY_DICT, PY_LIST, PyJson, py_equal
 from tools._sha256 import sha256_hex
 
@@ -138,6 +140,18 @@ def dispatch_pins(directory: String) raises:
             doc.text(doc.at(item, "label")),
         )
         index += 1
+
+
+def dispatch_declaration_tokens(payload: String) raises:
+    """Read each declaration and require its recorded token digest.
+
+    Args:
+        payload: A JSON list. Each item has `source`, `name`, `owner`, `token`, and `label`.
+
+    Raises:
+        Error: A function cannot be read, or a token digest changed.
+    """
+    declaration_token_checks(payload, "curve support/dispatch contract: ")
 
 
 def dispatch_tokens(directory: String) raises:
@@ -269,6 +283,7 @@ def _usage():
         (
             "usage: carla_dispatch_gate --migration PATH"
             " | --bytes PATH --sha HEX --label TEXT | --tokens DIR"
+            " | --declaration-tokens PATH"
             " | --edge HEX --expected HEX | --graphs DIR"
             " | --source-graphs PATH | --pins DIR"
         ),
@@ -288,6 +303,7 @@ def main() raises:
     var digest = String("")
     var label = String("")
     var tokens = String("")
+    var declaration_tokens = String("")
     var edge = String("")
     var expected = String("")
     var graphs = String("")
@@ -303,6 +319,7 @@ def main() raises:
             or word == "--sha"
             or word == "--label"
             or word == "--tokens"
+            or word == "--declaration-tokens"
             or word == "--edge"
             or word == "--expected"
             or word == "--graphs"
@@ -322,6 +339,8 @@ def main() raises:
                 label = value
             elif word == "--tokens":
                 tokens = value
+            elif word == "--declaration-tokens":
+                declaration_tokens = value
             elif word == "--edge":
                 edge = value
             elif word == "--expected":
@@ -341,6 +360,8 @@ def main() raises:
     if payload.byte_length() > 0:
         modes += 1
     if tokens.byte_length() > 0:
+        modes += 1
+    if declaration_tokens.byte_length() > 0:
         modes += 1
     if edge.byte_length() > 0 or expected.byte_length() > 0:
         modes += 1
@@ -370,6 +391,9 @@ def main() raises:
             return
         if edge.byte_length() > 0:
             dispatch_edge(edge, expected)
+            return
+        if declaration_tokens.byte_length() > 0:
+            dispatch_declaration_tokens(Path(declaration_tokens).read_text())
             return
         if tokens.byte_length() > 0:
             dispatch_tokens(tokens)

@@ -11,7 +11,9 @@ from std.tempfile import mkdtemp
 from std.testing import TestSuite, assert_raises
 
 from tools._sha256 import sha256_hex
+from tests._python_tokens import declaration_text, token_sha256
 from tools.carla_dispatch_gate import (
+    dispatch_declaration_tokens,
     dispatch_edge,
     dispatch_graphs,
     dispatch_pin,
@@ -129,6 +131,37 @@ def test_matching_dispatch_sources_are_accepted() raises:
         + '"source":"def center():\\n    return 1\\n"}]'
     )
     dispatch_source_graphs(payload)
+
+
+def _declaration_payload(token: String) -> String:
+    """Return one reference-declaration token check.
+
+    Args:
+        token: The required token digest.
+
+    Returns:
+        The JSON payload.
+    """
+    return (
+        '[{"source":"def f():\\n    return 1\\n","name":"f","owner":[],'
+        + '"token":"'
+        + token
+        + '","label":"reference changed: f"}]'
+    )
+
+
+def test_a_reference_declaration_token_is_checked_in_one_call() raises:
+    """The recorded digest of the declaration passes."""
+    var body = declaration_text("def f():\n    return 1\n", "f", List[String]())
+    dispatch_declaration_tokens(_declaration_payload(token_sha256(body)))
+
+
+def test_a_changed_reference_declaration_token_is_refused() raises:
+    """A different declaration digest fails with its label."""
+    with assert_raises(
+        contains="curve support/dispatch contract: reference changed: f"
+    ):
+        dispatch_declaration_tokens(_declaration_payload("00"))
 
 
 def main() raises:

@@ -158,6 +158,8 @@ It compares every dispatch premise text in one check.
 
 It reads every dispatch premise declaration and compares its tokens in one check.
 
+It checks every dispatch reference declaration token in one check.
+
 It chooses every dispatch premise fallback in one check.
 
 It checks every Map seed premise in one check.
