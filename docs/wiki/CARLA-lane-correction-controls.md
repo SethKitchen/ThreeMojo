@@ -63,6 +63,11 @@ It compares that grouped-table token digest before the predecessor fallback.
 
 It checks that digest and the stored bounds in one check when the digest matches.
 
+It reuses that grouped table check when the same texts are read again.
+The proof file and the geometry file are still read.
+A changed text is checked again.
+A failed check is not kept.
+
 It checks those stored bounds before the lane-control record paths in one check.
 
 It compares that grouped-table token digest in one check.

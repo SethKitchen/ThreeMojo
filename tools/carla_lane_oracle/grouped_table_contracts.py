@@ -52,8 +52,20 @@ def __getattr__(name):
         return _identity()['consumer']
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
+_GATED_GROUPED = None
+
+
 def _grouped_checked(module, geometry, digest):
-    """Compare the grouped token, then check the stored bounds when it matches."""
+    """Compare the grouped token, then check the stored bounds when it matches.
+
+    The same texts are not checked again. A changed text is checked again.
+    A failed check is not kept.
+    """
+    global _GATED_GROUPED
+    key = (module, geometry, digest)
+    cached = _GATED_GROUPED
+    if cached is not None and cached[0] == key:
+        return cached[1]
     import json
     import os
     import subprocess
@@ -78,7 +90,9 @@ def _grouped_checked(module, geometry, digest):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _GATED_GROUPED = (key, parsed)
+    return parsed
 
 
 def verify_text(module, geometry):
@@ -108,12 +122,17 @@ def verify_text(module, geometry):
     return json.loads(result.stdout)
 
 def _grouped_then_lane(module, geometry, digest):
-    """Check the grouped table, then read the lane-control record paths."""
+    """Check the grouped table, then read the lane-control record paths.
+
+    A successful table check is kept for a later read of the same texts.
+    A failed check is not kept.
+    """
     import json
     import os
     import subprocess
     import tempfile
     from pathlib import Path
+    global _GATED_GROUPED
     if __package__:
         from . import lane_control_contracts as lane
     else:
@@ -140,6 +159,7 @@ def _grouped_then_lane(module, geometry, digest):
     parsed = json.loads(result.stdout)
     if not parsed['restore'] and lane._RECORD_PATHS is None and 'paths' in parsed:
         lane._RECORD_PATHS = parsed['paths']
+    _GATED_GROUPED = ((module, geometry, digest), parsed)
     return parsed
 
 
