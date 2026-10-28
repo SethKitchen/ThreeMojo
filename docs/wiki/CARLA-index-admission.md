@@ -48,7 +48,6 @@ An unknown or nonfinite E gives a zero radius, so that candidate is not skipped.
 
 On `assets/carla/town.xodr` the skip removes about 44 percent of the candidate certifications.
 See [the #685 measurement](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/certified-query-685.md).
-The source edge has its own reviewed lane-oracle record, `map_deviation_contracts.py`.
 
 ## Separate limits
 

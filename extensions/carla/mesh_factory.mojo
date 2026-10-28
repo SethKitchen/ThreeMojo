@@ -633,7 +633,7 @@ struct MeshFactory(Movable):
         s_start: Length64,
         s_end: Length64,
     ) raises -> BufferGeometry:
-        """Checked typed boundary. Return a lane's strip from one s to another, `Generate(lane, a, b)`.
+        """Return a lane's strip from one s to another, `Generate(lane, a, b)`.
 
         Args:
             road: The road.
@@ -779,7 +779,7 @@ struct MeshFactory(Movable):
         s_start: Length64,
         s_end: Length64,
     ) raises -> BufferGeometry:
-        """Checked typed boundary. Return a lane with several vertices across, `GenerateTesselated`.
+        """Return a lane with several vertices across, `GenerateTesselated`.
 
         Args:
             road: The road.
@@ -929,7 +929,7 @@ struct MeshFactory(Movable):
         s_start: Length64,
         s_end: Length64,
     ) raises -> BufferGeometry:
-        """Checked typed boundary. Return a lane as a raised block, `GenerateSidewalk(lane, a, b)`.
+        """Return a lane as a raised block, `GenerateSidewalk(lane, a, b)`.
 
         Each row is six vertices: one meter below the first edge, the
         first edge twice, the second edge twice, and one meter below it.
@@ -1148,7 +1148,7 @@ struct MeshFactory(Movable):
         s_start: Length64,
         s_end: Length64,
     ) raises -> BufferGeometry:
-        """Checked typed boundary. Return a wall on a lane's first edge, `GenerateRightWall`.
+        """Return a wall on a lane's first edge, `GenerateRightWall`.
 
         Args:
             road: The road.
@@ -1232,7 +1232,7 @@ struct MeshFactory(Movable):
         s_start: Length64,
         s_end: Length64,
     ) raises -> BufferGeometry:
-        """Checked typed boundary. Return a wall on a lane's second edge, `GenerateLeftWall`.
+        """Return a wall on a lane's second edge, `GenerateLeftWall`.
 
         Args:
             road: The road.
@@ -1775,7 +1775,7 @@ struct MeshFactory(Movable):
         width: Length64,
         extra_width: Length,
     ) raises -> Tuple[Vector3, Vector3]:
-        """Checked typed boundary. Return a mark's two edges, `ComputeEdgesForLanemark`.
+        """Return a mark's two edges, `ComputeEdgesForLanemark`.
 
         The mark runs from the lane's first edge toward its second, one
         mark width. A lane of no width borrows the direction of the first

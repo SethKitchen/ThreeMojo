@@ -234,7 +234,7 @@ comptime VAN = BodyStyle(3)
 
 
 def body_style_of(type_id: String, height: Length) raises -> BodyStyle:
-    """Checked typed boundary. Return the body style of a vehicle blueprint.
+    """Return the body style of a vehicle blueprint.
 
     Args:
         type_id: The blueprint's id, such as `vehicle.mini.cooper`.
@@ -547,7 +547,7 @@ comptime BODY_RING = 28
 def body_geometry(
     length: Length, width: Length, height: Length, style: BodyStyle
 ) raises -> BufferGeometry:
-    """Checked typed boundary. Return a vehicle's lower body, below the belt line.
+    """Return a vehicle's lower body, below the belt line.
 
     Seen from above, the body is a superellipse of exponent 8. Seen from
     the side, it rises from its clearance to the belt line and rounds off
@@ -647,7 +647,7 @@ def _body_geometry_si(
 def cabin_geometry(
     length: Length, width: Length, height: Length, style: BodyStyle
 ) raises -> BufferGeometry:
-    """Checked typed boundary. Return a vehicle's cabin: its glass, its pillars and its roof.
+    """Return a vehicle's cabin: its glass, its pillars and its roof.
 
     The cabin rises from the belt line at `cabin_start` to the roof at
     `roof_start`, runs flat to `roof_end` and falls to the belt line at
@@ -778,7 +778,7 @@ def _cabin_geometry_si(
 
 
 def wheel_inset(length: Length) raises -> Length:
-    """Checked typed boundary. Return how far each axle stands in from its bumper.
+    """Return how far each axle stands in from its bumper.
 
     Args:
         length: The body's length.
@@ -1044,7 +1044,7 @@ def clothing(id: ActorId) -> Tuple[Color, Color, Color]:
 
 
 def stride(speed: Velocity) raises -> Angle:
-    """Checked typed boundary. Return the target swing amplitude at a speed, without a gait phase.
+    """Return the target swing amplitude at a speed, without a gait phase.
 
     Args:
         speed: The walker's speed in meters per second.

@@ -88,7 +88,7 @@ def dot_2d(a: Vector3, b: Vector3) -> Float32:
 
 
 def distance_squared_2d(a: Vector3, b: Vector3) raises -> Area:
-    """Checked typed boundary. Return the squared distance in the x-y plane, `DistanceSquared2D`.
+    """Return the squared distance in the x-y plane, `DistanceSquared2D`.
 
     Args:
         a: The first point, in meters.

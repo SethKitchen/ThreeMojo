@@ -418,7 +418,7 @@ struct LampPost(ImplicitlyCopyable):
 def roadside(
     road: Road, s: Length64, right: Bool
 ) raises -> Optional[Tuple[Vector3, Vector3]]:
-    """Checked typed boundary. Return the outer edge of a road's outermost lane and the way out.
+    """Return the outer edge of a road's outermost lane and the way out.
 
     Args:
         road: The road.
