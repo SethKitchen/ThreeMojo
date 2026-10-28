@@ -168,10 +168,8 @@ def decimal_word(token):
     value = F(token)
     # Fractions have no signed zero; a source literal does. `1/0` still
     # raises from the fraction above, before this classification.
-    if _moment_error('--signed', {'token': token, 'zero': not value}) == 'true':
-        return SIGN
     try:
-        result = ideal_projection.classified_decimal_word(token)
+        result = ideal_projection.signed_classified_word(token, not value)
     except ValueError as error:
         try:
             result = _moment_error('--result', {'error': str(error)})
@@ -180,6 +178,8 @@ def decimal_word(token):
         if result != 'nearest':
             raise CheckError(result) from error
         return nearest_even(value)
+    if result == 'signed':
+        return SIGN
     return int(result)
 
 

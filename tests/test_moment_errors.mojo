@@ -9,6 +9,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._moment_errors import (
     classified_decimal_word,
+    signed_classified_word,
     constant_error_text,
     decimal_word_result,
     signed_zero_word,
@@ -69,6 +70,21 @@ def test_a_bad_literal_fails_before_classification() raises:
     """A malformed literal fails before the word count is checked."""
     with assert_raises(contains="spiral moment word: unsupported decimal word"):
         _ = classified_decimal_word("nope")
+
+
+def test_a_signed_zero_is_marked_before_rounding() raises:
+    """A negative zero token is marked before the literal is rounded."""
+    assert_equal(
+        signed_classified_word('{"token":"-nope","zero":true}'), "signed"
+    )
+
+
+def test_an_unsigned_literal_is_still_rounded() raises:
+    """A non-zero fraction still rounds `1.0` after the sign check."""
+    assert_equal(
+        signed_classified_word('{"token":"1.0","zero":false}'),
+        "4607182418800017408",
+    )
 
 
 def main() raises:

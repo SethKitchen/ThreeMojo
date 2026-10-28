@@ -9,6 +9,7 @@
     carla_moment_errors --result PATH
     carla_moment_errors --constant PATH
     carla_moment_errors --classified PATH
+    carla_moment_errors --signed-word PATH
 
 The program prints the decision.
 """
@@ -20,6 +21,7 @@ from tools._moment_errors import (
     classified_decimal_word,
     constant_error_text,
     decimal_word_result,
+    signed_classified_word,
     signed_zero_word,
 )
 
@@ -29,7 +31,7 @@ def _usage():
     print(
         (
             "usage: carla_moment_errors --signed PATH | --result PATH |"
-            " --constant PATH | --classified PATH"
+            " --constant PATH | --classified PATH | --signed-word PATH"
         ),
         file=stderr,
     )
@@ -51,6 +53,7 @@ def main() raises:
         and mode != "--result"
         and mode != "--constant"
         and mode != "--classified"
+        and mode != "--signed-word"
     ):
         _usage()
     try:
@@ -61,6 +64,8 @@ def main() raises:
             print(decimal_word_result(text), end="")
         elif mode == "--classified":
             print(classified_decimal_word(text), end="")
+        elif mode == "--signed-word":
+            print(signed_classified_word(text), end="")
         else:
             print(constant_error_text(text), end="")
     except error:

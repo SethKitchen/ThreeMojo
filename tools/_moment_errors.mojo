@@ -92,6 +92,27 @@ def classified_decimal_word(token: String) raises -> String:
     return decimal_word_result(decision.dumps())
 
 
+def signed_classified_word(payload: String) raises -> String:
+    """Check a signed zero, then round and classify one literal.
+
+    Args:
+        payload: JSON with `token` and `zero`. `zero` is true when the
+            fraction is zero. `token` is the source literal.
+
+    Returns:
+        `signed` when the zero fraction keeps a negative token sign.
+        Otherwise the unsigned decimal encoding of the rounded word.
+
+    Raises:
+        Error: A field is absent, or the literal is not finite. The sign
+            is checked before the literal is rounded.
+    """
+    var doc = PyJson.parse(payload)
+    if signed_zero_word(payload) == "true":
+        return "signed"
+    return classified_decimal_word(doc.text(doc.at(doc.root, "token")))
+
+
 def constant_error_text(payload: String) raises -> String:
     """Return the constant-declaration failure text.
 

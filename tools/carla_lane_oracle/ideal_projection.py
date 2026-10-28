@@ -404,6 +404,34 @@ def hex_integers(words):
     return [int(item) for item in json.loads(result.stdout)]
 
 
+def signed_classified_word(token, zero):
+    """Return `signed`, or one rounded word, after the sign check."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    body = json.dumps({'token': token, 'zero': bool(zero)}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='signed-word-') as directory:
+        path = Path(directory) / 'word.json'
+        path.write_text(body)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_errors',
+             '--signed-word', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = _cli_failures()['word']
+        if message.startswith(prefix):
+            message = message[len(prefix):]
+        raise ValueError(message)
+    return result.stdout
+
+
 def classified_decimal_word(token):
     """Return one rounded decimal word after its count check."""
     import os
