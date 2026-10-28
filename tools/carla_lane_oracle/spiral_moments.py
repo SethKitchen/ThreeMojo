@@ -400,6 +400,29 @@ def _moment_fraction_groups(payload):
     return json.loads(result.stdout)
 
 
+def _moment_scalars_and_blocks(payload):
+    """Return the normalized blocks when the scalars and digests match."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-scalars-blocks-') as directory:
+        path = Path(directory) / 'blocks.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_blocks',
+             '--scalars', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _moment_blocks_and_digests(payload):
     """Return the normalized blocks when every route digest matches."""
     import os
@@ -660,26 +683,6 @@ def verify_inputs(root):
     loaded_scalars = []
     for name, record in pins['scalars'].items():
         loaded_scalars.append((name, record, _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))))
-    try:
-        _moment_scalars({
-            'items': [{
-                'name': name,
-                'source': text,
-                'expected': record['word'],
-                'message': messages['scalar_word'] + name,
-            } for name, record, text in loaded_scalars],
-            'overflow': messages['overflow'],
-        })
-    except ValueError as error:
-        message = str(error)
-        word = _cli_failures()['word']
-        if message.startswith(word):
-            message = message[len(word):]
-        marker = 'stored scalar literal: '
-        if message.startswith(marker):
-            name, rest = message[len(marker):].split('\n', 1)
-            _constant_error(ValueError(rest), name)
-        raise CheckError(message) from error
     blocks = {}
     block_items = []
     for name, record in pins['blocks'].items():
@@ -691,7 +694,16 @@ def verify_inputs(root):
     for name, record in pins['routing'].items():
         routing_items.append((name, record))
     try:
-        blocks = _moment_blocks_and_digests({
+        blocks = _moment_scalars_and_blocks({
+            'scalars': {
+                'items': [{
+                    'name': name,
+                    'source': text,
+                    'expected': record['word'],
+                    'message': messages['scalar_word'] + name,
+                } for name, record, text in loaded_scalars],
+                'overflow': messages['overflow'],
+            },
             'blocks': [{
                 'name': name, 'source': text, 'begin': record['begin'],
                 'end': record['end'], 'expected': record['normalized_source'],
@@ -704,7 +716,15 @@ def verify_inputs(root):
             } for name, record in routing_items],
         })
     except ValueError as error:
-        raise CheckError(str(error)) from error
+        message = str(error)
+        word = _cli_failures()['word']
+        if message.startswith(word):
+            message = message[len(word):]
+        marker = 'stored scalar literal: '
+        if message.startswith(marker):
+            name, rest = message[len(marker):].split('\n', 1)
+            _constant_error(ValueError(rest), name)
+        raise CheckError(message) from error
     loaded_routes = []
     for name, record in routing_items:
         loaded_routes.append((name, record, _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))))

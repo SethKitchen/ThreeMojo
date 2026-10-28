@@ -12,6 +12,7 @@ blocks before the route digests.
 
 from tests._python_tokens import require_operation_block
 from tools._moment_routes import moment_route_digests
+from tools._moment_scalars import moment_scalars
 from tools._python_json import PyJson
 
 
@@ -77,3 +78,28 @@ def moment_blocks_and_digests(payload: String) raises -> String:
     )
     moment_route_digests(doc.subtree(doc.at(doc.root, "digests")).dumps())
     return blocks_text
+
+
+def moment_scalars_and_blocks(payload: String) raises -> String:
+    """Check every scalar, then every operation block and route digest.
+
+    Args:
+        payload: JSON with `scalars`, `blocks`, and `digests`. `scalars`
+            has `items` and `overflow`. `blocks` and `digests` are the
+            block and route-digest lists.
+
+    Returns:
+        The normalized blocks. Each key is a block name.
+
+    Raises:
+        Error: A scalar changed, a block pin changed, or a route digest
+            disagrees. A scalar error is raised before any block is checked.
+    """
+    var doc = PyJson.parse(payload)
+    _ = moment_scalars(doc.subtree(doc.at(doc.root, "scalars")).dumps())
+    var rest = PyJson()
+    var root = rest.new_dict()
+    rest.set(root, "blocks", rest.adopt(doc, doc.at(doc.root, "blocks")))
+    rest.set(root, "digests", rest.adopt(doc, doc.at(doc.root, "digests")))
+    rest.root = root
+    return moment_blocks_and_digests(rest.dumps())

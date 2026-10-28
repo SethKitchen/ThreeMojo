@@ -7,22 +7,28 @@
 
     carla_moment_blocks PATH
     carla_moment_blocks --digests PATH
+    carla_moment_blocks --scalars PATH
 
 PATH is a JSON list of block pins. The command prints a JSON object of
 the normalized blocks. `--digests` checks those blocks, then the route
-digests, and prints the same block object.
+digests. `--scalars` checks the scalar words before those blocks and
+digests.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._moment_blocks import moment_blocks, moment_blocks_and_digests
+from tools._moment_blocks import (
+    moment_blocks,
+    moment_blocks_and_digests,
+    moment_scalars_and_blocks,
+)
 
 
 def _usage():
     """Print the command usage and stop."""
     print(
-        "usage: carla_moment_blocks PATH | carla_moment_blocks --digests PATH",
+        "usage: carla_moment_blocks PATH | --digests PATH | --scalars PATH",
         file=stderr,
     )
     exit(2)
@@ -32,10 +38,20 @@ def main() raises:
     """Print the normalized blocks that match their pins.
 
     Raises:
-        Error: The command is invalid, a block pin changed, or a route
-            digest disagrees.
+        Error: The command is invalid, a scalar changed, a block pin
+            changed, or a route digest disagrees.
     """
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--scalars":
+        try:
+            print(
+                moment_scalars_and_blocks(Path(arguments[2]).read_text()),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 3 and arguments[1] == "--digests":
         try:
             print(

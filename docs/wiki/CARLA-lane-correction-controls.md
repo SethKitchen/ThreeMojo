@@ -386,6 +386,8 @@ It keeps every stored-moment constant array in one check.
 
 It keeps every stored-moment scalar word in one check.
 
+It checks every scalar word before the blocks and route digests in one check.
+
 It groups every stored-moment fraction text by array.
 
 It reads every stored array, its fractions, and its name set in one check.
