@@ -22,6 +22,7 @@ from tests._python_tokens import (
 from tools._python_json import PyJson
 from tools._sampled_declarations import sampled_declarations
 from tools._sampled_projection import (
+    project_after_imports,
     project_reviewed_helpers,
     project_with_recipe,
 )
@@ -61,6 +62,12 @@ def test_decorator_prefix_map_matches_one_lookup() raises:
     assert_equal(
         doc.text(doc.at(doc.root, "other")), decorator_prefix(source, "other")
     )
+
+
+def test_bad_imports_fail_before_the_copy_plan() raises:
+    """A bad lane-value module fails before a missing bounds text."""
+    with assert_raises(contains="sampled imports:"):
+        _ = project_after_imports('{"target":"nope"}')
 
 
 def test_a_missing_bounds_text_fails_before_the_helpers() raises:

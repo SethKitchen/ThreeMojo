@@ -119,6 +119,8 @@ It reads those projection steps and the copied helpers in one check.
 
 It reads the sampled copy plan before those projection steps in one check.
 
+It checks the sampled value imports before that copy plan in one check.
+
 It keeps the sampled reference names and the closure groups.
 
 It keeps the sampled refusal messages.

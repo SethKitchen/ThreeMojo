@@ -32,6 +32,7 @@ from tools._sampled_value_gate import (
     drop_derivative_intersection,
     extract_sampled_function,
     rename_sampled_identifiers,
+    sampled_value_imports,
 )
 
 
@@ -376,3 +377,28 @@ def project_with_recipe(payload: String) raises -> String:
     return (
         '{"plan":' + plan + ',"recipe":' + recipe + ',"record":' + record + "}"
     )
+
+
+def project_after_imports(payload: String) raises -> String:
+    """Check the sampled value imports, then project the copied helpers.
+
+    Args:
+        payload: JSON with `target`, `bounds`, and `trig`. `target` is
+            the lane-value module. `bounds` and `trig` are the helper
+            sources.
+
+    Returns:
+        JSON with `plan`, `recipe`, and `record`, as
+        `project_with_recipe` returns them.
+
+    Raises:
+        Error: An import changed, or a helper projection changed. An
+            import error starts with `sampled imports: `. The imports are
+            checked before the copy plan.
+    """
+    var doc = PyJson.parse(payload)
+    try:
+        sampled_value_imports(doc.text(doc.at(doc.root, "target")))
+    except error:
+        raise Error("sampled imports: " + String(error))
+    return project_with_recipe(payload)
