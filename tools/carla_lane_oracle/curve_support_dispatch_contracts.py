@@ -298,6 +298,51 @@ def _dispatch_labels():
     return _DISPATCH_LABELS
 
 
+def _dispatch_choices(items):
+    """Return `current` or `restore` for each source."""
+    if not items:
+        return []
+    import json
+    return json.loads(_dispatch_query('--choice', items))
+
+
+def reviewed_sources(root, items, *, _operation=None):
+    """Return each source after its reviewed choice."""
+    if _operation is not None:
+        _check_operation(root, _operation)
+    if not items:
+        return []
+    labels = _dispatch_labels()
+    loaded = []
+    for path, expected in items:
+        text = _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
+        loaded.append((path, expected, text))
+    choices = _dispatch_choices([{
+        'text': text,
+        'expected': expected,
+        'path': path,
+        'dispatch_path': labels['dispatch_path'],
+    } for path, expected, text in loaded])
+    restored = None
+    operation = {} if _operation is None else {'_operation': _operation}
+    results = []
+    for (path, expected, text), choice in zip(loaded, choices):
+        if choice == labels['current']:
+            results.append(text)
+            continue
+        if choice != labels['restore']:
+            raise ValueError(labels['unreviewed'] + path)
+        if restored is None:
+            if __package__:
+                from . import raw_cut_inverse_contracts as raw
+            else:
+                import raw_cut_inverse_contracts as raw
+            restored = raw.verify(root, **operation)
+        _gate_edge(restored['before_token_sha256'], expected)
+        results.append(restored['before_source'])
+    return results
+
+
 def reviewed_source(root, path, expected, *, _operation=None):
     """Compose the exact raw inverse theorem with this retained outer proof."""
     if _operation is not None:
@@ -438,9 +483,13 @@ def verify_premises(root, *, _operation=None):
     labels = _dispatch_labels()
     operation_args = {} if _operation is None else {'_operation': _operation}
     prepared = []
-    for path, item in record['sources'].items():
+    source_items = list(record['sources'].items())
+    chosen = reviewed_sources(root, [
+        (path, item['after_token_sha256']) for path, item in source_items
+    ], **operation_args)
+    for (path, item), text in zip(source_items, chosen):
         prepared.append((
-            reviewed_source(root, path, item['after_token_sha256'], **operation_args),
+            text,
             item['after_source'],
             labels['successor_operations'] + path))
     if prepared:
@@ -563,9 +612,12 @@ def verify(root, *, _operation=None):
     labels = _dispatch_labels()
     operation_args = {} if _operation is None else {'_operation': _operation}
     pairs = []
-    for path, item in record['sources'].items():
-        pairs.append((reviewed_source(root,path,item['after_token_sha256'], **operation_args),
-                      item['after_token_sha256'], labels['complete'] + path))
+    source_items = list(record['sources'].items())
+    chosen = reviewed_sources(root, [
+        (path, item['after_token_sha256']) for path, item in source_items
+    ], **operation_args)
+    for (path, item), text in zip(source_items, chosen):
+        pairs.append((text, item['after_token_sha256'], labels['complete'] + path))
     if pairs:
         _gate_tokens(pairs)
     verify_premises(root, **operation_args)

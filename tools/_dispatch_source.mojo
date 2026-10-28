@@ -31,20 +31,64 @@ def reviewed_source_choice(payload: String) raises -> String:
             module.
     """
     var doc = PyJson.parse(payload)
-    var token_node = doc.get(doc.root, "token")
+    return _source_choice(doc, doc.root)
+
+
+def _source_choice(doc: PyJson, node: Int) raises -> String:
+    """Return the choice for one source object.
+
+    Args:
+        doc: The parsed document.
+        node: One source object.
+
+    Returns:
+        `current` when the token matches. `restore` when it does not and
+        `path` is the sample-dispatch module.
+
+    Raises:
+        Error: The token changed and the path is not the sample-dispatch
+            module.
+    """
+    var token_node = doc.get(node, "token")
     var token: String
     if token_node == MISSING:
-        token = token_sha256(doc.text(doc.at(doc.root, "text")))
+        token = token_sha256(doc.text(doc.at(node, "text")))
     else:
         token = doc.text(token_node)
-    if token == doc.text(doc.at(doc.root, "expected")):
+    if token == doc.text(doc.at(node, "expected")):
         return "current"
-    var path = doc.text(doc.at(doc.root, "path"))
-    if path == doc.text(doc.at(doc.root, "dispatch_path")):
+    var path = doc.text(doc.at(node, "path"))
+    if path == doc.text(doc.at(node, "dispatch_path")):
         return "restore"
     raise Error(
         "curve support/dispatch contract: unreviewed source successor: " + path
     )
+
+
+def reviewed_source_choices(payload: String) raises -> String:
+    """Return the choice for each dispatch source.
+
+    Args:
+        payload: A JSON list. Each item has the choice fields.
+
+    Returns:
+        A JSON list of `current` or `restore`, in the same order.
+
+    Raises:
+        Error: A token changed outside the sample-dispatch module.
+    """
+    var doc = PyJson.parse(payload)
+    var out = PyJson()
+    var rows = out.new_list()
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        out.append(
+            rows, out.new_str(_source_choice(doc, doc.item(doc.root, index)))
+        )
+        index += 1
+    out.root = rows
+    return out.dumps()
 
 
 def texts_match(payload: String) raises -> String:

@@ -10,6 +10,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 from tests._python_tokens import token_sha256
 from tools._dispatch_source import (
     reviewed_source_choice,
+    reviewed_source_choices,
     texts_match,
     texts_match_all,
 )
@@ -87,6 +88,20 @@ def test_a_dispatch_source_uses_its_kept_token_digest() raises:
         + '"dispatch_path":"extensions/carla/curve_sample_dispatch.mojo"}'
     )
     assert_equal(reviewed_source_choice(payload), "current")
+
+
+def test_dispatch_source_lists_keep_their_order() raises:
+    """Each source keeps its own choice."""
+    assert_equal(
+        reviewed_source_choices(
+            "["
+            + _choice("aa", "aa", "other.mojo")
+            + ","
+            + _choice("bb", "aa", "extensions/carla/curve_sample_dispatch.mojo")
+            + "]"
+        ),
+        '["current","restore"]',
+    )
 
 
 def test_premise_text_lists_keep_their_order() raises:

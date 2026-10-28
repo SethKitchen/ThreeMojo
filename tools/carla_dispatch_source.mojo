@@ -9,7 +9,7 @@
     carla_dispatch_source --match PATH
 
 `--choice` prints `current` or `restore`. `--match` prints `true` or
-`false` for one pair. A list prints those flags in order.
+`false` for one pair. A list prints those results in order.
 """
 
 from std.pathlib import Path
@@ -17,6 +17,7 @@ from std.sys import argv, exit, stderr
 
 from tools._dispatch_source import (
     reviewed_source_choice,
+    reviewed_source_choices,
     texts_match,
     texts_match_all,
 )
@@ -46,14 +47,16 @@ def main() raises:
         _usage()
     try:
         var text = Path(arguments[2]).read_text()
-        if mode == "--choice":
+        var doc = PyJson.parse(text)
+        if doc.kind(doc.root) == PY_LIST:
+            if mode == "--choice":
+                print(reviewed_source_choices(text), end="")
+            else:
+                print(texts_match_all(text), end="")
+        elif mode == "--choice":
             print(reviewed_source_choice(text), end="")
         else:
-            var doc = PyJson.parse(text)
-            if doc.kind(doc.root) == PY_LIST:
-                print(texts_match_all(text), end="")
-            else:
-                print(texts_match(text), end="")
+            print(texts_match(text), end="")
     except error:
         print(String(error), file=stderr)
         exit(1)

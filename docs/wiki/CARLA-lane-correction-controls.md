@@ -134,6 +134,8 @@ It keeps the current dispatch source when the token matches.
 
 It hashes the dispatch source before that choice.
 
+It chooses every dispatch source in one check.
+
 It compares each premise text before the predecessor fallback.
 
 It reads every dispatch premise declaration in one check.
