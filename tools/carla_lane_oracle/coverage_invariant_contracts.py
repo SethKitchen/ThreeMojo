@@ -226,28 +226,6 @@ def _gate(migration, prior=None, components=None, *, _then_pair=False):
         _GATED_INVARIANT.add((migration, prior, component_key, False))
 
 
-def _gate_digest(payload, expected, kind, label):
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='invariant-digest-') as directory:
-        target = Path(directory) / 'pin'
-        target.write_bytes(payload)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_invariant_gate',
-             '--bytes', str(target), '--sha', expected, '--kind', kind,
-             '--label', label],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-
-
 _INVARIANT_LABELS = None
 
 
@@ -578,12 +556,10 @@ def _verify_owned(root, *, _operation):
 
 
 def _pin_predecessor(payload, record, filename):
-    import hashlib
-    labels = _invariant_labels()
-    if hashlib.sha256(payload).hexdigest() != record['after_sha256']:
-        _gate_digest(payload, record['after_sha256'], labels['after'], filename)
-    # A repeated key is refused before placement. The digest check stays first.
-    json.loads(payload, object_pairs_hook=source.unique_keys)
+    """Return the indented coverage-invariant pin predecessor.
+
+    The rebuild checks the pin digest, then a repeated key.
+    """
     return _invariant_predecessor(payload, record, filename)
 
 
@@ -659,22 +635,15 @@ def _pin_predecessors(
         guard_payload, guard_record, guard_name):
     """Place the runtime predecessor, then the guard predecessor.
 
-    The runtime hash and repeated-key checks still run before that call.
+    The rebuild checks the runtime pin digest, then a repeated key.
     The guard pin is checked only after the runtime predecessor is placed.
     The same pins are not placed again. A changed pin is placed again.
     """
-    import hashlib
     import os
     import subprocess
     import tempfile
     from pathlib import Path
     global _PLACED_PREDECESSORS
-    labels = _invariant_labels()
-    if hashlib.sha256(runtime_payload).hexdigest() != runtime_record['after_sha256']:
-        _gate_digest(
-            runtime_payload, runtime_record['after_sha256'], labels['after'],
-            runtime_name)
-    json.loads(runtime_payload, object_pairs_hook=source.unique_keys)
     runtime_request = _pin_request(runtime_record, runtime_name)
     guard_request = _pin_request(guard_record, guard_name)
     cached = _PLACED_PREDECESSORS

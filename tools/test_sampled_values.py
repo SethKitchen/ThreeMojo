@@ -980,11 +980,19 @@ class PredecessorPairCacheTests(unittest.TestCase):
                 self.assertEqual(run.call_count, 1)
             duplicate = b'{"a":1,"a":2}'
             runtime_record['after_sha256'] = hashlib.sha256(duplicate).hexdigest()
-            with patch('subprocess.run') as run:
+            refused = Mock(
+                returncode=1, stdout=b'',
+                stderr=b'duplicate runtime source pin key: a\n',
+            )
+            with patch('subprocess.run', return_value=refused) as run:
                 with self.assertRaisesRegex(
                         ValueError, 'duplicate runtime source pin key: a'):
                     call(duplicate, guard)
-                self.assertEqual(run.call_count, 0)
+                self.assertEqual(run.call_count, 1)
+                with self.assertRaisesRegex(
+                        ValueError, 'duplicate runtime source pin key: a'):
+                    call(duplicate, guard)
+                self.assertEqual(run.call_count, 2)
             self.assertEqual(invariant._PLACED_PREDECESSORS[0], runtime)
         finally:
             invariant._INVARIANT_LABELS = original_labels

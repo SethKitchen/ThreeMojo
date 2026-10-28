@@ -550,7 +550,9 @@ def invariant_pin_predecessor(
         The predecessor as `json.dumps` writes it with `indent=2`, plus a newline.
 
     Raises:
-        Error: The digest, a placement, or a pin transition changed.
+        Error: The digest, a repeated key, a placement, or a pin transition
+            changed. The digest is checked before a repeated key. A repeated
+            key is refused before the pin is placed.
     """
     var spec = PyJson.parse(request)
     var after = spec.text(spec.at(spec.root, "after"))
@@ -559,6 +561,7 @@ def invariant_pin_predecessor(
         if label == "runtime-source-pins.json":
             _fail("unreviewed runtime pin successor: " + label)
         _fail("unreviewed guarded pin successor: " + label)
+    reject_duplicate_pin_keys(payload)
     var pins = loads(payload)
     var transitions = spec.at(spec.root, "transitions")
     _require_pin_places(pins, spec, transitions)

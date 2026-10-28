@@ -270,6 +270,10 @@ A wrong pair still fails before the next record is read.
 
 It rebuilds one coverage-invariant pin predecessor in one check.
 
+It checks that pin digest before it checks a repeated key.
+
+It refuses a repeated key before the pin is placed.
+
 It rebuilds the runtime and guard pin predecessors in one check.
 
 The runtime predecessor still fails before the guard pin is checked.
@@ -278,7 +282,7 @@ It reuses that predecessor pair when the same pins are placed again.
 
 A changed pin is placed again.
 
-The runtime hash and repeated-key check still run before that reused pair.
+It checks the runtime pin digest when that pair is rebuilt.
 
 It keeps the four coverage-invariant source paths.
 

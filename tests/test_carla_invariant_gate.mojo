@@ -349,6 +349,34 @@ def test_the_runtime_and_guard_predecessors_are_one_check() raises:
     )
 
 
+def test_a_wrong_digest_fails_before_a_repeated_key() raises:
+    """A repeated key is not reported when the pin digest is wrong."""
+    var payload = String('{"a":1,"a":2}')
+    var request = (
+        '{"after":"00","before":"00","label":"runtime-source-pins.json",'
+        + '"transitions":[]}'
+    )
+    with assert_raises(
+        contains=(
+            "coverage invariant successor: unreviewed runtime pin successor:"
+            " runtime-source-pins.json"
+        )
+    ):
+        _ = invariant_pin_predecessor(payload.as_bytes(), request)
+
+
+def test_a_repeated_key_fails_before_placement() raises:
+    """A repeated key fails after the digest and before placement."""
+    var payload = String('{"a":1,"a":2}')
+    var request = (
+        '{"after":"'
+        + sha256_hex(payload.as_bytes())
+        + '","before":"00","label":"runtime-source-pins.json","transitions":[]}'
+    )
+    with assert_raises(contains="duplicate runtime source pin key: a"):
+        _ = invariant_pin_predecessor(payload.as_bytes(), request)
+
+
 def test_a_repeated_pin_key_is_refused() raises:
     """A repeated object key fails before that pin is placed."""
     with assert_raises(contains="duplicate runtime source pin key: a"):
