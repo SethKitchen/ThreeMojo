@@ -298,6 +298,7 @@ def read_record(root):
 
 
 _GATED_PAIR = None
+_PLACED_PREDECESSORS = None
 
 
 def _gate_pair(names):
@@ -595,6 +596,20 @@ def _pin_request(record, filename):
     }, separators=(',', ':'))
 
 
+def _placed_pair(raw):
+    """Split one predecessor-pair result into runtime and guard bytes."""
+    line, sep, rest = raw.partition(b'\n')
+    if sep != b'\n':
+        raise ValueError('coverage invariant successor: unreviewed runtime pin successor')
+    runtime = rest[:int(line)]
+    rest = rest[int(line):]
+    line, sep, rest = rest.partition(b'\n')
+    if sep != b'\n':
+        raise ValueError('coverage invariant successor: unreviewed guarded pin successor')
+    guard = rest[:int(line)]
+    return runtime, guard
+
+
 def _pin_predecessors(
         runtime_payload, runtime_record, runtime_name,
         guard_payload, guard_record, guard_name):
@@ -602,26 +617,39 @@ def _pin_predecessors(
 
     The runtime hash and repeated-key checks still run before that call.
     The guard pin is checked only after the runtime predecessor is placed.
+    The same pins are not placed again. A changed pin is placed again.
     """
     import hashlib
     import os
     import subprocess
     import tempfile
     from pathlib import Path
+    global _PLACED_PREDECESSORS
     labels = _invariant_labels()
     if hashlib.sha256(runtime_payload).hexdigest() != runtime_record['after_sha256']:
         _gate_digest(
             runtime_payload, runtime_record['after_sha256'], labels['after'],
             runtime_name)
     json.loads(runtime_payload, object_pairs_hook=source.unique_keys)
+    runtime_request = _pin_request(runtime_record, runtime_name)
+    guard_request = _pin_request(guard_record, guard_name)
+    cached = _PLACED_PREDECESSORS
+    if (
+        cached is not None
+        and cached[0] == runtime_payload
+        and cached[1] == runtime_request
+        and cached[2] == guard_payload
+        and cached[3] == guard_request
+    ):
+        return cached[4], cached[5]
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='invariant-predecessor-pair-') as directory:
         folder = Path(directory)
         (folder / 'runtime').write_bytes(runtime_payload)
         (folder / 'guard').write_bytes(guard_payload)
-        (folder / 'runtime.json').write_text(_pin_request(runtime_record, runtime_name))
-        (folder / 'guard.json').write_text(_pin_request(guard_record, guard_name))
+        (folder / 'runtime.json').write_text(runtime_request)
+        (folder / 'guard.json').write_text(guard_request)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_invariant_gate',
              '--predecessor-pair', str(folder)],
@@ -632,14 +660,8 @@ def _pin_predecessors(
         message = (lines[-1] if lines else result.stdout).decode(
             'utf-8', 'replace').strip()
         raise ValueError(message)
-    raw = result.stdout
-    line, sep, rest = raw.partition(b'\n')
-    if sep != b'\n':
-        raise ValueError('coverage invariant successor: unreviewed runtime pin successor')
-    runtime = rest[:int(line)]
-    rest = rest[int(line):]
-    line, sep, rest = rest.partition(b'\n')
-    if sep != b'\n':
-        raise ValueError('coverage invariant successor: unreviewed guarded pin successor')
-    guard = rest[:int(line)]
+    runtime, guard = _placed_pair(result.stdout)
+    _PLACED_PREDECESSORS = (
+        runtime_payload, runtime_request, guard_payload, guard_request,
+        runtime, guard)
     return runtime, guard

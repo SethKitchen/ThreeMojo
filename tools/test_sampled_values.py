@@ -854,5 +854,66 @@ class ConstantDocumentTests(unittest.TestCase):
             frozen._CONTRACT_PREFIXES = original_frozen
 
 
+class PredecessorPairCacheTests(unittest.TestCase):
+    def test_a_repeated_predecessor_pair_skips_the_second_placement(self):
+        import hashlib
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import coverage_invariant_contracts as invariant
+        original_labels = invariant._INVARIANT_LABELS
+        original_placed = invariant._PLACED_PREDECESSORS
+        runtime = b'{"runtime":1}'
+        guard = b'{"guard":1}'
+        digest = hashlib.sha256(runtime).hexdigest()
+        runtime_record = {
+            'after_sha256': digest,
+            'before_sha256': 'before',
+            'transitions': [],
+        }
+        guard_record = {
+            'after_sha256': 'guard-after',
+            'before_sha256': 'guard-before',
+            'transitions': [],
+        }
+        placed = b'2\nRT2\nGD'
+
+        def call(runtime_payload, guard_payload):
+            return invariant._pin_predecessors(
+                runtime_payload, runtime_record, 'runtime-source-pins.json',
+                guard_payload, guard_record, 'sum2-guard-pins.json')
+
+        try:
+            invariant._INVARIANT_LABELS = {'after': 'after'}
+            invariant._PLACED_PREDECESSORS = None
+            ok = Mock(returncode=0, stdout=placed, stderr=b'')
+            with patch('subprocess.run', return_value=ok) as run:
+                first = call(runtime, guard)
+                second = call(runtime, guard)
+                self.assertEqual(first, (b'RT', b'GD'))
+                self.assertEqual(second, first)
+                self.assertEqual(run.call_count, 1)
+            failed = Mock(
+                returncode=1, stdout=b'', stderr=b'unreviewed guarded pin successor\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'unreviewed guarded pin successor'):
+                    call(runtime, b'{"guard":3}')
+                self.assertEqual(run.call_count, 1)
+                self.assertEqual(call(runtime, guard), (b'RT', b'GD'))
+                self.assertEqual(run.call_count, 1)
+            with patch('subprocess.run', return_value=ok) as run:
+                self.assertEqual(call(runtime, b'{"guard":2}'), (b'RT', b'GD'))
+                self.assertEqual(run.call_count, 1)
+            duplicate = b'{"a":1,"a":2}'
+            runtime_record['after_sha256'] = hashlib.sha256(duplicate).hexdigest()
+            with patch('subprocess.run') as run:
+                with self.assertRaisesRegex(
+                        ValueError, 'duplicate runtime source pin key: a'):
+                    call(duplicate, guard)
+                self.assertEqual(run.call_count, 0)
+            self.assertEqual(invariant._PLACED_PREDECESSORS[0], runtime)
+        finally:
+            invariant._INVARIANT_LABELS = original_labels
+            invariant._PLACED_PREDECESSORS = original_placed
+
+
 if __name__ == '__main__':
     unittest.main()

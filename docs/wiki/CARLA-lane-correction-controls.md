@@ -183,6 +183,12 @@ It rebuilds the runtime and guard pin predecessors in one check.
 
 The runtime predecessor still fails before the guard pin is checked.
 
+It reuses that predecessor pair when the same pins are placed again.
+
+A changed pin is placed again.
+
+The runtime hash and repeated-key check still run before that reused pair.
+
 It keeps the four coverage-invariant source paths.
 
 It keeps the six extra coverage-invariant inputs.
