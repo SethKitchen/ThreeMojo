@@ -1374,6 +1374,56 @@ class RestoredScopeTests(unittest.TestCase):
                 )
 
 
+class DependencyWordCacheTests(unittest.TestCase):
+    def test_an_accepted_dependency_word_is_not_checked_again(self):
+        import json
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import reviewed_cleanup_contracts as cleanup
+        saved = set(cleanup._CHECKED_DEPENDENCY_WORDS)
+        first = {'path': 'extensions/carla/curve_trig.mojo', 'text': 'trig', 'expected': 'aa'}
+        second = {'path': 'extensions/carla/road_info.mojo', 'text': 'road', 'expected': 'bb'}
+        sent = []
+
+        def run(args, **kwargs):
+            record = args[args.index('--pinned') + 1]
+            sent.append(json.loads(Path(record).read_text()))
+            return Mock(returncode=0, stdout='', stderr='')
+
+        try:
+            cleanup._CHECKED_DEPENDENCY_WORDS.clear()
+            with patch('subprocess.run', side_effect=run):
+                cleanup._pinned_dependency_words([first, second])
+                cleanup._pinned_dependency_words([first, second])
+                cleanup._pinned_dependency_words([
+                    first,
+                    {'path': 'extensions/carla/polynomial.mojo', 'text': 'poly', 'expected': 'cc'},
+                ])
+            self.assertEqual(sent, [
+                [
+                    {'text': 'trig', 'expected': 'aa', 'path': 'extensions/carla/curve_trig.mojo'},
+                    {'text': 'road', 'expected': 'bb', 'path': 'extensions/carla/road_info.mojo'},
+                ],
+                [
+                    {'text': 'poly', 'expected': 'cc', 'path': 'extensions/carla/polynomial.mojo'},
+                ],
+            ])
+            failed = Mock(returncode=1, stdout='', stderr='dependency word changed\n')
+            with patch('subprocess.run', return_value=failed) as run_failed:
+                bad = {'path': 'extensions/carla/road.mojo', 'text': 'bad', 'expected': 'dd'}
+                with self.assertRaisesRegex(ValueError, 'dependency word changed'):
+                    cleanup._pinned_dependency_words([first, bad])
+                self.assertEqual(run_failed.call_count, 1)
+                with self.assertRaisesRegex(ValueError, 'dependency word changed'):
+                    cleanup._pinned_dependency_words([bad])
+                self.assertEqual(run_failed.call_count, 2)
+            with patch('subprocess.run', side_effect=run):
+                cleanup._pinned_dependency_words([first])
+            self.assertEqual(len(sent), 2)
+        finally:
+            cleanup._CHECKED_DEPENDENCY_WORDS.clear()
+            cleanup._CHECKED_DEPENDENCY_WORDS.update(saved)
+
+
 class CleanupPremiseCacheTests(unittest.TestCase):
     def test_the_same_premise_texts_skip_the_second_catalog(self):
         from unittest.mock import Mock, patch

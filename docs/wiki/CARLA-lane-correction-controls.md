@@ -359,6 +359,11 @@ It chooses every dependency check and checks its selected words in one check.
 
 It reads the dependency pins before those selected words in one check.
 
+It reuses a selected word check when the same text is read again.
+The dependency files are still read.
+A changed text is checked again.
+A failed check is not kept.
+
 It checks those selected words before the cleanup paths in one check.
 
 It selects each reviewed declaration and checks that each premise fragment occurs once, in order.

@@ -833,9 +833,27 @@ def _dependency_fields(path, text, expected, pins):
     }
 
 
+_CHECKED_DEPENDENCY_WORDS = set()
+
+
+def _dependency_word_key(item):
+    """Return the identity of one selected dependency word check."""
+    return (item['path'], item['text'], item['expected'])
+
+
 def _pinned_dependency_words(items):
-    """Read the dependency pins, then check the selected words."""
+    """Read the dependency pins, then check the selected words.
+
+    A word that was already accepted is not checked again. A changed
+    text is checked again. A failed check is not kept.
+    """
     if not items:
+        return
+    pending = [
+        item for item in items
+        if _dependency_word_key(item) not in _CHECKED_DEPENDENCY_WORDS
+    ]
+    if not pending:
         return
     import json
     import os
@@ -846,7 +864,7 @@ def _pinned_dependency_words(items):
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     text = json.dumps([
         {'text': item['text'], 'expected': item['expected'], 'path': item['path']}
-        for item in items
+        for item in pending
     ], separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='pinned-dependency-words-') as directory:
         record = Path(directory) / 'choice.json'
@@ -860,6 +878,8 @@ def _pinned_dependency_words(items):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+    for item in pending:
+        _CHECKED_DEPENDENCY_WORDS.add(_dependency_word_key(item))
 
 
 def _words_then_paths(items):
