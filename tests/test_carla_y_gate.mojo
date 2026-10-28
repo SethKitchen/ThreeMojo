@@ -5,9 +5,16 @@
 
 """A changed Y-finiteness module fails the token gate."""
 
-from std.testing import TestSuite, assert_raises
+from std.pathlib import Path
+from std.testing import TestSuite, assert_equal, assert_raises
 
-from tools.carla_y_gate import y_finiteness, y_identity, y_successor
+from tools._python_json import PyJson
+from tools.carla_y_gate import (
+    y_finiteness,
+    y_identity,
+    y_successor,
+    y_token_mismatches,
+)
 
 
 def test_a_changed_module_is_refused() raises:
@@ -51,6 +58,34 @@ def test_a_changed_module_token_is_refused() raises:
             "00",
             "00",
         )
+
+
+def test_mismatches_keep_review_order() raises:
+    """A changed module is listed after every earlier match."""
+    var stand_in = "def main():\n    pass\n"
+    var listed = PyJson.parse(
+        y_token_mismatches(stand_in, stand_in, stand_in, stand_in, stand_in)
+    )
+    assert_equal(listed.length(listed.root), 5)
+    assert_equal(
+        listed.text(listed.item(listed.root, 0)),
+        "extensions/carla/spiral_grouped_roundoff_proof.mojo",
+    )
+    assert_equal(
+        listed.text(listed.item(listed.root, 4)),
+        "extensions/carla/curve_sum2.mojo",
+    )
+    var grouped = Path(
+        "extensions/carla/spiral_grouped_roundoff_proof.mojo"
+    ).read_text()
+    var partial = PyJson.parse(
+        y_token_mismatches(grouped, stand_in, stand_in, stand_in, stand_in)
+    )
+    assert_equal(partial.length(partial.root), 4)
+    assert_equal(
+        partial.text(partial.item(partial.root, 0)),
+        "extensions/carla/curve_interval.mojo",
+    )
 
 
 def main() raises:

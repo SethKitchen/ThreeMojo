@@ -6,15 +6,18 @@
 """Check the five Y-finiteness token digests.
 
     carla_y_gate --grouped PATH --interval PATH --trig PATH --geometry PATH --sum2 PATH
+    carla_y_gate --mismatches --grouped PATH --interval PATH --trig PATH --geometry PATH --sum2 PATH
 
 The program checks the texts it is given. It does not accept a stored-word
 substitute. The caller does that before it starts the program.
+`--mismatches` prints the paths whose tokens differ, in review order.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
+from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
 
 
@@ -96,6 +99,73 @@ def y_finiteness(
     return _PASS
 
 
+def _note_mismatch(
+    mut doc: PyJson,
+    rows: Int,
+    source: String,
+    expected: String,
+    label: String,
+) raises:
+    """Append `label` when its token digest differs.
+
+    Args:
+        doc: The result document.
+        rows: The path list.
+        source: The module text.
+        expected: The reviewed digest.
+        label: The module path.
+
+    Raises:
+        Error: The module cannot be tokenized.
+    """
+    if token_sha256(source) != expected:
+        doc.append(rows, doc.new_str(label))
+
+
+def y_token_mismatches(
+    grouped: String,
+    interval: String,
+    trig: String,
+    geometry: String,
+    sum2: String,
+) raises -> String:
+    """List the Y-finiteness modules whose token digests differ.
+
+    Args:
+        grouped: The grouped roundoff proof.
+        interval: The interval module.
+        trig: The trig module.
+        geometry: The geometry module.
+        sum2: The sum2 module.
+
+    Returns:
+        A JSON list of paths, in review order. The list is empty when
+        every digest matches.
+
+    Raises:
+        Error: A module cannot be tokenized.
+    """
+    var doc = PyJson()
+    var rows = doc.new_list()
+    _note_mismatch(
+        doc,
+        rows,
+        grouped,
+        _GROUPED,
+        "extensions/carla/spiral_grouped_roundoff_proof.mojo",
+    )
+    _note_mismatch(
+        doc, rows, interval, _INTERVAL, "extensions/carla/curve_interval.mojo"
+    )
+    _note_mismatch(doc, rows, trig, _TRIG, "extensions/carla/curve_trig.mojo")
+    _note_mismatch(
+        doc, rows, geometry, _GEOMETRY, "extensions/carla/geometry.mojo"
+    )
+    _note_mismatch(doc, rows, sum2, _SUM2, "extensions/carla/curve_sum2.mojo")
+    doc.root = rows
+    return doc.dumps()
+
+
 def y_successor(
     migration: Span[UInt8, _],
     before: Span[UInt8, _],
@@ -155,8 +225,8 @@ def _usage():
     """Print the command usage and stop."""
     print(
         (
-            "usage: carla_y_gate --grouped PATH --interval PATH --trig PATH"
-            " --geometry PATH --sum2 PATH | --before-text PATH --after-text"
+            "usage: carla_y_gate [--mismatches] --grouped PATH --interval PATH"
+            " --trig PATH --geometry PATH --sum2 PATH | --before-text PATH --after-text"
             " PATH --before-token HEX --after-token HEX"
         ),
         file=stderr,
@@ -170,6 +240,7 @@ def main() raises:
     Raises:
         Error: The command is invalid.
     """
+    var mismatches = False
     var grouped = String("")
     var interval = String("")
     var trig = String("")
@@ -188,6 +259,10 @@ def main() raises:
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
+        if word == "--mismatches":
+            mismatches = True
+            index += 1
+            continue
         if (
             word == "--grouped"
             or word == "--interval"
@@ -329,6 +404,18 @@ def main() raises:
     ):
         _usage()
     try:
+        if mismatches:
+            print(
+                y_token_mismatches(
+                    Path(grouped).read_text(),
+                    Path(interval).read_text(),
+                    Path(trig).read_text(),
+                    Path(geometry).read_text(),
+                    Path(sum2).read_text(),
+                ),
+                end="",
+            )
+            return
         print(
             y_finiteness(
                 Path(grouped).read_text(),

@@ -2813,6 +2813,62 @@ class InvariantRecordGateTests(unittest.TestCase):
             invariant._GATED_INVARIANT = saved_gates
 
 
+class YFinitenessMismatchTests(unittest.TestCase):
+    def test_a_mismatch_uses_the_dependency_substitute_in_review_order(self):
+        from unittest.mock import patch
+        from tools.carla_lane_oracle import grouped_y_finiteness_contracts as y
+        from tools.carla_lane_oracle import reviewed_cleanup_contracts as words
+        names = list(y.EXPECTED)
+        calls = []
+
+        def verify_dependency(name, text, digest):
+            calls.append((name, text, digest))
+
+        modules = {name: 'text-' + name for name in names}
+        with patch.object(y, '_token_mismatches', return_value=names[:2]), patch.object(
+            words, 'verify_dependency', verify_dependency,
+        ):
+            self.assertEqual(y.verify_text(modules), y._pass_record())
+        self.assertEqual(
+            calls,
+            [(names[0], modules[names[0]], y.EXPECTED[names[0]]),
+             (names[1], modules[names[1]], y.EXPECTED[names[1]])],
+        )
+
+    def test_matching_tokens_skip_the_dependency_substitute(self):
+        from unittest.mock import patch
+        from tools.carla_lane_oracle import grouped_y_finiteness_contracts as y
+        from tools.carla_lane_oracle import reviewed_cleanup_contracts as words
+        modules = {name: 'text' for name in y.EXPECTED}
+
+        def verify_dependency(name, text, digest):
+            raise AssertionError('dependency substitute was used')
+
+        with patch.object(y, '_token_mismatches', return_value=[]), patch.object(
+            words, 'verify_dependency', verify_dependency,
+        ):
+            self.assertEqual(y.verify_text(modules), y._pass_record())
+
+    def test_a_rejected_substitute_names_the_module(self):
+        from unittest.mock import patch
+        from tools.carla_lane_oracle import grouped_y_finiteness_contracts as y
+        from tools.carla_lane_oracle import reviewed_cleanup_contracts as words
+        name = next(iter(y.EXPECTED))
+        modules = {path: 'text' for path in y.EXPECTED}
+
+        def verify_dependency(path, text, digest):
+            raise ValueError('dependency changed')
+
+        with patch.object(y, '_token_mismatches', return_value=[name]), patch.object(
+            words, 'verify_dependency', verify_dependency,
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                'Y-finiteness premise, graph, writes or ordering changed: ' + name,
+            ):
+                y.verify_text(modules)
+
+
 class EnvelopeAdmissionTests(unittest.TestCase):
     def test_a_token_failure_reads_the_reviewed_source(self):
         from pathlib import Path

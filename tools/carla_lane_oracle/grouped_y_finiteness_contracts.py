@@ -20,40 +20,26 @@ def _pass_record():
     return {'status': 'PASS', 'maximum_accumulator_exponent': 947, 'origin_error_refusal_unchanged': True, 'y_call_and_writes_retained': True}
 
 
-def verify_text(modules):
-    if set(modules) != set(EXPECTED):
-        raise ValueError('Wrong Y-finiteness dependency set')
-    substitute = False
-    for name, digest in EXPECTED.items():
-        if source_contracts.token_sha256(modules[name]) != digest:
-            if __package__:
-                from . import reviewed_cleanup_contracts as words
-            else:
-                import reviewed_cleanup_contracts as words
-            try:
-                words.verify_dependency(name, modules[name], digest)
-            except ValueError as error:
-                raise ValueError('Y-finiteness premise, graph, writes or ordering changed: ' + name) from error
-            substitute = True
-    if substitute:
-        return _pass_record()
+def _token_mismatches(modules):
+    """Return the modules whose Y-finiteness tokens differ, in review order."""
     import json
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    names = {
-        'grouped': 'extensions/carla/spiral_grouped_roundoff_proof.mojo',
-        'interval': 'extensions/carla/curve_interval.mojo',
-        'trig': 'extensions/carla/curve_trig.mojo',
-        'geometry': 'extensions/carla/geometry.mojo',
-        'sum2': 'extensions/carla/curve_sum2.mojo',
-    }
-    with tempfile.TemporaryDirectory(prefix='y-gate-') as directory:
+    names = (
+        ('grouped', 'extensions/carla/spiral_grouped_roundoff_proof.mojo'),
+        ('interval', 'extensions/carla/curve_interval.mojo'),
+        ('trig', 'extensions/carla/curve_trig.mojo'),
+        ('geometry', 'extensions/carla/geometry.mojo'),
+        ('sum2', 'extensions/carla/curve_sum2.mojo'),
+    )
+    with tempfile.TemporaryDirectory(prefix='y-mismatches-') as directory:
         folder = Path(directory)
-        arguments = ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_y_gate']
-        for flag, path in names.items():
+        arguments = ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_y_gate',
+                     '--mismatches']
+        for flag, path in names:
             target = folder / (flag + '.mojo')
             target.write_text(modules[path])
             arguments.extend(['--' + flag, str(target)])
@@ -64,6 +50,23 @@ def verify_text(modules):
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
     return json.loads(result.stdout)
+
+
+def verify_text(modules):
+    if set(modules) != set(EXPECTED):
+        raise ValueError('Wrong Y-finiteness dependency set')
+    mismatches = _token_mismatches(modules)
+    if mismatches:
+        if __package__:
+            from . import reviewed_cleanup_contracts as words
+        else:
+            import reviewed_cleanup_contracts as words
+        for name in mismatches:
+            try:
+                words.verify_dependency(name, modules[name], EXPECTED[name])
+            except ValueError as error:
+                raise ValueError('Y-finiteness premise, graph, writes or ordering changed: ' + name) from error
+    return _pass_record()
 
 def verify(root, *, _operation=None):
     root = Path(root)

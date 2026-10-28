@@ -90,6 +90,8 @@ It compares that grouped-table token digest in one check.
 
 `tools/carla_y_gate.mojo` checks the five Y-finiteness token digests, the successor record digests, and the module token identity.
 
+It lists every module whose token differs, in review order, in one check.
+
 `tools/carla_speed_gate.mojo` checks the speed-parser record, its module token, and its correctness tests.
 
 It keeps the speed-limit module and its two correctness tests.
