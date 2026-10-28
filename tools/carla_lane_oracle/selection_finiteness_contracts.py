@@ -65,30 +65,22 @@ def verify_text(modules, interval, trig):
     import os
     import subprocess
     import tempfile
-    if __package__:
-        from . import ideal_projection
-    else:
-        import ideal_projection
-    ideal_projection.moment_guard('--names', {
-        'names': list(modules),
+    payload = json.dumps({
+        'modules': modules,
         'expected': list(_expected()),
         'message': _selection_labels()['producer_set'],
-    })
+        'interval': interval,
+        'trig': trig,
+    }, separators=(',', ':'))
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='selection-gate-') as directory:
-        folder = Path(directory)
-        names = dict(zip(('--grouped', '--roundoff'), _expected()))
-        command = ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_selection_gate']
-        for flag, path in names.items():
-            target = folder / flag.strip('-') 
-            target.write_text(modules[path])
-            command.extend([flag, str(target)])
-        for flag, text in (('--interval', interval), ('--trig', trig)):
-            target = folder / flag.strip('-')
-            target.write_text(text)
-            command.extend([flag, str(target)])
-        result = subprocess.run(command, capture_output=True, text=True)
+        path = Path(directory) / 'selection.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_selection_gate',
+             '--checked', str(path)],
+            capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]

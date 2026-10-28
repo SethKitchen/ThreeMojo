@@ -30,6 +30,8 @@ It uses those producer paths for the grouped and roundoff flags.
 
 It checks the producer names before that gate.
 
+It checks the producer names before the selection tokens in one check.
+
 It restores one selection function inside its line span.
 
 It keeps the selection contract path and the predecessor messages.

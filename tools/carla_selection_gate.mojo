@@ -6,6 +6,7 @@
 """Check the selection-producer tokens and phase-constant bounds.
 
     carla_selection_gate --grouped PATH --roundoff PATH --interval PATH --trig PATH
+    carla_selection_gate --checked PATH
 
 The program checks the texts it is given. It does not roll a successor
 back to a historical source. The caller does that before it starts the
@@ -17,6 +18,8 @@ from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
 from tools._fraction import Fraction
+from tools._moment_guards import require_name_set
+from tools._python_json import PyJson
 from tools._spiral_moment_derive import stored_scalar_word
 from tools._spiral_moment_words import fraction_of_word
 
@@ -105,6 +108,57 @@ def selection_finiteness(
     return _PASS
 
 
+def selection_checked(payload: String) raises -> String:
+    """Check the producer names, then the selection tokens and phase constants.
+
+    Args:
+        payload: JSON with `modules`, `expected`, `message`, `interval`, and
+            `trig`. `modules` maps each producer path to its source.
+
+    Returns:
+        The pass record as one JSON object.
+
+    Raises:
+        Error: The producer names differ, or a token or phase constant changed.
+    """
+    var doc = PyJson.parse(payload)
+    var modules = doc.at(doc.root, "modules")
+    var expected = doc.at(doc.root, "expected")
+    var names_doc = PyJson()
+    var root = names_doc.new_dict()
+    var names = names_doc.new_list()
+    var count = doc.length(modules)
+    var index = 0
+    while index < count:
+        names_doc.append(names, names_doc.new_str(doc.key(modules, index)))
+        index += 1
+    names_doc.set(root, "names", names)
+    var wanted = names_doc.new_list()
+    count = doc.length(expected)
+    index = 0
+    while index < count:
+        names_doc.append(
+            wanted, names_doc.new_str(doc.text(doc.item(expected, index)))
+        )
+        index += 1
+    names_doc.set(root, "expected", wanted)
+    names_doc.set(
+        root,
+        "message",
+        names_doc.new_str(doc.text(doc.at(doc.root, "message"))),
+    )
+    names_doc.root = root
+    require_name_set(names_doc.dumps())
+    var grouped = doc.text(doc.item(expected, 0))
+    var roundoff = doc.text(doc.item(expected, 1))
+    return selection_finiteness(
+        doc.text(doc.at(modules, grouped)),
+        doc.text(doc.at(modules, roundoff)),
+        doc.text(doc.at(doc.root, "interval")),
+        doc.text(doc.at(doc.root, "trig")),
+    )
+
+
 def selection_producers() -> String:
     """Return the two selection producer digests in reviewed order.
 
@@ -125,7 +179,7 @@ def _usage():
     print(
         (
             "usage: carla_selection_gate --grouped PATH --roundoff PATH"
-            " --interval PATH --trig PATH"
+            " --interval PATH --trig PATH | carla_selection_gate --checked PATH"
         ),
         file=stderr,
     )
@@ -138,11 +192,18 @@ def main() raises:
     Raises:
         Error: The command is invalid, or a selection check fails.
     """
+    var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--checked":
+        try:
+            print(selection_checked(Path(arguments[2]).read_text()), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var grouped = String("")
     var roundoff = String("")
     var interval = String("")
     var trig = String("")
-    var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]

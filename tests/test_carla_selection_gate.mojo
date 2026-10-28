@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.carla_selection_gate import selection_finiteness
+from tools.carla_selection_gate import selection_checked, selection_finiteness
 
 
 def test_a_changed_module_is_refused() raises:
@@ -22,6 +22,44 @@ def test_a_changed_module_is_refused() raises:
             "def main():\n    pass\n",
             "def main():\n    pass\n",
         )
+
+
+def test_wrong_producer_names_fail_before_the_tokens() raises:
+    """A wrong producer set is reported before the module tokens are read."""
+    var payload = (
+        '{"modules":{"other.mojo":"def main():\\n    pass\\n"},'
+        + '"expected":["extensions/carla/spiral_grouped_roundoff_proof.mojo",'
+        + '"extensions/carla/spiral_roundoff_proof.mojo"],'
+        + '"message":"Wrong selection producer set",'
+        + '"interval":"def main():\\n    pass\\n",'
+        + '"trig":"def main():\\n    pass\\n"}'
+    )
+    with assert_raises(contains="Wrong selection producer set"):
+        _ = selection_checked(payload)
+
+
+def test_matching_producer_names_reach_the_token_gate() raises:
+    """The reviewed paths still refuse a changed producer token."""
+    var grouped = "extensions/carla/spiral_grouped_roundoff_proof.mojo"
+    var roundoff = "extensions/carla/spiral_roundoff_proof.mojo"
+    var payload = (
+        '{"modules":{"'
+        + grouped
+        + '":"def main():\\n    pass\\n","'
+        + roundoff
+        + '":"def main():\\n    pass\\n"},"expected":["'
+        + grouped
+        + '","'
+        + roundoff
+        + '"],"message":"Wrong selection producer set",'
+        + '"interval":"def main():\\n    pass\\n",'
+        + '"trig":"def main():\\n    pass\\n"}'
+    )
+    with assert_raises(
+        contains="Selection producer/input/error/phase graph changed: "
+        + grouped
+    ):
+        _ = selection_checked(payload)
 
 
 def main() raises:
