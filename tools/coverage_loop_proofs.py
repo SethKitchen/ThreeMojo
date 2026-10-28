@@ -2667,35 +2667,59 @@ def _expand_path(value, root, build):
 
 
 def check_capture_inputs(envelope, root, build):
-    """Check sealed bytes before/after execution without reparsing all loops."""
-    root, build = Path(root).resolve(), Path(build).resolve()
-    receipt = envelope['receipt']
-    if (maintained_inputs(root, exclude=build) != receipt['root_inputs']
-            or maintained_inputs(build, staged=True)
-            != {name: item['instrumented'] for name, item in receipt['inputs'].items()}
-            or file_sha256(build / 'manifest.txt') != receipt['manifest_sha256']
-            or file_sha256(build / 'origins.ready') != receipt['generation']['index_sha256']
-            or file_sha256(build / 'generation-inputs.json') != receipt['generation']['checkpoint_sha256']):
-        raise ValueError('Stale or modified capture input binding')
-    expected_origins = {name + '.cov-origin': item['origin_sha256']
-                        for name, item in receipt['generation']['modules'].items()}
-    actual_origins = {path.relative_to(build).as_posix(): file_sha256(path)
-                      for path in build.rglob('*.cov-origin')}
-    if actual_origins != expected_origins:
-        raise ValueError('Stale or modified capture generation origins')
-    for name, active in [('tools/coverage_loop_proofs.py', ACTIVE_SOURCE_SHA256),
-                         ('tools/cache_key.py', ACTIVE_INVENTORY_SHA256),
-                         ('tools/coverage_toolchain_identity.py', ACTIVE_TOOLCHAIN_SHA256)]:
-        if receipt['root_inputs'][name] != active:
-            raise ValueError('Stale or modified executing capture verifier')
-    contract = receipt['execution']
-    command = [_expand_path(item['path'], root, build) if 'path' in item else item['literal']
-               for item in contract['compiler']]
-    current = execution_contract(root, build, receipt['inputs'], mojo=command,
-                                 capture_cache=_expand_path(contract['cache'], root, build),
-                                 suites=contract['suites'])
-    if current != contract or receipt['python'] != sys.version:
-        raise ValueError('Stale or modified capture compiler/execution identity')
+    """Check sealed bytes before and after execution without reparsing loops.
+
+    The receipt, the executing tool hashes, and the Python version are
+    passed to Mojo. This function still receives the envelope from its
+    caller.
+
+    Args:
+        envelope: The loop-proof envelope.
+        root: The repository root.
+        build: The build directory.
+
+    Returns:
+        None.
+
+    Raises:
+        ValueError: A sealed input, origin, verifier, or compiler binding changed.
+        FileNotFoundError: A sealed input file is missing.
+        KeyError: The receipt does not name an executing tool.
+    """
+    import subprocess
+    import tempfile
+    repo = Path(__file__).resolve().parents[1]
+    program = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
+    request = {
+        'receipt': envelope['receipt'],
+        'active': {
+            'tools/coverage_loop_proofs.py': ACTIVE_SOURCE_SHA256,
+            'tools/cache_key.py': ACTIVE_INVENTORY_SHA256,
+            'tools/coverage_toolchain_identity.py': ACTIVE_TOOLCHAIN_SHA256,
+        },
+        'python': sys.version,
+        'interpreter': sys.executable,
+    }
+    with tempfile.TemporaryDirectory(prefix='coverage-inputs-') as directory:
+        path = Path(directory) / 'request.json'
+        path.write_text(json.dumps(request), encoding='utf-8')
+        result = subprocess.run(
+            ['sh', str(repo / 'tools' / 'tool.sh'), program, 'coverage_execution',
+             'inputs', '--root', str(root), '--build', str(build),
+             '--request', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        errors = [line.strip() for line in result.stderr.splitlines()
+                  if line.strip() and 'Crashpad' not in line]
+        message = errors[-1] if errors else result.stdout.strip()
+        prefix = 'coverage_execution: '
+        if message.startswith(prefix):
+            message = message[len(prefix):]
+        if message.startswith('missing input file:'):
+            raise FileNotFoundError(message)
+        if message.startswith('KeyError:'):
+            raise KeyError(message[len('KeyError: '):])
+        raise ValueError(message)
 
 
 def build_receipt(root, build, compiler, flags, *, mojo=None, capture_cache=None, suites=None):

@@ -297,6 +297,8 @@ The receipt uses the repository's maintained cache-input inventory, including na
 
 Each successful capture receives a `*.txt.gz.proof.json` receipt binding those identities, compressed bytes and stdout. Before launch, its actual command must match the sealed wrapper/profile, staged suite, compiler invocation, cache location and capture flags. The maintained capture flags are `run -I <build> <staged suite>`; they are checked separately from instrumentation flags. That receipt is checked in Mojo. The execution contract is built in Mojo. The capture command is checked in Mojo.
 
+The sealed capture inputs are checked in Mojo. The receipt is still passed in from Python. A changed input byte is refused.
+
 Filenames must identify the same suite. The command stored in the receipt is its validated canonical form, not an unchecked command log. Inputs are checked before and after execution, and a failed replacement attempt removes its old success receipt before preflight. Shard placement and the supported raw/AOT transport choice do not change loop meanings or select different proofs.
 
 The official report path rederives the loop receipt in `tools/coverage_loop_seal.mojo`, checks the source, tool, and capture bindings, and writes a temporary manifest. Its final check must match the exact initial receipt; concurrent source changes followed by a successful reseal cannot return an old success. A `P constant-loops-v2 <sha256>` record identifies the validated proof receipt.
