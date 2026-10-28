@@ -7,6 +7,7 @@
 
     carla_invariant_gate --input-bundle
     carla_invariant_gate --migration PATH [--prior PATH] [--components DIR]
+        [--then-pair]
     carla_invariant_gate --bytes PATH --sha HEX --kind after|before --label TEXT
     carla_invariant_gate --pair DIR
     carla_invariant_gate --places DIR
@@ -18,6 +19,7 @@ An absent prior skips the frozen digest and the component digests.
 A prior without a component directory checks only that frozen digest.
 The component directory holds `names.json` and the payloads `0`, `1`, and
 so on. An escaping name fails before the record digests.
+`--then-pair` checks the ordered pin pair after those component digests.
 `DIR` holds `payload` and `request.json`. The program prints the
 predecessor.
 """
@@ -225,11 +227,32 @@ def _require_components(doc: PyJson, component_dir: String) raises:
         index += 1
 
 
+def _require_pin_pair(doc: PyJson) raises:
+    """Require the runtime pin, then the guard pin.
+
+    Args:
+        doc: The migration record.
+
+    Raises:
+        Error: The pin-file names are not that ordered pair. The component
+            digests have already been checked.
+    """
+    var node = doc.get(doc.root, "pin_files")
+    if node == MISSING or doc.kind(node) != PY_DICT or doc.length(node) != 2:
+        _fail("wrong fixed ordered pin pair")
+    if (
+        doc.key(node, 0) != "runtime-source-pins.json"
+        or doc.key(node, 1) != "sum2-guard-pins.json"
+    ):
+        _fail("wrong fixed ordered pin pair")
+
+
 def invariant_record(
     migration: Span[UInt8, _],
     prior: Span[UInt8, _],
     component_dir: String,
     check_prior: Bool,
+    check_pair: Bool = False,
 ) raises:
     """Require the coverage-invariant record.
 
@@ -238,10 +261,12 @@ def invariant_record(
         prior: The frozen-producer migration. Used only when `check_prior` is true.
         component_dir: The component directory. Empty skips the component digests.
         check_prior: Whether to check the frozen digest.
+        check_pair: Whether to check the ordered pin pair after the components.
 
     Raises:
         Error: An escaping component name fails before a changed record,
-            frozen digest, or component digest.
+            frozen digest, or component digest. A component digest fails
+            before the ordered pin pair.
     """
     if component_dir.byte_length() > 0:
         _confine_component_names(component_dir)
@@ -255,6 +280,8 @@ def invariant_record(
     if component_dir.byte_length() == 0:
         return
     _require_components(doc, component_dir)
+    if check_pair:
+        _require_pin_pair(doc)
 
 
 def invariant_digest(
@@ -849,9 +876,9 @@ def _usage():
     print(
         (
             "usage: carla_invariant_gate --migration PATH [--prior PATH]"
-            " [--components DIR] | --bytes PATH --sha HEX --kind after|before"
-            " --label TEXT | --pair DIR | --places DIR | --predecessor DIR"
-            " | --predecessor-pair DIR"
+            " [--components DIR] [--then-pair] | --bytes PATH --sha HEX --kind"
+            " after|before --label TEXT | --pair DIR | --places DIR |"
+            " --predecessor DIR | --predecessor-pair DIR"
         ),
         file=stderr,
     )
@@ -875,6 +902,7 @@ def main() raises:
     var places = String("")
     var predecessor = String("")
     var predecessor_pair = String("")
+    var check_pair = False
     var arguments = argv()
     if len(arguments) == 2 and arguments[1] == "--input-bundle":
         try:
@@ -898,7 +926,12 @@ def main() raises:
             or word == "--places"
             or word == "--predecessor"
             or word == "--predecessor-pair"
+            or word == "--then-pair"
         ):
+            if word == "--then-pair":
+                check_pair = True
+                index += 1
+                continue
             if index + 1 >= len(arguments):
                 _usage()
             var value = arguments[index + 1]
@@ -952,6 +985,8 @@ def main() raises:
         components.byte_length() > 0 and prior.byte_length() == 0
     ):
         _usage()
+    if check_pair and components.byte_length() == 0:
+        _usage()
     try:
         if predecessor_pair.byte_length() > 0:
             print(
@@ -996,6 +1031,7 @@ def main() raises:
                 Path(prior).read_bytes(),
                 components,
                 True,
+                check_pair,
             )
     except error:
         print(String(error), file=stderr)

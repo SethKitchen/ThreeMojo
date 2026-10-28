@@ -9,6 +9,7 @@ from std.os import makedirs
 from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises
 
+from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
 from tools.carla_invariant_gate import (
     invariant_digest,
@@ -18,6 +19,7 @@ from tools.carla_invariant_gate import (
     invariant_places,
     invariant_record,
     _reject_duplicate_keys,
+    _require_pin_pair,
 )
 
 
@@ -274,6 +276,55 @@ def test_indexed_component_bytes_keep_the_reviewed_digests() raises:
             directory,
             True,
         )
+
+
+def test_the_ordered_pin_pair_follows_the_component_digests() raises:
+    """A reviewed record accepts the pair, and a bad component still fails first.
+    """
+    var directory = "/tmp/invariant-component-pair"
+    makedirs(directory, exist_ok=True)
+    var folder = "tools/carla_lane_oracle/"
+    Path(directory + "/names.json").write_text(
+        '["curve-support-dispatch-migration.json",'
+        + '"grouped-table-contract.json","lane-control-migration.json"]'
+    )
+    Path(directory + "/0").write_bytes(
+        Path(folder + "curve-support-dispatch-migration.json").read_bytes()
+    )
+    Path(directory + "/1").write_bytes(
+        Path(folder + "grouped-table-contract.json").read_bytes()
+    )
+    Path(directory + "/2").write_bytes(
+        Path(folder + "lane-control-migration.json").read_bytes()
+    )
+    invariant_record(
+        Path(folder + "coverage-invariant-migration.json").read_bytes(),
+        Path(folder + "frozen-arc-producer-migration.json").read_bytes(),
+        directory,
+        True,
+        True,
+    )
+    Path(directory + "/0").write_bytes(String("changed").as_bytes())
+    with assert_raises(
+        contains=(
+            "coverage invariant successor: component record changed: "
+            "curve-support-dispatch-migration.json"
+        )
+    ):
+        invariant_record(
+            Path(folder + "coverage-invariant-migration.json").read_bytes(),
+            Path(folder + "frozen-arc-producer-migration.json").read_bytes(),
+            directory,
+            True,
+            True,
+        )
+    var swapped = PyJson.parse(
+        '{"pin_files":{"sum2-guard-pins.json":{},"runtime-source-pins.json":{}}}'
+    )
+    with assert_raises(
+        contains="coverage invariant successor: wrong fixed ordered pin pair"
+    ):
+        _require_pin_pair(swapped)
 
 
 def test_the_runtime_and_guard_predecessors_are_one_check() raises:

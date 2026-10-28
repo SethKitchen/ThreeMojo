@@ -168,7 +168,7 @@ def require(condition, message):
     if not condition:
         raise ValueError(_contract_prefixes()['invariant'] + message)
 
-def _gate(migration, prior=None, components=None):
+def _gate(migration, prior=None, components=None, *, _then_pair=False):
     import os
     import subprocess
     import tempfile
@@ -193,6 +193,8 @@ def _gate(migration, prior=None, components=None):
                 for index, (_name, payload) in enumerate(components):
                     (component_dir / str(index)).write_bytes(payload)
                 arguments.extend(['--components', str(component_dir)])
+                if _then_pair:
+                    arguments.append('--then-pair')
         result = subprocess.run(arguments, capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -281,7 +283,7 @@ def _labels_with_migration():
     return _INVARIANT_LABELS
 
 
-def read_record(root):
+def read_record(root, *, _then_pair=False):
     labels = _labels_with_migration()
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
@@ -293,7 +295,13 @@ def read_record(root):
     oracle = labels['oracle']
     for name, _expected in record['components'].items():
         components.append((name, _typed_source.historical_bytes(root, root/oracle/name, (root/oracle/name).read_bytes())))
-    _gate(payload, prior_bytes, components)
+    pair_names = None
+    if _then_pair and 'pin_files' in record:
+        pair_names = tuple(record['pin_files'])
+    _gate(payload, prior_bytes, components, _then_pair=pair_names is not None)
+    if pair_names is not None:
+        global _GATED_PAIR
+        _GATED_PAIR = pair_names
     return record
 
 
@@ -569,10 +577,10 @@ def _predecessor_pin_pair(root, *, _operation=None):
         OSError: A required input cannot be read.
     """
     filenames = tuple(_invariant_labels()['filenames'])
-    runtime_record = read_record(root)
+    runtime_record = read_record(root, _then_pair=True)
     _gate_pair(runtime_record['pin_files'])
     runtime_item = runtime_record['pin_files'][filenames[0]]
-    guard_record = read_record(root)
+    guard_record = read_record(root, _then_pair=True)
     _gate_pair(guard_record['pin_files'])
     guard_item = guard_record['pin_files'][filenames[1]]
     if __package__:

@@ -740,6 +740,82 @@ class PinPairCacheTests(unittest.TestCase):
             invariant._GATED_PAIR = original
 
 
+class ComponentPairTests(unittest.TestCase):
+    def test_the_component_gate_checks_the_ordered_pin_pair(self):
+        import json
+        from pathlib import Path
+        from unittest.mock import patch
+        from tools.carla_lane_oracle import coverage_invariant_contracts as invariant
+        original_labels = invariant._INVARIANT_LABELS
+        original_migration = invariant.__dict__.get('MIGRATION')
+        original_pair = invariant._GATED_PAIR
+        payload = json.dumps({
+            'components': {'a.json': 'abc'},
+            'pin_files': {
+                'runtime-source-pins.json': {},
+                'sum2-guard-pins.json': {},
+            },
+        }).encode()
+        root = Path('component-pair')
+        calls = []
+
+        def gate(*args, **kwargs):
+            calls.append(kwargs.get('_then_pair', False))
+            if kwargs.get('_then_pair') and gate.fail:
+                raise ValueError('component record changed: a.json')
+
+        gate.fail = False
+
+        def read_bytes(self):
+            return payload if self.name == 'migration.json' else b'bytes'
+
+        def historical_bytes(_root, _path, raw, _operation=None):
+            return raw
+
+        try:
+            (root / 'oracle').mkdir(parents=True)
+            invariant._INVARIANT_LABELS = {
+                'prior': 'prior.json',
+                'oracle': 'oracle',
+            }
+            invariant.MIGRATION = 'migration.json'
+            invariant._GATED_PAIR = None
+            with patch.object(Path, 'read_bytes', read_bytes), patch.object(
+                invariant._typed_source, 'historical_bytes', historical_bytes
+            ), patch.object(invariant, '_gate', gate):
+                record = invariant.read_record(root, _then_pair=True)
+            self.assertEqual(calls, [False, False, True])
+            self.assertEqual(
+                invariant._GATED_PAIR,
+                ('runtime-source-pins.json', 'sum2-guard-pins.json'),
+            )
+            self.assertEqual(
+                tuple(record['pin_files']), invariant._GATED_PAIR
+            )
+            with patch('subprocess.run') as run:
+                invariant._gate_pair(record['pin_files'])
+                self.assertEqual(run.call_count, 0)
+            invariant._GATED_PAIR = None
+            calls.clear()
+            gate.fail = True
+            with patch.object(Path, 'read_bytes', read_bytes), patch.object(
+                invariant._typed_source, 'historical_bytes', historical_bytes
+            ), patch.object(invariant, '_gate', gate):
+                with self.assertRaisesRegex(ValueError, 'component record changed'):
+                    invariant.read_record(root, _then_pair=True)
+            self.assertIsNone(invariant._GATED_PAIR)
+            self.assertEqual(calls, [False, False, True])
+        finally:
+            invariant._INVARIANT_LABELS = original_labels
+            if original_migration is None:
+                invariant.__dict__.pop('MIGRATION', None)
+            else:
+                invariant.MIGRATION = original_migration
+            invariant._GATED_PAIR = original_pair
+            import shutil
+            shutil.rmtree(root, ignore_errors=True)
+
+
 class ComponentGateTests(unittest.TestCase):
     def test_component_names_join_the_record_gate(self):
         from unittest.mock import Mock, patch
