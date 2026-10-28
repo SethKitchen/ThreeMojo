@@ -316,6 +316,8 @@ It compares the Sum2 recurrence, leaf, and caller graphs.
 
 It checks those caller graphs before the helper imports in one check.
 
+It checks those graphs before the Sum2 projection in one check.
+
 It keeps the reviewed Sum2 helper digest.
 
 It compares the scalar environment call with its stored statement.

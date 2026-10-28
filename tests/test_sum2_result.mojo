@@ -7,7 +7,11 @@
 
 from std.testing import TestSuite, assert_equal, assert_raises
 
-from tools._sum2_result import sum2_projected_result, sum2_result
+from tools._sum2_result import (
+    sum2_graphs_then_result,
+    sum2_projected_result,
+    sum2_result,
+)
 
 
 def test_the_sum2_result_keeps_historical_order() raises:
@@ -40,6 +44,12 @@ def test_a_sum2_projection_fails_before_the_result() raises:
     """A missing spiral bound is reported before the result is built."""
     with assert_raises(contains="KeyError: 'bounds'"):
         _ = sum2_projected_result('{"legacy":"x"}')
+
+
+def test_a_missing_graph_fails_before_the_sum2_projection() raises:
+    """A missing caller text fails before the spiral projection."""
+    with assert_raises(contains="sum2 graph: KeyError: 'texts'"):
+        _ = sum2_graphs_then_result("{}")
 
 
 def main() raises:

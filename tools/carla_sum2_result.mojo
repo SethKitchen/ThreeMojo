@@ -7,22 +7,27 @@
 
     carla_sum2_result PATH
     carla_sum2_result --projected PATH
+    carla_sum2_result --graphs PATH
 
 `PATH` is JSON with `projection` and `environment_guard`. The program
-prints the result. `--projected` projects the Sum2 spiral first, then
-prints that result.
+prints the result. `--projected` projects the Sum2 spiral first.
+`--graphs` checks the caller graphs before that projection.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._sum2_result import sum2_projected_result, sum2_result
+from tools._sum2_result import (
+    sum2_graphs_then_result,
+    sum2_projected_result,
+    sum2_result,
+)
 
 
 def _usage():
     """Print the command usage and stop."""
     print(
-        "usage: carla_sum2_result PATH | carla_sum2_result --projected PATH",
+        "usage: carla_sum2_result PATH | --projected PATH | --graphs PATH",
         file=stderr,
     )
     exit(2)
@@ -35,6 +40,16 @@ def main() raises:
         Error: The command is invalid, or a required field is missing.
     """
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--graphs":
+        try:
+            print(
+                sum2_graphs_then_result(Path(arguments[2]).read_text()),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 3 and arguments[1] == "--projected":
         try:
             print(sum2_projected_result(Path(arguments[2]).read_text()), end="")

@@ -11,6 +11,7 @@ environment guard are copied from the checks that just ran.
 
 from tools._json_tools import quote_ascii
 from tools._moment_projection import moment_sum2_projection
+from tools.carla_sum2_graphs import sum2_graphs_and_imports
 from tools._python_json import (
     PY_BOOL,
     PY_DICT,
@@ -129,3 +130,27 @@ def sum2_projected_result(payload: String) raises -> String:
     return sum2_result(
         '{"projection":' + projection + ',"environment_guard":' + guard + "}"
     )
+
+
+def sum2_graphs_then_result(payload: String) raises -> String:
+    """Check the caller graphs, then project the Sum2 spiral.
+
+    Args:
+        payload: JSON with the graph fields and the projection fields.
+            The graph fields are `texts`, `checkpoints`, and `interval`.
+            The projection fields are `legacy`, `bounds`, `begin`, `end`,
+            `interval`, and `environment_guard`.
+
+    Returns:
+        The result JSON in historical field order.
+
+    Raises:
+        Error: A caller graph changed, or the projection changed. A graph
+            error starts with `sum2 graph: `. The graphs are checked
+            before the projection.
+    """
+    try:
+        sum2_graphs_and_imports(payload)
+    except error:
+        raise Error("sum2 graph: " + String(error))
+    return sum2_projected_result(payload)
