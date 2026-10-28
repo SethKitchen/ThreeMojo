@@ -421,6 +421,8 @@ The trig module keeps its reviewed token digest.
 The interval module keeps its reviewed token digest.
 A changed token is refused.
 
+It prepares every other reference module after that reviewed graph in one check.
+
 It slices and renames each copied sampled declaration.
 
 It removes the two derivative intersections from the blend helper.

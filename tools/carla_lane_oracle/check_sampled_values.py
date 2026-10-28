@@ -281,6 +281,8 @@ def translated(text):
 
 
 _SYNTAX_WORDS = None
+_PREPARED_SYNTAX = {}
+_MISSING_SYNTAX = object()
 
 
 _CARLA_PACKAGE = None
@@ -373,6 +375,9 @@ def _python_syntax_tree(text):
 
 def _syntax_prepare(text):
     """Return parser source, generic rows, and the syntax words."""
+    cached = _PREPARED_SYNTAX.get(text, _MISSING_SYNTAX)
+    if cached is not _MISSING_SYNTAX:
+        return cached
     import os
     import subprocess
     import tempfile
@@ -393,17 +398,21 @@ def _syntax_prepare(text):
     try:
         data = json.loads(result.stdout)
     except (json.JSONDecodeError, TypeError):
+        _PREPARED_SYNTAX[text] = None
         return None
     if data.get('fallback'):
+        _PREPARED_SYNTAX[text] = None
         return None
     try:
-        return data['source'], data['generics'], data['words']
+        prepared = data['source'], data['generics'], data['words']
     except (KeyError, TypeError):
-        return None
+        prepared = None
+    _PREPARED_SYNTAX[text] = prepared
+    return prepared
 
 
 def _classified_sources(texts):
-    """Classify every copied helper before the Python comparison."""
+    """Classify every source before the Python comparison."""
     if not texts:
         return []
     import os
@@ -442,7 +451,37 @@ def _classified_sources(texts):
                 prepared.append((item['source'], item['generics'], item['words']))
             except (KeyError, TypeError):
                 prepared.append(None)
+    for text, item in zip(texts, prepared):
+        if not isinstance(item, str):
+            _PREPARED_SYNTAX[text] = item
     return prepared
+
+
+def _plain_reference_graphs(entries, label):
+    """Classify plain reference modules, then compare each graph."""
+    if not entries:
+        return
+    prepared = _classified_sources(
+        [text for _filename, text, _expected in entries])
+    for (filename, text, expected_hash), item in zip(entries, prepared):
+        if isinstance(item, str):
+            raise CheckError(item)
+        reference_graph = dump(syntax_tree(text, item, _prepare=False))
+        actual = hashlib.sha256(reference_graph.encode()).hexdigest()
+        require(actual == expected_hash, label + filename)
+
+
+def _reviewed_reference_graphs(items, texts, reviewed, label, review):
+    """Compare reference graphs, classifying each plain run in one check."""
+    pending = []
+    for filename, expected_hash in items:
+        if filename == reviewed:
+            _plain_reference_graphs(pending, label)
+            pending = []
+            review(filename, expected_hash)
+        else:
+            pending.append((filename, texts[filename], expected_hash))
+    _plain_reference_graphs(pending, label)
 
 
 def syntax_tree(text, prepared=None, _prepare=True):
@@ -917,11 +956,16 @@ def verify(root):
         graphs = inputs['graphs']
         reference_graphs = graphs['reference']
         closure = _sampled_closure()
-        for filename, expected_hash in reference_graphs.items():
-            reference_graph = (dump(reviewed_reference_tree(texts[filename], root, _operation=_operation))
-                               if filename == closure['reviewed'] else graph(texts[filename]))
+
+        def review(filename, expected_hash):
+            reference_graph = dump(reviewed_reference_tree(
+                texts[filename], root, _operation=_operation))
             actual = hashlib.sha256(reference_graph.encode()).hexdigest()
             require(actual == expected_hash, closure['reference_changed'] + filename)
+
+        _reviewed_reference_graphs(
+            reference_graphs.items(), texts, closure['reviewed'],
+            closure['reference_changed'], review)
         require(primitive_graph(texts[closure['primitive']]) == graphs['primitive'],
                 closure['primitive_message'])
         # Complete stored helper/interval closure and lexical qualifiers are

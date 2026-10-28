@@ -387,5 +387,35 @@ print('PASS: alias unowned; intentionally stopped before verification')
         self.assertEqual(result.stderr, '')
 
 
+class PlainReferenceGraphTests(unittest.TestCase):
+    def test_a_graph_mismatch_precedes_a_later_syntax_error(self):
+        label = 'reference module changed; renewed review required: '
+        with self.assertRaises(m.CheckError) as caught:
+            m._plain_reference_graphs([
+                ('curve_trig.mojo', 'def ok():\n    return 1\n', '0' * 64),
+                ('curve_interval.mojo',
+                 'def f[T: Int]():\n    return 1\ndef f[T: Int]():\n    return 2\n',
+                 '1' * 64),
+            ], label)
+        self.assertIn('reference module changed', str(caught.exception))
+        self.assertNotIn('ambiguous generic', str(caught.exception))
+
+    def test_the_reviewed_module_stays_ahead_of_the_plain_modules(self):
+        seen = []
+
+        def review(filename, expected):
+            seen.append(filename)
+            self.assertEqual(expected, 'keep')
+
+        texts = {'curve_trig.mojo': 'def ok():\n    return 1\n'}
+        with self.assertRaises(m.CheckError):
+            m._reviewed_reference_graphs([
+                ('curve_bounds.mojo', 'keep'),
+                ('curve_trig.mojo', '0' * 64),
+            ], texts, 'curve_bounds.mojo',
+                'reference module changed; renewed review required: ', review)
+        self.assertEqual(seen, ['curve_bounds.mojo'])
+
+
 if __name__ == '__main__':
     unittest.main()
