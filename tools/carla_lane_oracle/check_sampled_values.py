@@ -518,6 +518,48 @@ def _graph_digest_rows(rows):
         raise CheckError(failure)
 
 
+def _digests_then_value_fields(rows, text):
+    """Check the shared graph digests, then the value fields."""
+    import os
+    import subprocess
+    import tempfile
+    payload = json.dumps([
+        {'graph': graph, 'digest': digest, 'message': message}
+        for graph, digest, message in rows
+    ], separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='digests-fields-') as directory:
+        folder = Path(directory)
+        hashes = folder / 'graphs.json'
+        source = folder / 'source.mojo'
+        hashes.write_text(payload)
+        source.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sampled_text',
+             '--digests-then-fields', str(hashes), str(source)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        failure = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(failure)
+
+
+def _shared_reference_graphs(reference_trees, shared, label, target):
+    """Compare each shared function, then check the value fields."""
+    rows = []
+    for key, expected_hash in shared.items():
+        filename, name = key.split(':', 1)
+        try:
+            node = unique_function(reference_trees[filename], name)
+        except CheckError:
+            _graph_digest_rows(rows)
+            raise
+        rows.append((dump(node), expected_hash, label + key))
+    _digests_then_value_fields(rows, target)
+
+
 def _hashes_then_declaration(rows, text):
     """Check the plain graph digests, then the Jet primitive."""
     import os
@@ -1116,12 +1158,8 @@ def verify(root):
             _prepare=False,
         )
         reference_trees = {closure['reviewed']: reviewed_reference_tree(bounds, root, _operation=_operation), closure['syntax']: syntax_tree(trig)}
-        for key, expected_hash in graphs['shared'].items():
-            filename, name = key.split(':', 1)
-            node = unique_function(reference_trees[filename], name)
-            actual = hashlib.sha256(dump(node).encode()).hexdigest()
-            require(actual == expected_hash, closure['shared'] + key)
-        _sampled_text('--value-fields', target)
+        _shared_reference_graphs(
+            reference_trees, graphs['shared'], closure['shared'], target)
         try:
             for filename, text in texts.items():
                 verify_qualifiers(root, filename, text, _operation=_operation)

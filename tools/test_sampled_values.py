@@ -413,6 +413,21 @@ class AliasGraphTests(unittest.TestCase):
         self.assertNotIn('Jet primitive graph changed', str(caught.exception))
 
 
+class SharedGraphTests(unittest.TestCase):
+    def test_an_earlier_graph_mismatch_precedes_a_missing_function(self):
+        tree = m.syntax_tree('def ok():\n    return 1\n')
+        label = 'shared generic or full-Jet bridge changed: '
+        with self.assertRaises(m.CheckError) as caught:
+            m._shared_reference_graphs(
+                {'trig': tree},
+                {'trig:ok': '0' * 64, 'trig:missing': '1' * 64},
+                label,
+                'def f():\n    return x.first\n',
+            )
+        self.assertIn('trig:ok', str(caught.exception))
+        self.assertNotIn('missing or ambiguous function', str(caught.exception))
+
+
 class PlainReferenceGraphTests(unittest.TestCase):
     def test_a_graph_mismatch_precedes_a_later_syntax_error(self):
         label = 'reference module changed; renewed review required: '

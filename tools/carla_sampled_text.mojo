@@ -25,6 +25,7 @@
     carla_sampled_text --aliases-then-graph SOURCE GRAPH DIGEST MESSAGE
     carla_sampled_text --graph-digests PATH
     carla_sampled_text --hashes-then-declaration HASHES SOURCE
+    carla_sampled_text --digests-then-fields HASHES SOURCE
     carla_sampled_text --primitive-declaration PATH
     carla_sampled_text --stored-half-tail PATH
     carla_sampled_text --helper-then-syntax PRIMITIVE TARGET
@@ -47,6 +48,7 @@ The primitive-aliases mode checks the two derivative aliases.
 The aliases-then-graph mode checks those aliases before the primitive graph.
 The graph-digests mode checks Python graph digests in order.
 The hashes-then-declaration mode checks those digests before the Jet primitive.
+The digests-then-fields mode checks those digests before the value fields.
 The primitive-declaration mode requires one Jet primitive.
 The stored-half-tail mode prints the source from that declaration onward.
 The caller supplies the source.
@@ -170,6 +172,22 @@ def hashes_then_declaration(payload: String, source: String) raises:
     primitive_declaration(source)
 
 
+def digests_then_value_fields(payload: String, source: String) raises:
+    """Check the shared graph digests, then the value fields.
+
+    Args:
+        payload: A JSON list. Each item has `graph`, `digest`, and
+            `message`.
+        source: The lane-value module.
+
+    Raises:
+        Error: A digest differs, or the value graph reads a derivative
+            or `sqrt`. The digests are checked before the value fields.
+    """
+    require_graph_digests(payload)
+    sampled_value_fields(source)
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -187,7 +205,7 @@ def _usage():
             " PATH --name NAME --with PATH | --primitive-aliases PATH |"
             " --aliases-then-graph SOURCE GRAPH DIGEST MESSAGE |"
             " --graph-digests PATH | --hashes-then-declaration HASHES"
-            " SOURCE |"
+            " SOURCE | --digests-then-fields HASHES SOURCE |"
             " --stored-half-tail PATH | --primitive-declaration PATH"
         ),
         file=stderr,
@@ -231,6 +249,16 @@ def main() raises:
     if len(arguments) == 3 and arguments[1] == "--graph-digests":
         try:
             require_graph_digests(Path(arguments[2]).read_text())
+        except error:
+            print(strip_sampled_gates(String(error)), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 4 and arguments[1] == "--digests-then-fields":
+        try:
+            digests_then_value_fields(
+                Path(arguments[2]).read_text(),
+                Path(arguments[3]).read_text(),
+            )
         except error:
             print(strip_sampled_gates(String(error)), file=stderr)
             exit(1)
