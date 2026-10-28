@@ -9,7 +9,12 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._python_tokens import stored_half_tail
-from tools._moment_projection import moment_projection, moment_sum2_projection
+from tools._moment_projection import (
+    moment_legacy_projection,
+    moment_projection,
+    moment_sum2_projection,
+)
+from tools.carla_ideal_gate import ideal_digests
 from tools._python_json import PyJson, dumps_canonical
 
 
@@ -129,6 +134,43 @@ def test_the_sum2_ideal_spiral_matches() raises:
         result.text(result.at(result.root, "projected_ast_sha256")),
         "f0f94e038fd4a783b3ed400ffd32801ca0c3bdc54980e2c408d44f50211b9e06",
     )
+
+
+def _legacy_payload(digest: String) raises -> String:
+    """Return one legacy-pin projection with a missing stored-half tail.
+
+    Args:
+        digest: The pinned legacy digest.
+
+    Returns:
+        JSON whose interval has no stored-half declaration.
+
+    Raises:
+        Error: The payload cannot be written.
+    """
+    var doc = PyJson()
+    var root = doc.new_dict()
+    doc.set(root, "legacy", doc.new_str("legacy"))
+    doc.set(root, "current", doc.new_str("current"))
+    doc.set(root, "interval", doc.new_str("def other():\n    return 1\n"))
+    doc.set(root, "legacy_sha256", doc.new_str(digest))
+    doc.root = root
+    return doc.dumps()
+
+
+def test_a_wrong_legacy_pin_fails_before_the_interval_tail() raises:
+    """A wrong pin digest fails before the missing stored-half tail."""
+    with assert_raises(contains="historical ideal pin digest changed"):
+        _ = moment_legacy_projection(_legacy_payload("nope"))
+
+
+def test_a_matching_legacy_pin_still_checks_the_interval_tail() raises:
+    """A matching pin digest still refuses a missing stored-half tail."""
+    var digests = PyJson.parse(ideal_digests())
+    with assert_raises(contains="missing or ambiguous stored-half declaration"):
+        _ = moment_legacy_projection(
+            _legacy_payload(digests.text(digests.at(digests.root, "legacy")))
+        )
 
 
 def main() raises:

@@ -6,22 +6,34 @@
 """Check the ideal half projection.
 
     carla_moment_projection PATH
+    carla_moment_projection --legacy PATH
 
 PATH is a JSON object. The direct form has `legacy`, `current`, and
 `helper`. The Sum2 form has `bounds` and selects the spiral from that
-module. The command prints the projection record.
+module. `--legacy` checks the pin digest before that projection. The
+command prints the projection record.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._moment_projection import moment_projection, moment_sum2_projection
+from tools._moment_projection import (
+    moment_legacy_projection,
+    moment_projection,
+    moment_sum2_projection,
+)
 from tools._python_json import MISSING, PyJson
 
 
 def _usage():
     """Print the command usage and stop."""
-    print("usage: carla_moment_projection PATH", file=stderr)
+    print(
+        (
+            "usage: carla_moment_projection PATH | carla_moment_projection"
+            " --legacy PATH"
+        ),
+        file=stderr,
+    )
     exit(2)
 
 
@@ -29,9 +41,20 @@ def main() raises:
     """Print the ideal projection record when the spirals match.
 
     Raises:
-        Error: The command is invalid, or the projection changed.
+        Error: The command is invalid, the legacy pin digest disagrees, or
+            the projection changed.
     """
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--legacy":
+        try:
+            print(
+                moment_legacy_projection(Path(arguments[2]).read_text()),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) != 2:
         _usage()
     try:

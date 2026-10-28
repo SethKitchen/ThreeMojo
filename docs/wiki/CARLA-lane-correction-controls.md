@@ -392,6 +392,8 @@ It checks every rounded node sum in one check.
 
 It checks the ideal half projection in one call.
 
+It checks the legacy pin digest before the ideal half projection in one check.
+
 It checks the stored-half tail before the projection.
 
 It keeps the moment dependency record and the check messages.

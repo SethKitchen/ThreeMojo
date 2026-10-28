@@ -16,7 +16,10 @@ from tests._python_tokens import (
     stored_half_tail,
 )
 from tools._json_tools import quote_ascii
-from tools._moment_pin_shape import require_projection_result
+from tools._moment_pin_shape import (
+    require_legacy_digest,
+    require_projection_result,
+)
 from tools._projection_result import projection_result, require_source_text
 from tools._python_json import MISSING, PyJson, dumps_canonical
 from tools.carla_ideal_gate import ideal_digest, ideal_digests
@@ -108,6 +111,39 @@ def moment_projection(payload: String) raises -> String:
     if pins != MISSING:
         _projection_pins(doc, pins, record)
     return record
+
+
+def moment_legacy_projection(payload: String) raises -> String:
+    """Check the legacy pin digest, then the ideal half projection.
+
+    Args:
+        payload: JSON with `legacy`, `current`, `interval`, `pins`, and
+            `legacy_sha256`. `legacy_sha256` is the pinned digest.
+
+    Returns:
+        The reviewed projection record.
+
+    Raises:
+        Error: The pin digest disagrees, or the projection changed. The
+            digest is checked before the interval tail.
+    """
+    var doc = PyJson.parse(payload)
+    var expected = PyJson.parse(ideal_digests())
+    var gate = PyJson()
+    var body = gate.new_dict()
+    gate.set(
+        body,
+        "actual",
+        gate.new_str(doc.text(doc.at(doc.root, "legacy_sha256"))),
+    )
+    gate.set(
+        body,
+        "expected",
+        gate.new_str(expected.text(expected.at(expected.root, "legacy"))),
+    )
+    gate.root = body
+    require_legacy_digest(gate.dumps())
+    return moment_projection(payload)
 
 
 def moment_sum2_projection(payload: String) raises -> String:

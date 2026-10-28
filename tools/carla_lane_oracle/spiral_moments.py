@@ -263,6 +263,29 @@ def _moment_node_sums(payload):
     return json.loads(result.stdout)
 
 
+def _moment_legacy_projection(payload):
+    """Return the projection record when the legacy pin digest matches."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-legacy-projection-') as directory:
+        path = Path(directory) / 'projection.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_moment_projection', '--legacy', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _moment_projection(payload):
     """Return the ideal projection record when the spirals match."""
     import os
@@ -715,23 +738,19 @@ def verify_inputs(root):
     except ValueError as error:
         raise CheckError(messages['closure'] + str(error)) from error
     projection = pins['ideal_projection']
-    try:
-        ideal_projection.require_legacy_digest(
-            projection['legacy_sha256'], ideal_projection.LEGACY_SHA256)
-    except ValueError as error:
-        raise CheckError(str(error)) from error
     _dependencies()
     interval = _typed_source.historical_text(root, root / DEPENDENCIES['paths'][0], (root / DEPENDENCIES['paths'][0]).read_text(encoding='utf-8'))
     try:
-        _moment_projection({
+        _moment_legacy_projection({
             'legacy': projection['legacy_normalized_source'],
             'current': blocks[_moment_plan()['spiral_block']],
             'interval': interval,
             'pins': projection,
+            'legacy_sha256': projection['legacy_sha256'],
         })
     except ValueError as error:
         message = str(error)
-        if message in (
+        if message == 'historical ideal pin digest changed' or message in (
                 'missing or ambiguous stored-half declaration',
                 'wrong ideal-projection result pins'):
             raise CheckError(message) from error
