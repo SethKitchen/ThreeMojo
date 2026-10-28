@@ -6,6 +6,7 @@
 """Check the grouped-table token digest and the stored node and weight bounds.
 
     carla_grouped_gate --module PATH --geometry PATH
+    carla_grouped_gate --checked PATH
 
 The program checks the texts it is given. It does not roll a successor
 back to a historical source. The caller does that before it starts the
@@ -19,6 +20,7 @@ from std.sys import argv, exit, stderr
 from tests._python_tokens import token_sha256
 from tools._fraction import Fraction
 from tools._spiral_moment_derive import stored_coefficient_words
+from tools._python_json import PyJson
 from tools._spiral_moment_words import fraction_of_word
 
 
@@ -119,6 +121,28 @@ def grouped_table(module: String, geometry: String) raises -> String:
     return _PASS
 
 
+def grouped_checked(
+    module: String, geometry: String, digest: String
+) raises -> String:
+    """Compare the grouped token, then check the stored bounds when it matches.
+
+    Args:
+        module: The grouped proof source.
+        geometry: The geometry module source.
+        digest: The reviewed token digest.
+
+    Returns:
+        `restore` is false, with `record`, when the digest matches. It is
+        true when the digest differs.
+
+    Raises:
+        Error: The digest matches and a stored bound changed.
+    """
+    if token_sha256(module) != digest:
+        return '{"restore":true}'
+    return '{"restore":false,"record":' + grouped_table(module, geometry) + "}"
+
+
 def grouped_table_identity() -> String:
     """Return the grouped proof module and its token digest.
 
@@ -139,7 +163,10 @@ def grouped_table_identity() -> String:
 def _usage():
     """Print the command usage and stop."""
     print(
-        "usage: carla_grouped_gate --module PATH --geometry PATH",
+        (
+            "usage: carla_grouped_gate --module PATH --geometry PATH"
+            " | carla_grouped_gate --checked PATH"
+        ),
         file=stderr,
     )
     exit(2)
@@ -151,9 +178,24 @@ def main() raises:
     Raises:
         Error: The command is invalid, or a grouped-table check fails.
     """
+    var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--checked":
+        try:
+            var doc = PyJson.parse(Path(arguments[2]).read_text())
+            print(
+                grouped_checked(
+                    doc.text(doc.at(doc.root, "module")),
+                    doc.text(doc.at(doc.root, "geometry")),
+                    doc.text(doc.at(doc.root, "digest")),
+                ),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var module = String("")
     var geometry = String("")
-    var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]

@@ -50,6 +50,8 @@ It keeps the grouped consumer digest.
 
 It compares that grouped-table token digest before the predecessor fallback.
 
+It checks that digest and the stored bounds in one check when the digest matches.
+
 It compares that grouped-table token digest in one check.
 
 `tools/carla_y_gate.mojo` checks the five Y-finiteness token digests, the successor record digests, and the module token identity.

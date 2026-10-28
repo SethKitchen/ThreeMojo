@@ -8,11 +8,6 @@ else:
 from pathlib import Path
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 
-if __package__:
-    from . import ideal_projection
-else:
-    import ideal_projection
-
 _IDENTITY = None
 
 
@@ -57,6 +52,35 @@ def __getattr__(name):
         return _identity()['consumer']
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
+def _grouped_checked(module, geometry, digest):
+    """Compare the grouped token, then check the stored bounds when it matches."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps({
+        'module': module,
+        'geometry': geometry,
+        'digest': digest,
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='grouped-checked-') as directory:
+        path = Path(directory) / 'grouped.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_grouped_gate',
+             '--checked', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def verify_text(module, geometry):
     # Exact complete module binding includes imports, both materializations,
     # every use/write of local arrays, environment guard and error/work graph.
@@ -93,14 +117,16 @@ def verify(root, *, _operation=None):
         else:
             import full_audit_cleanup_contracts as full_audit
         text = full_audit._observe_text(root, MODULE, text, _operation=_operation)
-    if not ideal_projection.token_digest_equals(text, TOKEN_SHA256):
-        if __package__:
-            from . import selection_finiteness_contracts as selection
-        else:
-            import selection_finiteness_contracts as selection
-        text=selection.predecessor_text(root,MODULE, _operation=_operation)
     geometry = (root/'extensions/carla/geometry.mojo').read_text()
     if _operation is not None:
         geometry = full_audit._observe_text(
             root, 'extensions/carla/geometry.mojo', geometry, _operation=_operation)
-    return verify_text(text, geometry)
+    checked = _grouped_checked(text, geometry, TOKEN_SHA256)
+    if checked['restore']:
+        if __package__:
+            from . import selection_finiteness_contracts as selection
+        else:
+            import selection_finiteness_contracts as selection
+        text = selection.predecessor_text(root, MODULE, _operation=_operation)
+        return verify_text(text, geometry)
+    return checked['record']
