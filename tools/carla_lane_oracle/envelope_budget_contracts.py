@@ -40,13 +40,7 @@ def verify_text(text, *, root=None, _operation=None):
         except (ValueError, OSError) as error:
             raise ValueError('Reviewed budget admission, routing or arithmetic changed') from error
     _gate_token(checked, EXPECTED)
-    body=sum2_guard_contracts.declaration(text,'_try_lane_envelope_capture',())
-    start=body.index('    var at = info_index(')
-    end=body.index('    if optional_work > max_terms - terms:')
-    import tokenize
-    names={token.string for token in source_contracts.tokens(body[start:end]) if token.type==tokenize.NAME}
-    if names & {'terms','max_terms'}:
-        raise ValueError('Intervening span can access budget parameters')
+    _gate_span(sum2_guard_contracts.declaration(text,'_try_lane_envelope_capture',()))
     return {'status':'PASS','source_token_sha256':EXPECTED,'intervening_counter_uses':0,'retained_capacity_and_debit':True}
 
 def verify(root, *, _operation=None):
@@ -65,6 +59,27 @@ def _gate(payload):
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_envelope_gate',
              '--migration', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
+def _gate_span(text):
+    """Refuse a counter name between the two capacity checks."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='envelope-span-') as directory:
+        target = Path(directory) / 'capture.mojo'
+        target.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_envelope_gate',
+             '--span', str(target)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()

@@ -17,6 +17,7 @@ from std.testing import (
 from tests._python_tokens import token_names, token_sha256
 from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
+from tools.carla_envelope_gate import envelope_budget_span
 
 
 comptime _RECORD = "tools/carla_lane_oracle/envelope-budget-contract.json"
@@ -175,6 +176,65 @@ def test_removing_either_capacity_check_changes_the_function() raises:
             >= 0
         )
     assert_true(missing)
+
+
+def test_the_gate_refuses_a_counter_in_the_gap() raises:
+    """The production gate accepts the reviewed gap and refuses a counter."""
+    var doc = PyJson.parse(Path(_RECORD).read_text())
+    var after = _field(doc, "after_complete_function")
+    envelope_budget_span(after)
+    var marked = _replace_first(
+        after,
+        "    var optional_work = 1024 * branches",
+        "    terms = -1\n    var optional_work = 1024 * branches",
+    )
+    var refused = False
+    try:
+        envelope_budget_span(marked)
+    except error:
+        refused = True
+        assert_true(
+            String(error).find(
+                "Intervening span can access budget parameters"
+            )
+            >= 0
+        )
+    assert_true(refused)
+    var widest = _replace_first(
+        after,
+        "    var optional_work = 1024 * branches",
+        "    max_terms = 0\n    var optional_work = 1024 * branches",
+    )
+    refused = False
+    try:
+        envelope_budget_span(widest)
+    except error:
+        refused = True
+        assert_true(
+            String(error).find(
+                "Intervening span can access budget parameters"
+            )
+            >= 0
+        )
+    assert_true(refused)
+    var early = String("    if optional_work > max_terms - terms:\n") + after
+    envelope_budget_span(early)
+    var missing_start = _replace_first(after, _START, "    var at = missing(")
+    refused = False
+    try:
+        envelope_budget_span(missing_start)
+    except error:
+        refused = True
+        assert_true(String(error).find("substring not found") >= 0)
+    assert_true(refused)
+    var missing_end = _replace_first(after, _END, "    if optional_work > limit:")
+    refused = False
+    try:
+        envelope_budget_span(missing_end)
+    except error:
+        refused = True
+        assert_true(String(error).find("substring not found") >= 0)
+    assert_true(refused)
 
 
 def main() raises:

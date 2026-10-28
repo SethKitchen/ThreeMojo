@@ -922,6 +922,8 @@ It keeps the runtime-boundary contract prefix.
 
 `tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record and the admission token.
 
+It refuses `terms` or `max_terms` between the two capacity checks.
+
 `tools/carla_selection_record_gate.mojo` checks the selection predecessor record and the restored token.
 
 It reads the declaration line span before restoring that function.
