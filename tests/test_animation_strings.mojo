@@ -15,7 +15,7 @@ from animation.animation_utils import make_clip_additive
 from animation.keyframe_track import KeyframeTrack, NODE_NAME, node_target
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from std.testing import TestSuite, assert_equal
+from std.testing import TestSuite, assert_equal, assert_raises
 from units.si import Duration, SECOND
 
 
@@ -163,6 +163,17 @@ def test_an_additive_name_pile_keeps_its_last_selected_name() raises:
     mixer.stop_all_action()
     mixer.update(scene, Duration(0, SECOND))
     assert_equal(scene.get(NodeId(0)).name, "original")
+
+
+def test_a_name_track_emptied_after_play_is_refused() raises:
+    # A track's fields are open. A key that no longer names a string is an
+    # error from the mixer, not an out-of-bounds read.
+    var scene = named_scene()
+    var mixer = AnimationMixer()
+    var index = add_name(mixer, "walk", 1)
+    mixer.action(index).clip.tracks[0].strings = List[String]()
+    with assert_raises(contains="names no string"):
+        mixer.update(scene, Duration(0.5, SECOND))
 
 
 def main() raises:

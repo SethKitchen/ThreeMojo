@@ -32,6 +32,7 @@ from animation.animation_mixer import (
 from animation.animation_object_group import AnimationObjectGroup
 from animation.animation_utils import checked_fps, make_clip_additive, subclip
 from animation.keyframe_track import (
+    BEZIER,
     Interpolation,
     KeyframeTrack,
     LIGHT_COLOR,
@@ -1037,6 +1038,46 @@ def test_a_frame_rate_must_be_above_zero() raises:
         _ = checked_fps(-1)
 
 
+def _bezier_steps() raises -> KeyframeTrack:
+    """Return a Bezier position track keyed at one, two and three meters
+    on the x axis at zero, one and two seconds, each control point a third
+    of a second out at its key's value."""
+    var ins = List[Float32]()
+    var outs = List[Float32]()
+    var values = List[Float32]()
+    for key in range(3):
+        for number in range(3):
+            var value = Float32(key + 1) if number == 0 else Float32(0)
+            values.append(value)
+            ins.extend([Float32(key) - 1.0 / 3.0, value])
+            outs.extend([Float32(key) + 1.0 / 3.0, value])
+    return KeyframeTrack(
+        node_target(NodeId(0), POSITION),
+        seconds([0, 1, 2]),
+        in_tangents=ins^,
+        values=values^,
+        out_tangents=outs^,
+        interpolation=BEZIER,
+    )
+
+
+def test_a_bezier_subclip_keeps_and_moves_its_control_points() raises:
+    var clip = AnimationClip("steps", [_bezier_steps()])
+    var cut = subclip(clip, "tail", 10, 30, 10)
+    ref track = cut.tracks[0]
+    assert_equal(track.interpolation, BEZIER)
+    assert_equal(len(track.in_tangents), 12)
+    # The kept keys move back a second, and their control points with them.
+    assert_almost_equal(track.out_tangents[0], 1.0 / 3.0, atol=TOLERANCE)
+    assert_almost_equal(track.out_tangents[1], Float32(2), atol=TOLERANCE)
+    assert_almost_equal(track.in_tangents[6], 2.0 / 3.0, atol=TOLERANCE)
+    assert_almost_equal(
+        track.sample(at(0.5))[0],
+        clip.tracks[0].sample(at(1.5))[0],
+        atol=TOLERANCE,
+    )
+
+
 # --- make_clip_additive -----------------------------------------------------
 
 
@@ -1061,6 +1102,60 @@ def test_an_additive_clip_holds_changes_from_its_first_frame() raises:
     # At the last frame of a ten-frame-a-second clock.
     var late = make_clip_additive(clip, 10, 10)
     assert_almost_equal(late.tracks[0].values[0], Float32(-1), atol=TOLERANCE)
+
+
+def test_an_additive_bezier_track_takes_the_pose_off_its_control_points() raises:
+    var made = make_clip_additive(AnimationClip("steps", [_bezier_steps()]))
+    ref track = made.tracks[0]
+    # A control point's value is a value on the curve, so the first key's
+    # pose of one meter comes off it, and its time stays.
+    assert_almost_equal(track.out_tangents[1], Float32(0), atol=TOLERANCE)
+    assert_almost_equal(track.out_tangents[0], 1.0 / 3.0, atol=TOLERANCE)
+    assert_almost_equal(track.in_tangents[7], Float32(1), atol=TOLERANCE)
+    # Half way between keys of zero and one, the curve is half a meter.
+    assert_almost_equal(track.sample(at(0.5))[0], Float32(0.5), atol=1e-4)
+
+
+def test_an_additive_bezier_rotation_turns_its_control_points() raises:
+    var quarter = Quaternion.from_axis_angle(
+        Vector3(0, 1, 0), Angle(Float32(pi) / 2, RADIAN)
+    )
+    var half = Quaternion.from_axis_angle(
+        Vector3(0, 1, 0), Angle(Float32(pi), RADIAN)
+    )
+    var values: List[Float32] = [
+        quarter.x,
+        quarter.y,
+        quarter.z,
+        quarter.w,
+        half.x,
+        half.y,
+        half.z,
+        half.w,
+    ]
+    var ins = List[Float32]()
+    var outs = List[Float32]()
+    for index in range(8):
+        var key = Float32(index // 4)
+        ins.extend([key - 1.0 / 3.0, values[index]])
+        outs.extend([key + 1.0 / 3.0, values[index]])
+    var track = KeyframeTrack(
+        node_target(NodeId(0), QUATERNION),
+        seconds([0, 1]),
+        in_tangents=ins^,
+        values=values^,
+        out_tangents=outs^,
+        interpolation=BEZIER,
+    )
+    var made = make_clip_additive(AnimationClip("turn", [track^]))
+    ref turned = made.tracks[0]
+    # The first key's control points are no turn from the first key, and
+    # the second key's are a quarter turn, as the keys themselves are.
+    assert_almost_equal(turned.out_tangents[7], Float32(1), atol=TOLERANCE)
+    assert_almost_equal(turned.out_tangents[3], Float32(0), atol=TOLERANCE)
+    assert_almost_equal(turned.in_tangents[11], quarter.y, atol=TOLERANCE)
+    assert_almost_equal(turned.in_tangents[15], quarter.w, atol=TOLERANCE)
+    assert_almost_equal(turned.in_tangents[8], 2.0 / 3.0, atol=TOLERANCE)
 
 
 def test_an_additive_rotation_is_relative_to_the_reference() raises:

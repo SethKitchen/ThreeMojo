@@ -354,7 +354,7 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from render.texture_store import NO_TEXTURE, TextureId
-from std.math import inf, isfinite
+from std.math import inf, isfinite, pi
 from units.si import Angle, DEGREE, Duration, Length, METER, RADIAN, SECOND
 
 # How many numbers a pile holds: four, which is what the widest value, a
@@ -1013,20 +1013,53 @@ def _with_axis(vector: Vector3, axis: Int, value: Float32) -> Vector3:
 def _euler_axis(turn: Quaternion, axis: Int) raises -> Float32:
     """Return one angle of a turn read as x, y and z angles, in radians,
     three.js's `rotation[axis]`."""
-    var angles = Euler.from_quaternion(turn)
+    return _axis_angle(Euler.from_quaternion(turn), axis)
+
+
+def _angle_gap(a: Float32, b: Float32) -> Float32:
+    """Return how far apart two angles in radians are around the circle."""
+    var turn = Float32(2 * pi)
+    var gap = abs(a - b) % turn
+    return min(gap, turn - gap)
+
+
+def _kept_size(angles: Euler, axis: Int) -> Float32:
+    """Return how far from zero the two angles other than `axis` are."""
+    var total = Float32(0)
+    for other in range(3):
+        if other != axis:
+            total += _angle_gap(_axis_angle(angles, other), 0)
+    return total
+
+
+def _axis_angle(angles: Euler, axis: Int) -> Float32:
+    """Return one of a set of angles, in radians: x, y or z."""
     if axis == 0:
         return angles.x.to(RADIAN)
-    if axis == 1:
-        return angles.y.to(RADIAN)
-    return angles.z.to(RADIAN)
+    return angles.y.to(RADIAN) if axis == 1 else angles.z.to(RADIAN)
 
 
 def _with_euler_axis(
     turn: Quaternion, axis: Int, radians: Float32
 ) raises -> Quaternion:
     """Return a turn with one of its x, y and z angles replaced, as setting
-    three.js's `rotation[axis]` turns its quaternion."""
+    three.js's `rotation[axis]` turns its quaternion.
+
+    A turn has two sets of XYZ angles, (x, y, z) and (x + pi, pi - y,
+    z + pi), and three.js changes the set it holds, which a node here does
+    not keep. Each angle of the second set is pi less the first set's, so
+    the set whose two angles that are not replaced are the smaller is the
+    one changed: a track on one axis of a node at rest keeps the other two
+    at zero, as three.js does. Reading back the first set alone made a y
+    track past a right angle flip between two turns on alternate frames.
+    """
     var angles = Euler.from_quaternion(turn)
+    var other = angles
+    other.x = Angle(angles.x.to(RADIAN) + Float32(pi), RADIAN)
+    other.y = Angle(Float32(pi) - angles.y.to(RADIAN), RADIAN)
+    other.z = Angle(angles.z.to(RADIAN) + Float32(pi), RADIAN)
+    if _kept_size(other, axis) < _kept_size(angles, axis):
+        angles = other
     if axis == 0:
         angles.x = Angle(radians, RADIAN)
     elif axis == 1:
@@ -2988,11 +3021,11 @@ struct AnimationMixer(Movable):
                     )
                 )
                 if kind.is_string():
-                    var place = Int(value[0])
-                    var text = String(
-                        self.actions[index].clip.tracks[which].strings[place]
+                    # The fields are open: `sample_string` refuses a key
+                    # that names no string the track still holds.
+                    value[0] = self._intern(
+                        self.actions[index].clip.tracks[which].sample_string(at)
                     )
-                    value[0] = self._intern(text)
                 var reached: List[TrackTarget] = [named]
                 if self.actions[index].grouped:
                     reached = resolve_targets(

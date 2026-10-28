@@ -44,6 +44,14 @@ alone and leaves the tangents, as three.js does: a number less a constant
 has the same slope. A rotation's tangents are left unturned, which is
 three.js's arithmetic too.
 
+## Bezier tracks
+
+A `BEZIER` key has a control point on each side, a time and a value for
+each number. `subclip` keeps them and moves their times back with the
+keys. `make_clip_additive` takes the pose off their values as off the
+key's, or turns them as it turns the key, since a control point is a
+value on the curve and not a slope.
+
 ## What differs from three.js
 
 Both return a new clip. three.js's `makeClipAdditive` changes the clip it
@@ -69,7 +77,12 @@ from animation.animation_clip import (
     AnimationClip,
     require_frame_rate,
 )
-from animation.keyframe_track import CUBIC_SPLINE, KeyframeTrack, QUATERNION
+from animation.keyframe_track import (
+    BEZIER,
+    CUBIC_SPLINE,
+    KeyframeTrack,
+    QUATERNION,
+)
 from core.ordinal import require_non_negative
 from math.quaternion import Quaternion
 from units.si import Duration, SECOND
@@ -142,7 +155,14 @@ def subclip(
         var values = List[Float32]()
         var ins = List[Float32]()
         var outs = List[Float32]()
-        var tangents = track.interpolation == CUBIC_SPLINE
+        # A glTF key is three values, and three.js's subclip keeps all
+        # three. A Bezier key keeps its control points, a time and a value
+        # for each number.
+        var per_value = 0
+        if track.interpolation == CUBIC_SPLINE:
+            per_value = 1
+        elif track.interpolation == BEZIER:
+            per_value = 2
         for key in range(len(track.times)):  # pragma: no branch
             var frame = track.times[key] * rate
             if frame < first or frame >= last:
@@ -150,11 +170,10 @@ def subclip(
             times.append(track.times[key])
             for offset in range(width):  # pragma: no branch
                 values.append(track.values[key * width + offset])
-                if tangents:
-                    # A glTF key is three values, and three.js's subclip
-                    # keeps all three.
-                    ins.append(track.in_tangents[key * width + offset])
-                    outs.append(track.out_tangents[key * width + offset])
+                var at = (key * width + offset) * per_value
+                for lane in range(per_value):
+                    ins.append(track.in_tangents[at + lane])
+                    outs.append(track.out_tangents[at + lane])
         if len(times) == 0:
             continue
         if len(kept_from) == 0 or times[0] < earliest:
@@ -170,7 +189,12 @@ def subclip(
         for key in range(len(kept_times[index])):  # pragma: no branch
             shifted.append(Duration(kept_times[index][key] - earliest, SECOND))
         ref track = source.tracks[kept_from[index]]
-        if track.interpolation == CUBIC_SPLINE:
+        if track.interpolation == BEZIER:
+            # Control point times are on the keys' clock and move with them.
+            for at in range(0, len(kept_in[index]), 2):  # pragma: no branch
+                kept_in[index][at] -= earliest
+                kept_out[index][at] -= earliest
+        if track.interpolation == CUBIC_SPLINE or track.interpolation == BEZIER:
             tracks.append(
                 KeyframeTrack(
                     track.target,
@@ -178,6 +202,7 @@ def subclip(
                     in_tangents=kept_in[index].copy(),
                     values=kept_values[index].copy(),
                     out_tangents=kept_out[index].copy(),
+                    interpolation=track.interpolation,
                 )
             )
             continue
@@ -193,6 +218,32 @@ def subclip(
     # three.js's `subclip` starts from a clone, which keeps the user data.
     clip.user_data = source.user_data.copy()
     return clip^
+
+
+def _turn_back(
+    mut numbers: List[Float32], start: Int, step: Int, undo: Quaternion
+):
+    """Multiply one stored rotation by the reference's conjugate on the left.
+
+    Args:
+        numbers: The list that holds the rotation's four numbers.
+        start: Where the first number is.
+        step: How far apart the four numbers are.
+        undo: The reference rotation, of unit length.
+    """
+    var turn = undo.conjugate()
+    turn.multiply(
+        Quaternion(
+            numbers[start],
+            numbers[start + step],
+            numbers[start + 2 * step],
+            numbers[start + 3 * step],
+        )
+    )
+    numbers[start] = turn.x
+    numbers[start + step] = turn.y
+    numbers[start + 2 * step] = turn.z
+    numbers[start + 3 * step] = turn.w
 
 
 def make_clip_additive(
@@ -272,21 +323,23 @@ def make_clip_additive(
             if kind == QUATERNION:
                 var undo = Quaternion(pose[0], pose[1], pose[2], pose[3])
                 undo.normalize()
-                var turn = undo.conjugate()
-                turn.multiply(
-                    Quaternion(
-                        changed.values[start],
-                        changed.values[start + 1],
-                        changed.values[start + 2],
-                        changed.values[start + 3],
-                    )
-                )
-                changed.values[start] = turn.x
-                changed.values[start + 1] = turn.y
-                changed.values[start + 2] = turn.z
-                changed.values[start + 3] = turn.w
+                _turn_back(changed.values, start, 1, undo)
+                if changed.interpolation == BEZIER:
+                    # A Bezier control point's values turn as the key's do,
+                    # and its times stay.
+                    _turn_back(changed.in_tangents, start * 2 + 1, 2, undo)
+                    _turn_back(changed.out_tangents, start * 2 + 1, 2, undo)
                 continue
             for offset in range(width):  # pragma: no branch
                 changed.values[start + offset] -= pose[offset]
+                if changed.interpolation == BEZIER:
+                    # Control point values are values, not slopes, and the
+                    # pose comes off them too.
+                    changed.in_tangents[(start + offset) * 2 + 1] -= pose[
+                        offset
+                    ]
+                    changed.out_tangents[(start + offset) * 2 + 1] -= pose[
+                        offset
+                    ]
     made.blend_mode = ADDITIVE_BLEND_MODE
     return made^

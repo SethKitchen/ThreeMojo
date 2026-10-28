@@ -196,6 +196,30 @@ def test_each_rotation_axis_turns_about_its_own() raises:
         assert_almost_equal(scene.get(id).quaternion.w, 1, atol=1e-6)
 
 
+def test_a_rotation_element_past_a_right_angle_holds_steady() raises:
+    # A y of 2 radians reads back as the other set of angles, (pi,
+    # pi - 2, pi). Each frame must keep the turn the track wrote, not flip
+    # to the turn of y = pi - 2 on every other frame.
+    var scene = Scene()
+    var id = scene.add(Object3D())
+    var tracks: List[KeyframeTrack] = [
+        KeyframeTrack(
+            node_element_target(id, ROTATION_ELEMENT, 1),
+            _seconds([0, 1]),
+            [2.0, 2.0],
+        )
+    ]
+    var mixer = AnimationMixer()
+    var which = mixer.add(AnimationAction(AnimationClip("r", tracks^)))
+    mixer.action(which).play()
+    for _ in range(4):
+        mixer.update(scene, Duration(0.1, SECOND))
+        ref turn = scene.get(id).quaternion
+        assert_almost_equal(abs(turn.y), Float32(0.84147096), atol=1e-5)
+        assert_almost_equal(abs(turn.w), Float32(0.5403023), atol=1e-5)
+        assert_true(turn.y * turn.w > 0)
+
+
 def test_an_element_target_names_an_axis() raises:
     var target = node_element_target(NodeId(0), ROTATION_ELEMENT, 2)
     assert_equal(target.slot, 2)
