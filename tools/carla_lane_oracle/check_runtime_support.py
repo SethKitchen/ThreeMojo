@@ -80,20 +80,11 @@ def _cli_failures():
     global _CLI_FAILURES
     if _CLI_FAILURES is not None:
         return _CLI_FAILURES
-    import json
-    import os
-    import subprocess
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    result = subprocess.run(
-        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cli_failures'],
-        capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    _CLI_FAILURES = json.loads(result.stdout)
+    if __package__:
+        from .ideal_projection import cli_failure_prefixes
+    else:
+        from ideal_projection import cli_failure_prefixes
+    _CLI_FAILURES = cli_failure_prefixes()
     return _CLI_FAILURES
 
 

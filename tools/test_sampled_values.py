@@ -799,5 +799,60 @@ class MigrationDocumentTests(unittest.TestCase):
                 module._MIGRATION_RECORDS = saved
 
 
+class ConstantDocumentTests(unittest.TestCase):
+    def test_checkers_share_failure_and_contract_prefixes(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import ideal_projection
+        from tools.carla_lane_oracle import spiral_moments
+        from tools.carla_lane_oracle import sum2_contracts
+        from tools.carla_lane_oracle import frozen_arc_producer_contracts as frozen
+        original_docs = dict(ideal_projection._CONSTANT_DOCUMENTS)
+        original_spiral = spiral_moments._CLI_FAILURES
+        original_sum2 = sum2_contracts._CLI_FAILURES
+        original_ideal = ideal_projection._CONTRACT_PREFIXES
+        original_frozen = frozen._CONTRACT_PREFIXES
+        try:
+            ideal_projection._CONSTANT_DOCUMENTS.clear()
+            spiral_moments._CLI_FAILURES = None
+            sum2_contracts._CLI_FAILURES = None
+            ideal_projection._CONTRACT_PREFIXES = None
+            frozen._CONTRACT_PREFIXES = None
+            seen = []
+
+            def run(args, **kwargs):
+                seen.append(args[-1])
+                if args[-1] == 'carla_cli_failures':
+                    stdout = '{"word":"spiral moment word: "}'
+                else:
+                    stdout = '{"frozen":"frozen ARC producer contract: ","scalar":"x: "}'
+                return Mock(returncode=0, stdout=stdout, stderr='')
+
+            with patch('subprocess.run', side_effect=run):
+                self.assertEqual(
+                    spiral_moments._cli_failures()['word'], 'spiral moment word: ')
+                self.assertEqual(
+                    sum2_contracts._cli_failures()['word'], 'spiral moment word: ')
+                self.assertEqual(
+                    frozen._contract_prefixes()['frozen'],
+                    'frozen ARC producer contract: ')
+                self.assertEqual(
+                    ideal_projection._contract_prefixes()['scalar'], 'x: ')
+            self.assertEqual(seen, ['carla_cli_failures', 'carla_contract_prefixes'])
+            ideal_projection._CONSTANT_DOCUMENTS.clear()
+            spiral_moments._CLI_FAILURES = None
+            failed = Mock(returncode=1, stdout='', stderr='missing prefixes\n')
+            with patch('subprocess.run', return_value=failed):
+                with self.assertRaisesRegex(ValueError, 'missing prefixes'):
+                    spiral_moments._cli_failures()
+            self.assertNotIn('carla_cli_failures', ideal_projection._CONSTANT_DOCUMENTS)
+        finally:
+            ideal_projection._CONSTANT_DOCUMENTS.clear()
+            ideal_projection._CONSTANT_DOCUMENTS.update(original_docs)
+            spiral_moments._CLI_FAILURES = original_spiral
+            sum2_contracts._CLI_FAILURES = original_sum2
+            ideal_projection._CONTRACT_PREFIXES = original_ideal
+            frozen._CONTRACT_PREFIXES = original_frozen
+
+
 if __name__ == '__main__':
     unittest.main()

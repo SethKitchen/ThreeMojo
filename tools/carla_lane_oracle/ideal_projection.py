@@ -36,6 +36,54 @@ def migration_record_document():
     return _MIGRATION_RECORD_DOCUMENT
 
 
+_CONSTANT_DOCUMENTS = {}
+
+
+def constant_checker_document(tool):
+    """Return one no-argument checker document.
+
+    A later call reuses the same document. A failed read is not kept.
+
+    Args:
+        tool: The Mojo tool name, such as `carla_cli_failures`.
+
+    Returns:
+        The parsed JSON document.
+
+    Raises:
+        ValueError: The tool could not be read.
+    """
+    cached = _CONSTANT_DOCUMENTS.get(tool)
+    if cached is not None:
+        return cached
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, tool],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    loaded = json.loads(result.stdout)
+    _CONSTANT_DOCUMENTS[tool] = loaded
+    return loaded
+
+
+def cli_failure_prefixes():
+    """Return the checker failure prefixes."""
+    return constant_checker_document('carla_cli_failures')
+
+
+def contract_prefix_document():
+    """Return the reviewed contract prefixes."""
+    return constant_checker_document('carla_contract_prefixes')
+
+
 def _digests():
     """Return the legacy digest and the projected digest."""
     global _DIGESTS
@@ -1046,21 +1094,7 @@ def _contract_prefixes():
     global _CONTRACT_PREFIXES
     if _CONTRACT_PREFIXES is not None:
         return _CONTRACT_PREFIXES
-    import json
-    import os
-    import subprocess
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    result = subprocess.run(
-        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_contract_prefixes'],
-        capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    _CONTRACT_PREFIXES = json.loads(result.stdout)
+    _CONTRACT_PREFIXES = contract_prefix_document()
     return _CONTRACT_PREFIXES
 
 
@@ -1072,20 +1106,7 @@ def _cli_failures():
     global _CLI_FAILURES
     if _CLI_FAILURES is not None:
         return _CLI_FAILURES
-    import os
-    import subprocess
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    result = subprocess.run(
-        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cli_failures'],
-        capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    _CLI_FAILURES = json.loads(result.stdout)
+    _CLI_FAILURES = cli_failure_prefixes()
     return _CLI_FAILURES
 
 

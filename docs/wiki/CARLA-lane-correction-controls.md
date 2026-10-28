@@ -251,6 +251,12 @@ It reuses that migration record document when the next checker asks for it.
 
 A failed read is tried again.
 
+It reuses the checker failure prefixes when the next checker asks for them.
+
+It reuses the contract prefixes when the next checker asks for them.
+
+A failed prefix read is tried again.
+
 It reads the dispatch migration record before those protected paths in one check.
 
 It reuses that dispatch record when the same bytes are read again.
