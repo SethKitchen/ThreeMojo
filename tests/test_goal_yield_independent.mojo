@@ -40,11 +40,7 @@ from std.testing import (
 )
 from tests.test_carla_cross_candidate_certificates import _sampled_road
 from tests._spiral_domain_controls import _bits
-from tests._published_lane_refinement import (
-    _refine_lane_certificate as _published_refine,
-    _continue_lane_certificate as _published_continue,
-    _LaneExclusionGoal as _PublishedGoal,
-)
+from tools._sha256 import sha256_hex
 
 
 def _query(location: Vector3) -> Array[Float64, 3]:
@@ -333,7 +329,60 @@ def test_zero_distance_yield_stays_nonexact_until_ordinary_resume() raises:
     assert_true(certificate.exact_witness)
 
 
-def test_no_external_path_matches_untouched_published_solver() raises:
+def _word(value: Float64) -> String:
+    return hex(bitcast[DType.uint64](value))
+
+
+def _certificate_digest(certificate: _LaneCertificate) -> String:
+    """Return the SHA-256 of every field of `certificate`, bit for bit."""
+    var text = String(
+        _word(certificate.s),
+        " ",
+        _word(certificate.scale),
+        " ",
+        _word(certificate.lower),
+        " ",
+        _word(certificate.upper),
+        " ",
+        certificate.nodes,
+        " ",
+        certificate.terms,
+        " ",
+        certificate.exact_witness,
+    )
+    for axis in range(3):
+        text += " " + _word(certificate.point[axis])
+    for cell in certificate.cells:
+        text += String(
+            " ",
+            _word(cell.low),
+            ",",
+            _word(cell.high),
+            ",",
+            _word(cell.lower),
+            ",",
+            _word(cell.scale),
+            ",",
+            cell.depth,
+        )
+    return sha256_hex(text.as_bytes())
+
+
+def test_no_external_path_matches_the_published_solver() raises:
+    # Digests of the certificates the solver published before external
+    # goals existed. The no-goal path and a goal-led resume must keep them.
+    var published: List[String] = [
+        "267debeb7d863a2f626420f70c8a8dcc2404b2d8f3fab8265b39fc2bcab96817",
+        "31bf085b548cd5ed525993ed2c2806b4e366da0b7277c3ea4e461eefea0345a7",
+        "68a76ab0525b82222eaab4a922f5cee29a7430d6a3ef72a74ca66e2bdd0ceffe",
+        "9f994e21bbae7ddba0a2dec2ba45af63d3871b287f7d1fc057d6dc7924214f60",
+        "912dd999048439d0cda4a4329513a925a308d8d3678891c190efd40cfe4647e6",
+        "0f205195363de44e918828546f4215803e1783571f079f4464d6510fe66b00f6",
+        "f457ff4aeefa6e3d554cd98350703cd5519bf651367152e1dd5dc58da39bde26",
+        "6e84afbccde6b3b9799de7db629a5bfb0a5382191216d2409ccd0416406c64f3",
+        "8febaf96800ef55fa6e9ed8d7c0654bd053496b3cc96a54d490ba7d87accd27c",
+    ]
+    var index = 0
     for scale in [Float64(1e-100), Float64(1.0), Float64(1e100)]:
         var road = _sampled_road(scale)
         for location in [
@@ -341,57 +390,23 @@ def test_no_external_path_matches_untouched_published_solver() raises:
             Vector3(0.25, 1, 0),
             Vector3(4, -2, 0),
         ]:
-            var old = _published_refine(
-                road, 0, 0, 0.0, 1.0, location, 0.1, 0.0
-            )
             var actual = _refine_lane_certificate(
                 road, 0, 0, 0.0, 1.0, location, 0.1, 0.0
             )
-            _bits(actual.s, old.s)
-            _bits(actual.scale, old.scale)
-            _bits(actual.lower, old.lower)
-            _bits(actual.upper, old.upper)
-            assert_equal(actual.nodes, old.nodes)
-            assert_equal(actual.terms, old.terms)
-            assert_equal(actual.exact_witness, old.exact_witness)
-            assert_equal(len(actual.cells), len(old.cells))
-            for axis in range(3):
-                _bits(actual.point[axis], old.point[axis])
-            for i in range(len(actual.cells)):
-                _bits(actual.cells[i].low, old.cells[i].low)
-                _bits(actual.cells[i].high, old.cells[i].high)
-                _bits(actual.cells[i].lower, old.cells[i].lower)
-                _bits(actual.cells[i].scale, old.cells[i].scale)
-                assert_equal(actual.cells[i].depth, old.cells[i].depth)
+            assert_equal(_certificate_digest(actual), published[index])
+            index += 1
     var road = _sampled_road(1.0)
     var location = Vector3(0, 0, 0)
-    var old = _published_refine(
-        road, 0, 0, 0.0, 1.0, location, 0.1, 0.0, seed_only=True
-    )
     var actual = _seed(road, location, 0.0, 1.0, 0.1)
     var external: Array[Float64, 3] = [0.25, -2, 0]
     var goal = _goal(external, location, True)
-    _published_continue(
-        road,
-        0,
-        0,
-        0.0,
-        1.0,
-        location,
-        old,
-        None,
-        old.scale,
-        goal=_PublishedGoal(goal.upper, goal.scale, goal.allow_equal),
-    )
     _continue_lane_certificate(
         road, 0, 0, 0.0, 1.0, location, actual, None, actual.scale, goal=goal
     )
-    _bits(actual.s, old.s)
-    _bits(actual.lower, old.lower)
-    _bits(actual.upper, old.upper)
-    assert_equal(actual.nodes, old.nodes)
-    assert_equal(actual.terms, old.terms)
-    assert_equal(len(actual.cells), len(old.cells))
+    assert_equal(
+        _certificate_digest(actual),
+        "413610baa2871453e13686883b1beafd6e79b616c89226522d4dc9927cb8605e",
+    )
 
 
 def test_interruption_never_resets_local_caps_or_failed_work() raises:
