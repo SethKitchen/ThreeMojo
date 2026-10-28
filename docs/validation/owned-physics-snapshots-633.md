@@ -7,7 +7,7 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 Use an owned frozen snapshot for repeated rays through the same captured state. Keep `PhysicsWorld.raycast` for live queries. The snapshot preserves exact existing narrow-phase answers and never combines stored bounds with changed world geometry.
 
-This report measures [#633](https://github.com/SethKitchen/ThreeMojo/issues/633). The source baseline is `84038a2e06b0945fb1586b712298ab9268741b81`. The benchmark imports the [#288](static-primitive-index-288.md) world and ray distribution builders. It adds owned geometry, capture lifetime, a dynamic-participant sweep control, and refit degradation probes.
+This report measures [#633](https://github.com/SethKitchen/ThreeMojo/issues/633). The source baseline is `84038a2e06b0945fb1586b712298ab9268741b81`. The benchmark imports the [#288](https://github.com/SethKitchen/ThreeMojo/blob/37ecbc599777ebfe114679c197c27302ee9f5e1b/docs/validation/static-primitive-index-288.md) world and ray distribution builders. It adds owned geometry, capture lifetime, a dynamic-participant sweep control, and refit degradation probes.
 
 ## Measurement contract
 

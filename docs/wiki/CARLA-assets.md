@@ -286,7 +286,7 @@ Only he uploads archives, changes their sharing, and approves a manifest URL.
 
 The folder holds 47 archives: 41 vehicles and 6 towns, 968,072,352 bytes in all.
 The largest is Town10HD, 204,022,674 bytes.
-[The hosting check](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/carla-asset-hosting-309.md)
+[The hosting check](https://github.com/SethKitchen/ThreeMojo/blob/37ecbc599777ebfe114679c197c27302ee9f5e1b/docs/validation/carla-asset-hosting-309.md)
 gives the size, sharing and checksum result of each archive.
 
 To publish an archive, the publisher does these steps:
