@@ -616,6 +616,33 @@ def _declarations(items):
     return json.loads(result.stdout)
 
 
+def _catalog_then_frozen(texts):
+    """Check the premise catalog, then read the frozen migration record."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps({'texts': list(texts)}, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='catalog-frozen-') as directory:
+        path = Path(directory) / 'sources.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_premises',
+             '--catalog-migration', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    if 'MIGRATION' not in frozen.__dict__ or frozen.MIGRATION is None:
+        frozen.MIGRATION = parsed['path']
+        frozen.MIGRATION_SHA256 = parsed['sha']
+
+
 def _catalog_premises(texts):
     """Read the declaration catalog, then check the premise fragments."""
     import json
@@ -682,7 +709,10 @@ def verify_premises(root, *, _operation=None):
     junction = _typed_source.historical_text(root, SOURCE_PATHS[2], _observe_text(root, SOURCE_PATHS[2],
                          (root/SOURCE_PATHS[2]).read_text(), _operation=_operation), _operation=_operation)
     texts = (line, arc, junction)
-    _catalog_premises(texts)
+    if _operation is None:
+        _catalog_then_frozen(texts)
+    else:
+        _catalog_premises(texts)
 
 
 

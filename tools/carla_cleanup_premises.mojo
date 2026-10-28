@@ -8,6 +8,7 @@
     carla_cleanup_premises DIRECTORY
     carla_cleanup_premises --declared PATH
     carla_cleanup_premises --catalog PATH
+    carla_cleanup_premises --catalog-migration PATH
 
 `DIRECTORY` contains `sources.json` with `line`, `arc`, `bounds`, `center`,
 and `outward`. `--declared` reads the declarations from the module sources
@@ -19,6 +20,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._cleanup_premises import (
+    catalog_then_frozen_migration,
     cleanup_catalog_premises,
     cleanup_declared_premises,
     prepare_cleanup_premises,
@@ -31,7 +33,8 @@ def _usage():
     print(
         (
             "usage: carla_cleanup_premises DIRECTORY | carla_cleanup_premises"
-            " --declared PATH | carla_cleanup_premises --catalog PATH"
+            " --declared PATH | carla_cleanup_premises --catalog PATH |"
+            " carla_cleanup_premises --catalog-migration PATH"
         ),
         file=stderr,
     )
@@ -45,6 +48,16 @@ def main() raises:
         Error: The command is invalid, a function cannot be read, or a premise fragment changed.
     """
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--catalog-migration":
+        try:
+            print(
+                catalog_then_frozen_migration(Path(arguments[2]).read_text()),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var declared = String("")
     var catalog = String("")
     var directory = String("")

@@ -14,6 +14,7 @@ from std.tempfile import mkdtemp
 
 from tests._python_tokens import declaration_text
 from tools._cleanup_declarations import cleanup_declarations
+from tools._migration_records import migration_records
 from tools._python_json import PyJson
 from tools.carla_cleanup_gate import cleanup_premises
 
@@ -283,3 +284,23 @@ def cleanup_catalog_premises(payload: String) raises:
     gate.set(root, "declarations", declared)
     gate.root = root
     cleanup_declared_premises(gate.dumps())
+
+
+def catalog_then_frozen_migration(payload: String) raises -> String:
+    """Check the premise catalog, then read the frozen migration record.
+
+    Args:
+        payload: JSON with `texts`, a list of module texts in source order.
+
+    Returns:
+        The frozen migration record, with `path` and `sha`.
+
+    Raises:
+        Error: A premise fragment changed, or `texts` is absent. The
+            catalog is checked before the migration record is read.
+    """
+    var doc = PyJson.parse(payload)
+    var texts = doc.subtree(doc.at(doc.root, "texts")).dumps()
+    cleanup_catalog_premises(texts)
+    var records = PyJson.parse(migration_records())
+    return records.subtree(records.at(records.root, "frozen")).dumps()
