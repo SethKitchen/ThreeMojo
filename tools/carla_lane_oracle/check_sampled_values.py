@@ -540,15 +540,39 @@ def unique_function(tree, name):
     return found[0]
 
 
-def primitive_graph(text):
+def _aliases_then_graph(text, graph, digest, message):
+    """Check the derivative aliases, then the primitive graph digest."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='aliases-graph-') as directory:
+        folder = Path(directory)
+        source = folder / 'source.mojo'
+        dump_path = folder / 'graph.txt'
+        source.write_text(text)
+        dump_path.write_text(graph)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sampled_text',
+             '--aliases-then-graph', str(source), str(dump_path), digest,
+             message],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        failure = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(failure)
+
+
+def primitive_graph(text, expected, message):
     tree = syntax_tree(text)
     found = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == _syntax_words()['primitive_class']]
     # The declaration count is a token check. The class hash below stays on
     # the Python syntax tree.
     _sampled_text('--primitive-declaration', text)
     require(len(found) == 1, _sampled_closure()['primitive_declaration'])
-    _sampled_text('--primitive-aliases', text)
-    return hashlib.sha256(dump(found[0]).encode()).hexdigest()
+    _aliases_then_graph(text, dump(found[0]), expected, message)
 
 
 
@@ -968,8 +992,9 @@ def verify(root):
         _reviewed_reference_graphs(
             reference_graphs.items(), texts, closure['reviewed'],
             closure['reference_changed'], review)
-        require(primitive_graph(texts[closure['primitive']]) == graphs['primitive'],
-                closure['primitive_message'])
+        primitive_graph(
+            texts[closure['primitive']], graphs['primitive'],
+            closure['primitive_message'])
         # Complete stored helper/interval closure and lexical qualifiers are
         # independent of the unchanged primitive-class AST hash.
         try:

@@ -22,6 +22,7 @@
     carla_sampled_text --strip-try-only PATH
     carla_sampled_text --replace-function PATH --name NAME --with PATH
     carla_sampled_text --primitive-aliases PATH
+    carla_sampled_text --aliases-then-graph SOURCE GRAPH DIGEST MESSAGE
     carla_sampled_text --primitive-declaration PATH
     carla_sampled_text --stored-half-tail PATH
     carla_sampled_text --helper-then-syntax PRIMITIVE TARGET
@@ -41,6 +42,7 @@ The decorators mode prints the lines above one function.
 The strip-try-only mode removes the reviewed reuse refusal.
 The replace-function mode substitutes one complete function.
 The primitive-aliases mode checks the two derivative aliases.
+The aliases-then-graph mode checks those aliases before the primitive graph.
 The primitive-declaration mode requires one Jet primitive.
 The stored-half-tail mode prints the source from that declaration onward.
 The caller supplies the source.
@@ -78,6 +80,7 @@ from tools._sampled_value_gate import (
     sampled_value_fields,
     sampled_value_imports,
 )
+from tools._sha256 import sha256_hex
 from tools.carla_cleanup_gate import classified_syntax_json
 
 
@@ -103,6 +106,26 @@ def helper_fields_then_syntax(
     return classified_syntax_json(target)
 
 
+def aliases_then_graph(
+    source: String, graph: String, digest: String, message: String
+) raises:
+    """Check the derivative aliases, then the primitive graph digest.
+
+    Args:
+        source: The interval module.
+        graph: The Python dump of the primitive class.
+        digest: The reviewed SHA-256 of that dump.
+        message: The failure text when the digest differs.
+
+    Raises:
+        Error: An alias changed, or the graph digest differs. The alias
+            check runs before the digest.
+    """
+    primitive_aliases(source)
+    if sha256_hex(graph.as_bytes()) != digest:
+        raise Error(message)
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -118,6 +141,7 @@ def _usage():
             " --project-reference PATH | --project-lane PATH | --decorators"
             " PATH --name NAME | --strip-try-only PATH | --replace-function"
             " PATH --name NAME --with PATH | --primitive-aliases PATH |"
+            " --aliases-then-graph SOURCE GRAPH DIGEST MESSAGE |"
             " --stored-half-tail PATH | --primitive-declaration PATH"
         ),
         file=stderr,
@@ -158,6 +182,18 @@ def main() raises:
     var index_text = String("")
     var strip_gates = False
     var arguments = argv()
+    if len(arguments) == 6 and arguments[1] == "--aliases-then-graph":
+        try:
+            aliases_then_graph(
+                Path(arguments[2]).read_text(),
+                Path(arguments[3]).read_text(),
+                arguments[4],
+                arguments[5],
+            )
+        except error:
+            print(strip_sampled_gates(String(error)), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 4 and arguments[1] == "--helper-then-syntax":
         try:
             print(

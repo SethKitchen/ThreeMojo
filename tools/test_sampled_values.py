@@ -399,6 +399,20 @@ class RestoredSyntaxCacheTests(unittest.TestCase):
         self.assertEqual(syntax, prepared)
 
 
+class AliasGraphTests(unittest.TestCase):
+    def test_a_missing_alias_fails_before_the_graph_digest(self):
+        message = (
+            'Jet primitive graph changed; renewed'
+            ' derivative-independence review required'
+        )
+        with self.assertRaises(m.CheckError) as caught:
+            m._aliases_then_graph(
+                'def f():\n    return 1\n', 'graph', '0' * 64, message)
+        self.assertIn(
+            'missing or ambiguous actual alias: _Jet', str(caught.exception))
+        self.assertNotIn('Jet primitive graph changed', str(caught.exception))
+
+
 class PlainReferenceGraphTests(unittest.TestCase):
     def test_a_graph_mismatch_precedes_a_later_syntax_error(self):
         label = 'reference module changed; renewed review required: '

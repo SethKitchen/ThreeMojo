@@ -467,6 +467,8 @@ It reuses that restored syntax when the shared bridge reads the same capture.
 
 It checks the Jet and value aliases before the primitive hash.
 
+It checks that primitive graph after those aliases in one check.
+
 It slices the stored-half declaration from its marker.
 
 It requires one Jet primitive declaration.
