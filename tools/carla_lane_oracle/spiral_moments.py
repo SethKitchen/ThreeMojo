@@ -999,11 +999,43 @@ def verify_table(data, rows):
         raise CheckError(message) from error
 
 
+def _moment_meta_from_rows(rows, root, projection, dependencies, routing, blocks):
+    """Return the report meta when the derived rows and the fields match."""
+    import ast
+    import os
+    import subprocess
+    import tempfile
+    repo = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps({
+        'rows': rows, 'root': root, 'projection': projection,
+        'dependencies': dependencies, 'routing': routing, 'blocks': blocks,
+    }, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-meta-rows-') as directory:
+        path = Path(directory) / 'meta.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(repo / 'tools' / 'tool.sh'), mojo, 'carla_moment_meta',
+             '--rows', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        derive = _cli_failures()['derive']
+        if message.startswith(derive):
+            raise CheckError(message[len(derive):])
+        key = _cli_failures()['key']
+        if message.startswith(key):
+            raise KeyError(ast.literal_eval(message[len(key):])) from None
+        raise CheckError(message) from ValueError(message)
+    return json.loads(result.stdout)
+
+
 def make_report(root, rows, pins):
-    payload = _moment_payload(rows)
     projection = pins['ideal_projection']
-    meta = ideal_projection.moment_meta(
-        payload, str(root.resolve()), projection, _dependencies(),
+    meta = _moment_meta_from_rows(
+        rows, str(root.resolve()), projection, _dependencies(),
         pins['routing'], pins['blocks'])
     blobs = [
         _typed_source.historical_bytes(root, root / _pins(), (root / _pins()).read_bytes()),

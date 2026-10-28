@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_equal, assert_raises
 
-from tools._moment_report import moment_report
+from tools._moment_report import moment_meta_from_rows, moment_report
 from tools._sha256 import sha256_hex
 
 
@@ -105,6 +105,14 @@ def test_a_changed_report_shape_is_refused() raises:
     short.append(_bytes("two"))
     with assert_raises(contains="wrong derived table shape"):
         _ = moment_report(_meta("22528"), short)
+
+
+def test_bad_rows_fail_before_the_report_meta() raises:
+    """A short row list fails before a missing meta field is checked."""
+    with assert_raises(
+        contains="spiral moment derive: wrong derived table shape"
+    ):
+        _ = moment_meta_from_rows('{"rows":[]}')
 
 
 def main() raises:

@@ -352,6 +352,8 @@ It checks the derived payload size and the three pin-file digests.
 
 It builds the report meta from the payload, the projection, and the pin digests.
 
+It builds that report meta after the moment payload in one check.
+
 It writes the moment report and the coefficient file with two-space indentation.
 
 It checks the stored array names, word counts, and output paths.

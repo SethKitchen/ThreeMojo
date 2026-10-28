@@ -12,6 +12,7 @@ returned. Each pin file is hashed as raw bytes.
 from tools._json_tools import quote_ascii
 from tools._python_json import PY_DICT, PY_LIST, PY_STR, PyJson, py_equal
 from tools._sha256 import sha256_hex
+from tools._spiral_moment_derive import moment_payload_from_rows
 
 
 comptime _COUNTS = 64
@@ -241,3 +242,35 @@ def moment_meta(payload: String) raises -> String:
     _copy_sha(doc, doc.at(doc.root, "blocks"), blocks)
     doc.set(meta, "source_block_sha256", blocks)
     return _dump(doc, meta)
+
+
+def moment_meta_from_rows(payload: String) raises -> String:
+    """Build the moment payload, then the report meta.
+
+    Args:
+        payload: JSON with `rows`, `root`, `projection`, `dependencies`,
+            `routing`, and `blocks`. `rows` is the derived row list.
+            `routing` and `blocks` keep their key order.
+
+    Returns:
+        Compact JSON for the report meta, in historical field order.
+
+    Raises:
+        Error: The rows changed, or a required field is missing. The
+            rows are checked before the meta fields. A missing field uses
+            Python's `KeyError` text.
+    """
+    var doc = PyJson.parse(payload)
+    var packed = PyJson.parse(
+        moment_payload_from_rows(doc.subtree(doc.at(doc.root, "rows")).dumps())
+    )
+    var body = doc.new_dict()
+    doc.set(body, "payload", doc.adopt(packed, packed.root))
+    doc.set(body, "root", doc.copy_node(doc.at(doc.root, "root")))
+    doc.set(body, "projection", doc.copy_node(doc.at(doc.root, "projection")))
+    doc.set(
+        body, "dependencies", doc.copy_node(doc.at(doc.root, "dependencies"))
+    )
+    doc.set(body, "routing", doc.copy_node(doc.at(doc.root, "routing")))
+    doc.set(body, "blocks", doc.copy_node(doc.at(doc.root, "blocks")))
+    return moment_meta(_dump(doc, body))
