@@ -175,8 +175,8 @@ def _gate(migration, previous=None):
         raise ValueError(message)
 
 
-def _digest_and_token(payload, digest, kind, text, token):
-    """Check the guard pin digest, then the successor token."""
+def _digest_and_token(payload, digest, text, token):
+    """Read the guard label, then check the pin digest and the token."""
     import json
     import os
     import subprocess
@@ -185,7 +185,6 @@ def _digest_and_token(payload, digest, kind, text, token):
     body = json.dumps({
         'bytes': payload.decode('utf-8'),
         'sha': digest,
-        'kind': kind,
         'text': text,
         'token': token,
     }, separators=(',', ':'))
@@ -196,7 +195,7 @@ def _digest_and_token(payload, digest, kind, text, token):
         path.write_text(body)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
-             '--digest-token', str(path)],
+             '--labeled-digest', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -555,7 +554,6 @@ def verify(root, *, _operation=None):
     _digest_and_token(
         guard_payload,
         record['guard_pins_unchanged_sha256'],
-        _frozen_labels()['guard'],
         _typed_source.historical_text(root, SOURCE_PATH, _observe_text(
             root, SOURCE_PATH, (root/SOURCE_PATH).read_text(), _operation=_operation), _operation=_operation),
         record['source_successor']['after_token_sha256'])

@@ -15,6 +15,7 @@ from tools._sha256 import sha256_hex
 from tools.carla_frozen_arc_gate import (
     frozen_arc_digest,
     frozen_digest_and_token,
+    frozen_labeled_digest,
     frozen_arc_functions,
     frozen_arc_layout,
     frozen_arc_places,
@@ -373,6 +374,27 @@ def test_a_matching_guard_digest_checks_the_successor_token() raises:
     )
     with assert_raises(contains="complete frozen ARC successor changed"):
         frozen_digest_and_token(body)
+
+
+def test_the_guard_label_selects_the_pin_digest() raises:
+    """The stored guard label names a changed pin before the token check."""
+    with assert_raises(contains="guard pin lineage changed"):
+        frozen_labeled_digest(
+            '{"bytes":"nope","sha":"00","text":"def f():\\n    pass\\n",'
+            + '"token":"00"}'
+        )
+
+
+def test_a_matching_labeled_digest_checks_the_token() raises:
+    """A matching guard pin continues to the successor token."""
+    var payload = String("nope")
+    var body = (
+        '{"bytes":"nope","sha":"'
+        + sha256_hex(payload.as_bytes())
+        + '","text":"def f():\\n    pass\\n","token":"00"}'
+    )
+    with assert_raises(contains="complete frozen ARC successor changed"):
+        frozen_labeled_digest(body)
 
 
 def main() raises:

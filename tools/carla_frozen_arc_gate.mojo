@@ -8,6 +8,7 @@
     carla_frozen_arc_gate --migration PATH [--previous PATH]
     carla_frozen_arc_gate --bytes PATH --sha HEX --kind after|before|guard
     carla_frozen_arc_gate --digest-token PATH
+    carla_frozen_arc_gate --labeled-digest PATH
     carla_frozen_arc_gate --source PATH --token HEX
     carla_frozen_arc_gate --prior HEX --cleanup HEX
     carla_frozen_arc_gate --places DIR
@@ -34,6 +35,7 @@ from tests._python_tokens import (
     token_sha256,
 )
 from tools._carla_assets import dumps_indent
+from tools._frozen_pin_labels import frozen_pin_labels
 from tools._python_json import (
     MISSING,
     PY_DICT,
@@ -189,6 +191,31 @@ def frozen_digest_and_token(payload: String) raises:
         doc.text(doc.at(doc.root, "text")),
         doc.text(doc.at(doc.root, "token")),
     )
+
+
+def frozen_labeled_digest(payload: String) raises:
+    """Read the guard label, then check the pin digest and the token.
+
+    Args:
+        payload: JSON with `bytes`, `sha`, `text`, and `token`.
+
+    Raises:
+        Error: The pin digest changed, or the successor token changed.
+            The guard label is read before those checks.
+    """
+    var labels = PyJson.parse(frozen_pin_labels())
+    var doc = PyJson.parse(payload)
+    var gate = PyJson()
+    var body = gate.new_dict()
+    gate.set(body, "bytes", gate.new_str(doc.text(doc.at(doc.root, "bytes"))))
+    gate.set(body, "sha", gate.new_str(doc.text(doc.at(doc.root, "sha"))))
+    gate.set(
+        body, "kind", gate.new_str(labels.text(labels.at(labels.root, "guard")))
+    )
+    gate.set(body, "text", gate.new_str(doc.text(doc.at(doc.root, "text"))))
+    gate.set(body, "token", gate.new_str(doc.text(doc.at(doc.root, "token"))))
+    gate.root = body
+    frozen_digest_and_token(gate.dumps())
 
 
 def frozen_arc_prior(actual: String, expected: String) raises:
@@ -529,6 +556,7 @@ def _usage():
         (
             "usage: carla_frozen_arc_gate --migration PATH [--previous PATH]"
             " | --bytes PATH --sha HEX --kind after|before|guard"
+            " | --digest-token PATH | --labeled-digest PATH"
             " | --source PATH --token HEX | --prior HEX --cleanup HEX"
             " | --places DIR | --functions DIR"
             " | --layout PATH --stored PATH | --routing PATH"
@@ -565,6 +593,13 @@ def main() raises:
     if len(arguments) == 3 and arguments[1] == "--digest-token":
         try:
             frozen_digest_and_token(Path(arguments[2]).read_text())
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--labeled-digest":
+        try:
+            frozen_labeled_digest(Path(arguments[2]).read_text())
         except error:
             print(String(error), file=stderr)
             exit(1)
