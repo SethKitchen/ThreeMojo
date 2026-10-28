@@ -620,11 +620,33 @@ def verify_semantics(root, *, _operation=None):
     _search_after_declaration(previous, plan['search'])
     # Retain the sampled-reference gate after raw-inverse diagnostics.
     if __package__:
-        from .ideal_projection import verify_try_only_reference
+        from .ideal_projection import project_try_only_reference
     else:
-        from ideal_projection import verify_try_only_reference
-    verify_try_only_reference(_typed_source.historical_text(root, root / 'extensions/carla/curve_bounds.mojo', source._observe_text(root, (root / 'extensions/carla/curve_bounds.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_bounds.mojo').read_text(), _operation=_operation), _operation=_operation), root, _operation=_operation)
-    return _optional_runtime_result()
+        from ideal_projection import project_try_only_reference
+    return _try_only_then_result(project_try_only_reference(_typed_source.historical_text(root, root / 'extensions/carla/curve_bounds.mojo', source._observe_text(root, (root / 'extensions/carla/curve_bounds.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_bounds.mojo').read_text(), _operation=_operation), _operation=_operation), root, _operation=_operation))
+
+
+def _try_only_then_result(text):
+    """Check the try-only refusal, then return the optional-runtime result."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='try-only-result-') as directory:
+        path = Path(directory) / 'source.mojo'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_optional_runtime_result', '--after-refusal', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
 
 
 def _optional_runtime_result():

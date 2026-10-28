@@ -12,6 +12,7 @@ from tools._optional_runtime_result import (
     _dump,
     optional_runtime_result,
     optional_runtime_result_from_modules,
+    try_only_then_result,
 )
 from tools._python_json import PyJson
 
@@ -73,6 +74,28 @@ def test_json_text_keeps_true_false_and_null() raises:
     """True, false, null, and a number use Python's JSON spellings."""
     var doc = PyJson.parse('{"ok":true,"no":false,"z":null,"n":1}')
     assert_equal(_dump(doc, doc.root), '{"ok":true,"no":false,"z":null,"n":1}')
+
+
+def test_the_refusal_is_checked_before_the_result() raises:
+    """A changed refusal fails before the optional-runtime result is built."""
+    with assert_raises(contains="try-only parameter changed"):
+        _ = try_only_then_result("def _lane_jet_model_proof():\n    return 1\n")
+    var source = String(
+        "def _lane_jet_model_proof[capture: Bool](\n"
+        + "    ideal_translation: Bool = False,\n"
+        + "    require_reuse: Bool = False,\n"
+        + ") -> Int:\n"
+        + "    if reused:\n"
+        + "        point = reused.value()\n"
+        + "    elif require_reuse:\n"
+        + "        return _unknown_point()\n"
+        + "    else:\n"
+        + "        point = 1\n"
+        + "    return point\n"
+    )
+    var doc = PyJson.parse(try_only_then_result(source))
+    assert_equal(doc.key(doc.root, 0), "status")
+    assert_equal(doc.text(doc.at(doc.root, "status")), "PASS")
 
 
 def main() raises:

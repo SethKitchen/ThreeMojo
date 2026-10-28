@@ -9,6 +9,7 @@ The status and the scope sentences are fixed. The new module names are
 copied from the tuple that was just checked.
 """
 
+from tests._python_tokens import try_only_refusal
 from tools._json_tools import quote_ascii
 from tools._optional_runtime_modules import optional_runtime_modules
 from tools._python_json import (
@@ -127,3 +128,20 @@ def optional_runtime_result_from_modules() raises -> String:
     """
     var modules = optional_runtime_modules()
     return optional_runtime_result('{"new_modules":' + modules + "}")
+
+
+def try_only_then_result(source: String) raises -> String:
+    """Check the try-only refusal, then build the optional-runtime result.
+
+    Args:
+        source: The admitted reference module.
+
+    Returns:
+        The result JSON. The module names are the reviewed list.
+
+    Raises:
+        Error: The refusal changed, or the module list cannot be read.
+            The refusal is checked before the result is built.
+    """
+    try_only_refusal(source)
+    return optional_runtime_result_from_modules()
