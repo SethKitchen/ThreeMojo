@@ -108,6 +108,8 @@ It keeps the rounded-line contract prefix.
 
 It keeps the frozen-arc source and the polynomial and road paths.
 
+It checks the guard pin digest before the frozen ARC successor token in one check.
+
 It keeps the frozen runtime-pin labels and the public successor message.
 
 It keeps the reviewed cleanup record path.

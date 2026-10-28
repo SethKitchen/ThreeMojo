@@ -14,6 +14,7 @@ from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
 from tools.carla_frozen_arc_gate import (
     frozen_arc_digest,
+    frozen_digest_and_token,
     frozen_arc_functions,
     frozen_arc_layout,
     frozen_arc_places,
@@ -351,6 +352,27 @@ def test_a_missing_producer_declaration_is_refused_before_the_layout() raises:
         contains="missing or ambiguous actual guard declaration: absent"
     ):
         frozen_producer_review(payload)
+
+
+def test_a_guard_digest_fails_before_the_successor_token() raises:
+    """A changed guard pin is reported before the successor token."""
+    with assert_raises(contains="guard pin lineage changed"):
+        frozen_digest_and_token(
+            '{"bytes":"nope","sha":"00","kind":"guard","text":"def f():\\n   '
+            ' pass\\n","token":"00"}'
+        )
+
+
+def test_a_matching_guard_digest_checks_the_successor_token() raises:
+    """The successor token is checked after the guard pin digest matches."""
+    var payload = String("nope")
+    var body = (
+        '{"bytes":"nope","sha":"'
+        + sha256_hex(payload.as_bytes())
+        + '","kind":"guard","text":"def f():\\n    pass\\n","token":"00"}'
+    )
+    with assert_raises(contains="complete frozen ARC successor changed"):
+        frozen_digest_and_token(body)
 
 
 def main() raises:

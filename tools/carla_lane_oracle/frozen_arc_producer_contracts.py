@@ -175,6 +175,36 @@ def _gate(migration, previous=None):
         raise ValueError(message)
 
 
+def _digest_and_token(payload, digest, kind, text, token):
+    """Check the guard pin digest, then the successor token."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    body = json.dumps({
+        'bytes': payload.decode('utf-8'),
+        'sha': digest,
+        'kind': kind,
+        'text': text,
+        'token': token,
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='frozen-digest-token-') as directory:
+        path = Path(directory) / 'digest.json'
+        path.write_text(body)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
+             '--digest-token', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def _gate_token(text, expected):
     import os
     import subprocess
@@ -521,10 +551,13 @@ def verify(root, *, _operation=None):
         if not _relabel_runtime_pin(error, _operation is not None):
             raise
         raise ValueError(_frozen_labels()['public']) from error
-    _gate_digest(guard_payload, record['guard_pins_unchanged_sha256'], _frozen_labels()['guard'])
     _ensure_paths()
-    _gate_token(_typed_source.historical_text(root, SOURCE_PATH, _observe_text(
-        root, SOURCE_PATH, (root/SOURCE_PATH).read_text(), _operation=_operation), _operation=_operation),
+    _digest_and_token(
+        guard_payload,
+        record['guard_pins_unchanged_sha256'],
+        _frozen_labels()['guard'],
+        _typed_source.historical_text(root, SOURCE_PATH, _observe_text(
+            root, SOURCE_PATH, (root/SOURCE_PATH).read_text(), _operation=_operation), _operation=_operation),
         record['source_successor']['after_token_sha256'])
     if __package__:
         from . import reviewed_cleanup_contracts as cleanup

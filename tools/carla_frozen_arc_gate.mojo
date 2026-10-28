@@ -7,6 +7,7 @@
 
     carla_frozen_arc_gate --migration PATH [--previous PATH]
     carla_frozen_arc_gate --bytes PATH --sha HEX --kind after|before|guard
+    carla_frozen_arc_gate --digest-token PATH
     carla_frozen_arc_gate --source PATH --token HEX
     carla_frozen_arc_gate --prior HEX --cleanup HEX
     carla_frozen_arc_gate --places DIR
@@ -167,6 +168,27 @@ def frozen_arc_token(text: String, expected: String) raises:
             "frozen ARC producer contract: complete frozen ARC successor"
             " changed"
         )
+
+
+def frozen_digest_and_token(payload: String) raises:
+    """Check the guard pin digest, then the successor token.
+
+    Args:
+        payload: JSON with `bytes`, `sha`, `kind`, `text`, and `token`.
+
+    Raises:
+        Error: The pin digest changed, or the successor token changed.
+    """
+    var doc = PyJson.parse(payload)
+    frozen_arc_digest(
+        doc.text(doc.at(doc.root, "bytes")).as_bytes(),
+        doc.text(doc.at(doc.root, "sha")),
+        doc.text(doc.at(doc.root, "kind")),
+    )
+    frozen_arc_token(
+        doc.text(doc.at(doc.root, "text")),
+        doc.text(doc.at(doc.root, "token")),
+    )
 
 
 def frozen_arc_prior(actual: String, expected: String) raises:
@@ -540,6 +562,13 @@ def main() raises:
     var predecessor = String("")
     var review = String("")
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--digest-token":
+        try:
+            frozen_digest_and_token(Path(arguments[2]).read_text())
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
