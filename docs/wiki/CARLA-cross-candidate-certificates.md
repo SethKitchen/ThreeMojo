@@ -449,6 +449,8 @@ It projects the lane value dispatcher.
 
 It keeps each copied helper's decorators.
 
+It prepares every copied helper before the Python comparison in one check.
+
 It removes the try-only refusal before the reference graph hash.
 
 It restores the historical envelope helper before that hash.

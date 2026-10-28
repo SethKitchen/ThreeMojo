@@ -402,6 +402,49 @@ def _syntax_prepare(text):
         return None
 
 
+def _classified_sources(texts):
+    """Classify every copied helper before the Python comparison."""
+    if not texts:
+        return []
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='classified-sources-') as directory:
+        path = Path(directory) / 'sources.json'
+        path.write_text(json.dumps(list(texts), separators=(',', ':')))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--classified-syntax-all', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    items = json.loads(result.stdout)
+    if not isinstance(items, list) or len(items) != len(texts):
+        raise CheckError('sampled projection step changed')
+    prepared = []
+    for item in items:
+        if (
+            isinstance(item, dict)
+            and 'error' in item
+            and 'source' not in item
+            and 'fallback' not in item
+        ):
+            prepared.append(item['error'])
+        elif not isinstance(item, dict) or item.get('fallback'):
+            prepared.append(None)
+        else:
+            try:
+                prepared.append((item['source'], item['generics'], item['words']))
+            except (KeyError, TypeError):
+                prepared.append(None)
+    return prepared
+
+
 def syntax_tree(text, prepared=None, _prepare=True):
     # Keywords are removed lexically, never from string literals. Native
     # structs map to Python classes only for AST inspection; their generic
@@ -911,10 +954,15 @@ def verify(root):
         except ValueError as error:
             raise CheckError(str(error)) from error
         expected = _project_sampled(bounds, trig, texts, target)
-        for name, source in expected.items():
+        prepared_sources = _classified_sources(
+            [source for _name, source in expected.items()])
+        for (name, source), prepared in zip(expected.items(), prepared_sources):
             # Decorators stay on the copied text. The syntax tree is the
             # independent comparison with the sampled module.
-            wanted = unique_function(syntax_tree(source), name)
+            if isinstance(prepared, str):
+                raise CheckError(prepared)
+            wanted = unique_function(
+                syntax_tree(source, prepared, _prepare=False), name)
             actual = unique_function(target_tree, name)
             require(dump(wanted) == dump(actual),
                     closure['diverged'] + name)

@@ -43,6 +43,7 @@
     carla_cleanup_gate --replace-first DIR
     carla_cleanup_gate --syntax PATH
     carla_cleanup_gate --classified-syntax PATH
+    carla_cleanup_gate --classified-syntax-all PATH
     carla_cleanup_gate --slice PATH --name NAME
     carla_cleanup_gate --fragment DIR
     carla_cleanup_gate --normalize PATH
@@ -114,6 +115,7 @@ from tools._migration_records import migration_records
 from tools.carla_frozen_arc_gate import frozen_protected_bundle
 from tools.carla_invariant_gate import invariant_input_bundle
 from tools._record_paths import record_paths
+from tools._json_tools import quote_ascii
 from tools._python_json import (
     MISSING,
     PY_BOOL,
@@ -830,6 +832,43 @@ def classified_syntax_json(source: String) raises -> String:
         return '{"fallback":true}'
 
 
+def classified_syntax_all(payload: String) raises -> String:
+    """Classify every source, including sources after an earlier failure.
+
+    Args:
+        payload: A JSON list of source texts.
+
+    Returns:
+        A JSON list. Each item is that source's classified syntax, or
+        `{"error":...}` when that source fails.
+
+    Raises:
+        Error: The payload is not a list of strings. Each source is
+            classified in order, and a failure does not stop the list.
+    """
+    var doc = PyJson.parse(payload)
+    if doc.kind(doc.root) != PY_LIST:
+        raise Error("sampled syntax list changed")
+    var count = doc.length(doc.root)
+    var out = String("[")
+    var index = 0
+    while index < count:
+        if index > 0:
+            out += ","
+        var item = doc.item(doc.root, index)
+        if doc.kind(item) != PY_STR:
+            raise Error("sampled syntax list changed")
+        var text = doc.text(item)
+        try:
+            var syntax = classified_syntax_json(text)
+            out += syntax
+        except error:
+            out += '{"error":' + quote_ascii(String(error)) + "}"
+        index += 1
+    out += "]"
+    return out
+
+
 def cleanup_record_paths(migration: Span[UInt8, _]) raises -> String:
     """Require the cleanup record, then return the companion paths.
 
@@ -962,6 +1001,16 @@ def main() raises:
         try:
             print(
                 cleanup_record_paths(Path(arguments[2]).read_bytes()),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--classified-syntax-all":
+        try:
+            print(
+                classified_syntax_all(Path(arguments[2]).read_text()),
                 end="",
             )
         except error:
