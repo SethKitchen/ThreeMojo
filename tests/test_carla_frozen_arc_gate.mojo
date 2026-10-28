@@ -11,6 +11,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._python_tokens import declaration_routing
 from tools._python_json import PyJson
+from tools._record_paths import record_paths
 from tools._sha256 import sha256_hex
 from tools.carla_frozen_arc_gate import (
     frozen_arc_digest,
@@ -21,6 +22,7 @@ from tools.carla_frozen_arc_gate import (
     frozen_arc_places,
     frozen_arc_prior,
     frozen_arc_record,
+    frozen_record_paths,
     frozen_arc_token,
     frozen_producer_review,
     frozen_runtime_predecessor,
@@ -41,6 +43,18 @@ def test_a_changed_record_is_refused() raises:
         contains="frozen ARC producer contract: unreviewed migration record"
     ):
         frozen_arc_record(String("").as_bytes(), String("").as_bytes(), False)
+
+
+def test_the_companion_paths_follow_the_frozen_record() raises:
+    """A changed record fails before the companion paths are returned."""
+    with assert_raises(
+        contains="frozen ARC producer contract: unreviewed migration record"
+    ):
+        _ = frozen_record_paths(String("").as_bytes())
+    var raw = Path(
+        "tools/carla_lane_oracle/frozen-arc-producer-migration.json"
+    ).read_bytes()
+    assert_equal(frozen_record_paths(raw), record_paths())
 
 
 def test_a_changed_guard_pin_is_refused() raises:

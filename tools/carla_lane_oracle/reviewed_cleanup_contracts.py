@@ -372,12 +372,40 @@ def _record_paths():
     return _RECORD_PATHS
 
 
+def _paths_after_record(payload):
+    """Require the cleanup record, then return the companion paths."""
+    global _RECORD_PATHS
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='cleanup-record-paths-') as directory:
+        record = Path(directory) / 'migration.json'
+        record.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--record-paths', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    if _RECORD_PATHS is None:
+        _RECORD_PATHS = parsed
+    return parsed
+
+
 def read_record(root):
     _ensure_migration()
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
-    _gate(payload)
+    paths = _paths_after_record(payload)
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
-    previous = root/_record_paths()['winner_sign']
+    previous = root/paths['winner_sign']
     _gate(payload, _typed_source.historical_bytes(root, previous, previous.read_bytes()))
     return record
 

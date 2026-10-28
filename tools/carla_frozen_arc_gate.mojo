@@ -36,6 +36,7 @@ from tests._python_tokens import (
 )
 from tools._carla_assets import dumps_indent
 from tools._frozen_pin_labels import frozen_pin_labels
+from tools._record_paths import record_paths
 from tools._python_json import (
     MISSING,
     PY_DICT,
@@ -550,6 +551,23 @@ def frozen_arc_paths() raises -> String:
     return doc.dumps()
 
 
+def frozen_record_paths(migration: Span[UInt8, _]) raises -> String:
+    """Require the frozen record, then return the companion paths.
+
+    Args:
+        migration: The successor record bytes.
+
+    Returns:
+        The companion migration record paths.
+
+    Raises:
+        Error: The migration record changed. The record is checked before
+            the companion paths.
+    """
+    frozen_arc_record(migration, String("").as_bytes(), False)
+    return record_paths()
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -600,6 +618,16 @@ def main() raises:
     if len(arguments) == 3 and arguments[1] == "--labeled-digest":
         try:
             frozen_labeled_digest(Path(arguments[2]).read_text())
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--record-paths":
+        try:
+            print(
+                frozen_record_paths(Path(arguments[2]).read_bytes()),
+                end="",
+            )
         except error:
             print(String(error), file=stderr)
             exit(1)

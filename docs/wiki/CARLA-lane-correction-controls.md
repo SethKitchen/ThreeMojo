@@ -110,6 +110,8 @@ It keeps the rounded-line contract prefix.
 
 `tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record, the producer functions, and the arc layout.
 
+It reads the companion record paths after that frozen record check in one check.
+
 It keeps the frozen-arc source and the polynomial and road paths.
 
 It checks the guard pin digest before the frozen ARC successor token in one check.
@@ -209,6 +211,8 @@ It checks those complete tokens after the current choices in one check.
 It keeps the dispatch contract prefix.
 
 `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the trig and geometry stored words, and the successor tokens.
+
+It reads the companion record paths after that cleanup record check in one check.
 
 It admits trig and geometry word changes only for their reviewed token.
 
