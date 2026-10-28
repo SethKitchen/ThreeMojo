@@ -11,6 +11,7 @@
     carla_singleton_gate --graphs DIR
     carla_singleton_gate --source-graphs PATH
     carla_singleton_gate --import-scopes PATH
+    carla_singleton_gate --scopes-then-minima PATH
     carla_singleton_gate --declaration-graphs PATH
     carla_singleton_gate --restored-graphs PATH
     carla_singleton_gate --selector PATH --wanted PATH
@@ -28,6 +29,7 @@ from tests._python_tokens import (
     significant_match_flags,
     token_sha256,
 )
+from tools._lane_predecessor import selected_lane_minima
 from tools._lane_declarations import (
     checked_declaration_graphs,
     restored_declaration_graphs,
@@ -204,6 +206,34 @@ def checked_import_scopes(payload: String) raises -> String:
     return '{"restore":false}'
 
 
+def scopes_then_minima(payload: String) raises -> String:
+    """Check the import scopes, then the lane minima when they match.
+
+    Args:
+        payload: JSON with `scopes` and `minima`. `scopes` has `texts`,
+            `expected`, and `labels`. `minima` is the lane-minimum list.
+
+    Returns:
+        The scope result when `restore` is true. Otherwise `restore` is
+        false and `minima` is the flag list.
+
+    Raises:
+        Error: A scope cannot be read, or a minimum field is absent. The
+            scopes are checked before the minima. A restore skips the
+            minima.
+    """
+    var doc = PyJson.parse(payload)
+    var scopes = doc.at(doc.root, "scopes")
+    var texts = doc.at(scopes, "texts")
+    if doc.length(texts) > 0:
+        var checked = checked_import_scopes(doc.subtree(scopes).dumps())
+        var parsed = PyJson.parse(checked)
+        if parsed.flag(parsed.at(parsed.root, "restore")):
+            return checked
+    var minima = doc.subtree(doc.at(doc.root, "minima")).dumps()
+    return '{"restore":false,"minima":' + selected_lane_minima(minima) + "}"
+
+
 def singleton_checked_declarations(payload: String) raises -> String:
     """Read every declaration, then check every graph when each selected one matches.
 
@@ -306,6 +336,13 @@ def main() raises:
                 Path(arguments[2]).read_text(),
                 String(unsafe_from_utf8=Path(arguments[3]).read_bytes()),
             )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--scopes-then-minima":
+        try:
+            print(scopes_then_minima(Path(arguments[2]).read_text()), end="")
         except error:
             print(String(error), file=stderr)
             exit(1)

@@ -386,6 +386,46 @@ def _checked_import_scopes(items, lane_index, label_prefix):
     return json.loads(result.stdout)
 
 
+def _scopes_then_minima(items, lane_index, label_prefix, minima):
+    """Check the import scopes, then the lane minima when they match."""
+    if not items and not minima:
+        return {'restore': False, 'minima': []}
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = {
+        'scopes': {
+            'texts': [text for _path, text, _expected in items],
+            'expected': [expected for _path, _text, expected in items],
+            'labels': [label_prefix + path for path, _text, _expected in items],
+        },
+        'minima': [
+            {'path': path, 'name': name, 'owner': list(owner)}
+            for path, name, owner in minima
+        ],
+    }
+    if lane_index is not None:
+        payload['scopes']['lane'] = lane_index
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='scopes-minima-') as directory:
+        path = Path(directory) / 'scopes.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_singleton_gate',
+             '--scopes-then-minima', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _import_scope(text):
     """Return the consumer prefix before the first definition."""
     return _import_scopes([text])[0]
@@ -584,8 +624,11 @@ def verify_premises(root):
         if path == labels['lane']:
             lane_index = len(scope_items)
         scope_items.append((path, text, expected))
-    checked = _checked_import_scopes(
-        scope_items, lane_index, labels['import_scope'])
+    minimum_items = []
+    for item in record['declarations']:
+        minimum_items.append((item, tuple(item['owner'])))
+    checked = _scopes_then_minima(
+        scope_items, lane_index, labels['import_scope'], minimum_items)
     if checked['restore']:
         prefixes = checked['prefixes']
         path, text, expected = scope_items[lane_index]
@@ -596,11 +639,11 @@ def verify_premises(root):
             prepared.append((prefixes[index], expected,
                              labels['import_scope'] + path))
         _significant_graphs(prepared)
-    minimum_items = []
-    for item in record['declarations']:
-        minimum_items.append((item, tuple(item['owner'])))
-    selected_flags = _selected_minima([
-        (item['path'], item['name'], owner) for item, owner in minimum_items])
+        selected_flags = _selected_minima([
+            (item['path'], item['name'], owner)
+            for item, owner in minimum_items])
+    else:
+        selected_flags = [flag == 'true' for flag in checked['minima']]
     loaded = []
     for (item, _owner), selected in zip(minimum_items, selected_flags):
         text = _lane_text(root) if selected else _typed_source.historical_text(root, root/item['path'], (root/item['path']).read_text())
