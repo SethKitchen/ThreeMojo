@@ -17,6 +17,7 @@ from std.sys import argv, exit, stderr
 from tests._python_tokens import token_sha256
 from tools._migration_records import migration_records
 from tools._python_json import PY_INT, PyJson
+from tools._record_paths import record_paths
 from tools._sha256 import sha256_hex
 
 
@@ -142,18 +143,20 @@ def speed_parser_paths() raises -> String:
 
 
 def speed_paths_with_migration() raises -> String:
-    """Read the speed paths, then the migration record.
+    """Read the speed paths, the migration record, then the companion paths.
 
     Returns:
-        JSON with `paths` and `migration`. `paths` is first.
+        JSON with `paths`, `migration`, and `records`, in that order.
 
     Raises:
-        Error: The path list or the migration record cannot be read. The
-            paths are read before the migration record.
+        Error: A path list or the migration record cannot be read. The
+            speed paths are read before the migration record. The companion
+            paths are read after that record.
     """
     var paths = speed_parser_paths()
     var records = PyJson.parse(migration_records())
     var speed = records.at(records.root, "speed")
+    var companions = record_paths()
     return (
         '{"paths":'
         + paths
@@ -161,7 +164,9 @@ def speed_paths_with_migration() raises -> String:
         + records.text(records.at(speed, "path"))
         + '","sha":"'
         + records.text(records.at(speed, "sha"))
-        + '"}}'
+        + '"},"records":'
+        + companions
+        + "}"
     )
 
 

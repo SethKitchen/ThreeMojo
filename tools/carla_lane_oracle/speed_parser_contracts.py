@@ -224,9 +224,14 @@ def _paths_with_migration():
 
 
 def _ensure_inputs():
-    """Bind the speed paths and the migration path before a source read."""
-    global _PATHS, MIGRATION, MIGRATION_SHA256, MODULE, TESTS
-    if _PATHS is not None and 'MIGRATION' in globals() and MIGRATION is not None:
+    """Bind the speed paths, the migration path, and the companion paths."""
+    global _PATHS, _RECORD_PATHS, MIGRATION, MIGRATION_SHA256, MODULE, TESTS
+    if (
+        _PATHS is not None
+        and _RECORD_PATHS is not None
+        and 'MIGRATION' in globals()
+        and MIGRATION is not None
+    ):
         MODULE = _PATHS['module']
         TESTS = tuple(_PATHS['tests'])
         return
@@ -238,6 +243,8 @@ def _ensure_inputs():
     if not ('MIGRATION' in globals() and MIGRATION is not None):
         MIGRATION = data['migration']['path']
         MIGRATION_SHA256 = data['migration']['sha']
+    if _RECORD_PATHS is None:
+        _RECORD_PATHS = data['records']
 
 
 def verify(root, *, _operation=None):

@@ -9,6 +9,7 @@ from std.testing import TestSuite, assert_equal
 
 from tools._migration_records import migration_records
 from tools._python_json import PyJson
+from tools._record_paths import record_paths
 from tools.carla_speed_gate import (
     speed_parser_paths,
     speed_paths_with_migration,
@@ -52,6 +53,12 @@ def test_the_paths_are_read_before_the_migration_record() raises:
     assert_equal(
         doc.text(doc.at(migration, "sha")),
         records.text(records.at(speed, "sha")),
+    )
+    var companions = PyJson.parse(record_paths())
+    assert_equal(doc.key(doc.root, 2), "records")
+    assert_equal(
+        doc.text(doc.at(doc.at(doc.root, "records"), "accepted")),
+        companions.text(companions.at(companions.root, "accepted")),
     )
 
 
