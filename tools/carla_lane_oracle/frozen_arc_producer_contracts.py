@@ -297,11 +297,15 @@ def _predecessor_request(payload, record, prior_digest):
     }, separators=(',', ':'))
 
 
+_ACCEPTED_PREDECESSOR = None
+
+
 def _runtime_predecessor(payload, record, prior_digest, *, _then_paths=False):
     """Read the frozen pin labels, then return the indented predecessor.
 
     When `_then_paths` is set, the frozen-arc paths are read after that
-    predecessor and kept when the path cache is empty.
+    predecessor and kept when the path cache is empty. The same pins are
+    not rebuilt. The digest check still runs before that reuse.
     """
     import ast
     import os
@@ -310,6 +314,9 @@ def _runtime_predecessor(payload, record, prior_digest, *, _then_paths=False):
     from pathlib import Path
     global _PATHS
     request = _predecessor_request(payload, record, prior_digest)
+    cached = _ACCEPTED_PREDECESSOR
+    if cached is not None and cached[0] == payload and cached[1] == request:
+        return cached[2]
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     mode = '--predecessor-paths' if _then_paths else '--predecessor-labels'
@@ -346,12 +353,17 @@ def _runtime_predecessor(payload, record, prior_digest, *, _then_paths=False):
 
 
 def _predecessor_then_declarations(payload, record, prior_digest, guard, guard_sha):
-    """Read the pin labels, rebuild the predecessor, then return the catalog."""
+    """Read the pin labels, rebuild the predecessor, then return the catalog.
+
+    The frozen-arc paths are read after that catalog. The same predecessor
+    is not rebuilt. A failed placement is not kept.
+    """
     import ast
     import os
     import subprocess
     import tempfile
     from pathlib import Path
+    global _ACCEPTED_PREDECESSOR, _PATHS
     request = _predecessor_request(payload, record, prior_digest)
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
@@ -363,7 +375,7 @@ def _predecessor_then_declarations(payload, record, prior_digest, guard, guard_s
         (folder / 'sha').write_text(guard_sha)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
-             '--predecessor-declarations', str(folder)],
+             '--predecessor-declarations-paths', str(folder)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -375,7 +387,12 @@ def _predecessor_then_declarations(payload, record, prior_digest, guard, guard_s
             except (SyntaxError, ValueError):
                 pass
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _ACCEPTED_PREDECESSOR = (
+        payload, request, parsed['predecessor'].encode('utf-8'))
+    if _PATHS is None:
+        _PATHS = parsed['paths']
+    return parsed['catalog']
 
 
 def _producer_review(pairs, arc, stored):

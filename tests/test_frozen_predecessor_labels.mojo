@@ -8,9 +8,12 @@
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._cleanup_declarations import cleanup_declarations
+from tools._json_tools import quote_ascii
 from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
 from tools.carla_frozen_arc_gate import (
+    frozen_arc_paths,
+    frozen_declarations_then_paths,
     frozen_predecessor_then_declarations,
     frozen_predecessor_then_paths,
     frozen_predecessor_with_labels,
@@ -206,6 +209,44 @@ def test_a_missing_placement_fails_before_the_paths() raises:
             '{"after":"'
             + sha256_hex(_pin().as_bytes())
             + '","before":"00","transitions":[]}',
+        )
+
+
+def test_the_catalog_keeps_the_paths_after_the_predecessor() raises:
+    """The paths follow the catalog after the predecessor is accepted."""
+    var restored = _restored()
+    var guard = "pin"
+    assert_equal(
+        frozen_declarations_then_paths(
+            _pin().as_bytes(),
+            _request(sha256_hex(restored.as_bytes())),
+            guard.as_bytes(),
+            sha256_hex(guard.as_bytes()),
+        ),
+        '{"predecessor":'
+        + quote_ascii(restored)
+        + ',"catalog":'
+        + cleanup_declarations()
+        + ',"paths":'
+        + frozen_arc_paths()
+        + "}",
+    )
+
+
+def test_a_changed_guard_fails_before_those_paths() raises:
+    """A changed guard digest fails before the frozen-arc paths are read."""
+    var restored = _restored()
+    with assert_raises(
+        contains=(
+            "reviewed cleanup source contract: unreviewed dependency pin"
+            " successor"
+        )
+    ):
+        _ = frozen_declarations_then_paths(
+            _pin().as_bytes(),
+            _request(sha256_hex(restored.as_bytes())),
+            "nope".as_bytes(),
+            "00",
         )
 
 

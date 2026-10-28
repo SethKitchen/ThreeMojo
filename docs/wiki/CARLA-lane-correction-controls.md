@@ -368,6 +368,13 @@ It checks the guard pin digest before the declaration catalog in one check.
 
 It reads that declaration catalog after the runtime pin predecessor in one check.
 
+It reads the frozen-arc paths after that declaration catalog in one check.
+It reuses that predecessor when the same pins are placed again.
+The paths stay in that result.
+The runtime digest is checked before that reuse.
+A changed pin is placed again.
+A failed placement is not kept.
+
 It keeps the winner-sign record and the runtime pin path.
 
 The singleton, frozen ARC, dispatch, raw-cut, and optional-runtime contracts use that declaration text.

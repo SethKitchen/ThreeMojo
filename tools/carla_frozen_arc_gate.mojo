@@ -20,6 +20,7 @@
     carla_frozen_arc_gate --predecessor-labels DIR
     carla_frozen_arc_gate --predecessor-paths DIR
     carla_frozen_arc_gate --predecessor-declarations DIR
+    carla_frozen_arc_gate --predecessor-declarations-paths DIR
     carla_frozen_arc_gate --review PATH
     carla_frozen_arc_gate --review-labels PATH
 
@@ -32,6 +33,8 @@ that predecessor. The request omits `groups`.
 `--predecessor-paths` reads the frozen-arc paths after that predecessor.
 `--predecessor-declarations` also holds `guard` and `sha`. It reads the
 declaration catalog after that predecessor.
+`--predecessor-declarations-paths` reads the frozen-arc paths after that
+catalog.
 """
 
 from std.pathlib import Path
@@ -515,6 +518,41 @@ def frozen_predecessor_then_declarations(
     return cleanup_declarations_after_digest(guard, expected)
 
 
+def frozen_declarations_then_paths(
+    payload: Span[UInt8, _],
+    request: String,
+    guard: Span[UInt8, _],
+    expected: String,
+) raises -> String:
+    """Rebuild the predecessor, then return the catalog and the paths.
+
+    Args:
+        payload: The active runtime pin bytes.
+        request: JSON with `after`, `before`, and `transitions`.
+        guard: The reconstructed guard-pin bytes.
+        expected: The required guard-pin SHA-256 hex digest.
+
+    Returns:
+        JSON with `predecessor`, `catalog`, and `paths`. The predecessor
+        is checked before the catalog. The paths are read after the catalog.
+
+    Raises:
+        Error: The predecessor changed, or the guard digest changed. The
+            predecessor is checked before the catalog is returned.
+    """
+    var predecessor = frozen_predecessor_with_labels(payload, request)
+    var catalog = cleanup_declarations_after_digest(guard, expected)
+    return (
+        '{"predecessor":'
+        + quote_ascii(predecessor)
+        + ',"catalog":'
+        + catalog
+        + ',"paths":'
+        + frozen_arc_paths()
+        + "}"
+    )
+
+
 def frozen_arc_functions(directory: String) raises:
     """Require each producer function token list to match its record.
 
@@ -714,6 +752,7 @@ def _usage():
             " | --layout PATH --stored PATH | --routing PATH"
             " | --predecessor DIR | --predecessor-labels DIR"
             " | --predecessor-paths DIR | --predecessor-declarations DIR"
+            " | --predecessor-declarations-paths DIR"
             " | --review PATH"
         ),
         file=stderr,
@@ -806,6 +845,25 @@ def main() raises:
                 frozen_predecessor_then_paths(
                     Path(directory + "/payload").read_bytes(),
                     Path(directory + "/request.json").read_text(),
+                ),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if (
+        len(arguments) == 3
+        and arguments[1] == "--predecessor-declarations-paths"
+    ):
+        try:
+            var directory = arguments[2]
+            print(
+                frozen_declarations_then_paths(
+                    Path(directory + "/payload").read_bytes(),
+                    Path(directory + "/request.json").read_text(),
+                    Path(directory + "/guard").read_bytes(),
+                    Path(directory + "/sha").read_text(),
                 ),
                 end="",
             )

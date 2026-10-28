@@ -1115,6 +1115,61 @@ class SelectionGroupedTests(unittest.TestCase):
                 selection._predecessor_then_grouped({'path': 'other.mojo'}, 'nope')
 
 
+class FrozenPredecessorReuseTests(unittest.TestCase):
+    def test_a_placed_predecessor_is_not_rebuilt(self):
+        import hashlib
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import frozen_arc_producer_contracts as frozen
+        saved = (frozen._ACCEPTED_PREDECESSOR, frozen._PATHS)
+        payload = b'{}'
+        record = {
+            'runtime_pins_after_sha256': hashlib.sha256(payload).hexdigest(),
+            'runtime_token_successors': [],
+        }
+        prior = '00'
+        try:
+            frozen._ACCEPTED_PREDECESSOR = None
+            frozen._PATHS = None
+            request = frozen._predecessor_request(payload, record, prior)
+            frozen._ACCEPTED_PREDECESSOR = (payload, request, b'pred\n')
+            frozen._PATHS = {'source': 'extensions/carla/curve_frozen_arc.mojo'}
+            ok = Mock(returncode=0, stdout='', stderr='')
+            with patch('subprocess.run', return_value=ok) as run:
+                self.assertEqual(
+                    frozen._runtime_predecessor(
+                        payload, record, prior, _then_paths=True),
+                    b'pred\n')
+                self.assertEqual(run.call_count, 0)
+            other = b'{"a":1}'
+            other_record = {
+                'runtime_pins_after_sha256': hashlib.sha256(other).hexdigest(),
+                'runtime_token_successors': [],
+            }
+            placed = Mock(
+                returncode=0,
+                stdout='{"predecessor":"next","paths":{"source":"s"}}',
+                stderr='')
+            with patch('subprocess.run', return_value=placed) as run:
+                self.assertEqual(
+                    frozen._runtime_predecessor(
+                        other, other_record, prior, _then_paths=True),
+                    b'next')
+                self.assertEqual(run.call_count, 1)
+            with patch('subprocess.run', return_value=ok) as run:
+                with self.assertRaisesRegex(
+                        ValueError, 'unreviewed runtime pin successor'):
+                    frozen._runtime_predecessor(
+                        b'{', record, prior, _then_paths=True)
+                self.assertEqual(run.call_count, 0)
+                self.assertEqual(
+                    frozen._runtime_predecessor(
+                        payload, record, prior, _then_paths=True),
+                    b'pred\n')
+                self.assertEqual(run.call_count, 0)
+        finally:
+            frozen._ACCEPTED_PREDECESSOR, frozen._PATHS = saved
+
+
 class PriorDigestCacheTests(unittest.TestCase):
     def test_the_same_prior_digest_pair_skips_the_second_gate(self):
         from unittest.mock import Mock, patch
