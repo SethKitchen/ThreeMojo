@@ -10,6 +10,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._python_tokens import declaration_routing
+from tools._sha256 import sha256_hex
 from tools.carla_frozen_arc_gate import (
     frozen_arc_digest,
     frozen_arc_functions,
@@ -18,6 +19,7 @@ from tools.carla_frozen_arc_gate import (
     frozen_arc_prior,
     frozen_arc_record,
     frozen_arc_token,
+    frozen_runtime_predecessor,
 )
 
 
@@ -106,6 +108,148 @@ def test_a_changed_arc_layout_is_refused() raises:
         )
     ):
         frozen_arc_layout("[]", "[[]]")
+
+
+def _pin() -> String:
+    """Return one active runtime pin."""
+    return (
+        "{\n"
+        '  "groups": {\n'
+        '    "eligibility": {\n'
+        '      "extensions/carla/curve_frozen_arc.mojo": "new"\n'
+        "    },\n"
+        '    "optional_runtime": {\n'
+        '      "extensions/carla/curve_frozen_arc.mojo": "new"\n'
+        "    },\n"
+        '    "translation": {\n'
+        '      "extensions/carla/curve_frozen_arc.mojo": "new"\n'
+        "    }\n"
+        "  }\n"
+        "}\n"
+    )
+
+
+def _restored() -> String:
+    """Return the historical pin for `_pin`."""
+    return (
+        "{\n"
+        '  "groups": {\n'
+        '    "eligibility": {\n'
+        '      "extensions/carla/curve_frozen_arc.mojo": "old"\n'
+        "    },\n"
+        '    "optional_runtime": {\n'
+        '      "extensions/carla/curve_frozen_arc.mojo": "old"\n'
+        "    },\n"
+        '    "translation": {\n'
+        '      "extensions/carla/curve_frozen_arc.mojo": "old"\n'
+        "    }\n"
+        "  }\n"
+        "}\n"
+    )
+
+
+def _change(group: String, token: String) -> String:
+    """Return one runtime successor transition.
+
+    Args:
+        group: The pin group.
+        token: The active token.
+
+    Returns:
+        One JSON object.
+    """
+    return (
+        '{"group":"'
+        + group
+        + '","path":"extensions/carla/curve_frozen_arc.mojo","after":"'
+        + token
+        + '","before":"old"}'
+    )
+
+
+def _request(token: String, before: String) -> String:
+    """Return one predecessor request.
+
+    Args:
+        token: The active token stored in the pin.
+        before: The required predecessor digest.
+
+    Returns:
+        The request JSON.
+    """
+    return (
+        '{"after":"'
+        + sha256_hex(_pin().as_bytes())
+        + '","before":"'
+        + before
+        + '","groups":"groups","transitions":['
+        + _change("eligibility", token)
+        + ","
+        + _change("optional_runtime", token)
+        + ","
+        + _change("translation", token)
+        + "]}"
+    )
+
+
+def test_a_restored_runtime_pin_matches_its_predecessor() raises:
+    """The historical tokens replace the active tokens in one check."""
+    var restored = _restored()
+    assert_equal(
+        frozen_runtime_predecessor(
+            _pin().as_bytes(),
+            _request("new", sha256_hex(restored.as_bytes())),
+        ),
+        restored,
+    )
+
+
+def test_a_changed_runtime_pin_digest_is_refused_before_parse() raises:
+    """A wrong active digest fails before the pin text is read."""
+    with assert_raises(
+        contains=(
+            "frozen ARC producer contract: unreviewed runtime pin successor"
+        )
+    ):
+        _ = frozen_runtime_predecessor("{".as_bytes(), _request("new", "00"))
+
+
+def test_a_runtime_pin_with_the_wrong_placement_is_refused() raises:
+    """A transition outside the reviewed set fails closed."""
+    var request = (
+        '{"after":"'
+        + sha256_hex(_pin().as_bytes())
+        + '","before":"00","groups":"groups","transitions":[]}'
+    )
+    with assert_raises(
+        contains=(
+            "frozen ARC producer contract: wrong runtime successor placements"
+        )
+    ):
+        _ = frozen_runtime_predecessor(_pin().as_bytes(), request)
+
+
+def test_a_changed_runtime_successor_token_is_refused() raises:
+    """A placement whose token changed fails closed."""
+    with assert_raises(
+        contains=(
+            "frozen ARC producer contract: runtime successor token mismatch"
+        )
+    ):
+        _ = frozen_runtime_predecessor(
+            _pin().as_bytes(), _request("other", "00")
+        )
+
+
+def test_a_changed_runtime_predecessor_digest_is_refused() raises:
+    """A restored pin whose digest changed fails closed."""
+    with assert_raises(
+        contains=(
+            "frozen ARC producer contract: runtime predecessor"
+            " reconstruction failed"
+        )
+    ):
+        _ = frozen_runtime_predecessor(_pin().as_bytes(), _request("new", "00"))
 
 
 def main() raises:

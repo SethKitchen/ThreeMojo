@@ -104,6 +104,8 @@ It writes each frozen runtime pin back to its historical value.
 
 It writes that restored pin with two-space indentation.
 
+It rebuilds one frozen runtime pin predecessor in one check.
+
 It relabels one runtime pin failure when the cause is the reviewed contract error.
 
 `tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the pin digests, the ordered pin pair, and the pin placements.

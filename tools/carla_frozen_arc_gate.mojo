@@ -13,17 +13,29 @@
     carla_frozen_arc_gate --functions DIR
     carla_frozen_arc_gate --layout PATH --stored PATH
     carla_frozen_arc_gate --routing PATH
+    carla_frozen_arc_gate --predecessor DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
 An absent previous file checks only the migration record.
+`DIR` holds `payload` and `request.json`. The program prints the
+predecessor.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import declaration_routing, token_sha256
-from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PY_STR, PyJson
+from tools._carla_assets import dumps_indent
+from tools._python_json import (
+    MISSING,
+    PY_DICT,
+    PY_INT,
+    PY_LIST,
+    PY_STR,
+    PyJson,
+    loads,
+)
 from tools._sha256 import sha256_hex
 
 
@@ -217,6 +229,25 @@ def _places_match(doc: PyJson) raises -> Bool:
     return seen.byte_length() == 3
 
 
+def _require_places(doc: PyJson) raises:
+    """Require the runtime successor placements and their token values.
+
+    Args:
+        doc: The placement list.
+
+    Raises:
+        Error: The placement set changed, or a token value changed.
+    """
+    if not _places_match(doc):
+        _fail("wrong runtime successor placements")
+    var index = 0
+    while index < 3:
+        var row = doc.item(doc.root, index)
+        if doc.text(doc.at(row, "actual")) != doc.text(doc.at(row, "expected")):
+            _fail("runtime successor token mismatch")
+        index += 1
+
+
 def frozen_arc_places(directory: String) raises:
     """Require the runtime successor placements and their token values.
 
@@ -227,14 +258,107 @@ def frozen_arc_places(directory: String) raises:
         Error: The placement set changed, or a token value changed.
     """
     var doc = PyJson.parse(Path(directory + "/labels.json").read_text())
-    if not _places_match(doc):
-        _fail("wrong runtime successor placements")
+    _require_places(doc)
+
+
+def _placement_rows(
+    pins: PyJson, request: PyJson, transitions: Int, groups_key: String
+) raises -> PyJson:
+    """Return one placement row for each runtime successor.
+
+    Args:
+        pins: The active runtime pin document.
+        request: The predecessor request.
+        transitions: The transition list in `request`.
+        groups_key: The pin object that holds the groups.
+
+    Returns:
+        A list of `group`, `path`, `actual`, and `expected`.
+
+    Raises:
+        Error: A transition or a pin path cannot be read.
+    """
+    var rows = PyJson()
+    var root = rows.new_list()
+    var count = request.length(transitions)
     var index = 0
-    while index < 3:
-        var row = doc.item(doc.root, index)
-        if doc.text(doc.at(row, "actual")) != doc.text(doc.at(row, "expected")):
-            _fail("runtime successor token mismatch")
+    while index < count:
+        var change = request.item(transitions, index)
+        var group = request.text(request.at(change, "group"))
+        var path = request.text(request.at(change, "path"))
+        var expected = request.text(request.at(change, "after"))
+        var actual = pins.text(
+            pins.at(pins.at(pins.at(pins.root, groups_key), group), path)
+        )
+        var row = rows.new_dict()
+        rows.set(row, "group", rows.new_str(group))
+        rows.set(row, "path", rows.new_str(path))
+        rows.set(row, "actual", rows.new_str(actual))
+        rows.set(row, "expected", rows.new_str(expected))
+        rows.append(root, row)
         index += 1
+    rows.root = root
+    return rows^
+
+
+def _write_historical_values(
+    mut pins: PyJson, request: PyJson, transitions: Int, groups_key: String
+) raises:
+    """Write each transition's historical token into the pins.
+
+    Args:
+        pins: The active runtime pin document.
+        request: The predecessor request.
+        transitions: The transition list in `request`.
+        groups_key: The pin object that holds the groups.
+
+    Raises:
+        Error: A transition or a pin path cannot be read.
+    """
+    var count = request.length(transitions)
+    var index = 0
+    while index < count:
+        var change = request.item(transitions, index)
+        var group = request.text(request.at(change, "group"))
+        var path = request.text(request.at(change, "path"))
+        var parent = pins.at(pins.root, groups_key)
+        parent = pins.at(parent, group)
+        pins.set(
+            parent, path, pins.adopt(request, request.at(change, "before"))
+        )
+        index += 1
+
+
+def frozen_runtime_predecessor(
+    payload: Span[UInt8, _], request: String
+) raises -> String:
+    """Rebuild one frozen runtime pin predecessor.
+
+    Args:
+        payload: The active runtime pin bytes.
+        request: JSON with `after`, `before`, `groups`, and `transitions`.
+
+    Returns:
+        The predecessor as `json.dumps` writes it with `indent=2`, plus a newline.
+
+    Raises:
+        Error: The digest, the placements, or a pin transition changed.
+    """
+    var spec = PyJson.parse(request)
+    var after = spec.text(spec.at(spec.root, "after"))
+    if sha256_hex(payload) != after:
+        _fail("unreviewed runtime pin successor")
+    var pins = loads(payload)
+    var groups_key = spec.text(spec.at(spec.root, "groups"))
+    var transitions = spec.at(spec.root, "transitions")
+    var rows = _placement_rows(pins, spec, transitions, groups_key)
+    _require_places(rows)
+    _write_historical_values(pins, spec, transitions, groups_key)
+    var predecessor = dumps_indent(pins, pins.root, 2) + "\n"
+    var before = spec.text(spec.at(spec.root, "before"))
+    if sha256_hex(predecessor.as_bytes()) != before:
+        _fail("runtime predecessor reconstruction failed")
+    return predecessor
 
 
 def frozen_arc_functions(directory: String) raises:
@@ -321,6 +445,7 @@ def _usage():
             " | --source PATH --token HEX | --prior HEX --cleanup HEX"
             " | --places DIR | --functions DIR"
             " | --layout PATH --stored PATH | --routing PATH"
+            " | --predecessor DIR"
         ),
         file=stderr,
     )
@@ -328,7 +453,7 @@ def _usage():
 
 
 def main() raises:
-    """Check the frozen ARC record and print nothing on success.
+    """Check the frozen ARC record, or print one restored runtime pin.
 
     Raises:
         Error: The command is invalid.
@@ -347,6 +472,7 @@ def main() raises:
     var layout = String("")
     var stored = String("")
     var routing = String("")
+    var predecessor = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -366,6 +492,7 @@ def main() raises:
             or word == "--layout"
             or word == "--stored"
             or word == "--routing"
+            or word == "--predecessor"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -396,8 +523,10 @@ def main() raises:
                 layout = value
             elif word == "--stored":
                 stored = value
-            else:
+            elif word == "--routing":
                 routing = value
+            else:
+                predecessor = value
             index += 2
             continue
         _usage()
@@ -418,6 +547,8 @@ def main() raises:
         modes += 1
     if routing.byte_length() > 0:
         modes += 1
+    if predecessor.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if (layout.byte_length() == 0) != (stored.byte_length() == 0):
@@ -434,6 +565,15 @@ def main() raises:
     if previous.byte_length() > 0 and migration.byte_length() == 0:
         _usage()
     try:
+        if predecessor.byte_length() > 0:
+            print(
+                frozen_runtime_predecessor(
+                    Path(predecessor + "/payload").read_bytes(),
+                    Path(predecessor + "/request.json").read_text(),
+                ),
+                end="",
+            )
+            return
         if routing.byte_length() > 0:
             print(declaration_routing(Path(routing).read_text()), end="")
             return

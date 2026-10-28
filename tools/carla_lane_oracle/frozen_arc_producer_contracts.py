@@ -234,34 +234,48 @@ def _gate_prior(actual, expected):
         raise ValueError(message)
 
 
-def _gate_places(transitions, pins):
-    import json
+def _runtime_predecessor(payload, record, prior_digest):
+    """Return the indented runtime pin predecessor."""
+    import ast
+    import hashlib
     import os
     import subprocess
     import tempfile
     from pathlib import Path
+    if hashlib.sha256(payload).hexdigest() != record['runtime_pins_after_sha256']:
+        raise ValueError(
+            'frozen ARC producer contract: unreviewed runtime pin successor')
+    # A repeated key is refused before placement. The digest check stays first.
+    json.loads(payload, object_pairs_hook=source.unique_keys)
+    labels = _frozen_labels()
+    request = json.dumps({
+        'after': record['runtime_pins_after_sha256'],
+        'before': prior_digest,
+        'groups': labels['groups'],
+        'transitions': record['runtime_token_successors'],
+    }, separators=(',', ':'))
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    rows = []
-    for item in transitions:
-        rows.append({
-            'group': item['group'],
-            'path': item['path'],
-            'actual': pins['groups'][item['group']][item['path']],
-            'expected': item['after'],
-        })
-    with tempfile.TemporaryDirectory(prefix='frozen-places-') as directory:
+    with tempfile.TemporaryDirectory(prefix='frozen-predecessor-') as directory:
         folder = Path(directory)
-        (folder / 'labels.json').write_text(json.dumps(rows))
+        (folder / 'payload').write_bytes(payload)
+        (folder / 'request.json').write_text(request)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
-             '--places', str(folder)],
-            capture_output=True, text=True)
+             '--predecessor', str(folder)],
+            capture_output=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
+                 if line.strip() and b'Crashpad' not in line]
+        message = (lines[-1] if lines else result.stdout).decode(
+            'utf-8', 'replace').strip()
+        if message.startswith('KeyError: '):
+            try:
+                raise KeyError(ast.literal_eval(message[len('KeyError: '):]))
+            except (SyntaxError, ValueError):
+                pass
         raise ValueError(message)
+    return result.stdout
 
 
 def _significant_documents(texts):
@@ -404,24 +418,7 @@ def verify_runtime_pin_successor(root, prior_digest):
     else:
         import coverage_invariant_contracts as invariant
     payload = invariant.predecessor_pins(root, source.PINS)
-    labels = _frozen_labels()
-    _gate_digest(payload, record['runtime_pins_after_sha256'], labels['after'])
-    pins = json.loads(payload, object_pairs_hook=source.unique_keys)
-    transitions = record['runtime_token_successors']
-    _gate_places(transitions, pins)
-    if __package__:
-        from . import ideal_projection
-    else:
-        import ideal_projection
-    edited = [{
-        'pointer': [labels['groups'], item['group'], item['path']],
-        'before': item['before'],
-    } for item in transitions]
-    text = ideal_projection.apply_pin_transitions(pins, edited)
-    pins.clear()
-    pins.update(json.loads(text))
-    predecessor = invariant._indent_json(pins)
-    _gate_digest(predecessor, prior_digest, labels['before'])
+    _runtime_predecessor(payload, record, prior_digest)
 
 
 def _declaration(text, name, owner):
@@ -621,29 +618,7 @@ def verify(root, *, _operation=None):
 
 
 def _runtime_pin_predecessor(payload, record, prior_digest):
-    labels = _frozen_labels()
-    _gate_digest(payload, record['runtime_pins_after_sha256'], labels['after'])
-    pins = json.loads(payload, object_pairs_hook=source.unique_keys)
-    transitions = record['runtime_token_successors']
-    _gate_places(transitions, pins)
-    if __package__:
-        from . import ideal_projection
-    else:
-        import ideal_projection
-    edited = [{
-        'pointer': [labels['groups'], item['group'], item['path']],
-        'before': item['before'],
-    } for item in transitions]
-    text = ideal_projection.apply_pin_transitions(pins, edited)
-    pins.clear()
-    pins.update(json.loads(text))
-    if __package__:
-        from . import coverage_invariant_contracts as invariant
-    else:
-        import coverage_invariant_contracts as invariant
-    predecessor = invariant._indent_json(pins)
-    _gate_digest(predecessor, prior_digest, labels['before'])
-    return predecessor
+    return _runtime_predecessor(payload, record, prior_digest)
 
 
 def _verified_pin_pair(root, prior_digest, *, _operation=None):
