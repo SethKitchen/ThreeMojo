@@ -186,3 +186,162 @@ def semantic_step(payload: String) raises -> String:
         index += 1
     out.root = result
     return out.dumps()
+
+
+def _item_has_key(doc: PyJson, items: Int, key: String) raises -> Bool:
+    """Return whether one step binds `key`.
+
+    Args:
+        doc: The steps document.
+        items: The step's item list.
+        key: The declaration key.
+
+    Returns:
+        True when an item uses `key`.
+
+    Raises:
+        Error: An item has no `key`.
+    """
+    var count = doc.length(items)
+    var index = 0
+    while index < count:
+        if doc.text(doc.at(doc.item(items, index), "key")) == key:
+            return True
+        index += 1
+    return False
+
+
+def semantic_steps(payload: String) raises -> String:
+    """Bind each group and check its edges, in order.
+
+    Args:
+        payload: JSON with `prefix` and `steps`. Each step has `group`,
+            `items`, `bind_labels`, `checks`, and `edges`.
+
+    Returns:
+        An empty JSON object. The check raises when a group fails.
+
+    Raises:
+        Error: A group fails. Earlier groups are checked first.
+    """
+    var doc = PyJson.parse(payload)
+    var steps = doc.at(doc.root, "steps")
+    var prefix = doc.text(doc.at(doc.root, "prefix"))
+    var memory = PyJson()
+    var memory_root = memory.new_dict()
+    memory.root = memory_root
+    var count = doc.length(steps)
+    var index = 0
+    while index < count:
+        var step = doc.item(steps, index)
+        var items = doc.at(step, "items")
+        var step_doc = PyJson()
+        var step_root = step_doc.new_dict()
+        step_doc.set(
+            step_root,
+            "group",
+            step_doc.new_str(doc.text(doc.at(step, "group"))),
+        )
+        step_doc.set(step_root, "prefix", step_doc.new_str(prefix))
+        var copied_items = step_doc.new_list()
+        var item_count = doc.length(items)
+        var item_index = 0
+        while item_index < item_count:
+            var item = doc.item(items, item_index)
+            var row = step_doc.new_dict()
+            step_doc.set(
+                row, "key", step_doc.new_str(doc.text(doc.at(item, "key")))
+            )
+            step_doc.set(
+                row, "name", step_doc.new_str(doc.text(doc.at(item, "name")))
+            )
+            step_doc.set(
+                row,
+                "source",
+                step_doc.new_str(doc.text(doc.at(item, "source"))),
+            )
+            step_doc.append(copied_items, row)
+            item_index += 1
+        step_doc.set(step_root, "items", copied_items)
+        var labels = doc.at(step, "bind_labels")
+        var copied_labels = step_doc.new_list()
+        var label_count = doc.length(labels)
+        var label_index = 0
+        while label_index < label_count:
+            var label = doc.item(labels, label_index)
+            var row = step_doc.new_dict()
+            step_doc.set(
+                row, "key", step_doc.new_str(doc.text(doc.at(label, "key")))
+            )
+            step_doc.set(
+                row, "label", step_doc.new_str(doc.text(doc.at(label, "label")))
+            )
+            step_doc.append(copied_labels, row)
+            label_index += 1
+        step_doc.set(step_root, "bind_labels", copied_labels)
+        var checks = doc.at(step, "checks")
+        var copied_checks = step_doc.new_list()
+        var check_count = doc.length(checks)
+        var check_index = 0
+        while check_index < check_count:
+            var check = doc.item(checks, check_index)
+            var row = step_doc.new_dict()
+            step_doc.set(
+                row, "key", step_doc.new_str(doc.text(doc.at(check, "key")))
+            )
+            step_doc.set(
+                row, "label", step_doc.new_str(doc.text(doc.at(check, "label")))
+            )
+            step_doc.append(copied_checks, row)
+            check_index += 1
+        step_doc.set(step_root, "checks", copied_checks)
+        var edges = doc.at(step, "edges")
+        var copied_edges = step_doc.new_list()
+        var edge_count = doc.length(edges)
+        var edge_index = 0
+        var prior = step_doc.new_dict()
+        while edge_index < edge_count:
+            var key = doc.text(doc.item(edges, edge_index))
+            step_doc.append(copied_edges, step_doc.new_str(key))
+            if not _item_has_key(doc, items, key):
+                var remembered = memory.get(memory_root, key)
+                if remembered != MISSING:
+                    var row = step_doc.new_dict()
+                    step_doc.set(
+                        row,
+                        "name",
+                        step_doc.new_str(
+                            memory.text(memory.at(remembered, "name"))
+                        ),
+                    )
+                    step_doc.set(
+                        row,
+                        "source",
+                        step_doc.new_str(
+                            memory.text(memory.at(remembered, "source"))
+                        ),
+                    )
+                    step_doc.set(prior, key, row)
+            edge_index += 1
+        step_doc.set(step_root, "edges", copied_edges)
+        step_doc.set(step_root, "prior", prior)
+        step_doc.root = step_root
+        var declared_text = semantic_step(step_doc.dumps())
+        var declared = PyJson.parse(declared_text)
+        item_index = 0
+        while item_index < item_count:
+            var item = doc.item(items, item_index)
+            var key = doc.text(doc.at(item, "key"))
+            var row = memory.new_dict()
+            memory.set(
+                row, "name", memory.new_str(doc.text(doc.at(item, "name")))
+            )
+            memory.set(
+                row,
+                "source",
+                memory.new_str(declared.text(declared.at(declared.root, key))),
+            )
+            memory.set(memory_root, key, row)
+            item_index += 1
+        index += 1
+    return "{}"

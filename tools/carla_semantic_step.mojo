@@ -7,13 +7,15 @@
 
     carla_semantic_step PATH
 
-PATH is a JSON step. The command prints the new declaration texts.
+PATH is one step or several steps. One step prints its declarations.
+Several steps print an empty object after every group matches.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._semantic_declarations import semantic_step
+from tools._python_json import MISSING, PyJson
+from tools._semantic_declarations import semantic_step, semantic_steps
 
 
 def _usage():
@@ -32,7 +34,12 @@ def main() raises:
     if len(arguments) != 2:
         _usage()
     try:
-        print(semantic_step(Path(arguments[1]).read_text()), end="")
+        var text = Path(arguments[1]).read_text()
+        var doc = PyJson.parse(text)
+        if doc.get(doc.root, "steps") == MISSING:
+            print(semantic_step(text), end="")
+        else:
+            print(semantic_steps(text), end="")
     except error:
         print(String(error), file=stderr)
         exit(1)

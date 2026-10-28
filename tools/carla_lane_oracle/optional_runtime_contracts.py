@@ -548,30 +548,23 @@ def _semantic_plan():
 
 def _run_semantic_steps(root, steps, operation):
     """Bind each declaration, then check that group's edges."""
-    nodes = {}
+    prepared = []
     for step in steps:
         loaded = []
         for item in step['bind']:
             module = item['module']
             text = _typed_source.historical_text(root, root / ('extensions/carla/' + module + '.mojo'), source._observe_text(root, (root / ('extensions/carla/' + module + '.mojo')).relative_to(root).as_posix(), (root / ('extensions/carla/' + module + '.mojo')).read_text(), _operation=operation), _operation=operation)
             loaded.append((item, text))
-        fresh = {item['key'] for item, _text in loaded}
-        prior = {}
-        for key in step['edges']:
-            if key not in fresh and key in nodes:
-                node = nodes[key]
-                prior[key] = {
-                    'name': node._runtime_name,
-                    'source': node._runtime_source,
-                }
-        declared = _semantic_step({
+        prepared.append((step, loaded))
+    _semantic_step({
+        'prefix': _runtime_contract()['prefix'],
+        'steps': [{
             'group': step['group'],
             'items': [{
                 'key': item['key'],
                 'name': item['name'],
                 'source': text,
             } for item, text in loaded],
-            'prior': prior,
             'bind_labels': [{
                 'key': item['key'],
                 'label': item['label'] if 'label' in item else item['name'],
@@ -581,10 +574,8 @@ def _run_semantic_steps(root, steps, operation):
                 'label': item['label'],
             } for item in step['check']] if 'check' in step else [],
             'edges': list(step['edges']),
-            'prefix': _runtime_contract()['prefix'],
-        })
-        for item, _text in loaded:
-            nodes[item['key']] = _RuntimeFunction(item['name'], declared[item['key']])
+        } for step, loaded in prepared],
+    })
 
 
 def verify_semantics(root, *, _operation=None):

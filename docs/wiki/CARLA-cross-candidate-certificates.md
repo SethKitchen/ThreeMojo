@@ -224,6 +224,8 @@ It binds every semantic declaration in one group together.
 
 It checks that group's edges in the same call.
 
+It checks every optional-runtime group in one call.
+
 It checks the followup room, the recheck room, and the node fee.
 
 Mojo skips hidden and non-production paths, then keeps a file whose text contains a watched name.
