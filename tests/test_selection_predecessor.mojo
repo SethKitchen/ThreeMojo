@@ -9,6 +9,9 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._python_tokens import token_sha256
 from tools._selection_predecessor import selection_predecessor
+from tools.carla_selection_predecessor import (
+    selection_predecessor_then_grouped,
+)
 
 
 def test_a_matching_function_is_restored() raises:
@@ -26,6 +29,20 @@ def test_a_matching_function_is_restored() raises:
         + '"}'
     )
     assert_equal(selection_predecessor(payload), before)
+
+
+def test_an_unlisted_module_fails_before_the_grouped_table() raises:
+    """The producer guard fails before the grouped table reads the geometry."""
+    with assert_raises(contains="unlisted"):
+        _ = selection_predecessor_then_grouped(
+            '{"path":"other.mojo","names":["extensions/carla/curve_roundoff.mojo"],'
+            + '"record_names":["extensions/carla/curve_roundoff.mojo"],'
+            + '"message":"unlisted","body_message":"body changed","name":"f",'
+            + '"text":"def f():\\n    return 1\\n","after":"def f():\\n   '
+            ' return 1\\n",'
+            + '"before":"def f():\\n    return 2\\n","token":"00"}',
+            "nope",
+        )
 
 
 def test_an_unlisted_selection_module_is_refused() raises:

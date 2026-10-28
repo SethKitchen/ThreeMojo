@@ -1096,5 +1096,24 @@ class LaneTokenPredecessorTests(unittest.TestCase):
                 lane._tokens_then_predecessors(pairs, declarations, items)
 
 
+class SelectionGroupedTests(unittest.TestCase):
+    def test_the_grouped_table_follows_the_restored_predecessor(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import selection_finiteness_contracts as selection
+        ok = Mock(returncode=0, stdout='{"status":"PASS"}', stderr='')
+        with patch('subprocess.run', return_value=ok) as run:
+            record = selection._predecessor_then_grouped(
+                {'path': 'extensions/carla/curve_roundoff.mojo'}, 'geometry')
+        self.assertEqual(record['status'], 'PASS')
+        self.assertEqual(run.call_count, 1)
+        command = ' '.join(str(part) for part in run.call_args[0][0])
+        self.assertIn('--then-grouped', command)
+        self.assertNotIn('carla_grouped_gate', command)
+        failed = Mock(returncode=1, stdout='', stderr='unlisted\n')
+        with patch('subprocess.run', return_value=failed):
+            with self.assertRaisesRegex(ValueError, 'unlisted'):
+                selection._predecessor_then_grouped({'path': 'other.mojo'}, 'nope')
+
+
 if __name__ == '__main__':
     unittest.main()

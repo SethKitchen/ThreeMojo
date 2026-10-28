@@ -723,6 +723,10 @@ It reads the declaration line span before restoring that function.
 
 It rebuilds that selection predecessor in one check.
 
+It checks the grouped table after that restored predecessor in one check.
+
+A predecessor failure still fails before the grouped table is accepted.
+
 It chooses the grouped roundoff envelope name from the module path.
 
 It chooses that envelope name while rebuilding the selection predecessor.

@@ -230,6 +230,33 @@ def _selection_predecessor(payload):
     return result.stdout
 
 
+def _predecessor_then_grouped(payload, geometry):
+    """Restore one predecessor, then check the grouped table."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='selection-grouped-') as directory:
+        folder = Path(directory)
+        (folder / 'predecessor.json').write_text(text)
+        (folder / 'geometry.mojo').write_text(geometry)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_selection_predecessor', '--then-grouped',
+             str(folder / 'predecessor.json'), str(folder / 'geometry.mojo')],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _declaration_bounds(text, name, owner):
     import json
     import os
@@ -323,7 +350,7 @@ def _selection_labels():
     return _SELECTION_LABELS
 
 
-def predecessor_text(root, path, *, _operation=None):
+def predecessor_text(root, path, *, _operation=None, _then_grouped=None):
     """Verify both actual producers before reconstructing one legacy module."""
 # #333 explicit historical provenance views; current inputs remain operation-owned.
     import json
@@ -339,7 +366,7 @@ def predecessor_text(root, path, *, _operation=None):
     record=json.loads(payload,object_pairs_hook=source_contracts.unique_keys)
     item=record['modules'][path]
     text=_producer_text(root,path, _operation=_operation)
-    return _selection_predecessor({
+    request = {
         'path': path,
         'names': list(_expected()),
         'record_names': list(record['modules']),
@@ -349,4 +376,7 @@ def predecessor_text(root, path, *, _operation=None):
         'after': item['after_complete_function'],
         'before': item['before_complete_function'],
         'token': item['before_token_sha256'],
-    })
+    }
+    if _then_grouped is None:
+        return _selection_predecessor(request)
+    return _predecessor_then_grouped(request, _then_grouped)

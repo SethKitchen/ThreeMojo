@@ -166,6 +166,6 @@ def verify(root, *, _operation=None, _then_lane_paths=False):
             from . import selection_finiteness_contracts as selection
         else:
             import selection_finiteness_contracts as selection
-        text = selection.predecessor_text(root, MODULE, _operation=_operation)
-        return verify_text(text, geometry)
+        return selection.predecessor_text(
+            root, MODULE, _then_grouped=geometry, _operation=_operation)
     return checked['record']
