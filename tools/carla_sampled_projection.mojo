@@ -10,7 +10,7 @@
 
 PATH is JSON with `bounds` and `trig` source texts. The command prints
 the projected helpers and the constant and lane statement dumps.
-`--with-recipe` also prints the projection steps.
+`--with-recipe` also prints the copy plan and the projection steps.
 """
 
 from std.pathlib import Path
