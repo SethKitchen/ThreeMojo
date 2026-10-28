@@ -104,6 +104,9 @@ comptime CAUSTIC_LOD_BIAS = Float32(1.0)
 # it. A GPU has no libm, so the shader reads the stored bits.
 comptime _TAN_HALF_FOV = bitcast[DType.float32](UInt32(0x3F1FF770))
 
+# The pixels of a row that the water's row scan reads at once.
+comptime _SCAN = 32
+
 
 @fieldwise_init
 struct CameraLook(ImplicitlyCopyable):
@@ -388,24 +391,55 @@ def _water_rows(shown: List[Bool], width: Int, height: Int) -> Tuple[Int, Int]:
     var first = height
     var past = 0
     for y in range(height):  # pragma: no branch
-        var row = y * width
-        for x in range(width):  # pragma: no branch
-            if shown[row + x]:
-                first = min(first, y)
-                past = y + 1
-                break
+        if _row_shows(shown, y * width, width):
+            first = min(first, y)
+            past = y + 1
     if past == 0:
         return (0, 0)
     return (first, past)
 
 
+def _row_shows(shown: List[Bool], start: Int, width: Int) -> Bool:
+    """Return True if a pixel of the row that starts at `start` shows water.
+
+    The row is read as bytes, `_SCAN` pixels at a time, and its tail one
+    pixel at a time."""
+    var bytes = shown.unsafe_ptr().unsafe_bitcast[UInt8]()
+    var x = 0
+    while x + _SCAN <= width:
+        if bytes.unsafe_load[width=_SCAN](start + x).ne(0).reduce_or():
+            return True
+        x += _SCAN
+    while x < width:
+        if shown[start + x]:
+            return True
+        x += 1
+    return False
+
+
+def _grid_band(
+    rows: Tuple[Int, Int], height: Int, step: Int
+) -> Tuple[Int, Int]:
+    """Return the rows of the grid samples that the water rows `rows` are
+    mixed from: from the sample row at or above the first water row to the
+    sample row below the last, as `_grid_corners` finds them."""
+    var top = (rows[0] // step) * step
+    var bottom = min(((rows[1] - 1) // step) * step + step, height - 1)
+    return (top, bottom + 1)
+
+
 def _grid_of(
-    shown: List[Bool], width: Int, height: Int, step: Int
+    shown: List[Bool],
+    width: Int,
+    height: Int,
+    step: Int,
+    rows: Tuple[Int, Int],
 ) -> List[Bool]:
-    """Return the grid samples that the shown pixels are mixed from."""
+    """Return the grid samples that the shown pixels are mixed from. Only
+    the water rows `rows` hold shown pixels."""
     var marks = List[Bool](length=width * height, fill=False)
-    var rows = _water_rows(shown, width, height)
-    for y in range(rows[0], rows[1]):
+    # The caller passes at least one water row.
+    for y in range(rows[0], rows[1]):  # pragma: no branch
         for x in range(width):  # pragma: no branch
             if not shown[y * width + x]:
                 continue
@@ -418,23 +452,23 @@ def _grid_of(
 
 
 def _fill_from_grid(
-    mut hdr: List[Float32],
+    hdr: List[Float32],
+    mut mixed: List[Float32],
     shown: List[Bool],
     width: Int,
     height: Int,
     step: Int,
+    rows: Tuple[Int, Int],
     workers: Int = 0,
 ):
-    """Mix each shown pixel from the four grid samples round it.
+    """Mix each shown pixel from the four grid samples round it in `hdr`,
+    into `mixed`.
 
-    A sample's own pixel keeps its shading. The samples are read from a
-    copy, so a pixel written never feeds another. Disjoint runs of rows
-    mix in parallel.
+    A sample's own pixel keeps its shading. The samples are read from
+    `hdr`, so a pixel written never feeds another. Only the shown pixels
+    of `mixed` are written. Disjoint runs of the water rows `rows` mix in
+    parallel.
     """
-    var rows = _water_rows(shown, width, height)
-    if rows[1] == 0:
-        return
-    var mixed = hdr.copy()
     var count = rows[1] - rows[0]
     var tasks = row_tasks(workers, 8, count)
     var group = TaskGroup()
@@ -454,8 +488,8 @@ def _fill_from_grid(
             )
         )
     group.wait()
+    _ = len(hdr)
     _ = len(shown)
-    hdr = mixed^
 
 
 __async def _fill_task(
@@ -513,9 +547,51 @@ def _radiance_image(
     pixel stays zero. An empty `shown` marks every pixel.
     """
     var hdr = List[Float32](length=width * height * 3, fill=0.0)
+    _radiance_band(
+        look,
+        aspect,
+        surface,
+        ripples,
+        caustics,
+        bed,
+        clock,
+        sun,
+        width,
+        height,
+        shown,
+        hdr,
+        0,
+        height,
+        workers,
+    )
+    return hdr^
+
+
+def _radiance_band(
+    look: CameraLook,
+    aspect: Float32,
+    surface: SurfaceField,
+    ripples: RippleField,
+    caustics: CausticField,
+    bed: PebbleBed,
+    clock: Duration,
+    sun: Vector3,
+    width: Int,
+    height: Int,
+    shown: List[Bool],
+    mut hdr: List[Float32],
+    first: Int,
+    past: Int,
+    workers: Int,
+):
+    """Shade the marked pixels of rows `first` up to `past` into `hdr`, as
+    `_radiance_image` shades them. `hdr` holds three floats for each pixel,
+    and the pixels that are not marked keep what they held. `shown` must
+    mark no pixel outside the band."""
     # Sky rows cost far less than water rows, so small runs of rows balance
-    # the threads. Each task gets at least one row, because tasks <= height.
-    var tasks = row_tasks(workers, 8, height)
+    # the threads. Each task gets at least one row, because tasks <= rows.
+    var count = past - first
+    var tasks = row_tasks(workers, 8, count)
     var group = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         group.create_task(
@@ -532,12 +608,11 @@ def _radiance_image(
                 height,
                 Pointer(to=shown).unsafe_origin_cast[ImmutAnyOrigin](),
                 hdr.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                task * height // tasks,
-                (task + 1) * height // tasks,
+                first + task * count // tasks,
+                first + (task + 1) * count // tasks,
             )
         )
     group.wait()
-    return hdr^
 
 
 __async def _radiance_task(
@@ -1513,6 +1588,11 @@ struct WaterScene(Movable):
     # next call.
     var _surface_next: Optional[SurfaceField]
     var _composed: Int
+    # The radiance that `compose` shades and the mix it fills, kept from
+    # frame to frame so that a frame does not fault in fresh pages. A
+    # frame reads only the pixels it writes.
+    var _hdr: List[Float32]
+    var _mixed: List[Float32]
 
     def __init__(
         out self,
@@ -1552,6 +1632,8 @@ struct WaterScene(Movable):
         self._caustics_kept = None
         self._surface_next = None
         self._composed = 0
+        self._hdr = List[Float32]()
+        self._mixed = List[Float32]()
         self._spectrum = build_spectrum(
             ocean, Length(_PATCH_METERS), _TARGET_SLOPE
         )
@@ -1776,11 +1858,21 @@ struct WaterScene(Movable):
         ref surface = self._surface_kept.value()
         ref caustics = self._caustics_kept.value()
         var shown = self._compose_depth(image, plan, surface)
+        # The later passes read only the rows that show water, and the
+        # grid rows round them. With no water, there is nothing to write.
+        var rows = _water_rows(shown, image.width, image.height)
+        if rows[1] == 0:
+            return 0
         var step = self.shade_step
         var shaded = shown.copy() if step == 1 else _grid_of(
-            shown, image.width, image.height, step
+            shown, image.width, image.height, step, rows
         )
-        var hdr = _radiance_image(
+        var band = _grid_band(rows, image.height, step)
+        var size = image.width * image.height * 3
+        if len(self._hdr) != size:
+            self._hdr = List[Float32](length=size, fill=0.0)
+            self._mixed = List[Float32](length=size, fill=0.0)
+        _radiance_band(
             plan.look,
             plan.aspect,
             surface,
@@ -1792,13 +1884,24 @@ struct WaterScene(Movable):
             image.width,
             image.height,
             shaded,
+            self._hdr,
+            band[0],
+            band[1],
             self.workers,
         )
-        if step > 1:
-            _fill_from_grid(
-                hdr, shown, image.width, image.height, step, self.workers
-            )
-        return self._compose_write(image, hdr, shown)
+        if step == 1:
+            return self._compose_write(image, self._hdr, shown)
+        _fill_from_grid(
+            self._hdr,
+            self._mixed,
+            shown,
+            image.width,
+            image.height,
+            step,
+            rows,
+            self.workers,
+        )
+        return self._compose_write(image, self._mixed, shown)
 
     def _compose_depth(
         self, mut image: Framebuffer, plan: _ComposePlan, surface: SurfaceField
@@ -1838,10 +1941,14 @@ struct WaterScene(Movable):
         self, mut image: Framebuffer, hdr: List[Float32], shown: List[Bool]
     ) raises -> Int:
         # Grade and write each shown pixel, as `draw` grades `LINEAR`. Each
-        # pixel has one writer, so disjoint runs of rows write in parallel.
+        # pixel has one writer, so disjoint runs of the rows that show water
+        # write in parallel.
         var width = image.width
         var height = image.height
-        var tasks = row_tasks(self.workers, 1, height)
+        var rows = _water_rows(shown, width, height)
+        var first = rows[0]
+        var count = rows[1] - rows[0]
+        var tasks = row_tasks(self.workers, 4, count)
         var drawn = List[Int](length=tasks, fill=0)
         var group = TaskGroup()
         for task in range(tasks):  # pragma: no branch
@@ -1858,8 +1965,8 @@ struct WaterScene(Movable):
                     self.clock,
                     width,
                     height,
-                    task * height // tasks,
-                    (task + 1) * height // tasks,
+                    first + task * count // tasks,
+                    first + (task + 1) * count // tasks,
                 )
             )
         group.wait()

@@ -436,17 +436,70 @@ def _splat_channel(
     ref splat = settings[]
     var verts = splat.grid + 1
     var at = plane.unsafe_offset(splat.channel * splat.n * splat.n)
+    var side = Float32(splat.n)
     for j in range(splat.grid):  # pragma: no branch
         for i in range(splat.grid):  # pragma: no branch
             var a = j * verts + i
             var b = a + 1
             var c = a + verts
             var d = c + 1
+            # The cell's reach in patches, as `_splat` finds each corner.
+            var reach = _cell_reach(floor_x, floor_z, a, b, c, d, splat)
             for instance in range(9):  # pragma: no branch
                 var ox = Float32(instance % 3 - 1)
                 var oz = Float32(instance // 3 - 1)
+                # A copy wholly a texel past an edge covers no texel.
+                if (
+                    (reach[1] + ox) * side < -1
+                    or (reach[0] + ox) * side > side + 1
+                    or (reach[3] + oz) * side < -1
+                    or (reach[2] + oz) * side > side + 1
+                ):
+                    continue
                 _splat(at, floor_x, floor_z, live, a, b, c, ox, oz, splat)
                 _splat(at, floor_x, floor_z, live, b, d, c, ox, oz, splat)
+
+
+def _cell_reach(
+    floor_x: Pointer[Float32, ImmutAnyOrigin],
+    floor_z: Pointer[Float32, ImmutAnyOrigin],
+    a: Int,
+    b: Int,
+    c: Int,
+    d: Int,
+    splat: _Splat,
+) -> Tuple[Float32, Float32, Float32, Float32]:
+    """Return the least and the greatest x, then z, of a cell's four
+    corners on the floor, in patches from the texture's corner.
+
+    Each corner is found as `_splat` finds it. Rounding keeps the order of
+    values, so every copy of a corner that `_splat` finds lies inside the
+    copy of the reach."""
+    var pa = _floor_patches(floor_x, floor_z, a, splat)
+    var pb = _floor_patches(floor_x, floor_z, b, splat)
+    var pc = _floor_patches(floor_x, floor_z, c, splat)
+    var pd = _floor_patches(floor_x, floor_z, d, splat)
+    return (
+        min(min(pa[0], pb[0]), min(pc[0], pd[0])),
+        max(max(pa[0], pb[0]), max(pc[0], pd[0])),
+        min(min(pa[1], pb[1]), min(pc[1], pd[1])),
+        max(max(pa[1], pb[1]), max(pc[1], pd[1])),
+    )
+
+
+def _floor_patches(
+    floor_x: Pointer[Float32, ImmutAnyOrigin],
+    floor_z: Pointer[Float32, ImmutAnyOrigin],
+    vertex: Int,
+    splat: _Splat,
+) -> Tuple[Float32, Float32]:
+    """Return where one corner's ray meets the floor, in patches from the
+    texture's corner, as `_splat` finds it."""
+    var slot = vertex * 3 + splat.channel
+    return (
+        (floor_x[unsafe_offset=slot] - splat.shift_x) / splat.patch,
+        (floor_z[unsafe_offset=slot] - splat.shift_z) / splat.patch,
+    )
 
 
 def _splat(

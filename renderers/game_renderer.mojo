@@ -1738,8 +1738,12 @@ struct GameRenderer(Movable):
         self, frame: _Frame, sky: List[Float32], shadowing: Bool
     ) raises -> Framebuffer:
         """Shade each pixel once, tone map and encode it."""
-        var pixels = List[UInt8](length=self.width * self.height * 4, fill=255)
-        var depth = List[Float32](length=self.width * self.height, fill=1)
+        # The tiles write every pixel and its depth, so neither list is
+        # filled first.
+        var pixels = List[UInt8]()
+        pixels.resize(unsafe_uninit_length=self.width * self.height * 4)
+        var depth = List[Float32]()
+        depth.resize(unsafe_uninit_length=self.width * self.height)
         var tiles_x = (self.width + TILE - 1) // TILE
         var tiles_y = (self.height + TILE - 1) // TILE
         # When the sun casts, `render` has drawn the still map, and the
@@ -1810,14 +1814,31 @@ def _blend(
     q0: F,
     q1: F,
     q2: F,
+    one: Bool,
 ) -> F:
     """Return one of the three corners' floats, mixed by the pixels'
-    shares."""
+    shares. With `one`, every lane names the same corners."""
     return (
-        q0 * vertices.unsafe_gather(va + Int64(slot))
-        + q1 * vertices.unsafe_gather(vb + Int64(slot))
-        + q2 * vertices.unsafe_gather(vc + Int64(slot))
+        q0 * _pick(vertices, va, slot, one)
+        + q1 * _pick(vertices, vb, slot, one)
+        + q2 * _pick(vertices, vc, slot, one)
     )
+
+
+@always_inline
+def _pick[
+    dtype: DType
+](
+    values: Pointer[Scalar[dtype], ImmutAnyOrigin],
+    at: SIMD[DType.int64, GAME_LANES],
+    slot: Int,
+    one: Bool,
+) -> SIMD[dtype, GAME_LANES]:
+    """Return each lane's value `slot` past its index in `at`. With `one`,
+    every lane holds the same index, so one load serves them all."""
+    if one:
+        return SIMD[dtype, GAME_LANES](values[unsafe_offset=Int(at[0]) + slot])
+    return values.unsafe_gather(at + Int64(slot))
 
 
 @always_inline
@@ -2696,24 +2717,30 @@ __async def _raster_task(
 
 
 @always_inline
-def _pixel_texel(maps: _PixelMaps, code: F, u: F, v: F) -> Tuple[F, F, F]:
+def _pixel_texel(
+    maps: _PixelMaps, one: Bool, code: F, u: F, v: F
+) -> Tuple[F, F, F]:
     """Return each lane's color of its triangle's map at its texture
     coordinates, bilinear within the level its code names.
 
     Every lane must name a map: a lane with nothing to read names the
-    code 0, as some other lane's map."""
+    code 0, as some other lane's map. With `one`, every lane names the
+    same code."""
     var slot = floor(code / LEVEL_CODE)
     var wanted = (code - slot * LEVEL_CODE + 0.5).cast[DType.int32]()
     var slots = slot.cast[DType.int64]()
     var firsts = maps.firsts.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
     var counts = maps.levels.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
     var wraps = maps.repeats.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
-    var level = min(wanted, counts.unsafe_gather(slots) - 1)
-    var entry = (firsts.unsafe_gather(slots) + level).cast[DType.int64]()
-    var w = maps.widths.unsafe_ptr().unsafe_gather(entry)
-    var h = maps.heights.unsafe_ptr().unsafe_gather(entry)
-    var start = maps.starts.unsafe_ptr().unsafe_gather(entry)
-    var repeat = wraps.unsafe_gather(slots).eq(1)
+    var widths = maps.widths.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
+    var heights = maps.heights.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
+    var starts = maps.starts.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
+    var level = min(wanted, _pick(counts, slots, 0, one) - 1)
+    var entry = (_pick(firsts, slots, 0, one) + level).cast[DType.int64]()
+    var w = _pick(widths, entry, 0, one)
+    var h = _pick(heights, entry, 0, one)
+    var start = _pick(starts, entry, 0, one)
+    var repeat = _pick(wraps, slots, 0, one).eq(1)
     var wf = w.cast[DType.float32]()
     var hf = h.cast[DType.float32]()
     # `v` counts up from the bottom row, as `Texture.sample` reads it.
@@ -2846,43 +2873,47 @@ __async def _resolve_task(
                 b = _mix4(sky, s00, s10, s01, s11, 2, fx, fy)
             if drawn.reduce_or():
                 var tri = drawn.select(t, I(0)).cast[DType.int64]()
+                # Lanes that all show one triangle read its floats once.
+                var one = drawn.reduce_and() and t.eq(t[0]).reduce_and()
                 var p = tri * PLANE
                 var px = lane_f + (Float32(x) + 0.5)
                 var py = F(Float32(y) + 0.5)
                 var q0 = (
-                    planes.unsafe_gather(p) * px
-                    + planes.unsafe_gather(p + 1) * py
-                    + planes.unsafe_gather(p + 2)
-                ) * planes.unsafe_gather(p + 12)
+                    _pick(planes, p, 0, one) * px
+                    + _pick(planes, p, 1, one) * py
+                    + _pick(planes, p, 2, one)
+                ) * _pick(planes, p, 12, one)
                 var q1 = (
-                    planes.unsafe_gather(p + 3) * px
-                    + planes.unsafe_gather(p + 4) * py
-                    + planes.unsafe_gather(p + 5)
-                ) * planes.unsafe_gather(p + 13)
+                    _pick(planes, p, 3, one) * px
+                    + _pick(planes, p, 4, one) * py
+                    + _pick(planes, p, 5, one)
+                ) * _pick(planes, p, 13, one)
                 var q2 = (
-                    planes.unsafe_gather(p + 6) * px
-                    + planes.unsafe_gather(p + 7) * py
-                    + planes.unsafe_gather(p + 8)
-                ) * planes.unsafe_gather(p + 14)
+                    _pick(planes, p, 6, one) * px
+                    + _pick(planes, p, 7, one) * py
+                    + _pick(planes, p, 8, one)
+                ) * _pick(planes, p, 14, one)
                 var norm = 1 / (q0 + q1 + q2)
                 q0 *= norm
                 q1 *= norm
                 q2 *= norm
                 var c = tri * 3
-                var va = corners.unsafe_gather(c).cast[DType.int64]() * STRIDE
-                var vb = (
-                    corners.unsafe_gather(c + 1).cast[DType.int64]() * STRIDE
-                )
-                var vc = (
-                    corners.unsafe_gather(c + 2).cast[DType.int64]() * STRIDE
-                )
+                var va = _pick(corners, c, 0, one).cast[DType.int64]() * STRIDE
+                var vb = _pick(corners, c, 1, one).cast[DType.int64]() * STRIDE
+                var vc = _pick(corners, c, 2, one).cast[DType.int64]() * STRIDE
                 var shadow = F(1)
                 if use_still:
-                    var wants = drawn & vertices.unsafe_gather(va + 13).ge(0)
+                    var wants = drawn & _pick(vertices, va, 13, one).ge(0)
                     if wants.reduce_or():
-                        var wx = _blend(vertices, va, vb, vc, 10, q0, q1, q2)
-                        var wy = _blend(vertices, va, vb, vc, 11, q0, q1, q2)
-                        var wz = _blend(vertices, va, vb, vc, 12, q0, q1, q2)
+                        var wx = _blend(
+                            vertices, va, vb, vc, 10, q0, q1, q2, one
+                        )
+                        var wy = _blend(
+                            vertices, va, vb, vc, 11, q0, q1, q2, one
+                        )
+                        var wz = _blend(
+                            vertices, va, vb, vc, 12, q0, q1, q2, one
+                        )
                         shadow = _sun_shadows(still[], wx, wy, wz, bias)
                         if use_moving:
                             shadow = min(
@@ -2890,28 +2921,31 @@ __async def _resolve_task(
                             )
                         shadow = wants.select(shadow, F(1))
                 var lit_r = (
-                    _blend(vertices, va, vb, vc, 4, q0, q1, q2)
-                    + _blend(vertices, va, vb, vc, 7, q0, q1, q2) * shadow
+                    _blend(vertices, va, vb, vc, 4, q0, q1, q2, one)
+                    + _blend(vertices, va, vb, vc, 7, q0, q1, q2, one) * shadow
                 )
                 var lit_g = (
-                    _blend(vertices, va, vb, vc, 5, q0, q1, q2)
-                    + _blend(vertices, va, vb, vc, 8, q0, q1, q2) * shadow
+                    _blend(vertices, va, vb, vc, 5, q0, q1, q2, one)
+                    + _blend(vertices, va, vb, vc, 8, q0, q1, q2, one) * shadow
                 )
                 var lit_b = (
-                    _blend(vertices, va, vb, vc, 6, q0, q1, q2)
-                    + _blend(vertices, va, vb, vc, 9, q0, q1, q2) * shadow
+                    _blend(vertices, va, vb, vc, 6, q0, q1, q2, one)
+                    + _blend(vertices, va, vb, vc, 9, q0, q1, q2, one) * shadow
                 )
-                var code = planes.unsafe_gather(p + 15)
+                var code = _pick(planes, p, 15, one)
                 var mapped = drawn & code.ge(0)
                 if mapped.reduce_or():
                     var texel = _pixel_texel(
                         maps[],
+                        one,
                         mapped.select(code, F(0)),
                         mapped.select(
-                            _blend(vertices, va, vb, vc, 14, q0, q1, q2), F(0)
+                            _blend(vertices, va, vb, vc, 14, q0, q1, q2, one),
+                            F(0),
                         ),
                         mapped.select(
-                            _blend(vertices, va, vb, vc, 15, q0, q1, q2), F(0)
+                            _blend(vertices, va, vb, vc, 15, q0, q1, q2, one),
+                            F(0),
                         ),
                     )
                     lit_r = mapped.select(lit_r * texel[0], lit_r)
@@ -2920,7 +2954,7 @@ __async def _resolve_task(
                     if fog:
                         # The fog's share kept, packed with the lookup.
                         var packed = _blend(
-                            vertices, va, vb, vc, 13, q0, q1, q2
+                            vertices, va, vb, vc, 13, q0, q1, q2, one
                         )
                         var keep = packed.ge(0).select(packed, -1 - packed)
                         lit_r = mapped.select(
