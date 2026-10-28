@@ -10,6 +10,7 @@ from std.testing import TestSuite, assert_equal
 from tools._python_json import PyJson
 from tools._record_paths import record_paths
 from tools.carla_cleanup_gate import (
+    cleanup_composed_inputs,
     cleanup_protected_bundle,
     cleanup_protected_tail,
     cleanup_records_then_tail,
@@ -73,6 +74,32 @@ def test_the_paths_and_migration_are_read_before_the_tail() raises:
         doc.text(doc.item(tail, 0)),
         "tools/carla_lane_oracle/coverage-followup-migration.json",
     )
+
+
+def test_the_frozen_and_invariant_inputs_follow_the_cleanup_bundle() raises:
+    """The cleanup bundle stays ahead of the frozen and invariant inputs."""
+    var doc = PyJson.parse(cleanup_composed_inputs())
+    assert_equal(doc.key(doc.root, 0), "cleanup")
+    assert_equal(doc.key(doc.root, 1), "frozen")
+    assert_equal(doc.key(doc.root, 2), "invariant")
+    var cleanup = doc.at(doc.root, "cleanup")
+    assert_equal(doc.length(doc.at(doc.at(cleanup, "paths"), "sources")), 3)
+    assert_equal(doc.length(doc.at(cleanup, "tail")), 14)
+    var frozen = doc.at(doc.root, "frozen")
+    assert_equal(
+        doc.text(doc.at(doc.at(frozen, "paths"), "source")),
+        "extensions/carla/curve_frozen_arc.mojo",
+    )
+    assert_equal(
+        doc.text(doc.at(doc.at(frozen, "migration"), "path")),
+        "tools/carla_lane_oracle/frozen-arc-producer-migration.json",
+    )
+    var invariant = doc.at(doc.root, "invariant")
+    assert_equal(
+        doc.text(doc.at(doc.at(invariant, "invariant"), "path")),
+        "tools/carla_lane_oracle/coverage-invariant-migration.json",
+    )
+    assert_equal(doc.length(doc.at(invariant, "tail")), 6)
 
 
 def main() raises:

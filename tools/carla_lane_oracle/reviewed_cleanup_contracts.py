@@ -191,9 +191,79 @@ def _protected_bundle():
         _PROTECTED_TAIL = tuple(parsed['tail'])
 
 
+def _composed_ready():
+    return (_CLEANUP_PATHS is not None
+            and 'MIGRATION' in globals() and MIGRATION is not None
+            and _RECORD_PATHS is not None and _PROTECTED_TAIL is not None
+            and frozen._PATHS is not None
+            and 'MIGRATION' in frozen.__dict__ and frozen.MIGRATION is not None
+            and 'MIGRATION' in invariant.__dict__
+            and invariant.MIGRATION is not None
+            and invariant._PROTECTED_TAIL is not None
+            and 'MIGRATION' in invariant.curve.__dict__
+            and invariant.curve.MIGRATION is not None
+            and invariant.curve._PATHS is not None)
+
+
+def _composed_inputs():
+    """Read the cleanup bundle, then the frozen and invariant inputs."""
+    global _CLEANUP_PATHS, MIGRATION, MIGRATION_SHA256
+    global SOURCE_PATHS, PREMISE_PATHS, _RECORD_PATHS, _PROTECTED_TAIL
+    if _composed_ready():
+        SOURCE_PATHS = tuple(_CLEANUP_PATHS['sources'])
+        PREMISE_PATHS = tuple(_CLEANUP_PATHS['premises'])
+        return
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+         '--composed-inputs'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    cleanup = parsed['cleanup']
+    if _CLEANUP_PATHS is None:
+        _CLEANUP_PATHS = cleanup['paths']
+    SOURCE_PATHS = tuple(_CLEANUP_PATHS['sources'])
+    PREMISE_PATHS = tuple(_CLEANUP_PATHS['premises'])
+    if 'MIGRATION' not in globals() or MIGRATION is None:
+        MIGRATION = cleanup['migration']['path']
+        MIGRATION_SHA256 = cleanup['migration']['sha']
+    if _RECORD_PATHS is None:
+        _RECORD_PATHS = cleanup['records']
+    if _PROTECTED_TAIL is None:
+        _PROTECTED_TAIL = tuple(cleanup['tail'])
+    frozen_part = parsed['frozen']
+    if frozen._PATHS is None:
+        frozen._PATHS = frozen_part['paths']
+    frozen.SOURCE_PATH = frozen._PATHS['source']
+    if 'MIGRATION' not in frozen.__dict__ or frozen.MIGRATION is None:
+        frozen.MIGRATION = frozen_part['migration']['path']
+        frozen.MIGRATION_SHA256 = frozen_part['migration']['sha']
+    inv = parsed['invariant']
+    if 'MIGRATION' not in invariant.__dict__ or invariant.MIGRATION is None:
+        invariant.MIGRATION = inv['invariant']['path']
+        invariant.MIGRATION_SHA256 = inv['invariant']['sha']
+    curve = invariant.curve
+    if 'MIGRATION' not in curve.__dict__ or curve.MIGRATION is None:
+        curve.MIGRATION = inv['dispatch']['path']
+        curve.MIGRATION_SHA256 = inv['dispatch']['sha']
+    if curve._PATHS is None:
+        curve._PATHS = inv['paths']
+    if invariant._PROTECTED_TAIL is None:
+        invariant._PROTECTED_TAIL = tuple(inv['tail'])
+
+
 def _protected_inputs():
     """Return the protected inputs, including the Mojo path tables."""
-    _protected_bundle()
+    _composed_inputs()
     return (*cache_key.PROTECTED_INPUTS, *accepted.PROTECTED_INPUTS, MIGRATION, _RECORD_PATHS['runtime_pins'],
             *SOURCE_PATHS, *PREMISE_PATHS, *frozen.PROTECTED_INPUTS,
             *invariant.PROTECTED_INPUTS, *_PROTECTED_TAIL)

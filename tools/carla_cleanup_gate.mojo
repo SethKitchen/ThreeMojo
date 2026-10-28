@@ -5,6 +5,7 @@
 
 """Check the reviewed cleanup migration record.
 
+    carla_cleanup_gate --composed-inputs
     carla_cleanup_gate --protected-bundle
     carla_cleanup_gate --records-tail
     carla_cleanup_gate --migration PATH [--previous PATH]
@@ -110,6 +111,8 @@ from tests._python_tokens import (
     without_move_sigils,
 )
 from tools._migration_records import migration_records
+from tools.carla_frozen_arc_gate import frozen_protected_bundle
+from tools.carla_invariant_gate import invariant_input_bundle
 from tools._record_paths import record_paths
 from tools._python_json import (
     MISSING,
@@ -769,6 +772,32 @@ def cleanup_protected_bundle() raises -> String:
     )
 
 
+def cleanup_composed_inputs() raises -> String:
+    """Read the cleanup bundle, then the frozen and invariant inputs.
+
+    Returns:
+        JSON with `cleanup`, `frozen`, and `invariant`. The cleanup
+        bundle is read before the frozen inputs. The invariant inputs
+        are read last.
+
+    Raises:
+        Error: A path list cannot be written. The cleanup bundle is
+            read before the frozen inputs and the invariant inputs.
+    """
+    var cleanup = cleanup_protected_bundle()
+    var frozen = frozen_protected_bundle()
+    var invariant = invariant_input_bundle()
+    return (
+        '{"cleanup":'
+        + cleanup
+        + ',"frozen":'
+        + frozen
+        + ',"invariant":'
+        + invariant
+        + "}"
+    )
+
+
 def classified_syntax_json(source: String) raises -> String:
     """Classify a syntax failure, or return the Python syntax JSON.
 
@@ -908,6 +937,13 @@ def main() raises:
     var literals = String("")
     var literal_size = String("")
     var arguments = argv()
+    if len(arguments) == 2 and arguments[1] == "--composed-inputs":
+        try:
+            print(cleanup_composed_inputs(), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 2 and arguments[1] == "--protected-bundle":
         try:
             print(cleanup_protected_bundle(), end="")

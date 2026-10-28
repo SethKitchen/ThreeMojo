@@ -234,6 +234,8 @@ It reads the companion record paths before that protected tail in one check.
 
 It reads the cleanup paths and the migration record before that protected tail in one check.
 
+It reads the frozen and invariant protected inputs after that cleanup bundle in one check.
+
 It admits trig and geometry word changes only for their reviewed token.
 
 It hashes a premise dependency before choosing its word check.
