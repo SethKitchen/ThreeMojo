@@ -245,6 +245,9 @@ It keeps the current sources when that token list is already checked.
 It reuses a current source choice when that source is read again.
 A changed source still chooses again.
 
+It checks every restored predecessor edge in one check.
+The first mismatched edge still fails before a later edge is accepted.
+
 It keeps the dispatch contract prefix.
 
 `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the trig and geometry stored words, and the successor tokens.

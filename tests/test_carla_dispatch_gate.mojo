@@ -15,6 +15,7 @@ from tests._python_tokens import declaration_text, token_sha256
 from tools.carla_dispatch_gate import (
     dispatch_declaration_tokens,
     dispatch_edge,
+    dispatch_edges,
     dispatch_graphs,
     dispatch_pin,
     dispatch_pins,
@@ -79,6 +80,23 @@ def test_a_changed_reference_token_is_refused() raises:
         )
     ):
         dispatch_tokens(directory)
+
+
+def test_restored_edges_keep_their_order() raises:
+    """The first mismatched predecessor edge fails before a later match."""
+    with assert_raises(
+        contains=(
+            "curve support/dispatch contract: raw predecessor edge mismatch"
+        )
+    ):
+        dispatch_edges("aa", '["bb","aa"]')
+    with assert_raises(
+        contains=(
+            "curve support/dispatch contract: raw predecessor edge mismatch"
+        )
+    ):
+        dispatch_edges("aa", '["aa","bb"]')
+    dispatch_edges("aa", '["aa","aa"]')
 
 
 def test_a_mismatched_predecessor_edge_is_refused() raises:

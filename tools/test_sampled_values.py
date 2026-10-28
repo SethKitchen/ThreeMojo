@@ -496,6 +496,51 @@ class CurrentDispatchTokenTests(unittest.TestCase):
             dispatch._gate_tokens = original
         self.assertEqual(calls, [])
 
+    def test_restored_edges_are_checked_together(self):
+        from tools.carla_lane_oracle import curve_support_dispatch_contracts as dispatch
+        from tools.carla_lane_oracle import raw_cut_inverse_contracts as raw
+        calls = []
+        original_choices = dispatch._labeled_choices
+        original_verify = raw.verify
+        original_edges = dispatch._gate_edges
+        dispatch._REVIEWED_CURRENT.clear()
+
+        def choices(items, tokens=False):
+            return {
+                'labels': {
+                    'current': 'current', 'restore': 'restore',
+                    'unreviewed': 'unreviewed ',
+                },
+                'choices': ['restore', 'unreviewed'],
+                'tokens': False,
+            }
+
+        def verify(root, **kwargs):
+            return {'before_token_sha256': 'aa', 'before_source': 'old'}
+
+        def edges(recorded, expected):
+            calls.append((recorded, list(expected)))
+
+        dispatch._labeled_choices = choices
+        raw.verify = verify
+        dispatch._gate_edges = edges
+        root = Path('dispatch-restored-edges')
+        try:
+            root.mkdir(parents=True)
+            (root / 'one.txt').write_text('live-one')
+            (root / 'two.txt').write_text('live-two')
+            with self.assertRaises(ValueError) as caught:
+                dispatch.reviewed_sources(
+                    root, [('one.txt', 'aa'), ('two.txt', 'bb')])
+            self.assertIn('unreviewed ', str(caught.exception))
+            self.assertEqual(calls, [('aa', ['aa'])])
+        finally:
+            dispatch._labeled_choices = original_choices
+            raw.verify = original_verify
+            dispatch._gate_edges = original_edges
+            dispatch._REVIEWED_CURRENT.clear()
+            shutil.rmtree(root, ignore_errors=True)
+
     def test_a_repeated_current_source_skips_the_second_choice(self):
         from tools.carla_lane_oracle import curve_support_dispatch_contracts as dispatch
         calls = []

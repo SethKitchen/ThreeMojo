@@ -12,6 +12,7 @@
     carla_dispatch_gate --declaration-tokens PATH
     carla_dispatch_gate --declaration-identity PATH
     carla_dispatch_gate --edge HEX --expected HEX
+    carla_dispatch_gate --edges HEX PATH
     carla_dispatch_gate --graphs DIR
     carla_dispatch_gate --source-graphs PATH
     carla_dispatch_gate --source-graph-groups PATH
@@ -29,7 +30,14 @@ from tests._python_tokens import significant_graph_pairs, token_sha256
 from tools.carla_grouped_gate import grouped_table_identity
 from tools._migration_records import migration_records
 from tools._lane_declarations import declaration_token_checks
-from tools._python_json import MISSING, PY_DICT, PY_LIST, PyJson, py_equal
+from tools._python_json import (
+    MISSING,
+    PY_DICT,
+    PY_LIST,
+    PY_STR,
+    PyJson,
+    py_equal,
+)
 from tools._sha256 import sha256_hex
 
 
@@ -219,6 +227,29 @@ def dispatch_edge(recorded: String, expected: String) raises:
         _fail("raw predecessor edge mismatch")
 
 
+def dispatch_edges(recorded: String, payload: String) raises:
+    """Require each raw predecessor token to match the caller.
+
+    Args:
+        recorded: The raw-cut record's before token.
+        payload: A JSON list of expected tokens, in order.
+
+    Raises:
+        Error: A token differs, or the payload is not a list of strings.
+            The tokens are checked in order.
+    """
+    var doc = PyJson.parse(payload)
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("raw predecessor edge mismatch")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var item = doc.item(doc.root, index)
+        if doc.kind(item) != PY_STR or recorded != doc.text(item):
+            _fail("raw predecessor edge mismatch")
+        index += 1
+
+
 def dispatch_source_graphs(payload: String) raises:
     """Compare each dispatch source pair by its significant tokens.
 
@@ -354,7 +385,7 @@ def _usage():
             "usage: carla_dispatch_gate --migration PATH"
             " | --bytes PATH --sha HEX --label TEXT | --tokens DIR"
             " | --declaration-tokens PATH"
-            " | --edge HEX --expected HEX | --graphs DIR"
+            " | --edge HEX --expected HEX | --edges HEX PATH | --graphs DIR"
             " | --source-graphs PATH | --source-graph-groups PATH"
             " | --pins DIR"
         ),
@@ -385,6 +416,13 @@ def main() raises:
     if len(arguments) == 2 and arguments[1] == "--protected-bundle":
         try:
             print(dispatch_protected_bundle(), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 4 and arguments[1] == "--edges":
+        try:
+            dispatch_edges(arguments[2], Path(arguments[3]).read_text())
         except error:
             print(String(error), file=stderr)
             exit(1)

@@ -191,15 +191,27 @@ def _gate(payload):
 
 
 def _gate_edge(recorded, expected):
+    _gate_edges(recorded, [expected])
+
+
+def _gate_edges(recorded, expected):
+    """Check every restored predecessor edge, in order."""
+    if not expected:
+        return
+    import json
     import os
     import subprocess
+    import tempfile
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    result = subprocess.run(
-        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_gate',
-         '--edge', recorded, '--expected', expected],
-        capture_output=True, text=True)
+    with tempfile.TemporaryDirectory(prefix='dispatch-edges-') as directory:
+        path = Path(directory) / 'expected.json'
+        path.write_text(json.dumps(list(expected), separators=(',', ':')))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_gate',
+             '--edges', recorded, str(path)],
+            capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
@@ -430,6 +442,7 @@ def reviewed_sources(root, items, *, _operation=None, check_tokens=False):
     labels = checked['labels']
     choices = checked['choices']
     restored = None
+    pending = []
     operation = {} if _operation is None else {'_operation': _operation}
     results = []
     for (path, expected, text), choice in zip(loaded, choices):
@@ -437,6 +450,8 @@ def reviewed_sources(root, items, *, _operation=None, check_tokens=False):
             results.append(text)
             continue
         if choice != labels['restore']:
+            if pending:
+                _gate_edges(restored['before_token_sha256'], pending)
             raise ValueError(labels['unreviewed'] + path)
         if restored is None:
             if __package__:
@@ -444,8 +459,10 @@ def reviewed_sources(root, items, *, _operation=None, check_tokens=False):
             else:
                 import raw_cut_inverse_contracts as raw
             restored = raw.verify(root, **operation)
-        _gate_edge(restored['before_token_sha256'], expected)
+        pending.append(expected)
         results.append(restored['before_source'])
+    if pending:
+        _gate_edges(restored['before_token_sha256'], pending)
     for (path, expected, text), result in zip(loaded, results):
         if result == text:
             _REVIEWED_CURRENT[(path, expected, text)] = result
