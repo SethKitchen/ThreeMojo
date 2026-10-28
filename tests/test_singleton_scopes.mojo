@@ -12,6 +12,7 @@ from tools.carla_singleton_gate import (
     graphs_then_minima,
     restored_scope_then_minima,
     scopes_then_minima,
+    words_then_matches,
 )
 
 
@@ -84,6 +85,27 @@ def test_a_matching_restored_scope_selects_the_lane_minimum() raises:
         )
     )
     assert_equal(doc.text(doc.item(doc.root, 0)), "true")
+
+
+def test_empty_words_compare_the_source_pairs() raises:
+    """A word list that is empty returns the token flags."""
+    var doc = PyJson.parse(
+        words_then_matches(
+            '{"words":[],"pairs":[{"actual":"def f():\\n    return 1\\n",'
+            + '"source":"def f():\\n    return 1\\n"}]}'
+        )
+    )
+    assert_equal(doc.key(doc.root, 0), "flags")
+    assert_equal(doc.text(doc.item(doc.at(doc.root, "flags"), 0)), "true")
+
+
+def test_a_word_failure_precedes_a_token_error() raises:
+    """A missing word field fails before a token error is returned."""
+    with assert_raises(contains="KeyError: 'expected'"):
+        _ = words_then_matches(
+            '{"words":[{"text":"nope"}],"pairs":[{"actual":"def f(",'
+            + '"source":"def f("}]}'
+        )
 
 
 def main() raises:

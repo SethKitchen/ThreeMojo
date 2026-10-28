@@ -119,6 +119,12 @@ It compares every rounded LINE module text in one check.
 
 It compares every rounded LINE source pair by its tokens in one check.
 
+It checks the dependency words before those token pairs in one check.
+A word failure is returned before a token result.
+The same pairs are not compared again after that check.
+A changed module is compared again.
+A token error is still reported after the modules are read again.
+
 It reuses a matching rounded LINE module when that module is read again.
 A changed module is compared again.
 

@@ -12,6 +12,7 @@
     carla_singleton_gate --source-graphs PATH
     carla_singleton_gate --import-scopes PATH
     carla_singleton_gate --scopes-then-minima PATH
+    carla_singleton_gate --words-then-matches PATH
     carla_singleton_gate --graphs-then-minima PATH
     carla_singleton_gate --restored-scope-then-minima PATH
     carla_singleton_gate --declaration-graphs PATH
@@ -31,6 +32,8 @@ from tests._python_tokens import (
     significant_match_flags,
     token_sha256,
 )
+from tools._dependency_words import pinned_dependency_words
+from tools._json_tools import quote_ascii
 from tools._lane_predecessor import selected_lane_minima
 from tools._lane_declarations import (
     checked_declaration_graphs,
@@ -206,6 +209,32 @@ def checked_import_scopes(payload: String) raises -> String:
         "consumer import scope changed",
     )
     return '{"restore":false}'
+
+
+def words_then_matches(payload: String) raises -> String:
+    """Check the dependency words, then compare the source pairs.
+
+    Args:
+        payload: JSON with `words` and `pairs`. Each word has `text`,
+            `expected`, and `path`. Each pair has `actual` and `source`.
+
+    Returns:
+        JSON with `flags`, a list of `true` or `false`. A token error
+        returns `defer` instead of flags.
+
+    Raises:
+        Error: A dependency word changed. The word checks run before the
+            token comparison.
+    """
+    var doc = PyJson.parse(payload)
+    pinned_dependency_words(doc.subtree(doc.at(doc.root, "words")).dumps())
+    try:
+        var flags = significant_match_flags(
+            doc.subtree(doc.at(doc.root, "pairs")).dumps()
+        )
+        return '{"flags":' + flags + "}"
+    except error:
+        return '{"defer":' + quote_ascii(String(error)) + "}"
 
 
 def scopes_then_minima(payload: String) raises -> String:
@@ -413,6 +442,13 @@ def main() raises:
                 Path(arguments[2]).read_text(),
                 String(unsafe_from_utf8=Path(arguments[3]).read_bytes()),
             )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--words-then-matches":
+        try:
+            print(words_then_matches(Path(arguments[2]).read_text()), end="")
         except error:
             print(String(error), file=stderr)
             exit(1)

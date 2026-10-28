@@ -302,6 +302,8 @@ def _significant_matches(pairs):
     """Return whether each source pair has the same significant tokens."""
     if not pairs:
         return []
+    if all(_MATCHED_PAIRS.get((actual, source)) for actual, source in pairs):
+        return [True] * len(pairs)
     import json
     import os
     import subprocess
@@ -418,6 +420,54 @@ def _verify_dependencies(items):
     else:
         import reviewed_cleanup_contracts as words
     words.verify_dependencies(items)
+
+
+def _words_then_matches(items, pairs):
+    """Check the dependency words, then compare the source pairs.
+
+    A word failure is returned before a token result. A token error is
+    left for the later comparison, after the modules are read again.
+    Matching pairs are not compared again.
+    """
+    if not items and not pairs:
+        return []
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps({
+        'words': [
+            {'text': text, 'expected': expected, 'path': path}
+            for path, text, expected in items
+        ],
+        'pairs': [
+            {'actual': actual, 'source': source}
+            for actual, source in pairs
+        ],
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='words-matches-') as directory:
+        path = Path(directory) / 'words.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_singleton_gate',
+             '--words-then-matches', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    if 'defer' in parsed:
+        return None
+    flags = [flag == 'true' for flag in parsed['flags']]
+    for pair, flag in zip(pairs, flags):
+        if flag:
+            _MATCHED_PAIRS[pair] = True
+    return flags
 
 
 def _checked_import_scopes(items, lane_index, label_prefix):
@@ -765,9 +815,11 @@ def verify(root):
     record = read_record(root)
     _prepare_rounded(list(record['modules']))
     dependencies = []
+    matched_pairs = []
     for path, item in record['modules'].items():
-        dependencies.append((
-            path, _reviewed_text(root, path, record), item['token_sha256']))
-    _verify_dependencies(dependencies)
+        text = _reviewed_text(root, path, record)
+        dependencies.append((path, text, item['token_sha256']))
+        matched_pairs.append((text, item['source']))
+    _words_then_matches(dependencies, matched_pairs)
     verify_premises(root)
     return record

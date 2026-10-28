@@ -1115,6 +1115,48 @@ class SelectionGroupedTests(unittest.TestCase):
                 selection._predecessor_then_grouped({'path': 'other.mojo'}, 'nope')
 
 
+class RoundedWordMatchTests(unittest.TestCase):
+    def test_matching_pairs_skip_the_second_comparison(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import rounded_line_singleton_contracts as singleton
+        saved = dict(singleton._MATCHED_PAIRS)
+        singleton._MATCHED_PAIRS.clear()
+        try:
+            ok = Mock(
+                returncode=0, stdout='{"flags":["true","false"]}', stderr='')
+            with patch('subprocess.run', return_value=ok) as run:
+                flags = singleton._words_then_matches(
+                    [('p', 'text', 'tok')],
+                    [('text', 'source'), ('other', 'nope')])
+                self.assertEqual(flags, [True, False])
+                self.assertEqual(run.call_count, 1)
+                command = ' '.join(str(part) for part in run.call_args[0][0])
+                self.assertIn('--words-then-matches', command)
+            self.assertTrue(singleton._MATCHED_PAIRS[('text', 'source')])
+            self.assertNotIn(('other', 'nope'), singleton._MATCHED_PAIRS)
+            with patch('subprocess.run', return_value=ok) as run:
+                self.assertEqual(
+                    singleton._significant_matches([('text', 'source')]),
+                    [True])
+                self.assertEqual(run.call_count, 0)
+                singleton._significant_matches([('text', 'source'), ('other', 'nope')])
+                self.assertEqual(run.call_count, 1)
+            deferred = Mock(
+                returncode=0, stdout='{"defer":"bad tokens"}', stderr='')
+            with patch('subprocess.run', return_value=deferred):
+                self.assertIsNone(singleton._words_then_matches(
+                    [('p', 'text', 'tok')], [('bad', 'bad')]))
+            self.assertNotIn(('bad', 'bad'), singleton._MATCHED_PAIRS)
+            failed = Mock(returncode=1, stdout='', stderr='word list changed\n')
+            with patch('subprocess.run', return_value=failed):
+                with self.assertRaisesRegex(ValueError, 'word list changed'):
+                    singleton._words_then_matches(
+                        [('p', 'text', 'tok')], [('text', 'source')])
+        finally:
+            singleton._MATCHED_PAIRS.clear()
+            singleton._MATCHED_PAIRS.update(saved)
+
+
 class LaneCheckCacheTests(unittest.TestCase):
     def test_repeated_lane_checks_skip_the_second_call(self):
         from unittest.mock import Mock, patch
