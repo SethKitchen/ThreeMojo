@@ -645,6 +645,16 @@ It checks those declaration tokens before the lane predecessors in one check.
 
 A token mismatch still fails before a predecessor is accepted.
 
+It reuses that lane-control record when the same bytes are read again.
+It reuses those token pairs when the same texts are checked again.
+It reuses that prepare when the same declarations are read again.
+The files are still read.
+A changed byte is checked again.
+A failed check is not kept.
+
+It reuses one kept-token comparison when the same texts are compared again.
+A changed text is compared again.
+
 It reads every lane-control declaration in one check.
 
 The cleanup, dispatch, selection, grouped-table, and lane-control checks use that digest.

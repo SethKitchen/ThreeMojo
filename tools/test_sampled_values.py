@@ -1115,6 +1115,84 @@ class SelectionGroupedTests(unittest.TestCase):
                 selection._predecessor_then_grouped({'path': 'other.mojo'}, 'nope')
 
 
+class LaneCheckCacheTests(unittest.TestCase):
+    def test_repeated_lane_checks_skip_the_second_call(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import ideal_projection
+        from tools.carla_lane_oracle import lane_control_contracts as lane
+        saved = (
+            lane._GATED_LANE,
+            lane._PREPARED_LANE,
+            lane._LANE_LABELS,
+            lane._LANE_TOKEN_PAIRS,
+            lane._LANE_TOKEN_FULL,
+            dict(ideal_projection._TOKEN_DIGESTS),
+        )
+        try:
+            lane._GATED_LANE = None
+            lane._PREPARED_LANE = None
+            lane._LANE_LABELS = None
+            lane._LANE_TOKEN_PAIRS = None
+            lane._LANE_TOKEN_FULL = None
+            ideal_projection._TOKEN_DIGESTS.clear()
+            ok = Mock(returncode=0, stdout='true', stderr='')
+            with patch('subprocess.run', return_value=ok) as run:
+                self.assertTrue(ideal_projection.token_texts_match('left', 'right'))
+                self.assertTrue(ideal_projection.token_texts_match('left', 'right'))
+                self.assertEqual(run.call_count, 1)
+                self.assertTrue(ideal_projection.token_texts_match('left', 'other'))
+                self.assertEqual(run.call_count, 2)
+            with patch('subprocess.run', return_value=ok) as run:
+                lane._gate(b'record')
+                lane._gate(b'record')
+                self.assertEqual(run.call_count, 1)
+                lane._gate(b'other')
+                self.assertEqual(run.call_count, 2)
+            prepared = Mock(
+                returncode=0,
+                stdout='{"replaced":["a"],"declared":["b"],"labels":{"s":"t"}}',
+                stderr='')
+            with patch('subprocess.run', return_value=prepared) as run:
+                first = lane._prepare_with_labels({'current': 'text'})
+                second = lane._prepare_with_labels({'current': 'text'})
+                self.assertEqual(first, second)
+                self.assertEqual(run.call_count, 1)
+            pairs = [('left', 'right', 'lane token changed')]
+            with patch('subprocess.run', return_value=ok) as run:
+                lane._gate_tokens(pairs)
+                lane._gate_tokens(pairs)
+                self.assertEqual(run.call_count, 1)
+            flags = Mock(returncode=0, stdout='["true"]', stderr='')
+            with patch('subprocess.run', return_value=flags) as run:
+                self.assertEqual(
+                    lane._tokens_then_predecessors(
+                        pairs,
+                        [{'path': 'p', 'name': 'n', 'before': 'b'}],
+                        [('p', 'n', (), 'expected')]),
+                    [True])
+                self.assertEqual(run.call_count, 1)
+                lane._gate_tokens(pairs)
+                self.assertEqual(run.call_count, 1)
+            failed = Mock(returncode=1, stdout='', stderr='lane record changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaises(RuntimeError):
+                    lane._gate(b'bad')
+                self.assertEqual(run.call_count, 1)
+                with self.assertRaises(RuntimeError):
+                    lane._gate(b'bad')
+                self.assertEqual(run.call_count, 2)
+        finally:
+            (
+                lane._GATED_LANE,
+                lane._PREPARED_LANE,
+                lane._LANE_LABELS,
+                lane._LANE_TOKEN_PAIRS,
+                lane._LANE_TOKEN_FULL,
+            ) = saved[:5]
+            ideal_projection._TOKEN_DIGESTS.clear()
+            ideal_projection._TOKEN_DIGESTS.update(saved[5])
+
+
 class FrozenPredecessorReuseTests(unittest.TestCase):
     def test_a_placed_predecessor_is_not_rebuilt(self):
         import hashlib

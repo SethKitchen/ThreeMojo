@@ -1020,16 +1020,25 @@ def token_sha256(text):
     return result.stdout.strip()
 
 
+_TOKEN_DIGESTS = {}
+
+
 def _token_digest(payload):
-    """Return whether one kept-token comparison agrees."""
+    """Return whether one kept-token comparison agrees.
+
+    The same texts are not compared again. A failed comparison is not kept.
+    """
     import json
     import os
     import subprocess
     import tempfile
     from pathlib import Path
+    text = json.dumps(payload, separators=(',', ':'))
+    cached = _TOKEN_DIGESTS.get(text)
+    if cached is not None:
+        return cached
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    text = json.dumps(payload, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='token-digest-') as directory:
         path = Path(directory) / 'digest.json'
         path.write_text(text)
@@ -1042,6 +1051,7 @@ def _token_digest(payload):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+    _TOKEN_DIGESTS[text] = result.stdout
     return result.stdout
 
 

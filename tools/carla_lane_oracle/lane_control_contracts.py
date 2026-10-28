@@ -152,14 +152,26 @@ def _prepare(replacements, requests):
     return prepared['replaced'], prepared['declared']
 
 
+_PREPARED_LANE = None
+
+
 def _prepare_with_labels(payload):
-    """Read the lane-control labels, then prepare the declarations."""
-    global _LANE_LABELS
+    """Read the lane-control labels, then prepare the declarations.
+
+    The same declaration payload is not prepared again. A failed prepare
+    is not kept.
+    """
+    global _LANE_LABELS, _PREPARED_LANE
     import json
     import os
     import subprocess
     import tempfile
     text = json.dumps(payload, separators=(',', ':'))
+    cached = _PREPARED_LANE
+    if cached is not None and cached[0] == text:
+        if _LANE_LABELS is None:
+            _LANE_LABELS = cached[1][2]
+        return cached[1]
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='lane-prepare-labeled-') as directory:
@@ -177,10 +189,20 @@ def _prepare_with_labels(payload):
     prepared = json.loads(result.stdout)
     if _LANE_LABELS is None:
         _LANE_LABELS = prepared['labels']
-    return prepared['replaced'], prepared['declared'], prepared['labels']
+    result_tuple = (
+        prepared['replaced'], prepared['declared'], prepared['labels'])
+    _PREPARED_LANE = (text, result_tuple)
+    return result_tuple
+
+
+_GATED_LANE = None
 
 
 def _gate(payload):
+    """Check the lane-control record once for the same bytes."""
+    global _GATED_LANE
+    if _GATED_LANE == payload:
+        return
     import os
     import subprocess
     import tempfile
@@ -198,6 +220,7 @@ def _gate(payload):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise RuntimeError(message)
+    _GATED_LANE = payload
 
 
 def _gate_tokens(pairs):
@@ -218,12 +241,32 @@ def _predecessor_payload(declarations, items):
     }, separators=(',', ':'))
 
 
+_LANE_TOKEN_PAIRS = None
+_LANE_TOKEN_FULL = None
+
+
 def _token_directory(pairs, predecessors):
-    """Check the token pairs, and the predecessors when they are present."""
+    """Check the token pairs, and the predecessors when they are present.
+
+    The same token pairs are not checked again. A predecessor check still
+    runs when those pairs were checked without predecessors. A failed check
+    is not kept.
+    """
+    global _LANE_TOKEN_PAIRS, _LANE_TOKEN_FULL
     import json
     import os
     import subprocess
     import tempfile
+    key = tuple(pairs)
+    if predecessors is None and _LANE_TOKEN_PAIRS == key:
+        return None
+    if (
+        predecessors is not None
+        and _LANE_TOKEN_FULL is not None
+        and _LANE_TOKEN_FULL[0] == key
+        and _LANE_TOKEN_FULL[1] == predecessors
+    ):
+        return _LANE_TOKEN_FULL[2]
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     labels = []
@@ -251,8 +294,12 @@ def _token_directory(pairs, predecessors):
             raise ValueError(message)
         raise RuntimeError(message)
     if predecessors is None:
+        _LANE_TOKEN_PAIRS = key
         return None
-    return [flag == 'true' for flag in json.loads(result.stdout)]
+    flags = [flag == 'true' for flag in json.loads(result.stdout)]
+    _LANE_TOKEN_PAIRS = key
+    _LANE_TOKEN_FULL = (key, predecessors, flags)
+    return flags
 
 
 def _tokens_then_predecessors(pairs, declarations, items):
