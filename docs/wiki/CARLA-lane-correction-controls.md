@@ -171,6 +171,12 @@ It compares those successor digests before the dispatch migration record in one 
 
 It checks every coverage-invariant predecessor in one check.
 
+It reuses that ordered pin pair when the same names are checked again.
+
+A changed name list is checked again.
+
+A wrong pair still fails before the next record is read.
+
 It rebuilds one coverage-invariant pin predecessor in one check.
 
 It keeps the four coverage-invariant source paths.

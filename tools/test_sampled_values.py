@@ -705,5 +705,40 @@ class RoundedMatchCacheTests(unittest.TestCase):
             shutil.rmtree(root, ignore_errors=True)
 
 
+class PinPairCacheTests(unittest.TestCase):
+    def test_a_repeated_pin_pair_skips_the_second_gate(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import coverage_invariant_contracts as invariant
+        original = invariant._GATED_PAIR
+        names = {
+            'runtime-source-pins.json': {},
+            'sum2-guard-pins.json': {},
+        }
+        same = ['runtime-source-pins.json', 'sum2-guard-pins.json']
+        other = ('other.json',)
+        try:
+            invariant._GATED_PAIR = None
+            ok = Mock(returncode=0, stdout='', stderr='')
+            with patch('subprocess.run', return_value=ok) as run:
+                invariant._gate_pair(names)
+                invariant._gate_pair(same)
+                self.assertEqual(run.call_count, 1)
+                invariant._gate_pair(other)
+                self.assertEqual(run.call_count, 2)
+            self.assertEqual(invariant._GATED_PAIR, other)
+            failed = Mock(
+                returncode=1, stdout='', stderr='wrong fixed ordered pin pair\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'wrong fixed ordered pin pair'):
+                    invariant._gate_pair(names)
+                self.assertEqual(run.call_count, 1)
+            self.assertEqual(invariant._GATED_PAIR, other)
+            with patch('subprocess.run', return_value=ok) as run:
+                invariant._gate_pair(other)
+                self.assertEqual(run.call_count, 0)
+        finally:
+            invariant._GATED_PAIR = original
+
+
 if __name__ == '__main__':
     unittest.main()

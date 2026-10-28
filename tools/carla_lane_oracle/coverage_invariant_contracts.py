@@ -316,7 +316,15 @@ def read_record(root):
     return record
 
 
+_GATED_PAIR = None
+
+
 def _gate_pair(names):
+    """Require this ordered pin pair once for the same names."""
+    global _GATED_PAIR
+    labels = tuple(names)
+    if _GATED_PAIR == labels:
+        return
     import json
     import os
     import subprocess
@@ -326,7 +334,7 @@ def _gate_pair(names):
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='invariant-pair-') as directory:
         folder = Path(directory)
-        (folder / 'labels.json').write_text(json.dumps(list(names)))
+        (folder / 'labels.json').write_text(json.dumps(list(labels)))
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_invariant_gate',
              '--pair', str(folder)],
@@ -336,6 +344,7 @@ def _gate_pair(names):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+    _GATED_PAIR = labels
 
 
 def _invariant_predecessor(payload, record, filename):
