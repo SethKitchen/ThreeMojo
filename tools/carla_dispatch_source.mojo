@@ -7,6 +7,7 @@
 
     carla_dispatch_source --choice PATH
     carla_dispatch_source --match PATH
+    carla_dispatch_source --match-migration PATH
     carla_dispatch_source --token-match PATH
     carla_dispatch_source --labeled PATH
     carla_dispatch_source --labeled-tokens PATH
@@ -29,6 +30,7 @@ from tools._dispatch_source import (
     reviewed_source_choices,
     texts_match,
     texts_match_all,
+    texts_match_then_migration,
 )
 from tools._python_json import PY_LIST, PyJson
 
@@ -38,6 +40,7 @@ def _usage():
     print(
         (
             "usage: carla_dispatch_source --choice PATH | --match PATH |"
+            " --match-migration PATH |"
             " --token-match PATH | --labeled PATH | --labeled-tokens PATH"
         ),
         file=stderr,
@@ -58,6 +61,7 @@ def main() raises:
     if (
         mode != "--choice"
         and mode != "--match"
+        and mode != "--match-migration"
         and mode != "--token-match"
         and mode != "--labeled"
         and mode != "--labeled-tokens"
@@ -65,6 +69,9 @@ def main() raises:
         _usage()
     try:
         var text = Path(arguments[2]).read_text()
+        if mode == "--match-migration":
+            print(texts_match_then_migration(text), end="")
+            return
         if mode == "--labeled-tokens":
             print(labeled_choices_then_tokens(text), end="")
             return

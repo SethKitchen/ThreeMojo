@@ -12,6 +12,7 @@ strings.
 
 from tests._python_tokens import token_sha256
 from tools._dispatch_labels import dispatch_labels
+from tools._migration_records import migration_records
 from tools._python_json import MISSING, PyJson
 
 
@@ -229,3 +230,34 @@ def texts_match_all(payload: String) raises -> String:
         index += 1
     out.root = rows
     return out.dumps()
+
+
+def texts_match_then_migration(payload: String) raises -> String:
+    """Compare the texts, then read the dispatch migration when they match.
+
+    Args:
+        payload: A JSON list. Each item has `actual` and `expected`.
+
+    Returns:
+        JSON with `flags` and `matched`. `migration` is present when
+        every flag is true.
+
+    Raises:
+        Error: A text field is absent. The texts are compared before the
+            migration record is read.
+    """
+    var flags = texts_match_all(payload)
+    var doc = PyJson.parse(flags)
+    var index = 0
+    var count = doc.length(doc.root)
+    var matched = True
+    while index < count:
+        if doc.text(doc.item(doc.root, index)) != "true":
+            matched = False
+            break
+        index += 1
+    if not matched:
+        return '{"flags":' + flags + ',"matched":false}'
+    var records = PyJson.parse(migration_records())
+    var item = records.subtree(records.at(records.root, "dispatch")).dumps()
+    return '{"flags":' + flags + ',"matched":true,"migration":' + item + "}"

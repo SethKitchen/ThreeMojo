@@ -152,6 +152,8 @@ It relabels one runtime pin failure when the cause is the reviewed contract erro
 
 It compares every coverage-invariant successor digest in one check.
 
+It compares those successor digests before the dispatch migration record in one check.
+
 It checks every coverage-invariant predecessor in one check.
 
 It rebuilds one coverage-invariant pin predecessor in one check.
