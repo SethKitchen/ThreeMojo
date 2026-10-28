@@ -7,16 +7,18 @@
 
     carla_sampled_value_result PATH
     carla_sampled_value_result --framed FRAME META
+    carla_sampled_value_result --framed-indented FRAME META
 
 `PATH` is JSON with the measured counts and the copied records. The program
 prints the result. `--framed` hashes `FRAME` before that result. `META`
-names each source.
+names each source. `--framed-indented` also indents that result.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._sampled_value_result import (
+    indented_sampled_result_from_frame,
     sampled_result_from_frame,
     sampled_value_result,
 )
@@ -27,7 +29,8 @@ def _usage():
     print(
         (
             "usage: carla_sampled_value_result PATH |"
-            " carla_sampled_value_result --framed FRAME META"
+            " carla_sampled_value_result --framed FRAME META |"
+            " carla_sampled_value_result --framed-indented FRAME META"
         ),
         file=stderr,
     )
@@ -41,6 +44,19 @@ def main() raises:
         Error: The command is invalid, or a field has the wrong type.
     """
     var arguments = argv()
+    if len(arguments) == 4 and arguments[1] == "--framed-indented":
+        try:
+            print(
+                indented_sampled_result_from_frame(
+                    Path(arguments[2]).read_bytes(),
+                    Path(arguments[3]).read_text(),
+                ),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 4 and arguments[1] == "--framed":
         try:
             print(

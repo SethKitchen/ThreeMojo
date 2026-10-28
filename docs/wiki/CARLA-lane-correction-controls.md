@@ -348,6 +348,8 @@ It returns the runtime-support result after the heading, optional-runtime, and S
 
 It writes the runtime-support result with two-space indentation.
 
+It indents that runtime-support result after the result in one check.
+
 It keeps the runtime failure prefix.
 
 It compares the projected ideal spiral with the historical half-rate form.

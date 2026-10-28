@@ -9,6 +9,7 @@ The status and the scope text are fixed. The repository root and the
 check records are copied from the checks that just ran.
 """
 
+from tools._carla_assets import dumps_indent
 from tools._json_tools import quote_ascii
 from tools._python_json import (
     PY_BOOL,
@@ -109,3 +110,25 @@ def runtime_support_result(payload: String) raises -> String:
     var sum2 = doc.copy_node(doc.at(doc.root, "sum2"))
     doc.set(result, "sum2_correspondence", sum2)
     return _dump(doc, result)
+
+
+def indented_runtime_support_result(payload: String) raises -> String:
+    """Build the runtime-support result, then indent it.
+
+    Args:
+        payload: JSON with `root`, `groups`, `successors`, `heading`,
+            `optional`, and `sum2`.
+
+    Returns:
+        JSON with `result` and `indented`. `result` is the compact
+        result. `indented` is that result with two-space indentation
+        and a final newline.
+
+    Raises:
+        Error: A required field is missing. The result is built before
+            it is indented.
+    """
+    var compact = runtime_support_result(payload)
+    var doc = PyJson.parse(compact)
+    var indented = dumps_indent(doc, doc.root, 2) + "\n"
+    return '{"result":' + compact + ',"indented":' + quote_ascii(indented) + "}"

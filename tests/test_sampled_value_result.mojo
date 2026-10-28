@@ -7,7 +7,10 @@
 
 from std.testing import TestSuite, assert_equal, assert_raises
 
+from tools._carla_assets import dumps_indent
+from tools._python_json import PyJson
 from tools._sampled_value_result import (
+    indented_sampled_result_from_frame,
     sampled_result_from_frame,
     sampled_value_result,
 )
@@ -115,6 +118,34 @@ def test_one_framed_source_keeps_its_digest() raises:
     assert_equal(result.find('"status":"PASS"') >= 0, True)
     assert_equal(result.find(digest) >= 0, True)
     assert_equal(result.find('"a.mojo"') >= 0, True)
+
+
+def test_the_framed_result_is_indented_after_it_is_built() raises:
+    """A short frame fails before the indented result is returned."""
+    var meta = String(
+        '{"root":"r","shared":1,"modules":1,"primitive":"p","names":["a.mojo"],'
+        + '"successors":{}}'
+    )
+    with assert_raises(contains="sampled source frame changed"):
+        _ = indented_sampled_result_from_frame(String("").as_bytes(), meta)
+    var frame = String("2\nab").as_bytes()
+    var compact = sampled_result_from_frame(frame, meta)
+    var wrapped = indented_sampled_result_from_frame(frame, meta)
+    assert_equal(
+        wrapped.startswith('{"result":' + compact + ',"indented":'), True
+    )
+    var doc = PyJson.parse(wrapped)
+    assert_equal(doc.key(doc.root, 0), "result")
+    assert_equal(doc.key(doc.root, 1), "indented")
+    var result = PyJson.parse(compact)
+    assert_equal(
+        doc.text(doc.at(doc.root, "indented")),
+        dumps_indent(result, result.root, 2) + "\n",
+    )
+    assert_equal(
+        doc.text(doc.at(doc.root, "indented")).startswith('{\n  "status":'),
+        True,
+    )
 
 
 def main() raises:

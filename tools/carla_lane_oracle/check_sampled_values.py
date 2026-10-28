@@ -549,8 +549,12 @@ def _sampled_result(root, shared, modules, primitive, sources, successors):
     return json.loads(result.stdout)
 
 
+_SAMPLED_INDENTED = None
+
+
 def _digests_and_result(blobs, root, shared, modules, primitive, names, successors):
-    """Hash the observed sources, then return the sampled result."""
+    """Hash the observed sources, then return the result and its indent."""
+    global _SAMPLED_INDENTED
     import ast
     import os
     import subprocess
@@ -574,7 +578,8 @@ def _digests_and_result(blobs, root, shared, modules, primitive, names, successo
         meta.write_text(payload)
         result = subprocess.run(
             ['sh', str(repo / 'tools' / 'tool.sh'), mojo,
-             'carla_sampled_value_result', '--framed', str(frame), str(meta)],
+             'carla_sampled_value_result', '--framed-indented', str(frame),
+             str(meta)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -584,7 +589,9 @@ def _digests_and_result(blobs, root, shared, modules, primitive, names, successo
         if message.startswith(prefix):
             raise KeyError(ast.literal_eval(message[len(prefix):])) from None
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _SAMPLED_INDENTED = parsed['indented']
+    return parsed['result']
 
 
 _SAMPLED_CLOSURE = None
@@ -859,15 +866,11 @@ def main():
     parser.add_argument('--repo-root', type=Path, default=ROOT)
     args = parser.parse_args()
     try:
-        result = verify(args.repo_root.resolve())
+        verify(args.repo_root.resolve())
     except (CheckError, OSError, SyntaxError, ValueError) as error:
         print(_cli_failures()['sampled'], error)
         return 1
-    if __package__:
-        from . import coverage_invariant_contracts as invariant
-    else:
-        import coverage_invariant_contracts as invariant
-    print(invariant._indent_json(result).decode(), end='')
+    print(_SAMPLED_INDENTED, end='')
     return 0
 
 

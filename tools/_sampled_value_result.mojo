@@ -10,6 +10,7 @@ The repository root, the two measured counts, the primitive digest, the
 source digests, and the typed edges are copied from the check that just ran.
 """
 
+from tools._carla_assets import dumps_indent
 from tools._framed_sha256 import framed_sha256
 from tools._json_tools import quote_ascii
 from tools._python_json import (
@@ -184,3 +185,28 @@ def sampled_result_from_frame(
     payload += _dump(doc, doc.at(doc.root, "successors"))
     payload += "}"
     return sampled_value_result(payload)
+
+
+def indented_sampled_result_from_frame(
+    frame: Span[UInt8, _], meta: String
+) raises -> String:
+    """Hash the framed sources, build the result, then indent it.
+
+    Args:
+        frame: Length lines followed by the exact payload bytes.
+        meta: JSON with `root`, `shared`, `modules`, `primitive`,
+            `names`, and `successors`.
+
+    Returns:
+        JSON with `result` and `indented`. `result` is the compact
+        result. `indented` is that result with two-space indentation
+        and a final newline.
+
+    Raises:
+        Error: A frame is invalid or a result field changed. The frame
+            and the result are read before the result is indented.
+    """
+    var compact = sampled_result_from_frame(frame, meta)
+    var doc = PyJson.parse(compact)
+    var indented = dumps_indent(doc, doc.root, 2) + "\n"
+    return '{"result":' + compact + ',"indented":' + quote_ascii(indented) + "}"

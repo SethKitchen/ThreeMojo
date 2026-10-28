@@ -17,8 +17,12 @@ import optional_runtime_contracts
 ROOT = Path(__file__).resolve().parents[2]
 
 
+_RUNTIME_INDENTED = None
+
+
 def _runtime_result(root, groups, successors, heading, optional, sum2):
-    """Return the runtime-support result in historical field order."""
+    """Return the runtime-support result and keep its indented text."""
+    global _RUNTIME_INDENTED
     import ast
     import os
     import subprocess
@@ -34,7 +38,7 @@ def _runtime_result(root, groups, successors, heading, optional, sum2):
         path.write_text(payload)
         result = subprocess.run(
             ['sh', str(repo / 'tools' / 'tool.sh'), mojo,
-             'carla_runtime_support_result', str(path)],
+             'carla_runtime_support_result', '--indented', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -44,7 +48,9 @@ def _runtime_result(root, groups, successors, heading, optional, sum2):
         if message.startswith(prefix):
             raise KeyError(ast.literal_eval(message[len(prefix):])) from None
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _RUNTIME_INDENTED = parsed['indented']
+    return parsed['result']
 
 
 @lexical_memo_scope()
@@ -96,15 +102,11 @@ def main():
     parser.add_argument('--repo-root', type=Path, default=ROOT)
     args = parser.parse_args()
     try:
-        result = verify(args.repo_root.resolve())
+        verify(args.repo_root.resolve())
     except (ValueError, OSError, KeyError, TypeError) as error:
         print(_cli_failures()['runtime'], error)
         return 1
-    if __package__:
-        from . import coverage_invariant_contracts as invariant
-    else:
-        import coverage_invariant_contracts as invariant
-    print(invariant._indent_json(result).decode(), end='')
+    print(_RUNTIME_INDENTED, end='')
     return 0
 
 

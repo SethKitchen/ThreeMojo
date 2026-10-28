@@ -168,6 +168,8 @@ It hashes each observed source byte string before that result.
 
 It writes the sampled value result with two-space indentation.
 
+It indents that sampled value result after the result in one check.
+
 It stores the three sampled lane and uncertain declarations.
 
 Mojo checks the sampled qualifier pins.
