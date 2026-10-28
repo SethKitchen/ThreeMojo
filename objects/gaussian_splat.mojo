@@ -52,6 +52,7 @@ from math.matrix4 import Matrix4
 from math.norm import squared_length3
 from math.utils import max3
 from math.vector3 import Vector3, append_vector3, vector3_from_float64
+from render.splat_harmonics import sh_weights
 from render.tasks import TaskGroup
 from std.math import floor, inf, max, min, sqrt
 from std.memory import bitcast
@@ -894,50 +895,6 @@ def _length(x: Float32, y: Float32, z: Float32) -> Float64:
     var fz = Float64(z)
     return sqrt(squared_length3[DType.float64](fx, fy, fz))
 
-
-def _weights(degree: Int, d: Vector3) -> SIMD[DType.float32, 8]:
-    """Return the weights of one band's coefficients for a direction, as
-    three.js's `applySphericalHarmonics` writes them.
-
-    The weights are lanes of one vector, so that no splat allocates.
-
-    Args:
-        degree: The band, 1 through 3.
-        d: The unit direction from the camera to the splat.
-
-    Returns:
-        `2 degree + 1` weights in the first lanes, and zeros after them.
-    """
-    var x = d.x
-    var y = d.y
-    var z = d.z
-    var w = SIMD[DType.float32, 8](0)
-    if degree == 1:
-        w[0] = y * -0.4886025
-        w[1] = z * 0.4886025
-        w[2] = x * -0.4886025
-        return w
-    var xx = x * x
-    var yy = y * y
-    var zz = z * z
-    if degree == 2:
-        w[0] = x * y * 1.0925484
-        w[1] = y * z * -1.0925484
-        w[2] = (zz * 2 - xx - yy) * 0.3153915
-        w[3] = x * z * -1.0925484
-        w[4] = (xx - yy) * 0.5462742
-        return w
-    var xy = x * y
-    w[0] = y * (xx * 3 - yy) * -0.5900436
-    w[1] = xy * z * 2.8906114
-    w[2] = y * (zz * 4 - xx - yy) * -0.4570458
-    w[3] = z * (zz * 2 - xx * 3 - yy * 3) * 0.3731763
-    w[4] = x * (zz * 4 - xx - yy) * -0.4570458
-    w[5] = z * (xx - yy) * 1.4453057
-    w[6] = x * (xx - yy * 3) * -0.5900436
-    return w
-
-
 def _band_sum(
     band: List[UInt8], index: Int, degree: Int, d: Vector3
 ) -> Vector3:
@@ -953,7 +910,7 @@ def _band_sum(
         The sum of the band's coefficients, each `(byte - 128) / 128`,
         times their weights.
     """
-    var weights = _weights(degree, d)
+    var weights = sh_weights(degree, d)
     var coefficients = degree * 2 + 1
     # Each splat takes whole four-byte words: `sh_band_words`.
     var words = (coefficients * 3 + 3) // 4

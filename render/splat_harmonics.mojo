@@ -7,12 +7,10 @@
 
 A splat's color depends on where it is seen from. Its harmonics bytes give
 `2 degree + 1` coefficients for each band, three channels each, and the color
-is the sum of the coefficients times these weights. `objects.gaussian_splat`
-sums them on the host, as three.js's `applySphericalHarmonics` does. A GPU
-kernel needs the same weights without the object, so this module holds them
-in a leaf module that imports nothing of the renderer. The weights are the
-ones `GaussianSplat.spherical_harmonics_color` uses, and
-`tests/test_splat_harmonics.mojo` holds the two to the same colors.
+is the sum of the coefficients times these weights, as three.js's
+`applySphericalHarmonics` writes them. `objects.gaussian_splat` sums them on
+the host and the GPU kernels sum them on the device, so the weights live in
+this leaf module, which imports nothing of the renderer.
 """
 
 from math.vector3 import Vector3
