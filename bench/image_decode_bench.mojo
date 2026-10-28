@@ -53,6 +53,14 @@ from tools._python_stats import (
 )
 from tools._sha256 import Sha256
 from tools._text import split_lines
+from tools._host import (
+    c_string,
+    environ_address,
+    environment_value,
+    read_c_string,
+    two_digits,
+    uname_fields,
+)
 
 comptime BASELINE_REVISION = "51b4424ceef57fef1f8a5e787c583126f999baf5"
 """The baseline commit of the recorded #505 comparison."""
@@ -120,11 +128,6 @@ def runner_source() -> String:
 # --- small helpers -------------------------------------------------------------
 
 
-def _two(value: Int) -> String:
-    """Return a number with at least two digits."""
-    return ("0" if value < 10 else "") + String(value)
-
-
 def now() -> String:
     """Return the UTC time, as `datetime.now(timezone.utc).isoformat()`.
 
@@ -155,15 +158,15 @@ def now() -> String:
     var text = (
         String(year)
         + "-"
-        + _two(month)
+        + two_digits(month)
         + "-"
-        + _two(day)
+        + two_digits(day)
         + "T"
-        + _two(rest // 3600)
+        + two_digits(rest // 3600)
         + ":"
-        + _two((rest // 60) % 60)
+        + two_digits((rest // 60) % 60)
         + ":"
-        + _two(rest % 60)
+        + two_digits(rest % 60)
     )
     if micro:
         var fraction = String(micro)
@@ -286,43 +289,6 @@ def _python_list(values: List[String]) -> String:
 def _command_text(command: List[String]) -> String:
     """Return a command as Python writes a list of strings."""
     return _python_list(command)
-
-
-def _c_string(text: String) -> List[UInt8]:
-    """Return text with a final zero byte."""
-    var bytes = List[UInt8](text.as_bytes())
-    bytes.append(0)
-    return bytes^
-
-
-def _read_c_string(address: Int) -> String:
-    """Return the zero-terminated text at an address."""
-    if address == 0:
-        return String()
-    var length = external_call["strlen", Int](address)
-    var bytes = List[UInt8](length=length, fill=0)
-    _ = external_call["memcpy", Int](
-        bytes.unsafe_ptr().unsafe_bitcast[NoneType](), address, length
-    )
-    return String(from_utf8_lossy=bytes)
-
-
-def environment_value(name: String) -> Optional[String]:
-    """Return an environment variable, or None when it is unset.
-
-    Args:
-        name: The variable.
-
-    Returns:
-        The value, which can be empty, or None.
-    """
-    var key = _c_string(name)
-    var address = external_call["getenv", Int](
-        key.unsafe_ptr().unsafe_bitcast[NoneType]()
-    )
-    if address == 0:
-        return None
-    return _read_c_string(address)
 
 
 def read_optional(path: String) -> Optional[String]:
@@ -709,7 +675,7 @@ def free_disk_bytes(directory: String) raises -> Int:
     Raises:
         Error: If `statvfs` fails.
     """
-    var path = _c_string(directory)
+    var path = c_string(directory)
     var buffer = List[UInt8](length=512, fill=0)
     var status = external_call["statvfs", Int32](
         path.unsafe_ptr().unsafe_bitcast[NoneType](),
@@ -1134,29 +1100,6 @@ def build(
 # --- host ----------------------------------------------------------------------
 
 
-def _uname() -> List[String]:
-    """Return `uname` as system, node, release, version and machine."""
-    var buffer = List[UInt8](length=2048, fill=0)
-    _ = external_call["uname", Int32](
-        buffer.unsafe_ptr().unsafe_bitcast[NoneType]()
-    )
-    var width: Int
-    comptime if CompilationTarget.is_macos():
-        width = 256
-    else:
-        width = 65
-    var fields = List[String]()
-    for index in range(5):
-        var text = List[UInt8]()
-        for i in range(width):
-            var byte = buffer[index * width + i]
-            if byte == 0:
-                break
-            text.append(byte)
-        fields.append(String(from_utf8_lossy=text))
-    return fields^
-
-
 def platform_text() -> String:
     """Return a platform name in the form of `platform.platform()`.
 
@@ -1164,12 +1107,12 @@ def platform_text() -> String:
         `Linux-RELEASE-MACHINE-with-glibcVERSION` on Linux, or
         `SYSTEM-RELEASE-MACHINE` elsewhere.
     """
-    var fields = _uname()
+    var fields = uname_fields()
     var text = fields[0] + "-" + fields[2] + "-" + fields[4]
     comptime if CompilationTarget.is_macos():
         return text
     else:
-        var version = _read_c_string(
+        var version = read_c_string(
             external_call["gnu_get_libc_version", Int]()
         )
         return text + "-with-glibc" + version
@@ -1203,7 +1146,7 @@ def host_record(mut tree: JsonTree) raises -> Int:
         Error: If a value cannot be written.
     """
     var record = tree.object()
-    var fields = _uname()
+    var fields = uname_fields()
     var processor = String()
     try:
         var result = run_program(["uname", "-p"], 10)
@@ -1529,22 +1472,6 @@ struct Launch(Movable):
     """The wall time from launch to reaping, in nanoseconds."""
 
 
-def _environ() raises -> Int:
-    """Return the address of this process's environment array."""
-    comptime if CompilationTarget.is_macos():
-        var cell = external_call["_NSGetEnviron", Int]()
-        var value = List[Int](length=1, fill=0)
-        _ = external_call["memcpy", Int](
-            value.unsafe_ptr().unsafe_bitcast[NoneType](), cell, 8
-        )
-        return value[0]
-    else:
-        var handle = OwnedDLHandle()
-        var symbol = handle.get_symbol[Int]("environ")
-        var address: Int = symbol[][]
-        return address
-
-
 comptime _SHELL = (
     'cd -- "$1" || exit 125\nout=$2\nerr=$3\nshift 3\nexec "$@" >"$out"'
     ' 2>"$err"\n'
@@ -1589,7 +1516,7 @@ def launch_group(
     words.extend(arguments.copy())
     var strings = List[List[UInt8]]()
     for word in words:
-        strings.append(_c_string(word))
+        strings.append(c_string(word))
     var addresses = List[Int]()
     for i in range(len(strings)):
         addresses.append(Int(strings[i].unsafe_ptr()))
@@ -1610,7 +1537,7 @@ def launch_group(
         Int(0),
         pointer,
         addresses.unsafe_ptr().unsafe_bitcast[NoneType](),
-        _environ(),
+        environ_address(),
     )
     _ = external_call["posix_spawnattr_destroy", Int32](pointer)
     if spawned != 0:

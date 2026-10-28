@@ -40,6 +40,14 @@ from tools._python_float import parse_float, python_repr
 from tools._python_json import py_repr
 from tools._python_stats import format_fixed
 from tools._text import split_lines
+from tools._host import (
+    c_string,
+    environ_address,
+    environment_value,
+    read_c_string,
+    two_digits,
+    uname_fields,
+)
 
 comptime TIME_BIN = "/usr/bin/time"
 """The `time` program that reports the peak resident set."""
@@ -888,62 +896,9 @@ struct Finished(Movable):
     """The time from launch to reaping, in nanoseconds."""
 
 
-def _c_string(text: String) -> List[UInt8]:
-    """Return text with a final zero byte."""
-    var bytes = List[UInt8](text.as_bytes())
-    bytes.append(0)
-    return bytes^
-
-
-def _read_c_string(address: Int) -> String:
-    """Return the zero-terminated text at an address."""
-    if address == 0:
-        return String()
-    var length = external_call["strlen", Int](address)
-    var bytes = List[UInt8](length=length, fill=0)
-    _ = external_call["memcpy", Int](
-        bytes.unsafe_ptr().unsafe_bitcast[NoneType](), address, length
-    )
-    return String(from_utf8_lossy=bytes)
-
-
-def environment_value(name: String) -> Optional[String]:
-    """Return an environment variable, or None when it is unset.
-
-    Args:
-        name: The variable.
-
-    Returns:
-        The value, which can be empty, or None.
-    """
-    var key = _c_string(name)
-    var address = external_call["getenv", Int](
-        key.unsafe_ptr().unsafe_bitcast[NoneType]()
-    )
-    if address == 0:
-        return None
-    return _read_c_string(address)
-
-
-def _environ() raises -> Int:
-    """Return the address of this process's environment array."""
-    comptime if CompilationTarget.is_macos():
-        var cell = external_call["_NSGetEnviron", Int]()
-        var value = List[Int](length=1, fill=0)
-        _ = external_call["memcpy", Int](
-            value.unsafe_ptr().unsafe_bitcast[NoneType](), cell, 8
-        )
-        return value[0]
-    else:
-        var handle = OwnedDLHandle()
-        var symbol = handle.get_symbol[Int]("environ")
-        var address: Int = symbol[][]
-        return address
-
-
 def _environment() raises -> List[String]:
     """Return this process's environment as `NAME=VALUE` entries."""
-    var base = _environ()
+    var base = environ_address()
     var entries = List[String]()
     var cell = List[Int](length=1, fill=0)
     var index = 0
@@ -953,7 +908,7 @@ def _environment() raises -> List[String]:
         )
         if cell[0] == 0:
             break
-        entries.append(_read_c_string(cell[0]))
+        entries.append(read_c_string(cell[0]))
         index += 1
     return entries^
 
@@ -978,7 +933,7 @@ def _with_overrides(
 
 def _executable(path: String) -> Bool:
     """Return whether a path is a file that this process can run."""
-    var bytes = _c_string(path)
+    var bytes = c_string(path)
     var allowed = external_call["access", Int32](
         bytes.unsafe_ptr().unsafe_bitcast[NoneType](), Int32(1)
     )
@@ -1107,7 +1062,7 @@ def spawn(
     var err_path = scratch + "/stderr"
     var strings = List[List[UInt8]]()
     for word in arguments:
-        strings.append(_c_string(word))
+        strings.append(c_string(word))
     var addresses = List[Int]()
     for i in range(len(strings)):
         addresses.append(Int(strings[i].unsafe_ptr()))
@@ -1115,15 +1070,15 @@ def spawn(
     var entries = _with_overrides(_environment(), overrides)
     var env_strings = List[List[UInt8]]()
     for entry in entries:
-        env_strings.append(_c_string(entry))
+        env_strings.append(c_string(entry))
     var env_addresses = List[Int]()
     for i in range(len(env_strings)):
         env_addresses.append(Int(env_strings[i].unsafe_ptr()))
     env_addresses.append(0)
-    var path_bytes = _c_string(program)
-    var out_bytes = _c_string(out_path)
-    var err_bytes = _c_string(err_path)
-    var dir_bytes = _c_string(directory)
+    var path_bytes = c_string(program)
+    var out_bytes = c_string(out_path)
+    var err_bytes = c_string(err_path)
+    var dir_bytes = c_string(directory)
     var flags: Int32
     comptime if CompilationTarget.is_macos():
         flags = Int32(0x1 | 0x200 | 0x400)
@@ -1697,11 +1652,6 @@ struct System(Machine):
         print(text, end="", file=stderr, flush=True)
 
 
-def _two(value: Int) -> String:
-    """Return a number with at least two digits."""
-    return ("0" if value < 10 else "") + String(value)
-
-
 def local_date() -> String:
     """Return the local date, as `time.strftime("%Y-%m-%d")`.
 
@@ -1720,9 +1670,9 @@ def local_date() -> String:
     return (
         String(Int(fields[5]) + 1900)
         + "-"
-        + _two(Int(fields[4]) + 1)
+        + two_digits(Int(fields[4]) + 1)
         + "-"
-        + _two(Int(fields[3]))
+        + two_digits(Int(fields[3]))
     )
 
 
@@ -1787,8 +1737,8 @@ def which_npm() -> String:
 
 def _symlink(target: String, link: String) -> Bool:
     """Make a symbolic link, and return whether it was made."""
-    var a = _c_string(target)
-    var b = _c_string(link)
+    var a = c_string(target)
+    var b = c_string(link)
     var made = external_call["symlink", Int32](
         a.unsafe_ptr().unsafe_bitcast[NoneType](),
         b.unsafe_ptr().unsafe_bitcast[NoneType](),
@@ -2018,29 +1968,6 @@ def release_labels(mut tree: JsonTree, payload: Int) raises -> List[String]:
     return labels^
 
 
-def _uname() -> List[String]:
-    """Return `uname` as system, node, release, version and machine."""
-    var buffer = List[UInt8](length=2048, fill=0)
-    _ = external_call["uname", Int32](
-        buffer.unsafe_ptr().unsafe_bitcast[NoneType]()
-    )
-    var width: Int
-    comptime if CompilationTarget.is_macos():
-        width = 256
-    else:
-        width = 65
-    var fields = List[String]()
-    for index in range(5):
-        var text = List[UInt8]()
-        for i in range(width):
-            var byte = buffer[index * width + i]
-            if byte == 0:
-                break
-            text.append(byte)
-        fields.append(String(from_utf8_lossy=text))
-    return fields^
-
-
 def _sysctl[M: Machine](mut machine: M, name: String) raises -> String:
     """Return `sysctl -n NAME`, or empty when it fails."""
     var done = machine.capture(["sysctl", "-n", name], "", List[String]())
@@ -2066,7 +1993,7 @@ def cpu_name[M: Machine](mut machine: M) raises -> String:
     comptime if CompilationTarget.is_macos():
         var brand = _sysctl(machine, "machdep.cpu.brand_string")
         if brand.byte_length() == 0:
-            brand = _uname()[4]
+            brand = uname_fields()[4]
         var cores = _sysctl(machine, "hw.logicalcpu")
         return (
             brand + ", " + cores + " cores" if cores.byte_length()
@@ -2089,7 +2016,7 @@ def cpu_name[M: Machine](mut machine: M) raises -> String:
         pass
     if processor == "unknown":
         processor = String()
-    return processor if processor.byte_length() > 0 else _uname()[4]
+    return processor if processor.byte_length() > 0 else uname_fields()[4]
 
 
 def os_name() -> String:
@@ -2098,7 +2025,7 @@ def os_name() -> String:
     Returns:
         `Linux 6.12.94+`, or `macOS 26.7 (arm64)`.
     """
-    var fields = _uname()
+    var fields = uname_fields()
     comptime if CompilationTarget.is_macos():
         var version = String()
         var plist = "/System/Library/CoreServices/SystemVersion.plist"
