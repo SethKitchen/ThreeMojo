@@ -10,6 +10,7 @@ result, the token text, and the decimal-word error.
 """
 
 from tools._python_json import MISSING, PyJson
+from tools._spiral_moment_words import decimal_integers_json
 
 
 def signed_zero_word(payload: String) raises -> String:
@@ -59,6 +60,36 @@ def decimal_word_result(payload: String) raises -> String:
     if doc.length(words) != 1:
         raise Error("binary64 overflow")
     return doc.text(doc.item(words, 0))
+
+
+def classified_decimal_word(token: String) raises -> String:
+    """Round one decimal literal, then classify that word.
+
+    Args:
+        token: A decimal literal or integer fraction.
+
+    Returns:
+        The unsigned decimal encoding of the rounded word.
+
+    Raises:
+        Error: The literal is not finite, or the rounded word is not the
+            one stored encoding. The literal is rounded before the word
+            is classified.
+    """
+    var listed = PyJson()
+    var rows = listed.new_list()
+    listed.append(rows, listed.new_str(token))
+    listed.root = rows
+    var parsed = PyJson.parse(decimal_integers_json(listed.dumps()))
+    var decision = PyJson()
+    var body = decision.new_dict()
+    var words = decision.new_list()
+    decision.append(
+        words, decision.new_str(parsed.text(parsed.item(parsed.root, 0)))
+    )
+    decision.set(body, "words", words)
+    decision.root = body
+    return decimal_word_result(decision.dumps())
 
 
 def constant_error_text(payload: String) raises -> String:

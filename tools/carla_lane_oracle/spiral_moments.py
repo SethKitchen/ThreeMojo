@@ -171,7 +171,7 @@ def decimal_word(token):
     if _moment_error('--signed', {'token': token, 'zero': not value}) == 'true':
         return SIGN
     try:
-        words = ideal_projection.decimal_words([token])
+        result = ideal_projection.classified_decimal_word(token)
     except ValueError as error:
         try:
             result = _moment_error('--result', {'error': str(error)})
@@ -180,10 +180,6 @@ def decimal_word(token):
         if result != 'nearest':
             raise CheckError(result) from error
         return nearest_even(value)
-    try:
-        result = _moment_error('--result', {'words': [str(word) for word in words]})
-    except ValueError as error:
-        raise CheckError(str(error)) from error
     return int(result)
 
 

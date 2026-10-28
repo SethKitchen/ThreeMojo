@@ -404,6 +404,32 @@ def hex_integers(words):
     return [int(item) for item in json.loads(result.stdout)]
 
 
+def classified_decimal_word(token):
+    """Return one rounded decimal word after its count check."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='classified-decimal-') as directory:
+        path = Path(directory) / 'token.txt'
+        path.write_text(token)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_errors',
+             '--classified', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = _cli_failures()['word']
+        if message.startswith(prefix):
+            message = message[len(prefix):]
+        raise ValueError(message)
+    return result.stdout
+
+
 def decimal_words(literals):
     """Return the nearest binary64 word of each decimal literal."""
     import os

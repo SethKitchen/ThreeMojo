@@ -8,6 +8,7 @@
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._moment_errors import (
+    classified_decimal_word,
     constant_error_text,
     decimal_word_result,
     signed_zero_word,
@@ -57,6 +58,17 @@ def test_a_constant_routing_error_names_the_declaration() raises:
         constant_error_text('{"message":"other failure","name":"_GL_NODES"}'),
         "other failure",
     )
+
+
+def test_one_literal_is_rounded_and_classified() raises:
+    """`1.0` is rounded and returned as its one decimal word."""
+    assert_equal(classified_decimal_word("1.0"), "4607182418800017408")
+
+
+def test_a_bad_literal_fails_before_classification() raises:
+    """A malformed literal fails before the word count is checked."""
+    with assert_raises(contains="spiral moment word: unsupported decimal word"):
+        _ = classified_decimal_word("nope")
 
 
 def main() raises:
