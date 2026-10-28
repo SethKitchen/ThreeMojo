@@ -98,6 +98,11 @@ class RoundingTests(unittest.TestCase):
             self.assertEqual(m.nearest_even(mid), even)
             self.assertEqual(m.nearest_even(-mid), even | m.SIGN)
 
+    def test_a_repeated_pin_key_is_refused(self):
+        with self.assertRaisesRegex(ValueError, 'duplicate runtime source pin key: a'):
+            m._refuse_repeated_pin_keys('{"a": 1, "a": 2}')
+        m._refuse_repeated_pin_keys('{"a": 1}')
+
     def test_decimal_sign_and_exact_rounding(self):
         self.assertEqual(m.decimal_word('-0.0'), m.SIGN)
         self.assertEqual(m.decimal_word('0.0'), 0)

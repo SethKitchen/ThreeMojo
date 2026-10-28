@@ -734,6 +734,8 @@ It reads the word count before that stored table in one check.
 
 It checks the moment pin sets, paths, dependency closure, legacy digest, and result pins.
 
+It refuses a repeated pin key before that pin document is parsed.
+
 It builds the moment pin specification before that pin check in one check.
 
 It reuses that moment pin check when the same document is read again.

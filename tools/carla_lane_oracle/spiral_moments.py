@@ -818,6 +818,40 @@ def __getattr__(name):
 _GATED_MOMENT_PINS = None
 
 
+_GATED_PIN_KEYS = None
+
+
+def _refuse_repeated_pin_keys(text):
+    """Refuse a repeated key before the pin document is parsed.
+
+    The same text is not checked again. A changed text is checked again.
+    A failed check is not kept.
+    """
+    global _GATED_PIN_KEYS
+    if _GATED_PIN_KEYS == text:
+        return
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='moment-pin-keys-') as directory:
+        path = Path(directory) / 'pins.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_pins',
+             '--keys', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        if message.startswith('duplicate runtime source pin key:'):
+            raise ValueError(message)
+        return
+    _GATED_PIN_KEYS = text
+
+
 def _require_moment_pins(pins):
     """Build the pin specification, then check the pin document.
 
@@ -855,8 +889,9 @@ def verify_inputs(root, *, _then_rows=False):
     _plan_with_files()
     messages = _moment_plan()['messages']
     arrays = _moment_plan()['arrays']
-    pins = json.loads(_typed_source.historical_text(root, root / _pins(), (root / _pins()).read_text(encoding='utf-8')),
-                      object_pairs_hook=source_contracts.unique_keys)
+    pin_text = _typed_source.historical_text(root, root / _pins(), (root / _pins()).read_text(encoding='utf-8'))
+    _refuse_repeated_pin_keys(pin_text)
+    pins = json.loads(pin_text)
     _require_moment_pins(pins)
     constants = {}
     stored_words = {}

@@ -6,6 +6,7 @@
 """Check the stored-moment pin shape.
 
     carla_moment_pins PATH
+    carla_moment_pins --keys PATH
     carla_moment_pins --after-spec PATH
     carla_moment_pins --legacy PATH
     carla_moment_pins --result PATH
@@ -18,6 +19,7 @@ prints nothing when the check matches.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
+from tools._duplicate_pin_keys import reject_duplicate_pin_keys
 from tools._moment_pin_shape import (
     moment_pins_after_spec,
     require_legacy_digest,
@@ -26,12 +28,25 @@ from tools._moment_pin_shape import (
 )
 
 
+def moment_pin_keys(payload: Span[UInt8, _]) raises:
+    """Refuse a repeated key in a moment pin document.
+
+    Args:
+        payload: The pin document bytes.
+
+    Raises:
+        Error: A key is repeated, or the bytes are not JSON. The repeated
+            key has no contract prefix. Invalid JSON uses the parser text.
+    """
+    reject_duplicate_pin_keys(payload)
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
-            "usage: carla_moment_pins PATH | --after-spec PATH | --legacy PATH"
-            " | --result PATH"
+            "usage: carla_moment_pins PATH | --keys PATH | --after-spec PATH"
+            " | --legacy PATH | --result PATH"
         ),
         file=stderr,
     )
@@ -45,6 +60,13 @@ def main() raises:
         Error: The command is invalid, or a pin check failed.
     """
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--keys":
+        try:
+            moment_pin_keys(Path(arguments[2]).read_bytes())
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 3 and arguments[1] == "--after-spec":
         try:
             moment_pins_after_spec(Path(arguments[2]).read_text())

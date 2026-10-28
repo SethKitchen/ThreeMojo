@@ -8,6 +8,7 @@
 from std.testing import TestSuite, assert_raises
 
 from tools._python_json import PyJson
+from tools.carla_moment_pins import moment_pin_keys
 from tools._moment_pin_shape import (
     moment_pins_after_spec,
     require_legacy_digest,
@@ -15,6 +16,13 @@ from tools._moment_pin_shape import (
     require_projection_result,
 )
 from tools._moment_pin_spec import moment_pin_spec
+
+
+def test_a_repeated_moment_pin_key_is_refused() raises:
+    """A repeated key fails before the pin shape is checked."""
+    with assert_raises(contains="duplicate runtime source pin key: a"):
+        moment_pin_keys(String('{"a":1,"a":2}').as_bytes())
+    moment_pin_keys(String('{"a":1,"b":2}').as_bytes())
 
 
 def _pins() -> String:
