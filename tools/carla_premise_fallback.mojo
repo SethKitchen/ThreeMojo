@@ -7,14 +7,15 @@
 
     carla_premise_fallback PATH
 
-`PATH` is JSON with `matched`, `path`, `name`, and `owner`. The program
-prints `none`, `seed`, or `lane`.
+`PATH` is one premise or a list of premises. One premise prints `none`,
+`seed`, or `lane`. A list prints those choices in order.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._premise_fallback import premise_fallback
+from tools._premise_fallback import premise_fallback, premise_fallbacks
+from tools._python_json import PY_LIST, PyJson
 
 
 def _usage():
@@ -24,7 +25,7 @@ def _usage():
 
 
 def main() raises:
-    """Print the premise predecessor choice.
+    """Print each premise predecessor choice.
 
     Raises:
         Error: The command is invalid, or a required field is missing.
@@ -33,7 +34,12 @@ def main() raises:
     if len(arguments) != 2:
         _usage()
     try:
-        print(premise_fallback(Path(arguments[1]).read_text()), end="")
+        var text = Path(arguments[1]).read_text()
+        var doc = PyJson.parse(text)
+        if doc.kind(doc.root) == PY_LIST:
+            print(premise_fallbacks(text), end="")
+        else:
+            print(premise_fallback(text), end="")
     except error:
         print(String(error), file=stderr)
         exit(1)

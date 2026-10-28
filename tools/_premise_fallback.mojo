@@ -8,18 +8,47 @@
 from tools._python_json import PY_BOOL, PY_LIST, PyJson
 
 
-def _is_true(doc: PyJson, key: String) raises -> Bool:
-    """Return whether a field is JSON true.
+def _is_true(doc: PyJson, node: Int) -> Bool:
+    """Return whether a value is JSON true.
 
     Args:
         doc: The decision document.
-        key: The field name.
+        node: The value.
 
     Returns:
         True only for a boolean true. Every other kind is false.
     """
-    var node = doc.at(doc.root, key)
     return doc.kind(node) == PY_BOOL and doc.flag(node)
+
+
+def _choice(doc: PyJson, node: Int) raises -> String:
+    """Choose one premise predecessor.
+
+    Args:
+        doc: The parsed document.
+        node: One premise object.
+
+    Returns:
+        `none`, `seed`, or `lane`.
+
+    Raises:
+        Error: A required field is missing.
+    """
+    if _is_true(doc, doc.at(node, "matched")):
+        return "none"
+    var path = doc.text(doc.at(node, "path"))
+    var name = doc.text(doc.at(node, "name"))
+    var owner = doc.at(node, "owner")
+    var empty_owner = doc.kind(owner) == PY_LIST and doc.length(owner) == 0
+    if (
+        path == "extensions/carla/map.mojo"
+        and name == "_try_winner_seed"
+        and empty_owner
+    ):
+        return "seed"
+    if path == "extensions/carla/lane_refinement.mojo":
+        return "lane"
+    return "none"
 
 
 def premise_fallback(payload: String) raises -> String:
@@ -38,18 +67,29 @@ def premise_fallback(payload: String) raises -> String:
         Error: A required field is missing.
     """
     var doc = PyJson.parse(payload)
-    if _is_true(doc, "matched"):
-        return "none"
-    var path = doc.text(doc.at(doc.root, "path"))
-    var name = doc.text(doc.at(doc.root, "name"))
-    var owner = doc.at(doc.root, "owner")
-    var empty_owner = doc.kind(owner) == PY_LIST and doc.length(owner) == 0
-    if (
-        path == "extensions/carla/map.mojo"
-        and name == "_try_winner_seed"
-        and empty_owner
-    ):
-        return "seed"
-    if path == "extensions/carla/lane_refinement.mojo":
-        return "lane"
-    return "none"
+    return _choice(doc, doc.root)
+
+
+def premise_fallbacks(payload: String) raises -> String:
+    """Choose the predecessor for each premise.
+
+    Args:
+        payload: A JSON list. Each item has `matched`, `path`, `name`, and
+            `owner`.
+
+    Returns:
+        A JSON list of `none`, `seed`, or `lane`, in the same order.
+
+    Raises:
+        Error: A required field is missing.
+    """
+    var doc = PyJson.parse(payload)
+    var out = PyJson()
+    var rows = out.new_list()
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        out.append(rows, out.new_str(_choice(doc, doc.item(doc.root, index))))
+        index += 1
+    out.root = rows
+    return out.dumps()

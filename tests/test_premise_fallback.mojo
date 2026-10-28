@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_equal
 
-from tools._premise_fallback import premise_fallback
+from tools._premise_fallback import premise_fallback, premise_fallbacks
 
 
 def test_a_matched_premise_selects_no_predecessor() raises:
@@ -82,6 +82,20 @@ def test_the_lane_module_selects_the_lane_predecessor() raises:
             + '"name":"_other","owner":[]}'
         ),
         "none",
+    )
+
+
+def test_premise_fallbacks_keep_their_order() raises:
+    """Each premise keeps its own predecessor choice."""
+    assert_equal(
+        premise_fallbacks(
+            '[{"matched":true,"path":"a.mojo","name":"f","owner":[]},'
+            + '{"matched":false,"path":"extensions/carla/map.mojo",'
+            + '"name":"_try_winner_seed","owner":[]},'
+            + '{"matched":false,"path":"extensions/carla/lane_refinement.mojo",'
+            + '"name":"g","owner":["Box"]}]'
+        ),
+        '["none","seed","lane"]',
     )
 
 

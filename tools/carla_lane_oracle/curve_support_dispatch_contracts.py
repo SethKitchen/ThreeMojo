@@ -399,8 +399,10 @@ def _declarations(items):
     return json.loads(result.stdout)
 
 
-def _premise_fallback(matched, path, name, owner):
-    """Return `seed`, `lane`, or `none` for one differing premise."""
+def _premise_fallbacks(items):
+    """Return `seed`, `lane`, or `none` for each premise."""
+    if not items:
+        return []
     import json
     import os
     import subprocess
@@ -408,9 +410,10 @@ def _premise_fallback(matched, path, name, owner):
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps({
-        'matched': matched, 'path': path, 'name': name, 'owner': list(owner),
-    }, separators=(',', ':'))
+    payload = json.dumps([
+        {'matched': matched, 'path': path, 'name': name, 'owner': list(owner)}
+        for matched, path, name, owner in items
+    ], separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='premise-fallback-') as directory:
         record = Path(directory) / 'fallback.json'
         record.write_text(payload)
@@ -423,7 +426,7 @@ def _premise_fallback(matched, path, name, owner):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return result.stdout.strip()
+    return json.loads(result.stdout)
 
 
 def verify_premises(root, *, _operation=None):
@@ -474,10 +477,12 @@ def verify_premises(root, *, _operation=None):
     matched_flags = _match_flags([
         (premise_docs[index * 2], premise_docs[index * 2 + 1])
         for index in range(len(loaded))])
+    fallbacks = _premise_fallbacks([
+        (matched_flags[index] == 'true', item['path'], item['name'], tuple(item['owner']))
+        for index, (item, _physical_text, _text) in enumerate(loaded)])
     for index, (item, physical_text, _text) in enumerate(loaded):
         matched = matched_flags[index] == 'true'
-        fallback = _premise_fallback(
-            matched, item['path'], item['name'], tuple(item['owner']))
+        fallback = fallbacks[index]
         if fallback == labels['seed']:
             try:
                 if __package__:
