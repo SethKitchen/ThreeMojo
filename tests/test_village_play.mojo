@@ -229,7 +229,8 @@ def test_a_player_walks_into_a_house_through_its_door() raises:
     # behind.
     var x = middle.x - door.swing_x * 3
     var z = middle.z - door.swing_z * 3
-    game.player.position = Vector3(x, game.terrain.height_at(x, z), z)
+    var ground = game.terrain.ground.height_at(x, z)
+    game.player.position = Vector3(x, game.terrain.height_at(x, z, ground), z)
     var yaw = yaw_of(Vector3(door.swing_x, 0, door.swing_z))
     game.player.heading = yaw
     game.view.yaw = yaw
@@ -250,14 +251,14 @@ def test_a_player_walks_into_a_house_through_its_door() raises:
     # player came, and a wall came between the player and the camera's
     # eye.
     var feet = game.player.position
-    assert_true(game.terrain.floor_under(feet.x, feet.z) >= 0)
+    assert_true(game.terrain.floor_under(feet.x, feet.z, feet.y) >= 0)
     assert_almost_equal(
         feet.y, game.village.houses[0].interior.floor_height, atol=1e-4
     )
     assert_true(widest > 1)
     assert_true(nearest < 1)
     # Under the ceiling, the eye stays below it.
-    var ceiling = game.terrain.ceiling_over(feet.x, feet.z)
+    var ceiling = game.terrain.ceiling_over(feet.x, feet.z, feet.y)
     assert_true(game.camera.position.y < ceiling)
     game.render(scene, assets)
     assert_equal(game.window.width, 32)

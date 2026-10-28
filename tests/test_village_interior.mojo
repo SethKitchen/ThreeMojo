@@ -13,15 +13,18 @@ from extensions.building.model import Element, Opening
 from extensions.vegetation.ground import Ground, Lot
 from extensions.village.house import (
     HouseParameters,
+    STAIR_GOING,
     front_wall,
     house_lot,
     house_model,
+    house_stair,
 )
 from extensions.village.interior import (
     Doorway,
     HouseInterior,
     MOST_STEPS,
     PLINTH_OVERHANG,
+    RAIL_HEIGHT,
     STEP_DEPTH,
     house_interior,
 )
@@ -105,14 +108,22 @@ def test_a_floor_carries_and_its_slab_covers() raises:
     assert_almost_equal(floor.ceiling, 1.5 + 2.8 - 0.2, atol=1e-5)
     assert_almost_equal(floor.area.half_width, 3.5 + PLINTH_OVERHANG, atol=1e-6)
     assert_almost_equal(floor.area.turn, 0.4, atol=1e-6)
-    # Only the ground storey's furniture stands in the way.
-    var ground_pieces = 0
-    for piece in model.furnishings:
-        if model.spaces[piece.space.value].storey.value == 0:
-            ground_pieces += 1
-    assert_equal(len(inside.furniture), ground_pieces)
-    assert_true(ground_pieces > 0)
-    assert_true(len(model.furnishings) > ground_pieces)
+    # Each piece stands in the way on its own storey's floor, as high as
+    # it is: a piece upstairs passes over the floor below.
+    assert_equal(len(inside.furniture), len(model.furnishings))
+    var upstairs = 0
+    for k in range(len(model.furnishings)):
+        ref piece = model.furnishings[k]
+        ref span = inside.furniture[k]
+        var storey = model.spaces[piece.space.value].storey.value
+        var bottom = Float32(1.5 + 2.8 * Float64(storey))
+        assert_almost_equal(span.bottom, bottom, atol=1e-5)
+        assert_almost_equal(
+            span.top - span.bottom, Float32(piece.height.value), atol=1e-5
+        )
+        upstairs += storey
+    assert_true(upstairs > 0)
+    assert_true(upstairs < len(model.furnishings))
 
 
 def test_steps_lead_up_to_a_door_above_the_ground() raises:
@@ -122,6 +133,7 @@ def test_steps_lead_up_to_a_door_above_the_ground() raises:
     # A floor a meter over level ground: five steps of a sixth of a meter.
     var high = house_interior(model, lot, 1.0, _flat())
     assert_equal(len(high.floors), 6)
+    assert_equal(high.steps, 5)
     var last = Float32(1)
     for k in range(1, 6):
         ref step = high.floors[k]
@@ -274,6 +286,72 @@ def test_a_model_with_no_elements_is_only_its_floor() raises:
     assert_equal(len(inside.floors), 1)
     # No slab covers the floor, so its ceiling is the storey's top.
     assert_almost_equal(inside.floors[0].ceiling, 2.8, atol=1.0e-4)
+
+
+def test_a_stair_climbs_to_the_floor_above() raises:
+    var house = HouseParameters(
+        "stair house", Length(9.0, METER), Length(7.0, METER), 2, brick()
+    )
+    var model = house_model(house)
+    var stair = house_stair(model).value()
+    var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
+    var inside = house_interior(model, lot, 0, _flat())
+    # The ground floor, a floor for each of the fourteen treads, and the
+    # upper floor before the well, beside its foot and past its top.
+    assert_equal(len(inside.floors), 1 + 14 + 3)
+    assert_equal(inside.steps, 0)
+    var top = Float32(stair.height())
+    var over = top + 2.8 - 0.2
+    for k in range(14):
+        ref tread = inside.floors[1 + k]
+        assert_almost_equal(
+            tread.height, Float32(Float64(k + 1) * stair.rise), atol=1e-5
+        )
+        assert_almost_equal(tread.ceiling, over, atol=1e-4)
+        assert_almost_equal(
+            tread.area.half_width, Float32(STAIR_GOING / 2), atol=1e-6
+        )
+        # Tread by tread along the plan's x, at the stair's middle.
+        assert_almost_equal(
+            tread.area.x,
+            Float32(stair.x0 + (Float64(k) + 0.5) * STAIR_GOING),
+            atol=1e-5,
+        )
+        assert_almost_equal(
+            tread.area.z, -Float32((stair.y0 + stair.y1) / 2), atol=1e-5
+        )
+    for k in range(15, 18):
+        assert_almost_equal(inside.floors[k].height, top, atol=1e-5)
+        assert_almost_equal(inside.floors[k].ceiling, over, atol=1e-4)
+    # The upper floor past the top reaches from the stair to the east wall.
+    ref past = inside.floors[17]
+    assert_almost_equal(
+        past.area.x - past.area.half_width, Float32(stair.x1), atol=1e-5
+    )
+    # Three railings after the walls: along the well's open side from the
+    # ground floor up, across its foot upstairs, and under the stair's top.
+    var walls = 0
+    var doors = 0
+    for e in model.elements:
+        if e.kind == WALL:
+            walls += 1
+    for o in model.openings:
+        if o.kind == DOOR:
+            doors += 1
+    assert_equal(len(inside.walls), walls + doors * 2 + 3)
+    var n = len(inside.walls)
+    ref side = inside.walls[n - 3]
+    assert_almost_equal(side.bottom, 0)
+    assert_almost_equal(side.top, top + RAIL_HEIGHT, atol=1e-5)
+    assert_almost_equal(side.z0, -Float32(stair.y0), atol=1e-5)
+    assert_almost_equal(side.z1, -Float32(stair.y0), atol=1e-5)
+    ref foot = inside.walls[n - 2]
+    assert_almost_equal(foot.bottom, top, atol=1e-5)
+    assert_almost_equal(foot.x0, Float32(stair.x0), atol=1e-5)
+    ref under = inside.walls[n - 1]
+    assert_almost_equal(under.bottom, 0)
+    assert_almost_equal(under.top, top / 2, atol=1e-5)
+    assert_almost_equal(under.x0, Float32(stair.x1), atol=1e-5)
 
 
 def test_the_front_door_is_the_first_that_leads_out() raises:

@@ -414,9 +414,9 @@ struct Village(Movable):
         """Return what carries and stops a character in the village.
 
         Returns:
-            The ground; each house's walls, its floor and its steps, and
-            each fence; and, as solid lots, each house's furniture, each
-            other prop, and the scanned building, if there is one.
+            The ground; each house's walls, its furniture, its floors,
+            its steps and its stair, and each fence; and, as solid lots,
+            each other prop, and the scanned building, if there is one.
         """
         var lots = self.props.lots.copy()
         var walls = self.props.walls.copy()
@@ -425,8 +425,8 @@ struct Village(Movable):
             lots.append(self.scanned.value())
         for index in range(len(self.houses)):
             ref inside = self.houses[index].interior
-            lots.extend(inside.furniture.copy())
             walls.extend(inside.walls.copy())
+            walls.extend(inside.furniture.copy())
             floors.extend(inside.floors.copy())
         return Terrain(self.meadow.field.ground, lots^, walls^, floors^)
 

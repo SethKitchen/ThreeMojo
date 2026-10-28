@@ -6,7 +6,16 @@
 """The village's character controller: walking, running and jumping, and
 the houses, trees, water and bounds that stop it."""
 
+from extensions.building.material import brick
+from extensions.building.model import Furnishing
 from extensions.vegetation.ground import Canyon, Ground, Lot, Pond
+from extensions.village.house import (
+    HouseParameters,
+    house_lot,
+    house_model,
+    house_stair,
+)
+from extensions.village.interior import house_interior
 from extensions.village.terrain import Floor, Terrain, WallSpan
 from extensions.village.character import (
     AIRBORNE,
@@ -466,6 +475,53 @@ def test_a_floor_carries_a_character_and_stands_over_water() raises:
     assert_true(walker.position.z < -4)
     assert_almost_equal(walker.position.y, 0.3, atol=1e-6)
     assert_true(walker.grounded)
+
+
+def test_a_character_climbs_a_stair_and_comes_down() raises:
+    var house = HouseParameters(
+        "stair house", Length(9.0, METER), Length(7.0, METER), 2, brick()
+    )
+    var model = house_model(house)
+    # No furniture stands in the walker's way upstairs.
+    model.furnishings = List[Furnishing]()
+    var stair = house_stair(model).value()
+    var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
+    var ground = _flat()
+    var inside = house_interior(model, lot, 0, ground)
+    var walls = inside.walls.copy()
+    walls.extend(inside.furniture.copy())
+    var terrain = Terrain(ground, List[Lot](), walls^, inside.floors.copy())
+    # On the landing, in the middle of the stair's width. The scene's z is
+    # the plan's -y.
+    var middle = -Float32((stair.y0 + stair.y1) / 2)
+    var walker = Character(
+        CharacterParameters(),
+        Float32(stair.x0) - 0.5,
+        middle,
+        Angle(0.0, RADIAN),
+        terrain,
+    )
+    assert_almost_equal(walker.position.y, 0, atol=1e-5)
+    # Right, along +x: up the stair, tread by tread, onto the floor above.
+    var top = Float32(stair.height())
+    _walk(walker, MoveInput(0, 1, 0, 0, False, False), 4, terrain)
+    assert_true(walker.position.x > Float32(stair.x1))
+    assert_almost_equal(walker.position.y, top, atol=1e-4)
+    assert_true(walker.grounded)
+    # Back toward the front, along over the well, and toward it again:
+    # the railing on its open side holds the walker on the floor above.
+    _walk(walker, MoveInput(-1, 0, 0, 0, False, False), 1, terrain)
+    _walk(walker, MoveInput(0, -1, 0, 0, False, False), 2, terrain)
+    assert_true(walker.position.x < Float32(stair.x1) - 0.5)
+    _walk(walker, MoveInput(1, 0, 0, 0, False, False), 2, terrain)
+    assert_almost_equal(walker.position.y, top, atol=1e-4)
+    assert_true(walker.position.z > -Float32(stair.y0))
+    # Down again, from past the stair's top, left along -x.
+    walker.position = Vector3(Float32(stair.x1) + 1, top, middle)
+    walker.velocity = Vector3(0, 0, 0)
+    _walk(walker, MoveInput(0, -1, 0, 0, False, False), 5, terrain)
+    assert_true(walker.position.x < Float32(stair.x0))
+    assert_almost_equal(walker.position.y, 0, atol=1e-4)
 
 
 def main() raises:

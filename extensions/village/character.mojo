@@ -29,8 +29,10 @@ things:
    middle. Where a move is refused, the character slides along the edge
    if it can.
 5. **The ground.** On the ground, the feet follow `Terrain.height_at`:
-   a house's floor or a step where there is one, and the ground
-   elsewhere. Where the ground drops away by more than `step_down`, the
+   the highest floor or step that they can reach, and the ground
+   elsewhere. A floor more than `CLIMB` above the feet, such as an upper
+   storey, passes over them, so a character goes up a stair one tread at
+   a time. Where the ground drops away by more than `step_down`, the
    character falls. In the air, gravity pulls it down until it lands.
 
 The stance says which clip a body plays: see `Stance`.
@@ -371,7 +373,9 @@ struct Character(Copyable, Movable):
             Float64(heading.to(RADIAN)), "A character's heading must be finite"
         )
         self.parameters = parameters
-        self.position = Vector3(x, terrain.height_at(x, z), z)
+        # It starts on the ground, or on a floor a climb above it.
+        var ground = terrain.ground.height_at(x, z)
+        self.position = Vector3(x, terrain.height_at(x, z, ground), z)
         self.heading = heading
         self.velocity = Vector3(0, 0, 0)
         self.grounded = True
@@ -474,7 +478,7 @@ struct Character(Copyable, Movable):
             terrain,
             obstacles,
         )
-        if not self._walkable(goal.x, goal.z, terrain):
+        if not self._walkable(goal.x, goal.z, start.y, terrain):
             # Slide along the edge, one axis at a time.
             goal = self._clear(
                 start.x + self.velocity.x * h,
@@ -483,7 +487,7 @@ struct Character(Copyable, Movable):
                 terrain,
                 obstacles,
             )
-            if not self._walkable(goal.x, goal.z, terrain):
+            if not self._walkable(goal.x, goal.z, start.y, terrain):
                 goal = self._clear(
                     start.x,
                     start.z + self.velocity.z * h,
@@ -491,12 +495,12 @@ struct Character(Copyable, Movable):
                     terrain,
                     obstacles,
                 )
-            if not self._walkable(goal.x, goal.z, terrain):
+            if not self._walkable(goal.x, goal.z, start.y, terrain):
                 goal = Vector3(start.x, 0, start.z)
         if h > 0:
             self.velocity.x = (goal.x - start.x) / h
             self.velocity.z = (goal.z - start.z) / h
-        var floor = terrain.height_at(goal.x, goal.z)
+        var floor = terrain.height_at(goal.x, goal.z, start.y)
         var y = start.y
         if self.grounded:
             if start.y - floor > p.step_down.to(METER):
@@ -545,13 +549,15 @@ struct Character(Copyable, Movable):
             at = Vector3(at.x * bound / reach, 0, at.z * bound / reach)
         return at
 
-    def _walkable(self, x: Float32, z: Float32, terrain: Terrain) -> Bool:
-        """Return whether the water at a point is shallow enough to wade.
-        A floor stands above the water."""
+    def _walkable(
+        self, x: Float32, z: Float32, foot: Float32, terrain: Terrain
+    ) -> Bool:
+        """Return whether the water at a point is shallow enough to wade
+        for feet at `foot`. A floor stands above the water."""
         ref ground = terrain.ground
         if ground.pond.radius.to(METER) <= 0:
             return True
-        var depth = ground.water_level() - terrain.height_at(x, z)
+        var depth = ground.water_level() - terrain.height_at(x, z, foot)
         return depth <= self.parameters.wade_depth.to(METER)
 
     def _settle(mut self):

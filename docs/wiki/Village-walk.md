@@ -27,7 +27,7 @@ The window is 1920 by 1080 pixels by default. Give a width and a height for a di
 
 The buttons are named by position, as SDL names them. The south button is A on an Xbox controller and the cross on a PlayStation controller.
 
-The game builds for about 15 seconds before the window opens. On a four-core Linux host, the `low` quality draws about 39 frames a second at 1920 by 1080 on the CPU. The game moves by the time each frame takes. So a slow frame moves the player as far as many quick frames do.
+The game builds for about 15 seconds before the window opens. On a four-core Linux host, the `low` quality draws about 41 frames a second at 1920 by 1080 on the CPU. The game moves by the time each frame takes. So a slow frame moves the player as far as many quick frames do.
 
 The game prints the frames a second to the standard error.
 
@@ -115,15 +115,15 @@ A jump starts only on a new press of the jump button. Hold the button and the ch
 
 These things stop a character:
 
-- **A wall.** `wall_push` moves the character straight away from each `WallSpan` whose foot is lower than 1.5 meters over its feet. A door's gap lets it into a house. The span over the door stands too high to stop it.
-- **A solid lot.** `lot_push` moves the character out of each solid `Lot` by the shortest way. A piece of furniture and a scanned building are solid lots.
+- **A wall.** `wall_push` moves the character straight away from each `WallSpan` that overlaps the 1.5 meters over its feet. A door's gap lets it into a house. The span over the door stands too high to stop it. A railing and a piece of furniture are spans too, so a piece upstairs does not stop a character on the floor below.
+- **A solid lot.** `lot_push` moves the character out of each solid `Lot` by the shortest way. A well, a barrel and a scanned building are solid lots.
 - **A tree or a resident.** `obstacle_push` moves the character straight away from each `Obstacle`. `tree_obstacles` gives each planting a trunk of 0.35 meters times its size.
 - **Deep water.** The character does not step where the water is deeper than the wade depth.
 - **The bounds.** The character stays within the bounds.
 
 Where a step is refused, the character slides along the edge if it can.
 
-The feet follow `Terrain.height_at`: the highest floor under them, or the ground. A house's floor and the steps to its door are floors, so the character climbs the steps and walks on the floor. A floor stands over water, so a character does not wade on it.
+The feet follow `Terrain.height_at`: the highest floor under them that they can reach, or the ground. Feet reach a floor at most `CLIMB`, 0.45 meters, above them. A higher floor, such as an upper storey, passes over them. A house's floor, the steps to its door and each tread of its stair are floors. So the character climbs the steps, walks on the floor, and goes up the stair one tread at a time. A floor stands over water, so a character does not wade on it.
 
 `Stance` is `STANDING`, `WALKING`, `RUNNING` or `AIRBORNE`. A character in the air is airborne. On the ground, a character below 0.15 meters a second is standing, and one above 1.15 times the walking speed is running.
 
@@ -137,12 +137,12 @@ The feet follow `Terrain.height_at`: the highest floor under them, or the ground
 | Look speed | 150 degrees a second of yaw, and 90 of pitch, at a full lean of the look stick. |
 | Trail speed | 60 degrees a second at the running speed, and less at a slower speed. |
 | Follow rate | 10 a second. Each second, the focus closes all but `exp(-10)` of its gap to the player. |
-| Clearance | 0.3 meters above the ground under the eye, and below a ceiling over the focus. |
+| Clearance | 0.3 meters above the ground under the eye, and below the ceilings over the focus and over the eye. |
 | Arm | The eye stops 0.3 meters before the first wall between it and the focus. It goes back out at a rate of 3 a second. |
 
 The yaw is the way the camera looks, about +y. Yaw 0 looks toward -z. `ground_direction` turns a yaw and the two leans of a stick into a direction on the ground.
 
-`Terrain.view_reach` finds how much of the way from the focus to the eye is clear of the walls. `place_within` then stands the camera that share of the way out, below the ceiling over the focus. So in a room, the camera stays in the room. Four points along the camera's last sight hold a door open, so the camera can look through it.
+`Terrain.view_reach` finds how much of the way from the focus to the eye is clear of the walls. `place_within` then stands the camera that share of the way out, below the ceilings over the focus and over the eye. Each is the ceiling over the floor that the player's feet reach there. So in a room, the camera stays in the room. Four points along the camera's last sight hold a door open, so the camera can look through it.
 
 ## The residents
 

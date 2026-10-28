@@ -21,7 +21,14 @@ render view is: it reads the model and never writes it.
 - **Steps.** Where the ground outside an outside door lies more than
   `STEP_RISE` below the floor, stone steps lead up to the door. Each step
   is a `Floor` of its own.
-- **Furniture.** Each piece of the ground storey is a solid `Lot`.
+- **Furniture.** Each piece is a `WallSpan` along its longer side, as
+  thick as its shorter side and as high as the piece, on its storey's
+  floor. So a piece upstairs passes over a character on the floor below.
+- **The stair.** Where `house_stair` finds a stair, each tread is a
+  `Floor`, and so is the upper floor round the stairwell. A railing
+  guards the well's open side, from the ground floor up, so it closes the
+  stair's side too. A railing crosses the well's foot upstairs, and a
+  wall closes the space under the stair's top.
 - **Doorways.** Each door of the ground storey is a `Doorway`: the jamb
   it hangs on, its width and the way it swings.
 
@@ -34,6 +41,7 @@ from extensions.building.ids import ElementId
 from extensions.building.kinds import DOOR, ROOF, SLAB, WALL
 from extensions.building.model import Building
 from extensions.vegetation.ground import Ground, Lot
+from extensions.village.house import STAIR_GOING, Stair, house_stair
 from extensions.village.terrain import OPEN_SKY, Floor, WallSpan
 from generators.utils import Vec3d
 from math.vector3 import Vector3
@@ -53,6 +61,10 @@ comptime STEP_WIDER = Float32(0.6)
 """How much wider a step is than its door, in meters."""
 comptime MOST_STEPS = 6
 """The most steps before one door."""
+comptime RAIL_HEIGHT = Float32(1.0)
+"""How high a railing stands over the floor it guards, in meters."""
+comptime RAIL_HALF = Float32(0.05)
+"""Half the thickness of a railing, in meters."""
 
 
 @fieldwise_init
@@ -96,9 +108,12 @@ struct HouseInterior(Copyable, Movable):
     """Where a character can walk in a house, and what stops it there."""
 
     var walls: List[WallSpan]
-    # The ground floor first, then the steps before the outside doors.
+    # The ground floor first, then the steps before the outside doors,
+    # then the stair's treads and the upper floor round its well.
     var floors: List[Floor]
-    var furniture: List[Lot]
+    # How many steps before the doors follow the ground floor.
+    var steps: Int
+    var furniture: List[WallSpan]
     var doorways: List[Doorway]
     # The height of the ground floor, in meters.
     var floor_height: Float32
@@ -111,7 +126,8 @@ struct HouseInterior(Copyable, Movable):
         """
         self.walls = List[WallSpan]()
         self.floors = List[Floor]()
-        self.furniture = List[Lot]()
+        self.steps = 0
+        self.furniture = List[WallSpan]()
         self.doorways = List[Doorway]()
         self.floor_height = floor_height
 
@@ -326,6 +342,156 @@ def _steps(mut interior: HouseInterior, ground: Ground, turn: Float32) raises:
                 count + 1
             )
             interior.floors.append(Floor(area, height, OPEN_SKY))
+            interior.steps += 1
+
+
+def _plan_floor(
+    placer: _Placer,
+    x0: Float64,
+    x1: Float64,
+    y0: Float64,
+    y1: Float64,
+    height: Float32,
+    ceiling: Float32,
+) -> Floor:
+    """Return a floor over a rectangle of the plan, from `x0` to `x1` and
+    from `y0` to `y1`."""
+    var middle = placer.point(Vec3d((x0 + x1) / 2, (y0 + y1) / 2, 0))
+    return Floor(
+        Lot(
+            middle.x,
+            middle.z,
+            Float32(x1 - x0) / 2,
+            Float32(y1 - y0) / 2,
+            placer.lot.turn,
+        ),
+        height,
+        ceiling,
+    )
+
+
+def _plan_span(
+    placer: _Placer,
+    x0: Float64,
+    y0: Float64,
+    x1: Float64,
+    y1: Float64,
+    half: Float32,
+    bottom: Float32,
+    top: Float32,
+) -> WallSpan:
+    """Return a span from one point of the plan to another, from a height
+    to a height."""
+    var a = placer.point(Vec3d(x0, y0, 0))
+    var b = placer.point(Vec3d(x1, y1, 0))
+    return WallSpan(a.x, a.z, b.x, b.z, half, bottom, top)
+
+
+def _stair(
+    mut interior: HouseInterior,
+    placer: _Placer,
+    stair: Stair,
+    ceiling: Float32,
+):
+    """Add a stair's treads, the upper floor round its well, and the
+    railings. `ceiling` is the upper storey's."""
+    var floor = placer.floor
+    var top = floor + Float32(stair.height())
+    # `house_stair` gives a stair two risers or more: a tread or more.
+    for k in range(stair.risers - 1):  # pragma: no branch
+        var x0 = stair.x0 + Float64(k) * STAIR_GOING
+        interior.floors.append(
+            _plan_floor(
+                placer,
+                x0,
+                x0 + STAIR_GOING,
+                stair.y0,
+                stair.y1,
+                floor + Float32(Float64(k + 1) * stair.rise),
+                ceiling,
+            )
+        )
+    # The upper floor before the well, beside its foot, and past its top.
+    var half_x = Float64(placer.lot.half_width)
+    var half_y = Float64(placer.lot.half_depth)
+    interior.floors.append(
+        _plan_floor(placer, -half_x, half_x, -half_y, stair.y0, top, ceiling)
+    )
+    interior.floors.append(
+        _plan_floor(placer, -half_x, stair.x0, stair.y0, half_y, top, ceiling)
+    )
+    interior.floors.append(
+        _plan_floor(placer, stair.x1, half_x, stair.y0, half_y, top, ceiling)
+    )
+    interior.walls.append(
+        _plan_span(
+            placer,
+            stair.x0,
+            stair.y0,
+            stair.x1,
+            stair.y0,
+            RAIL_HALF,
+            floor,
+            top + RAIL_HEIGHT,
+        )
+    )
+    interior.walls.append(
+        _plan_span(
+            placer,
+            stair.x0,
+            stair.y0,
+            stair.x0,
+            stair.y1,
+            RAIL_HALF,
+            top,
+            top + RAIL_HEIGHT,
+        )
+    )
+    interior.walls.append(
+        _plan_span(
+            placer,
+            stair.x1,
+            stair.y0,
+            stair.x1,
+            stair.y1,
+            RAIL_HALF,
+            floor,
+            floor + Float32(stair.height() / 2),
+        )
+    )
+
+
+def _furniture(
+    mut interior: HouseInterior, placer: _Placer, building: Building
+) raises:
+    """Add a span for each piece of furniture, on its storey's floor."""
+    for index in range(len(building.furnishings)):
+        ref piece = building.furnishings[index]
+        building.check_space(piece.space)
+        ref storey = building.storeys[
+            building.spaces[piece.space.value].storey.value
+        ]
+        # Along the piece's longer side, as thick as its shorter one.
+        var w = piece.width.value
+        var d = piece.depth.value
+        var across = Float64(Int(w >= d))
+        var turn = piece.rotation.value
+        var way_x = cos(turn) * across - sin(turn) * (1 - across)
+        var way_y = sin(turn) * across + cos(turn) * (1 - across)
+        var reach = (max(w, d) - min(w, d)) / 2
+        var bottom = placer.floor + Float32(storey.elevation.value)
+        interior.furniture.append(
+            _plan_span(
+                placer,
+                piece.center.x - way_x * reach,
+                piece.center.y - way_y * reach,
+                piece.center.x + way_x * reach,
+                piece.center.y + way_y * reach,
+                Float32(min(w, d) / 2),
+                bottom,
+                bottom + Float32(piece.height.value),
+            )
+        )
 
 
 def house_interior(
@@ -340,7 +506,8 @@ def house_interior(
         ground: The ground round it, which the steps lead down to.
 
     Returns:
-        Its walls, its floor and steps, its furniture and its doors.
+        Its walls, its floor and steps, its stair, its furniture and
+        its doors.
 
     Raises:
         Error: If the model's ids do not agree.
@@ -376,18 +543,12 @@ def house_interior(
     )
     _doorways(interior, placer, building)
     _steps(interior, ground, lot.turn)
-    for index in range(len(building.furnishings)):
-        ref piece = building.furnishings[index]
-        if building.spaces[piece.space.value].storey.value != 0:
-            continue
-        var at = placer.point(Vec3d(piece.center.x, piece.center.y, 0))
-        interior.furniture.append(
-            Lot(
-                at.x,
-                at.z,
-                Float32(piece.width.value) / 2,
-                Float32(piece.depth.value) / 2,
-                lot.turn + Float32(piece.rotation.value),
-            )
+    var stair = house_stair(building)
+    if stair:
+        ref upper = building.storeys[1]
+        var over = floor + Float32(
+            upper.elevation.value + upper.height.value - slab
         )
+        _stair(interior, placer, stair.value(), over)
+    _furniture(interior, placer, building)
     return interior^

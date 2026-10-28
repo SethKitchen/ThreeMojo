@@ -11,8 +11,10 @@ A house gives a `Terrain` its walls, as `WallSpan` values with gaps at
 the doors, and its floor, as a `Floor`. A building that cannot be
 entered, such as a scanned one, stays a solid `Lot`.
 
-- `Terrain.height_at` is the height of the highest floor under a point,
-  or of the ground where there is no floor.
+- `Terrain.height_at` is the height of the highest floor under a point
+  that feet can reach, or of the ground where there is no such floor.
+  Feet reach a floor at most `CLIMB` above them. A higher floor, such as
+  a house's upper storey, passes over them.
 - `wall_push` moves a circle out of a wall span, as `lot_push` moves it
   out of a lot.
 - `Terrain.view_reach` says how far a camera can stand from its focus
@@ -28,6 +30,9 @@ comptime OPEN_SKY = Float32(1.0e30)
 """The ceiling of a floor that has nothing over it, in meters."""
 comptime INSIDE = Float32(1.0e-6)
 """A point nearer a lot than this, in meters, is on it."""
+comptime CLIMB = Float32(0.45)
+"""How far above its feet a character can step onto a floor, in meters:
+more than a step or a stair's riser, and less than a storey."""
 
 
 @fieldwise_init
@@ -233,12 +238,14 @@ struct Terrain(Copyable, Movable):
         self.walls = walls^
         self.floors = floors^
 
-    def floor_under(self, x: Float32, z: Float32) -> Int:
-        """Return the highest floor under a point.
+    def floor_under(self, x: Float32, z: Float32, foot: Float32) -> Int:
+        """Return the highest floor under a point that feet can reach.
 
         Args:
             x: The point's x, in meters.
             z: The point's z, in meters.
+            foot: The height of the feet, in meters. A floor more than
+                `CLIMB` above them is out of their reach.
 
         Returns:
             The floor's index in `floors`, or -1 where there is none.
@@ -248,38 +255,42 @@ struct Terrain(Copyable, Movable):
             ref floor = self.floors[index]
             if floor.area.reach(x, z) >= INSIDE:
                 continue
+            if floor.height > foot + CLIMB:
+                continue
             if best < 0 or floor.height > self.floors[best].height:
                 best = index
         return best
 
-    def height_at(self, x: Float32, z: Float32) -> Float32:
+    def height_at(self, x: Float32, z: Float32, foot: Float32) -> Float32:
         """Return the height a character stands at.
 
         Args:
             x: The point's x, in meters.
             z: The point's z, in meters.
+            foot: The height of its feet, in meters.
 
         Returns:
-            The height of the highest floor under the point, or of the
-            ground where there is no floor.
+            The height of the highest floor under the point that the feet
+            can reach, or of the ground where there is no such floor.
         """
-        var floor = self.floor_under(x, z)
+        var floor = self.floor_under(x, z, foot)
         if floor < 0:
             return self.ground.height_at(x, z)
         return self.floors[floor].height
 
-    def ceiling_over(self, x: Float32, z: Float32) -> Float32:
+    def ceiling_over(self, x: Float32, z: Float32, foot: Float32) -> Float32:
         """Return how high something can stand over a point.
 
         Args:
             x: The point's x, in meters.
             z: The point's z, in meters.
+            foot: The height of its feet, in meters.
 
         Returns:
-            The ceiling of the highest floor under the point, or
-            `OPEN_SKY`.
+            The ceiling of the highest floor under the point that the feet
+            can reach, or `OPEN_SKY`.
         """
-        var floor = self.floor_under(x, z)
+        var floor = self.floor_under(x, z, foot)
         if floor < 0:
             return OPEN_SKY
         return self.floors[floor].ceiling

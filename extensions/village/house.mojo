@@ -56,6 +56,7 @@ from extensions.building.material import (
 from extensions.building.model import (
     Building,
     ConstructionSet,
+    Furnishing,
     Site,
     SpacePlan,
     StoreyPlan,
@@ -68,7 +69,7 @@ from extensions.vegetation.checks import (
 )
 from extensions.vegetation.ground import Ground, Lot
 from math.vector3 import Vector3
-from std.math import cos, sin
+from std.math import ceil, cos, sin
 from units.si import (
     DEGREE,
     DEGREE64,
@@ -102,6 +103,15 @@ comptime INSIDE_DOOR = Vector3(0.9, 2.0, 0)
 comptime HALL_SHARE = Float64(0.6)
 # The narrowest house, in meters, whose ground storey has a chamber.
 comptime CHAMBERED = Float32(6)
+"""How wide a house must be for a chamber beside its hall, in meters."""
+comptime STAIR_WIDTH = Float64(1.0)
+"""How wide a stair is, in meters."""
+comptime STAIR_GOING = Float64(0.25)
+"""How deep each tread of a stair is, in meters."""
+comptime STAIR_RISE = Float64(0.19)
+"""The most that one riser of a stair rises, in meters."""
+comptime STAIR_LANDING = Float64(0.9)
+"""How much floor a stair keeps clear before its foot, in meters."""
 
 
 @fieldwise_init
@@ -332,6 +342,118 @@ def front_wall(building: Building) raises -> ElementId:
     return ElementId(best)
 
 
+@fieldwise_init
+struct Stair(ImplicitlyCopyable):
+    """A straight stair along a hall's back wall, from the ground floor up
+    to the floor of the storey above, in the model's plan.
+
+    It climbs along the plan's +x. Tread `k`, from zero, runs from
+    `x0 + k * STAIR_GOING` to one going further, and its top stands
+    `(k + 1) * rise` over the ground floor. The last riser reaches the
+    upper floor at `x1`."""
+
+    # Where its foot and its top are along the plan's x, in meters.
+    var x0: Float64
+    var x1: Float64
+    # Its open side, and the back wall's inside face, along the plan's y,
+    # in meters.
+    var y0: Float64
+    var y1: Float64
+    # How many risers it has, and how high each one is, in meters.
+    var risers: Int
+    var rise: Float64
+
+    def height(self) -> Float64:
+        """Return how high the stair climbs.
+
+        Returns:
+            The height of the upper floor over the ground floor, in meters.
+        """
+        return Float64(self.risers) * self.rise
+
+
+def house_stair(building: Building) -> Optional[Stair]:
+    """Return a house's stair: along the back wall of its hall, from the
+    ground floor up to the storey above.
+
+    The hall is the first space of the ground storey, as `house_model`
+    writes it. The stair keeps `STAIR_LANDING` of floor clear before its
+    foot, at the hall's -x end. It has as few risers as keep each one at
+    most `STAIR_RISE`.
+
+    Args:
+        building: A house's model.
+
+    Returns:
+        The stair, or None for a model of one storey or of no room, for
+        an upper storey no more than one riser over the ground floor, and
+        for a hall too short for the stair.
+    """
+    if len(building.storeys) < 2:
+        return None
+    if len(building.spaces) == 0:
+        return None
+    var west = Float64(1.0e30)
+    var east = Float64(-1.0e30)
+    var back = Float64(-1.0e30)
+    for p in building.spaces[0].outline:  # pragma: no branch
+        west = min(west, p.x)
+        east = max(east, p.x)
+        back = max(back, p.y)
+    var half = building.constructions[0].thickness().value / 2
+    var climb = (
+        building.storeys[1].elevation.value
+        - building.storeys[0].elevation.value
+    )
+    # A stair has two risers or more: a lower storey needs no stair.
+    if climb <= STAIR_RISE:
+        return None
+    var risers = Int(ceil(climb / STAIR_RISE))
+    var foot = west + half + STAIR_LANDING
+    var top = foot + Float64(risers - 1) * STAIR_GOING
+    if top > east - half:
+        return None
+    var wall = back - half
+    return Stair(
+        foot, top, wall - STAIR_WIDTH, wall, risers, climb / Float64(risers)
+    )
+
+
+def clear_stair(mut building: Building, stair: Stair) raises:
+    """Take away the furniture of the ground storey and of the storey above
+    that stands on a stair, before its foot, or over its well.
+
+    Args:
+        building: A house's model. It is changed.
+        stair: Its stair.
+
+    Raises:
+        Error: If a piece's room is not in the model.
+    """
+    var west = stair.x0 - STAIR_LANDING
+    var middle_x = (west + stair.x1) / 2
+    var middle_y = (stair.y0 + stair.y1) / 2
+    var half_x = (stair.x1 - west) / 2
+    var half_y = (stair.y1 - stair.y0) / 2
+    var kept = List[Furnishing]()
+    for index in range(len(building.furnishings)):
+        ref piece = building.furnishings[index]
+        building.check_space(piece.space)
+        var storey = building.spaces[piece.space.value].storey.value
+        # The piece's reach along the plan's axes, as it is turned.
+        var c = abs(cos(piece.rotation.value))
+        var s = abs(sin(piece.rotation.value))
+        var w = piece.width.value / 2
+        var d = piece.depth.value / 2
+        var reach_x = half_x + c * w + s * d
+        var reach_y = half_y + s * w + c * d
+        var apart_x = abs(piece.center.x - middle_x) >= reach_x
+        var apart_y = abs(piece.center.y - middle_y) >= reach_y
+        if storey > 1 or apart_x or apart_y:
+            kept.append(piece.copy())
+    building.furnishings = kept^
+
+
 def house_model(parameters: HouseParameters) raises -> Building:
     """Return a house's model, with its doors, windows and furniture.
 
@@ -445,6 +567,9 @@ def house_model(parameters: HouseParameters) raises -> Building:
         WindowOptions(_m(2.6), _m(1.5), _m(0.9), _m(1.25), double_glazing()),
     )
     _ = furnish(building, parameters.seed)
+    var stair = house_stair(building)
+    if stair:
+        clear_stair(building, stair.value())
     return building^
 
 

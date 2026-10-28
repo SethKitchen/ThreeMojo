@@ -8,6 +8,7 @@ that carry it, ceilings over them, and the camera's sight past walls."""
 
 from extensions.vegetation.ground import Ground, Lot
 from extensions.village.terrain import (
+    CLIMB,
     OPEN_SKY,
     Floor,
     Terrain,
@@ -109,21 +110,31 @@ def test_floors_carry_and_ceilings_cover() raises:
         Floor(Lot(0, 0, 2, 2, 0), 0.5, 3.0),
         Floor(Lot(1, 0, 1, 1, 0), 0.8, 3.2),
         Floor(Lot(-1.5, 0, 1, 1, 0), 0.2, OPEN_SKY),
+        Floor(Lot(0, 1, 2, 1, 0), 3.2, 6.0),
     ]
     var terrain = Terrain(ground, List[Lot](), List[WallSpan](), floors^)
     # Off the floors, the ground.
-    assert_equal(terrain.floor_under(10, 10), -1)
-    assert_almost_equal(terrain.height_at(10, 10), ground.height_at(10, 10))
-    assert_equal(terrain.ceiling_over(10, 10), OPEN_SKY)
+    assert_equal(terrain.floor_under(10, 10, 0), -1)
+    assert_almost_equal(terrain.height_at(10, 10, 0), ground.height_at(10, 10))
+    assert_equal(terrain.ceiling_over(10, 10, 0), OPEN_SKY)
     # On one floor, its height and its ceiling.
-    assert_equal(terrain.floor_under(0, 1.5), 0)
-    assert_almost_equal(terrain.height_at(0, 1.5), 0.5)
-    assert_almost_equal(terrain.ceiling_over(0, 1.5), 3)
+    assert_equal(terrain.floor_under(0, -1.5, 0.5), 0)
+    assert_almost_equal(terrain.height_at(0, -1.5, 0.5), 0.5)
+    assert_almost_equal(terrain.ceiling_over(0, -1.5, 0.5), 3)
     # Where two overlap, the higher carries.
-    assert_equal(terrain.floor_under(1.5, 0), 1)
-    assert_almost_equal(terrain.height_at(1.5, 0), 0.8)
+    assert_equal(terrain.floor_under(1.5, 0, 0.5), 1)
+    assert_almost_equal(terrain.height_at(1.5, 0, 0.5), 0.8)
     # The lower of two that overlap is passed over.
-    assert_equal(terrain.floor_under(-1.5, 0), 0)
+    assert_equal(terrain.floor_under(-1.5, 0, 0.5), 0)
+    # A floor more than a climb above the feet passes over them: feet on
+    # the lower floor stay on it, and feet on the upper floor stand there.
+    assert_equal(terrain.floor_under(0, 1.5, 0.5), 0)
+    assert_almost_equal(terrain.ceiling_over(0, 1.5, 0.5), 3)
+    assert_equal(terrain.floor_under(0, 1.5, 3.2), 3)
+    assert_almost_equal(terrain.height_at(0, 1.5, 3.2), 3.2)
+    # Feet a climb below a floor can step onto it.
+    assert_equal(terrain.floor_under(0, 1.5, 3.21 - CLIMB), 3)
+    assert_equal(terrain.floor_under(0, 1.5, 3.19 - CLIMB), 0)
 
 
 def test_bare_ground_is_a_terrain() raises:

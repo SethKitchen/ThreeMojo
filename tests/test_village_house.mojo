@@ -7,17 +7,18 @@
 its building model, with its rooms, its doors, its windows and its
 furniture."""
 
-from extensions.building.ids import ElementId
+from extensions.building.ids import ElementId, SpaceId
 from extensions.building.kinds import (
     BEDROOM,
     DOOR,
     KITCHEN,
     LIVING,
+    TABLE,
     WALL,
     WINDOW,
 )
 from extensions.building.material import brick
-from extensions.building.model import Element
+from extensions.building.model import Element, Furnishing, Space
 from extensions.vegetation.ground import Ground
 from extensions.village.house import (
     BOARDED,
@@ -28,13 +29,19 @@ from extensions.village.house import (
     HouseParameters,
     NATURAL,
     PAINT,
+    STAIR_GOING,
+    STAIR_LANDING,
+    STAIR_RISE,
+    STAIR_WIDTH,
     STONE_FACADE,
     TIMBER_FRAMED,
+    clear_stair,
     fieldstone,
     footing,
     front_wall,
     house_lot,
     house_model,
+    house_stair,
     lime_plaster,
 )
 from math.vector3 import Vector3
@@ -47,7 +54,16 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import DEGREE, METER, RADIAN, Angle, Length
+from extensions.topology.arrangement import Point2
+from units.si import (
+    DEGREE,
+    METER,
+    RADIAN,
+    Angle,
+    Angle64,
+    Length,
+    Length64,
+)
 
 
 def _house(width: Float32, storeys: Int) -> HouseParameters:
@@ -206,6 +222,101 @@ def test_a_house_stands_on_its_lot_at_its_footing() raises:
     assert_almost_equal(feet[0], low, atol=1e-5)
     assert_almost_equal(feet[1], high, atol=1e-5)
     assert_true(feet[1] >= feet[0])
+
+
+def _two_storeys(width: Float32 = 9, storeys: Int = 2) -> HouseParameters:
+    """Return a brick house `width` wide and 7 meters deep."""
+    return HouseParameters(
+        "stair house",
+        Length(width, METER),
+        Length(7.0, METER),
+        storeys,
+        brick(),
+    )
+
+
+def test_a_house_of_two_storeys_has_a_stair() raises:
+    var model = house_model(_two_storeys())
+    var stair = house_stair(model).value()
+    # Fifteen risers of 2.8 / 15 meters, so each is at most 19 cm.
+    assert_equal(stair.risers, 15)
+    assert_almost_equal(stair.rise, 2.8 / 15, atol=1e-9)
+    assert_true(stair.rise <= STAIR_RISE)
+    assert_almost_equal(stair.height(), 2.8, atol=1e-9)
+    # Its foot keeps a landing clear of the hall's west wall, and its
+    # fourteen treads run along the back wall's inside face.
+    var half = Float64(0.2325) / 2
+    assert_almost_equal(stair.x0, -4.5 + half + STAIR_LANDING, atol=1e-9)
+    assert_almost_equal(stair.x1 - stair.x0, 14 * STAIR_GOING, atol=1e-9)
+    assert_almost_equal(stair.y1, 3.5 - half, atol=1e-9)
+    assert_almost_equal(stair.y1 - stair.y0, STAIR_WIDTH, atol=1e-9)
+    # The hall's ground storey and the room above keep their furniture
+    # off the stair, its landing and its well.
+    for piece in model.furnishings:
+        var storey = model.spaces[piece.space.value].storey.value
+        if storey > 1:
+            continue
+        var inside_x = (
+            piece.center.x > stair.x0 - STAIR_LANDING
+            and piece.center.x < stair.x1
+        )
+        var inside_y = piece.center.y > stair.y0
+        assert_false(inside_x and inside_y)
+
+
+def test_some_houses_have_no_stair() raises:
+    # One storey, and a hall too short for six-meter storeys.
+    assert_false(Bool(house_stair(house_model(_two_storeys(9, 1)))))
+    var tall = _two_storeys()
+    tall.storey_height = Length(6.0, METER)
+    assert_false(Bool(house_stair(house_model(tall))))
+    # A model with no room, and one whose upper storey is one riser up.
+    var bare = house_model(_two_storeys())
+    bare.spaces = List[Space]()
+    assert_false(Bool(house_stair(bare)))
+    var low = house_model(_two_storeys())
+    low.storeys[1].elevation = Length64(STAIR_RISE, METER)
+    assert_false(Bool(house_stair(low)))
+
+
+def _table(space: Int, at: Point2) -> Furnishing:
+    """Return a table turned half a radian, in a room, at a point."""
+    return Furnishing(
+        "table",
+        TABLE,
+        SpaceId(space),
+        at,
+        Angle64(0.5),
+        Length64(1.2, METER),
+        Length64(0.8, METER),
+        Length64(0.75, METER),
+    )
+
+
+def test_a_stair_clears_the_furniture_in_its_way() raises:
+    var model = house_model(_two_storeys(9, 3))
+    var stair = house_stair(model).value()
+    var top = -1
+    for k in range(len(model.spaces)):
+        if model.spaces[k].storey.value == 2:
+            top = k
+    var middle = Point2((stair.x0 + stair.x1) / 2, (stair.y0 + stair.y1) / 2)
+    model.furnishings = [
+        # On the stair: taken away.
+        _table(0, middle),
+        # Clear of it along x, and along y: kept.
+        _table(0, Point2(stair.x1 + 2, middle.y)),
+        _table(0, Point2(middle.x, stair.y0 - 2)),
+        # Two storeys up, over the well: kept.
+        _table(top, middle),
+    ]
+    clear_stair(model, stair)
+    assert_equal(len(model.furnishings), 3)
+    assert_equal(model.furnishings[2].space.value, top)
+    # A model with no furniture keeps none.
+    model.furnishings = List[Furnishing]()
+    clear_stair(model, stair)
+    assert_equal(len(model.furnishings), 0)
 
 
 def main() raises:

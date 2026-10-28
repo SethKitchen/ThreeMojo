@@ -492,10 +492,17 @@ struct VillageGame(Movable):
             var ease = 1 - exp(-ARM_EASE * delta.to(SECOND))
             self.reach += (clear - self.reach) * ease
         var eye = focus + (self.view.eye() - focus) * self.reach
+        # The floors and ceilings that the player's feet reach: the eye
+        # stays over the floor under it, and under the ceiling over it and
+        # over the focus.
+        var ceiling = min(
+            self.terrain.ceiling_over(focus.x, focus.z, feet.y),
+            self.terrain.ceiling_over(eye.x, eye.z, feet.y),
+        )
         self.view.place_within(
             self.camera,
-            Length(self.terrain.height_at(eye.x, eye.z), METER),
-            Length(self.terrain.ceiling_over(focus.x, focus.z), METER),
+            Length(self.terrain.height_at(eye.x, eye.z, feet.y), METER),
+            Length(ceiling, METER),
             self.reach,
         )
         scene.update()

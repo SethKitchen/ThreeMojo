@@ -337,13 +337,17 @@ def test_a_village_stands_its_buildings_and_draws_its_pond() raises:
     # and the scanned building as a solid lot.
     var terrain = village.terrain()
     ref inside = village.houses[0].interior
-    # The house's walls and the fence; the furniture, the well and the
+    # The house's walls and furniture and the fence; the well and the
     # scanned building.
-    assert_equal(len(terrain.walls), len(inside.walls) + 1)
+    assert_equal(
+        len(terrain.walls), len(inside.walls) + len(inside.furniture) + 1
+    )
     assert_equal(len(terrain.floors), len(inside.floors))
-    assert_equal(len(terrain.lots), len(inside.furniture) + 2)
+    assert_equal(len(terrain.lots), 2)
     assert_almost_equal(
-        terrain.height_at(5, -4), inside.floor_height, atol=1e-6
+        terrain.height_at(5, -4, inside.floor_height),
+        inside.floor_height,
+        atol=1e-6,
     )
     assert_almost_equal(village.meadow.field.cover_at(5, -4), 0)
     assert_almost_equal(village.meadow.field.cover_at(-5, -4), 0)

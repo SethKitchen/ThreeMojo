@@ -29,12 +29,14 @@ from extensions.village.house import (
     BRICK_FACADE,
     Facade,
     HouseParameters,
+    STAIR_RISE,
     STONE_FACADE,
     TIMBER_FRAMED,
     fieldstone,
     front_wall,
     house_lot,
     house_model,
+    house_stair,
     lime_plaster,
 )
 from extensions.village.house_view import (
@@ -54,6 +56,7 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_true,
 )
 from units.si import (
@@ -346,6 +349,35 @@ def test_a_model_with_no_walls_or_rooms_stands_its_roof() raises:
     # or window does.
     assert_true(standing.triangles > 0)
     assert_true(standing.meshes < 6)
+
+
+def test_a_stair_rises_through_its_well() raises:
+    var assets = Assets()
+    var looks = house_looks(assets, 8, 1)
+    var house = HouseParameters(
+        "stair house", Length(9.0, METER), Length(7.0, METER), 2, brick()
+    )
+    var model = house_model(house)
+    assert_true(Bool(house_stair(model)))
+    var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
+    var scene = Scene()
+    var stair = stand_house(scene, assets, looks, house, model, lot, _flat())
+    # The same house with its upper storey one riser up has no stair: no
+    # treads, no well, no balustrade.
+    var low = house_model(house)
+    low.storeys[1].elevation = Length64(STAIR_RISE, METER)
+    assert_false(Bool(house_stair(low)))
+    var bare = Scene()
+    var plain = stand_house(bare, assets, looks, house, low, lot, _flat())
+    assert_equal(len(stair.interior.floors), len(plain.interior.floors) + 17)
+    # Fourteen treads and fifteen risers, a stringer, a handrail, its
+    # balusters, a newel, trimmers and a balustrade: about 650 triangles
+    # more, less the joists over the well. No stone stands under the
+    # treads or the upper floor: a block under each would add 200 more.
+    var more = stair.triangles - plain.triangles
+    assert_true(more > 550)
+    assert_true(more < 750)
+    assert_equal(stair.meshes, plain.meshes)
 
 
 def main() raises:

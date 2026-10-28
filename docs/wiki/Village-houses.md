@@ -1,8 +1,8 @@
 # Village houses
 
-A house of the [Village](Village) is a building model that a player can walk into. It has a front door that swings open, furnished rooms, and a facade of brick, fieldstone, timber framing or boards.
+A house of the [Village](Village) is a building model that a player can walk into. It has a front door that swings open, furnished rooms and a stair. Its facade is brick, fieldstone, timber framing or boards.
 
-![Houses with tile roofs along a trail, a framed house, a brick house, and a man in a red tunic inside a stone cottage](out/village_houses.png)
+![Houses with tile roofs along a trail, a framed house, a brick house, and a man in a red tunic before the brick house's stair](out/village_houses.png)
 
 `examples/village_houses.mojo` draws this picture. The modules live in `extensions/village/`. See [Building model](Building-model) for the canonical model, and [Village walk](Village-walk) for the game.
 
@@ -101,18 +101,33 @@ A `Sheet` holds the triangles of one material, with a normal, a color and textur
 
 | Part | What it is |
 |---|---|
-| `walls` | One `WallSpan` for each piece of each wall. A door cuts a gap to its head, and the wall over the door is a span of its own. |
-| `floors` | The ground floor over the plan and its plinth, and then each step. The floor's ceiling is the underside of the slab over it. |
-| `furniture` | A solid `Lot` for each piece of the ground storey. |
+| `walls` | One `WallSpan` for each piece of each wall. A door cuts a gap to its head, and the wall over the door is a span of its own. The stair's railings follow. |
+| `floors` | The ground floor over the plan and its plinth, then each step, then each tread of the stair and the upper floor round its well. A floor's ceiling is the underside of the slab over it. |
+| `furniture` | A `WallSpan` for each piece, along its longer side and as high as the piece, on its storey's floor. |
 | `doorways` | Each door of the ground storey: the jamb it hangs on, its width and the way it swings. |
 
 A step is 32 centimeters deep and at most 18 centimeters high. A door whose sill is less than 12 centimeters above the ground has no step. A door has at most six steps.
+
+## The stair
+
+A house of two storeys or more has a stair from the ground floor up to the first storey above. `house_stair` finds it in the model. It runs along the back wall of the hall, the first room of the ground storey, and climbs along the plan's +x.
+
+| Part | Size |
+|---|---|
+| Width | 1 meter. |
+| Riser | As few risers as keep each one at most 19 centimeters. A storey of 2.8 meters has 15 risers of 18.7 centimeters. |
+| Tread | 25 centimeters deep, one fewer than the risers. |
+| Landing | 0.9 meters of floor clear before the foot. |
+
+A hall too short for the landing and the treads has no stair. `house_model` takes away the furniture that would stand on the stair, on its landing or over its well.
+
+A railing 1 meter high guards the well's open side upstairs. It reaches down to the ground floor, so it closes the stair's side as well. A railing crosses the well's foot upstairs, and a wall closes the space under the stair's top. `stand_house` draws oak treads and risers, a stringer, a handrail on balusters, a newel post and a balustrade. It cuts the well out of the hall's ceiling and the floor above, with oak trimmers round it.
 
 `Doors` opens each door while someone stands within 1.8 meters of its middle, on its floor. The leaf turns at 2.5 radians a second, to a little over a right angle. It closes when nobody is near. A leaf is not solid: the gap in the wall is where a character walks through.
 
 ## Limits
 
-- The upper storeys have no stairs. A character walks on the ground storey alone.
+- Only the first storey above the ground has a stair. A character does not reach a higher storey.
 - A door leaf does not stop a character or a camera.
 - A house has no lamp. The inside is lit by the sky and by the sun through its windows.
 - A house is a box of storeys under one gable roof. It has no porch and no wing.
