@@ -265,10 +265,12 @@ The ground has no water of its own. Compose the water into the picture after the
 
 ### A lot
 
-`MeadowParameters.lots` lists the lots, up to 1,000. A lot has a middle, a half width, a half depth and a turn about +y.
+`MeadowParameters.lots` lists the lots, up to 1,000. A lot has a middle, a half width, a half depth and a turn about +y. It also has an apron and an edge.
 
-- `lot_openness` is zero on a lot and on an apron 0.8 meters wide round it. It rises smoothly to one over the next 1.6 meters. `GrassField.cover_at` thins the grass by it.
+- `lot_openness` is zero on a lot and on its apron. It rises smoothly to one over its edge. A building's apron is 0.8 meters wide, and its edge 1.6 meters. `GrassField.cover_at` thins the grass by it.
+- `footpath` returns a straight footpath as a lot, from one point to another. Its apron is 0.1 meters wide, and its edge 0.6 meters, so it is a narrow worn strip.
 - `lot_shade` turns the ground mesh's colors on a lot and its apron to mottled dirt.
+- `Ground.trail_x` gives where the trail's middle passes a z.
 - The meadow stands no tree or bush where `lot_openness` is below one.
 
 ## Ground, sky and light

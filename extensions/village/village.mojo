@@ -8,7 +8,9 @@
 `Village` puts the three subjects into one scene:
 
 1. **The lots.** Each house and the scanned building stands on a `Lot`,
-   and the meadow grows no grass, tree or bush on a lot or its apron.
+   and the meadow grows no grass, tree or bush on a lot or its apron. A
+   worn footpath runs from each house's front door to the trail: see
+   `door_path`. The paths are lots too, with narrow aprons.
 2. **The meadow.** A `Meadow` with the lots and with the ground's `Pond`:
    a basin carved below the lowest hills.
 3. **The buildings.** Each house is a building model, drawn by the
@@ -36,12 +38,13 @@ from core.assets import Assets
 from core.object3d import NodeId
 from core.scene import Scene
 from extensions.building.material import brick, timber
+from extensions.building.model import Building
 from extensions.vegetation.checks import (
     require_between,
     require_count_between,
 )
 from extensions.vegetation.field import FieldStats
-from extensions.vegetation.ground import Lot, Pond
+from extensions.vegetation.ground import Ground, Lot, Pond, footpath
 from extensions.vegetation.meadow import (
     Meadow,
     MeadowParameters,
@@ -56,10 +59,12 @@ from extensions.village.house import (
     STONE_FACADE,
     TIMBER_FRAMED,
     fieldstone,
+    footing,
     house_lot,
     house_model,
     lime_plaster,
 )
+from extensions.village.interior import Doorway, house_interior
 from extensions.village.house_view import StandingHouse, stand_house
 from extensions.village.props import (
     BARREL,
@@ -87,6 +92,55 @@ from units.si import DEGREE, METER, RADIAN, SECOND, Angle, Duration, Length
 comptime WATER_START = Float32(5)
 # The texels on a side of each texture of the houses.
 comptime SURFACE_TEXELS = 128
+comptime PATH_WIDTH = Float32(0.8)
+"""How wide a footpath from a door is, in meters."""
+comptime PATH_OUT = Float32(3.5)
+"""How far a footpath runs straight out from its door before it turns
+toward the trail, in meters."""
+comptime PATH_REACH = Float32(60)
+"""The furthest a footpath runs to the trail, in meters. A door further
+from the trail has only the path straight out from it."""
+
+
+def door_path(door: Doorway, ground: Ground) -> List[Lot]:
+    """Return the footpath from a door: `PATH_OUT` straight out from it,
+    and then on to the nearest point of the trail.
+
+    The second leg is left out when the trail is not drawn, or is more
+    than `PATH_REACH` from the end of the first.
+
+    Args:
+        door: The door.
+        ground: The ground, with its trail.
+
+    Returns:
+        One lot for each leg, `PATH_WIDTH` wide.
+    """
+    var middle = door.middle()
+    var bend_x = middle.x - door.swing_x * PATH_OUT
+    var bend_z = middle.z - door.swing_z * PATH_OUT
+    var legs: List[Lot] = [
+        footpath(middle.x, middle.z, bend_x, bend_z, PATH_WIDTH)
+    ]
+    if ground.trail_width.to(METER) <= 0:
+        return legs^
+    # The nearest point of the trail, sought every half meter along z.
+    var best = Float32(1.0e30)
+    var best_z = bend_z
+    for k in range(-240, 241):  # pragma: no branch
+        var z = bend_z + 0.5 * Float32(k)
+        var dx = ground.trail_x(z) - bend_x
+        var dz = z - bend_z
+        var gap = dx * dx + dz * dz
+        if gap < best:
+            best = gap
+            best_z = z
+    if best > PATH_REACH * PATH_REACH:
+        return legs^
+    legs.append(
+        footpath(bend_x, bend_z, ground.trail_x(best_z), best_z, PATH_WIDTH)
+    )
+    return legs^
 
 
 @fieldwise_init
@@ -356,11 +410,17 @@ struct Village(Movable):
         parameters.check()
         var meadow = parameters.meadow.copy()
         var lots = List[Lot]()
+        var models = List[Building]()
         for index in range(len(parameters.houses)):
             ref placed = parameters.houses[index]
-            lots.append(
-                house_lot(placed.house, placed.x, placed.z, placed.turn)
-            )
+            var lot = house_lot(placed.house, placed.x, placed.z, placed.turn)
+            var model = house_model(placed.house)
+            # A worn path from the house's front door to the trail.
+            var floor = footing(lot, meadow.ground)[1]
+            var inside = house_interior(model, lot, floor, meadow.ground)
+            meadow.lots.extend(door_path(inside.front_door(), meadow.ground))
+            lots.append(lot)
+            models.append(model^)
         if scan:
             meadow.lots.append(
                 scan_lot(
@@ -378,9 +438,8 @@ struct Village(Movable):
         var looks = house_looks(assets, SURFACE_TEXELS, 17)
         for index in range(len(parameters.houses)):
             ref house = parameters.houses[index].house
-            var model = house_model(house)
             var standing = stand_house(
-                scene, assets, looks, house, model, lots[index], ground
+                scene, assets, looks, house, models[index], lots[index], ground
             )
             # `house_model` gives every house a front door.
             for hinge in standing.hinges:  # pragma: no branch

@@ -89,7 +89,6 @@ from extensions.village.quality import (
 )
 from extensions.village.scanned import CutBuilding
 from extensions.village.terrain import Terrain
-from extensions.village.house import house_lot
 from extensions.village.interior import Doorway
 from extensions.village.village import Village, VillageParameters
 from extensions.water.pebbles import PebbleBed
@@ -259,28 +258,23 @@ struct PlayParameters(Copyable, Movable):
 
 
 def tree_obstacles(
-    parameters: VillageParameters, scanned: Optional[Lot] = None
+    parameters: VillageParameters, lots: List[Lot]
 ) -> List[Obstacle]:
     """Return a trunk for each planting that grows in a village's meadow.
 
-    A planting on a house's lot, on the scanned building's lot, on the
-    apron of either, or in the pond, does not grow: the meadow leaves it
-    out, and so does this.
+    A planting on a lot or its apron, or in the pond, does not grow: the
+    meadow leaves it out, and so does this.
 
     Args:
         parameters: The village.
-        scanned: The scanned building's lot, or None for none.
+        lots: The lots the meadow leaves bare, as `Village` gives them to
+            its meadow: the houses', the scanned building's and the
+            footpaths'.
 
     Returns:
         One obstacle a planting that grows, `TRUNK` times its size
         across.
     """
-    var lots = parameters.meadow.lots.copy()
-    for index in range(len(parameters.houses)):
-        ref placed = parameters.houses[index]
-        lots.append(house_lot(placed.house, placed.x, placed.z, placed.turn))
-    if scanned:
-        lots.append(scanned.value())
     var out = List[Obstacle]()
     ref plantings = parameters.meadow.plantings
     for index in range(len(plantings)):
@@ -422,7 +416,9 @@ struct VillageGame(Movable):
                 METER,
             ),
         )
-        self.trees = tree_obstacles(parameters.village, self.village.scanned)
+        self.trees = tree_obstacles(
+            parameters.village, self.village.meadow.field.lots
+        )
         self.clock = 0
         self.village.meadow.register_shadings(self.fast, assets)
         self.fast.set_shadows(self.quality.shadows, self.quality.shadow_size)

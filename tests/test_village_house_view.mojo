@@ -483,6 +483,14 @@ def test_a_barn_draws_its_hay_its_mangers_and_its_loft_door() raises:
     low_dwelling.use = DWELLING
     var bare = _drawn(assets, looks, low) - _drawn(assets, looks, low_dwelling)
     assert_true(stocked - bare > 100)
+    # A flat-roofed barn has no gable, so no loft door either.
+    var flat = _barn(0)
+    var flat_dwelling = _barn(0)
+    flat_dwelling.use = DWELLING
+    assert_equal(
+        _drawn(assets, looks, flat) - _drawn(assets, looks, flat_dwelling),
+        bare,
+    )
 
 
 def test_a_wide_door_leaf_is_braced() raises:

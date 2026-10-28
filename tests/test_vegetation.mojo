@@ -21,6 +21,8 @@ from extensions.vegetation.checks import (
 from extensions.vegetation.ground import (
     APRON,
     APRON_EDGE,
+    PATH_APRON,
+    PATH_EDGE,
     CANOPY,
     CREST,
     DIRT,
@@ -40,6 +42,7 @@ from extensions.vegetation.ground import (
     Lot,
     Pond,
     cliff_wall,
+    footpath,
     litter_shade,
     lot_openness,
     lot_shade,
@@ -1047,6 +1050,44 @@ def test_a_boulder_sits_on_the_ground_with_moss_on_top() raises:
         _ = boulder(Length(0.001, METER), 2, 0)
     with assert_raises(contains="detail"):
         _ = boulder(Length(1.0, METER), 6, 0)
+
+
+def test_a_footpath_is_a_narrow_bare_lot() raises:
+    """A building's lot keeps the wide apron. A footpath is a lot along
+    its line, bare across its width and a narrow apron, with its grass
+    back soon after; and the trail's course is shared."""
+    var house = Lot(0, 0, 1, 1, 0)
+    assert_almost_equal(house.apron, APRON)
+    assert_almost_equal(house.edge, APRON_EDGE)
+    # Five meters from (0, 0) to (4, -3), 0.8 meters wide.
+    var path = footpath(0, 0, 4, -3, 0.8)
+    assert_almost_equal(path.x, 2, atol=1e-6)
+    assert_almost_equal(path.z, -1.5, atol=1e-6)
+    assert_almost_equal(path.half_width, 2.5, atol=1e-6)
+    assert_almost_equal(path.half_depth, 0.4, atol=1e-6)
+    assert_almost_equal(path.apron, PATH_APRON)
+    assert_almost_equal(path.edge, PATH_EDGE)
+    # Along its line and its ends, nothing; across it, (0.6, 0.8).
+    var lots: List[Lot] = [path]
+    assert_almost_equal(path.reach(4, -3), 0, atol=1e-5)
+    assert_almost_equal(path.reach(4.8, -3.6), 1, atol=1e-5)
+    assert_equal(lot_openness(lots, 2 + 0.6 * 0.45, -1.5 + 0.8 * 0.45), 0)
+    var clear = 0.4 + PATH_APRON + PATH_EDGE + 0.05
+    assert_equal(lot_openness(lots, 2 + 0.6 * clear, -1.5 + 0.8 * clear), 1)
+    # The trail's middle, where the trail is drawn.
+    var ground = Ground(
+        hill_height=Length(0.0, METER), trail_width=Length(1.2, METER)
+    )
+    var z = Float32(12)
+    var x = ground.trail_x(z)
+    assert_almost_equal(
+        x,
+        TRAIL_X
+        + TRAIL_DRIFT * (TRAIL_Z - z)
+        + TRAIL_WANDER * sin(z / TRAIL_BEND),
+        atol=1e-5,
+    )
+    assert_true(ground.bare(x, z) > ground.bare(x + 3, z))
 
 
 def main() raises:

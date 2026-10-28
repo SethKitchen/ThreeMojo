@@ -18,7 +18,7 @@ from core.scene import Scene
 from extensions.building.material import brick, timber
 from extensions.scan.frame import supersplat_frame
 from extensions.vegetation.field import LodBand
-from extensions.vegetation.ground import Ground, Lot, Pond
+from extensions.vegetation.ground import Ground, Lot, Pond, lot_openness
 from extensions.vegetation.meadow import Planting
 from extensions.village.house import BARN, DWELLING, HouseParameters
 from extensions.scan.occupancy import ScanRegion
@@ -32,10 +32,14 @@ from extensions.village.scanned import (
     stand_scan,
 )
 from extensions.village.props import CRATE, FENCE, WELL, Prop
+from extensions.village.interior import Doorway
 from extensions.village.village import (
     HousePlacement,
+    PATH_OUT,
+    PATH_WIDTH,
     Village,
     VillageParameters,
+    door_path,
     default_props,
 )
 from extensions.water.pebbles import pebble_bed
@@ -331,7 +335,11 @@ def test_a_village_stands_its_buildings_and_draws_its_pond() raises:
     var village = Village(scene, assets, renderer, p, pebble_bed(_bed()), cut^)
     assert_equal(len(village.houses), 1)
     assert_true(Bool(village.scanned))
-    assert_equal(len(village.meadow.field.lots), 2)
+    # The house, its footpath's legs, and the scanned building.
+    var door = village.houses[0].interior.front_door()
+    var legs = len(door_path(door, village.meadow.field.ground))
+    assert_true(legs >= 1)
+    assert_equal(len(village.meadow.field.lots), 2 + legs)
     # The house's front door opens: its doorway and its hinge are the
     # village's door.
     assert_equal(len(village.doors.ways), 1)
@@ -384,6 +392,39 @@ def test_a_village_stands_its_buildings_and_draws_its_pond() raises:
     assert_equal(len(plain.doors.ways), 0)
     var open = plain.terrain()
     assert_equal(len(open.walls) + len(open.floors) + len(open.lots), 0)
+
+
+def test_a_footpath_leads_from_a_front_door_to_the_trail() raises:
+    # A door a meter wide along x at (2, 4), that swings into its house
+    # toward -z: its path runs out along +z.
+    var door = Doorway(2, 4, 1, 0, 0, -1, 1, 2.1, 0, True)
+    var trail = Ground(
+        hill_height=Length(0.0, METER), trail_width=Length(1.2, METER)
+    )
+    var legs = door_path(door, trail)
+    assert_equal(len(legs), 2)
+    assert_almost_equal(legs[0].half_width, PATH_OUT / 2, atol=1e-5)
+    assert_almost_equal(legs[0].half_depth, PATH_WIDTH / 2, atol=1e-5)
+    var first: List[Lot] = [legs[0]]
+    assert_equal(lot_openness(first, 2.5, 4 + PATH_OUT / 2), 0)
+    assert_equal(lot_openness(first, 4.5, 4 + PATH_OUT / 2), 1)
+    # The second leg starts where the first ends and ends on the trail's
+    # middle.
+    ref second = legs[1]
+    var c = cos(second.turn)
+    var s = sin(second.turn)
+    var start_x = second.x - c * second.half_width
+    var start_z = second.z + s * second.half_width
+    var end_x = second.x + c * second.half_width
+    var end_z = second.z - s * second.half_width
+    assert_almost_equal(start_x, 2.5, atol=1e-3)
+    assert_almost_equal(start_z, 4 + PATH_OUT, atol=1e-3)
+    assert_almost_equal(end_x, trail.trail_x(end_z), atol=1e-3)
+    # With no trail, or a trail too far away, only the first leg.
+    var open = Ground(hill_height=Length(0.0, METER))
+    assert_equal(len(door_path(door, open)), 1)
+    var far = Doorway(200, 4, 1, 0, 0, -1, 1, 2.1, 0, True)
+    assert_equal(len(door_path(far, trail)), 1)
 
 
 def main() raises:

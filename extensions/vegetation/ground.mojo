@@ -50,7 +50,7 @@ from extensions.vegetation.checks import (
 )
 from extensions.vegetation.noise import hash01, layered_noise, value_noise
 from math.vector3 import Vector3
-from std.math import abs, cos, floor, pi, pow, sin, sqrt
+from std.math import abs, atan2, cos, floor, pi, pow, sin, sqrt
 from units.si import METER, Length
 
 # The linear color of grass seen from far away.
@@ -97,6 +97,10 @@ comptime POND_LAWN = Float32(1.6)
 # comes back, in meters.
 comptime APRON = Float32(0.8)
 comptime APRON_EDGE = Float32(1.6)
+# How far either side of a footpath the ground is bare, and how far
+# further its grass comes back, in meters.
+comptime PATH_APRON = Float32(0.1)
+comptime PATH_EDGE = Float32(0.6)
 # The linear color of the mountains.
 comptime STONE = Vector3(0.036, 0.044, 0.056)
 # How wide the step at each rim of a canyon is, in meters.
@@ -479,6 +483,22 @@ struct Ground(ImplicitlyCopyable):
         var n = Vector3(-dx, 2 * e, -dz)
         return n / n.length()
 
+    def trail_x(self, z: Float32) -> Float32:
+        """Return where the middle of the trail passes a z.
+
+        Args:
+            z: The z, in meters.
+
+        Returns:
+            The trail's middle's x there, in meters. It is there whether
+            or not the trail is drawn: see `trail_width`.
+        """
+        return (
+            TRAIL_X
+            + TRAIL_DRIFT * (TRAIL_Z - z)
+            + TRAIL_WANDER * sin(z / TRAIL_BEND)
+        )
+
     def bare(self, x: Float32, z: Float32) -> Float32:
         """Return how bare the ground is at a point, from zero to one.
 
@@ -501,11 +521,7 @@ struct Ground(ImplicitlyCopyable):
             Float32(1), self.dirt * 20
         )
         var width = self.trail_width.to(METER)
-        var course = (
-            TRAIL_X
-            + TRAIL_DRIFT * (TRAIL_Z - z)
-            + TRAIL_WANDER * sin(z / TRAIL_BEND)
-        )
+        var course = self.trail_x(z)
         var half = (
             0.5
             * width
@@ -782,10 +798,9 @@ def litter_shade(
     geometry.set_attribute(COLOR, BufferAttribute(shaded^, 3))
 
 
-@fieldwise_init
 struct Lot(ImplicitlyCopyable):
-    """A building's footprint: a rectangle where nothing grows, turned
-    about +y, with a bare apron round it."""
+    """A building's footprint or a footpath: a rectangle where nothing
+    grows, turned about +y, with a bare apron round it."""
 
     # The middle, in meters.
     var x: Float32
@@ -796,6 +811,41 @@ struct Lot(ImplicitlyCopyable):
     var half_depth: Float32
     # How far the lot is turned about +y, from +x toward -z, in radians.
     var turn: Float32
+    # How far round it the ground is bare, and how far further the grass
+    # comes back, in meters.
+    var apron: Float32
+    var edge: Float32
+
+    def __init__(
+        out self,
+        x: Float32,
+        z: Float32,
+        half_width: Float32,
+        half_depth: Float32,
+        turn: Float32,
+        apron: Float32 = APRON,
+        edge: Float32 = APRON_EDGE,
+    ):
+        """Create a lot.
+
+        Args:
+            x: Its middle's x, in meters.
+            z: Its middle's z, in meters.
+            half_width: Half its width along its own x, in meters.
+            half_depth: Half its depth along its own z, in meters.
+            turn: How far it is turned about +y, from +x toward -z, in
+                radians.
+            apron: How far round it the ground is bare, in meters.
+            edge: How far past the apron the grass comes back, in meters.
+                It must be above zero.
+        """
+        self.x = x
+        self.z = z
+        self.half_width = half_width
+        self.half_depth = half_depth
+        self.turn = turn
+        self.apron = apron
+        self.edge = edge
 
     def reach(self, x: Float32, z: Float32) -> Float32:
         """Return how far a point is outside the lot.
@@ -820,8 +870,9 @@ struct Lot(ImplicitlyCopyable):
 def lot_openness(lots: List[Lot], x: Float32, z: Float32) -> Float32:
     """Return how open a point is to growth round the lots.
 
-    The lot and its apron, `APRON` round it, are bare, and the grass comes
-    back smoothly over `APRON_EDGE` further.
+    A lot and its apron are bare, and the grass comes back smoothly over
+    the lot's edge further. A building's apron is `APRON`, and its edge
+    `APRON_EDGE`.
 
     Args:
         lots: The lots.
@@ -834,9 +885,45 @@ def lot_openness(lots: List[Lot], x: Float32, z: Float32) -> Float32:
     var open = Float32(1)
     for index in range(len(lots)):
         open = min(
-            open, _ramp(APRON, APRON + APRON_EDGE, lots[index].reach(x, z))
+            open,
+            _ramp(
+                lots[index].apron,
+                lots[index].apron + lots[index].edge,
+                lots[index].reach(x, z),
+            ),
         )
     return open
+
+
+def footpath(
+    x0: Float32, z0: Float32, x1: Float32, z1: Float32, width: Float32
+) -> Lot:
+    """Return a straight footpath from one point to another, as a lot:
+    `width` wide, bare along `PATH_APRON` either side, with its grass back
+    over `PATH_EDGE` further.
+
+    Args:
+        x0: Where it starts, along x, in meters.
+        z0: Where it starts, along z, in meters.
+        x1: Where it ends, along x, in meters.
+        z1: Where it ends, along z, in meters.
+        width: How wide it is, in meters.
+
+    Returns:
+        The lot: its own x runs along the path.
+    """
+    var dx = x1 - x0
+    var dz = z1 - z0
+    var length = sqrt(dx * dx + dz * dz)
+    return Lot(
+        (x0 + x1) / 2,
+        (z0 + z1) / 2,
+        length / 2,
+        width / 2,
+        atan2(-dz, dx),
+        PATH_APRON,
+        PATH_EDGE,
+    )
 
 
 def lot_shade(mut geometry: BufferGeometry, lots: List[Lot], seed: Int) raises:

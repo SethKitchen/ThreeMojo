@@ -14,7 +14,7 @@ from extensions.building.material import brick
 from extensions.humanoid.sex import FEMALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.field import LodBand
-from extensions.vegetation.ground import Ground, Lot, Pond
+from extensions.vegetation.ground import Ground, Lot, Pond, footpath
 from extensions.vegetation.meadow import Planting
 from controls.third_person_controls import yaw_of
 from extensions.village.character import (
@@ -23,7 +23,7 @@ from extensions.village.character import (
     MoveInput,
     no_input,
 )
-from extensions.village.house import HouseParameters
+from extensions.village.house import HouseParameters, house_lot
 from extensions.village.play import (
     FOCUS_HEIGHT,
     PlayParameters,
@@ -39,7 +39,11 @@ from extensions.village.residents import (
     ResidentsParameters,
     Villager,
 )
-from extensions.village.village import HousePlacement, VillageParameters
+from extensions.village.village import (
+    HousePlacement,
+    PATH_WIDTH,
+    VillageParameters,
+)
 from extensions.water.pebbles import pebble_bed
 from extensions.water.resolution import SpectrumResolution
 from render.png import DecodedImage
@@ -151,7 +155,12 @@ def test_the_game_village_is_planted_at_its_quality_and_lived_in() raises:
     for villager in people.villagers:
         assert_true(len(villager.outfit.garments) >= 4)
     assert_equal(len(game.outfit.garments), 4)
-    var trunks = tree_obstacles(_village())
+    var village = _village()
+    ref placed = village.houses[0]
+    var lots: List[Lot] = [
+        house_lot(placed.house, placed.x, placed.z, placed.turn)
+    ]
+    var trunks = tree_obstacles(village, lots)
     assert_equal(len(trunks), 1)
     assert_almost_equal(trunks[0].radius, TRUNK * 0.5, atol=1e-6)
     # A planting on the house's lot, or in the pond, does not grow, and
@@ -159,12 +168,14 @@ def test_the_game_village_is_planted_at_its_quality_and_lived_in() raises:
     var crowded = _village()
     crowded.meadow.plantings.append(Planting(0, 5, -6, 0.5))
     crowded.meadow.plantings.append(Planting(0, 0, 4, 0.5))
-    assert_equal(len(tree_obstacles(crowded)), 1)
-    # Nor does one on the scanned building's lot.
-    assert_equal(len(tree_obstacles(_village(), Lot(6, 6, 1, 1, 0))), 0)
+    assert_equal(len(tree_obstacles(crowded, lots)), 1)
+    # Nor does one on any other lot the meadow leaves bare, such as a
+    # footpath.
+    var path: List[Lot] = [footpath(5, 6, 7, 6, PATH_WIDTH)]
+    assert_equal(len(tree_obstacles(_village(), path)), 0)
     var bare = _village()
     bare.meadow.plantings = []
-    assert_equal(len(tree_obstacles(bare)), 0)
+    assert_equal(len(tree_obstacles(bare, lots)), 0)
 
 
 def test_a_player_walks_jumps_and_is_followed() raises:

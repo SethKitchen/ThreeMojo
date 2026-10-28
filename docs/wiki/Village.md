@@ -116,6 +116,8 @@ The default village has a well and a bench by the trail, and barrels, crates and
 
 Each building stands on a `Lot`: its footprint, turned about +y. `Village` puts the lots into `MeadowParameters.lots` before it builds the meadow. So no grass grows on a lot or on the bare apron round it, and no tree or bush stands there. The ground under a lot is mottled dirt. See [Ponds and lots](Vegetation#ponds-and-lots).
 
+A worn footpath 0.8 meters wide leads from each house's front door to the trail. `door_path` gives it as two lots with narrow aprons. The first runs 3.5 meters straight out from the door. The second runs on to the nearest point of the trail. A door with no trail within 60 meters, or on ground with no trail, has only the first.
+
 ## Houses
 
 Each house is a canonical building model with a hall, a front door, windows and furniture. The village draws it with its own view, on a stone plinth, under a gable roof. See [Village houses](Village-houses).
