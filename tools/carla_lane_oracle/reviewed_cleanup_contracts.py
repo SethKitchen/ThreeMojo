@@ -322,6 +322,31 @@ def _gate_digest(payload, expected):
         raise ValueError(message)
 
 
+def _declarations_after_digest(payload, expected):
+    """Check the guard-pin digest, then return the declaration catalog."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='cleanup-catalog-digest-') as directory:
+        path = Path(directory) / 'guard'
+        path.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_cleanup_declarations', '--after', str(path),
+             '--sha', expected],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 _RECORD_PATHS = None
 
 
@@ -644,8 +669,8 @@ def verify(root, *, _operation=None):
     operation_args = {} if _operation is None else {'_operation': _operation}
     record = read_record(root)
     _, guard_payload = frozen._verified_pin_pair(root, record['runtime_pins_after_sha256'], **operation_args)
-    _gate_digest(guard_payload, record['guard_pins_after_sha256'])
-    labels = _cleanup_declarations()
+    labels = _declarations_after_digest(
+        guard_payload, record['guard_pins_after_sha256'])
     pairs = []
     paths = []
     for path, transition in record['sources'].items():

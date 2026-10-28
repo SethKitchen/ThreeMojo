@@ -9,6 +9,8 @@ The live texts still come from the three successor sources. This list only
 says which declaration each premise checks.
 """
 
+from tools._sha256 import sha256_hex
+
 
 def cleanup_declarations() -> String:
     """Return the cleanup declarations, the junction path, and the label.
@@ -26,3 +28,27 @@ def cleanup_declarations() -> String:
         + '{"source":1,"name":"center","owner":["_RoundedArc"],"key":"center"},'
         + '{"source":2,"name":"_outward_float","owner":[],"key":"outward"}]}'
     )
+
+
+def cleanup_declarations_after_digest(
+    payload: Span[UInt8, _], expected: String
+) raises -> String:
+    """Check the guard-pin digest, then return the declaration catalog.
+
+    Args:
+        payload: The reconstructed guard-pin bytes.
+        expected: The required SHA-256 hex digest.
+
+    Returns:
+        JSON with `junction`, `unreviewed`, and `declarations`.
+
+    Raises:
+        Error: The digest changed. The digest is checked before the
+            catalog is returned.
+    """
+    if sha256_hex(payload) != expected:
+        raise Error(
+            "reviewed cleanup source contract: unreviewed dependency pin"
+            " successor: sum2-guard-pins.json"
+        )
+    return cleanup_declarations()

@@ -5,10 +5,14 @@
 
 """The reviewed cleanup declarations stay in source order."""
 
-from std.testing import TestSuite, assert_equal
+from std.testing import TestSuite, assert_equal, assert_raises
 
-from tools._cleanup_declarations import cleanup_declarations
+from tools._cleanup_declarations import (
+    cleanup_declarations,
+    cleanup_declarations_after_digest,
+)
 from tools._python_json import PyJson
+from tools._sha256 import sha256_hex
 
 
 def test_cleanup_declarations_stay_with_their_sources() raises:
@@ -49,6 +53,30 @@ def test_cleanup_declarations_stay_with_their_sources() raises:
     assert_equal(doc.text(doc.at(outward, "source")), "2")
     assert_equal(doc.text(doc.at(outward, "name")), "_outward_float")
     assert_equal(doc.text(doc.at(outward, "key")), "outward")
+
+
+def test_a_changed_guard_pin_fails_before_the_catalog() raises:
+    """A wrong digest fails before the declaration catalog is returned."""
+    with assert_raises(
+        contains=(
+            "reviewed cleanup source contract: unreviewed dependency pin"
+            " successor: sum2-guard-pins.json"
+        )
+    ):
+        _ = cleanup_declarations_after_digest(String("nope").as_bytes(), "00")
+
+
+def test_a_matching_guard_pin_returns_the_catalog() raises:
+    """A matching digest returns the declaration catalog."""
+    var payload = String("guard").as_bytes()
+    var doc = PyJson.parse(
+        cleanup_declarations_after_digest(payload, sha256_hex(payload))
+    )
+    assert_equal(doc.key(doc.root, 0), "junction")
+    assert_equal(
+        doc.text(doc.at(doc.root, "junction")),
+        "extensions/carla/junction_bounds.mojo",
+    )
 
 
 def main() raises:
