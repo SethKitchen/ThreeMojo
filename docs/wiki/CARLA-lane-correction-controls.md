@@ -655,6 +655,11 @@ It builds that report meta after the moment payload in one check.
 
 It checks the stored table before that report meta in one check.
 
+It reuses that table check when the same table is read again.
+The table file is still read.
+A changed table is checked again.
+A failed check is not kept.
+
 It writes the moment report and the coefficient file with two-space indentation.
 
 It indents that moment report before the output-path guard in one check.
@@ -734,6 +739,10 @@ A failed check is not kept.
 It checks every rounded node sum in one check.
 
 It derives the moment rows after those rounded node sums in one check.
+
+It reuses that sum-and-row check when the same rows are read again.
+A changed row is checked again.
+A failed check is not kept.
 
 It spells the stored nodes and weights before their rounded sums in one check.
 

@@ -1649,6 +1649,92 @@ class ProductionScanTests(unittest.TestCase):
         )
 
 
+class MomentTableCacheTests(unittest.TestCase):
+    def test_the_same_moment_table_skips_the_second_check(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import spiral_moments as moments
+        saved_sums = moments._GATED_SUMS_ROWS
+        saved_rows = moments._DERIVED_ROWS
+        saved_table = moments._GATED_TABLE_META
+        saved_ready = moments._DEPENDENCIES_READY
+        saved_dependencies = moments.__dict__.get('DEPENDENCIES')
+        saved_failures = moments._CLI_FAILURES
+        pins = {
+            'ideal_projection': {'legacy': 'old'},
+            'routing': {},
+            'blocks': {},
+        }
+        try:
+            moments._GATED_SUMS_ROWS = None
+            moments._DERIVED_ROWS = None
+            moments._GATED_TABLE_META = None
+            moments._DEPENDENCIES_READY = True
+            moments.DEPENDENCIES = {'group': 'g'}
+            moments._CLI_FAILURES = {
+                'derive': 'spiral moment derive: ',
+                'key': 'KeyError: ',
+            }
+            ok = Mock(
+                returncode=0,
+                stdout='{"sums":["1"],"rows":[[1]],"sha256":"aa"}',
+                stderr='',
+            )
+            with patch('subprocess.run', return_value=ok) as run:
+                self.assertEqual(
+                    moments._sums_then_rows(
+                        {'nodes': ['1']}, {'cosine': [1], 'sine': [2]}),
+                    ['1'])
+                self.assertEqual(moments._DERIVED_ROWS, [[1]])
+                moments._DERIVED_ROWS = None
+                moments._sums_then_rows(
+                    {'nodes': ['1']}, {'cosine': [1], 'sine': [2]})
+                self.assertEqual(moments._DERIVED_ROWS, [[1]])
+                self.assertEqual(run.call_count, 1)
+                moments._sums_then_rows(
+                    {'nodes': ['2']}, {'cosine': [1], 'sine': [2]})
+                self.assertEqual(run.call_count, 2)
+                meta = moments._table_then_meta(
+                    b'table', [[1]], Path('table-root'), pins)
+                self.assertEqual(meta['sha256'], 'aa')
+                moments._table_then_meta(
+                    b'table', [[1]], Path('table-root'), pins)
+                self.assertEqual(run.call_count, 3)
+                moments._table_then_meta(
+                    b'other', [[1]], Path('table-root'), pins)
+                self.assertEqual(run.call_count, 4)
+            failed = Mock(returncode=1, stdout='', stderr='table changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'table changed'):
+                    moments._sums_then_rows(
+                        {'nodes': ['bad']}, {'cosine': [1], 'sine': [2]})
+                with self.assertRaisesRegex(ValueError, 'table changed'):
+                    moments._sums_then_rows(
+                        {'nodes': ['bad']}, {'cosine': [1], 'sine': [2]})
+                with self.assertRaises(moments.CheckError):
+                    moments._table_then_meta(
+                        b'bad', [[9]], Path('table-root'), pins)
+                with self.assertRaises(moments.CheckError):
+                    moments._table_then_meta(
+                        b'bad', [[9]], Path('table-root'), pins)
+                self.assertEqual(run.call_count, 4)
+            with patch('subprocess.run', return_value=ok) as run:
+                moments._sums_then_rows(
+                    {'nodes': ['2']}, {'cosine': [1], 'sine': [2]})
+                moments._table_then_meta(
+                    b'other', [[1]], Path('table-root'), pins)
+                self.assertEqual(run.call_count, 0)
+        finally:
+            moments._GATED_SUMS_ROWS = saved_sums
+            moments._DERIVED_ROWS = saved_rows
+            moments._GATED_TABLE_META = saved_table
+            moments._DEPENDENCIES_READY = saved_ready
+            moments._CLI_FAILURES = saved_failures
+            if saved_dependencies is None:
+                moments.__dict__.pop('DEPENDENCIES', None)
+            else:
+                moments.DEPENDENCIES = saved_dependencies
+
+
 class MomentBatchCacheTests(unittest.TestCase):
     def test_the_same_moment_batches_skip_the_second_check(self):
         from unittest.mock import Mock, patch

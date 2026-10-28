@@ -280,9 +280,16 @@ def _route_currents(loaded_routes):
 _DERIVED_ROWS = None
 
 
+_GATED_SUMS_ROWS = None
+
+
 def _sums_then_rows(sums, rows):
-    """Check the rounded node sums, then derive the moment rows."""
-    global _DERIVED_ROWS
+    """Check the rounded node sums, then derive the moment rows.
+
+    The same rows are not checked again. A changed row is checked again.
+    A failed check is not kept.
+    """
+    global _DERIVED_ROWS, _GATED_SUMS_ROWS
     import os
     import subprocess
     import tempfile
@@ -290,6 +297,10 @@ def _sums_then_rows(sums, rows):
     payload['cosine'] = [str(word) for word in rows['cosine']]
     payload['sine'] = [str(word) for word in rows['sine']]
     text = json.dumps(payload, separators=(',', ':'))
+    cached = _GATED_SUMS_ROWS
+    if cached is not None and cached[0] == text:
+        _DERIVED_ROWS = cached[2]
+        return cached[1]
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='moment-sums-rows-') as directory:
@@ -306,6 +317,7 @@ def _sums_then_rows(sums, rows):
         raise ValueError(message)
     parsed = json.loads(result.stdout)
     _DERIVED_ROWS = parsed['rows']
+    _GATED_SUMS_ROWS = (text, parsed['sums'], parsed['rows'])
     return parsed['sums']
 
 
@@ -1351,8 +1363,16 @@ def _raise_table_meta(message):
     raise CheckError(message)
 
 
+_GATED_TABLE_META = None
+
+
 def _table_then_meta(data, rows, root, pins):
-    """Check the stored table, then build the report meta."""
+    """Check the stored table, then build the report meta.
+
+    The same table is not checked again. A changed table is checked again.
+    A failed check is not kept.
+    """
+    global _GATED_TABLE_META
     try:
         text = data.decode('utf-8')
     except UnicodeDecodeError as error:
@@ -1369,6 +1389,9 @@ def _table_then_meta(data, rows, root, pins):
         'routing': pins['routing'],
         'blocks': pins['blocks'],
     }, separators=(',', ':'))
+    cached = _GATED_TABLE_META
+    if cached is not None and cached[0] == payload:
+        return cached[1]
     repo = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='table-meta-') as directory:
@@ -1383,7 +1406,9 @@ def _table_then_meta(data, rows, root, pins):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         _raise_table_meta(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _GATED_TABLE_META = (payload, parsed)
+    return parsed
 
 
 def make_report(root, rows, pins, meta=None):
