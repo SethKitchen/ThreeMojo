@@ -19,6 +19,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
+from tools._duplicate_pin_keys import reject_duplicate_pin_keys
 from tools._lane_declarations import (
     lane_control_prepare,
     lane_control_prepare_with_labels,
@@ -74,10 +75,11 @@ def lane_control_record(migration: Span[UInt8, _]) raises:
         migration: The successor record bytes.
 
     Raises:
-        Error: The record digest or an embedded source digest changed.
+        Error: The record digest, a repeated key, or an embedded source digest changed.
     """
     if sha256_hex(migration) != _RECORD_SHA256:
         _fail("lane-control migration record changed")
+    reject_duplicate_pin_keys(migration)
     var doc = PyJson.parse(String(from_utf8_lossy=migration))
     var before = _field(doc, "before_source")
     var before_hash = _field(doc, "before_sha256")

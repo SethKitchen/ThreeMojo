@@ -14,6 +14,7 @@ The caller observes those files first.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
+from tools._duplicate_pin_keys import reject_duplicate_pin_keys
 from tools._python_json import PY_BOOL, PY_INT, PyJson
 from tools._sha256 import sha256_hex
 
@@ -206,10 +207,11 @@ def runtime_view(
         The two steps as one JSON object.
 
     Raises:
-        Error: The record or a bound test changed.
+        Error: The record digest, a repeated key, or a bound test changed.
     """
     if sha256_hex(migration) != _MIGRATION_SHA256:
         _fail("unreviewed exact step")
+    reject_duplicate_pin_keys(migration)
     var doc = PyJson.parse(String(from_utf8_lossy=migration))
     if not (
         _is_one(doc, doc.at(doc.root, "schema"))

@@ -5,6 +5,7 @@
 
 """A changed selection predecessor record fails the gate."""
 
+from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools.carla_selection_record_gate import (
@@ -17,6 +18,17 @@ def test_a_changed_record_is_refused() raises:
     """Bytes that are not the reviewed record fail closed."""
     with assert_raises(contains="Unreviewed selection predecessor record"):
         selection_record(String("").as_bytes())
+    with assert_raises(contains="Unreviewed selection predecessor record"):
+        selection_record(String('{"a":1,"a":2}').as_bytes())
+
+
+def test_the_reviewed_selection_record_passes() raises:
+    """The reviewed record passes the digest and the repeated-key check."""
+    selection_record(
+        Path(
+            "tools/carla_lane_oracle/selection-finiteness-contract.json"
+        ).read_bytes()
+    )
 
 
 def test_a_changed_restored_token_is_refused() raises:

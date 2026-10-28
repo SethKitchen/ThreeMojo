@@ -46,6 +46,29 @@ def test_a_changed_successor_record_is_refused() raises:
             "",
             False,
         )
+    with assert_raises(contains="Unreviewed grouped Y successor record"):
+        y_successor(
+            String('{"a":1,"a":2}').as_bytes(),
+            String("").as_bytes(),
+            String("").as_bytes(),
+            "",
+            "",
+            False,
+        )
+
+
+def test_the_reviewed_y_successor_record_passes() raises:
+    """The reviewed record passes the digest and the repeated-key check."""
+    y_successor(
+        Path(
+            "tools/carla_lane_oracle/grouped-y-successor-record.json"
+        ).read_bytes(),
+        String("").as_bytes(),
+        String("").as_bytes(),
+        "",
+        "",
+        False,
+    )
 
 
 def test_a_changed_module_token_is_refused() raises:

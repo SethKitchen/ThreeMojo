@@ -90,6 +90,8 @@ It compares that grouped-table token digest in one check.
 
 `tools/carla_y_gate.mojo` checks the five Y-finiteness token digests, the successor record digests, and the module token identity.
 
+It checks that record digest before it checks a repeated key.
+
 It lists every module whose token differs, in review order, in one check.
 
 It checks the successor record, then returns the earlier grouped module in one check.
@@ -125,6 +127,8 @@ It reads the predecessor token before it checks that binding.
 It refuses a repeated predecessor key before that token is read.
 
 `tools/carla_runtime_view_gate.mojo` checks the runtime-view record and its bound tests.
+
+It checks that record digest before it checks a repeated key.
 
 `tools/carla_followup_gate.mojo` checks the coverage-followup record, the pin digests, the ordered pin pair, and the pin placements.
 
@@ -876,6 +880,8 @@ The cleanup, dispatch, selection, grouped-table, and lane-control checks use tha
 
 `tools/carla_lane_control_gate.mojo` checks the lane-control migration digest, its source digests, and the declaration tokens.
 
+It checks that record digest before it checks a repeated key.
+
 It accepts one historical lane declaration when the owner is empty and the token matches.
 
 It renames the first frozen lane declaration.
@@ -966,6 +972,8 @@ It keeps the runtime-boundary contract prefix.
 
 `tools/carla_envelope_gate.mojo` checks the envelope budget predecessor record and the admission token.
 
+It checks that record digest before it checks a repeated key.
+
 It refuses `terms` or `max_terms` between the two capacity checks.
 
 It requires the successor function to keep the same significant tokens.
@@ -979,6 +987,8 @@ A token failure reads the reviewed source before that gap check.
 It checks the predecessor record, then returns the earlier capture function in one check.
 
 `tools/carla_selection_record_gate.mojo` checks the selection predecessor record and the restored token.
+
+It checks that record digest before it checks a repeated key.
 
 It reads the declaration line span before restoring that function.
 

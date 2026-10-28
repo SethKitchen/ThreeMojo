@@ -27,6 +27,19 @@ def test_a_changed_record_is_refused() raises:
         contains="Unreviewed envelope budget predecessor record"
     ):
         envelope_record(String("").as_bytes())
+    with assert_raises(
+        contains="Unreviewed envelope budget predecessor record"
+    ):
+        envelope_record(String('{"a":1,"a":2}').as_bytes())
+
+
+def test_the_reviewed_envelope_record_passes() raises:
+    """The reviewed record passes the digest and the repeated-key check."""
+    envelope_record(
+        Path(
+            "tools/carla_lane_oracle/envelope-budget-contract.json"
+        ).read_bytes()
+    )
 
 
 def test_a_changed_admission_token_is_refused() raises:

@@ -36,6 +36,7 @@ from tests._python_tokens import (
     token_sha256,
 )
 from tools._python_json import PyJson
+from tools._duplicate_pin_keys import reject_duplicate_pin_keys
 from tools._sha256 import sha256_hex
 
 
@@ -51,10 +52,11 @@ def envelope_record(migration: Span[UInt8, _]) raises:
         migration: The contract record bytes.
 
     Raises:
-        Error: The digest changed.
+        Error: The digest changed, or a key is repeated after that digest.
     """
     if sha256_hex(migration) != _RECORD_SHA256:
         raise Error("Unreviewed envelope budget predecessor record")
+    reject_duplicate_pin_keys(migration)
 
 
 def envelope_token(text: String, expected: String) raises:

@@ -18,6 +18,7 @@ from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
 from tools._python_json import PyJson
+from tools._duplicate_pin_keys import reject_duplicate_pin_keys
 from tools._sha256 import sha256_hex
 
 
@@ -185,10 +186,11 @@ def y_successor(
         check_sources: Whether to check the two module digests.
 
     Raises:
-        Error: A digest changed.
+        Error: A digest changed, or a key is repeated after the record digest.
     """
     if sha256_hex(migration) != _RECORD_SHA256:
         raise Error("Unreviewed grouped Y successor record")
+    reject_duplicate_pin_keys(migration)
     if not check_sources:
         return
     if sha256_hex(before) != before_sha or sha256_hex(after) != after_sha:

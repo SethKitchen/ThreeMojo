@@ -21,6 +21,15 @@ def test_a_changed_record_is_refused() raises:
     """Bytes that are not the reviewed record fail closed."""
     with assert_raises(contains="lane-control migration record changed"):
         lane_control_record(String("").as_bytes())
+    with assert_raises(contains="lane-control migration record changed"):
+        lane_control_record(String('{"a":1,"a":2}').as_bytes())
+
+
+def test_the_reviewed_lane_control_record_passes() raises:
+    """The reviewed record passes the digest and the repeated-key check."""
+    lane_control_record(
+        Path("tools/carla_lane_oracle/lane-control-migration.json").read_bytes()
+    )
 
 
 def test_a_changed_declaration_is_refused() raises:
