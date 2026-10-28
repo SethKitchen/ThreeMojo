@@ -991,5 +991,85 @@ class PredecessorPairCacheTests(unittest.TestCase):
             invariant._PLACED_PREDECESSORS = original_placed
 
 
+class RepeatedByteGateTests(unittest.TestCase):
+    def test_repeated_speed_runtime_and_render_bytes_skip_the_second_gate(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import render_actor_reuse_contracts as render
+        from tools.carla_lane_oracle import runtime_boundary_contracts as runtime
+        from tools.carla_lane_oracle import speed_parser_contracts as speed
+        saved = (
+            speed._GATED_SPEED,
+            runtime._GATED_RUNTIME_RECORD,
+            runtime._GATED_RUNTIME_BYTES,
+            runtime._EDGES_AFTER_STEPS,
+            runtime._GATED_RUNTIME_EDGES,
+            runtime._RUNTIME_MESSAGES,
+            render._GATED_RENDER_RECORD,
+            render._GATED_RENDER_BYTES,
+            render._GATED_RENDER_EDGES,
+            render._RENDER_MESSAGES,
+            render._PATHS,
+        )
+        stdout = (
+            '{"modules":["m.mojo"],"decisions":[],'
+            '"edges":[{"path":"m.mojo"}],'
+            '"messages":{"runtime_test":"rt","render_test":"r"}}'
+        )
+        edge = ('m.mojo', {'path': 'm.mojo'}, b'payload', 'digest', None)
+        try:
+            speed._GATED_SPEED = None
+            runtime._GATED_RUNTIME_RECORD = None
+            runtime._GATED_RUNTIME_BYTES = None
+            runtime._EDGES_AFTER_STEPS = None
+            runtime._GATED_RUNTIME_EDGES = None
+            runtime._RUNTIME_MESSAGES = None
+            render._GATED_RENDER_RECORD = None
+            render._GATED_RENDER_BYTES = None
+            render._GATED_RENDER_EDGES = None
+            render._RENDER_MESSAGES = None
+            render._PATHS = None
+            ok = Mock(returncode=0, stdout=stdout, stderr='')
+            with patch('subprocess.run', return_value=ok) as run:
+                speed._gate(b'm', b'a', 'module', b'l', b'x')
+                speed._gate(b'm', b'a', 'module', b'l', b'x')
+                runtime._gate_record(b'record')
+                runtime._gate_record(b'record')
+                runtime._gate_bytes_all([(b'file', 'sha', None, 'label')])
+                runtime._gate_bytes_all([(b'file', 'sha', None, 'label')])
+                first = runtime._edges_after_steps({'lane': {}}, {'m.mojo': {}})
+                second = runtime._edges_after_steps({'lane': {}}, {'m.mojo': {}})
+                self.assertEqual(first, second)
+                runtime._checked_edges_with_messages([edge])
+                runtime._checked_edges_with_messages([edge])
+                render._paths_after_record(b'render')
+                render._paths_after_record(b'render')
+                render._gate_bytes_all([(b'file', 'sha', None, 'label')])
+                render._gate_bytes_all([(b'file', 'sha', None, 'label')])
+                render._checked_edges_with_messages([edge])
+                render._checked_edges_with_messages([edge])
+                self.assertEqual(run.call_count, 8)
+            failed = Mock(returncode=1, stdout='', stderr='speed record changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'speed record changed'):
+                    speed._gate(b'm', b'a', 'module', b'l', b'other')
+                self.assertEqual(run.call_count, 1)
+                speed._gate(b'm', b'a', 'module', b'l', b'x')
+                self.assertEqual(run.call_count, 1)
+        finally:
+            (
+                speed._GATED_SPEED,
+                runtime._GATED_RUNTIME_RECORD,
+                runtime._GATED_RUNTIME_BYTES,
+                runtime._EDGES_AFTER_STEPS,
+                runtime._GATED_RUNTIME_EDGES,
+                runtime._RUNTIME_MESSAGES,
+                render._GATED_RENDER_RECORD,
+                render._GATED_RENDER_BYTES,
+                render._GATED_RENDER_EDGES,
+                render._RENDER_MESSAGES,
+                render._PATHS,
+            ) = saved
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -190,9 +190,17 @@ def _gate_record(payload):
         _run(['--migration', str(record)])
 
 
+_GATED_RENDER_RECORD = None
+
+
 def _paths_after_record(payload):
     """Require the render-actor record, then return its module paths."""
-    global _PATHS
+    global _PATHS, _GATED_RENDER_RECORD
+    cached = _GATED_RENDER_RECORD
+    if cached is not None and cached[0] == payload:
+        if _PATHS is None:
+            _PATHS = cached[2]
+        return cached[1]
     import json
     import os
     import subprocess
@@ -215,16 +223,25 @@ def _paths_after_record(payload):
     parsed = json.loads(result.stdout)
     if _PATHS is None:
         _PATHS = parsed
-    return tuple(parsed['modules'])
+    modules = tuple(parsed['modules'])
+    _GATED_RENDER_RECORD = (payload, modules, parsed)
+    return modules
 
 
 def _gate_bytes(payload, digest, token, label):
     _gate_bytes_all([(payload, digest, token, label)])
 
 
+_GATED_RENDER_BYTES = None
+
+
 def _gate_bytes_all(items):
     """Require every file digest, in order."""
+    global _GATED_RENDER_BYTES
     if not items:
+        return
+    key = tuple(items)
+    if _GATED_RENDER_BYTES == key:
         return
     import json
     import tempfile
@@ -241,6 +258,7 @@ def _gate_bytes_all(items):
             rows.append(row)
         (folder / 'labels.json').write_text(json.dumps(rows, separators=(',', ':')))
         _run(['--bytes-all', str(folder)])
+    _GATED_RENDER_BYTES = key
 
 
 def _merged_query(payload):
@@ -311,9 +329,12 @@ def _checked_edges(items):
     return json.loads(result.stdout)
 
 
+_GATED_RENDER_EDGES = None
+
+
 def _checked_edges_with_messages(items):
     """Read the consumer messages, then check every file digest."""
-    global _RENDER_MESSAGES
+    global _RENDER_MESSAGES, _GATED_RENDER_EDGES
     if not items:
         return []
     import json
@@ -321,21 +342,31 @@ def _checked_edges_with_messages(items):
     import subprocess
     import tempfile
     from pathlib import Path
+    rows = []
+    payloads = []
+    for index, (path, edge, payload, digest, token) in enumerate(items):
+        name = str(index)
+        payloads.append(payload)
+        row = {
+            'name': name, 'sha': digest, 'path': path, 'edge': edge,
+        }
+        if token is not None:
+            row['token'] = token
+        rows.append(row)
+    labels_text = json.dumps(rows, separators=(',', ':'))
+    key = (tuple(payloads), labels_text)
+    cached = _GATED_RENDER_EDGES
+    if cached is not None and cached[0] == key:
+        if _RENDER_MESSAGES is None:
+            _RENDER_MESSAGES = cached[2]
+        return cached[1]
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='render-actor-labeled-') as directory:
         folder = Path(directory)
-        rows = []
-        for index, (path, edge, payload, digest, token) in enumerate(items):
-            name = str(index)
+        for name, payload in zip((row['name'] for row in rows), payloads):
             (folder / name).write_bytes(payload)
-            row = {
-                'name': name, 'sha': digest, 'path': path, 'edge': edge,
-            }
-            if token is not None:
-                row['token'] = token
-            rows.append(row)
-        (folder / 'labels.json').write_text(json.dumps(rows, separators=(',', ':')))
+        (folder / 'labels.json').write_text(labels_text)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_render_actor_gate',
              '--checked-labeled', str(folder)],
@@ -348,6 +379,7 @@ def _checked_edges_with_messages(items):
     parsed = json.loads(result.stdout)
     if _RENDER_MESSAGES is None:
         _RENDER_MESSAGES = parsed['messages']
+    _GATED_RENDER_EDGES = (key, parsed['edges'], parsed['messages'])
     return parsed['edges']
 
 

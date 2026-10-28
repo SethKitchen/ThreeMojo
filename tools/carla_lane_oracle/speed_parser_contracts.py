@@ -127,7 +127,15 @@ def require(value, message):
         raise ValueError(_contract_prefixes()['speed'] + message)
 
 
+_GATED_SPEED = None
+
+
 def _gate(migration, accepted, module, lexical, xml):
+    """Check the speed record once for the same bytes."""
+    global _GATED_SPEED
+    key = (migration, accepted, module, lexical, xml)
+    if _GATED_SPEED == key:
+        return
     import os
     import subprocess
     import tempfile
@@ -158,6 +166,7 @@ def _gate(migration, accepted, module, lexical, xml):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+    _GATED_SPEED = key
 
 
 _RECORD_PATHS = None

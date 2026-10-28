@@ -78,6 +78,12 @@ It keeps the accepted successor record path.
 
 It keeps the speed-parser contract prefix.
 
+It reuses that speed check when the same bytes are read again.
+
+A changed byte is checked again.
+
+A failed speed check is not kept.
+
 `tools/carla_raw_cut_gate.mojo` checks the raw-cut inverse record, the fixture token, the successor binding, and the operation graph.
 
 `tools/carla_runtime_view_gate.mojo` checks the runtime-view record and its bound tests.
@@ -655,6 +661,10 @@ It checks every render-actor digest and writes each path in one check.
 
 It reads the consumer messages before those digests in one check.
 
+It reuses that render-actor record and those digest checks when the same bytes are read again.
+
+A changed render-actor byte is checked again.
+
 It keeps the render-actor module and its three bound tests.
 
 It reads the render migration record before those paths in one check.
@@ -678,6 +688,10 @@ It checks every runtime-boundary extension in one check.
 It decides every runtime-boundary edge and checks its extension in one check.
 
 It checks the view steps before the module paths and the edge extensions in one check.
+
+It reuses that runtime-boundary record and those edge checks when the same bytes are read again.
+
+A changed runtime-boundary byte is checked again.
 
 It puts the module path on that edge.
 

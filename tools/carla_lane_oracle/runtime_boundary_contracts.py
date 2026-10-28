@@ -201,22 +201,37 @@ def _run(arguments):
         raise ValueError(message)
 
 
+_GATED_RUNTIME_RECORD = None
+
+
 def _gate_record(payload):
+    """Check the runtime-boundary record once for the same bytes."""
+    global _GATED_RUNTIME_RECORD
+    if _GATED_RUNTIME_RECORD == payload:
+        return
     import tempfile
     from pathlib import Path
     with tempfile.TemporaryDirectory(prefix='runtime-boundary-gate-') as directory:
         record = Path(directory) / 'migration.json'
         record.write_bytes(payload)
         _run(['--migration', str(record)])
+    _GATED_RUNTIME_RECORD = payload
 
 
 def _gate_bytes(payload, digest, token, label):
     _gate_bytes_all([(payload, digest, token, label)])
 
 
+_GATED_RUNTIME_BYTES = None
+
+
 def _gate_bytes_all(items):
     """Require every file digest, in order."""
+    global _GATED_RUNTIME_BYTES
     if not items:
+        return
+    key = tuple(items)
+    if _GATED_RUNTIME_BYTES == key:
         return
     import json
     import tempfile
@@ -233,6 +248,7 @@ def _gate_bytes_all(items):
             rows.append(row)
         (folder / 'labels.json').write_text(json.dumps(rows, separators=(',', ':')))
         _run(['--bytes-all', str(folder)])
+    _GATED_RUNTIME_BYTES = key
 
 
 def _gate_steps(names):
@@ -272,8 +288,12 @@ def _extended_edge(path, edge, steps):
     return _extended_query({'path': path, 'edge': edge, 'steps': steps})
 
 
+_EDGES_AFTER_STEPS = None
+
+
 def _edges_after_steps(steps, edges):
     """Check the view steps, then the module paths, then the extensions."""
+    global _EDGES_AFTER_STEPS
     import ast
     import json
     import os
@@ -282,6 +302,9 @@ def _edges_after_steps(steps, edges):
     from pathlib import Path
     payload = json.dumps(
         {'steps': steps, 'edges': edges}, separators=(',', ':'))
+    cached = _EDGES_AFTER_STEPS
+    if cached is not None and cached[0] == payload:
+        return cached[1]
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='runtime-after-steps-') as directory:
@@ -299,7 +322,9 @@ def _edges_after_steps(steps, edges):
         if message.startswith(prefix):
             raise KeyError(ast.literal_eval(message[len(prefix):])) from None
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _EDGES_AFTER_STEPS = (payload, parsed)
+    return parsed
 
 
 def _extended_edges(items, steps):
@@ -399,9 +424,12 @@ def _checked_edges(items):
     return json.loads(result.stdout)
 
 
+_GATED_RUNTIME_EDGES = None
+
+
 def _checked_edges_with_messages(items):
     """Read the consumer messages, then check every file digest."""
-    global _RUNTIME_MESSAGES
+    global _RUNTIME_MESSAGES, _GATED_RUNTIME_EDGES
     if not items:
         return []
     import json
@@ -409,21 +437,31 @@ def _checked_edges_with_messages(items):
     import subprocess
     import tempfile
     from pathlib import Path
+    rows = []
+    payloads = []
+    for index, (path, edge, payload, digest, token) in enumerate(items):
+        name = str(index)
+        payloads.append(payload)
+        row = {
+            'name': name, 'sha': digest, 'path': path, 'edge': edge,
+        }
+        if token is not None:
+            row['token'] = token
+        rows.append(row)
+    labels_text = json.dumps(rows, separators=(',', ':'))
+    key = (tuple(payloads), labels_text)
+    cached = _GATED_RUNTIME_EDGES
+    if cached is not None and cached[0] == key:
+        if _RUNTIME_MESSAGES is None:
+            _RUNTIME_MESSAGES = cached[2]
+        return cached[1]
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='runtime-boundary-labeled-') as directory:
         folder = Path(directory)
-        rows = []
-        for index, (path, edge, payload, digest, token) in enumerate(items):
-            name = str(index)
+        for name, payload in zip((row['name'] for row in rows), payloads):
             (folder / name).write_bytes(payload)
-            row = {
-                'name': name, 'sha': digest, 'path': path, 'edge': edge,
-            }
-            if token is not None:
-                row['token'] = token
-            rows.append(row)
-        (folder / 'labels.json').write_text(json.dumps(rows, separators=(',', ':')))
+        (folder / 'labels.json').write_text(labels_text)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo,
              'carla_runtime_boundary_gate', '--checked-labeled', str(folder)],
@@ -436,6 +474,7 @@ def _checked_edges_with_messages(items):
     parsed = json.loads(result.stdout)
     if _RUNTIME_MESSAGES is None:
         _RUNTIME_MESSAGES = parsed['messages']
+    _GATED_RUNTIME_EDGES = (key, parsed['edges'], parsed['messages'])
     return parsed['edges']
 
 
