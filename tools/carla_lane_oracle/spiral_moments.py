@@ -943,6 +943,32 @@ def _moment_payload(rows):
     return json.loads(result.stdout)
 
 
+def _generated_products(rows):
+    """Write the table source, then the moment payload hex."""
+    import os
+    import subprocess
+    import tempfile
+    text = json.dumps(rows, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='moment-products-') as directory:
+        path = Path(directory) / 'rows.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_gate',
+             '--products', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = _cli_failures()['derive']
+        if message.startswith(prefix):
+            raise CheckError(message[len(prefix):])
+        raise CheckError(message) from ValueError(message)
+    return json.loads(result.stdout)
+
+
 def generate_source(rows):
     """Return the canonical table source when the derived rows are well formed."""
     import os
@@ -1235,10 +1261,11 @@ def main(argv=None):
                 import coverage_invariant_contracts as invariant
             products = {report_plan['report_name']: invariant._indent_json(report)}
             if args.generate:
+                generated = _generated_products(rows)
                 products.update({
-                    _table().name: generate_source(rows),
+                    _table().name: generated['source'].encode('utf-8'),
                     report_plan['words_name']: ideal_projection.payload_bytes(
-                        _moment_payload(rows)['be64']),
+                        generated['be64']),
                     report_plan['coefficients_name']: invariant._indent_json(
                         {report_plan['counts_key']: rows}),
                 })

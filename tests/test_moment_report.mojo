@@ -7,6 +7,7 @@
 
 from std.testing import TestSuite, assert_equal, assert_raises
 
+from tools._spiral_moment_derive import moment_products_from_rows
 from tools._moment_report import (
     moment_meta_from_rows,
     moment_report,
@@ -155,6 +156,14 @@ def test_the_table_is_checked_before_the_report_meta() raises:
     var payload = '{"rows":' + _coefficient_rows() + ',"source":"nope"}'
     with assert_raises(contains="missing or malformed table declaration"):
         _ = verified_table_then_meta(payload)
+
+
+def test_bad_rows_fail_before_the_generated_products() raises:
+    """A short row list fails before the table source or the payload."""
+    with assert_raises(
+        contains="spiral moment derive: wrong derived table shape"
+    ):
+        _ = moment_products_from_rows("[]")
 
 
 def main() raises:

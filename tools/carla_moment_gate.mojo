@@ -12,6 +12,7 @@
     carla_moment_gate --verified-table PATH
     carla_moment_gate --payload-rows PATH
     carla_moment_gate --source-rows PATH
+    carla_moment_gate --products PATH
     carla_moment_gate --integer-rows PATH
     carla_moment_gate --node-sums PATH
     carla_moment_gate --fractions PATH
@@ -32,6 +33,7 @@ from tools._spiral_moment_derive import (
     coefficient_rows_payload,
     coefficient_words_json,
     moment_payload_from_rows,
+    moment_products_from_rows,
     moment_source_from_rows,
     stored_coefficient_words,
     verified_table_integers,
@@ -177,7 +179,8 @@ def _usage():
             "usage: carla_moment_gate --module PATH --interval PATH"
             " --geometry PATH --trig PATH | --rows PATH | --decimal-rows PATH |"
             " --coefficient-words PATH | --verified-table PATH | --payload-rows"
-            " PATH | --source-rows PATH | --integer-rows PATH | --node-sums"
+            " PATH | --source-rows PATH | --products PATH | --integer-rows PATH"
+            " | --node-sums"
             " PATH | --fractions PATH"
         ),
         file=stderr,
@@ -205,6 +208,16 @@ def main() raises:
     var node_sums = String("")
     var fractions = String("")
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--products":
+        try:
+            print(
+                moment_products_from_rows(Path(arguments[2]).read_text()),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var index = 1
     while index < len(arguments):
         var word = arguments[index]

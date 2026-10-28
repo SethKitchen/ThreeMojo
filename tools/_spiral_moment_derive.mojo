@@ -991,6 +991,35 @@ def moment_source_from_rows(rows: String) raises -> String:
     return moment_source(coefficient_words_json(rows))
 
 
+def moment_products_from_rows(rows: String) raises -> String:
+    """Write the table source, then the moment payload.
+
+    Args:
+        rows: The JSON rows from the moment derivation.
+
+    Returns:
+        JSON with `source` and `be64`. `source` is the generated table
+        text. `be64` is the payload hex.
+
+    Raises:
+        Error: The rows changed, or a coefficient word is malformed. The
+            source is written before the payload.
+    """
+    var words = coefficient_words_json(rows)
+    var source = moment_source(words)
+    var payload = PyJson.parse(moment_payload_json(words))
+    var doc = PyJson()
+    var root = doc.new_dict()
+    doc.set(root, "source", doc.new_str(source))
+    doc.set(
+        root,
+        "be64",
+        doc.new_str(payload.text(payload.at(payload.root, "be64"))),
+    )
+    doc.root = root
+    return doc.dumps()
+
+
 def coefficient_integers_from_rows(rows: String) raises -> String:
     """Derive the coefficient words, then read them as integers.
 

@@ -490,6 +490,8 @@ It writes the canonical stored-moment table source.
 
 It writes that table source after those coefficient words in one check.
 
+It writes that table source before the moment payload in one check.
+
 It reads those coefficient words as integers in one check.
 
 It returns one normalized source block between two markers.
