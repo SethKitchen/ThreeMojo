@@ -2483,9 +2483,10 @@ def test_a_depth_material_writes_its_depth_as_a_gray() raises:
     assert_same_color(turned.shown(4, 4), Color(64, 64, 64))
 
 
-def test_a_maps_alpha_cuts_a_depth_out_and_its_color_does_not() raises:
-    # three.js's `MeshDepthMaterial` reads its map's alpha. A red texel at
-    # half alpha halves the coverage and leaves the gray alone.
+def test_a_maps_alpha_feeds_only_the_depth_alpha_test() raises:
+    # three.js's `MeshDepthMaterial` reads its map's alpha for the alpha
+    # test alone: `depth.glsl` writes `opacity` as the alpha. A red texel
+    # at half alpha leaves the gray and the opacity, one, alone.
     var pixels = List[UInt8]()
     for value in [255, 0, 0, 128]:
         pixels.append(UInt8(value))
@@ -2494,10 +2495,7 @@ def test_a_maps_alpha_cuts_a_depth_out_and_its_color_does_not() raises:
     var shown = data_pixel(
         data_quad(DEPTH, z=0.5, texture=cut), textures=textures
     )
-    assert_same_color(shown.shown(4, 4), Color(64, 64, 64, 128))
-    # The alpha reaches the pixel as coverage and the gray comes back
-    # exact, because the fragment is written rather than mixed. Mixing is
-    # refused: see the next test.
+    assert_same_color(shown.shown(4, 4), Color(64, 64, 64, 255))
 
 
 def packed_quad(

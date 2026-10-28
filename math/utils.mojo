@@ -500,7 +500,7 @@ def interleaved_gradient_noise(x: Float32, y: Float32) -> Float32:
 def rec709_luminance(r: Float32, g: Float32, b: Float32) -> Float32:
     """Return rec. 709 luminance to four decimal places.
 
-    three.js's `colorToLuminance`. `luminance_of` uses the longer weights.
+    three.js's `colorToLuminance`, and the `luminance` of its shaders.
 
     Args:
         r: Red.
@@ -516,7 +516,7 @@ def rec709_luminance(r: Float32, g: Float32, b: Float32) -> Float32:
 def rec709_luminance(r: Float64, g: Float64, b: Float64) -> Float64:
     """Return rec. 709 luminance to four decimal places.
 
-    three.js's `colorToLuminance`. `luminance_of` uses the longer weights.
+    three.js's `colorToLuminance`, and the `luminance` of its shaders.
 
     Args:
         r: Red.

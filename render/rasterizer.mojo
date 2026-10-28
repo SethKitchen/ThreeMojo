@@ -5241,6 +5241,8 @@ def rasterize_shaded(
                     # A depth, packed by the material's packing, or a
                     # distance from the reference point, packed into four
                     # channels. A packed alpha is data too, and is kept.
+                    # A basic packing writes the surface's own alpha, not
+                    # the maps': three.js's `depth.glsl` writes `opacity`.
                     var written: SIMD[DType.float32, 4]
                     if a.kind == DISTANCE:
                         written = packed_distance_fragment(
@@ -5248,7 +5250,7 @@ def rasterize_shaded(
                         )
                     else:
                         written = packed_depth_fragment(
-                            a.depth_packing, z, shaded.a
+                            a.depth_packing, z, base.a
                         )
                     shaded = data_color(
                         written[0], written[1], written[2], written[3]

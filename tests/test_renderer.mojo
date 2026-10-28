@@ -4047,6 +4047,28 @@ def test_a_depth_material_is_brighter_near_than_far() raises:
     )
 
 
+def test_a_basic_depth_writes_the_opacity_and_not_the_maps_alpha() raises:
+    # three.js's `depth.glsl` writes `opacity` as the alpha under
+    # `BasicDepthPacking`. A map's alpha only feeds the alpha test.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var pixels = List[UInt8]()
+    for _ in range(4):
+        pixels.append(255)
+        pixels.append(255)
+        pixels.append(255)
+        pixels.append(128)
+    var half = assets.textures.add(
+        Texture(2, 2, pixels^, filter=NEAREST, mipmapped=False)
+    )
+    var mapped = assets.materials.add(depth_material(map=half))
+    var scene = scene_with_node_at(0)
+    var image = rendered(
+        renderer, scene, assets, sheet_of(assets, mapped), camera_at(0, 0, 4)
+    )
+    assert_equal(image.get_pixel(WIDTH // 2, HEIGHT // 2).a, 255)
+
+
 def test_a_data_material_ignores_the_lights_and_the_fog() raises:
     # Neither the lights nor the fog touches a normal or a depth: what the
     # material writes is data, and a veil of light over it would be a lie.

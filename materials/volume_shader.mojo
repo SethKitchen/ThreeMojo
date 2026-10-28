@@ -140,9 +140,11 @@ vec4 add_lighting(float val, vec3 loc, vec3 step, vec3 view_ray) {
     vec3 H = normalize(L + V);
     float specularTerm = pow(max(dot(H, N), 0.0), shininess);
     float mask1 = lightEnabled;
-    ambient += mask1 * ambient_color;
+    // three.js names these locals `ambient_color` and `specular_color`,
+    // which hide the constants, so each adds only its own zero.
+    ambient += mask1 * ambient;
     diffuse += mask1 * lambertTerm;
-    specular += mask1 * specularTerm * specular_color;
+    specular += mask1 * specularTerm * specular;
     vec4 color = apply_colormap(val);
     vec4 final_color = color * (ambient + diffuse) + specular;
     final_color.a = color.a;

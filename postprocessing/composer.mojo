@@ -56,7 +56,7 @@ from core.scene import Scene
 from math.norm import squared_length2
 from math.sine import fraction
 from math.smoothstep import smoothstep
-from math.utils import SeededRandom
+from math.utils import SeededRandom, rec709_luminance
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.antialiasing import (
@@ -77,7 +77,6 @@ from postprocessing.display_nodes import (
     dof_light,
     hash_blur_light,
     lensflare_light,
-    luminance_of,
     motion_blur_light,
 )
 from postprocessing.denoise import (
@@ -4161,7 +4160,7 @@ def luminance(color: FloatColor) -> Float32:
     Returns:
         The weighted sum of red, green and blue.
     """
-    return luminance_of(color.r, color.g, color.b)
+    return rec709_luminance(color.r, color.g, color.b)
 
 
 def copy_pixel(color: FloatColor, opacity: Float32) -> FloatColor:
@@ -4404,6 +4403,31 @@ def bright_pixel(color: FloatColor, threshold: Float32) -> FloatColor:
     )
 
 
+def bright_sample(
+    view: LightView, x: Int, y: Int, width: Int, height: Int, threshold: Float32
+) -> FloatColor:
+    """Return one pixel of the bloom's bright light, as three.js's
+    `UnrealBloomPass` renders it: `LuminosityHighPassShader` into a target
+    half the frame's size, which reads the frame through a linear filter.
+
+    So the frame is filtered first and the threshold is passed after. A
+    bright pixel whose filtered light is below the threshold does not
+    bloom.
+
+    Args:
+        view: The frame.
+        x: The column of the bright target.
+        y: The row of the bright target, down from the top.
+        width: The bright target's width: `halved_size` of the frame's.
+        height: The bright target's height: `halved_size` of the frame's.
+        threshold: The luminance the light must reach.
+
+    Returns:
+        The light kept.
+    """
+    return bright_pixel(view.sample(u_of(x, width), v_of(y, height)), threshold)
+
+
 def bloom_glow(
     glow: FloatColor,
     level: LightView,
@@ -4616,12 +4640,13 @@ def bloom_light(
     `UnrealBloomPass`.
 
     The light whose luminance is above `threshold` is kept, faded in over
-    a hundredth; it is blurred at five halved sizes, each blur across and
-    then down with a kernel two taps wider than the last; the five are
-    weighted by `radius` and summed; and the sum, scaled by `strength`,
-    is added to the red, green and blue of every pixel, times its own
-    alpha, as three.js's additive blend adds it; see `glow_pixel`. Alpha
-    is kept.
+    a hundredth, at half the frame's size; see `bright_sample`. It is
+    blurred at five sizes, the first its own and each after half the
+    last, each blur across and then down with a kernel two taps wider
+    than the last. The five are weighted by `radius` and summed, and the
+    sum, scaled by `strength`, is added to the red, green and blue of
+    every pixel, times its own alpha, as three.js's additive blend adds
+    it; see `glow_pixel`. Alpha is kept.
 
     Args:
         frame: The frame, changed in place.
@@ -4631,19 +4656,37 @@ def bloom_light(
     """
     var width = frame.width
     var height = frame.height
-    var bright = List[FloatColor](length=width * height, fill=TRANSPARENT_BLACK)
-    for index in range(len(frame.colors)):  # pragma: no branch
-        bright[index] = bright_pixel(frame.colors[index], threshold)
+    # The bright light is half the frame's size; see `bright_sample`.
+    var bright_width = halved_size(width)
+    var bright_height = halved_size(height)
+    var frame_view = LightView(frame.colors, width, height)
+    var bright = List[FloatColor](capacity=bright_width * bright_height)
+    var row = 0
+    while row < bright_height:
+        var column = 0
+        while column < bright_width:
+            bright.append(
+                bright_sample(
+                    frame_view,
+                    column,
+                    row,
+                    bright_width,
+                    bright_height,
+                    threshold,
+                )
+            )
+            column += 1
+        row += 1
     # Each level blurs the one before it into half its size, the first
-    # blurring the bright light at the frame's own size.
+    # blurring the bright light at its own size.
     var levels = List[List[FloatColor]]()
     var level_widths = List[Int]()
     var level_heights = List[Int]()
     var source = bright^
-    var source_width = width
-    var source_height = height
-    var level_width = halved_size(width)
-    var level_height = halved_size(height)
+    var source_width = bright_width
+    var source_height = bright_height
+    var level_width = bright_width
+    var level_height = bright_height
     for level in range(BLOOM_LEVELS):  # pragma: no branch
         var kernel = bloom_kernel(level)
         var across = _separable_blur(

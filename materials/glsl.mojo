@@ -183,8 +183,25 @@ def _listed(word: String, words: StringLiteral) -> Bool:
 
 
 def _clipped(text: String, at: Int, end: Int) -> String:
-    """Return the bytes from `at` to `end`, or to the end of the text."""
-    return String(text[byte = at : min(end, text.byte_length())])
+    """Return the bytes from `at` to `end`, or to the end of the text.
+
+    An end inside a character of more than one byte moves back to the start
+    of that character. `at` must start a character.
+    """
+    var bytes = text.as_bytes()
+    var stop = min(end, len(bytes))
+    while stop > at and stop < len(bytes) and (bytes[stop] & 0xC0) == 0x80:
+        stop -= 1
+    return String(text[byte=at:stop])
+
+
+def _character(text: String, at: Int) -> String:
+    """Return the whole character that starts at `at`, all its bytes."""
+    var bytes = text.as_bytes()
+    var end = at + 1
+    while end < len(bytes) and (bytes[end] & 0xC0) == 0x80:
+        end += 1
+    return String(text[byte=at:end])
 
 
 def _letter(text: String, at: Int) -> String:
@@ -374,7 +391,7 @@ struct _Lexer(Movable):
         if pair.byte_length() == 2 and _listed(pair, _PAIRS):
             out.append(_Token(_MARK, pair, 0, line))
             return at + 2
-        var single = String(text[byte = at : at + 1])
+        var single = _character(text, at)
         if single in String(_SINGLES):
             out.append(_Token(_MARK, single, 0, line))
             return at + 1
@@ -603,11 +620,11 @@ struct _Lexer(Movable):
                     end += 1
             elif _listed(_clipped(text, at, at + 2), " && || == != <= >= "):
                 end = at + 2
-            elif not (String(text[byte = at : at + 1]) in String("()!<>")):
+            elif not (_character(text, at) in String("()!<>")):
                 raise self.error(
                     line,
                     "the character "
-                    + String(text[byte = at : at + 1])
+                    + _character(text, at)
                     + " is outside an #if condition",
                 )
             parts.append(String(text[byte=at:end]))

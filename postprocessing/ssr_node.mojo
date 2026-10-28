@@ -41,7 +41,8 @@ from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.cross import cross_vectors
 from math.vector3 import Vector3
-from postprocessing.display_nodes import luminance_of, scaled_size
+from math.utils import rec709_luminance
+from postprocessing.display_nodes import scaled_size
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor, TRANSPARENT_BLACK
@@ -310,7 +311,7 @@ def ssr_node_pixel(
     var r = seen.r * weight
     var g = seen.g * weight
     var b = seen.b * weight
-    var light = max(luminance_of(r, g, b), 1e-4)
+    var light = max(rec709_luminance(r, g, b), 1e-4)
     var cap = min(settings.max_luminance / light, 1) * settings.intensity
     return FloatColor(
         max(r * cap, 0),

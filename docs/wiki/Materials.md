@@ -902,7 +902,7 @@ A `DOUBLE_SIDE` face seen from behind shows its normal flipped, as it is lit fli
 
 Set the camera's `near` and `far` close together to see anything. A range of one to a thousand meters puts almost every surface within a few levels of black.
 
-A map's alpha cuts the surface out, as three.js's does. Its color is not read. Give the material an `alpha_test` to throw the cut fragments away. Such a fragment claims no depth, so what is behind it draws. A depth material cannot blend, so blending is not the way to show the cut.
+A map's alpha cuts the surface out, as three.js's does. Its color is not read, and its alpha is not written. Give the material an `alpha_test` to throw the cut fragments away. Such a fragment claims no depth, so what is behind it draws. A depth material cannot blend, so blending is not the way to show the cut.
 
 ### Depth packing
 
@@ -910,7 +910,7 @@ A `DepthPacking` says how a `DEPTH` material writes its depth. A byte holds only
 
 | Value | three.js | What the pixel holds |
 |---|---|---|
-| `BASIC_DEPTH_PACKING` | `BasicDepthPacking`, 3200 | One minus the depth in red, green and blue. The alpha is the fragment's alpha. |
+| `BASIC_DEPTH_PACKING` | `BasicDepthPacking`, 3200 | One minus the depth in red, green and blue. The alpha is the material's `opacity`. |
 | `RGBA_DEPTH_PACKING` | `RGBADepthPacking`, 3201 | `pack_depth_to_rgba`: the depth in all four channels. |
 | `RGB_DEPTH_PACKING` | `RGBDepthPacking`, 3202 | `pack_depth_to_rgb`: the depth in red, green and blue. The alpha is one. |
 | `RG_DEPTH_PACKING` | `RGDepthPacking`, 3203 | `pack_depth_to_rg`: the depth in red and green. Blue is zero and the alpha is one. |

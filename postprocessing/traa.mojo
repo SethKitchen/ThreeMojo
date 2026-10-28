@@ -40,7 +40,7 @@ limits, and explicit zero and nonfinite rules.
 
 from render.color_math import floor_channels
 from math.norm import length2
-from math.utils import edge_index, max3
+from math.utils import edge_index, max3, rec709_luminance
 from math.sine import fraction
 from cameras.camera import Camera
 from core.assets import Assets
@@ -49,7 +49,6 @@ from math.matrix4 import Matrix4
 from math.vector2 import Vector2, append_vector2
 from math.vector3 import Vector3
 from postprocessing.antialiasing import JitteredCamera
-from postprocessing.display_nodes import luminance_of
 from postprocessing.sampling import LightView, Untracked, nearest_held_index
 from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor
@@ -460,12 +459,12 @@ def flicker_reduction(
     """
     var squeeze_now = 1 / (max3(current.r, current.g, current.b) + 1)
     var squeeze_then = 1 / (max3(history.r, history.g, history.b) + 1)
-    var light_now = luminance_of(
+    var light_now = rec709_luminance(
         current.r * squeeze_now,
         current.g * squeeze_now,
         current.b * squeeze_now,
     )
-    var light_then = luminance_of(
+    var light_then = rec709_luminance(
         history.r * squeeze_then,
         history.g * squeeze_then,
         history.b * squeeze_then,

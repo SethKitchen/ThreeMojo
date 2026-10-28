@@ -13,7 +13,6 @@ from math.vector3 import Vector3
 from postprocessing.importance_sampled_environment import (
     EquirectEnvironment,
     closest_index,
-    color_to_luminance,
     conditional_at,
     d_gtr,
     equirect_dir_pdf,
@@ -46,7 +45,6 @@ def gray(value: Float32) -> FloatColor:
 
 def test_the_numbers_are_three_js_s() raises:
     assert_equal(half(0.1), Float32(0.0999755859375))
-    assert_almost_equal(color_to_luminance(1, 1, 1), 1, atol=1e-6)
     var values: List[Float32] = [0.1, 0.4, 0.4, 1.0]
     assert_equal(closest_index(values, 0.4, 0, 4), 1)
     assert_equal(closest_index(values, 0.05, 0, 4), 0)

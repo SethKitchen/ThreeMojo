@@ -443,7 +443,7 @@ from postprocessing.composer import (
     bloom_glow,
     bloom_kernel,
     blur_pixel,
-    bright_pixel,
+    bright_sample,
     check_frame_time,
     check_pass,
     copy_pixel,
@@ -6306,6 +6306,9 @@ def rasterize_kernel(
     var green = Float32(0)
     var blue = Float32(0)
     var alpha = Float32(0)
+    # The surface's own alpha before its maps: what a basic depth packing
+    # writes, as three.js's `depth.glsl` writes `opacity`.
+    var opacity = Float32(1)
     # What the pixel holds so far, in *premultiplied* linear light — the
     # light it actually contributes, already scaled by its coverage. Starts as
     # the background decoded, so a translucent surface over nothing mixes with
@@ -7982,6 +7985,7 @@ def rasterize_kernel(
                     share_b,
                     share_c,
                 )
+                opacity = alpha
                 red *= arriving.x
                 green *= arriving.y
                 blue *= arriving.z
@@ -8650,7 +8654,7 @@ def rasterize_kernel(
                                     )
                                 ),
                                 z,
-                                alpha,
+                                opacity,
                             )
                         shown = _decoded(
                             ramp, written[0], written[1], written[2]
@@ -11466,15 +11470,24 @@ def bright_kernel(
     light: MutPointer[Float32, MutAnyOrigin],
     width: Int32,
     height: Int32,
+    bright_width: Int32,
+    bright_height: Int32,
     threshold: Float32,
 ):
-    """Keep the light above the bloom's threshold: `bright_pixel`."""
+    """Keep the light above the bloom's threshold, at half the frame's
+    size: `bright_sample`."""
     var x = Int(global_idx.x)
     var y = Int(global_idx.y)
-    if x >= Int(width) or y >= Int(height):
+    if x >= Int(bright_width) or y >= Int(bright_height):
         return
-    var slot = y * Int(width) + x
-    _store(bright, slot, bright_pixel(_load(light, slot), threshold))
+    var view = LightView(floats=light, width=Int(width), height=Int(height))
+    _store(
+        bright,
+        y * Int(bright_width) + x,
+        bright_sample(
+            view, x, y, Int(bright_width), Int(bright_height), threshold
+        ),
+    )
 
 
 def bloom_blur_kernel(
@@ -12511,22 +12524,29 @@ struct GpuComposer(Movable):
         """Run `bloom_light`'s stages as kernels: the bright light, five
         levels each blurred across and then down, and the composite."""
         var grid = self._grid()
+        var bright_width = halved_size(self.width)
+        var bright_height = halved_size(self.height)
         self.context.enqueue_function[bright_kernel](
             self.source.unsafe_ptr(),
             self.light.unsafe_ptr(),
             Int32(self.width),
             Int32(self.height),
+            Int32(bright_width),
+            Int32(bright_height),
             threshold,
-            grid_dim=grid,
+            grid_dim=(
+                ceildiv(bright_width, TILE),
+                ceildiv(bright_height, TILE),
+            ),
             block_dim=(TILE, TILE),
         )
         var from_pointer = self.source.unsafe_ptr().unsafe_origin_cast[
             MutAnyOrigin
         ]()
-        var from_width = self.width
-        var from_height = self.height
-        var level_width = halved_size(self.width)
-        var level_height = halved_size(self.height)
+        var from_width = bright_width
+        var from_height = bright_height
+        var level_width = bright_width
+        var level_height = bright_height
         var start = 0
         for level in range(BLOOM_LEVELS):
             var level_grid = (

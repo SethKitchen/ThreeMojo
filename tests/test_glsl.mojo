@@ -303,6 +303,14 @@ def test_the_lexer_refuses_what_is_outside_the_subset() raises:
         "void main() {}\n/* never closed", "line 2: a comment is never closed"
     )
     refused("void main() { 0x; }", "a hexadecimal number needs digits")
+    # A character of more than one byte is named whole, wherever it falls.
+    refused(
+        "void main() { gl_FragColor = vec4(1.0) × 0.5; }",
+        "the character × is outside the subset",
+    )
+    refused("void main() { float x = 1é; }", "the character é is")
+    refused("void main() { bool b = 1 <é; }", "the character é is")
+    refused("void main() {}\n€", "line 2: the character € is")
     refused("void main() { 1e+; }", "an exponent needs digits")
     assert_equal(number("float(1u)"), 1)
     assert_equal(number("float(1U)"), 1)
@@ -596,6 +604,7 @@ def test_an_if_takes_the_lines_of_the_branch_that_holds() raises:
     refused("#if\n#endif" + ends, "an #if needs a condition")
     refused("#if 1 1\n#endif" + ends, "the #if condition goes on past 1")
     refused("#if 1 +\n#endif" + ends, "the character + is outside an #if")
+    refused("#if 1 é\n#endif" + ends, "the character é is outside")
     refused("#if (1\n#endif" + ends, "an #if condition leaves a ( open")
     refused("#if defined(ON\n#endif" + ends, "an #if condition leaves a ( open")
     refused("#if defined 1\n#endif" + ends, "defined names a macro")

@@ -973,6 +973,7 @@ def plan_levels(
 
     Args:
         level: How far down the chain the footprint reaches, fractional.
+            NaN reads as zero.
         levels: How many levels the texture holds, at least one.
         mag_filter: `NEAREST` or `BILINEAR`.
         min_filter: Any of the six filters.
@@ -980,7 +981,9 @@ def plan_levels(
     Returns:
         The plan.
     """
-    if level <= 0:
+    # A level that is not a number reads the full-size image, as one of
+    # zero does: its index would be out of the chain.
+    if not level > 0:
         return LevelPlan(mag_filter, 0, 0, 0)
     var within = min_filter.within_level()
     if levels == 1 or min_filter.magnifies():
