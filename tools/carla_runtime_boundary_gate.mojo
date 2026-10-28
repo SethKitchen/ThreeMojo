@@ -9,6 +9,7 @@
     carla_runtime_boundary_gate --bytes PATH --sha HEX [--token HEX] --label TEXT
     carla_runtime_boundary_gate --bytes-all DIR
     carla_runtime_boundary_gate --checked-edges DIR
+    carla_runtime_boundary_gate --checked-labeled DIR
     carla_runtime_boundary_gate --steps DIR
     carla_runtime_boundary_gate --extend --path TEXT --step-sha HEX --edge-sha HEX --step-token HEX --edge-token HEX
     carla_runtime_boundary_gate --extends PATH
@@ -25,6 +26,7 @@ from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
 from tools._runtime_edge import extend_runtime_edges
+from tools._bound_consumer_messages import bound_consumer_messages
 from tools._merged_edge import merged_edges
 from tools._python_json import (
     MISSING,
@@ -274,6 +276,49 @@ def runtime_boundary_checked_edges(directory: String) raises -> String:
     return merged_edges(Path(directory + "/labels.json").read_text())
 
 
+def runtime_boundary_checked_edges_with_messages(
+    directory: String,
+) raises -> String:
+    """Read the consumer messages, then check every file digest.
+
+    Args:
+        directory: A directory with `labels.json` and one file per item.
+            Each item has `name`, `sha`, `path`, and `edge`. `token` is
+            optional. The consumer message supplies `label`.
+
+    Returns:
+        JSON with `edges` and `messages`. The edges keep their path first.
+
+    Raises:
+        Error: A digest changed, or an edge cannot be read. The messages
+            are read before the digests.
+    """
+    var messages = bound_consumer_messages()
+    var parsed = PyJson.parse(messages)
+    var prefix = parsed.text(parsed.at(parsed.root, "runtime_consumer"))
+    var labels = Path(directory + "/labels.json").read_text()
+    var doc = PyJson.parse(labels)
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("malformed byte list")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var item = doc.item(doc.root, index)
+        var token_node = doc.get(item, "token")
+        var token = String("")
+        if token_node != MISSING:
+            token = doc.text(token_node)
+        var path = doc.text(doc.at(item, "path"))
+        runtime_boundary_bytes(
+            Path(directory + "/" + doc.text(doc.at(item, "name"))).read_bytes(),
+            doc.text(doc.at(item, "sha")),
+            token,
+            prefix + path,
+        )
+        index += 1
+    return '{"edges":' + merged_edges(labels) + ',"messages":' + messages + "}"
+
+
 def _known_module(name: String) -> Bool:
     """Return whether the path is one reviewed boundary module.
 
@@ -469,6 +514,17 @@ def main() raises:
     Raises:
         Error: The command is invalid.
     """
+    var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--checked-labeled":
+        try:
+            print(
+                runtime_boundary_checked_edges_with_messages(arguments[2]),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var migration = String("")
     var payload = String("")
     var digest = String("")
@@ -485,7 +541,6 @@ def main() raises:
     var edge_token = String("")
     var extends = String("")
     var extended = String("")
-    var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]

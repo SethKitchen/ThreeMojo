@@ -9,10 +9,12 @@ from std.pathlib import Path
 from std.tempfile import mkdtemp
 from std.testing import TestSuite, assert_equal, assert_raises
 
+from tools._bound_consumer_messages import bound_consumer_messages
 from tools._sha256 import sha256_hex
 from tools.carla_render_actor_gate import (
     render_actor_bytes_all,
     render_actor_checked_edges,
+    render_actor_checked_edges_with_messages,
     render_actor_record,
 )
 
@@ -76,6 +78,34 @@ def test_a_changed_checked_render_actor_digest_is_refused() raises:
         contains="reviewed render actor reuse successor: second"
     ):
         _ = render_actor_checked_edges(directory)
+
+
+def test_the_consumer_messages_are_read_before_the_digests() raises:
+    """A matching digest keeps the messages, and a change uses that label."""
+    var directory = mkdtemp(prefix="render-labeled-")
+    var body = String("actor")
+    Path(directory + "/0").write_bytes(body.as_bytes())
+    Path(directory + "/labels.json").write_text(
+        '[{"name":"0","sha":"'
+        + sha256_hex(body.as_bytes())
+        + '","path":"a.mojo","edge":{"after_sha256":"aa"}}]'
+    )
+    assert_equal(
+        render_actor_checked_edges_with_messages(directory),
+        '{"edges":[{"path":"a.mojo","after_sha256":"aa"}],"messages":'
+        + bound_consumer_messages()
+        + "}",
+    )
+    Path(directory + "/labels.json").write_text(
+        '[{"name":"0","sha":"00","path":"a.mojo","edge":{"after_sha256":"aa"}}]'
+    )
+    with assert_raises(
+        contains=(
+            "reviewed render actor reuse successor: unreviewed render actor"
+            " consumer: a.mojo"
+        )
+    ):
+        _ = render_actor_checked_edges_with_messages(directory)
 
 
 def main() raises:

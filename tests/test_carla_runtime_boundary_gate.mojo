@@ -10,6 +10,7 @@ from std.pathlib import Path
 from std.tempfile import mkdtemp
 from std.testing import TestSuite, assert_equal, assert_raises
 
+from tools._bound_consumer_messages import bound_consumer_messages
 from tools._sha256 import sha256_hex
 from tools.carla_runtime_boundary_gate import (
     boundary_extend,
@@ -17,6 +18,7 @@ from tools.carla_runtime_boundary_gate import (
     boundary_steps,
     runtime_boundary_bytes_all,
     runtime_boundary_checked_edges,
+    runtime_boundary_checked_edges_with_messages,
     runtime_boundary_extended_edges,
     runtime_boundary_record,
 )
@@ -164,6 +166,34 @@ def test_a_disconnected_extension_is_refused() raises:
         )
     ):
         _ = runtime_boundary_extended_edges(payload)
+
+
+def test_the_consumer_messages_are_read_before_the_digests() raises:
+    """A matching digest keeps the messages, and a change uses that label."""
+    var directory = mkdtemp(prefix="runtime-labeled-")
+    var body = String("actor")
+    Path(directory + "/0").write_bytes(body.as_bytes())
+    Path(directory + "/labels.json").write_text(
+        '[{"name":"0","sha":"'
+        + sha256_hex(body.as_bytes())
+        + '","path":"a.mojo","edge":{"after_sha256":"aa"}}]'
+    )
+    assert_equal(
+        runtime_boundary_checked_edges_with_messages(directory),
+        '{"edges":[{"path":"a.mojo","after_sha256":"aa"}],"messages":'
+        + bound_consumer_messages()
+        + "}",
+    )
+    Path(directory + "/labels.json").write_text(
+        '[{"name":"0","sha":"00","path":"a.mojo","edge":{"after_sha256":"aa"}}]'
+    )
+    with assert_raises(
+        contains=(
+            "reviewed runtime boundary successor: unreviewed runtime boundary"
+            " consumer: a.mojo"
+        )
+    ):
+        _ = runtime_boundary_checked_edges_with_messages(directory)
 
 
 def main() raises:

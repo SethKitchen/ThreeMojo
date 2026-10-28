@@ -274,6 +274,46 @@ def _checked_edges(items):
     return json.loads(result.stdout)
 
 
+def _checked_edges_with_messages(items):
+    """Read the consumer messages, then check every file digest."""
+    global _RENDER_MESSAGES
+    if not items:
+        return []
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='render-actor-labeled-') as directory:
+        folder = Path(directory)
+        rows = []
+        for index, (path, edge, payload, digest, token) in enumerate(items):
+            name = str(index)
+            (folder / name).write_bytes(payload)
+            row = {
+                'name': name, 'sha': digest, 'path': path, 'edge': edge,
+            }
+            if token is not None:
+                row['token'] = token
+            rows.append(row)
+        (folder / 'labels.json').write_text(json.dumps(rows, separators=(',', ':')))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_render_actor_gate',
+             '--checked-labeled', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    if _RENDER_MESSAGES is None:
+        _RENDER_MESSAGES = parsed['messages']
+    return parsed['edges']
+
+
 _RENDER_MESSAGES = None
 
 
@@ -343,9 +383,8 @@ def verify(root, *, _operation=None):
         actual = _typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
                                 _operation=_operation), _operation=_operation)
         checked.append((
-            path, edge, actual, current['after_sha256'], current['after_token_sha256'],
-            _render_messages()['render_consumer'] + path))
-    merged = _checked_edges(checked)
+            path, edge, actual, current['after_sha256'], current['after_token_sha256']))
+    merged = _checked_edges_with_messages(checked)
     for (path, _edge, _actual, _digest, _token, _label), edge in zip(checked, merged):
         edges[path] = edge
     tests = []

@@ -9,6 +9,7 @@
     carla_render_actor_gate --bytes PATH --sha HEX [--token HEX] --label TEXT
     carla_render_actor_gate --bytes-all DIR
     carla_render_actor_gate --checked-edges DIR
+    carla_render_actor_gate --checked-labeled DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -19,6 +20,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
+from tools._bound_consumer_messages import bound_consumer_messages
 from tools._merged_edge import merged_edges
 from tools._python_json import (
     MISSING,
@@ -228,6 +230,49 @@ def render_actor_checked_edges(directory: String) raises -> String:
     return merged_edges(Path(directory + "/labels.json").read_text())
 
 
+def render_actor_checked_edges_with_messages(
+    directory: String,
+) raises -> String:
+    """Read the consumer messages, then check every file digest.
+
+    Args:
+        directory: A directory with `labels.json` and one file per item.
+            Each item has `name`, `sha`, `path`, and `edge`. `token` is
+            optional. The consumer message supplies `label`.
+
+    Returns:
+        JSON with `edges` and `messages`. The edges keep their path first.
+
+    Raises:
+        Error: A digest changed, or an edge cannot be read. The messages
+            are read before the digests.
+    """
+    var messages = bound_consumer_messages()
+    var parsed = PyJson.parse(messages)
+    var prefix = parsed.text(parsed.at(parsed.root, "render_consumer"))
+    var labels = Path(directory + "/labels.json").read_text()
+    var doc = PyJson.parse(labels)
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("malformed byte list")
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var item = doc.item(doc.root, index)
+        var token_node = doc.get(item, "token")
+        var token = String("")
+        if token_node != MISSING:
+            token = doc.text(token_node)
+        var path = doc.text(doc.at(item, "path"))
+        render_actor_bytes(
+            Path(directory + "/" + doc.text(doc.at(item, "name"))).read_bytes(),
+            doc.text(doc.at(item, "sha")),
+            token,
+            prefix + path,
+        )
+        index += 1
+    return '{"edges":' + merged_edges(labels) + ',"messages":' + messages + "}"
+
+
 def render_actor_paths() raises -> String:
     """Return the render-actor module and its bound tests.
 
@@ -271,6 +316,17 @@ def main() raises:
     Raises:
         Error: The command is invalid.
     """
+    var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--checked-labeled":
+        try:
+            print(
+                render_actor_checked_edges_with_messages(arguments[2]),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var migration = String("")
     var payload = String("")
     var digest = String("")
@@ -278,7 +334,6 @@ def main() raises:
     var label = String("")
     var bytes_all = String("")
     var checked_edges = String("")
-    var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]

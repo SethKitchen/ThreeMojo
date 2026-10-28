@@ -518,6 +518,8 @@ It puts every render-actor path on its edge in one check.
 
 It checks every render-actor digest and writes each path in one check.
 
+It reads the consumer messages before those digests in one check.
+
 It keeps the render-actor module and its three bound tests.
 
 It keeps the render-actor consumer and test messages.
@@ -543,6 +545,8 @@ It puts the module path on that edge.
 It puts every runtime-boundary path on its edge in one check.
 
 It checks every runtime-boundary digest and writes each path in one check.
+
+It reads the consumer messages before those digests in one check.
 
 It keeps the four runtime-boundary module paths.
 
