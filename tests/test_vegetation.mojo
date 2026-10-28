@@ -21,6 +21,8 @@ from extensions.vegetation.checks import (
 from extensions.vegetation.ground import (
     APRON,
     APRON_EDGE,
+    CANOPY,
+    CREST,
     DIRT,
     LITTER,
     POND_DROP,
@@ -867,9 +869,11 @@ def test_a_canyon_cuts_a_floor_and_raises_a_plateau() raises:
 
 def test_a_cliff_wall_faces_the_camera_from_floor_to_plateau() raises:
     """The wall has a vertex at each corner of its grid. It runs from the
-    floor to just above the plateau, stands in front of the far rim, and
-    is mossy at its top. A canyon with no wall, and a size out of range,
-    are refused."""
+    floor to the woods over the plateau, and stands in front of the far
+    rim. The near rim hides its foot, so the first quarter of the rows
+    reach just under the near side. The woods stand back from the lip,
+    their crowns rise and fall along the crest, and they are green. A
+    canyon with no wall, and a size out of range, are refused."""
     var ground = Ground(
         hill_height=Length(0.0, METER),
         canyon=Canyon(
@@ -886,10 +890,25 @@ def test_a_cliff_wall_faces_the_camera_from_floor_to_plateau() raises:
     ref c = wall.attribute_view(String(COLOR))
     assert_almost_equal(p.vector3(0).y, -30, atol=1e-4)
     assert_almost_equal(p.vector3(0).x, -20, atol=1e-4)
-    assert_true(p.vector3(44).y > 10 and p.vector3(44).y < 12.2)
+    # The second row is 4 meters under the near side, at a quarter of the
+    # rows.
+    assert_almost_equal(p.vector3(9).y, -4, atol=1e-4)
     for v in range(45):
         assert_true(p.vector3(v).z > -150 + RIM)
-    assert_true(c.vector3(44).y > c.vector3(44).x)
+    var lowest = Float32(1.0e9)
+    var highest = Float32(-1.0e9)
+    for col in range(36, 45):
+        var top = p.vector3(col)
+        # Over the plateau by the thicket at least, and by the highest
+        # crest and crown at most.
+        assert_true(top.y > 10 + 0.25 * CANOPY)
+        assert_true(top.y < 10 + CREST + 1.5 * CANOPY)
+        # Back at the face's line, behind the rock's buttresses.
+        assert_almost_equal(top.z, -150 + RIM + 1, atol=1e-4)
+        assert_true(c.vector3(col).y > c.vector3(col).x)
+        lowest = min(lowest, top.y)
+        highest = max(highest, top.y)
+    assert_true(highest - lowest > 1)
     with assert_raises(contains="no wall"):
         _ = cliff_wall(Ground(), Length(40.0, METER), 8, 4, 2)
     with assert_raises(contains="wide"):

@@ -2,7 +2,7 @@
 
 `Meadow` builds open summer grassland: tall grass and flowers, bare dirt and a trail, trees and bushes of real leaves, and a canyon. Mountains, a clouded sky and a soft sun surround it.
 
-![A dirt trail winds through wind-bent grass with poppies past a lone pale-trunked tree, with birches, groves, a band of cliffs and a woodland beyond](out/meadow.png)
+![A dirt trail winds through wind-bent grass with poppies past a lone pale-trunked tree, with birches, groves, and wooded cliffs beyond](out/meadow.png)
 
 `examples/meadow.mojo` draws this picture. The modules live in `extensions/vegetation/`. See [Extensions](Extensions). [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters) explains the design.
 
@@ -231,7 +231,7 @@ The time is the `SWAY_TIME` uniform, which `Meadow.update` sets each frame. A lo
 
 `default_crowns` returns twelve crowns: three open trees, a windswept tree, two young trees, two round trees, two birches, a green bush and a gray-green bush.
 
-`default_plantings` places a lone open tree and a bush near the camera, a second open tree, and a windswept tree. A grove of mixed trees, a grove of birches and a grove at the back stand from 60 to 140 meters. 14 trees and 30 bushes are scattered from 12 to 160 meters. A woodland of 120 young and round trees stands from 428 to 520 meters, just past the canyon's far rim. They are 1.3 to 1.9 times their crowns' size, so their tops show above the band of cliffs.
+`default_plantings` places a lone open tree and a bush near the camera, a second open tree, and a windswept tree. A grove of mixed trees, a grove of birches and a grove at the back stand from 60 to 140 meters. 14 trees and 30 bushes are scattered from 12 to 160 meters. A woodland of 120 young and round trees stands from 428 to 520 meters, just past the canyon's far rim. They are 1.3 to 1.9 times their crowns' size. They stand behind the woods along the cliff's crest, and deepen them.
 
 ## Bare ground and litter
 
@@ -277,7 +277,14 @@ The ground has no water of its own. Compose the water into the picture after the
 
 A `Canyon` crosses the ground toward -z. Its floor is `depth` below the near side, and its far plateau is `rise` above it. Each rim is a smooth step 6 meters wide. The default canyon's near rim is 300 meters from the origin and its far rim 420 meters. It is 80 meters deep, and the far side rises 38 meters. The far wall then shows above the near rim as a band of cliffs.
 
-`cliff_wall` builds that wall as a dense face of rock. It stands just in front of the far rim, and hides the ground mesh's coarse step there. Buttresses and flutes run down it, a few ledges cross it, and dark strata band it. Moss grows along its top, and its crest is ragged.
+`cliff_wall` builds that wall as a dense face of rock. It stands just in front of the far rim, and hides the ground mesh's coarse step there.
+
+- **The rock.** Buttresses and flutes run down it. Its rock lies in pale and dark beds about 9 meters tall, with warm stains and streaks. Each bed stands out a little from the seam over it. The buttresses are lighter than the gullies between them.
+- **The growth.** Moss grows on the beds' ledges and along the lip. Scrub clings to the face in patches.
+- **The crest.** The rock rises up to 14 meters over the plateau, in long swells.
+- **The woods.** Woods stand on the crest, back from the lip. Round crowns and the spires of firs reach up to 13 meters over the rock. So the skyline is ragged, as the edge of a wood is.
+
+The sun stands behind the wall, so only the sky lights its face. Its colors and its shape give it its contrast. The near rim hides the wall's foot. So a quarter of the rows cover the foot, and the rest cover the face that shows.
 
 `paint_sky` draws Preetham's sky into a small cube and reads it into a large cube. It then paints the clouds. `gain` scales the sky's light, and `saturation` and `tint` deepen its blue. The cube is the scene's background. Its mean color near the horizon is the fog's color.
 
