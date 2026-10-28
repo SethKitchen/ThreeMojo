@@ -8,19 +8,28 @@
     carla_envelope_gate --migration PATH
     carla_envelope_gate --source PATH --token HEX
     carla_envelope_gate --span PATH
+    carla_envelope_gate --module-span PATH
     carla_envelope_gate --successor PATH
+    carla_envelope_gate --module-successor PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
 `--span` reads one capture function and refuses a counter name between
-the two capacity checks. `--successor` reads `actual` and `expected`
-function text and requires the same significant tokens.
+the two capacity checks. `--module-span` selects that function from a
+module first. `--successor` reads `actual` and `expected` function text
+and requires the same significant tokens. `--module-successor` selects
+the live function from `source` before that comparison.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tests._python_tokens import significant_json, token_names, token_sha256
+from tests._python_tokens import (
+    declaration_text,
+    significant_json,
+    token_names,
+    token_sha256,
+)
 from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
 
@@ -104,12 +113,60 @@ def envelope_successor(payload: String) raises:
         raise Error("Envelope budget successor function changed")
 
 
+def _capture_function(source: String) raises -> String:
+    """Return `_try_lane_envelope_capture` from one module.
+
+    Args:
+        source: The module, or the function itself.
+
+    Returns:
+        The dedented capture function.
+
+    Raises:
+        Error: The function is missing, repeated, or has no indented body.
+    """
+    var owners = List[String]()
+    return declaration_text(source, "_try_lane_envelope_capture", owners)
+
+
+def envelope_module_span(source: String) raises:
+    """Refuse a counter name in the module's capture function.
+
+    Args:
+        source: The module that declares `_try_lane_envelope_capture`.
+
+    Raises:
+        Error: The function cannot be read, a capacity marker is missing,
+            or `terms` or `max_terms` appears between those markers.
+    """
+    envelope_budget_span(_capture_function(source))
+
+
+def envelope_module_successor(payload: String) raises:
+    """Require the module's capture function to match the recorded successor.
+
+    Args:
+        payload: JSON with `source`, the module text, and `expected`, the
+            recorded function text.
+
+    Raises:
+        Error: The function cannot be read, a field is absent, or the
+            significant tokens differ.
+    """
+    var doc = PyJson.parse(payload)
+    var actual = _capture_function(doc.text(doc.at(doc.root, "source")))
+    var expected = doc.text(doc.at(doc.root, "expected"))
+    if significant_json(actual) != significant_json(expected):
+        raise Error("Envelope budget successor function changed")
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_envelope_gate --migration PATH"
-            " | --source PATH --token HEX | --span PATH | --successor PATH"
+            " | --source PATH --token HEX | --span PATH | --module-span PATH"
+            " | --successor PATH | --module-successor PATH"
         ),
         file=stderr,
     )
@@ -127,6 +184,8 @@ def main() raises:
     var token = String("")
     var span = String("")
     var successor = String("")
+    var module_span = String("")
+    var module_successor = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -137,6 +196,8 @@ def main() raises:
             or word == "--token"
             or word == "--span"
             or word == "--successor"
+            or word == "--module-span"
+            or word == "--module-successor"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -149,6 +210,10 @@ def main() raises:
                 span = value
             elif word == "--successor":
                 successor = value
+            elif word == "--module-span":
+                module_span = value
+            elif word == "--module-successor":
+                module_successor = value
             else:
                 token = value
             index += 2
@@ -163,6 +228,10 @@ def main() raises:
         modes += 1
     if successor.byte_length() > 0:
         modes += 1
+    if module_span.byte_length() > 0:
+        modes += 1
+    if module_successor.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if source.byte_length() > 0 and token.byte_length() == 0:
@@ -173,6 +242,10 @@ def main() raises:
         _usage()
     if successor.byte_length() > 0 and token.byte_length() > 0:
         _usage()
+    if module_span.byte_length() > 0 and token.byte_length() > 0:
+        _usage()
+    if module_successor.byte_length() > 0 and token.byte_length() > 0:
+        _usage()
     try:
         if source.byte_length() > 0:
             envelope_token(Path(source).read_text(), token)
@@ -182,6 +255,12 @@ def main() raises:
             return
         if successor.byte_length() > 0:
             envelope_successor(Path(successor).read_text())
+            return
+        if module_span.byte_length() > 0:
+            envelope_module_span(Path(module_span).read_text())
+            return
+        if module_successor.byte_length() > 0:
+            envelope_module_successor(Path(module_successor).read_text())
             return
         envelope_record(Path(migration).read_bytes())
     except error:

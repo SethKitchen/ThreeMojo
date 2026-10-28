@@ -926,6 +926,8 @@ It refuses `terms` or `max_terms` between the two capacity checks.
 
 It requires the successor function to keep the same significant tokens.
 
+It selects that capture function from the module before the gap check and the successor check.
+
 `tools/carla_selection_record_gate.mojo` checks the selection predecessor record and the restored token.
 
 It reads the declaration line span before restoring that function.

@@ -5,17 +5,11 @@ if __package__:
 else:
     import source_contracts as _typed_source
 
-if __package__:
-    from . import source_contracts as source
-else:
-    import source_contracts as source
 from pathlib import Path
 if __package__:
     from . import source_contracts
-    from . import sum2_guard_contracts
 else:
     import source_contracts
-    import sum2_guard_contracts
 MODULE='extensions/carla/curve_bounds.mojo'
 EXPECTED='9bc62290a6bdeca43c4d695a0f0ce6592d69f49386d83ce7342b667c73680fce'
 
@@ -40,7 +34,7 @@ def verify_text(text, *, root=None, _operation=None):
         except (ValueError, OSError) as error:
             raise ValueError('Reviewed budget admission, routing or arithmetic changed') from error
     _gate_token(checked, EXPECTED)
-    _gate_span(sum2_guard_contracts.declaration(text,'_try_lane_envelope_capture',()))
+    _gate_module_span(text)
     return {'status':'PASS','source_token_sha256':EXPECTED,'intervening_counter_uses':0,'retained_capacity_and_debit':True}
 
 def verify(root, *, _operation=None):
@@ -67,19 +61,19 @@ def _gate(payload):
         raise ValueError(message)
 
 
-def _gate_span(text):
-    """Refuse a counter name between the two capacity checks."""
+def _gate_module_span(text):
+    """Select the capture function, then refuse a counter in its gap."""
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='envelope-span-') as directory:
-        target = Path(directory) / 'capture.mojo'
+    with tempfile.TemporaryDirectory(prefix='envelope-module-span-') as directory:
+        target = Path(directory) / 'module.mojo'
         target.write_text(text)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_envelope_gate',
-             '--span', str(target)],
+             '--module-span', str(target)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -88,8 +82,8 @@ def _gate_span(text):
         raise ValueError(message)
 
 
-def _gate_successor(actual, expected):
-    """Require the live capture function to match the recorded successor."""
+def _gate_module_successor(source, expected):
+    """Select the capture function, then match the recorded successor."""
     import json
     import os
     import subprocess
@@ -97,13 +91,13 @@ def _gate_successor(actual, expected):
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     payload = json.dumps(
-        {'actual': actual, 'expected': expected}, separators=(',', ':'))
-    with tempfile.TemporaryDirectory(prefix='envelope-successor-') as directory:
+        {'source': source, 'expected': expected}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='envelope-module-successor-') as directory:
         target = Path(directory) / 'successor.json'
         target.write_text(payload)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_envelope_gate',
-             '--successor', str(target)],
+             '--module-successor', str(target)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -142,6 +136,5 @@ def historical_function(text, *, root=None):
     payload = _typed_source.historical_bytes(root, record_path, record_path.read_bytes())
     _gate(payload)
     record = json.loads(payload, object_pairs_hook=source_contracts.unique_keys)
-    actual = sum2_guard_contracts.declaration(text,'_try_lane_envelope_capture',())
-    _gate_successor(actual, record['after_complete_function'])
+    _gate_module_successor(text, record['after_complete_function'])
     return record['before_complete_function']
