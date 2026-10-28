@@ -161,8 +161,9 @@ struct _PixelMaps(Movable):
         var w = max(1, texture.width)
         var h = max(1, texture.height)
         var level = List[Float32](length=w * h * 3, fill=0)
-        for y in range(h):
-            for x in range(w):
+        # Each side holds at least one texel.
+        for y in range(h):  # pragma: no branch
+            for x in range(w):  # pragma: no branch
                 var c = texture.sample(
                     (Float32(x) + 0.5) / Float32(w),
                     (Float32(y) + 0.5) / Float32(h),
@@ -184,8 +185,8 @@ struct _PixelMaps(Movable):
             var w2 = max(1, w // 2)
             var h2 = max(1, h // 2)
             var half = List[Float32](length=w2 * h2 * 3, fill=0)
-            for y in range(h2):
-                for x in range(w2):
+            for y in range(h2):  # pragma: no branch
+                for x in range(w2):  # pragma: no branch
                     var x0 = min(w - 1, 2 * x)
                     var x1 = min(w - 1, 2 * x + 1)
                     var y0 = min(h - 1, 2 * y)

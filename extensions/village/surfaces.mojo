@@ -99,7 +99,9 @@ struct _Canvas(Movable):
     var size: Int
     var pixels: List[UInt8]
 
-    def __init__(out self, size: Int):
+    def __init__(out self, size: Int) raises:
+        if size < 1:
+            raise Error("A texture needs at least one texel on a side")
         self.size = size
         self.pixels = List[UInt8](length=size * size * 4, fill=255)
 
@@ -135,7 +137,7 @@ def brick_texture(size: Int, seed: Int) raises -> Texture:
         half a brick, in a pale mortar 1 centimeter wide.
 
     Raises:
-        Error: If the texture cannot be made.
+        Error: If `size` is below one.
     """
     var canvas = _Canvas(size)
     var across = Float32(4)
@@ -143,12 +145,12 @@ def brick_texture(size: Int, seed: Int) raises -> Texture:
     # The mortar's share of a brick's length and of a course's height.
     var joint_u = Float32(0.01 / 0.225)
     var joint_v = Float32(0.01 / 0.075)
-    for y in range(size):
+    for y in range(size):  # pragma: no branch
         var fy = (Float32(y) + 0.5) / Float32(size) * courses
         var row = Int(fy)
         var local_v = fy - Float32(row)
         var shift = Float32(0.5) if row % 2 == 1 else Float32(0)
-        for x in range(size):
+        for x in range(size):  # pragma: no branch
             var fx = (Float32(x) + 0.5) / Float32(size) * across + shift
             var column = Int(fx)
             var local_u = fx - Float32(column)
@@ -189,7 +191,7 @@ def fieldstone_texture(size: Int, seed: Int) raises -> Texture:
         moved at random, in a deep mortar.
 
     Raises:
-        Error: If the texture cannot be made.
+        Error: If `size` is below one.
     """
     var canvas = _Canvas(size)
     var cells = 6
@@ -199,17 +201,17 @@ def fieldstone_texture(size: Int, seed: Int) raises -> Texture:
         Vector3(118, 116, 110),
         Vector3(168, 158, 142),
     ]
-    for y in range(size):
+    for y in range(size):  # pragma: no branch
         var py = (Float32(y) + 0.5) / Float32(size) * Float32(cells)
-        for x in range(size):
+        for x in range(size):  # pragma: no branch
             var px = (Float32(x) + 0.5) / Float32(size) * Float32(cells)
             var first = Float32(1.0e9)
             var second = Float32(1.0e9)
             var owner = 0
             var cx = Int(px)
             var cy = Int(py)
-            for dj in range(-1, 2):
-                for di in range(-1, 2):
+            for dj in range(-1, 2):  # pragma: no branch
+                for di in range(-1, 2):  # pragma: no branch
                     var i = cx + di
                     var j = cy + dj
                     var wi = (i + cells) % cells
@@ -247,11 +249,11 @@ def plaster_texture(size: Int, seed: Int) raises -> Texture:
         Warm white plaster, clouded at two scales.
 
     Raises:
-        Error: If the texture cannot be made.
+        Error: If `size` is below one.
     """
     var canvas = _Canvas(size)
-    for y in range(size):
-        for x in range(size):
+    for y in range(size):  # pragma: no branch
+        for x in range(size):  # pragma: no branch
             var u = Float32(x) / Float32(size)
             var v = Float32(y) / Float32(size)
             var cloud = tiled_noise(u * 4, v * 4, 4, seed) * 0.08
@@ -281,13 +283,13 @@ def boards_texture(size: Int, seed: Int) raises -> Texture:
         and a dark joint between boards.
 
     Raises:
-        Error: If the texture cannot be made.
+        Error: If `size` is below one.
     """
     var canvas = _Canvas(size)
     var boards = 6
-    for y in range(size):
+    for y in range(size):  # pragma: no branch
         var v = Float32(y) / Float32(size)
-        for x in range(size):
+        for x in range(size):  # pragma: no branch
             var fu = (Float32(x) + 0.5) / Float32(size) * Float32(boards)
             var board = Int(fu)
             var local = fu - Float32(board)
@@ -316,12 +318,12 @@ def wood_texture(size: Int, seed: Int) raises -> Texture:
         Light brown wood, ready to be tinted by vertex colors.
 
     Raises:
-        Error: If the texture cannot be made.
+        Error: If `size` is below one.
     """
     var canvas = _Canvas(size)
-    for y in range(size):
+    for y in range(size):  # pragma: no branch
         var v = Float32(y) / Float32(size)
-        for x in range(size):
+        for x in range(size):  # pragma: no branch
             var u = Float32(x) / Float32(size)
             var shade = _grain(u, v, seed)
             # A knot: a dark ring round a few points.
@@ -350,15 +352,15 @@ def ashlar_texture(size: Int, seed: Int) raises -> Texture:
         course offset by half a block, with thin pale joints.
 
     Raises:
-        Error: If the texture cannot be made.
+        Error: If `size` is below one.
     """
     var canvas = _Canvas(size)
-    for y in range(size):
+    for y in range(size):  # pragma: no branch
         var fy = (Float32(y) + 0.5) / Float32(size) * 4
         var row = Int(fy)
         var lv = fy - Float32(row)
         var shift = Float32(0.5) if row % 2 == 1 else Float32(0)
-        for x in range(size):
+        for x in range(size):  # pragma: no branch
             var fx = (Float32(x) + 0.5) / Float32(size) * 2 + shift
             var column = Int(fx)
             var lu = fx - Float32(column)
@@ -396,12 +398,12 @@ def _courses(
     its lowest second coordinate, is the lip of the piece over the next
     course down."""
     var canvas = _Canvas(size)
-    for y in range(size):
+    for y in range(size):  # pragma: no branch
         var fy = (Float32(y) + 0.5) / Float32(size) * Float32(rows)
         var row = Int(fy)
         var lv = fy - Float32(row)
         var shift = Float32(0.5) if row % 2 == 1 else Float32(0)
-        for x in range(size):
+        for x in range(size):  # pragma: no branch
             var fx = (Float32(x) + 0.5) / Float32(size) * Float32(
                 across
             ) + shift
@@ -435,7 +437,7 @@ def tile_texture(size: Int, seed: Int) raises -> Texture:
         one below it.
 
     Raises:
-        Error: If the texture cannot be made.
+        Error: If `size` is below one.
     """
     return _courses(size, seed, 5, 5, Vector3(172, 78, 50), 0.35)
 
@@ -451,7 +453,7 @@ def slate_texture(size: Int, seed: Int) raises -> Texture:
         Six courses of four gray slates, staggered.
 
     Raises:
-        Error: If the texture cannot be made.
+        Error: If `size` is below one.
     """
     return _courses(size, seed, 6, 4, Vector3(92, 96, 104), 0.3)
 
@@ -468,15 +470,15 @@ def plank_texture(size: Int, seed: Int) raises -> Texture:
         lengths whose joint lies at its own place, with grain along them.
 
     Raises:
-        Error: If the texture cannot be made.
+        Error: If `size` is below one.
     """
     var canvas = _Canvas(size)
-    for y in range(size):
+    for y in range(size):  # pragma: no branch
         var fy = (Float32(y) + 0.5) / Float32(size) * 8
         var row = Int(fy)
         var lv = fy - Float32(row)
         var joint = hash01(row, 0, seed)
-        for x in range(size):
+        for x in range(size):  # pragma: no branch
             var u = (Float32(x) + 0.5) / Float32(size)
             if lv < 0.06:
                 canvas.set(x, y, 40, 30, 22)
@@ -540,7 +542,7 @@ def house_looks(mut assets: Assets, size: Int, seed: Int) raises -> HouseLooks:
         The materials.
 
     Raises:
-        Error: If a texture or a material cannot be made.
+        Error: If `size` is below one, or a material cannot be made.
     """
     var glass = standard_material(Color(255, 255, 255), roughness=0.15)
     glass.vertex_colors = True

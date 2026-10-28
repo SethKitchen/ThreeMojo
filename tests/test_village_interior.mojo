@@ -9,7 +9,7 @@ doorways, all read from the house's building model."""
 
 from extensions.building.kinds import DOOR, WALL
 from extensions.building.material import brick
-from extensions.building.model import Opening
+from extensions.building.model import Element, Opening
 from extensions.vegetation.ground import Ground, Lot
 from extensions.village.house import (
     HouseParameters,
@@ -221,6 +221,59 @@ def test_a_wall_with_no_door_is_one_span() raises:
     assert_equal(len(inside.walls), walls)
     assert_equal(len(inside.doorways), 0)
     assert_equal(len(inside.floors), 1)
+
+
+def test_doors_that_touch_leave_no_piece_between_them() raises:
+    var house = _house(1)
+    var model = house_model(house)
+    var front = front_wall(model)
+    # Only the doors stay, so a second door can touch the front door.
+    var doors = List[Opening]()
+    var end = Float64(0)
+    for o in model.openings:
+        if o.kind == DOOR:
+            doors.append(o.copy())
+            if o.host == front:
+                end = o.offset.value + o.width.value
+    model.openings = doors^
+    _ = model.add_opening(
+        DOOR,
+        front,
+        Length64(end, METER),
+        Length64(0, METER),
+        Length64(0.5, METER),
+        Length64(2.0, METER),
+        None,
+    )
+    var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
+    var inside = house_interior(model, lot, 0, _flat())
+    var low = 0
+    var heads = 0
+    for span in inside.walls:
+        if abs(span.z0 - 2.75) < 1.0e-4:
+            if span.bottom < 1:
+                low += 1
+            else:
+                heads += 1
+    # The hall's front wall keeps a piece left of the doors and one right
+    # of them, and the chamber's front wall is one more. Each door has
+    # the wall over its head.
+    assert_equal(low, 3)
+    assert_equal(heads, 2)
+
+
+def test_a_model_with_no_elements_is_only_its_floor() raises:
+    var house = _house(1)
+    var model = house_model(house)
+    model.elements = List[Element]()
+    model.openings = List[Opening]()
+    var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
+    var inside = house_interior(model, lot, 0, _flat())
+    assert_equal(len(inside.walls), 0)
+    assert_equal(len(inside.doorways), 0)
+    assert_equal(len(inside.floors), 1)
+    # No slab covers the floor, so its ceiling is the storey's top.
+    assert_almost_equal(inside.floors[0].ceiling, 2.8, atol=1.0e-4)
 
 
 def test_the_front_door_is_the_first_that_leads_out() raises:

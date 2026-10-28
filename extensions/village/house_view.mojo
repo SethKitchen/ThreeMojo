@@ -280,7 +280,8 @@ def _breaks(
     between them, and more so no gap is wider than `CELL`."""
     var cuts = List[Float64]()
     cuts.append(start)
-    for mark in marks:
+    # Each face passes the marks of its edges, so there are always some.
+    for mark in marks:  # pragma: no branch
         var m = min(max(mark, start), end)
         # The first cut is `start`, so the search stops at it.
         var k = len(cuts)
@@ -361,15 +362,16 @@ def _wall_faces(
         marks_v.append(Float64(o.v1))
     marks_u.append(0.45)
     marks_u.append(Float64(face.length) - 0.45)
-    for mark in [0.3, 0.7]:
+    for mark in [0.3, 0.7]:  # pragma: no branch
         marks_v.append(mark)
         marks_v.append(Float64(face.height) - mark)
     var us = _breaks(-Float64(half), Float64(face.length + half), marks_u)
     var vs = _breaks(0, Float64(face.height), marks_v)
-    for j in range(len(vs) - 1):
+    # Each list of cuts holds its start and its end.
+    for j in range(len(vs) - 1):  # pragma: no branch
         var v0 = Float32(vs[j])
         var v1 = Float32(vs[j + 1])
-        for i in range(len(us) - 1):
+        for i in range(len(us) - 1):  # pragma: no branch
             var u0 = Float32(us[i])
             var u1 = Float32(us[i + 1])
             if _inside(openings, (u0 + u1) / 2, (v0 + v1) / 2):

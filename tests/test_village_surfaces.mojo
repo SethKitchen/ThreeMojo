@@ -23,7 +23,7 @@ from extensions.village.surfaces import (
 from materials.material import BASIC
 from render.srgb import SRGB
 from render.texture import REPEAT, Texture
-from std.testing import TestSuite, assert_equal, assert_true
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
 def test_tiled_noise_repeats_and_stays_in_range() raises:
@@ -52,6 +52,12 @@ def _check(texture: Texture, size: Int) raises -> Float32:
         low = min(low, c.r)
         high = max(high, c.r)
     return high - low
+
+
+def test_a_texture_needs_a_texel() raises:
+    with assert_raises(contains="one texel"):
+        _ = brick_texture(0, 17)
+    assert_equal(brick_texture(1, 17).width, 1)
 
 
 def test_each_texture_has_its_pattern() raises:

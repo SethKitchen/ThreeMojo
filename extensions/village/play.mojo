@@ -469,7 +469,7 @@ struct VillageGame(Movable):
         # A door the camera looks through stays open too: points along the
         # last frame's sight hold it, at the height of the player's feet.
         var sight = self.camera.position
-        for k in range(SIGHT_POINTS):
+        for k in range(SIGHT_POINTS):  # pragma: no branch
             var t = Float32(k) / Float32(SIGHT_POINTS)
             people.append(
                 Vector3(

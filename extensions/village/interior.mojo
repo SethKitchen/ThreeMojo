@@ -37,7 +37,7 @@ from extensions.vegetation.ground import Ground, Lot
 from extensions.village.terrain import OPEN_SKY, Floor, WallSpan
 from generators.utils import Vec3d
 from math.vector3 import Vector3
-from std.math import atan2, ceil, cos, sin
+from std.math import atan2, ceil, copysign, cos, sin
 
 comptime PLINTH_OVERHANG = Float32(0.15)
 """How far the plinth reaches past the middle of the outside walls, in
@@ -240,11 +240,12 @@ def _walls(
                 )
             )
             u = doors[k][1]
+        # A door ends inside its wall, so the last piece is at least half
+        # the wall's thickness long.
         var end = frame.length + t / 2
-        if end - u > 1.0e-6:
-            interior.walls.append(
-                _span(placer, building, id, u, end, 0, frame.height, half)
-            )
+        interior.walls.append(
+            _span(placer, building, id, u, end, 0, frame.height, half)
+        )
 
 
 def _turn_of(along: Vector3) -> Float32:
@@ -267,13 +268,16 @@ def _doorways(
         var hinge = placer.point(frame.point(o.offset.value, 0, 0))
         var along = placer.way(frame.along)
         var normal = placer.way(frame.normal)
-        ref face = building.topology.complex.faces[host.faces[0].value]
         var outside = building.is_exterior(o.host)
-        # An outside door swings into the house: toward the side of its
-        # wall that has a room. An inside door swings along the normal.
+        # An outside door swings into the house: toward the lot's middle,
+        # which a box of storeys holds. An inside door swings along the
+        # normal.
         var swing = normal
-        if outside and not face.positive:
-            swing = Vector3(-normal.x, 0, -normal.z)
+        if outside:
+            var toward = (placer.lot.x - hinge.x) * normal.x + (
+                placer.lot.z - hinge.z
+            ) * normal.z
+            swing = normal * copysign(Float32(1), toward)
         interior.doorways.append(
             Doorway(
                 hinge.x,

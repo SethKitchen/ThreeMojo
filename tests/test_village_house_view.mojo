@@ -21,7 +21,7 @@ from extensions.building.kinds import (
 )
 from extensions.building.construction import double_glazing
 from extensions.building.material import brick, timber
-from extensions.building.model import Furnishing, Opening
+from extensions.building.model import Element, Furnishing, Opening, Space
 from extensions.topology.arrangement import Point2
 from extensions.vegetation.ground import Canyon, Ground, Lot
 from extensions.village.house import (
@@ -326,6 +326,26 @@ def test_a_boarded_house_with_no_openings() raises:
     assert_equal(len(standing.hinges), 0)
     # No window: no pane, and so no glass and no daylight sheet.
     assert_equal(standing.meshes, 6)
+
+
+def test_a_model_with_no_walls_or_rooms_stands_its_roof() raises:
+    var assets = Assets()
+    var looks = house_looks(assets, 8, 1)
+    var house = _house(5, 1)
+    var model = house_model(house)
+    model.elements = List[Element]()
+    model.spaces = List[Space]()
+    model.openings = List[Opening]()
+    model.furnishings = List[Furnishing]()
+    var scene = Scene()
+    var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
+    var standing = stand_house(scene, assets, looks, house, model, lot, _flat())
+    assert_equal(len(standing.interior.walls), 0)
+    assert_equal(len(standing.hinges), 0)
+    # The roof, its boards and the plinth stand. No wall, floor, ceiling
+    # or window does.
+    assert_true(standing.triangles > 0)
+    assert_true(standing.meshes < 6)
 
 
 def main() raises:

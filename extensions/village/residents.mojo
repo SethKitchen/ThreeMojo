@@ -469,7 +469,8 @@ def _others(
 ) -> List[Obstacle]:
     """Return the obstacles, and every resident but one."""
     var out = obstacles.copy()
-    for index in range(len(residents)):
+    # It is called for one of the residents, so there is at least one.
+    for index in range(len(residents)):  # pragma: no branch
         if index != skip:
             out.append(residents[index])
     return out^
