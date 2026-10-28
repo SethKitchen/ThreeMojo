@@ -319,14 +319,25 @@ def _moment_node_sums(payload):
     return json.loads(result.stdout)
 
 
+_GATED_LEGACY_PROJECTION = None
+
+
 def _moment_legacy_projection(payload):
-    """Return the projection record when the legacy pin digest matches."""
+    """Return the projection record when the legacy pin digest matches.
+
+    The same record is not checked again. A changed record is checked again.
+    A failed check is not kept.
+    """
+    global _GATED_LEGACY_PROJECTION
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     text = json.dumps(payload, separators=(',', ':'))
+    cached = _GATED_LEGACY_PROJECTION
+    if cached is not None and cached[0] == text:
+        return cached[1]
     with tempfile.TemporaryDirectory(prefix='moment-legacy-projection-') as directory:
         path = Path(directory) / 'projection.json'
         path.write_text(text)
@@ -339,7 +350,9 @@ def _moment_legacy_projection(payload):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _GATED_LEGACY_PROJECTION = (text, parsed)
+    return parsed
 
 
 def _moment_projection(payload):
@@ -738,8 +751,16 @@ def __getattr__(name):
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
+_GATED_MOMENT_PINS = None
+
+
 def _require_moment_pins(pins):
-    """Build the pin specification, then check the pin document."""
+    """Build the pin specification, then check the pin document.
+
+    The same document is not checked again. A changed document is checked
+    again. A failed check is not kept.
+    """
+    global _GATED_MOMENT_PINS
     import os
     import subprocess
     import tempfile
@@ -747,6 +768,8 @@ def _require_moment_pins(pins):
         'dependencies': _dependencies(),
         'pins': pins,
     }, separators=(',', ':'))
+    if _GATED_MOMENT_PINS == payload:
+        return
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='moment-pins-') as directory:
@@ -761,6 +784,7 @@ def _require_moment_pins(pins):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise CheckError(message)
+    _GATED_MOMENT_PINS = payload
 
 
 def verify_inputs(root, *, _then_rows=False):

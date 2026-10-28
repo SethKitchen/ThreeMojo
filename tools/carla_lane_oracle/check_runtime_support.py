@@ -20,9 +20,16 @@ ROOT = Path(__file__).resolve().parents[2]
 _RUNTIME_INDENTED = None
 
 
+_GATED_RUNTIME_RESULT = None
+
+
 def _runtime_result(root, groups, successors, heading, optional, sum2):
-    """Return the runtime-support result and keep its indented text."""
-    global _RUNTIME_INDENTED
+    """Return the runtime-support result and keep its indented text.
+
+    The same inputs are not checked again. A changed input is checked again.
+    A failed check is not kept.
+    """
+    global _RUNTIME_INDENTED, _GATED_RUNTIME_RESULT
     import ast
     import os
     import subprocess
@@ -31,6 +38,10 @@ def _runtime_result(root, groups, successors, heading, optional, sum2):
         'root': root, 'groups': groups, 'successors': successors,
         'heading': heading, 'optional': optional, 'sum2': sum2,
     }, separators=(',', ':'))
+    cached = _GATED_RUNTIME_RESULT
+    if cached is not None and cached[0] == payload:
+        _RUNTIME_INDENTED = cached[2]
+        return cached[1]
     repo = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='runtime-support-result-') as directory:
@@ -50,6 +61,7 @@ def _runtime_result(root, groups, successors, heading, optional, sum2):
         raise ValueError(message)
     parsed = json.loads(result.stdout)
     _RUNTIME_INDENTED = parsed['indented']
+    _GATED_RUNTIME_RESULT = (payload, parsed['result'], parsed['indented'])
     return parsed['result']
 
 

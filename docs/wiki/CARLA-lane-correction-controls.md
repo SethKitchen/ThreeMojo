@@ -584,6 +584,10 @@ It writes the runtime-support result with two-space indentation.
 
 It indents that runtime-support result after the result in one check.
 
+It reuses that runtime-support result when the same inputs are read again.
+A changed input is checked again.
+A failed check is not kept.
+
 It keeps the runtime failure prefix.
 
 It compares the projected ideal spiral with the historical half-rate form.
@@ -679,6 +683,11 @@ It checks the moment pin sets, paths, dependency closure, legacy digest, and res
 
 It builds the moment pin specification before that pin check in one check.
 
+It reuses that moment pin check when the same document is read again.
+The pin file is still read.
+A changed document is checked again.
+A failed check is not kept.
+
 It keeps the moment array paths, scalar names, block boundaries, and routing paths.
 
 It keeps the moment routing constants and the route comparison.
@@ -716,6 +725,10 @@ It spells the stored nodes and weights before their rounded sums in one check.
 It checks the ideal half projection in one call.
 
 It checks the legacy pin digest before the ideal half projection in one check.
+
+It reuses that legacy projection when the same record is read again.
+A changed record is checked again.
+A failed check is not kept.
 
 It checks the stored-half tail before the projection.
 

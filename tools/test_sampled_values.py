@@ -1649,6 +1649,97 @@ class ProductionScanTests(unittest.TestCase):
         )
 
 
+class RuntimeMomentCacheTests(unittest.TestCase):
+    def test_the_same_runtime_and_moment_inputs_skip_the_second_check(self):
+        import sys
+        from unittest.mock import Mock, patch
+        oracle = Path(__file__).resolve().parent / 'carla_lane_oracle'
+        sys.path.insert(0, str(oracle))
+        try:
+            import check_runtime_support as runtime
+        finally:
+            sys.path.pop(0)
+        from tools.carla_lane_oracle import spiral_moments as moments
+        saved_runtime = runtime._GATED_RUNTIME_RESULT
+        saved_indent = runtime._RUNTIME_INDENTED
+        saved_failures = runtime._CLI_FAILURES
+        saved_pins = moments._GATED_MOMENT_PINS
+        saved_legacy = moments._GATED_LEGACY_PROJECTION
+        saved_ready = moments._DEPENDENCIES_READY
+        saved_dependencies = moments.__dict__.get('DEPENDENCIES')
+        try:
+            runtime._GATED_RUNTIME_RESULT = None
+            runtime._RUNTIME_INDENTED = None
+            runtime._CLI_FAILURES = {'key': 'KeyError: '}
+            moments._GATED_MOMENT_PINS = None
+            moments._GATED_LEGACY_PROJECTION = None
+            moments._DEPENDENCIES_READY = True
+            moments.DEPENDENCIES = {
+                'group': 'g',
+                'pin_file': 'pins.json',
+                'paths': [],
+                'additional_groups': [],
+                'guard_pin_file': 'guard.json',
+            }
+            ok = Mock(
+                returncode=0,
+                stdout='{"result":{"status":"PASS"},"indented":"pass\\n"}',
+                stderr='',
+            )
+            with patch('subprocess.run', return_value=ok) as run:
+                self.assertEqual(
+                    runtime._runtime_result('root', {}, {}, {}, {}, {}),
+                    {'status': 'PASS'})
+                runtime._runtime_result('root', {}, {}, {}, {}, {})
+                self.assertEqual(runtime._RUNTIME_INDENTED, 'pass\n')
+                self.assertEqual(run.call_count, 1)
+                runtime._runtime_result('other', {}, {}, {}, {}, {})
+                self.assertEqual(run.call_count, 2)
+                moments._require_moment_pins({'arrays': {}})
+                moments._require_moment_pins({'arrays': {}})
+                self.assertEqual(run.call_count, 3)
+                moments._require_moment_pins({'arrays': {'a': 1}})
+                self.assertEqual(run.call_count, 4)
+                self.assertEqual(
+                    moments._moment_legacy_projection({'legacy': 'old'}),
+                    {'result': {'status': 'PASS'}, 'indented': 'pass\n'})
+                moments._moment_legacy_projection({'legacy': 'old'})
+                self.assertEqual(run.call_count, 5)
+                moments._moment_legacy_projection({'legacy': 'new'})
+                self.assertEqual(run.call_count, 6)
+            failed = Mock(returncode=1, stdout='', stderr='moment changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'moment changed'):
+                    runtime._runtime_result('bad', {}, {}, {}, {}, {})
+                with self.assertRaisesRegex(ValueError, 'moment changed'):
+                    runtime._runtime_result('bad', {}, {}, {}, {}, {})
+                with self.assertRaises(moments.CheckError):
+                    moments._require_moment_pins({'arrays': {'bad': 1}})
+                with self.assertRaises(moments.CheckError):
+                    moments._require_moment_pins({'arrays': {'bad': 1}})
+                with self.assertRaisesRegex(ValueError, 'moment changed'):
+                    moments._moment_legacy_projection({'legacy': 'bad'})
+                with self.assertRaisesRegex(ValueError, 'moment changed'):
+                    moments._moment_legacy_projection({'legacy': 'bad'})
+                self.assertEqual(run.call_count, 6)
+            with patch('subprocess.run', return_value=ok) as run:
+                runtime._runtime_result('other', {}, {}, {}, {}, {})
+                moments._require_moment_pins({'arrays': {'a': 1}})
+                moments._moment_legacy_projection({'legacy': 'new'})
+                self.assertEqual(run.call_count, 0)
+        finally:
+            runtime._GATED_RUNTIME_RESULT = saved_runtime
+            runtime._RUNTIME_INDENTED = saved_indent
+            runtime._CLI_FAILURES = saved_failures
+            moments._GATED_MOMENT_PINS = saved_pins
+            moments._GATED_LEGACY_PROJECTION = saved_legacy
+            moments._DEPENDENCIES_READY = saved_ready
+            if saved_dependencies is None:
+                moments.__dict__.pop('DEPENDENCIES', None)
+            else:
+                moments.DEPENDENCIES = saved_dependencies
+
+
 class SampledMentionCacheTests(unittest.TestCase):
     def test_the_same_sampled_bytes_skip_the_second_result(self):
         from unittest.mock import Mock, patch
