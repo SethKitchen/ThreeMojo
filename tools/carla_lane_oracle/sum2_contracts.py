@@ -126,8 +126,16 @@ def require(condition, message):
         raise ValueError(message)
 
 
+_GATED_SUM2_GRAPHS = None
+
+
 def _graphs_then_result(payload):
-    """Read the Sum2 checkpoints, then return the projection result."""
+    """Read the Sum2 checkpoints, then return the projection result.
+
+    The same texts are not checked again. A changed text is checked again.
+    A failed check is not kept.
+    """
+    global _GATED_SUM2_GRAPHS
     import ast
     import os
     import subprocess
@@ -135,6 +143,9 @@ def _graphs_then_result(payload):
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     text = json.dumps(payload, separators=(',', ':'))
+    cached = _GATED_SUM2_GRAPHS
+    if cached is not None and cached[0] == text:
+        return cached[1]
     with tempfile.TemporaryDirectory(prefix='sum2-graphs-result-') as directory:
         path = Path(directory) / 'payload.json'
         path.write_text(text)
@@ -153,7 +164,9 @@ def _graphs_then_result(payload):
         if message.startswith(prefix):
             raise KeyError(ast.literal_eval(message[len(prefix):])) from None
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _GATED_SUM2_GRAPHS = (text, parsed)
+    return parsed
 
 
 def _graphs_and_imports(texts, checkpoints, interval):

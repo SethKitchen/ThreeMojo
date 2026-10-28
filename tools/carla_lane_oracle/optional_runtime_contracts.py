@@ -174,8 +174,16 @@ def _semantic_declarations(items):
     return json.loads(result.stdout)
 
 
+_GATED_SEMANTIC_STEP = None
+
+
 def _semantic_step(payload):
-    """Bind one group and check its edges."""
+    """Bind one group and check its edges.
+
+    The same texts are not checked again. A changed text is checked again.
+    A failed check is not kept.
+    """
+    global _GATED_SEMANTIC_STEP
     import json
     import os
     import subprocess
@@ -184,6 +192,9 @@ def _semantic_step(payload):
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     text = json.dumps(payload, separators=(',', ':'))
+    cached = _GATED_SEMANTIC_STEP
+    if cached is not None and cached[0] == text:
+        return cached[1]
     with tempfile.TemporaryDirectory(prefix='semantic-step-') as directory:
         path = Path(directory) / 'step.json'
         path.write_text(text)
@@ -196,7 +207,9 @@ def _semantic_step(payload):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _GATED_SEMANTIC_STEP = (text, parsed)
+    return parsed
 
 
 class _RuntimeFunction:

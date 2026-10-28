@@ -498,6 +498,11 @@ It lists the production Mojo files for the containing-model scan in one check.
 It keeps the reviewed path order.
 Each kept file is still read.
 
+It reuses that optional-runtime declaration group when the same texts are read again.
+The module files are still read.
+A changed text is checked again.
+A failed check is not kept.
+
 It removes an argument move sigil before that contract parses a function body.
 
 It returns the top-level statements used by the spiral-moment and selection contracts.
@@ -590,6 +595,11 @@ It checks those caller graphs before the helper imports in one check.
 It checks those graphs before the Sum2 projection in one check.
 
 It reads the Sum2 checkpoints before those graphs in one check.
+
+It reuses that Sum2 graph check when the same texts are read again.
+The module files are still read.
+A changed text is checked again.
+A failed check is not kept.
 
 It keeps the reviewed Sum2 helper digest.
 

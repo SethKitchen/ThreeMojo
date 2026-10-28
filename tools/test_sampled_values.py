@@ -1649,6 +1649,55 @@ class ProductionScanTests(unittest.TestCase):
         )
 
 
+class Sum2OptionalReuseCacheTests(unittest.TestCase):
+    def test_the_same_sum2_and_optional_texts_skip_the_second_check(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import optional_runtime_contracts as optional
+        from tools.carla_lane_oracle import sum2_contracts as sum2
+        saved_sum2 = sum2._GATED_SUM2_GRAPHS
+        saved_step = optional._GATED_SEMANTIC_STEP
+        try:
+            sum2._GATED_SUM2_GRAPHS = None
+            optional._GATED_SEMANTIC_STEP = None
+            ok = Mock(returncode=0, stdout='{"status":"PASS"}', stderr='')
+            with patch('subprocess.run', return_value=ok) as run:
+                self.assertEqual(
+                    sum2._graphs_then_result({'texts': {'a': 'one'}}),
+                    {'status': 'PASS'})
+                sum2._graphs_then_result({'texts': {'a': 'one'}})
+                self.assertEqual(run.call_count, 1)
+                sum2._graphs_then_result({'texts': {'a': 'two'}})
+                self.assertEqual(run.call_count, 2)
+                self.assertEqual(
+                    optional._semantic_step({'steps': [{'group': 'before'}]}),
+                    {'status': 'PASS'})
+                optional._semantic_step({'steps': [{'group': 'before'}]})
+                self.assertEqual(run.call_count, 3)
+                optional._semantic_step({'steps': [{'group': 'after'}]})
+                self.assertEqual(run.call_count, 4)
+            failed = Mock(returncode=1, stdout='', stderr='sum2 graph: nope\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'nope'):
+                    sum2._graphs_then_result({'texts': {'a': 'bad'}})
+                with self.assertRaisesRegex(ValueError, 'nope'):
+                    sum2._graphs_then_result({'texts': {'a': 'bad'}})
+                self.assertEqual(run.call_count, 2)
+            failed = Mock(returncode=1, stdout='', stderr='group changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'group changed'):
+                    optional._semantic_step({'steps': [{'group': 'bad'}]})
+                with self.assertRaisesRegex(ValueError, 'group changed'):
+                    optional._semantic_step({'steps': [{'group': 'bad'}]})
+                self.assertEqual(run.call_count, 2)
+            with patch('subprocess.run', return_value=ok) as run:
+                sum2._graphs_then_result({'texts': {'a': 'two'}})
+                optional._semantic_step({'steps': [{'group': 'after'}]})
+                self.assertEqual(run.call_count, 0)
+        finally:
+            sum2._GATED_SUM2_GRAPHS = saved_sum2
+            optional._GATED_SEMANTIC_STEP = saved_step
+
+
 class RoundedLineReuseCacheTests(unittest.TestCase):
     def test_the_same_rounded_line_texts_skip_the_second_check(self):
         from unittest.mock import Mock, patch
