@@ -10,11 +10,8 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tools._sha256 import sha256_hex
-from tools.carla_pose_report import (
-    output_directory,
-    publish,
-    repository_root,
-)
+from tools._lane_reports import output_directory, repository_root
+from tools.carla_pose_report import publish
 
 
 comptime _REPORT = (

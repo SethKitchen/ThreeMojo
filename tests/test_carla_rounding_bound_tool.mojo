@@ -12,6 +12,16 @@ from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from tools._bigint import BigInt
 from tools._fraction import Fraction
 from tools._sha256 import sha256_hex
+from tools._lane_reports import (
+    _floor_log10,
+    _min_fixed,
+    _place_digits,
+    _strip_zeros,
+    isqrt,
+    nstr,
+    output_directory,
+    repository_root,
+)
 from tools.carla_rounding_bound import (
     Bound,
     add_bounds,
@@ -21,12 +31,9 @@ from tools.carla_rounding_bound import (
     from_int,
     from_interval,
     mul_bounds,
-    nstr,
-    output_directory,
     poly,
     publish,
     reports,
-    repository_root,
     sincos,
     sub_bound,
     sum2_terms,
@@ -34,17 +41,12 @@ from tools.carla_rounding_bound import (
     _ceil_div,
     _ceil_shift,
     _coefficients,
-    _floor_log10,
     _fraction_text,
-    _isqrt,
     _max_abs,
     _min_abs,
-    _min_fixed,
     _parse_rational,
-    _place_digits,
     _radius,
     _require,
-    _strip_zeros,
     _sum2_error,
     _up,
     _upper,
@@ -202,10 +204,10 @@ def test_decimal_text_matches_mpmath_nstr() raises:
         _radius(BigInt(16) * BigInt(1000), BigInt.parse("912499999999998")),
         "0.00000418739138072171421723292040790778079674546282",
     )
-    assert_equal(_isqrt(BigInt(0)), BigInt(0))
-    assert_equal(_isqrt(BigInt(9)), BigInt(3))
+    assert_equal(isqrt(BigInt(0)), BigInt(0))
+    assert_equal(isqrt(BigInt(9)), BigInt(3))
     with assert_raises(contains="square root of a negative integer"):
-        _ = _isqrt(BigInt(-1))
+        _ = isqrt(BigInt(-1))
 
 
 def test_constants_polynomials_and_endpoint_squares() raises:
