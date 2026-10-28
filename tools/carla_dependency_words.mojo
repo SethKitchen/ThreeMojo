@@ -6,15 +6,18 @@
 """Choose the stored-word check for each dependency.
 
     carla_dependency_words PATH
+    carla_dependency_words --checked PATH
 
 `PATH` is the dependency JSON. One object prints `match`, `trig`, or
-`geometry`. A list prints those names in order.
+`geometry`. A list prints those names in order. `--checked` chooses
+every dependency, then checks the selected stored words.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._dependency_words import (
+    checked_dependency_words,
     dependency_word_choice,
     dependency_word_choices,
 )
@@ -23,7 +26,13 @@ from tools._python_json import PY_LIST, PyJson
 
 def _usage():
     """Print the command usage and stop."""
-    print("usage: carla_dependency_words PATH", file=stderr)
+    print(
+        (
+            "usage: carla_dependency_words PATH | carla_dependency_words"
+            " --checked PATH"
+        ),
+        file=stderr,
+    )
     exit(2)
 
 
@@ -34,6 +43,13 @@ def main() raises:
         Error: The command is invalid, or a dependency is unreviewed.
     """
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--checked":
+        try:
+            checked_dependency_words(Path(arguments[2]).read_text())
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) != 2:
         _usage()
     try:

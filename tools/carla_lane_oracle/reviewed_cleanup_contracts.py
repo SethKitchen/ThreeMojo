@@ -508,12 +508,8 @@ def _dependency_pins():
     return _DEPENDENCY_PINS
 
 
-def _gate_words(text, kind, label):
-    _gate_words_all([(text, kind, label)])
-
-
-def _gate_words_all(items):
-    """Require every selected stored-word list."""
+def _checked_dependency_words(items):
+    """Choose every dependency word check, then check the selected words."""
     if not items:
         return
     import json
@@ -523,46 +519,19 @@ def _gate_words_all(items):
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps([
-        {'text': text, 'kind': kind, 'label': label}
-        for text, kind, label in items
-    ], separators=(',', ':'))
-    with tempfile.TemporaryDirectory(prefix='cleanup-words-') as directory:
-        record = Path(directory) / 'words.json'
-        record.write_text(payload)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_words',
-             str(record)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-
-
-def _dependency_query(payload):
-    import json
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    text = json.dumps(payload, separators=(',', ':'))
+    text = json.dumps(items, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='dependency-words-') as directory:
         record = Path(directory) / 'choice.json'
         record.write_text(text)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo,
-             'carla_dependency_words', str(record)],
+             'carla_dependency_words', '--checked', str(record)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return result.stdout.strip()
 
 
 def _dependency_fields(path, text, expected, pins):
@@ -577,47 +546,22 @@ def _dependency_fields(path, text, expected, pins):
     }
 
 
-def _dependency_choice(text, expected, path):
-    pins = _dependency_pins()
-    return _dependency_query(_dependency_fields(path, text, expected, pins))
-
-
-def _dependency_choices(items):
-    if not items:
-        return []
-    import json
-    pins = _dependency_pins()
-    return json.loads(_dependency_query([
-        _dependency_fields(path, text, expected, pins)
-        for path, text, expected in items]))
-
-
-def _apply_word_choice(path, text, choice, pins):
-    if choice == pins['trig_choice']:
-        _gate_words(text, pins['trig_choice'], path)
-    elif choice == pins['geometry_choice']:
-        _gate_words(text, pins['geometry_choice'], path)
-
-
 def verify_dependencies(items):
     """Choose every dependency word check, then run the selected checks."""
     if not items:
         return
-    choices = _dependency_choices(items)
     pins = _dependency_pins()
-    selected = []
-    for (path, text, _expected), choice in zip(items, choices):
-        if choice == pins['trig_choice'] or choice == pins['geometry_choice']:
-            selected.append((text, choice, path))
-    _gate_words_all(selected)
+    _checked_dependency_words([
+        _dependency_fields(path, text, expected, pins)
+        for path, text, expected in items])
 
 
 def verify_dependency(path, text, expected):
     # A fixed whole-module fingerprint admits only equivalent stored words.
     # Historical pins remain unchanged; other dependencies retain exact tokens.
     pins = _dependency_pins()
-    choice = _dependency_choice(text, expected, path)
-    _apply_word_choice(path, text, choice, pins)
+    _checked_dependency_words([
+        _dependency_fields(path, text, expected, pins)])
 
 
 def verify(root, *, _operation=None):

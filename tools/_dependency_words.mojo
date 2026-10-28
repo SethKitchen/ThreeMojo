@@ -10,6 +10,7 @@ geometry tokens may differ and still keep their stored words.
 """
 
 from tests._python_tokens import token_sha256
+from tools.carla_cleanup_gate import cleanup_words
 from tools._python_json import MISSING, PyJson
 
 
@@ -95,3 +96,28 @@ def dependency_word_choices(payload: String) raises -> String:
         index += 1
     out.root = rows
     return out.dumps()
+
+
+def checked_dependency_words(payload: String) raises:
+    """Choose every dependency word check, then require the selected words.
+
+    Args:
+        payload: A JSON list. Each item has the choice fields and `text`.
+
+    Raises:
+        Error: A dependency is unreviewed, a stored declaration cannot be read, or a word list changed.
+    """
+    var choices = PyJson.parse(dependency_word_choices(payload))
+    var doc = PyJson.parse(payload)
+    var count = choices.length(choices.root)
+    var index = 0
+    while index < count:
+        var choice = choices.text(choices.item(choices.root, index))
+        if choice == "trig" or choice == "geometry":
+            var item = doc.item(doc.root, index)
+            cleanup_words(
+                doc.text(doc.at(item, "text")),
+                choice,
+                doc.text(doc.at(item, "path")),
+            )
+        index += 1

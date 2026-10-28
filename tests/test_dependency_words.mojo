@@ -9,9 +9,11 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._python_tokens import token_sha256
 from tools._dependency_words import (
+    checked_dependency_words,
     dependency_word_choice,
     dependency_word_choices,
 )
+from tools._python_json import PyJson
 
 
 def _payload(
@@ -135,6 +137,124 @@ def test_a_source_text_uses_its_kept_token_digest() raises:
         + '"geometry_token":"geometry-token"}'
     )
     assert_equal(dependency_word_choice(payload), "match")
+
+
+def _add_dependency(
+    mut doc: PyJson,
+    rows: Int,
+    text: String,
+    token: String,
+    expected: String,
+    path: String,
+    geometry_token: String,
+):
+    """Append one dependency choice.
+
+    Args:
+        doc: The payload document.
+        rows: The dependency list.
+        text: The module text.
+        token: The current token digest.
+        expected: The recorded token digest.
+        path: The dependency path.
+        geometry_token: The reviewed geometry token.
+    """
+    var row = doc.new_dict()
+    doc.set(row, "text", doc.new_str(text))
+    doc.set(row, "token", doc.new_str(token))
+    doc.set(row, "expected", doc.new_str(expected))
+    doc.set(row, "path", doc.new_str(path))
+    doc.set(row, "trig_path", doc.new_str("extensions/carla/curve_trig.mojo"))
+    doc.set(row, "trig_token", doc.new_str("trig-token"))
+    doc.set(
+        row,
+        "geometry_path",
+        doc.new_str("extensions/carla/geometry.mojo"),
+    )
+    doc.set(row, "geometry_token", doc.new_str(geometry_token))
+    doc.append(rows, row)
+
+
+def test_an_unreviewed_choice_fails_before_the_word_check() raises:
+    """Every choice is decided before a selected word list is checked."""
+    var zeros = (
+        "comptime _GL_NODES: Array[Float64, 5] = [0.0, 0.0, 0.0, 0.0, 0.0]\n"
+        + "comptime _GL_WEIGHTS: Array[Float64, 5] = [0.0, 0.0, 0.0, 0.0,"
+        " 0.0]\n"
+    )
+    var doc = PyJson()
+    var rows = doc.new_list()
+    _add_dependency(
+        doc,
+        rows,
+        zeros,
+        "changed",
+        "geometry-token",
+        "extensions/carla/geometry.mojo",
+        "geometry-token",
+    )
+    _add_dependency(
+        doc,
+        rows,
+        "def f():\n    return 1\n",
+        "changed",
+        "other-token",
+        "other.mojo",
+        "geometry-token",
+    )
+    doc.root = rows
+    with assert_raises(contains="changed: other.mojo"):
+        checked_dependency_words(doc.dumps())
+
+
+def test_a_matching_token_skips_the_word_check() raises:
+    """An unchanged token does not read the stored-word declarations."""
+    var doc = PyJson()
+    var rows = doc.new_list()
+    _add_dependency(
+        doc,
+        rows,
+        "not stored words",
+        "same",
+        "same",
+        "other.mojo",
+        "geometry-token",
+    )
+    doc.root = rows
+    checked_dependency_words(doc.dumps())
+
+
+def test_empty_dependency_words_are_accepted() raises:
+    """No dependencies need no word check."""
+    checked_dependency_words("[]")
+
+
+def test_a_changed_geometry_word_list_is_refused() raises:
+    """A geometry choice with different stored words keeps the word message."""
+    var zeros = (
+        "comptime _GL_NODES: Array[Float64, 5] = [0.0, 0.0, 0.0, 0.0, 0.0]\n"
+        + "comptime _GL_WEIGHTS: Array[Float64, 5] = [0.0, 0.0, 0.0, 0.0,"
+        " 0.0]\n"
+    )
+    var doc = PyJson()
+    var rows = doc.new_list()
+    _add_dependency(
+        doc,
+        rows,
+        zeros,
+        "changed",
+        "geometry-token",
+        "extensions/carla/geometry.mojo",
+        "geometry-token",
+    )
+    doc.root = rows
+    with assert_raises(
+        contains=(
+            "reviewed cleanup source contract: unchanged premise dependency"
+            " changed: extensions/carla/geometry.mojo"
+        )
+    ):
+        checked_dependency_words(doc.dumps())
 
 
 def main() raises:
