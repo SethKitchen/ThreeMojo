@@ -77,10 +77,11 @@ from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from core.search import first_match
-from loaders.bytes import hex_digit_value
+from loaders.bytes import bytes_match, hex_digit_value
 from loaders.gltf import decode_image
 from loaders.js_number import js_parse_float
 from loaders.js_text import split_fields
+from loaders.utf8 import byte_slice
 from loaders.model_nodes import decompose_onto
 from loaders.xml import NO_ELEMENT, XmlDocument, parse_xml
 from loaders.zip import ZipEntry, unzip
@@ -1091,8 +1092,7 @@ def _linear(style: String) raises -> FloatColor:
     Raises:
         Error: If the text is not a color `setStyle` reads.
     """
-    var head = String(style[byte = 0 : min(7, style.byte_length())])
-    return parse_style(head, SRGB)
+    return parse_style(byte_slice(style, 0, 7), SRGB)
 
 
 def _authored(style: String) raises -> Color:
@@ -1151,8 +1151,9 @@ def _entry_role(name: String) -> Int:
         for anything else.
     """
     var length = name.byte_length()
-    var tail = String(name[byte = max(0, length - 11) : max(0, length - 5)])
-    if length >= 11 and tail == "_rels/" and name.endswith("rels"):
+    if bytes_match(
+        name.as_bytes(), length - 11, length - 5, "_rels/"
+    ) and name.endswith("rels"):
         return 0
     var rels_at = name.find("3D/_rels/")
     if rels_at >= 0 and length >= rels_at + 20 and name.endswith(".model.rels"):

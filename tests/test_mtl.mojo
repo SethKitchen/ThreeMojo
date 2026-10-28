@@ -448,5 +448,36 @@ def test_a_textured_cube_from_its_library_renders() raises:
     _ = renderer.render(second, assets, camera)
 
 
+def test_a_hash_inside_a_material_name_keeps_the_name() raises:
+    var assets = Assets()
+    var library = parse_mtl(
+        "newmtl Material#1 # red\nKd 1 0 0\nnewmtl Material#2\nKd 0 0 1\n",
+        "",
+        assets,
+    )
+    assert_equal(library.count(), 2)
+    assert_true(library.find("Material#1") >= 0)
+    assert_true(library.find("Material#2") >= 0)
+
+
+def test_a_default_material_for_vertex_colors_turns_them_on() raises:
+    # three.js keys a default material by its vertex colors too, so the
+    # colored object and the plain one under one name get two materials.
+    var model = parse_obj(
+        "o first\nv 0 0 0 1 0 0\nv 1 0 0 1 0 0\nv 0 1 0 1 0 0\nusemtl a\nf 1 2"
+        " 3\no b\nusemtl b\nf 1 2 3\no again\nusemtl a\nf 1 2 3\nv 0 0"
+        " 1\nv 1 0 1\nv 0 1 1\no plain\nusemtl a\nf 4 5 6\n"
+    )
+    var assets = Assets()
+    var library = MtlLibrary()
+    var ids = set_materials(model, library, assets)
+    var colored = assets.materials.get(ids[0][0])
+    assert_true(colored.vertex_colors)
+    assert_true(ids[2][0] == ids[0][0])
+    assert_false(ids[1][0] == ids[0][0])
+    assert_false(assets.materials.get(ids[3][0]).vertex_colors)
+    assert_false(ids[3][0] == ids[0][0])
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

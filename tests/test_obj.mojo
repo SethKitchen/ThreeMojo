@@ -12,7 +12,7 @@ and every way a file can be wrong is given to the parser and refused.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.buffer_geometry import NORMAL, POSITION, UV
+from core.buffer_geometry import COLOR, NORMAL, POSITION, UV
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from loaders.obj import ObjModel, parse_obj, read_obj
@@ -304,6 +304,39 @@ def test_a_coordinate_that_is_not_a_number_is_refused() raises:
 def test_a_face_with_too_few_corners_is_refused() raises:
     with assert_raises():
         _ = parse_obj(String("v 0 0 0\nv 1 0 0\nf 1 2\n"))
+
+
+def test_a_vertex_color_is_read_as_three_js_reads_it() raises:
+    # `v x y z r g b` is a position and an sRGB color. An object with a
+    # colored vertex gets a linear `color` attribute; a vertex that names
+    # no color is white in it.
+    var model = parse_obj(
+        "o first\nv 0 0 0 1 0 0\nv 1 0 0 0 0.5 0\nv 0 1 0\nf 1 2 3\nv 0 0"
+        " 1\nv 1 0"
+        " 1\nv 0 1 1\no plain\nf 4 5 6\n"
+    )
+    var colored = model.objects[0].take_geometry()
+    assert_true(colored.has_attribute(String(COLOR)))
+    ref colors = colored.attribute_view(String(COLOR))
+    assert_equal(colors.data[0], 1)
+    assert_equal(colors.data[1], 0)
+    assert_almost_equal(colors.data[4], 0.21404, atol=1e-4)
+    assert_equal(colors.data[6], 1)
+    assert_equal(colors.data[8], 1)
+    # The object whose corners name no color has no attribute.
+    assert_false(model.objects[1].take_geometry().has_attribute(String(COLOR)))
+
+
+def test_a_hash_inside_a_word_is_not_a_comment() raises:
+    # A comment starts at a `#` that starts the line or follows a space or
+    # a tab, so a material named with a `#` keeps its name, as in three.js.
+    var model = parse_obj(
+        "# a comment\nv 0 0 0\nv 1 0 0\nv 0 1 0 # after the data\nusemtl"
+        " Material#1\nf 1 2 3\t# after a tab\nusemtl Material#2\nf 1 2 3\n"
+    )
+    assert_equal(len(model.objects), 1)
+    assert_equal(model.objects[0].materials[0], "Material#1")
+    assert_equal(model.objects[0].materials[1], "Material#2")
 
 
 def test_a_corner_with_too_many_parts_is_refused() raises:

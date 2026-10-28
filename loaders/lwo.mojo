@@ -76,6 +76,7 @@ from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from loaders.gltf import decode_image
 from loaders.lwo_iff import LwoTree, LwoValue, parse_lwo_tree
+from loaders.utf8 import byte_slice
 from materials.material import (
     ADD_OPERATION,
     BACK_SIDE,
@@ -1395,8 +1396,8 @@ def lwo_model_name(url: String) -> String:
     if path.byte_length() == 0:
         # A path that starts with `Objects`: three.js splits it into its
         # characters and keeps the last.
-        var units = url.as_bytes()
-        rest = String(url[byte = len(units) - 1 :]) if len(units) > 0 else ""
+        var length = url.byte_length()
+        rest = byte_slice(url, length - 1, length)
     else:
         var parts = url.split(path)
         rest = String(parts[len(parts) - 1])

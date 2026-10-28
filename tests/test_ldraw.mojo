@@ -395,6 +395,30 @@ def test_a_file_three_js_cannot_read_is_refused() raises:
     assert_equal(count, 8)
 
 
+def test_a_file_that_places_itself_is_not_built_without_end() raises:
+    # three.js never finishes such a file. A part that places itself
+    # leaves that placement out, as a part that fails is left out.
+    var part = (
+        "0 FILE main.ldr\n1 16 0 0 0 1 0 0 0 1 0 0 0 1 loop.dat\n0 FILE"
+        " loop.dat\n0 !LDRAW_ORG Part\n3 16 0 0 0 1 0 0 0 1 0\n1 16 0 0 0 1"
+        " 0 0 0 1 0 0 0 1 loop.dat\n"
+    )
+    var scene = Scene()
+    var assets = Assets()
+    var model = parse_ldraw(part, LDrawLoader(""))
+    load_ldraw(model, scene, assets)
+    assert_equal(len(scene.meshes), 1)
+    # A primitive is merged into what places it, so one that places itself
+    # cannot be left out, and is refused.
+    var primitive = (
+        "0 FILE main.ldr\n1 16 0 0 0 1 0 0 0 1 0 0 0 1 loop.dat\n0 FILE"
+        " loop.dat\n0 !LDRAW_ORG Primitive\n3 16 0 0 0 1 0 0 0 1 0\n1 16 0 0"
+        " 0 1 0 0 0 1 0 0 0 1 loop.dat\n"
+    )
+    with assert_raises(contains="places itself"):
+        _ = parse_ldraw(primitive, LDrawLoader(""))
+
+
 def test_parse_int_and_color_styles_are_javascript_s() raises:
     assert_equal(js_parse_int(" 	+0x1F"), 31)
     assert_equal(js_parse_int("\n\r-12abc"), -12)

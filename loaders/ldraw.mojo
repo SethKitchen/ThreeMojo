@@ -639,6 +639,9 @@ struct LDrawBuilder(Movable):
     var model: LDrawModel
     var cache_names: List[String]
     var cache_roots: List[Int]
+    var building: List[String]
+    """The files being built, outermost first, in lower case. A file that
+    places one of them would place itself without end."""
 
     def __init__(out self, var loader: LDrawLoader):
         """Start building.
@@ -649,6 +652,22 @@ struct LDrawBuilder(Movable):
         self.model = LDrawModel(loader^)
         self.cache_names = List[String]()
         self.cache_roots = List[Int]()
+        self.building = List[String]()
+
+    def enter(mut self, name: String) raises:
+        """Start building a file.
+
+        Args:
+            name: The file.
+
+        Raises:
+            Error: If the file is already being built, so it places itself.
+        """
+        var key = name.lower()
+        for open in self.building:
+            if open == key:
+                raise Error("LDraw: a file places itself: " + name)
+        self.building.append(key^)
 
     def add(mut self, var node: LDrawNode) -> Int:
         """Keep a node.
@@ -797,19 +816,23 @@ struct LDrawBuilder(Movable):
             ].type
             if not is_primitive_type(type):
                 # three.js warns and leaves out a part that fails.
+                var depth = len(self.building)
                 var group: Int
                 try:
                     group = self.load_model(name)
                 except:
                     group = -1
+                    self.building.resize(depth, String())
                 built.append(group)
                 merged.append(LDrawInfo())
                 primitive_at.append(False)
             else:
                 var primitive = self.model.loader.data(name)
+                self.enter(name)
                 var group = self.process(
                     primitive, info.subobjects[k].copy(), face_codes
                 )
+                _ = self.building.pop()
                 built.append(group)
                 merged.append(primitive^)
                 primitive_at.append(True)
@@ -946,7 +969,8 @@ struct LDrawBuilder(Movable):
             The copy.
 
         Raises:
-            Error: If the file or one it places is not found, or refused.
+            Error: If the file or one it places is not found, or refused,
+                or the file places itself.
         """
         var key = name.lower()
         for k in range(len(self.cache_names)):
@@ -954,7 +978,9 @@ struct LDrawBuilder(Movable):
                 return self.clone(self.cache_roots[k])
         self.model.loader.ensure_loaded(name)
         var info = self.model.loader.data(name)
+        self.enter(name)
         var group = self.process_into_mesh(info)
+        _ = self.building.pop()
         if is_part_type(info.type):
             self.cache_names.append(key)
             self.cache_roots.append(group)

@@ -1796,6 +1796,10 @@ struct _Loader(Movable):
                     counts = _ints(self.document.text(vcount))
                 var sum = 0
                 for count in counts:
+                    if count < 0:
+                        raise Error(
+                            "Collada: a <polylist>'s vcount is negative"
+                        )
                     sum += count
                 if sum != total:
                     raise Error(

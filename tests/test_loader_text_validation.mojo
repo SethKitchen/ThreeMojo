@@ -4,7 +4,7 @@
 """External loader bytes must be valid UTF-8 before they become strings."""
 
 from core.binary import append_little_endian_u32
-from std.testing import TestSuite, assert_equal, assert_raises
+from std.testing import TestSuite, assert_equal, assert_false, assert_raises
 from std.pathlib import Path
 from core.assets import Assets
 from core.scene import Scene
@@ -24,7 +24,13 @@ from loaders.draco import _metadata_name, decode_draco
 from loaders.draco_buffer import DracoBuffer
 from loaders.vtk import parse_vtk
 from loaders.ultrahdr import parse_ultrahdr, XMP_NAMESPACE
-from loaders.utf8 import leading_utf8_bom
+from loaders.lwo import lwo_model_name
+from loaders.pdb import parse_pdb
+from loaders.svg import parse_svg
+from loaders.three_mf import _linear, parse_3mf
+from loaders.usda_parser import attribute_match
+from loaders.utf8 import byte_slice, char_start, leading_utf8_bom
+from loaders.zip import ZIP_STORED, ZipEntry, zip_archive
 
 
 def test_only_the_complete_utf8_byte_order_mark_is_skipped() raises:
@@ -86,6 +92,90 @@ def glb(var text: List[UInt8]) -> List[UInt8]:
     le32(out, 0x4E4F534A)
     out.extend(text^)
     return out^
+
+
+def test_a_cut_inside_a_character_moves_back_to_its_start() raises:
+    # `a` is one byte, `é` two and `€` three: they start at 0, 1 and 3.
+    var text = String("aé€")
+    assert_equal(char_start(text, -1), 0)
+    assert_equal(char_start(text, 0), 0)
+    assert_equal(char_start(text, 2), 1)
+    assert_equal(char_start(text, 5), 3)
+    assert_equal(char_start(text, 6), 6)
+    assert_equal(char_start(text, 9), 6)
+    assert_equal(byte_slice(text, 0, 2), "a")
+    assert_equal(byte_slice(text, 2, 6), "é€")
+    assert_equal(byte_slice(text, 4, 5), "")
+    # Bytes that are not UTF-8 stop at the first byte.
+    var stray = String(unsafe_from_utf8=[UInt8(0x80), UInt8(0x80)])
+    assert_equal(char_start(stray, 1), 0)
+
+
+def _entry(name: String, text: String) -> ZipEntry:
+    var data = List[UInt8]()
+    for byte in text.as_bytes():
+        data.append(byte)
+    return ZipEntry(name, ZIP_STORED, data^)
+
+
+def test_text_cut_at_a_fixed_byte_never_splits_a_character() raises:
+    # Each reader cuts at a fixed byte, as three.js cuts at a fixed
+    # character. A character across the cut is read or refused, and the
+    # process goes on.
+    var mark = "é"
+    var atom = (
+        "ATOM      1  N   ALA A   1   "
+        + mark
+        + "  11.104   6.134  -6.504  1.00  0.00           N\n"
+    )
+    assert_equal(len(parse_pdb(atom).atoms), 1)
+    with assert_raises(contains="names no element"):
+        _ = parse_svg(
+            '<svg xmlns="http://www.w3.org/2000/svg"'
+            ' xmlns:xlink="http://www.w3.org/1999/xlink"><use'
+            ' xlink:href="é"/></svg>'
+        )
+    assert_equal(lwo_model_name("Objects€"), "€")
+    assert_equal(lwo_model_name(""), "")
+    assert_false(Bool(attribute_match("int€ x")))
+    with assert_raises():
+        _ = _linear("#FF000é")
+    # A part the model never uses may have any name.
+    var entries = List[ZipEntry]()
+    entries.append(
+        _entry(
+            "_rels/.rels",
+            (
+                '<Relationships><Relationship Target="/3D/3dmodel.model"'
+                ' Id="r"/></Relationships>'
+            ),
+        )
+    )
+    entries.append(
+        _entry(
+            "3D/3dmodel.model",
+            (
+                '<model unit="millimeter"><resources><object id="1"><mesh>'
+                '<vertices><vertex x="0" y="0" z="0"/><vertex x="1" y="0"'
+                ' z="0"/><vertex x="0" y="1" z="0"/></vertices><triangles>'
+                '<triangle v1="0" v2="1" v3="2"/></triangles></mesh></object>'
+                '</resources><build><item objectid="1"/></build></model>'
+            ),
+        )
+    )
+    entries.append(_entry("3D/Textures/é.png", "unused"))
+    var scene = Scene()
+    var assets = Assets()
+    assert_equal(parse_3mf(zip_archive(entries), scene, assets).mesh_count, 1)
+
+
+def test_a_splat_ply_shorter_than_its_magic_is_refused() raises:
+    for text in [String(""), "pl", "abc"]:
+        var bytes = List[UInt8]()
+        for byte in text.as_bytes():
+            bytes.append(byte)
+        with assert_raises(contains="missing PLY header"):
+            _ = _header_lines(bytes)
 
 
 def test_glb_validates_json_utf8() raises:

@@ -44,6 +44,7 @@ from core.gaussian_splat_utils import (
     write_color_bytes_from_sh0,
     write_covariance,
 )
+from loaders.bytes import bytes_match
 from loaders.ply import PlyOptions, parse_ply
 from std.math import exp
 from std.pathlib import Path
@@ -145,7 +146,7 @@ def _header_lines(bytes: List[UInt8]) raises -> List[String]:
     """
     var scan = min(len(bytes), PLY_HEADER_SCAN)
     var end = _find(bytes, "end_header", 3, scan)
-    if _find(bytes, "ply", 0, 3) != 0 or end < 0:
+    if not bytes_match(bytes, 0, len(bytes), "ply") or end < 0:
         raise Error("Gaussian splat PLY: missing PLY header")
     var lines = List[String]()
     var line = List[UInt8]()

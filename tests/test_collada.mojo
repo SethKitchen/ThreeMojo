@@ -1274,6 +1274,12 @@ def test_refused() raises:
             ' offset="0"/><vcount>4</vcount><p>0 1 2</p></polylist>'
         ),
         (
+            # The counts sum to the corners, but a negative one would make
+            # the polygon before it read past them.
+            '<polylist><input semantic="VERTEX" source="#v"'
+            ' offset="0"/><vcount>5 -2</vcount><p>0 1 2</p></polylist>'
+        ),
+        (
             '<polylist><input semantic="VERTEX" source="#v" offset="0"/><p>0 1'
             " 2</p></polylist>"
         ),
