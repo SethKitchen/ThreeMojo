@@ -64,7 +64,29 @@ def __getattr__(name):
         return EXPECTED_INTERVAL
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
+_GATED_MOMENT = None
+
+
 def verify_text(module, interval, geometry, trig):
+    """Check one moment-producer tuple once for the same texts.
+
+    Args:
+        module: The moment proof source.
+        interval: The interval source.
+        geometry: The geometry source.
+        trig: The trig source.
+
+    Returns:
+        The parsed pass record.
+
+    Raises:
+        ValueError: A token digest or a stored bound changed.
+    """
+    global _GATED_MOMENT
+    key = (module, interval, geometry, trig)
+    cached = _GATED_MOMENT
+    if cached is not None and cached[0] == key:
+        return cached[1]
     import json
     import os
     import subprocess
@@ -91,7 +113,9 @@ def verify_text(module, interval, geometry, trig):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _GATED_MOMENT = (key, parsed)
+    return parsed
 
 def verify(root, *, _operation=None):
     _ensure_sources()

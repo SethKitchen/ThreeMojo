@@ -74,8 +74,16 @@ def _carla_package():
     return _CARLA_PACKAGE
 
 
+_GATED_HEADING = None
+
+
 def _checked_heading(fresh, consumers, eligibility):
-    """Check the heading graph, then return the correspondence result."""
+    """Check the heading graph, then return the correspondence result.
+
+    The same texts are not checked again. A changed text is checked again.
+    A failed check is not kept.
+    """
+    global _GATED_HEADING
     import os
     import subprocess
     import tempfile
@@ -90,6 +98,9 @@ def _checked_heading(fresh, consumers, eligibility):
         ],
         'eligibility': eligibility,
     }, separators=(',', ':'))
+    cached = _GATED_HEADING
+    if cached is not None and cached[0] == payload:
+        return cached[1]
     with tempfile.TemporaryDirectory(prefix='heading-checked-') as directory:
         path = Path(directory) / 'payload.json'
         path.write_text(payload)
@@ -102,7 +113,9 @@ def _checked_heading(fresh, consumers, eligibility):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _GATED_HEADING = (payload, parsed)
+    return parsed
 
 
 _HEADING_PLAN = None

@@ -462,8 +462,16 @@ def predecessor_pins(root, filename):
     payload = followup.predecessor_pins(root, filename)
     return _pin_predecessor(payload, record, filename)
 
+_GATED_MATCHES = None
+
+
 def _matches_then_dispatch(pairs):
-    """Compare the successor digests, then read the dispatch migration."""
+    """Compare the successor digests, then read the dispatch migration.
+
+    The same digests are not compared again. A changed digest is compared
+    again. A failed comparison is not kept.
+    """
+    global _GATED_MATCHES
     if not pairs:
         return {'flags': [], 'matched': True}
     import os
@@ -473,6 +481,9 @@ def _matches_then_dispatch(pairs):
     payload = json.dumps([
         {'actual': actual, 'expected': expected} for actual, expected in pairs
     ], separators=(',', ':'))
+    cached = _GATED_MATCHES
+    if cached is not None and cached[0] == payload:
+        return cached[1]
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='match-migration-') as directory:
@@ -487,7 +498,9 @@ def _matches_then_dispatch(pairs):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _GATED_MATCHES = (payload, parsed)
+    return parsed
 
 
 def verify(root, *, _operation=None):

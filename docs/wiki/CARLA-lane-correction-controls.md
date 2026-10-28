@@ -25,6 +25,11 @@ A failed check is not kept.
 
 It keeps the moment proof path and the interval path.
 
+It reuses that moment-producer check when the same texts are read again.
+The proof file, the interval file, the geometry file, and the trig file are still read.
+A changed text is checked again.
+A failed check is not kept.
+
 It keeps the moment pin file, the stored table, and the word count.
 
 It reads the moment check plan before the pin file, the table, and the word count in one check.
@@ -226,6 +231,11 @@ That pair check also covers the component gate for those same bytes.
 It compares every coverage-invariant successor digest in one check.
 
 It compares those successor digests before the dispatch migration record in one check.
+
+It reuses that successor comparison when the same digests are read again.
+The source files are still read.
+A changed digest is checked again.
+A failed check is not kept.
 
 It checks every coverage-invariant predecessor in one check.
 
@@ -532,6 +542,11 @@ It compares the fresh heading graph with each stored consumer.
 It reads the package path and the heading consumers in one check.
 
 It checks the fresh heading graph and returns the consumer count in one check.
+
+It reuses that heading check when the same texts are read again.
+The bounds file, the consumer files, and the proof file are still read.
+A changed text is checked again.
+A failed check is not kept.
 
 It returns the heading consumer count after that comparison.
 

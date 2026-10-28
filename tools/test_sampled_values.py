@@ -1649,6 +1649,112 @@ class ProductionScanTests(unittest.TestCase):
         )
 
 
+class RepeatedProducerCacheTests(unittest.TestCase):
+    def test_the_same_producer_texts_skip_the_second_check(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import coverage_invariant_contracts as invariant
+        from tools.carla_lane_oracle import heading_correspondence as heading
+        from tools.carla_lane_oracle import moment_finiteness_contracts as moment
+        saved_moment = moment._GATED_MOMENT
+        saved_sources = moment._SOURCES
+        saved_heading = heading._GATED_HEADING
+        saved_plan = heading._HEADING_PLAN
+        saved_matches = invariant._GATED_MATCHES
+        reads = []
+
+        def read_text(self, *args, **kwargs):
+            reads.append(self.name)
+            return 'text-' + self.name
+
+        def passthrough(root, path, text, _operation=None, **kwargs):
+            return text
+
+        try:
+            moment._GATED_MOMENT = None
+            moment._SOURCES = {
+                'module': 'extensions/carla/spiral_moment_proof.mojo',
+                'interval': 'extensions/carla/curve_interval.mojo',
+                'module_token': 'aa',
+                'interval_token': 'bb',
+            }
+            heading._GATED_HEADING = None
+            heading._HEADING_PLAN = {
+                'package': 'extensions/carla',
+                'consumers': {'curve_trig.mojo': 'consumer'},
+            }
+            invariant._GATED_MATCHES = None
+            ok = Mock(returncode=0, stdout='{"status":"PASS","flags":["true"],"matched":true}', stderr='')
+            with patch('subprocess.run', return_value=ok) as run:
+                self.assertEqual(
+                    moment.verify_text('module', 'interval', 'geometry', 'trig'),
+                    {'status': 'PASS', 'flags': ['true'], 'matched': True},
+                )
+                moment.verify_text('module', 'interval', 'geometry', 'trig')
+                self.assertEqual(run.call_count, 1)
+                moment.verify_text('module', 'interval', 'geometry', 'other')
+                self.assertEqual(run.call_count, 2)
+                heading._checked_heading('fresh', [('file.mojo', 'name', 'text')], 'proof')
+                heading._checked_heading('fresh', [('file.mojo', 'name', 'text')], 'proof')
+                self.assertEqual(run.call_count, 3)
+                heading._checked_heading('fresh', [('file.mojo', 'name', 'other')], 'proof')
+                self.assertEqual(run.call_count, 4)
+                pairs = [('aa', 'bb')]
+                self.assertTrue(invariant._matches_then_dispatch(pairs)['matched'])
+                invariant._matches_then_dispatch(pairs)
+                self.assertEqual(run.call_count, 5)
+                invariant._matches_then_dispatch([('aa', 'cc')])
+                self.assertEqual(run.call_count, 6)
+            failed = Mock(returncode=1, stdout='', stderr='producer changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'producer changed'):
+                    moment.verify_text('bad', 'bad', 'bad', 'bad')
+                with self.assertRaisesRegex(ValueError, 'producer changed'):
+                    moment.verify_text('bad', 'bad', 'bad', 'bad')
+                with self.assertRaisesRegex(ValueError, 'producer changed'):
+                    heading._checked_heading('bad', [], 'bad')
+                with self.assertRaisesRegex(ValueError, 'producer changed'):
+                    heading._checked_heading('bad', [], 'bad')
+                with self.assertRaisesRegex(ValueError, 'producer changed'):
+                    invariant._matches_then_dispatch([('bad', 'bad')])
+                with self.assertRaisesRegex(ValueError, 'producer changed'):
+                    invariant._matches_then_dispatch([('bad', 'bad')])
+                self.assertEqual(run.call_count, 6)
+            with patch('subprocess.run', return_value=ok) as run, patch.object(
+                Path, 'read_text', read_text
+            ):
+                moment.verify(Path('moment-root'))
+                moment.verify(Path('moment-root'))
+                self.assertEqual(run.call_count, 1)
+                self.assertEqual(
+                    reads,
+                    [
+                        'spiral_moment_proof.mojo',
+                        'curve_interval.mojo',
+                        'geometry.mojo',
+                        'curve_trig.mojo',
+                    ] * 2,
+                )
+            reads.clear()
+            with patch('subprocess.run', return_value=ok) as run, patch.object(
+                Path, 'read_text', read_text
+            ), patch.object(
+                heading._typed_source, 'historical_text', passthrough
+            ), patch.object(heading.source, '_observe_text', passthrough):
+                heading.verify(Path('heading-root'))
+                heading.verify(Path('heading-root'))
+                self.assertEqual(run.call_count, 1)
+                self.assertEqual(
+                    reads,
+                    ['curve_bounds.mojo', 'curve_trig.mojo', 'spiral_moment_proof.mojo'] * 2,
+                )
+        finally:
+            moment._GATED_MOMENT = saved_moment
+            moment._SOURCES = saved_sources
+            heading._GATED_HEADING = saved_heading
+            heading._HEADING_PLAN = saved_plan
+            invariant._GATED_MATCHES = saved_matches
+
+
 class DispatchPremiseCacheTests(unittest.TestCase):
     def test_the_same_dispatch_premises_skip_the_second_check(self):
         from unittest.mock import Mock, patch
