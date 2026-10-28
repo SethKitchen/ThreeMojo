@@ -483,5 +483,34 @@ class PlainReferenceGraphTests(unittest.TestCase):
         self.assertNotIn('curve_bounds.mojo', str(caught.exception))
 
 
+class CurrentDispatchTokenTests(unittest.TestCase):
+    def test_current_sources_skip_the_second_token_list(self):
+        from tools.carla_lane_oracle import curve_support_dispatch_contracts as dispatch
+        calls = []
+        original = dispatch._gate_tokens
+        dispatch._gate_tokens = lambda pairs: calls.append(pairs)
+        try:
+            dispatch._complete_tokens(
+                [('a.mojo', {'after_token_sha256': 'aa'})], ['text'], True)
+        finally:
+            dispatch._gate_tokens = original
+        self.assertEqual(calls, [])
+
+    def test_a_restore_still_checks_the_token_list(self):
+        from tools.carla_lane_oracle import curve_support_dispatch_contracts as dispatch
+        calls = []
+        original_gate = dispatch._gate_tokens
+        original_labels = dispatch._dispatch_labels
+        dispatch._gate_tokens = lambda pairs: calls.append(pairs)
+        dispatch._dispatch_labels = lambda: {'complete': 'complete '}
+        try:
+            dispatch._complete_tokens(
+                [('a.mojo', {'after_token_sha256': 'aa'})], ['text'], False)
+        finally:
+            dispatch._gate_tokens = original_gate
+            dispatch._dispatch_labels = original_labels
+        self.assertEqual(calls, [[('text', 'aa', 'complete a.mojo')]])
+
+
 if __name__ == '__main__':
     unittest.main()

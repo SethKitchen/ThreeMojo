@@ -240,6 +240,8 @@ It reuses those dispatch labels after the source choices.
 
 It checks those complete tokens after the current choices in one check.
 
+It keeps the current sources when that token list is already checked.
+
 It keeps the dispatch contract prefix.
 
 `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the trig and geometry stored words, and the successor tokens.

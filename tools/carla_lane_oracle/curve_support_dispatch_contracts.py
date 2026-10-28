@@ -759,21 +759,34 @@ def verify_premises(root, *, _operation=None, _then_grouped_identity=False):
     return record
 
 
+def _complete_tokens(source_items, chosen, tokens_done):
+    """Check complete tokens only when the choice check did not.
+
+    Args:
+        source_items: The record source rows.
+        chosen: The source text chosen for each row.
+        tokens_done: Whether that choice already checked the tokens.
+    """
+    if tokens_done or not source_items:
+        return
+    labels = _dispatch_labels()
+    pairs = []
+    for (path, item), text in zip(source_items, chosen):
+        pairs.append((text, item['after_token_sha256'], labels['complete'] + path))
+    if pairs:
+        _gate_tokens(pairs)
+
+
 def verify(root, *, _operation=None, _then_grouped_identity=False):
     if _operation is not None:
         _check_operation(root, _operation)
     record = read_record(root)
     operation_args = {} if _operation is None else {'_operation': _operation}
-    pairs = []
     source_items = list(record['sources'].items())
     chosen, tokens_done = reviewed_sources(root, [
         (path, item['after_token_sha256']) for path, item in source_items
     ], check_tokens=True, **operation_args)
-    labels = _dispatch_labels()
-    for (path, item), text in zip(source_items, chosen):
-        pairs.append((text, item['after_token_sha256'], labels['complete'] + path))
-    if pairs and not tokens_done:
-        _gate_tokens(pairs)
+    _complete_tokens(source_items, chosen, tokens_done)
     verify_premises(
         root,
         _then_grouped_identity=_then_grouped_identity,
