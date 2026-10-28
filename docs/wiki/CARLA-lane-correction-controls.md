@@ -268,6 +268,8 @@ It reads the decimal literals in one stored array or scalar declaration.
 
 It rounds one stored decimal literal to a binary64 word.
 
+It rounds those decimal literals and reads them as integers in one check.
+
 It rounds one plus each stored node before the moment rows.
 
 It reads the exact fraction of each stored binary64 word.

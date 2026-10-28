@@ -417,7 +417,7 @@ def decimal_words(literals):
         path = Path(directory) / 'literals.json'
         path.write_text(payload)
         result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_stored_words',
              '--decimal', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
@@ -428,7 +428,7 @@ def decimal_words(literals):
         if message.startswith(prefix):
             message = message[len(prefix):]
         raise ValueError(message)
-    return hex_integers(json.loads(result.stdout))
+    return [int(item) for item in json.loads(result.stdout)]
 
 
 def hex_words(words):

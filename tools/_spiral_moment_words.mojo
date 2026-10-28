@@ -678,6 +678,34 @@ def parsed_table_integers(payload: String) raises -> String:
     )
 
 
+def decimal_integers_json(payload: String) raises -> String:
+    """Round decimal literals, then read those words as integers.
+
+    Args:
+        payload: A JSON list of decimal literals or integer fractions.
+
+    Returns:
+        A JSON list of unsigned decimal binary64 encodings. `-0.0` keeps
+        its sign.
+
+    Raises:
+        Error: A literal is not finite, or a rounded word is not
+            hexadecimal. Each literal is rounded before the words are
+            read as integers.
+    """
+    var doc = PyJson.parse(payload)
+    var count = doc.length(doc.root)
+    var hexed = PyJson()
+    var rows = hexed.new_list()
+    var index = 0
+    while index < count:
+        var token = doc.text(doc.item(doc.root, index))
+        hexed.append(rows, hexed.new_str(_hex_word(decimal_word(token))))
+        index += 1
+    hexed.root = rows
+    return hex_integers_json(hexed.dumps())
+
+
 def hex_words_json(payload: String) raises -> String:
     """Return the `0x` spelling of each decimal word.
 

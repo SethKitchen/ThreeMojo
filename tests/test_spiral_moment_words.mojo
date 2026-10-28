@@ -15,6 +15,7 @@ from tools._spiral_moment_words import (
     MAX_FINITE,
     SIGN,
     bracket,
+    decimal_integers_json,
     decimal_word,
     fraction_of_word,
     fraction_texts,
@@ -172,6 +173,21 @@ def test_one_table_word_is_read_as_an_integer() raises:
         + "]\n"
     )
     var result = PyJson.parse(parsed_table_integers(_table_payload(source, 1)))
+    assert_equal(result.length(result.root), 1)
+    assert_equal(
+        result.text(result.item(result.root, 0)), "4607182418800017408"
+    )
+
+
+def test_a_bad_literal_fails_before_the_integer_read() raises:
+    """A malformed literal fails before the rounded words are read."""
+    with assert_raises(contains="unsupported decimal word"):
+        _ = decimal_integers_json('["nope"]')
+
+
+def test_one_decimal_literal_is_read_as_an_integer() raises:
+    """`1.0` rounds to its binary64 integer."""
+    var result = PyJson.parse(decimal_integers_json('["1.0"]'))
     assert_equal(result.length(result.root), 1)
     assert_equal(
         result.text(result.item(result.root, 0)), "4607182418800017408"
