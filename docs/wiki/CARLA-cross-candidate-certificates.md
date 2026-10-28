@@ -117,6 +117,8 @@ It keeps the sampled projection steps and their comparison texts.
 
 It reads those projection steps and the copied helpers in one check.
 
+It reads the sampled copy plan before those projection steps in one check.
+
 It keeps the sampled reference names and the closure groups.
 
 It keeps the sampled refusal messages.

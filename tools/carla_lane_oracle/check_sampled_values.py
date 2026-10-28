@@ -587,9 +587,12 @@ def _recipe_and_batch(bounds, trig):
     return json.loads(result.stdout)
 
 
-def _project_sampled(bounds, trig, texts, names, copies):
+def _project_sampled(bounds, trig, texts):
     """Project the reviewed helpers, using Python only for the syntax texts."""
     checked = _recipe_and_batch(bounds, trig)
+    plan = checked['plan']
+    names = plan['names']
+    copies = plan['copies']
     recipe = checked['recipe']
     record = checked['record']
     expected = record['helpers']
@@ -704,9 +707,7 @@ def verify(root):
         except ValueError as error:
             raise CheckError(str(error)) from error
         _sampled_text('--value-imports', target)
-        plan = _copy_plan()
-        expected = _project_sampled(
-            bounds, trig, texts, plan['names'], plan['copies'])
+        expected = _project_sampled(bounds, trig, texts)
         _sampled_text('--top-level', target, ','.join(sorted(expected)))
         for name, source in expected.items():
             # Decorators stay on the copied text. The syntax tree is the
