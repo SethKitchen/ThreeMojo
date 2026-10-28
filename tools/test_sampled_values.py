@@ -1374,6 +1374,38 @@ class RestoredScopeTests(unittest.TestCase):
                 )
 
 
+class FrozenDigestTokenCacheTests(unittest.TestCase):
+    def test_the_same_guard_digest_and_token_skip_the_second_check(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import frozen_arc_producer_contracts as frozen
+        saved = set(frozen._GATED_DIGEST_TOKEN)
+        try:
+            frozen._GATED_DIGEST_TOKEN.clear()
+            ok = Mock(returncode=0, stdout='', stderr='')
+            with patch('subprocess.run', return_value=ok) as run:
+                frozen._digest_and_token(b'pin', 'aa', 'def f():\n    return 1\n', 'bb')
+                frozen._digest_and_token(b'pin', 'aa', 'def f():\n    return 1\n', 'bb')
+                self.assertEqual(run.call_count, 1)
+                frozen._digest_and_token(b'pin', 'aa', 'def f():\n    return 2\n', 'bb')
+                self.assertEqual(run.call_count, 2)
+                frozen._digest_and_token(b'other', 'aa', 'def f():\n    return 1\n', 'bb')
+                self.assertEqual(run.call_count, 3)
+            failed = Mock(returncode=1, stdout='', stderr='guard digest changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'guard digest changed'):
+                    frozen._digest_and_token(b'bad', 'aa', 'bad', 'bb')
+                self.assertEqual(run.call_count, 1)
+                with self.assertRaisesRegex(ValueError, 'guard digest changed'):
+                    frozen._digest_and_token(b'bad', 'aa', 'bad', 'bb')
+                self.assertEqual(run.call_count, 2)
+            with patch('subprocess.run', return_value=ok) as run:
+                frozen._digest_and_token(b'pin', 'aa', 'def f():\n    return 1\n', 'bb')
+                self.assertEqual(run.call_count, 0)
+        finally:
+            frozen._GATED_DIGEST_TOKEN.clear()
+            frozen._GATED_DIGEST_TOKEN.update(saved)
+
+
 class DependencyWordCacheTests(unittest.TestCase):
     def test_an_accepted_dependency_word_is_not_checked_again(self):
         import json

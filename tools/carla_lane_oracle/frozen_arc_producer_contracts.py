@@ -185,8 +185,20 @@ def _gate(migration, previous=None):
         raise ValueError(message)
 
 
+_GATED_DIGEST_TOKEN = set()
+
+
 def _digest_and_token(payload, digest, text, token):
-    """Read the guard label, then check the pin digest and the token."""
+    """Read the guard label, then check the pin digest and the token.
+
+    The same bytes are not checked again. A changed byte is checked again.
+    A failed check is not kept.
+    """
+    if type(payload) is not bytes:
+        payload = bytes(payload)
+    key = (payload, digest, text, token)
+    if key in _GATED_DIGEST_TOKEN:
+        return
     import json
     import os
     import subprocess
@@ -212,6 +224,7 @@ def _digest_and_token(payload, digest, text, token):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+    _GATED_DIGEST_TOKEN.add(key)
 
 
 def _gate_token(text, expected):

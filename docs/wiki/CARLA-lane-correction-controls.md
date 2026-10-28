@@ -169,6 +169,11 @@ It checks the guard pin digest before the frozen ARC successor token in one chec
 
 It reads the guard label before that pin digest in one check.
 
+It reuses that digest and token check when the same bytes are read again.
+The frozen ARC source is still read.
+A changed byte is checked again.
+A failed check is not kept.
+
 It keeps the frozen runtime-pin labels and the public successor message.
 
 It keeps the reviewed cleanup record path.
