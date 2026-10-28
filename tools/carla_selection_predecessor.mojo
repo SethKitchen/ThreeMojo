@@ -7,6 +7,9 @@
 
     carla_selection_predecessor PATH
     carla_selection_predecessor --then-grouped PATH GEOMETRY
+    carla_selection_predecessor --has-module DIR
+    carla_selection_predecessor --from-record DIR
+    carla_selection_predecessor --from-record-grouped DIR
 
 `PATH` is the predecessor JSON. The program prints the restored module.
 `--then-grouped` checks the grouped table after that module is restored.
@@ -16,7 +19,11 @@
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._selection_predecessor import selection_predecessor
+from tools._selection_predecessor import (
+    selection_from_record,
+    selection_predecessor,
+    selection_record_path,
+)
 from tools.carla_grouped_gate import grouped_table
 
 
@@ -44,7 +51,8 @@ def _usage():
     print(
         (
             "usage: carla_selection_predecessor PATH | --then-grouped PATH"
-            " GEOMETRY"
+            " GEOMETRY | --has-module DIR | --from-record DIR"
+            " | --from-record-grouped DIR"
         ),
         file=stderr,
     )
@@ -70,6 +78,37 @@ def main() raises:
                 ),
                 end="",
             )
+            return
+        if len(arguments) == 3 and arguments[1] == "--has-module":
+            var folder = arguments[2]
+            if not folder.endswith("/"):
+                folder += "/"
+            selection_record_path(
+                Path(folder + "record.json").read_text(),
+                Path(folder + "path.txt").read_text(),
+            )
+            return
+        if len(arguments) == 3 and (
+            arguments[1] == "--from-record"
+            or arguments[1] == "--from-record-grouped"
+        ):
+            var folder = arguments[2]
+            if not folder.endswith("/"):
+                folder += "/"
+            var restored = selection_from_record(
+                Path(folder + "record.json").read_text(),
+                Path(folder + "path.txt").read_text(),
+                Path(folder + "module.mojo").read_text(),
+            )
+            if arguments[1] == "--from-record-grouped":
+                print(
+                    grouped_table(
+                        restored, Path(folder + "geometry.mojo").read_text()
+                    ),
+                    end="",
+                )
+            else:
+                print(restored, end="")
             return
     except error:
         print(String(error), file=stderr)

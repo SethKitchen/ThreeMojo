@@ -18,7 +18,7 @@ from tests._python_tokens import (
 from tools._moment_guards import require_member, require_name_set
 from tools._python_json import MISSING, PyJson
 from tools._roundoff_name import roundoff_envelope_name
-from tools.carla_selection_record_gate import selection_restored
+from tools.carla_selection_record_gate import selection_record, selection_restored
 
 
 def _copy_strings(
@@ -156,3 +156,111 @@ def selection_predecessor(payload: String) raises -> String:
     )
     selection_restored(restored, doc.text(doc.at(doc.root, "token")))
     return restored
+
+
+def _selection_module(record: String, path: String) raises -> Int:
+    """Return the record entry for `path`.
+
+    Args:
+        record: The selection predecessor record.
+        path: The producer path.
+
+    Returns:
+        The JSON node for that module. The parsed document is not returned;
+        the caller parses `record` again.
+
+    Raises:
+        Error: The record digest changed, or `path` is not in the record.
+            The digest is checked before the path.
+    """
+    selection_record(record.as_bytes())
+    var doc = PyJson.parse(record)
+    var modules = doc.at(doc.root, "modules")
+    var index = 0
+    var count = doc.length(modules)
+    while index < count:
+        if doc.key(modules, index) == path:
+            return modules
+        index += 1
+    raise Error("KeyError: " + path)
+
+
+def selection_record_path(record: String, path: String) raises:
+    """Require `path` to be in the selection record.
+
+    Args:
+        record: The selection predecessor record.
+        path: The producer path.
+
+    Raises:
+        Error: The record digest changed, or `path` is not in the record.
+            The digest is checked before the path.
+    """
+    _ = _selection_module(record, path)
+
+
+def selection_from_record(record: String, path: String, text: String) raises -> String:
+    """Restore one producer from the selection record.
+
+    Args:
+        record: The selection predecessor record.
+        path: The producer path.
+        text: The live producer source.
+
+    Returns:
+        The producer text after the recorded function replaces the live one.
+
+    Raises:
+        Error: The record digest changed, `path` is absent, the declaration
+            changed, or the restored token changed. The digest is checked
+            before the path.
+    """
+    _ = _selection_module(record, path)
+    var doc = PyJson.parse(record)
+    var modules = doc.at(doc.root, "modules")
+    var item = doc.at(modules, path)
+    var payload = PyJson()
+    var root = payload.new_dict()
+    payload.set(root, "path", payload.new_str(path))
+    var names = payload.new_list()
+    payload.append(
+        names,
+        payload.new_str("extensions/carla/spiral_grouped_roundoff_proof.mojo"),
+    )
+    payload.append(
+        names, payload.new_str("extensions/carla/spiral_roundoff_proof.mojo")
+    )
+    payload.set(root, "names", names)
+    var record_names = payload.new_list()
+    var index = 0
+    var count = doc.length(modules)
+    while index < count:
+        payload.append(record_names, payload.new_str(doc.key(modules, index)))
+        index += 1
+    payload.set(root, "record_names", record_names)
+    payload.set(
+        root, "message", payload.new_str("Wrong selection predecessor module")
+    )
+    payload.set(
+        root,
+        "body_message",
+        payload.new_str("Selection complete successor body changed"),
+    )
+    payload.set(root, "text", payload.new_str(text))
+    payload.set(
+        root,
+        "after",
+        payload.new_str(doc.text(doc.at(item, "after_complete_function"))),
+    )
+    payload.set(
+        root,
+        "before",
+        payload.new_str(doc.text(doc.at(item, "before_complete_function"))),
+    )
+    payload.set(
+        root,
+        "token",
+        payload.new_str(doc.text(doc.at(item, "before_token_sha256"))),
+    )
+    payload.root = root
+    return selection_predecessor(payload.dumps())

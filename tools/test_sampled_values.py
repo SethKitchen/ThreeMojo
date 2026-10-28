@@ -2813,6 +2813,21 @@ class InvariantRecordGateTests(unittest.TestCase):
             invariant._GATED_INVARIANT = saved_gates
 
 
+class SelectionRecordPathTests(unittest.TestCase):
+    def test_a_missing_record_module_is_a_key_error(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import selection_finiteness_contracts as selection
+        failed = Mock(
+            returncode=1, stdout='', stderr='KeyError: missing.mojo\n',
+        )
+        with patch('subprocess.run', return_value=failed):
+            with self.assertRaises(ValueError) as failed_call:
+                selection._record_files(b'record', 'missing.mojo')
+        with self.assertRaises(KeyError) as caught:
+            selection._raise_record_error(failed_call.exception)
+        self.assertEqual(caught.exception.args, ('missing.mojo',))
+
+
 class YFinitenessMismatchTests(unittest.TestCase):
     def test_a_mismatch_uses_the_dependency_substitute_in_review_order(self):
         from unittest.mock import patch

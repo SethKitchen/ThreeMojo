@@ -5,10 +5,17 @@
 
 """One selection predecessor restores its reviewed function."""
 
+from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._python_tokens import token_sha256
-from tools._selection_predecessor import selection_predecessor
+from tools._python_json import PyJson
+from tools.carla_y_gate import y_predecessor
+from tools._selection_predecessor import (
+    selection_from_record,
+    selection_predecessor,
+    selection_record_path,
+)
 from tools.carla_selection_predecessor import (
     selection_predecessor_then_grouped,
 )
@@ -96,6 +103,37 @@ def test_a_grouped_path_uses_the_grouped_envelope() raises:
         + '"}'
     )
     assert_equal(selection_predecessor(payload), before)
+
+
+def test_the_record_path_is_checked_before_the_producer() raises:
+    """A missing producer is refused after the record digest matches."""
+    var record = Path(
+        "tools/carla_lane_oracle/selection-finiteness-contract.json"
+    ).read_text()
+    var path = "extensions/carla/spiral_grouped_roundoff_proof.mojo"
+    selection_record_path(record, path)
+    with assert_raises(contains="KeyError: missing.mojo"):
+        selection_record_path(record, "missing.mojo")
+    with assert_raises(contains="Unreviewed selection predecessor record"):
+        selection_record_path(record + " ", path)
+
+
+def test_the_recorded_producer_is_restored() raises:
+    """The live Y predecessor restores the recorded selection function."""
+    var record = Path(
+        "tools/carla_lane_oracle/selection-finiteness-contract.json"
+    ).read_text()
+    var path = "extensions/carla/spiral_grouped_roundoff_proof.mojo"
+    var earlier = y_predecessor(
+        Path("tools/carla_lane_oracle/grouped-y-successor-record.json").read_text()
+    )
+    var doc = PyJson.parse(record)
+    var item = doc.at(doc.at(doc.root, "modules"), path)
+    var restored = selection_from_record(record, path, earlier)
+    assert_equal(
+        token_sha256(restored),
+        doc.text(doc.at(item, "before_token_sha256")),
+    )
 
 
 def main() raises:

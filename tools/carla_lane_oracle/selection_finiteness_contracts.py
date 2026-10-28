@@ -375,10 +375,49 @@ def _selection_labels():
     return _SELECTION_LABELS
 
 
+def _raise_record_error(error):
+    message = str(error)
+    if message.startswith('KeyError: '):
+        raise KeyError(message[len('KeyError: '):]) from None
+    raise error
+
+
+def _record_files(record, path, text=None, geometry=None):
+    """Run one selection-record mode and return its stdout."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    if text is None:
+        mode = '--has-module'
+    elif geometry is None:
+        mode = '--from-record'
+    else:
+        mode = '--from-record-grouped'
+    with tempfile.TemporaryDirectory(prefix='selection-from-record-') as directory:
+        folder = Path(directory)
+        (folder / 'record.json').write_bytes(record)
+        (folder / 'path.txt').write_text(path)
+        if text is not None:
+            (folder / 'module.mojo').write_text(text)
+        if geometry is not None:
+            (folder / 'geometry.mojo').write_text(geometry)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_selection_predecessor', mode, str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def predecessor_text(root, path, *, _operation=None, _then_grouped=None):
     """Verify both actual producers before reconstructing one legacy module."""
 # #333 explicit historical provenance views; current inputs remain operation-owned.
-    import json
     root=Path(root)
     verify(
         root,
@@ -387,21 +426,14 @@ def predecessor_text(root, path, *, _operation=None, _then_grouped=None):
     )
     contract = _selection_labels()['contract']
     payload=_typed_source.historical_bytes(root, root/contract, (root/contract).read_bytes(), _operation=_operation)
-    _gate_record(payload)
-    record=json.loads(payload,object_pairs_hook=source_contracts.unique_keys)
-    item=record['modules'][path]
+    try:
+        _record_files(payload, path)
+    except ValueError as error:
+        _raise_record_error(error)
     text=_producer_text(root,path, _operation=_operation)
-    request = {
-        'path': path,
-        'names': list(_expected()),
-        'record_names': list(record['modules']),
-        'message': _selection_labels()['predecessor'],
-        'body_message': _selection_labels()['body'],
-        'text': text,
-        'after': item['after_complete_function'],
-        'before': item['before_complete_function'],
-        'token': item['before_token_sha256'],
-    }
-    if _then_grouped is None:
-        return _selection_predecessor(request)
-    return _predecessor_then_grouped(request, _then_grouped)
+    try:
+        if _then_grouped is None:
+            return _record_files(payload, path, text)
+        return _record_files(payload, path, text, _then_grouped)
+    except ValueError as error:
+        _raise_record_error(error)
