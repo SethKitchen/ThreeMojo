@@ -540,6 +540,8 @@ It checks every runtime-boundary extension in one check.
 
 It decides every runtime-boundary edge and checks its extension in one check.
 
+It checks the view steps before the module paths and the edge extensions in one check.
+
 It puts the module path on that edge.
 
 It puts every runtime-boundary path on its edge in one check.

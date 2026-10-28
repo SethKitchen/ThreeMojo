@@ -25,7 +25,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
-from tools._runtime_edge import extend_runtime_edges
+from tools._runtime_edge import emit_json, extend_runtime_edges
 from tools._bound_consumer_messages import bound_consumer_messages
 from tools._merged_edge import merged_edges
 from tools._python_json import (
@@ -465,6 +465,53 @@ def runtime_boundary_modules() raises -> String:
     return doc.dumps()
 
 
+def runtime_boundary_edges_after_steps(payload: String) raises -> String:
+    """Check the view steps, then the module paths, then the extensions.
+
+    Args:
+        payload: JSON with `steps` and `edges`. `steps` maps a module path
+            to its digests. `edges` maps every boundary module to its edge.
+
+    Returns:
+        JSON with `modules` and `decisions`, in module order.
+
+    Raises:
+        Error: A view step is outside the boundary, an edge key is missing,
+            or a step does not extend its edge. The view steps are checked
+            before the module paths. A missing edge is reported before an
+            extension check.
+    """
+    var doc = PyJson.parse(payload)
+    var steps = doc.at(doc.root, "steps")
+    if doc.kind(steps) != PY_DICT:
+        _fail("runtime view step outside the boundary scope")
+    var index = 0
+    var step_count = doc.length(steps)
+    while index < step_count:
+        if not _known_module(doc.key(steps, index)):
+            _fail("runtime view step outside the boundary scope")
+        index += 1
+    var modules_text = runtime_boundary_modules()
+    var modules = PyJson.parse(modules_text)
+    var edges = doc.at(doc.root, "edges")
+    var items = doc.new_list()
+    var count = modules.length(modules.root)
+    index = 0
+    while index < count:
+        var path = modules.text(modules.item(modules.root, index))
+        var edge = doc.at(edges, path)
+        var item = doc.new_dict()
+        doc.set(item, "path", doc.new_str(path))
+        doc.set(item, "edge", doc.copy_node(edge))
+        doc.append(items, item)
+        index += 1
+    var body = doc.new_dict()
+    doc.set(body, "steps", doc.copy_node(steps))
+    doc.set(body, "items", items)
+    var decisions = runtime_boundary_extended_edges(emit_json(doc, body))
+    return '{"modules":' + modules_text + ',"decisions":' + decisions + "}"
+
+
 def runtime_boundary_tests() raises -> String:
     """Return the bound tests and the compile-fail fixtures.
 
@@ -515,6 +562,18 @@ def main() raises:
         Error: The command is invalid.
     """
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--after-steps":
+        try:
+            print(
+                runtime_boundary_edges_after_steps(
+                    Path(arguments[2]).read_text()
+                ),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 3 and arguments[1] == "--checked-labeled":
         try:
             print(

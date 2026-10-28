@@ -256,6 +256,36 @@ def _extended_edge(path, edge, steps):
     return _extended_query({'path': path, 'edge': edge, 'steps': steps})
 
 
+def _edges_after_steps(steps, edges):
+    """Check the view steps, then the module paths, then the extensions."""
+    import ast
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps(
+        {'steps': steps, 'edges': edges}, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='runtime-after-steps-') as directory:
+        path = Path(directory) / 'edges.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_runtime_boundary_gate', '--after-steps', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = 'KeyError: '
+        if message.startswith(prefix):
+            raise KeyError(ast.literal_eval(message[len(prefix):])) from None
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _extended_edges(items, steps):
     """Decide every edge and require each extension to meet that edge."""
     if not items:
@@ -459,11 +489,9 @@ def verify(root, *, _operation=None):
     else:
         import runtime_view_contracts as view
     steps = view.steps(root, _operation=_operation)
-    _gate_steps(steps)
-    pairs = []
-    for path in _modules():
-        pairs.append((path, record['edges'][path]))
-    decisions = _extended_edges(pairs, steps)
+    parsed = _edges_after_steps(steps, record['edges'])
+    pairs = [(path, record['edges'][path]) for path in parsed['modules']]
+    decisions = parsed['decisions']
     prepared = []
     for (path, edge), decision in zip(pairs, decisions):
         if decision['extend']:

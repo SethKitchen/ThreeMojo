@@ -13,6 +13,22 @@ from tools._json_tools import quote_ascii
 from tools._python_json import MISSING, PY_BOOL, PY_LIST, PY_STR, PyJson
 
 
+def emit_json(doc: PyJson, node: Int) raises -> String:
+    """Return JSON in stored key order, with no spaces.
+
+    Args:
+        doc: The document.
+        node: The value.
+
+    Returns:
+        The text `json.dumps` writes with `separators=(',', ':')`.
+
+    Raises:
+        Error: A nested value cannot be read.
+    """
+    return _emit(doc, node)
+
+
 def _emit(doc: PyJson, node: Int) raises -> String:
     """Return JSON in stored key order, with no spaces.
 

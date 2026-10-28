@@ -11,6 +11,7 @@ from std.tempfile import mkdtemp
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._bound_consumer_messages import bound_consumer_messages
+from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
 from tools.carla_runtime_boundary_gate import (
     boundary_extend,
@@ -19,6 +20,8 @@ from tools.carla_runtime_boundary_gate import (
     runtime_boundary_bytes_all,
     runtime_boundary_checked_edges,
     runtime_boundary_checked_edges_with_messages,
+    runtime_boundary_edges_after_steps,
+    runtime_boundary_modules,
     runtime_boundary_extended_edges,
     runtime_boundary_record,
 )
@@ -194,6 +197,59 @@ def test_the_consumer_messages_are_read_before_the_digests() raises:
         )
     ):
         _ = runtime_boundary_checked_edges_with_messages(directory)
+
+
+def test_view_steps_are_checked_before_the_module_paths() raises:
+    """A foreign step fails before a missing edge, and a full edge set extends.
+    """
+    var lane = "extensions/carla/lane_invasion.mojo"
+    var step = (
+        '{"before_sha256":"aa","before_token_sha256":"bb",'
+        + '"after_sha256":"cc","after_token_sha256":"dd"}'
+    )
+    var edge = '{"after_sha256":"aa","after_token_sha256":"bb"}'
+    var modules = (
+        '["extensions/carla/cameras.mojo","'
+        + lane
+        + '","extensions/carla/sensor_manager.mojo",'
+        + '"extensions/carla/world.mojo"]'
+    )
+    with assert_raises(
+        contains=(
+            "reviewed runtime boundary successor: runtime view step outside the"
+            " boundary scope"
+        )
+    ):
+        _ = runtime_boundary_edges_after_steps(
+            '{"steps":{"other.mojo":' + step + '},"edges":{}}'
+        )
+    with assert_raises(contains="KeyError: 'extensions/carla/cameras.mojo'"):
+        _ = runtime_boundary_edges_after_steps(
+            '{"steps":{},"edges":{"extensions/carla/world.mojo":' + edge + "}}"
+        )
+    var payload = (
+        '{"steps":{"'
+        + lane
+        + '":'
+        + step
+        + '},"edges":{"extensions/carla/cameras.mojo":'
+        + edge
+        + ',"'
+        + lane
+        + '":'
+        + edge
+        + ',"extensions/carla/sensor_manager.mojo":'
+        + edge
+        + ',"extensions/carla/world.mojo":'
+        + edge
+        + "}}"
+    )
+    var doc = PyJson.parse(runtime_boundary_edges_after_steps(payload))
+    assert_equal(runtime_boundary_modules(), modules)
+    var decisions = doc.at(doc.root, "decisions")
+    assert_equal(doc.length(decisions), 4)
+    assert_equal(doc.flag(doc.at(doc.item(decisions, 0), "extend")), False)
+    assert_equal(doc.flag(doc.at(doc.item(decisions, 1), "extend")), True)
 
 
 def main() raises:
