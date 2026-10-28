@@ -268,7 +268,11 @@ def _labeled_choices(items):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    global _DISPATCH_LABELS
+    if _DISPATCH_LABELS is None:
+        _DISPATCH_LABELS = parsed['labels']
+    return parsed
 
 
 def _declaration_matches(items):
@@ -583,13 +587,13 @@ def verify_premises(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
     record = read_record(root)
-    labels = _dispatch_labels()
     operation_args = {} if _operation is None else {'_operation': _operation}
     source_pairs = []
     source_items = list(record['sources'].items())
     chosen = reviewed_sources(root, [
         (path, item['after_token_sha256']) for path, item in source_items
     ], **operation_args)
+    labels = _dispatch_labels()
     for (path, item), text in zip(source_items, chosen):
         source_pairs.append((
             text,
@@ -675,13 +679,13 @@ def verify(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
     record = read_record(root)
-    labels = _dispatch_labels()
     operation_args = {} if _operation is None else {'_operation': _operation}
     pairs = []
     source_items = list(record['sources'].items())
     chosen = reviewed_sources(root, [
         (path, item['after_token_sha256']) for path, item in source_items
     ], **operation_args)
+    labels = _dispatch_labels()
     for (path, item), text in zip(source_items, chosen):
         pairs.append((text, item['after_token_sha256'], labels['complete'] + path))
     if pairs:

@@ -198,6 +198,8 @@ It keeps the dispatch path, the choice names, and the premise messages.
 
 It reads those dispatch labels before the source choices in one check.
 
+It reuses those dispatch labels after the source choices.
+
 It keeps the dispatch contract prefix.
 
 `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the trig and geometry stored words, and the successor tokens.
