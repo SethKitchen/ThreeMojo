@@ -81,6 +81,23 @@ def test_a_changed_record_is_refused() raises:
         contains="reviewed cleanup source contract: unreviewed migration record"
     ):
         cleanup_record(String("").as_bytes(), String("").as_bytes(), False)
+    with assert_raises(
+        contains="reviewed cleanup source contract: unreviewed migration record"
+    ):
+        cleanup_record(
+            String('{"a":1,"a":2}').as_bytes(), String("").as_bytes(), False
+        )
+
+
+def test_the_reviewed_cleanup_record_passes() raises:
+    """The reviewed record passes the digest and the repeated-key check."""
+    cleanup_record(
+        Path(
+            "tools/carla_lane_oracle/reviewed-cleanup-migration.json"
+        ).read_bytes(),
+        String("").as_bytes(),
+        False,
+    )
 
 
 def test_a_changed_guard_pin_is_refused() raises:

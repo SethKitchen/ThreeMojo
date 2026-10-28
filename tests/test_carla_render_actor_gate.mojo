@@ -27,6 +27,19 @@ def test_a_changed_record_is_refused() raises:
         contains="reviewed render actor reuse successor: unreviewed exact edge"
     ):
         render_actor_record(String("").as_bytes())
+    with assert_raises(
+        contains="reviewed render actor reuse successor: unreviewed exact edge"
+    ):
+        render_actor_record(String('{"a":1,"a":2}').as_bytes())
+
+
+def test_the_reviewed_render_actor_record_passes() raises:
+    """The reviewed record passes the digest and the repeated-key check."""
+    render_actor_record(
+        Path(
+            "tools/carla_lane_oracle/render-actor-reuse-successor.json"
+        ).read_bytes()
+    )
 
 
 def test_the_module_paths_follow_the_record_check() raises:

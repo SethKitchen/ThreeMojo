@@ -136,6 +136,8 @@ It checks the restored pin bytes after the placements.
 
 `tools/carla_singleton_gate.mojo` checks the rounded LINE singleton record, the lane text token, the consumer graphs, and the selector path.
 
+It checks that record digest before it checks a repeated key.
+
 It translates universal newlines before that lane text comparison.
 
 It translates those newlines and compares that lane text in one check.
@@ -213,6 +215,8 @@ It keeps the rounded-line contract prefix.
 
 `tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record, the producer functions, and the arc layout.
 
+It checks that record digest before it checks a repeated key.
+
 It reads the companion record paths after that frozen record check in one check.
 
 It keeps the frozen-arc source and the polynomial and road paths.
@@ -257,6 +261,8 @@ A failed check is not kept.
 It relabels one runtime pin failure when the cause is the reviewed contract error.
 
 `tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the pin digests, the ordered pin pair, and the pin placements.
+
+It checks that record digest before it checks a repeated key.
 
 It reuses one coverage-invariant record gate when the same bytes are read again.
 The migration file, the prior record, and each component are still read.
@@ -425,6 +431,8 @@ The first mismatched edge still fails before a later edge is accepted.
 It keeps the dispatch contract prefix.
 
 `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the trig and geometry stored words, and the successor tokens.
+
+It checks that record digest before it checks a repeated key.
 
 It reads the companion record paths after that cleanup record check in one check.
 
@@ -884,6 +892,8 @@ It keeps the lane-control migration path.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.
 
+It checks that record digest before it checks a repeated key.
+
 It reads the module paths after that record check in one check.
 
 It checks every render-actor file digest in one check.
@@ -911,6 +921,8 @@ It keeps the render-actor consumer and test messages.
 It keeps the render-actor contract prefix.
 
 `tools/carla_runtime_boundary_gate.mojo` checks the runtime-boundary record, its bound tests, and the view-step edges.
+
+It checks that record digest before it checks a repeated key.
 
 It checks every runtime-boundary file digest in one check.
 

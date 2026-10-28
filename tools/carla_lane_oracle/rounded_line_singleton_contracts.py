@@ -13,10 +13,8 @@ else:
 # #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 if __package__:
-    from . import source_contracts as source
     from . import full_audit_cleanup_contracts as full_audit
 else:
-    import source_contracts as source
     import full_audit_cleanup_contracts as full_audit
 
 
@@ -254,7 +252,7 @@ def read_record(root):
     if _GATED_SINGLETON != payload:
         _gate(payload)
         _GATED_SINGLETON = payload
-    return json.loads(payload, object_pairs_hook=source.unique_keys)
+    return json.loads(payload)
 
 
 def _prepare_rounded(paths):

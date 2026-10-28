@@ -30,6 +30,19 @@ def test_a_changed_record_is_refused() raises:
         contains="rounded LINE singleton contract: unreviewed migration record"
     ):
         singleton_record(String("").as_bytes())
+    with assert_raises(
+        contains="rounded LINE singleton contract: unreviewed migration record"
+    ):
+        singleton_record(String('{"a":1,"a":2}').as_bytes())
+
+
+def test_the_reviewed_singleton_record_passes() raises:
+    """The reviewed record passes the digest and the repeated-key check."""
+    singleton_record(
+        Path(
+            "tools/carla_lane_oracle/rounded-line-singleton-migration.json"
+        ).read_bytes()
+    )
 
 
 def test_disagreeing_lane_views_are_refused() raises:

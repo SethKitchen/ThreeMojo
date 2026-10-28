@@ -266,13 +266,15 @@ def invariant_record(
 
     Raises:
         Error: An escaping component name fails before a changed record,
-            frozen digest, or component digest. A component digest fails
-            before the ordered pin pair.
+            frozen digest, or component digest. A repeated key fails after
+            that record digest. A component digest fails before the ordered
+            pin pair.
     """
     if component_dir.byte_length() > 0:
         _confine_component_names(component_dir)
     if sha256_hex(migration) != _MIGRATION_SHA256:
         _fail("unreviewed migration record")
+    reject_duplicate_pin_keys(migration)
     var doc = PyJson.parse(String(from_utf8_lossy=migration))
     _require_record(doc)
     if not check_prior:

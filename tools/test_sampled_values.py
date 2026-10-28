@@ -2748,13 +2748,16 @@ class InvariantRecordGateTests(unittest.TestCase):
                     ['migration.json', 'prior.json', 'a.json'] * 2,
                 )
                 read_bytes.payload = duplicate
+                run.return_value = Mock(
+                    returncode=1, stdout='',
+                    stderr='duplicate runtime source pin key: a\n')
                 with self.assertRaisesRegex(
                         ValueError, 'duplicate runtime source pin key: a'):
                     invariant.read_record(Path('invariant-gate'))
                 with self.assertRaisesRegex(
                         ValueError, 'duplicate runtime source pin key: a'):
                     invariant.read_record(Path('invariant-gate'))
-                self.assertEqual(run.call_count, 9)
+                self.assertEqual(run.call_count, 10)
                 self.assertEqual(
                     reads[-2:], ['migration.json', 'migration.json'])
             failed = Mock(returncode=1, stdout='', stderr='bad migration\n')

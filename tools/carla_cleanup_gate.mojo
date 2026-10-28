@@ -112,6 +112,7 @@ from tests._python_tokens import (
     token_words,
     without_move_sigils,
 )
+from tools._duplicate_pin_keys import reject_duplicate_pin_keys
 from tools._migration_records import migration_records
 from tools.carla_frozen_arc_gate import frozen_protected_bundle
 from tools.carla_invariant_gate import invariant_input_bundle
@@ -255,10 +256,11 @@ def cleanup_record(
         check_previous: Whether to check the winner-sign digest.
 
     Raises:
-        Error: The record or the winner-sign digest changed.
+        Error: The record digest, a repeated key, or the winner-sign digest changed.
     """
     if sha256_hex(migration) != _MIGRATION_SHA256:
         _fail("unreviewed migration record")
+    reject_duplicate_pin_keys(migration)
     var doc = PyJson.parse(String(from_utf8_lossy=migration))
     _require_record(doc)
     if not check_previous:

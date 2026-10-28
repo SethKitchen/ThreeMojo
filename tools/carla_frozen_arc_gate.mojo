@@ -140,10 +140,11 @@ def frozen_arc_record(
         check_previous: Whether to check the cleanup digest and the successor path.
 
     Raises:
-        Error: The record, the cleanup digest, or the successor path changed.
+        Error: The record digest, a repeated key, the cleanup digest, or the successor path changed.
     """
     if sha256_hex(migration) != _MIGRATION_SHA256:
         _fail("unreviewed migration record")
+    reject_duplicate_pin_keys(migration)
     var doc = PyJson.parse(String(from_utf8_lossy=migration))
     _require_record(doc)
     if not check_previous:

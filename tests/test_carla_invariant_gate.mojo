@@ -31,6 +31,15 @@ def test_a_changed_record_is_refused() raises:
         invariant_record(
             String("").as_bytes(), String("").as_bytes(), "", False
         )
+    with assert_raises(
+        contains="coverage invariant successor: unreviewed migration record"
+    ):
+        invariant_record(
+            String('{"a":1,"a":2}').as_bytes(),
+            String("").as_bytes(),
+            "",
+            False,
+        )
 
 
 def test_a_changed_runtime_pin_is_refused() raises:

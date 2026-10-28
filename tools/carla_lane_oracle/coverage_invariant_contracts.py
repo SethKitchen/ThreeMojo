@@ -288,7 +288,7 @@ def read_record(root, *, _then_pair=False):
     labels = _labels_with_migration()
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
-    record = json.loads(payload, object_pairs_hook=source.unique_keys)
+    record = json.loads(payload)
     prior = root/labels['prior']
     prior_bytes = _typed_source.historical_bytes(root, prior, prior.read_bytes())
     _gate(payload, prior_bytes)

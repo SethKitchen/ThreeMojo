@@ -22,6 +22,7 @@ from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
 from tools._bound_consumer_messages import bound_consumer_messages
+from tools._duplicate_pin_keys import reject_duplicate_pin_keys
 from tools._migration_records import migration_records
 from tools._merged_edge import merged_edges
 from tools._python_json import (
@@ -131,10 +132,11 @@ def render_actor_record(migration: Span[UInt8, _]) raises:
         migration: The successor record bytes.
 
     Raises:
-        Error: The record scope, tests, or edge changed.
+        Error: The record digest, a repeated key, the scope, the tests, or an edge changed.
     """
     if sha256_hex(migration) != _MIGRATION_SHA256:
         _fail("unreviewed exact edge")
+    reject_duplicate_pin_keys(migration)
     var doc = PyJson.parse(String(from_utf8_lossy=migration))
     var schema = doc.get(doc.root, "schema")
     var issue = doc.get(doc.root, "issue")

@@ -43,6 +43,12 @@ def test_a_changed_record_is_refused() raises:
         contains="frozen ARC producer contract: unreviewed migration record"
     ):
         frozen_arc_record(String("").as_bytes(), String("").as_bytes(), False)
+    with assert_raises(
+        contains="frozen ARC producer contract: unreviewed migration record"
+    ):
+        frozen_arc_record(
+            String('{"a":1,"a":2}').as_bytes(), String("").as_bytes(), False
+        )
 
 
 def test_the_companion_paths_follow_the_frozen_record() raises:

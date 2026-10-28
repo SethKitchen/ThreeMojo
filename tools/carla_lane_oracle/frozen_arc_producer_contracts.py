@@ -572,7 +572,7 @@ def read_record(root):
     global _FROZEN_RECORD
     cached = _FROZEN_RECORD
     if cached is not None and cached[0] == payload:
-        record = json.loads(payload, object_pairs_hook=source.unique_keys)
+        record = json.loads(payload)
         previous = root/cached[1]
         previous_bytes = _typed_source.historical_bytes(root, previous, previous.read_bytes())
         if previous_bytes != cached[2]:
@@ -580,7 +580,7 @@ def read_record(root):
             _FROZEN_RECORD = (payload, cached[1], previous_bytes)
         return record
     paths = _paths_after_record(payload)
-    record = json.loads(payload, object_pairs_hook=source.unique_keys)
+    record = json.loads(payload)
     relative = paths['reviewed_cleanup']
     previous = root/relative
     previous_bytes = _typed_source.historical_bytes(root, previous, previous.read_bytes())

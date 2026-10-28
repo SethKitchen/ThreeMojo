@@ -108,6 +108,55 @@ def _json_string(text: String, mut index: Int) raises -> String:
     raise Error("JSONDecodeError")
 
 
+def _skip_json_string(text: String, mut index: Int) raises:
+    """Move past one JSON string without copying its text.
+
+    Args:
+        text: The JSON text.
+        index: The index of the opening quote.
+
+    Raises:
+        Error: The string is not closed or an escape is invalid.
+    """
+    var data = text.as_bytes()
+    var count = len(data)
+    if index >= count or data[index] != 34:
+        raise Error("JSONDecodeError")
+    index += 1
+    while index < count:
+        var byte = data[index]
+        index += 1
+        if byte == 34:
+            return
+        if byte != 92:
+            continue
+        if index >= count:
+            raise Error("JSONDecodeError")
+        var escaped = data[index]
+        index += 1
+        if escaped == 117:
+            if index + 4 > count:
+                raise Error("JSONDecodeError")
+            var shift = 0
+            while shift < 4:
+                _ = _json_hex(Int(data[index]))
+                index += 1
+                shift += 1
+            continue
+        if (
+            escaped != 34
+            and escaped != 92
+            and escaped != 47
+            and escaped != 98
+            and escaped != 102
+            and escaped != 110
+            and escaped != 114
+            and escaped != 116
+        ):
+            raise Error("JSONDecodeError")
+    raise Error("JSONDecodeError")
+
+
 def _json_value(text: String, mut index: Int) raises:
     """Skip one JSON value and refuse a repeated object key.
 
@@ -125,7 +174,7 @@ def _json_value(text: String, mut index: Int) raises:
         raise Error("JSONDecodeError")
     var byte = data[index]
     if byte == 34:
-        _ = _json_string(text, index)
+        _skip_json_string(text, index)
         return
     if byte == 123:
         _json_object(text, index)

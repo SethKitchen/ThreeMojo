@@ -33,6 +33,7 @@ from tests._python_tokens import (
     token_sha256,
 )
 from tools._dependency_words import pinned_dependency_words
+from tools._duplicate_pin_keys import reject_duplicate_pin_keys
 from tools._json_tools import quote_ascii
 from tools._lane_predecessor import selected_lane_minima
 from tools._lane_declarations import (
@@ -68,10 +69,11 @@ def singleton_record(migration: Span[UInt8, _]) raises:
         migration: The successor record bytes.
 
     Raises:
-        Error: The digest or the schema changed.
+        Error: The digest, a repeated key, or the schema changed.
     """
     if sha256_hex(migration) != _MIGRATION_SHA256:
         _fail("unreviewed migration record")
+    reject_duplicate_pin_keys(migration)
     var doc = PyJson.parse(String(from_utf8_lossy=migration))
     var schema = doc.get(doc.root, "schema")
     var one = PyJson.parse("1")

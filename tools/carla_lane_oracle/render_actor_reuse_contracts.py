@@ -17,10 +17,8 @@ else:
 import json
 
 if __package__:
-    from . import source_contracts as source
     from . import consumer_successor_ledger as ledger
 else:
-    import source_contracts as source
     import consumer_successor_ledger as ledger
 
 
@@ -443,7 +441,7 @@ def verify(root, *, _operation=None):
     raw = _typed_source.historical_bytes(root, MIGRATION, _observe_bytes(root, MIGRATION, (root/MIGRATION).read_bytes(),
                          _operation=_operation), _operation=_operation)
     modules = _paths_after_record(raw)
-    record = json.loads(raw, object_pairs_hook=source.unique_keys)
+    record = json.loads(raw)
     module_rows = [(path, record['edges'][path]) for path in modules]
     currents = _live_endpoints(root, module_rows, _operation=_operation)
     edges = {}

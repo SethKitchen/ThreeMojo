@@ -33,6 +33,19 @@ def test_a_changed_record_is_refused() raises:
         contains="reviewed runtime boundary successor: unreviewed exact edge"
     ):
         runtime_boundary_record(String("").as_bytes())
+    with assert_raises(
+        contains="reviewed runtime boundary successor: unreviewed exact edge"
+    ):
+        runtime_boundary_record(String('{"a":1,"a":2}').as_bytes())
+
+
+def test_the_reviewed_runtime_boundary_record_passes() raises:
+    """The reviewed record passes the digest and the repeated-key check."""
+    runtime_boundary_record(
+        Path(
+            "tools/carla_lane_oracle/runtime-boundary-successor.json"
+        ).read_bytes()
+    )
 
 
 def test_a_foreign_view_step_is_refused() raises:
