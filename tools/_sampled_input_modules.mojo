@@ -8,6 +8,8 @@
 Bounds, trig, and the interval come first. The lane value module is last.
 """
 
+from tools._carla_package import carla_package
+
 
 def sampled_input_modules() -> String:
     """Return the four sampled input modules in reviewed order.
@@ -19,3 +21,13 @@ def sampled_input_modules() -> String:
         '["curve_bounds.mojo","curve_trig.mojo","curve_interval.mojo",'
         + '"lane_value_bounds.mojo"]'
     )
+
+
+def sampled_input_plan() -> String:
+    """Return the input modules, then the package path.
+
+    Returns:
+        JSON with `modules` and `package` in that order.
+    """
+    var modules = sampled_input_modules()
+    return '{"modules":' + modules + ',"package":"' + carla_package() + '"}'

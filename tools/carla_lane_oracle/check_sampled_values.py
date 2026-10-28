@@ -128,6 +128,25 @@ def _input_modules():
     return json.loads(result.stdout)
 
 
+def _sampled_inputs():
+    """Return the input modules, then the package path."""
+    import json
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+         'carla_sampled_input_modules', '--plan'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    return json.loads(result.stdout)
+
+
 def _graphs_and_names():
     """Return the graph digests after the reference names match."""
     import json
@@ -684,8 +703,12 @@ def verify(root):
         import full_audit_cleanup_contracts as audit
     _operation, owns = audit._operation_enter(root, 'sampled')
     try:
-        modules = _input_modules()
-        paths = {name: root / _carla_package() / name for name in modules}
+        inputs = _sampled_inputs()
+        global _CARLA_PACKAGE
+        if _CARLA_PACKAGE is None:
+            _CARLA_PACKAGE = inputs['package']
+        modules = inputs['modules']
+        paths = {name: root / inputs['package'] / name for name in modules}
         texts = {name: _typed_source.historical_text(root, path, _typed_source._observe_text(root, (path).relative_to(root).as_posix(), path.read_text(), _operation=_operation), _operation=_operation) for name, path in paths.items()}
         bounds, trig, target = texts[modules[0]], texts[modules[1]], texts[modules[3]]
         # Deliberately conservative closure: imports, aliases, all helper setup,
