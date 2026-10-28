@@ -28,6 +28,7 @@ from std.sys import argv, exit, stderr
 
 from tests._python_tokens import (
     declaration_routing,
+    declaration_text,
     significant_json,
     token_sha256,
 )
@@ -392,22 +393,45 @@ def frozen_producer_review(payload: String) raises:
     """Check every producer function and the arc layout.
 
     Args:
-        payload: JSON with `functions` and `layout`. Each function has `name`, `actual`, and `source`. `layout` has `source` and `stored`.
+        payload: JSON with `functions` and `layout`. Each function has `name` and `source`. It also has `actual`, or `module` and `owner`. `layout` has `source` and `stored`.
 
     Raises:
-        Error: A function token list changed, the arc source cannot be routed, or the routing changed.
+        Error: A function cannot be read, a function token list changed, the arc source cannot be routed, or the routing changed.
     """
     var doc = PyJson.parse(payload)
     var functions = doc.at(doc.root, "functions")
     if doc.kind(functions) != PY_LIST:
         _fail("complete producer/Box function changed")
     var count = doc.length(functions)
-    var actuals = List[String]()
-    var sources = List[String]()
+    var bodies = List[String]()
     var index = 0
     while index < count:
         var row = doc.item(functions, index)
-        actuals.append(significant_json(doc.text(doc.at(row, "actual"))))
+        var actual = doc.get(row, "actual")
+        if actual == MISSING:
+            var owners = List[String]()
+            var owner = doc.at(row, "owner")
+            var owner_count = doc.length(owner)
+            var cursor = 0
+            while cursor < owner_count:
+                owners.append(doc.text(doc.item(owner, cursor)))
+                cursor += 1
+            bodies.append(
+                declaration_text(
+                    doc.text(doc.at(row, "module")),
+                    doc.text(doc.at(row, "name")),
+                    owners,
+                )
+            )
+        else:
+            bodies.append(doc.text(actual))
+        index += 1
+    var actuals = List[String]()
+    var sources = List[String]()
+    index = 0
+    while index < count:
+        var row = doc.item(functions, index)
+        actuals.append(significant_json(bodies[index]))
         sources.append(significant_json(doc.text(doc.at(row, "source"))))
         index += 1
     index = 0

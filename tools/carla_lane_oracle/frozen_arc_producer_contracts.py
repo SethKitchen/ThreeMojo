@@ -286,8 +286,13 @@ def _producer_review(pairs, arc, stored):
     from pathlib import Path
     payload = json.dumps({
         'functions': [
-            {'name': name, 'actual': actual, 'source': source}
-            for actual, source, name in pairs
+            {
+                'name': item['name'],
+                'module': text,
+                'owner': list(item['owner']),
+                'source': item['source'],
+            }
+            for item, text in pairs
         ],
         'layout': {'source': arc, 'stored': stored},
     }, separators=(',', ':'))
@@ -415,18 +420,10 @@ def verify_premises(root, *, _operation=None):
         text = _typed_source.historical_text(root, item['path'], _observe_text(
             root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation)
         loaded.append((item, text))
-    declared = _declarations([{
-        'source': text,
-        'name': item['name'],
-        'owner': list(item['owner']),
-    } for item, text in loaded])
-    prepared = [
-        (declared[index], item['source'], item['name'])
-        for index, (item, _text) in enumerate(loaded)]
     arc = _typed_source.historical_text(root, 'extensions/carla/curve_rounded_arc.mojo', _observe_text(root, 'extensions/carla/curve_rounded_arc.mojo',
                         (root/'extensions/carla/curve_rounded_arc.mojo').read_text(),
                         _operation=_operation), _operation=_operation)
-    _producer_review(prepared, arc, record['rounded_arc_routing'])
+    _producer_review(loaded, arc, record['rounded_arc_routing'])
     return len(record['function_sources'])
 
 

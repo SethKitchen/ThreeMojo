@@ -324,6 +324,35 @@ def test_a_changed_producer_layout_is_refused_after_the_functions() raises:
         frozen_producer_review(_review(arc, arc, "center", arc, "[]"))
 
 
+def test_a_producer_review_reads_the_declaration_from_the_module() raises:
+    """The review extracts the function before it checks the arc layout."""
+    var arc = "def center():\n    return 1\n"
+    var payload = (
+        '{"functions":[{"name":"center","module":"def other():\\n    return'
+        " 0\\n\\n"
+        + 'def center():\\n    return 1\\n","owner":[],'
+        + '"source":"def center():\\n    return 1\\n"}],'
+        + '"layout":{"source":"def center():\\n    return 1\\n","stored":"'
+    )
+    frozen_producer_review(
+        payload + declaration_routing(arc).replace('"', '\\"') + '"}}'
+    )
+
+
+def test_a_missing_producer_declaration_is_refused_before_the_layout() raises:
+    """A missing function fails before a bad arc layout is reported."""
+    var payload = (
+        '{"functions":[{"name":"absent","module":"def center():\\n    return'
+        ' 1\\n",'
+        + '"owner":[],"source":"def center():\\n    return 1\\n"}],'
+        + '"layout":{"source":"def center():\\n    return 1\\n","stored":"[]"}}'
+    )
+    with assert_raises(
+        contains="missing or ambiguous actual guard declaration: absent"
+    ):
+        frozen_producer_review(payload)
+
+
 def main() raises:
     """Run the frozen ARC gate tests."""
     TestSuite.discover_tests[__functions_in_module()]().run()
