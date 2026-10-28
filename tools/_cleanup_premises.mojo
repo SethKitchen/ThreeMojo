@@ -13,6 +13,7 @@ from std.pathlib import Path
 from std.tempfile import mkdtemp
 
 from tests._python_tokens import declaration_text
+from tools._cleanup_declarations import cleanup_declarations
 from tools._python_json import PyJson
 from tools.carla_cleanup_gate import cleanup_premises
 
@@ -223,3 +224,62 @@ def cleanup_declared_premises(payload: String) raises:
     Path(directory + "/sources.json").write_text(texts.dumps())
     prepare_cleanup_premises(directory)
     cleanup_premises(directory)
+
+
+def cleanup_catalog_premises(payload: String) raises:
+    """Read the declaration catalog, then check the premise fragments.
+
+    Args:
+        payload: A JSON list of module texts, in source order.
+
+    Raises:
+        Error: A function cannot be read, or a premise fragment changed.
+            The declaration catalog is read before those fragments.
+    """
+    var catalog = PyJson.parse(cleanup_declarations())
+    var sources = PyJson.parse(payload)
+    var gate = PyJson()
+    var root = gate.new_dict()
+    var copied = gate.new_list()
+    var count = sources.length(sources.root)
+    var index = 0
+    while index < count:
+        gate.append(
+            copied,
+            gate.new_str(sources.text(sources.item(sources.root, index))),
+        )
+        index += 1
+    gate.set(root, "sources", copied)
+    var items = catalog.at(catalog.root, "declarations")
+    var declared = gate.new_list()
+    var item_count = catalog.length(items)
+    index = 0
+    while index < item_count:
+        var item = catalog.item(items, index)
+        var row = gate.new_dict()
+        gate.set(
+            row,
+            "source",
+            gate.new_int(Int(catalog.text(catalog.at(item, "source")))),
+        )
+        gate.set(
+            row, "name", gate.new_str(catalog.text(catalog.at(item, "name")))
+        )
+        gate.set(
+            row, "key", gate.new_str(catalog.text(catalog.at(item, "key")))
+        )
+        var owners = gate.new_list()
+        var owner = catalog.at(item, "owner")
+        var owner_count = catalog.length(owner)
+        var cursor = 0
+        while cursor < owner_count:
+            gate.append(
+                owners, gate.new_str(catalog.text(catalog.item(owner, cursor)))
+            )
+            cursor += 1
+        gate.set(row, "owner", owners)
+        gate.append(declared, row)
+        index += 1
+    gate.set(root, "declarations", declared)
+    gate.root = root
+    cleanup_declared_premises(gate.dumps())

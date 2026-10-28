@@ -10,7 +10,10 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._cleanup_premises import ordered_text, require_cleanup_premises
 from tests._python_tokens import def_token_sha256, token_sha256
-from tools._cleanup_premises import cleanup_declared_premises
+from tools._cleanup_premises import (
+    cleanup_catalog_premises,
+    cleanup_declared_premises,
+)
 from tools._sha256 import sha256_hex
 from tests._winner_pin_predecessor import (
     restored_junction_cleanup,
@@ -244,6 +247,17 @@ def test_a_missing_declared_premise_is_refused() raises:
         contains="missing or ambiguous actual guard declaration: absent"
     ):
         cleanup_declared_premises(payload)
+
+
+def test_the_catalog_names_the_first_premise() raises:
+    """The declaration catalog supplies the first function name."""
+    with assert_raises(
+        contains=(
+            "missing or ambiguous actual guard declaration: "
+            "_rounded_line_axis_context"
+        )
+    ):
+        cleanup_catalog_premises('["def f():\\n    return 1\\n"]')
 
 
 def main() raises:

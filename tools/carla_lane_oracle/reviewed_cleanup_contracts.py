@@ -430,6 +430,30 @@ def _declarations(items):
     return json.loads(result.stdout)
 
 
+def _catalog_premises(texts):
+    """Read the declaration catalog, then check the premise fragments."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps(list(texts), separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='cleanup-catalog-') as directory:
+        path = Path(directory) / 'sources.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_premises',
+             '--catalog', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def _declared_premises(texts, items):
     """Read each premise declaration and check it in one call."""
     import os
@@ -472,8 +496,7 @@ def verify_premises(root, *, _operation=None):
     junction = _typed_source.historical_text(root, SOURCE_PATHS[2], _observe_text(root, SOURCE_PATHS[2],
                          (root/SOURCE_PATHS[2]).read_text(), _operation=_operation), _operation=_operation)
     texts = (line, arc, junction)
-    items = _cleanup_declarations()['declarations']
-    _declared_premises(texts, items)
+    _catalog_premises(texts)
 
 
 

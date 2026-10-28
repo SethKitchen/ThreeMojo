@@ -230,6 +230,8 @@ It reads those five premise declarations in one check.
 
 It reads those declarations and checks every premise in one check.
 
+It reads the cleanup declaration catalog before those premise checks in one check.
+
 It keeps the winner-sign record and the runtime pin path.
 
 The singleton, frozen ARC, dispatch, raw-cut, and optional-runtime contracts use that declaration text.
