@@ -2,7 +2,7 @@
 
 `GameRenderer` draws the [Village walk](Village-walk) at 24 frames a second or more, at 1920 by 1080 pixels, on four CPU cores. It draws less than `Renderer` draws, and it draws it in a different way. `GameQuality` sets how finely each part of a frame is drawn. A slow machine can turn each part down, and a fast machine can turn each part up.
 
-The modules are `renderers/game_renderer.mojo`, `render/game_math.mojo`, `render/game_upscale.mojo` and `extensions/village/quality.mojo`. See [Renderer](Renderer) for the general renderer.
+The modules are `renderers/game_renderer.mojo`, `render/game_math.mojo`, `render/game_smooth.mojo`, `render/game_upscale.mojo` and `extensions/village/quality.mojo`. See [Renderer](Renderer) for the general renderer.
 
 ## Choose a quality
 
@@ -32,6 +32,7 @@ mojo run -I . examples/village_walk.mojo --play 1920 1080 low
 | `animal_coarseness` | 3 | 2 | 1.5 | 1 |
 | `shadows` | `CACHED_SHADOWS` | `CACHED_SHADOWS` | `CACHED_SHADOWS` | `FULL_SHADOWS` |
 | `shadow_size` | 1,024 | 2,048 | 2,048 | 4,096 |
+| `smooth_edges` | True | True | True | True |
 
 You can change each setting alone. `GameQuality.check` refuses a value out of range:
 
@@ -52,6 +53,17 @@ quality.check()
 - **`water_refresh_every`** sets how many frames share one ocean surface and its caustics. From two frames, one frame finds the next surface and the next frame finds its caustics.
 - **`animal_coarseness`** multiplies the cell of each animal's mesh, from 1 to 8. A coarser animal has fewer triangles.
 - **`shadows`** and **`shadow_size`** set how the sun's shadows are drawn. See [Shadows](#shadows).
+- **`smooth_edges`** smooths the stair steps along the frame's edges before the frame is stretched. See [Smooth edges](#smooth-edges).
+
+## Smooth edges
+
+`smooth_edges` in `render/game_smooth.mojo` is the simplest form of FXAA. It runs on the small frame, after the water and before the stretch, so a step is smoothed before the stretch makes it larger.
+
+1. A pixel and its four diagonal neighbors give a range of brightness. Where the range is less than 0.0833, or less than a sixth of the brightest, the pixel keeps its color. These are FXAA's own defaults.
+2. The edge runs across the larger change between the neighbors. The step along it is scaled so that its shorter part is one pixel, and each part is held within 8 pixels.
+3. The samples at a third and at two thirds of the step are averaged. The samples at its two ends are mixed in too, unless the mix leaves the range of brightness.
+
+Each sample is bilinear between pixel centers. The brightness is the luma of the sRGB bytes. Sixteen pixels are tested and blended at once. The rows are cut into small runs over the cores, and every count of cores gives the same frame. `VillageGame.smooth_ms` holds the time it took. At `LOW` it is about a millisecond.
 
 ## Measure a frame
 
@@ -63,8 +75,8 @@ The bench walks a scripted player through the village. It prints the median, the
 
 | Preset | Frame size | Median frame | 95th percentile | Median frames a second |
 |---|---|---|---|---|
-| `LOW` | 640 by 360 | 24.3 ms | 33.7 ms | 41 |
-| `MEDIUM` | 960 by 540 | 70.8 ms | 118 ms | 14 |
+| `LOW` | 640 by 360 | 24.3 ms | 34.2 ms | 41 |
+| `MEDIUM` | 960 by 540 | 71.0 ms | 109 ms | 14 |
 
 `GameRenderer.timings` holds the time of each stage of the last frame, in milliseconds. The stages are the shadow maps, the gathering, the vertices, the setup, the bins, the raster, the sky and the resolve.
 

@@ -289,6 +289,8 @@ def test_a_full_size_frame_is_not_stretched() raises:
     assert_equal(game.window.width, 24)
     assert_equal(game.window.height, 14)
     assert_equal(game.upscale_ms, 0)
+    # Every preset smooths the frame's edges.
+    assert_true(game.smooth_ms > 0)
 
 
 def test_a_villager_moves_and_a_frame_one_row_short_is_stretched() raises:
@@ -312,6 +314,8 @@ def test_a_villager_moves_and_a_frame_one_row_short_is_stretched() raises:
     # window, and a row short.
     parameters.quality = game_quality(ULTRA)
     parameters.quality.render_scale = 0.95
+    # The edges are left as they are drawn.
+    parameters.quality.smooth_edges = False
     var game = VillageGame(
         scene,
         assets,
@@ -330,6 +334,7 @@ def test_a_villager_moves_and_a_frame_one_row_short_is_stretched() raises:
     assert_equal(game.fast.height, 19)
     assert_equal(game.window.height, 20)
     assert_true(game.upscale_ms > 0)
+    assert_equal(game.smooth_ms, 0)
 
 
 def main() raises:

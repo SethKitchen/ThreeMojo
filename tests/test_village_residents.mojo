@@ -308,6 +308,10 @@ def test_residents_that_cannot_be_built_are_refused() raises:
     with assert_raises(contains="pasture"):
         p.check()
     p = _small()
+    p.herds.append(Herd(RABBIT, 1, 0, 0, 1, 1, flee=-1))
+    with assert_raises(contains="flee"):
+        p.check()
+    p = _small()
     p.triangles = 10
     with assert_raises(contains="triangles"):
         p.check()
@@ -448,6 +452,38 @@ def test_residents_wander_and_stand_in_the_players_way() raises:
     assert_almost_equal(
         obstacles[0].x, residents.people[0].position.x, atol=1e-6
     )
+
+
+def test_a_shy_animal_runs_from_the_player_and_a_tame_one_does_not() raises:
+    var ground = _flat()
+    var assets = Assets()
+    var scene = Scene()
+    var p = _small()
+    p.rest = Duration(30.0, SECOND)
+    # A shy rabbit and a tame one, each grazing at one point.
+    p.herds.append(Herd(RABBIT, 1, 0, 0, 0, 8, flee=6))
+    p.herds.append(Herd(RABBIT, 1, 0, 3, 0, 9))
+    var lots = List[Lot]()
+    var residents = Residents(scene, assets, p, ground, lots, _homes())
+    var player = Vector3(-2, 0, 1.5)
+    var shy = residents.beasts[0].character.position
+    var tame = residents.beasts[1].character.position
+    var before = (shy - player).length()
+    for _ in range(10):
+        residents.update(
+            scene, Duration(0.1, SECOND), ground, List[Obstacle](), player
+        )
+    ref runner = residents.beasts[0].character
+    # The shy one ran straight away, faster than it walks.
+    assert_true((runner.position - player).length() > before + 0.5)
+    assert_true(runner.stance == RUNNING)
+    assert_true(
+        runner.parameters.run_speed.to(METER_PER_SECOND)
+        > runner.parameters.walk_speed.to(METER_PER_SECOND) * 2.9
+    )
+    # The tame one kept grazing where it was.
+    var still = residents.beasts[1].character.position - tame
+    assert_true(still.length() < 0.05)
 
 
 def test_a_villager_visits_their_home_through_its_door() raises:

@@ -93,6 +93,7 @@ from extensions.village.village import Village, VillageParameters
 from extensions.water.pebbles import PebbleBed
 from math.vector3 import Vector3
 from render.framebuffer import Framebuffer
+from render.game_smooth import smooth_edges
 from render.game_upscale import upscale_into
 from renderers.game_renderer import FULL_SHADOWS, GameRenderer
 from renderers.renderer import Renderer, available_workers
@@ -137,7 +138,9 @@ def default_residents() raises -> ResidentsParameters:
         woman in a red tunic by the framed house, who visits it. Four
         sheep and a goat right of the trail, two cows and a horse left
         of it, a pig by the barn, a dog near the start, two rabbits by
-        the trail and two deer past the pond.
+        the trail and two deer past the pond. The deer run from a player
+        12 meters away, the rabbits from 6, the sheep from 3 and the goat
+        from 2.
 
     Raises:
         Error: Never: the outfits check.
@@ -198,14 +201,14 @@ def default_residents() raises -> ResidentsParameters:
         ),
     ]
     residents.herds = [
-        Herd(SHEEP, 4, 15, 4, 7, 51),
-        Herd(GOAT, 1, 20, -6, 5, 52),
+        Herd(SHEEP, 4, 15, 4, 7, 51, flee=3),
+        Herd(GOAT, 1, 20, -6, 5, 52, flee=2),
         Herd(COW, 2, -18, 6, 8, 53),
         Herd(HORSE, 1, -14, -16, 7, 54),
         Herd(PIG, 1, -12, -48, 4, 55),
         Herd(DOG, 1, 4, 22, 4, 56),
-        Herd(RABBIT, 2, -6, 14, 3, 57),
-        Herd(DEER, 2, 30, -40, 10, 58),
+        Herd(RABBIT, 2, -6, 14, 3, 57, flee=6),
+        Herd(DEER, 2, 30, -40, 10, 58, flee=12),
     ]
     return residents^
 
@@ -306,10 +309,11 @@ struct VillageGame(Movable):
     var width: Int
     var height: Int
     var fast: GameRenderer
-    # How long the last frame's draw, water and stretch took, in
-    # milliseconds.
+    # How long the last frame's draw, its water, the smoothing of its edges
+    # and its stretch took, in milliseconds.
     var render_ms: Float64
     var water_ms: Float64
+    var smooth_ms: Float64
     var upscale_ms: Float64
     # The last frame, the window's size: `render` draws into it.
     var window: Framebuffer
@@ -351,6 +355,7 @@ struct VillageGame(Movable):
         self.fast.pixel_maps = True
         self.render_ms = 0
         self.water_ms = 0
+        self.smooth_ms = 0
         self.upscale_ms = 0
         self.window = Framebuffer(
             width, height, List[UInt8](length=width * height * 4, fill=0)
@@ -459,7 +464,7 @@ struct VillageGame(Movable):
         around.append(
             Obstacle(feet.x, feet.z, self.player.parameters.radius.to(METER))
         )
-        self.residents.update(scene, delta, self.terrain, around)
+        self.residents.update(scene, delta, self.terrain, around, feet)
         var people = List[Vector3]()
         people.append(feet)
         for index in range(len(self.residents.people)):
@@ -514,8 +519,9 @@ struct VillageGame(Movable):
     def render(mut self, scene: Scene, assets: Assets) raises:
         """Draw the frame that `tick` prepared into `window`.
 
-        The frame is drawn at the quality's smaller size, the pond's water
-        is composed into it, and it is stretched over `window`. The window's
+        The frame is drawn at the quality's smaller size, and the pond's
+        water is composed into it. Its edges are smoothed if the quality's
+        `smooth_edges` asks, and it is stretched over `window`. The window's
         frame is kept from frame to frame, so it is not allocated again.
 
         Args:
@@ -536,9 +542,14 @@ struct VillageGame(Movable):
         var watered = perf_counter_ns()
         self.render_ms = Float64(drawn - began) / 1.0e6
         self.water_ms = Float64(watered - drawn) / 1.0e6
+        self.smooth_ms = 0
+        if self.quality.smooth_edges:
+            smooth_edges(image, available_workers())
+            self.smooth_ms = Float64(perf_counter_ns() - watered) / 1.0e6
         self.upscale_ms = 0
         if image.width == self.width and image.height == self.height:
             self.window = image^
             return
+        var smoothed = perf_counter_ns()
         upscale_into(image, self.window, available_workers())
-        self.upscale_ms = Float64(perf_counter_ns() - watered) / 1.0e6
+        self.upscale_ms = Float64(perf_counter_ns() - smoothed) / 1.0e6

@@ -24,7 +24,8 @@ the feet keep pace with the ground. The player is a `Body` too.
 walk, and once standing: a flipbook. Each frame its mesh shows the pose of
 how far it has walked, so a stride covers one stride of ground. Each
 `Herd` grazes round its own pasture. A species that does not walk on four
-legs keeps its standing mesh.
+legs keeps its standing mesh. A shy herd runs from the player, at
+`FLEE_PACE` times its walk, while the player is nearer than its `flee`.
 """
 
 from animation.animation_mixer import ONCE, AnimationAction, AnimationMixer
@@ -121,6 +122,8 @@ comptime THRESHOLD = Float32(1.0)
 and first after it comes out, in meters."""
 comptime INDOORS = Float32(1.8)
 """How far behind its door a villager rests inside, in meters."""
+comptime FLEE_PACE = Float32(3)
+"""How many times its walking speed an animal runs when it flees."""
 comptime TRIES = 8
 """How many places `wander_route` tries for each point before it gives
 up on that point."""
@@ -496,7 +499,6 @@ struct Villager(Copyable, Movable):
     var home: Int
 
 
-@fieldwise_init
 struct Herd(Copyable, Movable):
     """Animals of one kind that graze round one pasture."""
 
@@ -508,6 +510,39 @@ struct Herd(Copyable, Movable):
     var reach: Float32
     # Which individual, and which points they graze between.
     var seed: Int
+    # How near the player may come before they run, in meters. Zero is
+    # tame.
+    var flee: Float32
+
+    def __init__(
+        out self,
+        species: SpeciesId,
+        count: Int,
+        x: Float32,
+        z: Float32,
+        reach: Float32,
+        seed: Int,
+        flee: Float32 = 0,
+    ):
+        """Create a herd.
+
+        Args:
+            species: What kind of animal.
+            count: How many.
+            x: The pasture's middle along x, in meters.
+            z: The pasture's middle along z, in meters.
+            reach: How far round the middle they graze, in meters.
+            seed: Which individual, and which points they graze between.
+            flee: How near the player may come before they run away, in
+                meters. Zero is tame.
+        """
+        self.species = species
+        self.count = count
+        self.x = x
+        self.z = z
+        self.reach = reach
+        self.seed = seed
+        self.flee = flee
 
 
 struct ResidentsParameters(Copyable, Movable):
@@ -545,7 +580,8 @@ struct ResidentsParameters(Copyable, Movable):
         Raises:
             Error: If there are not from 0 to 64 villagers or herds; a
                 villager's home is below -1; a herd has not from 1 to 64
-                animals, or its species is not one;
+                animals, or its species is not one, or it flees from
+                further than 100 meters or from a negative distance;
                 a pasture or a wander reaches further than 1 kilometer;
                 the budget is not from 500 to 100,000 triangles; the detail
                 is not from 8 to 64; there are not from 1 to 32 phases; the
@@ -581,6 +617,12 @@ struct ResidentsParameters(Copyable, Movable):
                 0,
                 1000,
                 "A pasture must reach from 0 to 1 kilometer",
+            )
+            require_between(
+                herd.flee,
+                0,
+                100,
+                "A herd must flee from 0 to 100 meters",
             )
         require_count_between(
             self.triangles,
@@ -660,6 +702,8 @@ struct Beast(Copyable, Movable):
     var node: NodeId
     var mesh: Int
     var book: Int
+    # How near the player may come before it runs, in meters.
+    var flee: Float32
 
 
 struct Residents(Movable):
@@ -780,7 +824,11 @@ struct Residents(Movable):
                     )
             else:
                 walker.walk_speed = Velocity(0.3, METER_PER_SECOND)
-            walker.run_speed = walker.walk_speed
+            # An animal runs only when it flees, at three times its walk.
+            walker.run_speed = Velocity(
+                walker.walk_speed.to(METER_PER_SECOND) * FLEE_PACE,
+                METER_PER_SECOND,
+            )
             var book = len(self.books)
             self.books.append(Flipbook(stand, frames^, stride))
             for member in range(herd.count):  # pragma: no branch
@@ -814,7 +862,9 @@ struct Residents(Movable):
                     terrain,
                 )
                 route.next = (member + 1) % len(route.points)
-                self.beasts.append(Beast(character^, route^, node, mesh, book))
+                self.beasts.append(
+                    Beast(character^, route^, node, mesh, book, herd.flee)
+                )
 
     def update(
         mut self,
@@ -822,12 +872,15 @@ struct Residents(Movable):
         delta: Duration,
         terrain: Terrain,
         obstacles: List[Obstacle],
+        player: Optional[Vector3] = None,
     ) raises:
         """Move every resident along its route by one frame, and pose it.
 
         Each resident bumps into the obstacles that you give and into
         every other resident: where it stands now, for one that has moved
-        this frame, and where it stood, for one that has not.
+        this frame, and where it stood, for one that has not. An animal
+        that the player comes nearer than its herd's `flee` runs straight
+        away, and walks back to its route once the player is further.
 
         Args:
             scene: The scene the residents are in.
@@ -835,6 +888,7 @@ struct Residents(Movable):
             terrain: The ground, the floors, the walls and the solid
                 buildings.
             obstacles: The round things in the way.
+            player: Where the player stands, which a shy animal runs from.
 
         Raises:
             Error: If the time is negative, or a clip cannot be played.
@@ -857,6 +911,16 @@ struct Residents(Movable):
         for index in range(len(self.beasts)):
             ref beast = self.beasts[index]
             var steer = beast.route.steer(beast.character, delta)
+            if player:
+                var at = beast.character.position
+                var away = Vector3(
+                    at.x - player.value().x, 0, at.z - player.value().z
+                )
+                if away.length() < beast.flee:
+                    var run = no_input()
+                    run.forward = 1
+                    run.run = True
+                    steer = (run, yaw_of(away))
             beast.character.step(
                 steer[0],
                 steer[1],
