@@ -15,6 +15,7 @@ from tools._spiral_moment_derive import (
     coefficient_words_json,
     derive_endpoints,
     stored_coefficient_words,
+    moment_payload_from_rows,
     stored_scalar_word,
     verified_table_integers,
 )
@@ -483,6 +484,23 @@ def test_matching_rows_still_check_the_stored_table() raises:
     """Sixty-four zero rows still refuse a missing table declaration."""
     with assert_raises(contains="missing or malformed table declaration"):
         _ = verified_table_integers(_table_payload(64, "nope"))
+
+
+def test_bad_rows_fail_before_the_moment_payload() raises:
+    """A short row list fails before the payload is packed."""
+    with assert_raises(
+        contains="spiral moment derive: wrong derived table shape"
+    ):
+        _ = moment_payload_from_rows("[]")
+
+
+def test_spelled_rows_still_check_the_moment_payload() raises:
+    """Sixty-four rows still refuse a word that is not hexadecimal."""
+    var table = PyJson.parse(_table_payload(64, "unused"))
+    var rows = table.subtree(table.at(table.root, "rows")).dumps()
+    rows = rows.replace("0x0000000000000000", "nope")
+    with assert_raises(contains="malformed moment source word"):
+        _ = moment_payload_from_rows(rows)
 
 
 def main() raises:

@@ -10,6 +10,7 @@
     carla_moment_gate --decimal-rows PATH
     carla_moment_gate --coefficient-words PATH
     carla_moment_gate --verified-table PATH
+    carla_moment_gate --payload-rows PATH
     carla_moment_gate --node-sums PATH
     carla_moment_gate --fractions PATH
 
@@ -27,6 +28,7 @@ from tools._spiral_moment_derive import (
     coefficient_rows_from_decimals,
     coefficient_rows_payload,
     coefficient_words_json,
+    moment_payload_from_rows,
     stored_coefficient_words,
     verified_table_integers,
 )
@@ -170,7 +172,8 @@ def _usage():
         (
             "usage: carla_moment_gate --module PATH --interval PATH"
             " --geometry PATH --trig PATH | --rows PATH | --decimal-rows PATH |"
-            " --coefficient-words PATH | --verified-table PATH | --node-sums"
+            " --coefficient-words PATH | --verified-table PATH | --payload-rows"
+            " PATH | --node-sums"
             " PATH | --fractions PATH"
         ),
         file=stderr,
@@ -192,6 +195,7 @@ def main() raises:
     var decimal_rows = String("")
     var coefficient_words = String("")
     var verified_table = String("")
+    var payload_rows = String("")
     var node_sums = String("")
     var fractions = String("")
     var arguments = argv()
@@ -207,6 +211,7 @@ def main() raises:
             or word == "--decimal-rows"
             or word == "--coefficient-words"
             or word == "--verified-table"
+            or word == "--payload-rows"
             or word == "--node-sums"
             or word == "--fractions"
         ):
@@ -227,6 +232,8 @@ def main() raises:
                 coefficient_words = value
             elif word == "--verified-table":
                 verified_table = value
+            elif word == "--payload-rows":
+                payload_rows = value
             elif word == "--node-sums":
                 node_sums = value
             elif word == "--fractions":
@@ -244,6 +251,8 @@ def main() raises:
     if coefficient_words.byte_length() > 0:
         single += 1
     if verified_table.byte_length() > 0:
+        single += 1
+    if payload_rows.byte_length() > 0:
         single += 1
     if node_sums.byte_length() > 0:
         single += 1
@@ -277,6 +286,11 @@ def main() raises:
             elif verified_table.byte_length() > 0:
                 print(
                     verified_table_integers(Path(verified_table).read_text()),
+                    end="",
+                )
+            elif payload_rows.byte_length() > 0:
+                print(
+                    moment_payload_from_rows(Path(payload_rows).read_text()),
                     end="",
                 )
             elif decimal_rows.byte_length() > 0:

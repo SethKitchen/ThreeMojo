@@ -13,7 +13,7 @@ from tools._bigint import BigInt
 from tools._cli_failures import derive_prefix
 from tools._fraction import Fraction
 from tools._python_json import PyJson
-from tests._python_tokens import verify_moment_table
+from tests._python_tokens import moment_payload_json, verify_moment_table
 from tools._spiral_moment_words import (
     bracket,
     decimal_word,
@@ -953,6 +953,22 @@ def verified_table_integers(payload: String) raises -> String:
     return hex_integers_json(
         verify_moment_table(doc.text(doc.at(doc.root, "source")), words)
     )
+
+
+def moment_payload_from_rows(rows: String) raises -> String:
+    """Derive the coefficient words, then build the moment payload.
+
+    Args:
+        rows: The JSON rows from the moment derivation.
+
+    Returns:
+        JSON with `be64`, `be64_sha256`, `byte_count`, and `source_sha256`.
+
+    Raises:
+        Error: The rows changed, or a coefficient word is malformed. The
+            rows are checked before the payload is built.
+    """
+    return moment_payload_json(coefficient_words_json(rows))
 
 
 def coefficient_rows_payload(payload: String) raises -> String:
