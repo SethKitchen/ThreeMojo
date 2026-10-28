@@ -13,6 +13,7 @@
     carla_moment_gate --payload-rows PATH
     carla_moment_gate --source-rows PATH
     carla_moment_gate --products ROWS OUTPUT
+    carla_moment_gate --products-after-report PATH OUTPUT
     carla_moment_gate --integer-rows PATH
     carla_moment_gate --node-sums PATH
     carla_moment_gate --fractions PATH
@@ -35,6 +36,7 @@ from tools._spiral_moment_derive import (
     moment_payload_from_rows,
     moment_source_from_rows,
     write_moment_products,
+    write_products_after_report,
     stored_coefficient_words,
     verified_table_integers,
 )
@@ -180,7 +182,7 @@ def _usage():
             " --geometry PATH --trig PATH | --rows PATH | --decimal-rows PATH |"
             " --coefficient-words PATH | --verified-table PATH | --payload-rows"
             " PATH | --source-rows PATH | --products ROWS OUTPUT |"
-            " --integer-rows PATH"
+            " --products-after-report PATH OUTPUT | --integer-rows PATH"
             " | --node-sums"
             " PATH | --fractions PATH"
         ),
@@ -209,6 +211,18 @@ def main() raises:
     var node_sums = String("")
     var fractions = String("")
     var arguments = argv()
+    if len(arguments) == 4 and arguments[1] == "--products-after-report":
+        try:
+            print(
+                write_products_after_report(
+                    Path(arguments[2]).read_text(), Path(arguments[3])
+                ),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 4 and arguments[1] == "--products":
         try:
             print(

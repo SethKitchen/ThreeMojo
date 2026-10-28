@@ -943,6 +943,41 @@ def _moment_payload(rows):
     return json.loads(result.stdout)
 
 
+def _report_then_products(report, rows):
+    """Indent the moment report, then write the generated products."""
+    import os
+    import subprocess
+    import tempfile
+    payload = json.dumps(
+        {'report': report, 'rows': rows}, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='report-products-') as directory:
+        folder = Path(directory)
+        path = folder / 'products.json'
+        binary = folder / 'payload.bin'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_gate',
+             '--products-after-report', str(path), str(binary)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = _cli_failures()['derive']
+        if message.startswith(prefix):
+            raise CheckError(message[len(prefix):])
+        raise CheckError(message) from ValueError(message)
+    parsed = json.loads(result.stdout)
+    return (
+        parsed['report'].encode('utf-8'),
+        parsed['source'].encode('utf-8'),
+        binary.read_bytes(),
+        parsed['coefficients'].encode('utf-8'),
+    )
+
+
 def _generated_products(rows):
     """Write the table source, then the payload bytes."""
     import os
@@ -1266,14 +1301,19 @@ def main(argv=None):
                 from . import coverage_invariant_contracts as invariant
             else:
                 import coverage_invariant_contracts as invariant
-            products = {report_plan['report_name']: invariant._indent_json(report)}
             if args.generate:
-                source, payload, coefficients = _generated_products(rows)
-                products.update({
+                report_bytes, source, payload, coefficients = (
+                    _report_then_products(report, rows))
+                products = {
+                    report_plan['report_name']: report_bytes,
                     _table().name: source,
                     report_plan['words_name']: payload,
                     report_plan['coefficients_name']: coefficients,
-                })
+                }
+            else:
+                products = {
+                    report_plan['report_name']: invariant._indent_json(report),
+                }
             _moment_guard('--output', {
                 'destinations': [str((output / name).resolve()) for name in products],
                 'protected': [str(path.resolve()) for path in protected],

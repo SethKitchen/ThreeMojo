@@ -1065,6 +1065,45 @@ def write_moment_products(rows: String, output: Path) raises -> String:
     return out.dumps()
 
 
+def write_products_after_report(payload: String, output: Path) raises -> String:
+    """Indent the moment report, then write the generated products.
+
+    Args:
+        payload: JSON with `report` and `rows`. `report` is the report
+            object. `rows` is the derived row list.
+        output: The file that receives the payload bytes.
+
+    Returns:
+        JSON with `report`, `source`, and `coefficients`. `report` is the
+        indented report, including the final newline.
+
+    Raises:
+        Error: The report is missing, the rows changed, or the payload
+            hex is not bytes. The report is indented before the products
+            are written.
+    """
+    var doc = PyJson.parse(payload)
+    var report = doc.at(doc.root, "report")
+    var indented = dumps_indent(doc, report, 2) + "\n"
+    var rows = doc.subtree(doc.at(doc.root, "rows")).dumps()
+    var products = PyJson.parse(write_moment_products(rows, output))
+    var out = PyJson()
+    var body = out.new_dict()
+    out.set(body, "report", out.new_str(indented))
+    out.set(
+        body,
+        "source",
+        out.new_str(products.text(products.at(products.root, "source"))),
+    )
+    out.set(
+        body,
+        "coefficients",
+        out.new_str(products.text(products.at(products.root, "coefficients"))),
+    )
+    out.root = body
+    return out.dumps()
+
+
 def coefficient_integers_from_rows(rows: String) raises -> String:
     """Derive the coefficient words, then read them as integers.
 

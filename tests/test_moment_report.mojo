@@ -11,6 +11,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 from tools._spiral_moment_derive import (
     moment_products_from_rows,
     write_moment_products,
+    write_products_after_report,
 )
 from tools._moment_report import (
     moment_meta_from_rows,
@@ -172,6 +173,17 @@ def test_bad_rows_fail_before_the_generated_products() raises:
         contains="spiral moment derive: wrong derived table shape"
     ):
         _ = write_moment_products("[]", Path("/tmp/moment-product-bytes"))
+    with assert_raises(contains="KeyError: 'report'"):
+        _ = write_products_after_report(
+            '{"rows":[]}', Path("/tmp/moment-product-bytes")
+        )
+    with assert_raises(
+        contains="spiral moment derive: wrong derived table shape"
+    ):
+        _ = write_products_after_report(
+            '{"report":{"source_sha256":"aa"},"rows":[]}',
+            Path("/tmp/moment-product-bytes"),
+        )
 
 
 def main() raises:
