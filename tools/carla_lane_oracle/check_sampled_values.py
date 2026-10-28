@@ -1022,7 +1022,7 @@ def _project_batch(bounds, trig):
 
 
 def _recipe_and_batch(bounds, trig, target):
-    """Return the projection steps and the copied helpers."""
+    """Return the projection steps, the helpers, and their syntax."""
     import os
     import subprocess
     import tempfile
@@ -1036,7 +1036,8 @@ def _recipe_and_batch(bounds, trig, target):
         path.write_text(payload)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo,
-             'carla_sampled_projection', '--after-top-level', str(path)],
+             'carla_sampled_projection', '--after-top-level-syntax',
+             str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -1058,7 +1059,7 @@ def _recipe_and_batch(bounds, trig, target):
 
 
 def _project_sampled(bounds, trig, texts, target):
-    """Project the reviewed helpers, using Python only for the syntax texts."""
+    """Project the helpers, then return syntax after the recipe comparison."""
     checked = _recipe_and_batch(bounds, trig, target)
     recipe = checked['recipe']
     record = checked['record']
@@ -1104,7 +1105,9 @@ def _project_sampled(bounds, trig, texts, target):
             # 21..22: original trig and final output are retained, without slicing.
         else:
             raise CheckError(_sampled_closure()['step'])
-    return expected
+    # The recipe comparison above still fails before a syntax error.
+    return expected, _prepared_rows(
+        [source for _name, source in expected.items()], checked['syntax'])
 
 
 @source.lexical_memo_scope()
@@ -1165,9 +1168,8 @@ def verify(root):
                 verify_qualifiers(root, filename, text, _operation=_operation)
         except ValueError as error:
             raise CheckError(str(error)) from error
-        expected = _project_sampled(bounds, trig, texts, target)
-        prepared_sources = _classified_sources(
-            [source for _name, source in expected.items()])
+        expected, prepared_sources = _project_sampled(
+            bounds, trig, texts, target)
         for (name, source), prepared in zip(expected.items(), prepared_sources):
             # Decorators stay on the copied text. The syntax tree is the
             # independent comparison with the sampled module.

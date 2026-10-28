@@ -459,6 +459,10 @@ It keeps each copied helper's decorators.
 
 It prepares every copied helper before the Python comparison in one check.
 
+It classifies those copied helpers after the helper names in one check.
+A missing helper name still fails before that classification.
+The Python recipe comparison still runs before a syntax error.
+
 It removes the try-only refusal before the reference graph hash.
 
 It restores the historical envelope helper before that hash.
