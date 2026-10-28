@@ -76,11 +76,12 @@ comptime LABELS = [
 comptime SNAPSHOT_DIGEST = (
     "b052384e6dd218801b3c52bffe61d57b79ed420b74ee792bbc83b102715b7ea1"
 )
-"""The Python tool's digest of the synthetic snapshot."""
+"""The digest of the synthetic snapshot."""
 comptime HELD_DIGEST = (
-    "7e10d5fcba6e2160e1f9979f4cfeb42db80b7d4775cfc957b1fe6c2544de7bb3"
+    "49b031c0ddd0de8d1eced7b2fb7e24e60ccee9d92ede692783a13eafce8d9410"
 )
-"""The Python tool's digest of the snapshot that holds the evidence."""
+"""The digest of the snapshot that holds the committed evidence. It
+changes whenever the evidence is regenerated."""
 
 
 # --- Fixtures -------------------------------------------------------------------------

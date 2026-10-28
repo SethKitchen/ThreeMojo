@@ -895,6 +895,7 @@ def _length(x: Float32, y: Float32, z: Float32) -> Float64:
     var fz = Float64(z)
     return sqrt(squared_length3[DType.float64](fx, fy, fz))
 
+
 def _band_sum(
     band: List[UInt8], index: Int, degree: Int, d: Vector3
 ) -> Vector3:
