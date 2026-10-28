@@ -720,15 +720,21 @@ def classified_syntax_json(source: String) raises -> String:
         source: Mojo source to inspect as a Python AST.
 
     Returns:
-        The syntax JSON, or `{"fallback":true}` when the failure is not a
-        generic-declaration message.
+        The syntax JSON with `words` after `source` and `generics`, or
+        `{"fallback":true}` when the failure is not a generic-declaration
+        message.
 
     Raises:
         Error: The failure is an unclosed or ambiguous generic declaration.
-            The syntax check runs before those messages are read.
+            The syntax check runs before those messages are read. On
+            success, the syntax words are read after that check.
     """
     try:
-        return python_syntax_json(source)
+        var syntax = python_syntax_json(source)
+        var words = sampled_syntax_words()
+        var end = syntax.byte_length() - 1
+        var prefix = syntax[byte=0:end]
+        return String(prefix) + ',"words":' + words + "}"
     except error:
         var message = String(error)
         var words = PyJson.parse(sampled_syntax_words())

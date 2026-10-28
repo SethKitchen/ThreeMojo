@@ -317,7 +317,7 @@ def _python_syntax_tree(text):
 
 
 def _syntax_prepare(text):
-    """Return parser source and generic rows from the Mojo syntax gate."""
+    """Return parser source, generic rows, and the syntax words."""
     import os
     import subprocess
     import tempfile
@@ -342,7 +342,7 @@ def _syntax_prepare(text):
     if data.get('fallback'):
         return None
     try:
-        return data['source'], data['generics']
+        return data['source'], data['generics'], data['words']
     except (KeyError, TypeError):
         return None
 
@@ -354,14 +354,16 @@ def syntax_tree(text):
     prepared = _syntax_prepare(text)
     if prepared is None:
         return _python_syntax_tree(text)
-    source, generics = prepared
+    source, generics, words = prepared
+    global _SYNTAX_WORDS
+    if _SYNTAX_WORDS is None:
+        _SYNTAX_WORDS = words
     try:
         tree = ast.parse(source)
     except SyntaxError:
         return _python_syntax_tree(text)
     for key, parameters in generics:
         kind, name = key
-        words = _syntax_words()
         node_type = ast.FunctionDef if kind == words['def_word'] else ast.ClassDef
         matches = [n for n in ast.walk(tree) if isinstance(n, node_type) and n.name == name]
         require(len(matches) == 1, words['parsed'])

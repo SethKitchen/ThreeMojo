@@ -31,6 +31,7 @@ def test_a_plain_function_keeps_its_python_source() raises:
     """A plain function returns source and generic metadata."""
     var doc = PyJson.parse(classified_syntax_json("def f():\n    return 1\n"))
     assert_equal(doc.text(doc.at(doc.root, "source")).find("def f") >= 0, True)
+    assert_equal(doc.text(doc.at(doc.at(doc.root, "words"), "def_word")), "def")
 
 
 def main() raises:
