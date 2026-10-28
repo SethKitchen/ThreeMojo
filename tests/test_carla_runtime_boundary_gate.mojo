@@ -17,6 +17,7 @@ from tools.carla_runtime_boundary_gate import (
     boundary_steps,
     runtime_boundary_bytes_all,
     runtime_boundary_checked_edges,
+    runtime_boundary_extended_edges,
     runtime_boundary_record,
 )
 
@@ -117,6 +118,52 @@ def test_a_changed_checked_boundary_digest_is_refused() raises:
     )
     with assert_raises(contains="reviewed runtime boundary successor: second"):
         _ = runtime_boundary_checked_edges(directory)
+
+
+def test_a_missing_view_step_leaves_the_edge() raises:
+    """A path without a step is not an extension."""
+    var payload = (
+        '{"steps":{},"items":[{"path":"a.mojo",'
+        + '"edge":{"after_sha256":"aa","after_token_sha256":"bb"}}]}'
+    )
+    assert_equal(
+        runtime_boundary_extended_edges(payload),
+        '[{"extend":false}]',
+    )
+
+
+def test_a_matching_view_step_extends_the_edge() raises:
+    """A step that meets the edge replaces the after digests."""
+    var payload = (
+        '{"steps":{"a.mojo":{"before_sha256":"aa",'
+        + '"before_token_sha256":"bb","after_sha256":"cc",'
+        + '"after_token_sha256":"dd"}},'
+        + '"items":[{"path":"a.mojo","edge":{"after_sha256":"aa",'
+        + '"after_token_sha256":"bb"}}]}'
+    )
+    assert_equal(
+        runtime_boundary_extended_edges(payload),
+        '[{"extend":true,"edge":{"after_sha256":"cc",'
+        + '"after_token_sha256":"dd"}}]',
+    )
+
+
+def test_a_disconnected_extension_is_refused() raises:
+    """A step that does not meet the edge fails before the decision is used."""
+    var payload = (
+        '{"steps":{"a.mojo":{"before_sha256":"aa",'
+        + '"before_token_sha256":"bb","after_sha256":"cc",'
+        + '"after_token_sha256":"dd"}},'
+        + '"items":[{"path":"a.mojo","edge":{"after_sha256":"zz",'
+        + '"after_token_sha256":"bb"}}]}'
+    )
+    with assert_raises(
+        contains=(
+            "reviewed runtime boundary successor: runtime view step does not"
+            " extend the edge: a.mojo"
+        )
+    ):
+        _ = runtime_boundary_extended_edges(payload)
 
 
 def main() raises:

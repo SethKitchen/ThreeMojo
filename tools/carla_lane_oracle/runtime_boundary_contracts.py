@@ -257,13 +257,32 @@ def _extended_edge(path, edge, steps):
 
 
 def _extended_edges(items, steps):
-    """Return the edge decision for each path."""
+    """Decide every edge and require each extension to meet that edge."""
     if not items:
         return []
-    return _extended_query({
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps({
         'steps': steps,
         'items': [{'path': path, 'edge': edge} for path, edge in items],
-    })
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='runtime-extended-') as directory:
+        path = Path(directory) / 'edges.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_runtime_boundary_gate', '--extended', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
 
 
 def _gate_extend(step, edge, path):

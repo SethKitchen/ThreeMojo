@@ -12,6 +12,7 @@
     carla_runtime_boundary_gate --steps DIR
     carla_runtime_boundary_gate --extend --path TEXT --step-sha HEX --edge-sha HEX --step-token HEX --edge-token HEX
     carla_runtime_boundary_gate --extends PATH
+    carla_runtime_boundary_gate --extended PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -23,9 +24,11 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
+from tools._runtime_edge import extend_runtime_edges
 from tools._merged_edge import merged_edges
 from tools._python_json import (
     MISSING,
+    PY_BOOL,
     PY_DICT,
     PY_INT,
     PY_LIST,
@@ -332,6 +335,44 @@ def boundary_extend(
         _fail("runtime view step does not extend the edge: " + path)
 
 
+def runtime_boundary_extended_edges(payload: String) raises -> String:
+    """Decide every edge, then require each extension to meet that edge.
+
+    Args:
+        payload: JSON with `steps` and `items`. Each item has `path` and `edge`.
+
+    Returns:
+        A JSON list of edge decisions, in item order.
+
+    Raises:
+        Error: A step is missing a digest, or a step does not extend its edge.
+    """
+    var decisions = extend_runtime_edges(payload)
+    var doc = PyJson.parse(payload)
+    var decided = PyJson.parse(decisions)
+    var steps = doc.at(doc.root, "steps")
+    var items = doc.at(doc.root, "items")
+    var count = decided.length(decided.root)
+    var index = 0
+    while index < count:
+        var decision = decided.item(decided.root, index)
+        var extend_node = decided.at(decision, "extend")
+        if decided.kind(extend_node) == PY_BOOL and decided.flag(extend_node):
+            var item = doc.item(items, index)
+            var path = doc.text(doc.at(item, "path"))
+            var edge = doc.at(item, "edge")
+            var step = doc.at(steps, path)
+            boundary_extend(
+                doc.text(doc.at(step, "before_sha256")),
+                doc.text(doc.at(edge, "after_sha256")),
+                doc.text(doc.at(step, "before_token_sha256")),
+                doc.text(doc.at(edge, "after_token_sha256")),
+                path,
+            )
+        index += 1
+    return decisions
+
+
 def boundary_extends(payload: String) raises:
     """Require each view step to start where its edge ends.
 
@@ -443,6 +484,7 @@ def main() raises:
     var step_token = String("")
     var edge_token = String("")
     var extends = String("")
+    var extended = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -466,6 +508,7 @@ def main() raises:
             or word == "--step-token"
             or word == "--edge-token"
             or word == "--extends"
+            or word == "--extended"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -496,8 +539,10 @@ def main() raises:
                 step_token = value
             elif word == "--edge-token":
                 edge_token = value
-            else:
+            elif word == "--extends":
                 extends = value
+            else:
+                extended = value
             index += 2
             continue
         _usage()
@@ -515,6 +560,8 @@ def main() raises:
     if extend:
         modes += 1
     if extends.byte_length() > 0:
+        modes += 1
+    if extended.byte_length() > 0:
         modes += 1
     if modes != 1:
         _usage()
@@ -537,6 +584,12 @@ def main() raises:
         if extend:
             boundary_extend(
                 step_sha, edge_sha, step_token, edge_token, module_path
+            )
+            return
+        if extended.byte_length() > 0:
+            print(
+                runtime_boundary_extended_edges(Path(extended).read_text()),
+                end="",
             )
             return
         if extends.byte_length() > 0:
