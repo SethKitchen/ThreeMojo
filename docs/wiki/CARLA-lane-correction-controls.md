@@ -292,6 +292,8 @@ It returns the SHA-256 digest of each reviewed source text and pin file.
 
 It checks the stored-half helper result uses.
 
+It requires the helper text before that stored-half check in one check.
+
 It projects the Sum2 ideal spiral by removing the reviewed auxiliaries.
 
 It projects the Sum2 ideal spiral and returns its result in one check.

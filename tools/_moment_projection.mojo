@@ -176,3 +176,19 @@ def moment_sum2_projection(payload: String) raises -> String:
     inner.set(body, "helper", inner.new_str(helper))
     inner.root = body
     return moment_projection(inner.dumps())
+
+
+def checked_helper_projection(payload: String) raises:
+    """Require the helper text, then check the stored-half helper.
+
+    Args:
+        payload: JSON with `text` and `message`. `text` is the helper
+            source when it is a string.
+
+    Raises:
+        Error: `text` is not a string, or the helper changed. The text
+            check uses `message` and runs before the helper check.
+    """
+    require_source_text(payload)
+    var doc = PyJson.parse(payload)
+    check_stored_half(doc.text(doc.at(doc.root, "text")))

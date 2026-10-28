@@ -187,8 +187,32 @@ def projection_result(digest):
 
 def verify_helper_projection(helper_text):
     """The pinned helper starts with a half product and only revises error."""
-    _require_source_text(helper_text, 'ideal helper declaration or decorator changed')
-    check_stored_half(helper_text)
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    message = 'ideal helper declaration or decorator changed'
+    try:
+        payload = json.dumps(
+            {'text': helper_text, 'message': message},
+            separators=(',', ':'), allow_nan=False)
+    except (TypeError, ValueError):
+        payload = json.dumps(
+            {'text': None, 'message': message}, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='helper-projection-') as directory:
+        path = Path(directory) / 'helper.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_moment_projection', '--helper', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
 
 
 def _gate(payload, kind):

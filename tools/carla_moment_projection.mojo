@@ -7,17 +7,20 @@
 
     carla_moment_projection PATH
     carla_moment_projection --legacy PATH
+    carla_moment_projection --helper PATH
 
 PATH is a JSON object. The direct form has `legacy`, `current`, and
 `helper`. The Sum2 form has `bounds` and selects the spiral from that
-module. `--legacy` checks the pin digest before that projection. The
-command prints the projection record.
+module. `--legacy` checks the pin digest before that projection.
+`--helper` requires the helper text before the stored-half check. The
+projection commands print the projection record.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._moment_projection import (
+    checked_helper_projection,
     moment_legacy_projection,
     moment_projection,
     moment_sum2_projection,
@@ -30,7 +33,7 @@ def _usage():
     print(
         (
             "usage: carla_moment_projection PATH | carla_moment_projection"
-            " --legacy PATH"
+            " --legacy PATH | carla_moment_projection --helper PATH"
         ),
         file=stderr,
     )
@@ -51,6 +54,13 @@ def main() raises:
                 moment_legacy_projection(Path(arguments[2]).read_text()),
                 end="",
             )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--helper":
+        try:
+            checked_helper_projection(Path(arguments[2]).read_text())
         except error:
             print(String(error), file=stderr)
             exit(1)
