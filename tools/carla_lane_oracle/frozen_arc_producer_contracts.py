@@ -307,36 +307,52 @@ def _predecessor_request(payload, record, prior_digest):
     }, separators=(',', ':'))
 
 
-def _runtime_predecessor(payload, record, prior_digest):
-    """Read the frozen pin labels, then return the indented predecessor."""
+def _runtime_predecessor(payload, record, prior_digest, *, _then_paths=False):
+    """Read the frozen pin labels, then return the indented predecessor.
+
+    When `_then_paths` is set, the frozen-arc paths are read after that
+    predecessor and kept when the path cache is empty.
+    """
     import ast
     import os
     import subprocess
     import tempfile
     from pathlib import Path
+    global _PATHS
     request = _predecessor_request(payload, record, prior_digest)
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    mode = '--predecessor-paths' if _then_paths else '--predecessor-labels'
     with tempfile.TemporaryDirectory(prefix='frozen-predecessor-') as directory:
         folder = Path(directory)
         (folder / 'payload').write_bytes(payload)
         (folder / 'request.json').write_text(request)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
-             '--predecessor-labels', str(folder)],
-            capture_output=True)
+             mode, str(folder)],
+            capture_output=True, text=_then_paths)
     if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and b'Crashpad' not in line]
-        message = (lines[-1] if lines else result.stdout).decode(
-            'utf-8', 'replace').strip()
+        if _then_paths:
+            lines = [line.strip() for line in result.stderr.splitlines()
+                     if line.strip() and 'Crashpad' not in line]
+            message = lines[-1] if lines else result.stdout.strip()
+        else:
+            lines = [line.strip() for line in result.stderr.splitlines()
+                     if line.strip() and b'Crashpad' not in line]
+            message = (lines[-1] if lines else result.stdout).decode(
+                'utf-8', 'replace').strip()
         if message.startswith('KeyError: '):
             try:
                 raise KeyError(ast.literal_eval(message[len('KeyError: '):]))
             except (SyntaxError, ValueError):
                 pass
         raise ValueError(message)
-    return result.stdout
+    if not _then_paths:
+        return result.stdout
+    parsed = json.loads(result.stdout)
+    if _PATHS is None:
+        _PATHS = parsed['paths']
+    return parsed['predecessor'].encode('utf-8')
 
 
 def _predecessor_then_declarations(payload, record, prior_digest, guard, guard_sha):
@@ -683,7 +699,12 @@ def verify(root, *, _operation=None, _then_invariant_labels=False):
     operation_args = {} if _operation is None else {'_operation': _operation}
     record = read_record(root)
     try:
-        _, guard_payload = _verified_pin_pair(root, record['runtime_pins_before_sha256'], **operation_args)
+        _, guard_payload = _verified_pin_pair(
+            root,
+            record['runtime_pins_before_sha256'],
+            _then_paths=True,
+            **operation_args,
+        )
     except ValueError as error:
         # Preserve this public runtime-pin diagnostic after complete admission
         # rejects the same fixed input. Never relabel private operation faults.
@@ -715,15 +736,19 @@ def verify(root, *, _operation=None, _then_invariant_labels=False):
     return record
 
 
-def _runtime_pin_predecessor(payload, record, prior_digest):
-    return _runtime_predecessor(payload, record, prior_digest)
+def _runtime_pin_predecessor(payload, record, prior_digest, *, _then_paths=False):
+    return _runtime_predecessor(
+        payload, record, prior_digest, _then_paths=_then_paths)
 
 
-def _verified_pin_pair(root, prior_digest, *, _operation=None, _guard_sha=None):
+def _verified_pin_pair(
+        root, prior_digest, *, _operation=None, _guard_sha=None, _then_paths=False,
+):
     """Reconstruct frozen runtime bytes and retain the invariant guard bytes.
 
     When `_guard_sha` is set, the predecessor and the declaration catalog
-    are one check. That call returns the catalog.
+    are one check. That call returns the catalog. When `_then_paths` is
+    set, the frozen-arc paths are read after the predecessor.
     """
     if _operation is not None:
         _check_operation(root, _operation)
@@ -738,7 +763,7 @@ def _verified_pin_pair(root, prior_digest, *, _operation=None, _guard_sha=None):
         invariant._predecessor_pin_pair(root, _operation=_operation))
     if _guard_sha is None:
         runtime_predecessor = _runtime_pin_predecessor(
-            runtime_payload, record, prior_digest)
+            runtime_payload, record, prior_digest, _then_paths=_then_paths)
         return runtime_predecessor, guard_payload
     return _predecessor_then_declarations(
         runtime_payload, record, prior_digest, guard_payload, _guard_sha)

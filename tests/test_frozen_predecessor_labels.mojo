@@ -8,9 +8,11 @@
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._cleanup_declarations import cleanup_declarations
+from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
 from tools.carla_frozen_arc_gate import (
     frozen_predecessor_then_declarations,
+    frozen_predecessor_then_paths,
     frozen_predecessor_with_labels,
     frozen_runtime_predecessor,
 )
@@ -147,6 +149,59 @@ def test_a_missing_placement_fails_after_the_pin_labels() raises:
         )
     ):
         _ = frozen_predecessor_with_labels(
+            _pin().as_bytes(),
+            '{"after":"'
+            + sha256_hex(_pin().as_bytes())
+            + '","before":"00","transitions":[]}',
+        )
+
+
+def test_the_paths_follow_a_matching_predecessor() raises:
+    """A matching predecessor returns the frozen-arc paths after that check."""
+    var restored = _restored()
+    var doc = PyJson.parse(
+        frozen_predecessor_then_paths(
+            _pin().as_bytes(),
+            _request(sha256_hex(restored.as_bytes())),
+        )
+    )
+    var paths = doc.at(doc.root, "paths")
+    var protected = doc.at(paths, "protected")
+    assert_equal(doc.key(doc.root, 0), "predecessor")
+    assert_equal(doc.key(doc.root, 1), "paths")
+    assert_equal(doc.text(doc.at(doc.root, "predecessor")), restored)
+    assert_equal(
+        doc.text(doc.at(paths, "source")),
+        "extensions/carla/curve_frozen_arc.mojo",
+    )
+    assert_equal(doc.length(protected), 2)
+    assert_equal(
+        doc.text(doc.item(protected, 0)), "extensions/carla/polynomial.mojo"
+    )
+    assert_equal(doc.text(doc.item(protected, 1)), "extensions/carla/road.mojo")
+
+
+def test_a_changed_digest_fails_before_the_paths() raises:
+    """A wrong active digest fails before the frozen-arc paths are read."""
+    with assert_raises(
+        contains=(
+            "frozen ARC producer contract: unreviewed runtime pin successor"
+        )
+    ):
+        _ = frozen_predecessor_then_paths(
+            "{".as_bytes(),
+            '{"after":"00","before":"00","transitions":[]}',
+        )
+
+
+def test_a_missing_placement_fails_before_the_paths() raises:
+    """A placement failure is returned before the frozen-arc paths are read."""
+    with assert_raises(
+        contains=(
+            "frozen ARC producer contract: wrong runtime successor placements"
+        )
+    ):
+        _ = frozen_predecessor_then_paths(
             _pin().as_bytes(),
             '{"after":"'
             + sha256_hex(_pin().as_bytes())

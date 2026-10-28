@@ -150,6 +150,8 @@ It rebuilds one frozen runtime pin predecessor in one check.
 
 It reads the frozen pin labels before that runtime predecessor in one check.
 
+It reads the frozen-arc paths after that runtime predecessor in one check.
+
 It relabels one runtime pin failure when the cause is the reviewed contract error.
 
 `tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the pin digests, the ordered pin pair, and the pin placements.

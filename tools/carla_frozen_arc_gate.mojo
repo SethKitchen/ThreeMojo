@@ -18,6 +18,7 @@
     carla_frozen_arc_gate --routing PATH
     carla_frozen_arc_gate --predecessor DIR
     carla_frozen_arc_gate --predecessor-labels DIR
+    carla_frozen_arc_gate --predecessor-paths DIR
     carla_frozen_arc_gate --predecessor-declarations DIR
     carla_frozen_arc_gate --review PATH
     carla_frozen_arc_gate --review-labels PATH
@@ -28,6 +29,7 @@ An absent previous file checks only the migration record.
 `DIR` holds `payload` and `request.json`. The program prints the
 predecessor. `--predecessor-labels` reads the frozen pin labels before
 that predecessor. The request omits `groups`.
+`--predecessor-paths` reads the frozen-arc paths after that predecessor.
 `--predecessor-declarations` also holds `guard` and `sha`. It reads the
 declaration catalog after that predecessor.
 """
@@ -460,6 +462,33 @@ def frozen_predecessor_with_labels(
     return frozen_runtime_predecessor(payload, supplied)
 
 
+def frozen_predecessor_then_paths(
+    payload: Span[UInt8, _], request: String
+) raises -> String:
+    """Read the pin labels, rebuild the predecessor, then return the paths.
+
+    Args:
+        payload: The active runtime pin bytes.
+        request: JSON with `after`, `before`, and `transitions`.
+
+    Returns:
+        JSON with `predecessor` and `paths`. The predecessor is checked
+        before the paths are read.
+
+    Raises:
+        Error: The digest, the placements, or a pin transition changed.
+            The predecessor is checked before the paths are read.
+    """
+    var predecessor = frozen_predecessor_with_labels(payload, request)
+    return (
+        '{"predecessor":'
+        + quote_ascii(predecessor)
+        + ',"paths":'
+        + frozen_arc_paths()
+        + "}"
+    )
+
+
 def frozen_predecessor_then_declarations(
     payload: Span[UInt8, _],
     request: String,
@@ -684,7 +713,8 @@ def _usage():
             " | --places DIR | --functions DIR"
             " | --layout PATH --stored PATH | --routing PATH"
             " | --predecessor DIR | --predecessor-labels DIR"
-            " | --predecessor-declarations DIR | --review PATH"
+            " | --predecessor-paths DIR | --predecessor-declarations DIR"
+            " | --review PATH"
         ),
         file=stderr,
     )
@@ -760,6 +790,20 @@ def main() raises:
             var directory = arguments[2]
             print(
                 frozen_predecessor_with_labels(
+                    Path(directory + "/payload").read_bytes(),
+                    Path(directory + "/request.json").read_text(),
+                ),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--predecessor-paths":
+        try:
+            var directory = arguments[2]
+            print(
+                frozen_predecessor_then_paths(
                     Path(directory + "/payload").read_bytes(),
                     Path(directory + "/request.json").read_text(),
                 ),
