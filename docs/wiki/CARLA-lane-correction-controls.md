@@ -438,6 +438,8 @@ It keeps the runtime-boundary contract prefix.
 
 It reads the declaration line span before restoring that function.
 
+It rebuilds that selection predecessor in one check.
+
 It chooses the grouped roundoff envelope name from the module path.
 
 `tools/carla_ideal_gate.mojo` checks the historical ideal source digest and the projected graph digest.

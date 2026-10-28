@@ -206,6 +206,31 @@ def _significant_documents(texts):
     return json.loads(result.stdout)
 
 
+def _selection_predecessor(payload):
+    """Return one restored selection predecessor."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='selection-predecessor-') as directory:
+        path = Path(directory) / 'predecessor.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_selection_predecessor', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return result.stdout
+
+
 def _declaration_bounds(text, name, owner):
     import json
     import os
@@ -309,28 +334,18 @@ def predecessor_text(root, path, *, _operation=None):
     payload=_typed_source.historical_bytes(root, root/contract, (root/contract).read_bytes(), _operation=_operation)
     _gate_record(payload)
     record=json.loads(payload,object_pairs_hook=source_contracts.unique_keys)
-    if __package__:
-        from . import ideal_projection
-    else:
-        import ideal_projection
-    ideal_projection.moment_guard('--member', {
-        'name': path,
-        'names': list(_expected()),
-        'message': _selection_labels()['predecessor'],
-    })
-    ideal_projection.moment_guard('--names', {
-        'names': list(record['modules']),
-        'expected': list(_expected()),
-        'message': _selection_labels()['predecessor'],
-    })
     item=record['modules'][path]
     name=_envelope_name(path)
     text=_producer_text(root,path, _operation=_operation)
-    body, first, last = _declaration_bounds(text, name, ())
-    current_doc, recorded_doc = _significant_documents([
-        body, item['after_complete_function']])
-    ideal_projection.require_same_text(
-        current_doc, recorded_doc, _selection_labels()['body'])
-    restored=_replace_span(text, first, last, item['before_complete_function'])
-    _gate_restored(restored, item['before_token_sha256'])
-    return restored
+    return _selection_predecessor({
+        'path': path,
+        'names': list(_expected()),
+        'record_names': list(record['modules']),
+        'message': _selection_labels()['predecessor'],
+        'body_message': _selection_labels()['body'],
+        'name': name,
+        'text': text,
+        'after': item['after_complete_function'],
+        'before': item['before_complete_function'],
+        'token': item['before_token_sha256'],
+    })
