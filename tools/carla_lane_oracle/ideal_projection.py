@@ -1066,8 +1066,8 @@ def _reference_refusal():
     )
 
 
-def verify_try_only_reference(text, root, _operation=None):
-    """Admit the reference module, then check the try-only refusal in Mojo."""
+def project_try_only_reference(text, root, _operation=None):
+    """Admit the reference module and return its projected text."""
     bounds, refusal = _reference_refusal()
     try:
         try:
@@ -1086,7 +1086,12 @@ def verify_try_only_reference(text, root, _operation=None):
         budget.historical_function(text, root=root)
     except ValueError as error:
         raise ValueError(refusal + str(error)) from error
-    _try_only_gate(text)
+    return text
+
+
+def verify_try_only_reference(text, root, _operation=None):
+    """Admit the reference module, then check the try-only refusal in Mojo."""
+    _try_only_gate(project_try_only_reference(text, root, _operation=_operation))
 
 
 def strip_try_only(routing_json):

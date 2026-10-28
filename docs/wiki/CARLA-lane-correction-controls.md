@@ -376,6 +376,8 @@ It checks every stored-moment route digest before the source read.
 
 It compares every stored-moment route after that read.
 
+It checks the try-only refusal before the route pins in one check.
+
 It keeps every stored-moment operation block in one check.
 
 It checks every operation block before the route digests in one check.

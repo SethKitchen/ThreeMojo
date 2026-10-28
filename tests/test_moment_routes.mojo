@@ -11,6 +11,7 @@ from tests._python_tokens import strip_try_only_routing
 from tools._moment_route import moment_route_current
 from tools._moment_routes import (
     moment_route_accepts,
+    moment_route_checked,
     moment_route_currents,
     moment_route_digests,
 )
@@ -171,6 +172,83 @@ def test_the_try_only_parameter_is_removed_before_the_pin() raises:
     accepts.append(rows, item)
     accepts.root = rows
     moment_route_accepts(accepts.dumps())
+
+
+def _proof() -> String:
+    """Return one reviewed try-only refusal.
+
+    Returns:
+        A small lane-proof module.
+    """
+    return (
+        "def _lane_jet_model_proof[capture: Bool](\n"
+        + "    ideal_translation: Bool = False,\n"
+        + "    require_reuse: Bool = False,\n"
+        + ") -> Int:\n"
+        + "    if reused:\n"
+        + "        point = reused.value()\n"
+        + "    elif require_reuse:\n"
+        + "        return _unknown_point()\n"
+        + "    else:\n"
+        + "        point = 1\n"
+        + "    return point\n"
+    )
+
+
+def _checked(source: String, expected: String) raises -> String:
+    """Return one refusal check and one route pin.
+
+    Args:
+        source: The projected ideal-caller module. An empty string omits it.
+        expected: The pinned routing document.
+
+    Returns:
+        JSON with `accepts` and, when `source` is not empty, `source`.
+
+    Raises:
+        Error: The payload cannot be written.
+    """
+    var route = moment_route_current("def f():\n    return 1\n")
+    var doc = PyJson()
+    var root = doc.new_dict()
+    var accepts = doc.new_list()
+    var item = doc.new_dict()
+    doc.set(item, "current", doc.new_str(route))
+    doc.set(item, "expected", doc.new_str(expected))
+    doc.set(item, "message", doc.new_str("source routing changed: first"))
+    doc.set(item, "strip", doc.new_bool(False))
+    doc.append(accepts, item)
+    doc.set(root, "accepts", accepts)
+    if source.byte_length() > 0:
+        doc.set(root, "source", doc.new_str(source))
+    doc.root = root
+    return doc.dumps()
+
+
+def test_the_try_only_refusal_is_checked_before_the_route_pin() raises:
+    """A missing lane proof fails before a wrong route pin."""
+    with assert_raises(
+        contains="spiral moment try: missing or ambiguous function"
+    ):
+        moment_route_checked(_checked("def f():\n    return 1\n", "nope"))
+
+
+def test_a_matching_refusal_still_checks_the_route_pin() raises:
+    """A reviewed refusal still refuses a different route pin."""
+    with assert_raises(contains="source routing changed: first"):
+        moment_route_checked(_checked(_proof(), "nope"))
+
+
+def test_a_matching_refusal_and_route_pin_pass() raises:
+    """A reviewed refusal and its route pin both match."""
+    var route = moment_route_current("def f():\n    return 1\n")
+    moment_route_checked(_checked(_proof(), route))
+
+
+def test_an_absent_refusal_still_checks_the_route_pin() raises:
+    """An absent ideal caller still refuses a different route pin."""
+    with assert_raises(contains="source routing changed: first"):
+        moment_route_checked(_checked("", "nope"))
 
 
 def main() raises:

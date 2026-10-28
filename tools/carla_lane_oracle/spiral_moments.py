@@ -715,24 +715,34 @@ def verify_inputs(root):
         } for name, record, source in loaded_routes]))
     except ValueError as error:
         raise CheckError(str(error)) from error
+    projected = None
+    caller = _moment_plan()['ideal_caller']
     for name, record, source in loaded_routes:
-        if name == _moment_plan()['ideal_caller']:
-            # Keep the historical routing pin. Validate the exact additive
-            # try-only refusal, then project only its default-False parameter.
+        if name == caller:
+            # Keep the historical routing pin. Admit the reference module
+            # before the try-only refusal and the route pins.
             try:
-                ideal_projection.verify_try_only_reference(source, root)
+                projected = ideal_projection.project_try_only_reference(source, root)
             except ValueError as error:
                 raise CheckError(
                     messages['routing'] + name + ': ' + str(error)) from error
-    try:
-        _moment_route_batch('--accepts', [{
+    checked = {
+        'accepts': [{
             'current': currents[name],
             'expected': record['normalized_tokens'],
             'message': messages['routing'] + name,
-            'strip': name == _moment_plan()['ideal_caller'],
-        } for name, record, source in loaded_routes])
+            'strip': name == caller,
+        } for name, record, source in loaded_routes],
+    }
+    if projected is not None:
+        checked['source'] = projected
+    try:
+        _moment_route_batch('--checked', checked)
     except ValueError as error:
-        raise CheckError(str(error)) from error
+        message = str(error)
+        if message.startswith('spiral moment try: '):
+            raise CheckError(messages['routing'] + caller + ': ' + message) from error
+        raise CheckError(message) from error
     try:
         source_contracts.verify_group(root, _dependencies()['group'])
     except ValueError as error:

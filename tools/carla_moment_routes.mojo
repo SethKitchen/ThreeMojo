@@ -8,9 +8,11 @@
     carla_moment_routes --digests PATH
     carla_moment_routes --currents PATH
     carla_moment_routes --accepts PATH
+    carla_moment_routes --checked PATH
 
 `--digests` and `--accepts` print nothing when the pins match.
 `--currents` prints a JSON object of the live routing documents.
+`--checked` checks the try-only refusal before the route pins.
 """
 
 from std.pathlib import Path
@@ -18,6 +20,7 @@ from std.sys import argv, exit, stderr
 
 from tools._moment_routes import (
     moment_route_accepts,
+    moment_route_checked,
     moment_route_currents,
     moment_route_digests,
 )
@@ -28,7 +31,7 @@ def _usage():
     print(
         (
             "usage: carla_moment_routes --digests PATH | --currents PATH |"
-            " --accepts PATH"
+            " --accepts PATH | --checked PATH"
         ),
         file=stderr,
     )
@@ -45,7 +48,12 @@ def main() raises:
     if len(arguments) != 3:
         _usage()
     var mode = arguments[1]
-    if mode != "--digests" and mode != "--currents" and mode != "--accepts":
+    if (
+        mode != "--digests"
+        and mode != "--currents"
+        and mode != "--accepts"
+        and mode != "--checked"
+    ):
         _usage()
     try:
         var text = Path(arguments[2]).read_text()
@@ -53,8 +61,10 @@ def main() raises:
             moment_route_digests(text)
         elif mode == "--currents":
             print(moment_route_currents(text), end="")
-        else:
+        elif mode == "--accepts":
             moment_route_accepts(text)
+        else:
+            moment_route_checked(text)
     except error:
         print(String(error), file=stderr)
         exit(1)

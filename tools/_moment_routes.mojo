@@ -11,7 +11,8 @@ each live routing document and compares that document with its pin.
 
 from tests._python_tokens import module_routing_json, require_text_digest
 from tools._moment_route import _routing_constants, moment_route_accept
-from tools._python_json import PyJson
+from tools._python_json import MISSING, PyJson
+from tools._spiral_moment_try import try_only_refusal
 
 
 def moment_route_digests(payload: String) raises:
@@ -95,3 +96,22 @@ def moment_route_accepts(payload: String) raises:
             doc.flag(doc.at(item, "strip")),
         )
         index += 1
+
+
+def moment_route_checked(payload: String) raises:
+    """Check the try-only refusal, then every route pin.
+
+    Args:
+        payload: JSON with `accepts` and an optional `source`. `accepts`
+            is the route-pin list. `source` is the projected ideal-caller
+            module. An absent `source` skips the try-only refusal.
+
+    Raises:
+        Error: The try-only refusal changed, or a route pin differs. The
+            refusal is checked before the pins.
+    """
+    var doc = PyJson.parse(payload)
+    var source = doc.get(doc.root, "source")
+    if source != MISSING:
+        try_only_refusal(doc.text(source))
+    moment_route_accepts(doc.subtree(doc.at(doc.root, "accepts")).dumps())
