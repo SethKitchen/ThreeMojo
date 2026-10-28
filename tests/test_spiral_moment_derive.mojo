@@ -16,6 +16,7 @@ from tools._spiral_moment_derive import (
     derive_endpoints,
     stored_coefficient_words,
     moment_payload_from_rows,
+    moment_source_from_rows,
     stored_scalar_word,
     verified_table_integers,
 )
@@ -501,6 +502,23 @@ def test_spelled_rows_still_check_the_moment_payload() raises:
     rows = rows.replace("0x0000000000000000", "nope")
     with assert_raises(contains="malformed moment source word"):
         _ = moment_payload_from_rows(rows)
+
+
+def test_bad_rows_fail_before_the_table_source() raises:
+    """A short row list fails before the table source is written."""
+    with assert_raises(
+        contains="spiral moment derive: wrong derived table shape"
+    ):
+        _ = moment_source_from_rows("[]")
+
+
+def test_spelled_rows_still_check_the_table_source() raises:
+    """Sixty-four rows still refuse a word that is not hexadecimal."""
+    var table = PyJson.parse(_table_payload(64, "unused"))
+    var rows = table.subtree(table.at(table.root, "rows")).dumps()
+    rows = rows.replace("0x0000000000000000", "nope")
+    with assert_raises(contains="malformed moment source word"):
+        _ = moment_source_from_rows(rows)
 
 
 def main() raises:

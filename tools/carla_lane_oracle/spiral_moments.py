@@ -880,13 +880,29 @@ def _moment_payload(rows):
 
 
 def generate_source(rows):
-    # Match the Mojo formatter: one array element per line.
-    words = _coefficient_words(rows)
-    try:
-        text = ideal_projection.moment_source(words)
-    except ValueError as error:
-        raise CheckError(str(error)) from error
-    return text.encode('utf-8')
+    """Return the canonical table source when the derived rows are well formed."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(rows, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-source-rows-') as directory:
+        path = Path(directory) / 'rows.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_gate',
+             '--source-rows', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = _cli_failures()['derive']
+        if message.startswith(prefix):
+            raise CheckError(message[len(prefix):])
+        raise CheckError(message) from ValueError(message)
+    return result.stdout.encode('utf-8')
 
 
 def parse_table(data):

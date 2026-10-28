@@ -422,6 +422,8 @@ It builds the moment payload after those coefficient words in one check.
 
 It writes the canonical stored-moment table source.
 
+It writes that table source after those coefficient words in one check.
+
 It returns one normalized source block between two markers.
 
 It checks each operation block and routing text against its pin.

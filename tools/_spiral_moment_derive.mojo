@@ -13,7 +13,11 @@ from tools._bigint import BigInt
 from tools._cli_failures import derive_prefix
 from tools._fraction import Fraction
 from tools._python_json import PyJson
-from tests._python_tokens import moment_payload_json, verify_moment_table
+from tests._python_tokens import (
+    moment_payload_json,
+    moment_source,
+    verify_moment_table,
+)
 from tools._spiral_moment_words import (
     bracket,
     decimal_word,
@@ -969,6 +973,22 @@ def moment_payload_from_rows(rows: String) raises -> String:
             rows are checked before the payload is built.
     """
     return moment_payload_json(coefficient_words_json(rows))
+
+
+def moment_source_from_rows(rows: String) raises -> String:
+    """Derive the coefficient words, then write the table source.
+
+    Args:
+        rows: The JSON rows from the moment derivation.
+
+    Returns:
+        The generated Mojo source, including the trailing newline.
+
+    Raises:
+        Error: The rows changed, or a coefficient word is malformed. The
+            rows are checked before the source is written.
+    """
+    return moment_source(coefficient_words_json(rows))
 
 
 def coefficient_rows_payload(payload: String) raises -> String:
