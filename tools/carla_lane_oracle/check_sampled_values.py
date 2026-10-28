@@ -491,18 +491,82 @@ def _digest_then_sources(prior, texts):
     return _prepared_rows(texts, json.loads(result.stdout))
 
 
-def _plain_reference_graphs(entries, label, prior=None):
+def _graph_digest_rows(rows):
+    """Require each plain reference graph digest, in order."""
+    if not rows:
+        return
+    import os
+    import subprocess
+    import tempfile
+    payload = json.dumps([
+        {'graph': graph, 'digest': digest, 'message': message}
+        for graph, digest, message in rows
+    ], separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='graph-digests-') as directory:
+        path = Path(directory) / 'graphs.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sampled_text',
+             '--graph-digests', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        failure = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(failure)
+
+
+def _hashes_then_declaration(rows, text):
+    """Check the plain graph digests, then the Jet primitive."""
+    import os
+    import subprocess
+    import tempfile
+    payload = json.dumps([
+        {'graph': graph, 'digest': digest, 'message': message}
+        for graph, digest, message in rows
+    ], separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='hashes-declaration-') as directory:
+        folder = Path(directory)
+        hashes = folder / 'graphs.json'
+        source = folder / 'source.mojo'
+        hashes.write_text(payload)
+        source.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sampled_text',
+             '--hashes-then-declaration', str(hashes), str(source)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        failure = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(failure)
+
+
+def _plain_reference_graphs(entries, label, prior=None, defer=False):
     """Classify plain reference modules, then compare each graph."""
     if not entries and prior is None:
-        return
+        return []
     prepared = _digest_then_sources(
         prior, [text for _filename, text, _expected in entries])
+    rows = []
     for (filename, text, expected_hash), item in zip(entries, prepared):
         if isinstance(item, str):
+            _graph_digest_rows(rows)
             raise CheckError(item)
-        reference_graph = dump(syntax_tree(text, item, _prepare=False))
-        actual = hashlib.sha256(reference_graph.encode()).hexdigest()
-        require(actual == expected_hash, label + filename)
+        try:
+            reference_graph = dump(syntax_tree(text, item, _prepare=False))
+        except CheckError:
+            _graph_digest_rows(rows)
+            raise
+        rows.append((reference_graph, expected_hash, label + filename))
+    if defer:
+        return rows
+    _graph_digest_rows(rows)
+    return []
 
 
 def _reviewed_reference_graphs(items, texts, reviewed, label, review):
@@ -520,7 +584,7 @@ def _reviewed_reference_graphs(items, texts, reviewed, label, review):
             )
         else:
             pending.append((filename, texts[filename], expected_hash))
-    _plain_reference_graphs(pending, label, prior)
+    return _plain_reference_graphs(pending, label, prior, defer=True)
 
 
 def syntax_tree(text, prepared=None, _prepare=True):
@@ -603,12 +667,15 @@ def _aliases_then_graph(text, graph, digest, message):
         raise CheckError(failure)
 
 
-def primitive_graph(text, expected, message):
+def primitive_graph(text, expected, message, prior_hashes=None):
+    if prior_hashes:
+        _hashes_then_declaration(prior_hashes, text)
+    else:
+        _sampled_text('--primitive-declaration', text)
     tree = syntax_tree(text)
     found = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == _syntax_words()['primitive_class']]
     # The declaration count is a token check. The class hash below stays on
     # the Python syntax tree.
-    _sampled_text('--primitive-declaration', text)
     require(len(found) == 1, _sampled_closure()['primitive_declaration'])
     _aliases_then_graph(text, dump(found[0]), expected, message)
 
@@ -1025,12 +1092,12 @@ def verify(root):
             return dump(reviewed_reference_tree(
                 texts[filename], root, _operation=_operation))
 
-        _reviewed_reference_graphs(
+        prior_hashes = _reviewed_reference_graphs(
             reference_graphs.items(), texts, closure['reviewed'],
             closure['reference_changed'], review)
         primitive_graph(
             texts[closure['primitive']], graphs['primitive'],
-            closure['primitive_message'])
+            closure['primitive_message'], prior_hashes)
         # Complete stored helper/interval closure and lexical qualifiers are
         # independent of the unchanged primitive-class AST hash.
         try:

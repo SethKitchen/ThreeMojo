@@ -23,6 +23,8 @@
     carla_sampled_text --replace-function PATH --name NAME --with PATH
     carla_sampled_text --primitive-aliases PATH
     carla_sampled_text --aliases-then-graph SOURCE GRAPH DIGEST MESSAGE
+    carla_sampled_text --graph-digests PATH
+    carla_sampled_text --hashes-then-declaration HASHES SOURCE
     carla_sampled_text --primitive-declaration PATH
     carla_sampled_text --stored-half-tail PATH
     carla_sampled_text --helper-then-syntax PRIMITIVE TARGET
@@ -43,6 +45,8 @@ The strip-try-only mode removes the reviewed reuse refusal.
 The replace-function mode substitutes one complete function.
 The primitive-aliases mode checks the two derivative aliases.
 The aliases-then-graph mode checks those aliases before the primitive graph.
+The graph-digests mode checks Python graph digests in order.
+The hashes-then-declaration mode checks those digests before the Jet primitive.
 The primitive-declaration mode requires one Jet primitive.
 The stored-half-tail mode prints the source from that declaration onward.
 The caller supplies the source.
@@ -80,6 +84,7 @@ from tools._sampled_value_gate import (
     sampled_value_fields,
     sampled_value_imports,
 )
+from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
 from tools.carla_cleanup_gate import classified_syntax_json
 
@@ -126,6 +131,45 @@ def aliases_then_graph(
         raise Error(message)
 
 
+def require_graph_digests(payload: String) raises:
+    """Require each Python graph dump to match its digest.
+
+    Args:
+        payload: A JSON list. Each item has `graph`, `digest`, and
+            `message`.
+
+    Raises:
+        Error: A digest differs. The text is that item's `message`.
+            The digests are checked in order.
+    """
+    var doc = PyJson.parse(payload)
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        var item = doc.item(doc.root, index)
+        var graph = doc.text(doc.at(item, "graph"))
+        var digest = doc.text(doc.at(item, "digest"))
+        if sha256_hex(graph.as_bytes()) != digest:
+            raise Error(doc.text(doc.at(item, "message")))
+        index += 1
+
+
+def hashes_then_declaration(payload: String, source: String) raises:
+    """Check the plain graph digests, then the Jet primitive.
+
+    Args:
+        payload: A JSON list. Each item has `graph`, `digest`, and
+            `message`.
+        source: The interval module.
+
+    Raises:
+        Error: A digest differs, or the Jet primitive changed. The
+            digests are checked before the primitive declaration.
+    """
+    require_graph_digests(payload)
+    primitive_declaration(source)
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -142,6 +186,8 @@ def _usage():
             " PATH --name NAME | --strip-try-only PATH | --replace-function"
             " PATH --name NAME --with PATH | --primitive-aliases PATH |"
             " --aliases-then-graph SOURCE GRAPH DIGEST MESSAGE |"
+            " --graph-digests PATH | --hashes-then-declaration HASHES"
+            " SOURCE |"
             " --stored-half-tail PATH | --primitive-declaration PATH"
         ),
         file=stderr,
@@ -182,6 +228,23 @@ def main() raises:
     var index_text = String("")
     var strip_gates = False
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--graph-digests":
+        try:
+            require_graph_digests(Path(arguments[2]).read_text())
+        except error:
+            print(strip_sampled_gates(String(error)), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 4 and arguments[1] == "--hashes-then-declaration":
+        try:
+            hashes_then_declaration(
+                Path(arguments[2]).read_text(),
+                Path(arguments[3]).read_text(),
+            )
+        except error:
+            print(strip_sampled_gates(String(error)), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 6 and arguments[1] == "--aliases-then-graph":
         try:
             aliases_then_graph(

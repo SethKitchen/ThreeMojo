@@ -456,12 +456,14 @@ class PlainReferenceGraphTests(unittest.TestCase):
             self.assertEqual(expected, digest)
             return graph
 
+        rows = m._reviewed_reference_graphs([
+            ('curve_bounds.mojo', digest),
+            ('curve_trig.mojo', '0' * 64),
+        ], {'curve_trig.mojo': 'def ok():\n    return 1\n'},
+            'curve_bounds.mojo', label, review)
+        self.assertEqual(len(rows), 1)
         with self.assertRaises(m.CheckError) as caught:
-            m._reviewed_reference_graphs([
-                ('curve_bounds.mojo', digest),
-                ('curve_trig.mojo', '0' * 64),
-            ], {'curve_trig.mojo': 'def ok():\n    return 1\n'},
-                'curve_bounds.mojo', label, review)
+            m._graph_digest_rows(rows)
         self.assertIn('curve_trig.mojo', str(caught.exception))
         self.assertNotIn('curve_bounds.mojo', str(caught.exception))
 
