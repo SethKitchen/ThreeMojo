@@ -533,13 +533,29 @@ def _paths_after_record(payload):
     return parsed
 
 
+_CLEANUP_RECORD = None
+
+
 def read_record(root):
     _ensure_migration()
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
+    global _CLEANUP_RECORD
+    cached = _CLEANUP_RECORD
+    if cached is not None and cached[0] == payload:
+        record = json.loads(payload, object_pairs_hook=source.unique_keys)
+        previous = root/cached[1]
+        previous_bytes = _typed_source.historical_bytes(root, previous, previous.read_bytes())
+        if previous_bytes != cached[2]:
+            _gate(payload, previous_bytes)
+            _CLEANUP_RECORD = (payload, cached[1], previous_bytes)
+        return record
     paths = _paths_after_record(payload)
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
-    previous = root/paths['winner_sign']
-    _gate(payload, _typed_source.historical_bytes(root, previous, previous.read_bytes()))
+    relative = paths['winner_sign']
+    previous = root/relative
+    previous_bytes = _typed_source.historical_bytes(root, previous, previous.read_bytes())
+    _gate(payload, previous_bytes)
+    _CLEANUP_RECORD = (payload, relative, previous_bytes)
     return record
 
 

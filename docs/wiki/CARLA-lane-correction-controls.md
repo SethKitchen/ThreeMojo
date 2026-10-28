@@ -111,6 +111,8 @@ It compares every rounded LINE source pair by its tokens in one check.
 It reuses a matching rounded LINE module when that module is read again.
 A changed module is compared again.
 
+It reuses a rounded LINE record when the same bytes are read again.
+
 It checks every rounded LINE consumer graph in one check.
 
 It keeps the consumer import scope before the first definition.
@@ -156,6 +158,8 @@ It rebuilds one frozen runtime pin predecessor in one check.
 It reads the frozen pin labels before that runtime predecessor in one check.
 
 It reads the frozen-arc paths after that runtime predecessor in one check.
+
+It reuses that frozen record when the same bytes are read again.
 
 It relabels one runtime pin failure when the cause is the reviewed contract error.
 
@@ -235,6 +239,8 @@ It keeps the two dispatch sources and the five protected paths.
 
 It reads the dispatch migration record before those protected paths in one check.
 
+It reuses that dispatch record when the same bytes are read again.
+
 It keeps the dispatch path, the choice names, and the premise messages.
 
 It reads those dispatch labels before the source choices in one check.
@@ -256,6 +262,8 @@ It keeps the dispatch contract prefix.
 `tools/carla_cleanup_gate.mojo` checks the reviewed cleanup record, the winner-sign digest, the guard pin digest, the trig and geometry stored words, and the successor tokens.
 
 It reads the companion record paths after that cleanup record check in one check.
+
+It reuses that cleanup record when the same bytes are read again.
 
 It reads the companion record paths before that protected tail in one check.
 

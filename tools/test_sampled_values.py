@@ -595,6 +595,75 @@ class CurrentDispatchTokenTests(unittest.TestCase):
         self.assertEqual(calls, [[('text', 'aa', 'complete a.mojo')]])
 
 
+class RecordGateCacheTests(unittest.TestCase):
+    def test_repeated_records_skip_the_second_gate(self):
+        from tools.carla_lane_oracle import curve_support_dispatch_contracts as dispatch
+        from tools.carla_lane_oracle import frozen_arc_producer_contracts as frozen
+        from tools.carla_lane_oracle import reviewed_cleanup_contracts as cleanup
+        from tools.carla_lane_oracle import rounded_line_singleton_contracts as singleton
+        cases = (
+            (
+                dispatch, '_GATED_DISPATCH',
+                'tools/carla_lane_oracle/curve-support-dispatch-migration.json',
+                None,
+            ),
+            (
+                singleton, '_GATED_SINGLETON',
+                'tools/carla_lane_oracle/rounded-line-singleton-migration.json',
+                None,
+            ),
+            (
+                frozen, '_FROZEN_RECORD',
+                'tools/carla_lane_oracle/frozen-arc-producer-migration.json',
+                {'reviewed_cleanup':
+                 'tools/carla_lane_oracle/reviewed-cleanup-migration.json'},
+            ),
+            (
+                cleanup, '_CLEANUP_RECORD',
+                'tools/carla_lane_oracle/reviewed-cleanup-migration.json',
+                {'winner_sign':
+                 'tools/carla_lane_oracle/winner-sign-query-migration.json'},
+            ),
+        )
+        for module, cache_name, migration, path_record in cases:
+            with self.subTest(module=module.__name__):
+                calls = []
+                path_calls = []
+                original_gate = module._gate
+                original_cache = getattr(module, cache_name)
+                original_migration = getattr(module, 'MIGRATION', None)
+                original_paths = getattr(module, '_paths_after_record', None)
+
+                def gate(*args, _calls=calls):
+                    _calls.append(args)
+
+                def count_paths(payload, _record=path_record, _calls=path_calls):
+                    _calls.append(payload)
+                    return dict(_record)
+
+                module._gate = gate
+                module.MIGRATION = migration
+                setattr(module, cache_name, None)
+                if path_record is not None:
+                    module._paths_after_record = count_paths
+                try:
+                    first = module.read_record(ROOT)
+                    second = module.read_record(ROOT)
+                    self.assertEqual(first['schema'], second['schema'])
+                    self.assertEqual(len(calls), 1)
+                    if path_record is not None:
+                        self.assertEqual(len(path_calls), 1)
+                    setattr(module, cache_name, None)
+                    module.read_record(ROOT)
+                    self.assertEqual(len(calls), 2)
+                finally:
+                    module._gate = original_gate
+                    module.MIGRATION = original_migration
+                    setattr(module, cache_name, original_cache)
+                    if path_record is not None:
+                        module._paths_after_record = original_paths
+
+
 class RoundedMatchCacheTests(unittest.TestCase):
     def test_a_repeated_rounded_match_is_reused(self):
         from tools.carla_lane_oracle import rounded_line_singleton_contracts as singleton

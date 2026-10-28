@@ -228,10 +228,16 @@ def __getattr__(name):
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
+_GATED_SINGLETON = None
+
+
 def read_record(root):
     _ensure_migration()
     payload = _typed_source.historical_bytes(root, root / MIGRATION, (root / MIGRATION).read_bytes())
-    _gate(payload)
+    global _GATED_SINGLETON
+    if _GATED_SINGLETON != payload:
+        _gate(payload)
+        _GATED_SINGLETON = payload
     return json.loads(payload, object_pairs_hook=source.unique_keys)
 
 

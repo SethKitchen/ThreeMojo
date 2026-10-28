@@ -251,10 +251,16 @@ def _significant_graph_groups(groups):
         raise ValueError(message)
 
 
+_GATED_DISPATCH = None
+
+
 def read_record(root):
     _ensure_migration()
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
-    _gate(payload)
+    global _GATED_DISPATCH
+    if _GATED_DISPATCH != payload:
+        _gate(payload)
+        _GATED_DISPATCH = payload
     return json.loads(payload, object_pairs_hook=source.unique_keys)
 
 
