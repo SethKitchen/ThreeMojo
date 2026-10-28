@@ -241,6 +241,41 @@ def _dispatch_query(mode, payload):
     return result.stdout.strip()
 
 
+def _declaration_matches(items):
+    """Return whether each declaration matches its recorded source."""
+    if not items:
+        return []
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps([
+        {
+            'source': source,
+            'name': name,
+            'owner': list(owner),
+            'expected': expected,
+        }
+        for source, name, owner, expected in items
+    ], separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='declaration-match-') as directory:
+        path = Path(directory) / 'declarations.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_declarations',
+             '--match', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _significant_matches(pairs):
     """Return whether each source pair has the same significant tokens."""
     if not pairs:
@@ -503,14 +538,9 @@ def verify_premises(root, *, _operation=None):
         physical_text = _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation)
         text = _typed_source.historical_text(root, item['path'], physical_text, _operation=_operation)
         loaded.append((item, physical_text, text))
-    declared = _declarations([{
-        'source': text,
-        'name': item['name'],
-        'owner': list(item['owner']),
-    } for item, _physical_text, text in loaded])
-    matched_flags = _significant_matches([
-        (declared[index], item['source'])
-        for index, (item, _physical_text, _text) in enumerate(loaded)])
+    matched_flags = _declaration_matches([
+        (text, item['name'], item['owner'], item['source'])
+        for item, _physical_text, text in loaded])
     fallbacks = _premise_fallbacks([
         (matched_flags[index] == 'true', item['path'], item['name'], tuple(item['owner']))
         for index, (item, _physical_text, _text) in enumerate(loaded)])
@@ -531,14 +561,9 @@ def verify_premises(root, *, _operation=None):
                 require(False, labels['seed_message'] + str(error))
             seed_rows.append((index, item, predecessor))
         try:
-            declared_seeds = _declarations([{
-                'source': predecessor,
-                'name': item['name'],
-                'owner': [],
-            } for _index, item, predecessor in seed_rows])
-            seed_flags = _significant_matches([
-                (declared_seeds[position], item['source'])
-                for position, (_index, item, _predecessor) in enumerate(seed_rows)])
+            seed_flags = _declaration_matches([
+                (predecessor, item['name'], [], item['source'])
+                for _index, item, predecessor in seed_rows])
         except (ValueError, OSError) as error:
             require(False, labels['seed_message'] + str(error))
         for position, (index, _item, _predecessor) in enumerate(seed_rows):

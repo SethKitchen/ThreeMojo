@@ -156,7 +156,7 @@ It reads every dispatch premise declaration in one check.
 
 It compares every dispatch premise text in one check.
 
-It compares every dispatch premise declaration by its tokens in one check.
+It reads every dispatch premise declaration and compares its tokens in one check.
 
 It chooses every dispatch premise fallback in one check.
 

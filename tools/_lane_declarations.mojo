@@ -9,7 +9,11 @@ The caller supplies each source and function name. This check returns
 the declaration texts in that order.
 """
 
-from tests._python_tokens import declaration_text, replace_firsts
+from tests._python_tokens import (
+    declaration_text,
+    replace_firsts,
+    significant_json,
+)
 from tools._python_json import PyJson
 
 
@@ -51,6 +55,44 @@ def lane_declarations(payload: String) raises -> String:
                 )
             ),
         )
+        index += 1
+    out.root = rows
+    return out.dumps()
+
+
+def declaration_match_flags(payload: String) raises -> String:
+    """Read each declaration, then compare its significant tokens.
+
+    Args:
+        payload: A JSON list. Each item has `source`, `name`, `owner`, and `expected`.
+
+    Returns:
+        A JSON list of `true` or `false`, in the same order.
+
+    Raises:
+        Error: A function cannot be read, or a source cannot be tokenized.
+    """
+    var declared = PyJson.parse(lane_declarations(payload))
+    var doc = PyJson.parse(payload)
+    var count = declared.length(declared.root)
+    var actuals = List[String]()
+    var sources = List[String]()
+    var index = 0
+    while index < count:
+        var item = doc.item(doc.root, index)
+        actuals.append(
+            significant_json(declared.text(declared.item(declared.root, index)))
+        )
+        sources.append(significant_json(doc.text(doc.at(item, "expected"))))
+        index += 1
+    var out = PyJson()
+    var rows = out.new_list()
+    index = 0
+    while index < count:
+        var flag = String("false")
+        if actuals[index] == sources[index]:
+            flag = "true"
+        out.append(rows, out.new_str(flag))
         index += 1
     out.root = rows
     return out.dumps()

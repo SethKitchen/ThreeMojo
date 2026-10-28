@@ -8,7 +8,11 @@
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tests._python_tokens import replace_firsts
-from tools._lane_declarations import lane_control_prepare, lane_declarations
+from tools._lane_declarations import (
+    declaration_match_flags,
+    lane_control_prepare,
+    lane_declarations,
+)
 from tools._python_json import PyJson
 
 
@@ -112,6 +116,30 @@ def test_prepare_reports_a_missing_declaration() raises:
         contains="missing or ambiguous actual guard declaration: absent"
     ):
         _ = lane_control_prepare(payload)
+
+
+def test_a_declaration_match_compares_significant_tokens() raises:
+    """A comment does not change a match, and the next declaration keeps its result.
+    """
+    var payload = (
+        '[{"source":"def f():\\n    return 1\\n","name":"f","owner":[],'
+        + '"expected":"def f():\\n    # note\\n    return 1\\n"},'
+        + '{"source":"def f():\\n    return 1\\n","name":"f","owner":[],'
+        + '"expected":"def f():\\n    return 2\\n"}]'
+    )
+    assert_equal(declaration_match_flags(payload), '["true","false"]')
+
+
+def test_a_declaration_match_reports_a_missing_function_first() raises:
+    """A missing function fails before the recorded source is compared."""
+    var payload = (
+        '[{"source":"def f():\\n    return 1\\n","name":"absent","owner":[],'
+        + '"expected":"def f():\\n    return 1\\n"}]'
+    )
+    with assert_raises(
+        contains="missing or ambiguous actual guard declaration: absent"
+    ):
+        _ = declaration_match_flags(payload)
 
 
 def main() raises:
