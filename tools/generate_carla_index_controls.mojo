@@ -19,7 +19,7 @@ not depend on the estimate.
 """
 
 from std.math import sqrt
-from std.sys import argv, exit, stderr
+from std.sys import exit
 
 from tools._bigint import BigInt
 from tools._carla_controls import (
@@ -35,6 +35,7 @@ from tools._carla_controls import (
 from tools._fraction import Fraction
 from tools._json_tools import JsonWriter
 from tools._python_random import PythonRandom
+from tools._cli import command_arguments, finish
 
 
 comptime PROGRAM = "generate_carla_index_controls"
@@ -240,13 +241,4 @@ def main() raises:
     Raises:
         Error: If the exact arithmetic fails, which it must not.
     """
-    var given = argv()
-    var arguments = List[String]()
-    for index in range(1, len(given)):
-        arguments.append(String(given[index]))
-    var outcome = run(".", arguments)
-    if outcome[0] == 0:
-        print(outcome[1], end="")
-    else:
-        print(outcome[1], end="", file=stderr)
-    exit(outcome[0])
+    finish(run(".", command_arguments()))

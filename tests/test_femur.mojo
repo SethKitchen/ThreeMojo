@@ -83,6 +83,7 @@ from units.si import (
     RADIAN,
     STANDARD_GRAVITY,
 )
+from tests._bones import assert_outward_and_short
 
 comptime TOLERANCE = Float64(1e-5)
 
@@ -464,8 +465,8 @@ def test_isosurface_winding_and_interior_residual() raises:
     var field = FemurField(dims)
     var coarse = femur_from_dimensions(dims, 8)
     var finer = femur_from_dimensions(dims, 12)
-    _assert_outward_and_short(coarse)
-    _assert_outward_and_short(finer)
+    assert_outward_and_short(coarse)
+    assert_outward_and_short(finer)
     var e8 = _max_positive_centroid(coarse, field)
     var e12 = _max_positive_centroid(finer, field)
     assert_true(e8 < Float32(0.020))
@@ -852,33 +853,6 @@ def _max_positive_centroid(
         if d > worst:
             worst = d
     return worst
-
-
-def _assert_outward_and_short(bone: BufferGeometry) raises:
-    """Refuse a triangle that winds against its stored normals or spans a gap.
-    """
-    ref pos = bone.attribute_view(String(POSITION))
-    ref normals = bone.attribute_view(String(NORMAL))
-    for triangle in range(bone.triangle_count()):
-        var ia = bone.corner_index(triangle, 0)
-        var ib = bone.corner_index(triangle, 1)
-        var ic = bone.corner_index(triangle, 2)
-        var a = pos.vector3(ia)
-        var b = pos.vector3(ib)
-        var c = pos.vector3(ic)
-        var ab = b - a
-        var ac = c - a
-        var bc = c - b
-        assert_true(ab.length() < Float32(0.08))
-        assert_true(ac.length() < Float32(0.08))
-        assert_true(bc.length() < Float32(0.08))
-        ab.cross(ac)
-        if ab.length() < Float32(1e-10):
-            continue
-        var mean = (
-            normals.vector3(ia) + normals.vector3(ib) + normals.vector3(ic)
-        )
-        assert_true(ab.dot(mean) > 0)
 
 
 def main() raises:

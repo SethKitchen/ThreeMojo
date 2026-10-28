@@ -20,6 +20,7 @@ from core.binary import (
     store_little_endian,
 )
 from core.gaussian_splat_utils import GaussianSplatGeometry, write_covariance
+from loaders.bytes import encode_base64
 from loaders.gaussian_splat_ply import (
     detect_spherical_harmonics_degree,
     parse_gaussian_splat_ply,
@@ -68,9 +69,6 @@ from std.testing import (
 )
 
 comptime DIR = "assets/gaussian_splat/"
-comptime ALPHABET = (
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-)
 
 
 # --- expected values ----------------------------------------------------------
@@ -617,26 +615,6 @@ def test_gltf_splats_read_as_three_js_reads_them() raises:
 def test_a_buffer_beside_the_file_and_a_glb_read_the_same() raises:
     check_gltf(read_gltf_gaussian_splats(DIR + "external.gltf"))
     check_gltf(read_gltf_gaussian_splats(DIR + "splats.glb"))
-
-
-def encode_base64(bytes: List[UInt8]) -> String:
-    """Return the standard, padded base64 text of some bytes."""
-    var table = String(ALPHABET).as_bytes()
-    var out = List[UInt8]()
-    var at = 0
-    while at < len(bytes):
-        var left = len(bytes) - at
-        var n = Int(bytes[at]) << 16
-        if left > 1:
-            n |= Int(bytes[at + 1]) << 8
-        if left > 2:
-            n |= Int(bytes[at + 2])
-        out.append(table[(n >> 18) & 63])
-        out.append(table[(n >> 12) & 63])
-        out.append(table[(n >> 6) & 63] if left > 1 else UInt8(61))
-        out.append(table[n & 63] if left > 2 else UInt8(61))
-        at += 3
-    return String(unsafe_from_utf8=out)
 
 
 struct Gltf(Movable):

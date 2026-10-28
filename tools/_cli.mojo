@@ -10,11 +10,13 @@ print the same usage, help and error text. `parse_command_line` handles the
 long options that these tools use: flags, options with one value, `-h` and
 `--help`, a unique prefix of a long option, `--name=value` and `--`.
 `absolute_path` resolves a path that an option names, as `Path.resolve()`
-does.
+does. `command_arguments` and `finish` are the two ends of a tool whose
+`run` returns a status and its text.
 """
 
 from std.collections import Set
 from std.os.path import exists, realpath
+from std.sys import argv, exit, stderr
 
 from tools._python_json import py_repr
 
@@ -242,3 +244,32 @@ def absolute_path(path: String) raises -> String:
             found = False
             resolved = candidate
     return resolved^
+
+
+def command_arguments() -> List[String]:
+    """Return the command line without the program name.
+
+    Returns:
+        The arguments, in order.
+    """
+    var given = argv()
+    var arguments = List[String]()
+    for index in range(1, len(given)):
+        arguments.append(String(given[index]))
+    return arguments^
+
+
+def finish(outcome: Tuple[Int, String]):
+    """Print a tool's text and exit with its status.
+
+    The text goes to standard output for status zero and to standard error
+    otherwise.
+
+    Args:
+        outcome: The exit status and the text.
+    """
+    if outcome[0] == 0:
+        print(outcome[1], end="")
+    else:
+        print(outcome[1], end="", file=stderr)
+    exit(outcome[0])

@@ -30,12 +30,12 @@ from exporters.gltf import (
     GLTF_SEPARATE,
     GltfContainer,
     binary_name_for,
-    encode_base64,
     export_gltf,
     gltf_pixels,
     index_component,
     write_gltf,
 )
+from loaders.bytes import encode_base64
 from loaders.gltf import (
     COMPONENT_UNSIGNED_INT,
     COMPONENT_UNSIGNED_SHORT,

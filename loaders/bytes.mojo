@@ -299,6 +299,11 @@ def ascii_letter(byte: Int) -> Bool:
     return (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
 
 
+comptime _BASE64 = (
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+)
+
+
 def base64_digit(byte: Int) -> Int:
     """Return 0 through 61 for an ASCII letter or digit, or -1.
 
@@ -319,6 +324,39 @@ def base64_digit(byte: Int) -> Int:
     if byte <= 90:
         return byte - 65
     return byte - 71
+
+
+def encode_base64(bytes: List[UInt8]) -> String:
+    """Return bytes as base64, in the standard alphabet, padded with `=`.
+
+    Args:
+        bytes: The bytes.
+
+    Returns:
+        The text, which `loaders.gltf.decode_base64` reads back.
+    """
+    var alphabet = String(_BASE64).as_bytes()
+    var out = List[UInt8]()
+    var at = 0
+    while at + 3 <= len(bytes):
+        var word = (
+            (Int(bytes[at]) << 16)
+            | (Int(bytes[at + 1]) << 8)
+            | Int(bytes[at + 2])
+        )
+        for shift in [18, 12, 6, 0]:  # pragma: no branch
+            out.append(alphabet[(word >> shift) & 63])
+        at += 3
+    var left = len(bytes) - at
+    if left > 0:
+        var word = Int(bytes[at]) << 16
+        if left == 2:
+            word |= Int(bytes[at + 1]) << 8
+        out.append(alphabet[(word >> 18) & 63])
+        out.append(alphabet[(word >> 12) & 63])
+        out.append(alphabet[(word >> 6) & 63] if left == 2 else UInt8(61))
+        out.append(61)
+    return String(unsafe_from_utf8=out)
 
 
 def hex_digit_value(byte: Int) -> Int:

@@ -28,6 +28,7 @@ from core.buffer_geometry import POSITION
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from lights.light import directional_light
+from loaders.bytes import encode_base64
 from loaders.gltf import (
     GLTF_ORTHOGRAPHIC,
     GLTF_PERSPECTIVE,
@@ -50,9 +51,6 @@ from std.testing import (
 from units.si import DEGREE, METER, RADIAN, SECOND, Duration
 
 comptime TOLERANCE = Float64(1e-5)
-comptime ALPHABET = (
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-)
 comptime FLOAT = 5126
 comptime UBYTE = 5121
 comptime USHORT = 5123
@@ -61,26 +59,6 @@ comptime BYTE = 5120
 
 
 # --- building documents -----------------------------------------------------
-
-
-def encode_base64(bytes: List[UInt8]) -> String:
-    """Return the standard, padded base64 text of some bytes."""
-    var table = String(ALPHABET).as_bytes()
-    var out = List[UInt8]()
-    var at = 0
-    while at < len(bytes):
-        var left = len(bytes) - at
-        var n = Int(bytes[at]) << 16
-        if left > 1:
-            n |= Int(bytes[at + 1]) << 8
-        if left > 2:
-            n |= Int(bytes[at + 2])
-        out.append(table[(n >> 18) & 63])
-        out.append(table[(n >> 12) & 63])
-        out.append(table[(n >> 6) & 63] if left > 1 else UInt8(61))
-        out.append(table[n & 63] if left > 2 else UInt8(61))
-        at += 3
-    return String(unsafe_from_utf8=out)
 
 
 def width_of(kind: String) -> Int:

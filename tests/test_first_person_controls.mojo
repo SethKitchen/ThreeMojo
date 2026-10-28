@@ -56,6 +56,7 @@ from units.si import (
     SECOND,
     Velocity,
 )
+from tests._cameras import orthographic_above
 
 comptime TOLERANCE = Float64(1e-4)
 comptime SIZE = 100
@@ -78,27 +79,6 @@ def _camera(y: Float32 = 0) raises -> PerspectiveCamera:
     )
     camera.place(Vector3(0, y, 5), Vector3(0, y, 0))
     return camera
-
-
-def _ortho() raises -> OrthographicCamera:
-    """Return an orthographic camera five meters up +z.
-
-    Returns:
-        The camera.
-
-    Raises:
-        Error: If its volume is refused.
-    """
-    var camera = OrthographicCamera(
-        Length(-5.0, METER),
-        Length(5.0, METER),
-        Length(5.0, METER),
-        Length(-5.0, METER),
-        Length(0.1, METER),
-        Length(100.0, METER),
-    )
-    camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
-    return camera^
 
 
 def _seconds(value: Float32) -> Duration:
@@ -338,14 +318,14 @@ def test_look_at_turns_the_camera() raises:
     var controls = FirstPersonControls(camera)
     controls.look_at(camera, Vector3(5, 0, 5))
     assert_almost_equal(controls.longitude().to(DEGREE), Float32(90), atol=1e-3)
-    var ortho = _ortho()
+    var ortho = orthographic_above()
     var flat = FirstPersonControls(ortho)
     flat.look_at(ortho, Vector3(0, 5, 5))
     assert_almost_equal(flat.latitude().to(DEGREE), Float32(90), atol=1e-3)
 
 
 def test_an_orthographic_camera_walks() raises:
-    var camera = _ortho()
+    var camera = orthographic_above()
     var controls = FirstPersonControls(camera)
     _press(controls, Key(119))
     controls.update(camera, _seconds(1))
@@ -387,7 +367,7 @@ def test_bad_input_is_refused() raises:
     controls.vertical_max = Angle(0.0, RADIAN)
     with assert_raises(contains="vertical"):
         controls.update(camera, _seconds(1))
-    var ortho = _ortho()
+    var ortho = orthographic_above()
     with assert_raises(contains="vertical"):
         controls.update(ortho, _seconds(1))
 

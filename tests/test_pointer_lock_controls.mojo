@@ -50,6 +50,7 @@ from units.si import (
     SECOND,
     Velocity,
 )
+from tests._cameras import orthographic_above
 
 comptime TOLERANCE = Float64(1e-4)
 
@@ -68,27 +69,6 @@ def _camera() raises -> PerspectiveCamera:
     )
     camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
     return camera
-
-
-def _ortho() raises -> OrthographicCamera:
-    """Return an orthographic camera five meters up +z.
-
-    Returns:
-        The camera.
-
-    Raises:
-        Error: If its volume is refused.
-    """
-    var camera = OrthographicCamera(
-        Length(-5.0, METER),
-        Length(5.0, METER),
-        Length(5.0, METER),
-        Length(-5.0, METER),
-        Length(0.1, METER),
-        Length(100.0, METER),
-    )
-    camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
-    return camera^
 
 
 def _seconds(value: Float32) -> Duration:
@@ -230,7 +210,7 @@ def test_held_keys_walk() raises:
 
 
 def test_an_orthographic_camera_turns_and_walks() raises:
-    var camera = _ortho()
+    var camera = orthographic_above()
     var controls = PointerLockControls()
     controls.lock()
     controls.handle(InputEvent(POINTER_DOWN, x=50, y=50), camera)
@@ -248,7 +228,7 @@ def test_an_orthographic_camera_turns_and_walks() raises:
 
 def test_disabled_controls_do_nothing() raises:
     var camera = _camera()
-    var ortho = _ortho()
+    var ortho = orthographic_above()
     var controls = PointerLockControls()
     controls.lock()
     controls.enabled = False
@@ -264,7 +244,7 @@ def test_disabled_controls_do_nothing() raises:
 
 def test_bad_input_is_refused() raises:
     var camera = _camera()
-    var ortho = _ortho()
+    var ortho = orthographic_above()
     var controls = PointerLockControls()
     with assert_raises(contains="kind"):
         controls.handle(InputEvent(InputKind(9)), camera)
