@@ -16,8 +16,6 @@ from objects.mesh import Mesh
 from renderers.renderer import Renderer
 from extensions.water.caustics import (
     _Splat,
-    _caustic_high,
-    _caustic_low,
     _splat,
     CausticField,
     caustic_covers,
@@ -25,6 +23,7 @@ from extensions.water.caustics import (
     render_caustics,
 )
 from extensions.water.field import ComplexField, complex_mul, fft2
+from render.fillrule import pixel_index, shifted_pixel_index
 from extensions.water.filter import anisotropic_step, lod_blend
 from extensions.water.frame import (
     CameraLook,
@@ -391,14 +390,14 @@ def test_caustics() raises:
     var far = render_caustics(flat, Vector3(0.6, 0.8, 0.0), Length(1e20), 2, 8)
     assert_equal(far.channel(0, 0, 0), 0.0)
     assert_equal(far.channel(4, 4, 1), 0.0)
-    assert_equal(_caustic_low(Float32(1.2)), 1)
-    assert_equal(_caustic_high(Float32(3.8)), 4)
-    assert_equal(_caustic_low(Float32(1e20)), Int.MAX)
-    assert_equal(_caustic_high(Float32(1e20)), Int.MAX)
-    assert_equal(_caustic_low(Float32(-1e20)), Int.MIN)
-    assert_equal(_caustic_high(Float32(-1e20)), Int.MIN)
-    assert_equal(_caustic_low(nan[DType.float32]()), Int.MAX)
-    assert_equal(_caustic_high(nan[DType.float32]()), Int.MAX)
+    assert_equal(pixel_index(Float32(1.2), False), 1)
+    assert_equal(shifted_pixel_index(Float32(3.8), False, 1), 4)
+    assert_equal(pixel_index(Float32(1e20), False), Int.MAX)
+    assert_equal(shifted_pixel_index(Float32(1e20), False, 1), Int.MAX)
+    assert_equal(pixel_index(Float32(-1e20), False), Int.MIN)
+    assert_equal(shifted_pixel_index(Float32(-1e20), False, 1), Int.MIN)
+    assert_equal(pixel_index(nan[DType.float32](), False), Int.MAX)
+    assert_equal(shifted_pixel_index(nan[DType.float32](), False, 1), Int.MAX)
     var inside = 0
     var outside = 0
     for y in range(-1, 4):

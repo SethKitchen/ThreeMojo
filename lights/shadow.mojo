@@ -84,6 +84,7 @@ from math.cross import cross_vectors
 from math.norm import squared_length2
 from math.vector3 import Vector3
 from render.color_math import rgb_channels
+from render.fillrule import shifted_pixel_index
 from render.texture import Texture
 from render.texture_store import TextureId
 from math.sine import fraction
@@ -1289,44 +1290,6 @@ def _texel_at(column: Int, row: Int, size: Int) -> Int:
     return clamped_texel(column, row, size, size)
 
 
-def _shadow_index(value: Float32) -> Int:
-    """Return the floor of a shadow-map coordinate.
-
-    A value that is not finite, or that does not fit in an integer, lies
-    past the map. `Int` of such a float is not that texel.
-
-    Args:
-        value: The coordinate, in texels.
-
-    Returns:
-        The floor, or `Int.MAX` or `Int.MIN` when `value` does not fit.
-    """
-    # `Float32(Int.MAX)` is 2^63, as `Float64(Int.MAX)` is, and the floor
-    # of a `Float32` is a `Float32`: the same test and index without
-    # `Float64`, which a Metal kernel cannot run.
-    if not isfinite(value) or value >= Float32(Int.MAX):
-        return Int.MAX
-    if value <= -Float32(Int.MAX):
-        return Int.MIN
-    return Int(floor(value))
-
-
-def _shifted_shadow_index(value: Float32, shift: Int) -> Int:
-    """Return `_shadow_index` moved by `shift` without wrapping.
-
-    Args:
-        value: The coordinate, in texels.
-        shift: Texels to add. A sentinel is left where it is.
-
-    Returns:
-        The shifted index, held at `Int.MAX` or `Int.MIN`.
-    """
-    var index = _shadow_index(value)
-    if index == Int.MAX or index == Int.MIN:
-        return index
-    return index + shift
-
-
 def soft_texel(place: Vector3, tap: Int, size: Int) -> Int:
     """Return which texel one of `PCF_SOFT_SHADOW_MAP`'s sixteen taps reads.
 
@@ -1345,10 +1308,12 @@ def soft_texel(place: Vector3, tap: Int, size: Int) -> Int:
     Returns:
         The texel's index, row-major from the top.
     """
-    var column = _shifted_shadow_index(
-        place.x * Float32(size) + 0.5, tap % 4 - 2
+    var column = shifted_pixel_index(
+        place.x * Float32(size) + 0.5, False, tap % 4 - 2
     )
-    var row = _shifted_shadow_index(place.y * Float32(size) + 0.5, tap // 4 - 2)
+    var row = shifted_pixel_index(
+        place.y * Float32(size) + 0.5, False, tap // 4 - 2
+    )
     return _texel_at(column, row, size)
 
 
@@ -1424,8 +1389,8 @@ def bilinear_texel(
     Returns:
         The texel's index, row-major from the top.
     """
-    var column = _shifted_shadow_index(across - 0.5, corner % 2)
-    var row = _shifted_shadow_index(down - 0.5, corner // 2)
+    var column = shifted_pixel_index(across - 0.5, False, corner % 2)
+    var row = shifted_pixel_index(down - 0.5, False, corner // 2)
     return _texel_at(column, row, size)
 
 

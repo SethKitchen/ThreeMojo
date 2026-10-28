@@ -19,6 +19,7 @@ from extensions.water.spectrum import require_ocean_patch
 from extensions.water.surface import SurfaceField, sample_surface
 from math.utils import max3, min3
 from math.vector3 import Vector3
+from render.fillrule import pixel_index, shifted_pixel_index
 from render.tasks import TaskGroup
 from math.norm import squared_length3
 from std.math import abs, floor, hypot, isfinite, sqrt
@@ -494,10 +495,10 @@ def _splat(
     var max_x = max3(ax, bx, cx)
     var min_y = min3(ay, by, cy)
     var max_y = max3(ay, by, cy)
-    var x0 = _caustic_low(min_x)
-    var x1 = _caustic_high(max_x)
-    var y0 = _caustic_low(min_y)
-    var y1 = _caustic_high(max_y)
+    var x0 = pixel_index(min_x, False)
+    var x1 = shifted_pixel_index(max_x, False, 1)
+    var y0 = pixel_index(min_y, False)
+    var y1 = shifted_pixel_index(max_y, False, 1)
     if x0 < 0:
         x0 = 0
     if y0 < 0:
@@ -512,49 +513,6 @@ def _splat(
             var py = Float32(y) + 0.5
             if caustic_covers(px, py, ax, ay, bx, by, cx, cy, area2):
                 plane[unsafe_offset=y * n + x] += intensity
-
-
-def _caustic_low(value: Float32) -> Int:
-    """Return the first texel at or before a caustic edge.
-
-    A value that is not finite, or that does not fit in an integer, is
-    past every texel. `Int` of such a float is not that coordinate.
-
-    Args:
-        value: The near edge, in texels.
-
-    Returns:
-        The floor, or `Int.MAX` or `Int.MIN` when `value` does not fit.
-    """
-    # `Float32(Int.MAX)` is 2^63, as `Float64(Int.MAX)` is, and the floor
-    # of a `Float32` is a `Float32`: the same test and index without
-    # `Float64`, which a Metal kernel cannot run.
-    if not isfinite(value) or value >= Float32(Int.MAX):
-        return Int.MAX
-    if value <= -Float32(Int.MAX):
-        return Int.MIN
-    return Int(floor(value))
-
-
-def _caustic_high(value: Float32) -> Int:
-    """Return the texel just past a caustic edge.
-
-    See `_caustic_low`. The walk is half-open, so the far edge moves one
-    texel outward when that step still fits.
-
-    Args:
-        value: The far edge, in texels.
-
-    Returns:
-        The floor plus one, or `Int.MAX` or `Int.MIN` when `value` does
-        not fit.
-    """
-    # The test and the floor in `Float32`, as in `_caustic_low`.
-    if not isfinite(value) or value >= Float32(Int.MAX):
-        return Int.MAX
-    if value <= -Float32(Int.MAX):
-        return Int.MIN
-    return Int(floor(value)) + 1
 
 
 def caustic_covers(

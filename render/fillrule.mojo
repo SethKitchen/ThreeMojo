@@ -31,7 +31,7 @@ every shared edge once anything is blended.
 This is what graphics hardware does, and for the same two reasons.
 """
 
-from std.math import floor
+from std.math import ceil, floor, isfinite
 
 # Vertices snap to a grid this many steps to the pixel. Four bits of subpixel
 # precision is what most hardware rasterizers settled on: fine enough that the
@@ -116,3 +116,46 @@ def sample(index: Int) -> Int:
     the same arithmetic serves both axes.
     """
     return index * SUBPIXEL + SUBPIXEL // 2
+
+
+def pixel_index(value: Float32, round_up: Bool) -> Int:
+    """Return the pixel index of a screen coordinate.
+
+    A value that is not finite, or that does not fit in an integer, is
+    past every pixel: positive past the last, negative before the first.
+    `Int` of such a float is not that coordinate.
+
+    Args:
+        value: The coordinate, in pixels.
+        round_up: True to round toward positive infinity.
+
+    Returns:
+        The index, or `Int.MAX` or `Int.MIN` when `value` does not fit.
+    """
+    # `Float32(Int.MAX)` is 2^63, as `Float64(Int.MAX)` is, and the floor
+    # of a `Float32` is a `Float32`: the same test and index without
+    # `Float64`, which a Metal kernel cannot run.
+    if not isfinite(value) or value >= Float32(Int.MAX):
+        return Int.MAX
+    if value <= -Float32(Int.MAX):
+        return Int.MIN
+    if round_up:
+        return Int(ceil(value))
+    return Int(floor(value))
+
+
+def shifted_pixel_index(value: Float32, round_up: Bool, shift: Int) -> Int:
+    """Return `pixel_index` moved by `shift` without wrapping.
+
+    Args:
+        value: The coordinate, in pixels.
+        round_up: True to round toward positive infinity.
+        shift: Pixels to add. A sentinel is left where it is.
+
+    Returns:
+        The shifted index, held at `Int.MAX` or `Int.MIN`.
+    """
+    var index = pixel_index(value, round_up)
+    if index == Int.MAX or index == Int.MIN:
+        return index
+    return index + shift

@@ -215,7 +215,15 @@ from render.linerule import (
     span_of,
     toward_at,
 )
-from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
+from render.fillrule import (
+    SUBPIXEL,
+    bias,
+    edge_at,
+    pixel_index,
+    sample,
+    shifted_pixel_index,
+    snap,
+)
 from render.pointrule import (
     coord as point_coord,
     covers as point_covers,
@@ -478,51 +486,6 @@ struct _Bounds(ImplicitlyCopyable):
     var bottom: Int
 
 
-def _screen_index(value: Float32, round_up: Bool) -> Int:
-    """Return the pixel index of a screen coordinate.
-
-    A value that is not finite, or that does not fit in an integer, is
-    past every pixel: positive past the last, negative before the first.
-    `Int` of such a float is not that coordinate.
-
-    Args:
-        value: The coordinate, in pixels.
-        round_up: True to round toward positive infinity.
-
-    Returns:
-        The index, or `Int.MAX` or `Int.MIN` when `value` does not fit.
-    """
-    # `Float32(Int.MAX)` is 2^63, as `Float64(Int.MAX)` is, and the floor
-    # of a `Float32` is a `Float32`: the same test and index without
-    # `Float64`, which a Metal kernel cannot run.
-    if not isfinite(value) or value >= Float32(Int.MAX):
-        return Int.MAX
-    if value <= -Float32(Int.MAX):
-        return Int.MIN
-    if round_up:
-        return Int(ceil(value))
-    return Int(floor(value))
-
-
-def _shifted_index(value: Float32, round_up: Bool, pad: Int) -> Int:
-    """Return `_screen_index` moved by `pad` without wrapping.
-
-    Args:
-        value: The coordinate, in pixels.
-        round_up: True to round toward positive infinity.
-        pad: Rows to add when rounding up, or to subtract otherwise.
-
-    Returns:
-        The shifted index, held at `Int.MAX` or `Int.MIN`.
-    """
-    var index = _screen_index(value, round_up)
-    if index == Int.MAX or index == Int.MIN or pad == 0:
-        return index
-    if round_up:
-        return index + pad
-    return index - pad
-
-
 def _bounds(
     triangle: Triangle,
     width: Int,
@@ -552,10 +515,10 @@ def _bounds(
     if last_row >= 0:
         lowest = min(lowest, last_row)
     return _Bounds(
-        max(0, _screen_index(left, False)),
-        min(width - 1, _screen_index(right, True)),
-        max(first_row, _screen_index(top, False)),
-        min(lowest, _screen_index(bottom, True)),
+        max(0, pixel_index(left, False)),
+        min(width - 1, pixel_index(right, True)),
+        max(first_row, pixel_index(top, False)),
+        min(lowest, pixel_index(bottom, True)),
     )
 
 
@@ -7274,8 +7237,8 @@ def _rows_of(
             var y = corners[index * stride + corner].y
             top = min(top, y)
             bottom = max(bottom, y)
-        rows.append(_shifted_index(top, False, pad))
-        rows.append(_shifted_index(bottom, True, pad))
+        rows.append(shifted_pixel_index(top, False, -pad))
+        rows.append(shifted_pixel_index(bottom, True, pad))
     return rows^
 
 
@@ -7295,8 +7258,8 @@ def _point_rows(points: List[RasterVertex]) -> List[Int]:
     rows.reserve(len(points) * 2)
     for index in range(len(points)):
         var half = points[index].point_size / 2
-        rows.append(_screen_index(points[index].y - half, False))
-        rows.append(_screen_index(points[index].y + half, True))
+        rows.append(pixel_index(points[index].y - half, False))
+        rows.append(pixel_index(points[index].y + half, True))
     return rows^
 
 
@@ -7516,8 +7479,8 @@ def _rows_of_corners(corners: List[Corner]) -> List[Int]:
             var y = corners[index * 3 + corner].y
             top = min(top, y)
             bottom = max(bottom, y)
-        rows.append(_screen_index(top, False))
-        rows.append(_screen_index(bottom, True))
+        rows.append(pixel_index(top, False))
+        rows.append(pixel_index(bottom, True))
     return rows^
 
 
