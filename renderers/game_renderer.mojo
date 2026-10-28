@@ -75,6 +75,7 @@ from materials.material import (
 from math.frustum import Frustum
 from math.matrix4 import Matrix4
 from math.bounds import Sphere
+from math.cross import cross_vectors
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
 from render.game_math import (
@@ -609,13 +610,6 @@ struct _SunMap(Movable):
         self.ready = False
 
 
-def _cross(a: Vector3, b: Vector3) -> Vector3:
-    """Return the cross product of two vectors."""
-    return Vector3(
-        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
-    )
-
-
 def _sun_matrices(
     toward: SIMD[DType.float32, 4], center: Vector3, reach: Float32
 ) -> Tuple[Matrix4, Matrix4, Float32, Float32]:
@@ -623,11 +617,11 @@ def _sun_matrices(
     sun's rays, `reach` meters each way round `center`, the depth one meter
     spans in its NDC, and its far distance."""
     var back = Vector3(toward[0], toward[1], toward[2])
-    var side = _cross(Vector3(0, 1, 0), back)
+    var side = cross_vectors(Vector3(0, 1, 0), back)
     if side.length() < 1.0e-4:
         side = Vector3(1, 0, 0)
     side.normalize()
-    var up = _cross(back, side)
+    var up = cross_vectors(back, side)
     var distance = reach * 4
     var eye = center + back * distance
     var view = Matrix4()

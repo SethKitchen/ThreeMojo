@@ -921,22 +921,3 @@ def _frustum_volume(
         * (radius_a * radius_a + radius_a * radius_b + radius_b * radius_b)
         / Float32(3)
     )
-
-
-def clamp_unit(value: Float32) -> Float32:
-    """Return `value` held to minus one through one, for `acos`.
-
-    Error: Never.
-
-    Args:
-        value: The input value.
-
-    Returns:
-        The bounded value. NaN and signed zero keep their input value.
-
-    """
-    if value < -1:
-        return -1
-    if value > 1:
-        return 1
-    return value

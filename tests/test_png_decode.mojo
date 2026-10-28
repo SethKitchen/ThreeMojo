@@ -15,7 +15,7 @@ row filters, an overlapping back-reference, and every color type.
 
 from render.framebuffer import Color, Framebuffer
 from render.inflate import (
-    _BorrowedBitReader as BitReader,
+    BitReader,
     Huffman,
     inflate,
     zlib_inflate,
@@ -2759,6 +2759,8 @@ def test_an_incomplete_huffman_code_refuses_bits_it_cannot_match() raises:
     var reader = BitReader(Span(ones), 0)
     with assert_raises():
         _ = code.decode(reader)
+    assert_equal(reader.position, 1)
+    assert_equal(reader.bit, 7)
 
 
 def test_a_decoded_image_becomes_a_texture() raises:
@@ -6934,6 +6936,28 @@ def test_a_second_palette_trns_is_rejected_too() raises:
 def test_neither_alpha_bearing_type_may_carry_trns() raises:
     with assert_raises():
         _ = decode(trns_on_gray_alpha_png())
+
+
+def test_huffman_decode_keeps_the_reader_state() raises:
+    var bytes: List[UInt8] = [2]
+    var reader = BitReader(Span(bytes), 0)
+    var lengths: List[Int] = [1, 1]
+    var code = Huffman(lengths)
+    assert_equal(code.decode(reader), 0)
+    assert_equal(code.decode(reader), 1)
+    assert_equal(reader.bit, 2)
+    assert_equal(reader.position, 0)
+
+
+def test_a_failed_read_keeps_the_consumed_position() raises:
+    var bytes: List[UInt8] = [255]
+    var reader = BitReader(Span(bytes), 0)
+    with assert_raises(
+        contains="Compressed stream ended in the middle of a code"
+    ):
+        _ = reader.read_bits(9)
+    assert_equal(reader.position, 1)
+    assert_equal(reader.bit, 0)
 
 
 def main() raises:

@@ -14,7 +14,7 @@ from extensions.carla.curve_distance import (
     _WORDS,
     _exact_sign,
     _finite_point,
-    _normalized_square as _distance_normalized_square,
+    _normalized_square,
     _signed_product,
 )
 from extensions.carla.curve_interval import (
@@ -25,17 +25,6 @@ from extensions.carla.curve_interval import (
 )
 from std.math import inf, isfinite
 from std.memory import bitcast
-
-
-def _normalized_square[
-    axes: Int
-](
-    point: Array[Float64, 3], query: Array[Float64, 3], scale: Float64
-) -> _Interval:
-    # The conversion preserves both bound endpoints exactly. It performs no
-    # new arithmetic and does not tighten or widen the kernel's enclosure.
-    var bound = _distance_normalized_square[axes](point, query, scale)
-    return _Interval(bound.low, bound.high)
 
 
 def _refinement_square[

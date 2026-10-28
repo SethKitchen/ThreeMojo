@@ -236,10 +236,7 @@ from extensions.anatomy.soft_tissue import (
     skin_tissue,
     tendon_tissue,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
-    SOFT_EMPTY,
-    SOFT_FILL,
-)
+from extensions.humanoid.skeleton.soft_tissue import SOFT_EMPTY, SOFT_FILL
 from extensions.anatomy.tissue import (
     cortical_tissue,
     trabecular_tissue,

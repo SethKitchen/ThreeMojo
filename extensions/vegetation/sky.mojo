@@ -38,6 +38,7 @@ from extensions.vegetation.checks import (
 )
 from extensions.vegetation.noise import value_noise
 from math.smoothstep import smoothstep
+from math.utils import rec709_luminance
 from math.vector3 import Vector3
 from objects.sky import Sky
 from render.cube_texture import FACE_COUNT, CubeTexture, face_direction
@@ -155,11 +156,6 @@ def cloud_density(direction: Vector3, look: SkyLook) -> Float32:
     )
 
 
-def _luminance(c: Vector3) -> Float32:
-    """Return the luminance of a linear color."""
-    return 0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z
-
-
 @fieldwise_init
 struct SkyDome(ImplicitlyCopyable):
     """The painted sky: its cube, and the haze color at the horizon."""
@@ -251,7 +247,7 @@ def paint_sky(
                 d = d / d.length()
                 var raw = clear.sample(d)
                 var c = Vector3(raw.r, raw.g, raw.b) * look.gain
-                var gray = _luminance(c)
+                var gray = rec709_luminance(c.x, c.y, c.z)
                 c = (
                     Vector3(gray, gray, gray)
                     + (c - Vector3(gray, gray, gray)) * look.saturation
@@ -269,13 +265,15 @@ def paint_sky(
                     horizon = horizon + c
                     counted += 1
                 if d.y > 0.5:
-                    zenith = max(zenith, _luminance(c))
+                    zenith = max(zenith, rec709_luminance(c.x, c.y, c.z))
         faces.append(data^)
     horizon = horizon / Float32(max(counted, 1))
     # Pass two: the clouds over the clear sky, and the haze below. A
     # cloud is lit by how much cloud lies between it and the sun: the
     # density a little way along the layer toward the sun.
-    var white = max(zenith, _luminance(horizon)) * 1.8
+    var white = (
+        max(zenith, rec709_luminance(horizon.x, horizon.y, horizon.z)) * 1.8
+    )
     var level = sqrt(sun.x * sun.x + sun.z * sun.z)
     var sunward = Vector3(sun.x, 0, sun.z) * (
         SELF_SHADOW / max(level, Float32(1.0e-6))

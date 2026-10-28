@@ -71,6 +71,7 @@ from extensions.water.pebbles import (
 from extensions.water.optics import (
     aces_channel,
     bed_color,
+    clamp01,
     beckmann,
     channel_ior,
     fbm2,
@@ -82,6 +83,7 @@ from extensions.water.optics import (
     refracted_sun,
     sky_radiance,
     smith_visibility,
+    smoothstep,
     sun_direction,
     value_noise,
     water_ior,
@@ -127,8 +129,8 @@ from extensions.water.view import (
 )
 from math.utils import saturate
 from math.vector3 import Vector3
-from std.math import cos, inf, isfinite, nan, sin, sqrt
-from std.memory import AddressSpace
+from std.math import cos, inf, isfinite, isnan, nan, sin, sqrt
+from std.memory import AddressSpace, bitcast
 from render.framebuffer import Color, Framebuffer
 from render.png import SRGB, DecodedImage
 from std.testing import (
@@ -2285,6 +2287,22 @@ def test_calm_ripples_skip_their_step_and_caustics_split_by_channel() raises:
     water.workers = 0
     var parallel = water._caustics(surface)
     assert_true(serial.samples == parallel.samples)
+
+
+def test_clamp01_keeps_nan_and_zero_rules() raises:
+    assert_true(isnan(clamp01(nan[DType.float32]())))
+    assert_equal(bitcast[DType.uint32](clamp01(Float32(-0.0))), 0)
+    assert_equal(clamp01(-inf[DType.float32]()), 0)
+    assert_equal(clamp01(inf[DType.float32]()), 1)
+    assert_equal(clamp01(0.375), 0.375)
+
+
+def test_the_optics_keep_nan_instead_of_saturating_to_one() raises:
+    var value = nan[DType.float32]()
+    assert_true(isnan(fresnel(value, 1.33)))
+    assert_true(isnan(aces_channel(value)))
+    assert_true(isnan(smoothstep(0, 1, value)))
+    assert_equal(smoothstep(0, 1, 0.5), Float32(0.5))
 
 
 def main() raises:

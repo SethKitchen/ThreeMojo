@@ -43,6 +43,7 @@ from math.scaled_products import (
     _common_scale,
 )
 
+from math.cross import cross_vectors
 from math.norm import length2, normalized3, _ordinary_squared
 from math.vector2 import Vector2, weighted_sum2
 from math.utils import clamp, max3, min3, mix_delta
@@ -2019,13 +2020,6 @@ def _world_at(
     return weighted_sum3(a.world, b.world, c.world, share_a, share_b, share_c)
 
 
-def _cross(left: Vector3, right: Vector3) -> Vector3:
-    """Return the cross product of two vectors, as a value."""
-    var product = left
-    product.cross(right)
-    return product
-
-
 @fieldwise_init
 struct TangentFrame(ImplicitlyCopyable):
     """The first two columns of three.js's `getTangentFrame`: where `u`
@@ -2064,8 +2058,8 @@ def tangent_frame(
         The tangent and the bitangent, each zero when the coordinates do
         not change at all.
     """
-    var q1_perp = _cross(along_y, normal)
-    var q0_perp = _cross(normal, along_x)
+    var q1_perp = cross_vectors(along_y, normal)
+    var q0_perp = cross_vectors(normal, along_x)
     var tangent = q1_perp * uv_along_x.x + q0_perp * uv_along_y.x
     var bitangent = q1_perp * uv_along_x.y + q0_perp * uv_along_y.y
     var extent = max(tangent.dot(tangent), bitangent.dot(bitangent))
@@ -2229,8 +2223,8 @@ def bumped_normal(
     var sigma_y = along_y
     if sigma_y.length() != 0:
         sigma_y.normalize()
-    var r1 = _cross(sigma_y, normal)
-    var r2 = _cross(normal, sigma_x)
+    var r1 = cross_vectors(sigma_y, normal)
+    var r2 = cross_vectors(normal, sigma_x)
     var determinant = sigma_x.dot(r1)
     var sign = Float32(0)
     if determinant > 0:

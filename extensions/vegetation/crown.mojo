@@ -46,7 +46,9 @@ from extensions.vegetation.limbs import (
     Skeleton,
     grow_limbs,
     limb_mesh,
+    unit_or_up,
 )
+from math.cross import cross_vectors
 from extensions.vegetation.noise import hash01, value_noise, value_noise3
 from math.vector3 import Vector3
 from std.math import atan2, cos, pi, sin, sqrt
@@ -557,21 +559,6 @@ def _bark_colors(
     return colors^
 
 
-def _unit(v: Vector3) -> Vector3:
-    """Return `v` scaled to unit length, or +y for a vector near zero."""
-    var length = v.length()
-    if length < 1.0e-6:
-        return Vector3(0, 1, 0)
-    return v / length
-
-
-def _cross(a: Vector3, b: Vector3) -> Vector3:
-    """Return the cross product `a x b`."""
-    return Vector3(
-        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
-    )
-
-
 def hang_leaves(skeleton: Skeleton, parameters: CrownParameters) -> List[Leaf]:
     """Return the leaves on the twigs of a skeleton, not yet lit.
 
@@ -598,12 +585,12 @@ def hang_leaves(skeleton: Skeleton, parameters: CrownParameters) -> List[Leaf]:
         var a = skeleton.position[skeleton.parent[n]]
         var b = skeleton.position[n]
         var twig = b - a
-        var way = _unit(twig)
-        var side = _unit(
-            _cross(way, up) if abs(way.y) < 0.95 else Vector3(1, 0, 0)
+        var way = unit_or_up(twig)
+        var side = unit_or_up(
+            cross_vectors(way, up) if abs(way.y) < 0.95 else Vector3(1, 0, 0)
         )
-        var other = _cross(way, side)
-        var outward = _unit(
+        var other = cross_vectors(way, side)
+        var outward = unit_or_up(
             Vector3(
                 (b.x - mid.x) / radius,
                 (b.y - mid.y) / half,
@@ -626,15 +613,15 @@ def hang_leaves(skeleton: Skeleton, parameters: CrownParameters) -> List[Leaf]:
             var spoke = side * cos(spin) + other * sin(spin)
             # A leaf splays out from its twig, leans toward the twig's
             # tip, and hangs a little from its stalk.
-            var along = _unit(spoke + way * 0.7 + Vector3(0, -0.35, 0))
+            var along = unit_or_up(spoke + way * 0.7 + Vector3(0, -0.35, 0))
             var jitter = Vector3(
                 hash01(n, key + 2, seed) - 0.5,
                 hash01(n, key + 3, seed) - 0.5,
                 hash01(n, key + 4, seed) - 0.5,
             )
             var face = up * 0.75 + outward * 0.55 + jitter * 0.9
-            var normal = _unit(face - along * face.dot(along))
-            var across = _unit(_cross(along, normal))
+            var normal = unit_or_up(face - along * face.dot(along))
+            var across = unit_or_up(cross_vectors(along, normal))
             var scale = 0.7 + 0.6 * hash01(n, key + 5, seed)
             var base = a + twig * hash01(n, key, seed) + spoke * (length * 0.12)
             leaves.append(

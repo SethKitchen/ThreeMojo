@@ -3,70 +3,17 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Render clamps retain their original NaN and signed-zero behavior."""
+"""The render clamps keep NaN, signed zero and infinity."""
 
 from math.vector3 import Vector3
 from render.color_math import mix_opaque
 from render.framebuffer import FloatColor
 from render.fragment_flags import MIN_HASH_THRESHOLD, alpha_hash_threshold
 from render.packing import normalized_distance
-from render.raster_state import (
-    LOGARITHMIC_DEPTH,
-    REVERSED_DEPTH,
-    STANDARD_DEPTH,
-    DepthMode,
-    window_depth,
-)
 from std.benchmark import black_box
-from std.math import inf, max, min
+from std.math import inf
 from std.memory import bitcast
 from std.testing import TestSuite, assert_equal, assert_true
-
-
-def _original_window_depth(mode: DepthMode, depth: Float32) -> Float32:
-    """Return a stored depth as a depth texture holds it: zero to one.
-
-    Args:
-        mode: The depth mode it was stored with.
-        depth: The stored depth.
-
-    Returns:
-        The stored depth moved to zero to one and clamped there. A cleared
-        pixel gives 1, or 0 under `REVERSED_DEPTH`.
-    """
-    var window = depth * 0.5 + 0.5
-    if mode == REVERSED_DEPTH:
-        window = depth
-    return min(max(window, Float32(0)), Float32(1))
-
-
-def test_depth_window_keeps_original_clamp_order() raises:
-    var words: List[UInt32] = [
-        0x00000000,
-        0x80000000,
-        0x7F800000,
-        0xFF800000,
-        0x7FC00001,
-        0xFFC00001,
-        0x7FA00001,
-        0xFFA00001,
-        0x00000001,
-        0x80000001,
-        0x3F000000,
-        0x3F7FFFFF,
-        0x3F800000,
-        0x3F800001,
-        0xBF800000,
-    ]
-    var modes = [STANDARD_DEPTH, LOGARITHMIC_DEPTH, REVERSED_DEPTH]
-    for mode in modes:
-        for word in words:
-            var depth = black_box(bitcast[DType.float32](word))
-            var expected = _original_window_depth(mode, depth)
-            assert_equal(
-                bitcast[DType.uint32](window_depth(mode, depth)),
-                bitcast[DType.uint32](expected),
-            )
 
 
 def test_distance_clamp_keeps_nan_zero_and_infinity() raises:

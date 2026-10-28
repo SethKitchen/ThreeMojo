@@ -106,7 +106,6 @@ from math.utils import clamp, edge_index
 from std.math import exp2
 from math.norm import length2, _ordinary_squared, squared_length2
 from math.sine import fraction
-from math.utils import mix_delta
 from math.matrix3 import Matrix3
 from math.vector2 import Vector2
 from render.framebuffer import (
@@ -603,20 +602,6 @@ def float_texel(
         The color.
     """
     return FloatColor(r, g, b, 1.0 if alpha == IGNORED else a)
-
-
-def mix(near: Float32, far: Float32, t: Float32) -> Float32:
-    """Return a channel partway from one value to another.
-
-    Args:
-        near: The first value.
-        far: The second value.
-        t: The fraction between them.
-
-    Returns:
-        The difference-first blend.
-    """
-    return mix_delta(near, far, t)
 
 
 def mix_color(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:

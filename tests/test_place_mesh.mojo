@@ -3,41 +3,24 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The original statement API and the node-returning placement helper."""
+"""`place_mesh`, which attaches a mesh, and `place_mesh_node`, which also
+returns its node."""
 
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from extensions.humanoid.skeleton.arm.assembly import (
-    place_mesh as original_arm_place_mesh,
-)
 from extensions.humanoid.skeleton.place import place_mesh, place_mesh_node
 from materials.material import MaterialId
 from math.vector3 import Vector3
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
-def test_original_five_argument_statement_call() raises:
+def test_place_mesh_attaches_at_the_parent_origin() raises:
     var scene = Scene()
     var assets = Assets()
     var parent = scene.add(Object3D())
     place_mesh(scene, assets, parent, BufferGeometry(), MaterialId(0))
-    assert_equal(scene.count(), 2)
-    assert_equal(len(scene.meshes), 1)
-    assert_equal(assets.geometries.count(), 1)
-    var child = scene.meshes[0].node
-    assert_equal(scene.get(child).parent, parent)
-    assert_true(scene.get(child).position == Vector3(0, 0, 0))
-
-
-def test_original_arm_module_statement_call() raises:
-    var scene = Scene()
-    var assets = Assets()
-    var parent = scene.add(Object3D())
-    original_arm_place_mesh(
-        scene, assets, parent, BufferGeometry(), MaterialId(0)
-    )
     assert_equal(scene.count(), 2)
     assert_equal(len(scene.meshes), 1)
     assert_equal(assets.geometries.count(), 1)

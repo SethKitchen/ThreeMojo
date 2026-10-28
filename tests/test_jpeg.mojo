@@ -18,8 +18,7 @@ from core.search import first_match
 from render.framebuffer import Color
 from render.jpeg import (
     BLOCK_SAMPLES,
-    _BorrowedBitReader as BitReader,
-    BitReader as OwnedBitReader,
+    BitReader,
     HuffmanTable,
     clamp_sample,
     cosine_table,
@@ -349,7 +348,7 @@ def test_public_jpeg_huffman_reuses_buffered_bits() raises:
     counts[0] = 2
     var table = HuffmanTable(counts, [UInt8(7), UInt8(9)])
     var bytes: List[UInt8] = [0b01000000, 0, 0, 0xFF, 0xD9]
-    var reader = OwnedBitReader(bytes^, 0)
+    var reader = BitReader(Span(bytes), 0)
     assert_equal(reader.decode(table), UInt8(7))
     assert_equal(reader.count, 23)
     assert_equal(reader.at, 3)
@@ -1155,6 +1154,122 @@ def test_complete_nonmarker_bytes_cannot_end_a_scan() raises:
     var end_reader = BitReader(Span(end_bytes), 0)
     with assert_raises(contains="without a marker"):
         _ = end_reader.end()
+
+
+def test_a_failed_read_keeps_the_consumed_position() raises:
+    var bytes: List[UInt8] = [128]
+    var reader = BitReader(Span(bytes), 0)
+    assert_equal(reader.bits(8), 128)
+    with assert_raises(contains="A scan ended before its last block"):
+        _ = reader.bit()
+    assert_equal(reader.at, 1)
+    assert_equal(reader.count, 0)
+
+
+def test_huffman_lookup_and_slow_paths() raises:
+    var counts = List[Int](length=16, fill=0)
+    counts[0] = 1
+    var table = HuffmanTable(counts, [UInt8(7)])
+    var short: List[UInt8] = [0]
+    var slow = BitReader(Span(short), 0)
+    assert_equal(slow.decode(table), UInt8(7))
+    assert_equal(slow.count, 7)
+    var full: List[UInt8] = [0, 0, 0xFF, 0xD9]
+    var fast = BitReader(Span(full), 0)
+    assert_equal(fast.decode(table), UInt8(7))
+    assert_equal(fast.count, 15)
+    counts[0] = 0
+    counts[9] = 1
+    var long_table = HuffmanTable(counts, [UInt8(9)])
+    var long_bytes: List[UInt8] = [0, 0]
+    var long_reader = BitReader(Span(long_bytes), 0)
+    assert_equal(long_reader.decode(long_table), UInt8(9))
+    assert_equal(long_reader.count, 6)
+    var stuffed: List[UInt8] = [0xFF, 0, 0xFF, 0]
+    var wrong = BitReader(Span(stuffed), 0)
+    with assert_raises(contains="Huffman table does not define"):
+        _ = wrong.decode(table)
+    assert_equal(wrong.at, 4)
+    assert_equal(wrong.count, 0)
+
+
+def test_fill_boundaries_and_stuffing() raises:
+    var bytes: List[UInt8] = [0xFF, 0, 0xFF, 0xD9]
+    var stuffed = BitReader(Span(bytes), 0)
+    assert_equal(stuffed.bits(0), 0)
+    assert_equal(stuffed.at, 0)
+    assert_equal(stuffed.bits(8), 255)
+    assert_equal(stuffed.at, 2)
+    with assert_raises(contains="before its last block"):
+        _ = stuffed.bit()
+    var lone_bytes: List[UInt8] = [0xFF]
+    var lone = BitReader(Span(lone_bytes), 0)
+    with assert_raises(contains="before its last block"):
+        _ = lone.bit()
+    assert_equal(lone.at, 0)
+    var many = List[UInt8](length=8, fill=0)
+    var buffered = BitReader(Span(many), 0)
+    assert_equal(buffered.bit(), 0)
+    assert_equal(buffered.at, 7)
+    assert_equal(buffered.count, 55)
+
+
+def test_restart_success_and_error_states() raises:
+    var bytes: List[UInt8] = [0xFF, 0xD0, 0x80]
+    var reader = BitReader(Span(bytes), 0)
+    reader.held = 7
+    reader.count = 3
+    reader.stopped = True
+    reader.restart(UInt8(0xD0))
+    assert_equal(reader.at, 2)
+    assert_equal(reader.held, 0)
+    assert_equal(reader.count, 0)
+    assert_equal(reader.stopped, False)
+    assert_equal(reader.bit(), 1)
+    for kind in range(4):
+        var bad: List[UInt8] = [0xFF, 0xD1]
+        if kind == 0:
+            bad = [0, 0xD0]
+        elif kind == 1:
+            bad = [0xFF]
+        var broken = BitReader(Span(bad), 0)
+        broken.held = 15
+        broken.count = 8 if kind == 2 else 3
+        broken.stopped = True
+        with assert_raises():
+            broken.restart(UInt8(0xD0))
+        assert_equal(broken.at, 0)
+        assert_equal(broken.count, 0)
+        assert_equal(broken.held, 0)
+        assert_equal(broken.stopped, False)
+
+
+def test_end_success_and_error_states() raises:
+    var bytes: List[UInt8] = [0xFF, 0xD9]
+    var reader = BitReader(Span(bytes), 0)
+    reader.held = 7
+    reader.count = 3
+    reader.stopped = True
+    assert_equal(reader.end(), 0)
+    assert_equal(reader.count, 0)
+    assert_equal(reader.held, 0)
+    assert_equal(reader.stopped, False)
+    for kind in range(3):
+        var bad: List[UInt8] = [0xFF, 0xD9]
+        if kind == 0:
+            bad = [0, 0xD9]
+        elif kind == 1:
+            bad = [0xFF]
+        var broken = BitReader(Span(bad), 0)
+        broken.held = 15
+        broken.count = 8 if kind == 2 else 3
+        broken.stopped = True
+        with assert_raises(contains="without a marker"):
+            _ = broken.end()
+        assert_equal(broken.at, 0)
+        assert_equal(broken.count, 0)
+        assert_equal(broken.held, 0)
+        assert_equal(broken.stopped, False)
 
 
 def main() raises:

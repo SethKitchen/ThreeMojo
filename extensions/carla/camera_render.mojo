@@ -108,7 +108,6 @@ from extensions.carla.render_post import (
     apply_height_fog,
     apply_lens,
     draw_rain,
-    luminance,
     metered_luminance,
 )
 from extensions.carla.assets import AssetRegistry

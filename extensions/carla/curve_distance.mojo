@@ -10,82 +10,9 @@ comparisons use bounded exact binary products, not an epsilon or a rounded
 square. This is point-distance arithmetic, not a global curve certificate.
 """
 
-from extensions.carla.curve_interval import _next_down, _next_up
+from extensions.carla.curve_interval import _Interval
 from std.math import inf, isfinite, isnan, sqrt
 from std.memory import bitcast
-
-
-@fieldwise_init
-struct _DistanceInterval(ImplicitlyCopyable):
-    var low: Float64
-    var high: Float64
-
-    @staticmethod
-    def point(value: Float64) -> Self:
-        if isnan(value):
-            return Self.whole()
-        return Self(value, value)
-
-    @staticmethod
-    def whole() -> Self:
-        return Self(-inf[DType.float64](), inf[DType.float64]())
-
-    @staticmethod
-    def rounded(low: Float64, high: Float64) -> Self:
-        if isnan(low) or isnan(high):
-            return Self.whole()
-        return Self(_next_down(low), _next_up(high))
-
-    def is_finite(self) -> Bool:
-        return isfinite(self.low) and isfinite(self.high)
-
-    def contains(self, value: Float64) -> Bool:
-        return self.low <= value and value <= self.high
-
-    def is_point(self, value: Float64) -> Bool:
-        return self.low == value and self.high == value
-
-    def __neg__(self) -> Self:
-        return Self(-self.high, -self.low)
-
-    def __add__(self, other: Self) -> Self:
-        if self.is_point(0.0) and other.is_point(0.0):
-            return Self(-0.0, 0.0)
-        if self.is_point(0.0):
-            return other
-        if other.is_point(0.0):
-            return self
-        return Self.rounded(self.low + other.low, self.high + other.high)
-
-    def __sub__(self, other: Self) -> Self:
-        return self + (-other)
-
-    def __truediv__(self, other: Self) -> Self:
-        if other.contains(0.0):
-            return Self.whole()
-        if other.is_point(1.0):
-            return self
-        if self.is_point(0.0) and other.is_finite():
-            return Self(-0.0, 0.0)
-        var a = self.low / other.low
-        var b = self.low / other.high
-        var c = self.high / other.low
-        var d = self.high / other.high
-        if isnan(a) or isnan(b) or isnan(c) or isnan(d):
-            return Self.whole()
-        return Self.rounded(
-            min(min(a, b), min(c, d)), max(max(a, b), max(c, d))
-        )
-
-    def square(self) -> Self:
-        if self.is_point(0.0):
-            return Self.point(0.0)
-        var a = self.low * self.low
-        var b = self.high * self.high
-        var low = max(0.0, _next_down(min(a, b)))
-        if self.contains(0.0):
-            low = 0.0
-        return Self(low, _next_up(max(a, b)))
 
 
 comptime _WORDS = 132
@@ -191,20 +118,18 @@ def _normalized_square[
     axes: Int
 ](
     point: Array[Float64, 3], query: Array[Float64, 3], scale: Float64
-) -> _DistanceInterval:
+) -> _Interval:
     comptime assert axes >= 1 and axes <= 3
-    var result = _DistanceInterval.point(0.0)
+    var result = _Interval.point(0.0)
     var axis = 0
     while axis < axes:
-        var gap = _DistanceInterval.point(0.0)
+        var gap = _Interval.point(0.0)
         if point[axis] != query[axis]:
-            gap = _DistanceInterval.point(
-                point[axis]
-            ) - _DistanceInterval.point(query[axis])
-        var normalized = gap / _DistanceInterval.point(scale)
+            gap = _Interval.point(point[axis]) - _Interval.point(query[axis])
+        var normalized = gap / _Interval.point(scale)
         result = result + normalized.square()
         axis += 1
-    return _DistanceInterval(max(0.0, result.low), max(0.0, result.high))
+    return _Interval(max(0.0, result.low), max(0.0, result.high))
 
 
 @no_inline

@@ -511,8 +511,15 @@ struct Skeleton(Movable):
         return False
 
 
-def _unit(v: Vector3) -> Vector3:
-    """Return `v` scaled to unit length, or +y for a vector near zero."""
+def unit_or_up(v: Vector3) -> Vector3:
+    """Return a vector scaled to unit length.
+
+    Args:
+        v: The vector.
+
+    Returns:
+        `v` at unit length, or +y when `v` is shorter than 1e-6.
+    """
     var length = v.length()
     if length < 1.0e-6:
         return Vector3(0, 1, 0)
@@ -572,7 +579,7 @@ def _climb(
     var node = skeleton._add(here, -1)
     while (here.y < fork or _nearest(points, here) >= reach) and here.y < top:
         var wander = parameters.bend * 0.25 * sin(here.y * 0.45 + phase)
-        var way = _unit(
+        var way = unit_or_up(
             Vector3(
                 sin(tilt) * cos(heading) + wander,
                 cos(tilt),
@@ -632,7 +639,7 @@ def _colonize(
         for k in range(len(pulled)):
             var n = pulled[k]
             var at = skeleton.position[n]
-            var mean = _unit(pull[n] / Float32(pulls[n]))
+            var mean = unit_or_up(pull[n] / Float32(pulls[n]))
             pull[n] = Vector3(0, 0, 0)
             pulls[n] = 0
             var far = sqrt(at.x * at.x + at.z * at.z) / radius
@@ -642,7 +649,7 @@ def _colonize(
                 hash01(n, key + 1, seed) - 0.5,
                 hash01(n, key + 2, seed) - 0.5,
             )
-            var way = _unit(
+            var way = unit_or_up(
                 mean
                 + Vector3(
                     0, parameters.up_pull - parameters.droop * far * far, 0
@@ -792,10 +799,10 @@ def limb_mesh(
         var thick = skeleton.radius[chain[1]]
         var radial = max(3, min(sides, 3 + Int(thick * 100)))
         var first = len(positions) // 3
-        var tangent = _unit(
+        var tangent = unit_or_up(
             skeleton.position[chain[1]] - skeleton.position[chain[0]]
         )
-        var side = _unit(
+        var side = unit_or_up(
             Vector3(tangent.z, 0, -tangent.x) if abs(tangent.y)
             < 0.9 else Vector3(1, 0, 0)
         )
@@ -803,10 +810,10 @@ def limb_mesh(
             ref here = skeleton.position[chain[r]]
             var ahead = skeleton.position[chain[min(r + 1, last)]]
             var behind = skeleton.position[chain[max(r - 1, 0)]]
-            tangent = _unit(ahead - behind)
+            tangent = unit_or_up(ahead - behind)
             # Carry the side round to stay square to the tube, so the
             # rings do not twist.
-            side = _unit(side - tangent * side.dot(tangent))
+            side = unit_or_up(side - tangent * side.dot(tangent))
             var other = Vector3(
                 tangent.y * side.z - tangent.z * side.y,
                 tangent.z * side.x - tangent.x * side.z,

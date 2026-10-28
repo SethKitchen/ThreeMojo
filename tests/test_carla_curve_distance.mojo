@@ -5,11 +5,9 @@
 
 """Focused controls for the fixed-s stored-point arithmetic boundary."""
 
+from extensions.carla.curve_interval import _Interval, _next_down, _next_up
 from extensions.carla.curve_distance import (
-    _DistanceInterval,
     _exact_point_order,
-    _next_down,
-    _next_up,
     _wide_point_order,
 )
 from std.math import inf, isnan
@@ -91,14 +89,14 @@ def test_adjacent_bounds_include_signed_zero_and_infinity() raises:
 
 def test_interval_points_and_indeterminate_operations() raises:
     var nan = bitcast[DType.float64](UInt64(0x7FF8000000000000))
-    var whole = _DistanceInterval.whole()
+    var whole = _Interval.whole()
     assert_false(whole.is_finite())
     assert_true(whole.contains(0))
-    assert_equal(_DistanceInterval.point(nan).low, whole.low)
-    assert_equal(_DistanceInterval.rounded(nan, 0).high, whole.high)
-    assert_equal(_DistanceInterval.rounded(0, nan).low, whole.low)
-    var zero = _DistanceInterval.point(0)
-    var one = _DistanceInterval.point(1)
+    assert_equal(_Interval.point(nan).low, whole.low)
+    assert_equal(_Interval.rounded(nan, 0).high, whole.high)
+    assert_equal(_Interval.rounded(0, nan).low, whole.low)
+    var zero = _Interval.point(0)
+    var one = _Interval.point(1)
     assert_true((zero + zero).is_point(0))
     assert_true((zero + one).is_point(1))
     assert_true((one + zero).is_point(1))
@@ -106,15 +104,15 @@ def test_interval_points_and_indeterminate_operations() raises:
     assert_true((one + one).contains(2))
     assert_equal((one / zero).low, whole.low)
     assert_true((one / one).is_point(1))
-    assert_true((zero / _DistanceInterval.point(2)).is_point(0))
-    var infinity = _DistanceInterval.point(inf[DType.float64]())
+    assert_true((zero / _Interval.point(2)).is_point(0))
+    var infinity = _Interval.point(inf[DType.float64]())
     assert_equal((infinity / infinity).low, whole.low)
-    assert_true((one / _DistanceInterval.point(3)).contains(1.0 / 3.0))
+    assert_true((one / _Interval.point(3)).contains(1.0 / 3.0))
     assert_true(zero.square().is_point(0))
-    var crossed = _DistanceInterval(-1.0, 2.0).square()
+    var crossed = _Interval(-1.0, 2.0).square()
     assert_equal(crossed.low, 0.0)
     assert_true(crossed.high >= 4.0)
-    var positive = _DistanceInterval(2.0, 3.0).square()
+    var positive = _Interval(2.0, 3.0).square()
     assert_true(positive.low <= 4.0)
     assert_true(positive.high >= 9.0)
 
