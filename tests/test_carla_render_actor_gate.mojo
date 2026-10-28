@@ -15,6 +15,8 @@ from tools.carla_render_actor_gate import (
     render_actor_bytes_all,
     render_actor_checked_edges,
     render_actor_checked_edges_with_messages,
+    render_actor_paths,
+    render_actor_paths_after_record,
     render_actor_record,
 )
 
@@ -25,6 +27,18 @@ def test_a_changed_record_is_refused() raises:
         contains="reviewed render actor reuse successor: unreviewed exact edge"
     ):
         render_actor_record(String("").as_bytes())
+
+
+def test_the_module_paths_follow_the_record_check() raises:
+    """A changed record fails before the module paths are returned."""
+    with assert_raises(
+        contains="reviewed render actor reuse successor: unreviewed exact edge"
+    ):
+        _ = render_actor_paths_after_record(String("").as_bytes())
+    var raw = Path(
+        "tools/carla_lane_oracle/render-actor-reuse-successor.json"
+    ).read_bytes()
+    assert_equal(render_actor_paths_after_record(raw), render_actor_paths())
 
 
 def test_listed_render_actor_digests_keep_their_order() raises:

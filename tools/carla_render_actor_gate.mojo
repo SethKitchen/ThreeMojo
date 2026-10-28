@@ -297,6 +297,23 @@ def render_actor_paths() raises -> String:
     return doc.dumps()
 
 
+def render_actor_paths_after_record(migration: Span[UInt8, _]) raises -> String:
+    """Require the render-actor record, then return its module paths.
+
+    Args:
+        migration: The successor record bytes.
+
+    Returns:
+        JSON with `modules` and `tests` in reviewed order.
+
+    Raises:
+        Error: The record scope, tests, or edge changed. The record is
+            checked before the module paths.
+    """
+    render_actor_record(migration)
+    return render_actor_paths()
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -317,6 +334,18 @@ def main() raises:
         Error: The command is invalid.
     """
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--paths-after-record":
+        try:
+            print(
+                render_actor_paths_after_record(
+                    Path(arguments[2]).read_bytes()
+                ),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 3 and arguments[1] == "--checked-labeled":
         try:
             print(

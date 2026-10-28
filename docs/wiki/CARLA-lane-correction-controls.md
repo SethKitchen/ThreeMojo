@@ -508,6 +508,8 @@ It keeps the lane-control migration path.
 
 `tools/carla_render_actor_gate.mojo` checks the render-actor reuse record and its bound tests.
 
+It reads the module paths after that record check in one check.
+
 It checks every render-actor file digest in one check.
 
 It reads the render-actor ledger once for every edge.

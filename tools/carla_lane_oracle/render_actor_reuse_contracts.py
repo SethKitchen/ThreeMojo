@@ -181,6 +181,34 @@ def _gate_record(payload):
         _run(['--migration', str(record)])
 
 
+def _paths_after_record(payload):
+    """Require the render-actor record, then return its module paths."""
+    global _PATHS
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='render-paths-record-') as directory:
+        record = Path(directory) / 'migration.json'
+        record.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_render_actor_gate',
+             '--paths-after-record', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    if _PATHS is None:
+        _PATHS = parsed
+    return tuple(parsed['modules'])
+
+
 def _gate_bytes(payload, digest, token, label):
     _gate_bytes_all([(payload, digest, token, label)])
 
@@ -373,9 +401,9 @@ def verify(root, *, _operation=None):
     _ensure_migration()
     raw = _typed_source.historical_bytes(root, MIGRATION, _observe_bytes(root, MIGRATION, (root/MIGRATION).read_bytes(),
                          _operation=_operation), _operation=_operation)
-    _gate_record(raw)
+    modules = _paths_after_record(raw)
     record = json.loads(raw, object_pairs_hook=source.unique_keys)
-    module_rows = [(path, record['edges'][path]) for path in _actor_modules()]
+    module_rows = [(path, record['edges'][path]) for path in modules]
     currents = _live_endpoints(root, module_rows, _operation=_operation)
     edges = {}
     checked = []
