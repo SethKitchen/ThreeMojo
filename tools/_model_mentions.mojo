@@ -9,7 +9,9 @@ Each text is a length line and then that many UTF-8 bytes. An empty name
 matches every text. A longer name does not match a shorter text.
 """
 
+from tools._optional_runtime_messages import optional_runtime_messages
 from tools._python_json import PyJson
+from tools._watched_model_names import watched_model_names
 
 
 def _contains(text: String, needle: String) -> Bool:
@@ -122,3 +124,26 @@ def model_mentions(names_json: String, framed: String) raises -> String:
         out.append(rows, out.new_bool(kept))
     out.root = rows
     return out.dumps()
+
+
+def named_model_mentions(framed: String, expected: Int) raises -> String:
+    """Read the watched names, then find them in the framed texts.
+
+    Args:
+        framed: Length lines followed by the exact UTF-8 bytes of each text.
+        expected: The number of texts the caller framed.
+
+    Returns:
+        A JSON list of booleans, one per text.
+
+    Raises:
+        Error: A length line is invalid, or the flag count differs from
+            `expected`. The watched names are read before the texts.
+    """
+    var names = watched_model_names()
+    var flags = model_mentions(names, framed)
+    var doc = PyJson.parse(flags)
+    if doc.length(doc.root) != expected:
+        var messages = PyJson.parse(optional_runtime_messages())
+        raise Error(messages.text(messages.at(messages.root, "models")))
+    return flags

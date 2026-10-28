@@ -261,6 +261,8 @@ A new executable name is refused.
 
 It keeps the watched model names and the removed search names.
 
+It reads those names before the model mentions in one check.
+
 Mojo checks the live lane-search edges.
 One frontier loop keeps the current-cell work debit.
 The fresh producer follows that debit.

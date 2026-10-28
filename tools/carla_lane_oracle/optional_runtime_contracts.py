@@ -375,15 +375,13 @@ def _watched_names():
     return json.loads(result.stdout)
 
 
-def _model_mentions(names, texts):
-    """Return which texts contain one of `names`."""
+def _model_mentions(texts):
+    """Return which texts contain a watched name."""
     import json
     import os
     import subprocess
     import tempfile
     from pathlib import Path
-    if not texts:
-        return []
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     framed = bytearray()
@@ -391,24 +389,18 @@ def _model_mentions(names, texts):
         raw = text.encode('utf-8')
         framed += str(len(raw)).encode('ascii') + b'\n' + raw
     with tempfile.TemporaryDirectory(prefix='model-mentions-') as directory:
-        folder = Path(directory)
-        names_path = folder / 'names.json'
-        texts_path = folder / 'texts.bin'
-        names_path.write_text(json.dumps(list(names), separators=(',', ':')))
+        texts_path = Path(directory) / 'texts.bin'
         texts_path.write_bytes(framed)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_model_mentions',
-             str(names_path), str(texts_path)],
+             '--named', str(texts_path), str(len(texts))],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    flags = json.loads(result.stdout)
-    if len(flags) != len(texts):
-        raise ValueError(_runtime_contract()['models'])
-    return flags
+    return json.loads(result.stdout)
 
 
 def verify_no_containing_model_consumers(root, *, _operation=None):
@@ -424,7 +416,7 @@ def verify_no_containing_model_consumers(root, *, _operation=None):
         text = _typed_source.historical_text(root, path, source._observe_text(root, (path).relative_to(root).as_posix(), path.read_text(), _operation=_operation), _operation=_operation)
         texts.append(text)
         relatives.append(relative)
-    hits = _model_mentions(_watched_names(), texts)
+    hits = _model_mentions(texts)
     chosen = []
     for relative, text, hit in zip(relatives, texts, hits):
         if not hit:

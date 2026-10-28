@@ -7,7 +7,8 @@
 
 from std.testing import TestSuite, assert_equal, assert_raises
 
-from tools._model_mentions import model_mentions
+from tools._model_mentions import model_mentions, named_model_mentions
+from tools._watched_model_names import watched_model_names
 
 
 def test_a_watched_name_matches_a_python_substring() raises:
@@ -32,6 +33,24 @@ def test_a_watched_name_matches_a_python_substring() raises:
         "[true]",
     )
     assert_equal(model_mentions("[]", ""), "[]")
+
+
+def test_the_watched_names_are_read_before_the_mentions() raises:
+    """The reviewed names match before the flag count is checked."""
+    var frame = "12\ncached_model4\nnope"
+    assert_equal(
+        named_model_mentions(frame, 2),
+        model_mentions(watched_model_names(), frame),
+    )
+    assert_equal(named_model_mentions("", 0), "[]")
+    assert_equal(named_model_mentions("21\ncurve_objective_model", 1), "[true]")
+    assert_equal(named_model_mentions("4\nnope", 1), "[false]")
+    with assert_raises(
+        contains="optional runtime contract: model name set changed"
+    ):
+        _ = named_model_mentions("", 1)
+    with assert_raises(contains="invalid model text length"):
+        _ = named_model_mentions("5\nab", 0)
 
 
 def test_a_bad_length_line_is_refused() raises:
