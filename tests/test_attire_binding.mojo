@@ -37,7 +37,8 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from tests._attire_fixtures import coarse_person, empty_mesh, line_rig, strip
+from tests._attire_fixtures import empty_mesh, line_rig, strip
+from tests._attire_people import coarse_person
 from units.si import FOOT, INCH, Length
 
 

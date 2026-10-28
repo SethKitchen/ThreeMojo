@@ -53,7 +53,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from tests._attire_fixtures import coarse_person, coarse_spec
+from tests._attire_people import coarse_person, coarse_spec
 from tests.test_scratch import TestScratch, temporary_path
 from units.si import FOOT, Length
 

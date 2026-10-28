@@ -15,19 +15,11 @@ the plane z = 0, facing +z. Every vertex is bound wholly to one joint.
 An empty mesh has every attribute a garment has, and no vertex.
 """
 
-from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
-from core.object3d import Object3D
-from core.scene import Scene
-from extensions.humanoid.rig.game import GameHumanoid, add_game_humanoid
 from extensions.humanoid.rig.joints import JOINT_COUNT, HumanoidRig, Joint
-from extensions.humanoid.sex import MALE
-from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
-from renderers.renderer import available_workers
-from units.si import FOOT, Length
 
 
 def line_rig() raises -> HumanoidRig:
@@ -117,37 +109,3 @@ def empty_mesh(normals: Bool = True) raises -> BufferGeometry:
     mesh.set_attribute(String(SKIN_WEIGHT), BufferAttribute(List[Float32](), 4))
     mesh.set_index(List[Int]())
     return mesh^
-
-
-def coarse_spec() -> HumanoidSpec:
-    """Return the six-foot male template."""
-    return HumanoidSpec(Length(6.0, FOOT), MALE)
-
-
-def coarse_person(
-    mut scene: Scene, mut assets: Assets, guides: Int = 0
-) raises -> GameHumanoid:
-    """Return a coarse game humanoid in `scene`: detail 12, 3000 triangles.
-
-    Args:
-        scene: The scene.
-        assets: The store.
-        guides: Guide strands of hair, or none.
-
-    Returns:
-        The humanoid.
-    """
-    var root = scene.add(Object3D())
-    return add_game_humanoid(
-        scene,
-        assets,
-        root,
-        coarse_spec(),
-        3000,
-        12,
-        8,
-        8,
-        guides=guides,
-        followers=1 if guides > 0 else 0,
-        workers=available_workers(),
-    )

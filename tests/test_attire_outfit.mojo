@@ -48,7 +48,8 @@ from std.testing import (
 )
 from extensions.humanoid.rig.game import GameHumanoid
 from extensions.humanoid.skeleton.head.hair.strands import HairStrands
-from tests._attire_fixtures import coarse_person, empty_mesh, line_rig
+from tests._attire_fixtures import empty_mesh, line_rig
+from tests._attire_people import coarse_person
 
 
 def test_an_outfit_holds_one_garment_a_slot_and_layer() raises:
