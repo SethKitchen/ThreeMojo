@@ -340,6 +340,8 @@ It reads the Sum2 checkpoints before those graphs in one check.
 
 It keeps the reviewed Sum2 helper digest.
 
+It reads the Sum2 plan before the package path in one check.
+
 It compares the scalar environment call with its stored statement.
 
 It counts one stored statement or expression in a runtime helper.

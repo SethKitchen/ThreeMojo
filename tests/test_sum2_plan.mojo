@@ -8,7 +8,7 @@
 from std.testing import TestSuite, assert_equal, assert_true
 
 from tools._python_json import MISSING, PyJson
-from tools._sum2_plan import sum2_plan
+from tools._sum2_plan import sum2_plan, sum2_plan_with_package
 
 
 def test_sum2_modules_and_caller_comparisons_stay_reviewed() raises:
@@ -70,6 +70,19 @@ def test_sum2_modules_and_caller_comparisons_stay_reviewed() raises:
         doc.text(doc.at(doc.root, "spiral_begin")), "def _spiral_expression["
     )
     assert_equal(doc.text(doc.at(doc.root, "spiral_end")), "def _sample_index(")
+    assert_equal(
+        doc.text(doc.at(doc.root, "helper_sha")),
+        "41995592963bae61a2b690b465bdad6c759b02ddbe98141ba5da30d0df5d5c8e",
+    )
+
+
+def test_the_plan_comes_before_the_package() raises:
+    """The helper digest stays ahead of the package path."""
+    var doc = PyJson.parse(sum2_plan_with_package())
+    var count = doc.length(doc.root)
+    assert_equal(doc.key(doc.root, 0), "modules")
+    assert_equal(doc.key(doc.root, count - 1), "package")
+    assert_equal(doc.text(doc.at(doc.root, "package")), "extensions/carla")
     assert_equal(
         doc.text(doc.at(doc.root, "helper_sha")),
         "41995592963bae61a2b690b465bdad6c759b02ddbe98141ba5da30d0df5d5c8e",

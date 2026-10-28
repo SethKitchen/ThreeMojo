@@ -9,6 +9,8 @@ The live texts still come from the repository. This plan only says which
 module and which checkpoint each comparison uses.
 """
 
+from tools._carla_package import carla_package
+
 
 def sum2_plan() -> String:
     """Return the Sum2 module names, caller comparisons, and helper map.
@@ -37,3 +39,15 @@ def sum2_plan() -> String:
         ' _sample_index(",'
         + '"helper_sha":"41995592963bae61a2b690b465bdad6c759b02ddbe98141ba5da30d0df5d5c8e"}'
     )
+
+
+def sum2_plan_with_package() -> String:
+    """Return the Sum2 plan, then the package path.
+
+    Returns:
+        The Sum2 plan JSON with `package` after the helper digest.
+    """
+    var plan = sum2_plan()
+    var end = plan.byte_length() - 1
+    var prefix = plan[byte=0:end]
+    return String(prefix) + ',"package":"' + carla_package() + '"}'

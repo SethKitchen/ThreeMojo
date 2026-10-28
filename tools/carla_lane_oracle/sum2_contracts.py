@@ -103,6 +103,24 @@ def _sum2_plan():
     return _SUM2_PLAN
 
 
+def _sum2_plan_with_package():
+    """Return the Sum2 plan, then the package path."""
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sum2_plan',
+         '--with-package'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def require(condition, message):
     if not condition:
         raise ValueError(message)
@@ -225,7 +243,7 @@ def verify(root, *, _operation=None):
         from . import check_sampled_values as c
     else:
         import check_sampled_values as c
-    plan = _sum2_plan()
+    plan = _sum2_plan_with_package()
     names = tuple(plan['modules'])
     texts = {name: _typed_source.historical_text(root, root / ('extensions/carla/' + name + '.mojo'), source._observe_text(root, (root / ('extensions/carla/' + name + '.mojo')).relative_to(root).as_posix(), (root / ('extensions/carla/' + name + '.mojo')).read_text(), _operation=_operation), _operation=_operation)
              for name in names}
@@ -239,7 +257,7 @@ def verify(root, *, _operation=None):
     helpers = plan['helpers']
     roundoff = helpers['roundoff']
     texts[roundoff] = selection.predecessor_text(
-        root, _carla_package() + '/' + roundoff + '.mojo', _operation=_operation)
+        root, plan['package'] + '/' + roundoff + '.mojo', _operation=_operation)
 
     # The complete lexical contract above retains all keyword-subscripts and
     # decorators. Separately relate the unchanged arithmetic leaf/recurrence
