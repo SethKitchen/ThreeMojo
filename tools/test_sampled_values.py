@@ -1717,6 +1717,70 @@ class GroupedTableCacheTests(unittest.TestCase):
             else:
                 grouped.TOKEN_SHA256 = saved_token
 
+    def test_a_reused_grouped_check_reads_the_lane_paths(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import grouped_table_contracts as grouped
+        from tools.carla_lane_oracle import lane_control_contracts as lane
+        saved_gate = grouped._GATED_GROUPED
+        saved_paths = lane._RECORD_PATHS
+        calls = []
+
+        def run(args, **kwargs):
+            calls.append(args)
+            if 'carla_record_paths' in args:
+                return Mock(
+                    returncode=0, stdout='{"lane_control":"lane.json"}', stderr='')
+            return Mock(
+                returncode=0,
+                stdout='{"restore": false, "record": {"status": "PASS"}}',
+                stderr='',
+            )
+
+        try:
+            grouped._GATED_GROUPED = None
+            lane._RECORD_PATHS = None
+            with patch('subprocess.run', side_effect=run):
+                grouped._grouped_checked('module', 'geometry', 'aa')
+                parsed = grouped._grouped_then_lane('module', 'geometry', 'aa')
+                grouped._grouped_then_lane('module', 'geometry', 'aa')
+                self.assertEqual(parsed['record'], {'status': 'PASS'})
+                self.assertEqual(lane._RECORD_PATHS, {'lane_control': 'lane.json'})
+                self.assertEqual(
+                    [args for args in calls if 'carla_grouped_gate' in args],
+                    [calls[0]],
+                )
+                self.assertEqual(
+                    [args for args in calls if 'carla_record_paths' in args],
+                    [calls[1]],
+                )
+            lane._RECORD_PATHS = None
+            grouped._GATED_GROUPED = (
+                ('module', 'geometry', 'aa'),
+                {'restore': True, 'record': {'status': 'PASS'}},
+            )
+            with patch('subprocess.run', side_effect=run) as skipped:
+                restored = grouped._grouped_then_lane('module', 'geometry', 'aa')
+                self.assertEqual(skipped.call_count, 0)
+                self.assertTrue(restored['restore'])
+                self.assertIsNone(lane._RECORD_PATHS)
+            grouped._GATED_GROUPED = (
+                ('module', 'geometry', 'aa'),
+                {'restore': False, 'record': {'status': 'PASS'}},
+            )
+            failed = Mock(returncode=1, stdout='', stderr='paths changed\n')
+            with patch('subprocess.run', return_value=failed) as run_failed:
+                with self.assertRaisesRegex(ValueError, 'paths changed'):
+                    grouped._grouped_then_lane('module', 'geometry', 'aa')
+                with self.assertRaisesRegex(ValueError, 'paths changed'):
+                    grouped._grouped_then_lane('module', 'geometry', 'aa')
+                self.assertEqual(run_failed.call_count, 2)
+            with patch('subprocess.run', side_effect=run) as changed:
+                grouped._grouped_then_lane('module', 'other', 'aa')
+                self.assertIn('--checked-paths', changed.call_args.args[0])
+        finally:
+            grouped._GATED_GROUPED = saved_gate
+            lane._RECORD_PATHS = saved_paths
+
 
 class DistanceGateCacheTests(unittest.TestCase):
     def test_the_same_spiral_domain_texts_skip_the_second_gate(self):

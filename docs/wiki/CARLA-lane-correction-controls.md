@@ -67,6 +67,7 @@ It reuses that grouped table check when the same texts are read again.
 The proof file and the geometry file are still read.
 A changed text is checked again.
 A failed check is not kept.
+It reads the lane-control record paths after that reused check.
 
 It checks those stored bounds before the lane-control record paths in one check.
 

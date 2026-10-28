@@ -124,7 +124,8 @@ def verify_text(module, geometry):
 def _grouped_then_lane(module, geometry, digest):
     """Check the grouped table, then read the lane-control record paths.
 
-    A successful table check is kept for a later read of the same texts.
+    A table check that already passed is not repeated. The lane-control
+    paths are still read when that check did not restore a predecessor.
     A failed check is not kept.
     """
     import json
@@ -137,6 +138,19 @@ def _grouped_then_lane(module, geometry, digest):
         from . import lane_control_contracts as lane
     else:
         import lane_control_contracts as lane
+    key = (module, geometry, digest)
+    cached = _GATED_GROUPED
+    if cached is not None and cached[0] == key:
+        parsed = cached[1]
+        if not parsed['restore'] and lane._RECORD_PATHS is None:
+            if 'paths' in parsed:
+                lane._RECORD_PATHS = parsed['paths']
+            else:
+                try:
+                    lane._record_paths()
+                except RuntimeError as error:
+                    raise ValueError(str(error)) from error
+        return parsed
     payload = json.dumps({
         'module': module,
         'geometry': geometry,
