@@ -7,10 +7,11 @@
 
     carla_selection_gate --grouped PATH --roundoff PATH --interval PATH --trig PATH
     carla_selection_gate --checked PATH
+    carla_selection_gate --catalog PATH
 
 The program checks the texts it is given. It does not roll a successor
 back to a historical source. The caller does that before it starts the
-program.
+program. `--catalog` reads the selection labels before the producer paths.
 """
 
 from std.pathlib import Path
@@ -20,6 +21,7 @@ from tests._python_tokens import token_sha256
 from tools._fraction import Fraction
 from tools._moment_guards import require_name_set
 from tools._python_json import PyJson
+from tools._selection_labels import selection_labels
 from tools._spiral_moment_derive import stored_scalar_word
 from tools._spiral_moment_words import fraction_of_word
 
@@ -159,6 +161,60 @@ def selection_checked(payload: String) raises -> String:
     )
 
 
+def selection_catalog_checked(payload: String) raises -> String:
+    """Read the labels and producer paths, then check the tokens.
+
+    Args:
+        payload: JSON with `modules`, `interval`, and `trig`. `modules`
+            maps each producer path to its source.
+
+    Returns:
+        The pass record as one JSON object.
+
+    Raises:
+        Error: The producer names differ, or a token or phase constant
+            changed. The labels are read before the producer paths, and
+            both are read before the tokens.
+    """
+    var labels = PyJson.parse(selection_labels())
+    var producers = PyJson.parse(selection_producers())
+    var doc = PyJson.parse(payload)
+    var modules = doc.at(doc.root, "modules")
+    var names_doc = PyJson()
+    var root = names_doc.new_dict()
+    var names = names_doc.new_list()
+    var count = doc.length(modules)
+    var index = 0
+    while index < count:
+        names_doc.append(names, names_doc.new_str(doc.key(modules, index)))
+        index += 1
+    names_doc.set(root, "names", names)
+    var wanted = names_doc.new_list()
+    count = producers.length(producers.root)
+    index = 0
+    while index < count:
+        names_doc.append(
+            wanted, names_doc.new_str(producers.key(producers.root, index))
+        )
+        index += 1
+    names_doc.set(root, "expected", wanted)
+    names_doc.set(
+        root,
+        "message",
+        names_doc.new_str(labels.text(labels.at(labels.root, "producer_set"))),
+    )
+    names_doc.root = root
+    require_name_set(names_doc.dumps())
+    var grouped = producers.key(producers.root, 0)
+    var roundoff = producers.key(producers.root, 1)
+    return selection_finiteness(
+        doc.text(doc.at(modules, grouped)),
+        doc.text(doc.at(modules, roundoff)),
+        doc.text(doc.at(doc.root, "interval")),
+        doc.text(doc.at(doc.root, "trig")),
+    )
+
+
 def selection_producers() -> String:
     """Return the two selection producer digests in reviewed order.
 
@@ -180,6 +236,7 @@ def _usage():
         (
             "usage: carla_selection_gate --grouped PATH --roundoff PATH"
             " --interval PATH --trig PATH | carla_selection_gate --checked PATH"
+            " | carla_selection_gate --catalog PATH"
         ),
         file=stderr,
     )
@@ -196,6 +253,16 @@ def main() raises:
     if len(arguments) == 3 and arguments[1] == "--checked":
         try:
             print(selection_checked(Path(arguments[2]).read_text()), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--catalog":
+        try:
+            print(
+                selection_catalog_checked(Path(arguments[2]).read_text()),
+                end="",
+            )
         except error:
             print(String(error), file=stderr)
             exit(1)

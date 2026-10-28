@@ -67,8 +67,6 @@ def verify_text(modules, interval, trig):
     import tempfile
     payload = json.dumps({
         'modules': modules,
-        'expected': list(_expected()),
-        'message': _selection_labels()['producer_set'],
         'interval': interval,
         'trig': trig,
     }, separators=(',', ':'))
@@ -79,7 +77,7 @@ def verify_text(modules, interval, trig):
         path.write_text(payload)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_selection_gate',
-             '--checked', str(path)],
+             '--catalog', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
