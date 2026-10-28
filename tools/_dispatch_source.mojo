@@ -11,6 +11,7 @@ strings.
 """
 
 from tests._python_tokens import token_sha256
+from tools._dispatch_labels import dispatch_labels
 from tools._python_json import MISSING, PyJson
 
 
@@ -89,6 +90,44 @@ def reviewed_source_choices(payload: String) raises -> String:
         index += 1
     out.root = rows
     return out.dumps()
+
+
+def labeled_source_choices(payload: String) raises -> String:
+    """Read the dispatch labels, then choose each source.
+
+    Args:
+        payload: A JSON list. Each item has `text`, `expected`, and
+            `path`. The dispatch path comes from the labels.
+
+    Returns:
+        JSON with `labels` and `choices` in that order.
+
+    Raises:
+        Error: A token changed outside the sample-dispatch module. The
+            labels are read before the choices.
+    """
+    var labels_text = dispatch_labels()
+    var labels = PyJson.parse(labels_text)
+    var path = labels.text(labels.at(labels.root, "dispatch_path"))
+    var doc = PyJson.parse(payload)
+    var gate = PyJson()
+    var rows = gate.new_list()
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        var item = doc.item(doc.root, index)
+        var row = gate.new_dict()
+        gate.set(row, "text", gate.new_str(doc.text(doc.at(item, "text"))))
+        gate.set(
+            row, "expected", gate.new_str(doc.text(doc.at(item, "expected")))
+        )
+        gate.set(row, "path", gate.new_str(doc.text(doc.at(item, "path"))))
+        gate.set(row, "dispatch_path", gate.new_str(path))
+        gate.append(rows, row)
+        index += 1
+    gate.root = rows
+    var choices = reviewed_source_choices(gate.dumps())
+    return '{"labels":' + labels_text + ',"choices":' + choices + "}"
 
 
 def texts_match(payload: String) raises -> String:

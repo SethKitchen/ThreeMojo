@@ -244,6 +244,33 @@ def _dispatch_query(mode, payload):
     return result.stdout.strip()
 
 
+def _labeled_choices(items):
+    """Read the dispatch labels, then choose each source."""
+    if not items:
+        return {'labels': {}, 'choices': []}
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(items, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='dispatch-labeled-') as directory:
+        path = Path(directory) / 'sources.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_source',
+             '--labeled', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _declaration_matches(items):
     """Return whether each declaration matches its recorded source."""
     if not items:
@@ -348,17 +375,15 @@ def reviewed_sources(root, items, *, _operation=None):
         _check_operation(root, _operation)
     if not items:
         return []
-    labels = _dispatch_labels()
     loaded = []
     for path, expected in items:
         text = _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
         loaded.append((path, expected, text))
-    choices = _dispatch_choices([{
-        'text': text,
-        'expected': expected,
-        'path': path,
-        'dispatch_path': labels['dispatch_path'],
-    } for path, expected, text in loaded])
+    checked = _labeled_choices([
+        {'text': text, 'expected': expected, 'path': path}
+        for path, expected, text in loaded])
+    labels = checked['labels']
+    choices = checked['choices']
     restored = None
     operation = {} if _operation is None else {'_operation': _operation}
     results = []
@@ -384,13 +409,13 @@ def reviewed_source(root, path, expected, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
     text = _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
-    labels = _dispatch_labels()
-    choice = _dispatch_query('--choice', {
+    checked = _labeled_choices([{
         'text': text,
         'expected': expected,
         'path': path,
-        'dispatch_path': labels['dispatch_path'],
-    })
+    }])
+    labels = checked['labels']
+    choice = checked['choices'][0]
     if choice == labels['current']:
         return text
     if choice != labels['restore']:

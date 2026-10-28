@@ -9,11 +9,13 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._python_tokens import significant_match_flags, token_sha256
 from tools._dispatch_source import (
+    labeled_source_choices,
     reviewed_source_choice,
     reviewed_source_choices,
     texts_match,
     texts_match_all,
 )
+from tools._python_json import PyJson
 
 
 def _choice(token: String, expected: String, path: String) -> String:
@@ -125,6 +127,32 @@ def test_significant_token_pairs_ignore_a_comment() raises:
         ),
         '["true","false"]',
     )
+
+
+def test_the_dispatch_path_selects_restore() raises:
+    """The stored dispatch path restores that module after the labels."""
+    var doc = PyJson.parse(
+        labeled_source_choices(
+            '[{"text":"def f():\\n    return 1\\n","expected":"nope",'
+            + '"path":"extensions/carla/curve_sample_dispatch.mojo"}]'
+        )
+    )
+    assert_equal(doc.key(doc.root, 0), "labels")
+    assert_equal(doc.key(doc.root, 1), "choices")
+    assert_equal(
+        doc.text(doc.at(doc.at(doc.root, "labels"), "dispatch_path")),
+        "extensions/carla/curve_sample_dispatch.mojo",
+    )
+    assert_equal(doc.text(doc.item(doc.at(doc.root, "choices"), 0)), "restore")
+
+
+def test_an_unreviewed_path_fails_after_the_labels() raises:
+    """A changed token outside the dispatch module fails after the labels."""
+    with assert_raises(contains="unreviewed source successor: other.mojo"):
+        _ = labeled_source_choices(
+            '[{"text":"def f():\\n    return 1\\n","expected":"nope",'
+            + '"path":"other.mojo"}]'
+        )
 
 
 def main() raises:
