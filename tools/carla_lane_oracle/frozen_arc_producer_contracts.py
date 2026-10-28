@@ -256,7 +256,15 @@ def _gate_digest(payload, expected, kind):
         raise ValueError(message)
 
 
+_GATED_PRIOR = None
+
+
 def _gate_prior(actual, expected):
+    """Check one prior digest pair once for the same digests."""
+    global _GATED_PRIOR
+    key = (actual, expected)
+    if _GATED_PRIOR == key:
+        return
     import os
     import subprocess
     from pathlib import Path
@@ -271,6 +279,7 @@ def _gate_prior(actual, expected):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+    _GATED_PRIOR = key
 
 
 def _predecessor_request(payload, record, prior_digest):
