@@ -580,6 +580,66 @@ def _predecessor_pin_pair(root, *, _operation=None):
         import coverage_followup_contracts as followup
     runtime_payload, guard_payload = (followup.predecessor_pin_pair(root) if _operation is None else
                                     followup._predecessor_pin_pair(root, _operation=_operation))
-    runtime_predecessor = _pin_predecessor(runtime_payload, runtime_item, filenames[0])
-    guard_predecessor = _pin_predecessor(guard_payload, guard_item, filenames[1])
-    return runtime_predecessor, guard_predecessor
+    return _pin_predecessors(
+        runtime_payload, runtime_item, filenames[0],
+        guard_payload, guard_item, filenames[1])
+
+
+def _pin_request(record, filename):
+    """Return the predecessor request for one pin record."""
+    return json.dumps({
+        'after': record['after_sha256'],
+        'before': record['before_sha256'],
+        'label': filename,
+        'transitions': record['transitions'],
+    }, separators=(',', ':'))
+
+
+def _pin_predecessors(
+        runtime_payload, runtime_record, runtime_name,
+        guard_payload, guard_record, guard_name):
+    """Place the runtime predecessor, then the guard predecessor.
+
+    The runtime hash and repeated-key checks still run before that call.
+    The guard pin is checked only after the runtime predecessor is placed.
+    """
+    import hashlib
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    labels = _invariant_labels()
+    if hashlib.sha256(runtime_payload).hexdigest() != runtime_record['after_sha256']:
+        _gate_digest(
+            runtime_payload, runtime_record['after_sha256'], labels['after'],
+            runtime_name)
+    json.loads(runtime_payload, object_pairs_hook=source.unique_keys)
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='invariant-predecessor-pair-') as directory:
+        folder = Path(directory)
+        (folder / 'runtime').write_bytes(runtime_payload)
+        (folder / 'guard').write_bytes(guard_payload)
+        (folder / 'runtime.json').write_text(_pin_request(runtime_record, runtime_name))
+        (folder / 'guard.json').write_text(_pin_request(guard_record, guard_name))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_invariant_gate',
+             '--predecessor-pair', str(folder)],
+            capture_output=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and b'Crashpad' not in line]
+        message = (lines[-1] if lines else result.stdout).decode(
+            'utf-8', 'replace').strip()
+        raise ValueError(message)
+    raw = result.stdout
+    line, sep, rest = raw.partition(b'\n')
+    if sep != b'\n':
+        raise ValueError('coverage invariant successor: unreviewed runtime pin successor')
+    runtime = rest[:int(line)]
+    rest = rest[int(line):]
+    line, sep, rest = rest.partition(b'\n')
+    if sep != b'\n':
+        raise ValueError('coverage invariant successor: unreviewed guarded pin successor')
+    guard = rest[:int(line)]
+    return runtime, guard

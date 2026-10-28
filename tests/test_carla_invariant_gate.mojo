@@ -14,8 +14,10 @@ from tools.carla_invariant_gate import (
     invariant_digest,
     invariant_pair,
     invariant_pin_predecessor,
+    invariant_pin_predecessor_pair,
     invariant_places,
     invariant_record,
+    _reject_duplicate_keys,
 )
 
 
@@ -271,6 +273,61 @@ def test_indexed_component_bytes_keep_the_reviewed_digests() raises:
             Path(folder + "frozen-arc-producer-migration.json").read_bytes(),
             directory,
             True,
+        )
+
+
+def test_the_runtime_and_guard_predecessors_are_one_check() raises:
+    """Both predecessors match the single-pin results, runtime first."""
+    var restored = _restored()
+    var digest = sha256_hex(restored.as_bytes())
+    var runtime_request = _request("runtime-source-pins.json", digest, "new")
+    var guard_request = _request("sum2-guard-pins.json", digest, "new")
+    var framed = invariant_pin_predecessor_pair(
+        _pin().as_bytes(), runtime_request, _pin().as_bytes(), guard_request
+    )
+    var runtime = invariant_pin_predecessor(_pin().as_bytes(), runtime_request)
+    var guard = invariant_pin_predecessor(_pin().as_bytes(), guard_request)
+    assert_equal(
+        framed,
+        String(len(runtime.as_bytes()))
+        + "\n"
+        + runtime
+        + String(len(guard.as_bytes()))
+        + "\n"
+        + guard,
+    )
+
+
+def test_a_repeated_pin_key_is_refused() raises:
+    """A repeated object key fails before that pin is placed."""
+    with assert_raises(contains="duplicate runtime source pin key: a"):
+        _reject_duplicate_keys(String('{"a":1,"a":2}').as_bytes())
+    with assert_raises(contains="duplicate runtime source pin key: b"):
+        _reject_duplicate_keys(String('{"a":{"b":1,"b":2}}').as_bytes())
+
+
+def test_a_runtime_predecessor_fails_before_the_guard_pin() raises:
+    """A runtime reconstruction failure is reported before the guard key."""
+    var runtime = String('{"schema":1}').as_bytes()
+    var guard = String('{"a":1,"a":2}').as_bytes()
+    var runtime_request = (
+        '{"after":"'
+        + sha256_hex(runtime)
+        + '","before":"00","label":"runtime-source-pins.json","transitions":[]}'
+    )
+    var guard_request = (
+        '{"after":"'
+        + sha256_hex(guard)
+        + '","before":"11","label":"sum2-guard-pins.json","transitions":[]}'
+    )
+    with assert_raises(
+        contains=(
+            "coverage invariant successor: historical pin reconstruction"
+            " failed: runtime-source-pins.json"
+        )
+    ):
+        _ = invariant_pin_predecessor_pair(
+            runtime, runtime_request, guard, guard_request
         )
 
 

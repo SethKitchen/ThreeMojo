@@ -179,6 +179,10 @@ A wrong pair still fails before the next record is read.
 
 It rebuilds one coverage-invariant pin predecessor in one check.
 
+It rebuilds the runtime and guard pin predecessors in one check.
+
+The runtime predecessor still fails before the guard pin is checked.
+
 It keeps the four coverage-invariant source paths.
 
 It keeps the six extra coverage-invariant inputs.
