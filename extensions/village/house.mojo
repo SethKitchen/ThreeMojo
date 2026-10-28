@@ -14,7 +14,10 @@ Each storey above has one living room. The outside walls are `cladding`
 over mineral wool and gypsum board. The hall has a front door in the
 middle of its front wall, the wall at the plan's -y. The chamber has a
 door into the hall. Each outside wall has a row of windows, and
-`furnish` gives each room its furniture.
+`furnish` gives each room its furniture. A brick or a stone house has a
+chimney breast against its west gable wall, a column on each storey, with
+the hearth's fireplace in its face on the ground storey; `house_breast`
+finds it, and the wall behind it has no window.
 
 `extensions.village.house_view.stand_house` stands the model on its lot.
 It does not use the general render view: it draws the village's own view
@@ -44,8 +47,20 @@ from extensions.building.generate.openings import (
     add_doors,
     add_windows,
 )
-from extensions.building.ids import ConstructionId, ElementId, MaterialId
-from extensions.building.kinds import BEDROOM, DOOR, KITCHEN, LIVING, WALL
+from extensions.building.ids import (
+    ConstructionId,
+    ElementId,
+    MaterialId,
+    StoreyId,
+)
+from extensions.building.kinds import (
+    BEDROOM,
+    COLUMN,
+    DOOR,
+    KITCHEN,
+    LIVING,
+    WALL,
+)
 from extensions.building.material import (
     BuildingMaterial,
     Look,
@@ -57,10 +72,12 @@ from extensions.building.model import (
     Building,
     ConstructionSet,
     Furnishing,
+    Opening,
     Site,
     SpacePlan,
     StoreyPlan,
     assemble,
+    rectangle,
 )
 from extensions.topology.arrangement import Point2
 from extensions.vegetation.checks import (
@@ -112,6 +129,15 @@ comptime STAIR_RISE = Float64(0.19)
 """The most that one riser of a stair rises, in meters."""
 comptime STAIR_LANDING = Float64(0.9)
 """How much floor a stair keeps clear before its foot, in meters."""
+comptime BREAST_DEPTH = Float64(0.55)
+"""How far a chimney breast stands out from its wall, in meters."""
+comptime BREAST_WIDTH = Float64(1.5)
+"""How wide a chimney breast is along its wall, in meters."""
+comptime BREAST_Y = Float64(-0.45)
+"""Where the middle of a chimney breast stands along the plan's y, in
+meters."""
+comptime BREAST_CLEAR = Float64(0.6)
+"""How much floor a chimney breast keeps clear round it, in meters."""
 
 
 @fieldwise_init
@@ -419,22 +445,20 @@ def house_stair(building: Building) -> Optional[Stair]:
     )
 
 
-def clear_stair(mut building: Building, stair: Stair) raises:
-    """Take away the furniture of the ground storey and of the storey above
-    that stands on a stair, before its foot, or over its well.
-
-    Args:
-        building: A house's model. It is changed.
-        stair: Its stair.
-
-    Raises:
-        Error: If a piece's room is not in the model.
-    """
-    var west = stair.x0 - STAIR_LANDING
-    var middle_x = (west + stair.x1) / 2
-    var middle_y = (stair.y0 + stair.y1) / 2
-    var half_x = (stair.x1 - west) / 2
-    var half_y = (stair.y1 - stair.y0) / 2
+def _clear_furniture(
+    mut building: Building,
+    x0: Float64,
+    x1: Float64,
+    y0: Float64,
+    y1: Float64,
+    top: Int,
+) raises:
+    """Take away the furniture of storeys `top` and below that stands on a
+    rectangle of the plan, from `x0` to `x1` and from `y0` to `y1`."""
+    var middle_x = (x0 + x1) / 2
+    var middle_y = (y0 + y1) / 2
+    var half_x = (x1 - x0) / 2
+    var half_y = (y1 - y0) / 2
     var kept = List[Furnishing]()
     for index in range(len(building.furnishings)):
         ref piece = building.furnishings[index]
@@ -449,9 +473,120 @@ def clear_stair(mut building: Building, stair: Stair) raises:
         var reach_y = half_y + s * w + c * d
         var apart_x = abs(piece.center.x - middle_x) >= reach_x
         var apart_y = abs(piece.center.y - middle_y) >= reach_y
-        if storey > 1 or apart_x or apart_y:
+        if storey > top or apart_x or apart_y:
             kept.append(piece.copy())
     building.furnishings = kept^
+
+
+def clear_stair(mut building: Building, stair: Stair) raises:
+    """Take away the furniture of the ground storey and of the storey above
+    that stands on a stair, before its foot, or over its well.
+
+    Args:
+        building: A house's model. It is changed.
+        stair: Its stair.
+
+    Raises:
+        Error: If a piece's room is not in the model.
+    """
+    _clear_furniture(
+        building, stair.x0 - STAIR_LANDING, stair.x1, stair.y0, stair.y1, 1
+    )
+
+
+@fieldwise_init
+struct Breast(ImplicitlyCopyable):
+    """A chimney breast against a house's west gable wall, in the model's
+    plan: a column of masonry from the ground floor up through every
+    storey, with the hearth's fireplace in its face on the ground storey.
+    The chimney's stack rises over it through the roof."""
+
+    # Its back, against the wall, and its face, along the plan's x, and its
+    # sides along the plan's y, in meters.
+    var x0: Float64
+    var x1: Float64
+    var y0: Float64
+    var y1: Float64
+
+
+def house_breast(building: Building) -> Optional[Breast]:
+    """Return a house's chimney breast: the footprint of the model's first
+    column.
+
+    Args:
+        building: A house's model.
+
+    Returns:
+        The breast, or None for a model with no column.
+    """
+    for index in range(len(building.elements)):
+        ref element = building.elements[index]
+        if element.kind != COLUMN:
+            continue
+        var section = element.section.value()
+        var half_x = section.depth.value / 2
+        var half_y = section.width.value / 2
+        return Breast(
+            element.start.x - half_x,
+            element.start.x + half_x,
+            element.start.y - half_y,
+            element.start.y + half_y,
+        )
+    return None
+
+
+def clear_breast(mut building: Building, breast: Breast) raises:
+    """Take away the furniture that stands on or near a chimney breast, on
+    every storey, and the openings in the wall behind it.
+
+    A piece within `BREAST_CLEAR` of the breast is taken away. An opening
+    whose wall's middle stands at the breast's back, and that reaches into
+    the breast's width, is taken away.
+
+    Args:
+        building: A house's model. It is changed.
+        breast: Its chimney breast.
+
+    Raises:
+        Error: If a piece's room or an opening's wall is not in the model.
+    """
+    _clear_furniture(
+        building,
+        breast.x0 - BREAST_CLEAR,
+        breast.x1 + BREAST_CLEAR,
+        breast.y0 - BREAST_CLEAR,
+        breast.y1 + BREAST_CLEAR,
+        len(building.storeys),
+    )
+    var kept = List[Opening]()
+    for index in range(len(building.openings)):
+        ref o = building.openings[index]
+        var frame = building.wall_frame(o.host)
+        var middle = frame.origin.x + frame.along.x * frame.length / 2
+        var behind = abs(middle - breast.x0) < BREAST_DEPTH
+        # How far the opening's span along the plan's y overlaps the
+        # breast's width.
+        var a = frame.origin.y + frame.along.y * o.offset.value
+        var b = a + frame.along.y * o.width.value
+        var overlap = min(max(a, b), breast.y1) - max(min(a, b), breast.y0)
+        if behind and overlap > 0:
+            continue
+        kept.append(o.copy())
+    building.openings = kept^
+
+
+def _add_breast(mut building: Building, west: Float64) raises:
+    """Add a chimney breast against the west gable wall, whose middle line
+    stands at `west`: a column on each storey."""
+    var half = building.constructions[0].thickness().value / 2
+    var at = Point2(west + half + BREAST_DEPTH / 2, BREAST_Y)
+    for storey in range(len(building.storeys)):  # pragma: no branch
+        _ = building.add_column(
+            StoreyId(storey),
+            at,
+            rectangle(_m(BREAST_WIDTH), _m(BREAST_DEPTH)),
+            MaterialId(0),
+        )
 
 
 def house_model(parameters: HouseParameters) raises -> Building:
@@ -566,7 +701,16 @@ def house_model(parameters: HouseParameters) raises -> Building:
         building,
         WindowOptions(_m(2.6), _m(1.5), _m(0.9), _m(1.25), double_glazing()),
     )
+    # A brick or a stone house has a hearth, and a chimney over it.
+    var hearth = (
+        parameters.facade == BRICK_FACADE or parameters.facade == STONE_FACADE
+    )
+    if hearth:
+        _add_breast(building, -half_x)
     _ = furnish(building, parameters.seed)
+    var breast = house_breast(building)
+    if breast:
+        clear_breast(building, breast.value())
     var stair = house_stair(building)
     if stair:
         clear_stair(building, stair.value())

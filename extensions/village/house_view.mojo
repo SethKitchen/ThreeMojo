@@ -73,6 +73,7 @@ from extensions.vegetation.noise import hash01
 from extensions.village.house import (
     BOARDED,
     BRICK_FACADE,
+    Breast,
     Facade,
     HouseParameters,
     STAIR_GOING,
@@ -80,6 +81,7 @@ from extensions.village.house import (
     Stair,
     TIMBER_FRAMED,
     footing,
+    house_breast,
     house_stair,
 )
 from extensions.village.interior import (
@@ -139,6 +141,14 @@ comptime IRON = Vector3(0.06, 0.06, 0.065)
 """The tint of a door's iron straps over the wood texture."""
 comptime STONE = Vector3(0.95, 0.93, 0.9)
 """The tint of the dressed stone."""
+comptime SOOT = Vector3(0.1, 0.085, 0.075)
+"""The tint of the blackened stone at the back of a fire."""
+comptime EMBERS = Vector3(1.0, 0.38, 0.08)
+"""The color of glowing embers, drawn unlit."""
+comptime FIREBOX_HEIGHT = Float32(0.85)
+"""How high a fireplace's opening is, in meters."""
+comptime FIREBOX_HALF = Float32(0.45)
+"""Half the width of a fireplace's opening, in meters."""
 
 
 def painted(paint: Vector3) -> Vector3:
@@ -1332,10 +1342,151 @@ def _stair_view(mut sheets: _Sheets, stair: Stair):
         )
 
 
+def _cube(
+    mut sheet: Sheet,
+    x0: Float32,
+    x1: Float32,
+    y0: Float32,
+    y1: Float32,
+    z0: Float32,
+    z1: Float32,
+    color: Vector3,
+):
+    """Add a box from `x0` to `x1`, `y0` to `y1` and `z0` to `z1` in the
+    house's frame."""
+    sheet.box(
+        Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2),
+        Vector3((x1 - x0) / 2, 0, 0),
+        Vector3(0, (y1 - y0) / 2, 0),
+        Vector3(0, 0, (z1 - z0) / 2),
+        color,
+    )
+
+
+def _breast_view(mut sheets: _Sheets, building: Building, breast: Breast):
+    """Add a chimney breast up through every storey, and on the ground
+    storey its fireplace: a stone surround, an oak mantel, a sooty back, a
+    stone hearth, logs and glowing embers."""
+    var back = Float32(breast.x0)
+    var face = Float32(breast.x1)
+    # The scene's z is the model's -y.
+    var z0 = -Float32(breast.y1)
+    var z1 = -Float32(breast.y0)
+    var mid = (z0 + z1) / 2
+    var plaster = INDOORS * 0.9
+    for s in range(len(building.storeys)):  # pragma: no branch
+        ref storey = building.storeys[s]
+        var low = Float32(storey.elevation.value)
+        var high = low + Float32(storey.height.value)
+        if s != 0:
+            _cube(sheets.plaster, back, face, low, high, z0, z1, plaster)
+            continue
+        var opening = low + FIREBOX_HEIGHT
+        var lintel = opening + 0.2
+        # The jambs either side of the opening, the lintel over it, and the
+        # plastered breast over the mantel.
+        _cube(
+            sheets.ashlar,
+            back,
+            face,
+            low,
+            opening,
+            z0,
+            mid - FIREBOX_HALF,
+            STONE,
+        )
+        _cube(
+            sheets.ashlar,
+            back,
+            face,
+            low,
+            opening,
+            mid + FIREBOX_HALF,
+            z1,
+            STONE,
+        )
+        _cube(sheets.ashlar, back, face + 0.02, opening, lintel, z0, z1, STONE)
+        _cube(sheets.plaster, back, face, lintel, high, z0, z1, plaster)
+        _cube(
+            sheets.wood,
+            face - 0.04,
+            face + 0.14,
+            lintel,
+            lintel + 0.06,
+            z0 - 0.06,
+            z1 + 0.06,
+            OAK,
+        )
+        # The sooty back of the fire, and the stone hearth before it.
+        _cube(
+            sheets.ashlar,
+            back,
+            back + 0.1,
+            low,
+            opening,
+            mid - FIREBOX_HALF,
+            mid + FIREBOX_HALF,
+            SOOT,
+        )
+        _cube(
+            sheets.ashlar,
+            back + 0.1,
+            face + 0.45,
+            low,
+            low + 0.03,
+            mid - FIREBOX_HALF - 0.3,
+            mid + FIREBOX_HALF + 0.3,
+            STONE * 0.8,
+        )
+        # Glowing embers under two logs, and the fire's glow on the back.
+        _cube(
+            sheets.daylight,
+            back + 0.16,
+            back + 0.44,
+            low + 0.03,
+            low + 0.07,
+            mid - 0.25,
+            mid + 0.25,
+            EMBERS,
+        )
+        for k in range(2):  # pragma: no branch
+            var x = back + 0.22 + Float32(k) * 0.16
+            _cube(
+                sheets.wood,
+                x - 0.05,
+                x + 0.05,
+                low + 0.06,
+                low + 0.15,
+                mid - 0.28,
+                mid + 0.28,
+                OAK * 0.5,
+            )
+        # The glow is brightest over the embers and fades up the back.
+        var bright = EMBERS * 0.7
+        var dim = EMBERS * 0.05
+        sheets.daylight.painted_quad(
+            Vector3(back + 0.101, low + 0.05, mid + 0.38),
+            Vector3(back + 0.101, low + 0.05, mid - 0.38),
+            Vector3(back + 0.101, opening - 0.02, mid - 0.38),
+            Vector3(back + 0.101, opening - 0.02, mid + 0.38),
+            bright,
+            bright,
+            dim,
+            dim,
+            0,
+            0,
+            1,
+            1,
+        )
+
+
 def _roof(
-    mut sheets: _Sheets, parameters: HouseParameters, half_t: Float32
+    mut sheets: _Sheets,
+    parameters: HouseParameters,
+    half_t: Float32,
+    breast: Optional[Breast],
 ) raises:
-    """Add the gable roof, its gables and its chimney."""
+    """Add the gable roof, its gables, and the chimney over a breast."""
     var half_w = parameters.width.to(METER) / 2
     var half_d = parameters.depth.to(METER) / 2
     var base = parameters.storey_height.to(METER) * Float32(parameters.storeys)
@@ -1446,11 +1597,12 @@ def _roof(
                 0.04,
                 OAK,
             )
-    if parameters.facade != BRICK_FACADE and parameters.facade != STONE_FACADE:
+    if not breast:
         return
-    # A chimney through the roof, over the hall's end.
-    var cx = -half_w + 1.1
-    var cz = Float32(0.45)
+    # A chimney through the roof, over the breast.
+    ref over = breast.value()
+    var cx = Float32((over.x0 + over.x1) / 2)
+    var cz = -Float32((over.y0 + over.y1) / 2)
     var stack_top = ridge + 0.9
     var stack_foot = base - 0.1
     var stack = WHITE * 0.85
@@ -1962,9 +2114,12 @@ def stand_house(
     _rooms(sheets, building, stair)
     if stair:
         _stair_view(sheets, stair.value())
+    var breast = house_breast(building)
+    if breast:
+        _breast_view(sheets, building, breast.value())
     var half_t = Float32(building.constructions[0].thickness().value) / 2
     if parameters.pitch.to(RADIAN) > 0:
-        _roof(sheets, parameters, half_t)
+        _roof(sheets, parameters, half_t, breast)
     _plinth(sheets, half_x, half_z, feet[0] - floor)
     _steps(sheets, interior, lot, ground)
     if parameters.facade == BRICK_FACADE or parameters.facade == STONE_FACADE:

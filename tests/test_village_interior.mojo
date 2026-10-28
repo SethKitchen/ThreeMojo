@@ -7,11 +7,13 @@
 floor and its ceiling, the steps up to the door, the furniture and the
 doorways, all read from the house's building model."""
 
-from extensions.building.kinds import DOOR, WALL
+from extensions.building.kinds import COLUMN, DOOR, WALL
 from extensions.building.material import brick
 from extensions.building.model import Element, Opening
 from extensions.vegetation.ground import Ground, Lot
 from extensions.village.house import (
+    BREAST_DEPTH,
+    BREAST_WIDTH,
     HouseParameters,
     STAIR_GOING,
     front_wall,
@@ -63,12 +65,13 @@ def test_a_house_has_walls_cut_at_its_doors() raises:
     var walls = 0
     var doors = 0
     for e in model.elements:
-        if e.kind == WALL:
+        if e.kind == WALL or e.kind == COLUMN:
             walls += 1
     for o in model.openings:
         if o.kind == DOOR:
             doors += 1
-    # Each door cuts its wall in two and leaves a span over it.
+    # Each door cuts its wall in two and leaves a span over it. The
+    # chimney breast is a span too.
     assert_equal(len(inside.walls), walls + doors * 2)
     assert_equal(len(inside.doorways), doors)
     # The front door leads out, toward +z, and swings in, toward -z.
@@ -228,7 +231,7 @@ def test_a_wall_with_no_door_is_one_span() raises:
     var inside = house_interior(model, lot, 0, _flat())
     var walls = 0
     for e in model.elements:
-        if e.kind == WALL:
+        if e.kind == WALL or e.kind == COLUMN:
             walls += 1
     assert_equal(len(inside.walls), walls)
     assert_equal(len(inside.doorways), 0)
@@ -333,7 +336,7 @@ def test_a_stair_climbs_to_the_floor_above() raises:
     var walls = 0
     var doors = 0
     for e in model.elements:
-        if e.kind == WALL:
+        if e.kind == WALL or e.kind == COLUMN:
             walls += 1
     for o in model.openings:
         if o.kind == DOOR:
@@ -352,6 +355,25 @@ def test_a_stair_climbs_to_the_floor_above() raises:
     assert_almost_equal(under.bottom, 0)
     assert_almost_equal(under.top, top / 2, atol=1e-5)
     assert_almost_equal(under.x0, Float32(stair.x1), atol=1e-5)
+
+
+def test_a_chimney_breast_stands_in_the_way_on_every_storey() raises:
+    var house = _house(2)
+    var model = house_model(house)
+    var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
+    var inside = house_interior(model, lot, 0.5, _flat())
+    # A span along the breast's width, as thick as it stands out, from
+    # each storey's floor to the next.
+    var found = 0
+    for span in inside.walls:
+        if abs(span.half_thickness - Float32(BREAST_DEPTH / 2)) < 1.0e-5:
+            found += 1
+            var length = abs(span.z1 - span.z0)
+            assert_almost_equal(
+                length, Float32(BREAST_WIDTH - BREAST_DEPTH), atol=1e-5
+            )
+            assert_almost_equal(span.top - span.bottom, 2.8, atol=1e-5)
+    assert_equal(found, 2)
 
 
 def test_the_front_door_is_the_first_that_leads_out() raises:

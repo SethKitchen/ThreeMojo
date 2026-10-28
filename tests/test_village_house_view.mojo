@@ -12,6 +12,7 @@ from core.scene import Scene
 from extensions.building.ids import ElementId, SpaceId
 from extensions.building.kinds import (
     CABINET,
+    COLUMN,
     DESK,
     DOOR,
     SINK,
@@ -34,6 +35,7 @@ from extensions.village.house import (
     TIMBER_FRAMED,
     fieldstone,
     front_wall,
+    house_breast,
     house_lot,
     house_model,
     house_stair,
@@ -378,6 +380,33 @@ def test_a_stair_rises_through_its_well() raises:
     assert_true(more > 550)
     assert_true(more < 750)
     assert_equal(stair.meshes, plain.meshes)
+
+
+def test_a_brick_house_has_a_fireplace_and_a_chimney_over_it() raises:
+    var assets = Assets()
+    var looks = house_looks(assets, 8, 1)
+    var house = _house(6, 2)
+    var model = house_model(house)
+    assert_true(Bool(house_breast(model)))
+    var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
+    var scene = Scene()
+    var hearth = stand_house(scene, assets, looks, house, model, lot, _flat())
+    # The same model without its breast's columns, the last elements.
+    var cold = house_model(house)
+    var kept = List[Element]()
+    for e in cold.elements:
+        if e.kind != COLUMN:
+            kept.append(e.copy())
+    cold.elements = kept^
+    assert_false(Bool(house_breast(cold)))
+    var bare = Scene()
+    var plain = stand_house(bare, assets, looks, house, cold, lot, _flat())
+    # The fireplace's ten blocks and its glow, the breast upstairs and
+    # the stack's three blocks: about 170 triangles.
+    var more = hearth.triangles - plain.triangles
+    assert_true(more > 150)
+    assert_true(more < 200)
+    assert_equal(len(hearth.interior.walls), len(plain.interior.walls) + 2)
 
 
 def main() raises:

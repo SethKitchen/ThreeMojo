@@ -4,8 +4,8 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """The village's houses, as the game draws them: the street from above,
-a framed house and the brick house from the trail, and a player before
-the brick house's stair.
+a framed house and the brick house from the trail, and a player in the
+brick house's hall, by its fireplace and its stair.
 
     mojo run -I . examples/village_houses.mojo [path.png]
 
@@ -13,7 +13,8 @@ The page is Village houses. The program builds the village game at the
 `high` quality, in a window of 640 by 360 pixels. It stands the player at
 four places, lets the camera settle, and draws each view into one tile of
 a picture of 1280 by 720 pixels. For the last view, the player stands
-in the brick house's hall before the open side of its stair. The program
+in the brick house's hall and faces the corner between its fireplace and
+the foot of its stair. The program
 prints, as JSON, how long the build and each view took.
 """
 
@@ -24,7 +25,7 @@ from core.clock import Clock
 from core.scene import Scene
 from controls.third_person_controls import yaw_of
 from extensions.village.character import no_input
-from extensions.village.house import house_model, house_stair
+from extensions.village.house import house_breast, house_model, house_stair
 from extensions.village.play import PlayParameters, VillageGame
 from extensions.village.quality import HIGH, game_quality
 from extensions.water.pebbles import pebble_bed
@@ -146,17 +147,25 @@ def main() raises:
         0,
         TILE_HEIGHT,
     )
-    # The brick house's stair, from the hall before its open side. A plan
+    # The brick house's hall, from its front corner: the fireplace in the
+    # gable wall and the foot of the stair along the back wall. A plan
     # point (x, y) stands at the lot's (x, -y), turned by the lot's turn.
     var placed = PlayParameters(game_quality(HIGH)).village.houses[0].copy()
-    var stair = house_stair(house_model(placed.house)).value()
+    var model = house_model(placed.house)
+    var stair = house_stair(model).value()
+    var breast = house_breast(model).value()
     var turn = placed.turn.to(RADIAN)
     var c = cos(turn)
     var s = sin(turn)
-    var px = Float32(stair.x0 + stair.x1) / 2
-    var pz = -Float32(stair.y0) + 1.4
-    # Facing the plan's +y, the back wall that the stair climbs along.
-    var yaw = yaw_of(Vector3(-s, 0, -c)).to(DEGREE)
+    # The player looks at a point between the fireplace and the stair's
+    # foot, from 4 meters off along the plan's +x and -y.
+    var tx = Float32(breast.x0 + breast.x1 + 2 * stair.x0) / 4
+    var ty = Float32(breast.y0 + breast.y1 + stair.y0 + stair.y1) / 4
+    var dx = Float32(-0.72)
+    var dy = Float32(0.69)
+    var px = tx - dx * 4
+    var pz = -(ty - dy * 4)
+    var yaw = yaw_of(Vector3(dx * c - dy * s, 0, -dx * s - dy * c)).to(DEGREE)
     blit(
         sheet,
         _view(
@@ -166,8 +175,8 @@ def main() raises:
             placed.x + px * c + pz * s,
             placed.z - px * s + pz * c,
             yaw,
-            -4,
-            2.2,
+            -6,
+            2,
             game.village.houses[0].interior.floor_height,
         ),
         TILE_WIDTH,

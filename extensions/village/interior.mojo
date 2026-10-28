@@ -11,7 +11,8 @@ its ground floor at a height. It is a view of the canonical model, as the
 render view is: it reads the model and never writes it.
 
 - **Walls.** Each wall of the model is a `WallSpan` along the middle of
-  its face. It reaches half its thickness past each end, so the corners
+  its face. So is each column, such as a chimney breast, along its
+  longer side. It reaches half its thickness past each end, so the corners
   close, as the render view draws it. A door cuts a gap from the floor
   to its head. The wall over the door is a span of its own, from the
   door's head to the wall's top.
@@ -38,7 +39,7 @@ height plus z.
 """
 
 from extensions.building.ids import ElementId
-from extensions.building.kinds import DOOR, ROOF, SLAB, WALL
+from extensions.building.kinds import COLUMN, DOOR, ROOF, SLAB, WALL
 from extensions.building.model import Building
 from extensions.vegetation.ground import Ground, Lot
 from extensions.village.house import STAIR_GOING, Stair, house_stair
@@ -461,6 +462,35 @@ def _stair(
     )
 
 
+def _box_span(
+    placer: _Placer,
+    x: Float64,
+    y: Float64,
+    turn: Float64,
+    w: Float64,
+    d: Float64,
+    bottom: Float32,
+    top: Float32,
+) -> WallSpan:
+    """Return a span for a box of the plan, `w` along its own x and `d`
+    along its own y, turned by `turn` about its middle (x, y): along its
+    longer side, as thick as its shorter one."""
+    var across = Float64(Int(w >= d))
+    var way_x = cos(turn) * across - sin(turn) * (1 - across)
+    var way_y = sin(turn) * across + cos(turn) * (1 - across)
+    var reach = (max(w, d) - min(w, d)) / 2
+    return _plan_span(
+        placer,
+        x - way_x * reach,
+        y - way_y * reach,
+        x + way_x * reach,
+        y + way_y * reach,
+        Float32(min(w, d) / 2),
+        bottom,
+        top,
+    )
+
+
 def _furniture(
     mut interior: HouseInterior, placer: _Placer, building: Building
 ) raises:
@@ -471,25 +501,41 @@ def _furniture(
         ref storey = building.storeys[
             building.spaces[piece.space.value].storey.value
         ]
-        # Along the piece's longer side, as thick as its shorter one.
-        var w = piece.width.value
-        var d = piece.depth.value
-        var across = Float64(Int(w >= d))
-        var turn = piece.rotation.value
-        var way_x = cos(turn) * across - sin(turn) * (1 - across)
-        var way_y = sin(turn) * across + cos(turn) * (1 - across)
-        var reach = (max(w, d) - min(w, d)) / 2
         var bottom = placer.floor + Float32(storey.elevation.value)
         interior.furniture.append(
-            _plan_span(
+            _box_span(
                 placer,
-                piece.center.x - way_x * reach,
-                piece.center.y - way_y * reach,
-                piece.center.x + way_x * reach,
-                piece.center.y + way_y * reach,
-                Float32(min(w, d) / 2),
+                piece.center.x,
+                piece.center.y,
+                piece.rotation.value,
+                piece.width.value,
+                piece.depth.value,
                 bottom,
                 bottom + Float32(piece.height.value),
+            )
+        )
+
+
+def _columns(
+    mut interior: HouseInterior, placer: _Placer, building: Building
+) raises:
+    """Add a span for each column, such as a chimney breast, from its
+    storey's floor to the floor above."""
+    for index in range(len(building.elements)):
+        ref element = building.elements[index]
+        if element.kind != COLUMN:
+            continue
+        var section = element.section.value()
+        interior.walls.append(
+            _box_span(
+                placer,
+                element.start.x,
+                element.start.y,
+                0,
+                section.depth.value,
+                section.width.value,
+                placer.floor + Float32(element.start.z),
+                placer.floor + Float32(element.end.z),
             )
         )
 
@@ -515,6 +561,7 @@ def house_interior(
     var placer = _Placer(lot, floor)
     var interior = HouseInterior(floor)
     _walls(interior, placer, building)
+    _columns(interior, placer, building)
     # The ground floor's ceiling is the underside of the thickest slab
     # over it.
     var slab = Float64(0)

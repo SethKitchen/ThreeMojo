@@ -10,6 +10,7 @@ furniture."""
 from extensions.building.ids import ElementId, SpaceId
 from extensions.building.kinds import (
     BEDROOM,
+    COLUMN,
     DOOR,
     KITCHEN,
     LIVING,
@@ -18,7 +19,7 @@ from extensions.building.kinds import (
     WINDOW,
 )
 from extensions.building.material import brick
-from extensions.building.model import Element, Furnishing, Space
+from extensions.building.model import Element, Furnishing, Opening, Space
 from extensions.vegetation.ground import Ground
 from extensions.village.house import (
     BOARDED,
@@ -29,16 +30,22 @@ from extensions.village.house import (
     HouseParameters,
     NATURAL,
     PAINT,
+    BREAST_CLEAR,
+    BREAST_DEPTH,
+    BREAST_WIDTH,
+    BREAST_Y,
     STAIR_GOING,
     STAIR_LANDING,
     STAIR_RISE,
     STAIR_WIDTH,
     STONE_FACADE,
     TIMBER_FRAMED,
+    clear_breast,
     clear_stair,
     fieldstone,
     footing,
     front_wall,
+    house_breast,
     house_lot,
     house_model,
     house_stair,
@@ -317,6 +324,58 @@ def test_a_stair_clears_the_furniture_in_its_way() raises:
     model.furnishings = List[Furnishing]()
     clear_stair(model, stair)
     assert_equal(len(model.furnishings), 0)
+
+
+def test_a_brick_or_stone_house_has_a_chimney_breast() raises:
+    var model = house_model(_two_storeys())
+    var breast = house_breast(model).value()
+    # Against the west gable wall's inside face, on each storey.
+    var half = Float64(0.2325) / 2
+    assert_almost_equal(breast.x0, -4.5 + half, atol=1e-9)
+    assert_almost_equal(breast.x1 - breast.x0, BREAST_DEPTH, atol=1e-9)
+    assert_almost_equal((breast.y0 + breast.y1) / 2, BREAST_Y, atol=1e-9)
+    assert_almost_equal(breast.y1 - breast.y0, BREAST_WIDTH, atol=1e-9)
+    var columns = 0
+    for element in model.elements:
+        if element.kind == COLUMN:
+            columns += 1
+    assert_equal(columns, 2)
+    # No window stands behind it; the gable keeps the others.
+    var gable = 0
+    for o in model.openings:
+        var frame = model.wall_frame(o.host)
+        var middle = frame.origin.x + frame.along.x * frame.length / 2
+        if abs(middle - breast.x0) >= BREAST_DEPTH:
+            continue
+        gable += 1
+        var a = frame.origin.y + frame.along.y * o.offset.value
+        var b = a + frame.along.y * o.width.value
+        assert_true(max(a, b) <= breast.y0 or min(a, b) >= breast.y1)
+    assert_true(gable >= 2)
+    # And no furniture stands near it.
+    for piece in model.furnishings:
+        var near_x = piece.center.x < breast.x1 + BREAST_CLEAR
+        var near_y = (
+            piece.center.y > breast.y0 - BREAST_CLEAR
+            and piece.center.y < breast.y1 + BREAST_CLEAR
+        )
+        assert_false(near_x and near_y)
+    # A model with no openings and no furniture keeps none.
+    model.openings = List[Opening]()
+    model.furnishings = List[Furnishing]()
+    clear_breast(model, breast)
+    assert_equal(len(model.openings), 0)
+    assert_equal(len(model.furnishings), 0)
+    # A framed or a boarded house has no hearth.
+    var framed = _two_storeys()
+    framed.facade = TIMBER_FRAMED
+    assert_false(Bool(house_breast(house_model(framed))))
+    var boarded = _two_storeys(9, 1)
+    boarded.facade = BOARDED
+    assert_false(Bool(house_breast(house_model(boarded))))
+    var stone = _two_storeys(9, 1)
+    stone.facade = STONE_FACADE
+    assert_true(Bool(house_breast(house_model(stone))))
 
 
 def main() raises:
