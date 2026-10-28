@@ -367,6 +367,7 @@ def _significant_matches(pairs):
 
 
 _DISPATCH_LABELS = None
+_REVIEWED_CURRENT = {}
 
 
 def _dispatch_labels():
@@ -412,6 +413,17 @@ def reviewed_sources(root, items, *, _operation=None, check_tokens=False):
     for path, expected in items:
         text = _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
         loaded.append((path, expected, text))
+    if not check_tokens:
+        cached = []
+        missed = False
+        for path, expected, text in loaded:
+            saved = _REVIEWED_CURRENT.get((path, expected, text))
+            if saved is None:
+                missed = True
+                break
+            cached.append(saved)
+        if not missed:
+            return cached
     checked = _labeled_choices([
         {'text': text, 'expected': expected, 'path': path}
         for path, expected, text in loaded], tokens=check_tokens)
@@ -434,6 +446,9 @@ def reviewed_sources(root, items, *, _operation=None, check_tokens=False):
             restored = raw.verify(root, **operation)
         _gate_edge(restored['before_token_sha256'], expected)
         results.append(restored['before_source'])
+    for (path, expected, text), result in zip(loaded, results):
+        if result == text:
+            _REVIEWED_CURRENT[(path, expected, text)] = result
     if check_tokens:
         return results, bool(checked.get('tokens'))
     return results

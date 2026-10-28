@@ -496,6 +496,44 @@ class CurrentDispatchTokenTests(unittest.TestCase):
             dispatch._gate_tokens = original
         self.assertEqual(calls, [])
 
+    def test_a_repeated_current_source_skips_the_second_choice(self):
+        from tools.carla_lane_oracle import curve_support_dispatch_contracts as dispatch
+        calls = []
+        original = dispatch._labeled_choices
+        dispatch._REVIEWED_CURRENT.clear()
+
+        def choices(items, tokens=False):
+            calls.append(tokens)
+            return {
+                'labels': {
+                    'current': 'current', 'restore': 'restore',
+                    'unreviewed': 'unreviewed ',
+                },
+                'choices': ['current'] * len(items),
+                'tokens': True,
+            }
+
+        dispatch._labeled_choices = choices
+        root = Path(self.id().replace('.', '-'))
+        try:
+            root.mkdir(parents=True)
+            source = root / 'fixture.txt'
+            source.write_text('def f():\n    return 1\n')
+            first, done = dispatch.reviewed_sources(
+                root, [('fixture.txt', 'aa')], check_tokens=True)
+            second = dispatch.reviewed_sources(root, [('fixture.txt', 'aa')])
+            self.assertTrue(done)
+            self.assertEqual(second, first)
+            self.assertEqual(calls, [True])
+            source.write_text('def f():\n    return 2\n')
+            third = dispatch.reviewed_sources(root, [('fixture.txt', 'aa')])
+            self.assertEqual(third, ['def f():\n    return 2\n'])
+            self.assertEqual(calls, [True, False])
+        finally:
+            dispatch._labeled_choices = original
+            dispatch._REVIEWED_CURRENT.clear()
+            shutil.rmtree(root, ignore_errors=True)
+
     def test_a_restore_still_checks_the_token_list(self):
         from tools.carla_lane_oracle import curve_support_dispatch_contracts as dispatch
         calls = []
