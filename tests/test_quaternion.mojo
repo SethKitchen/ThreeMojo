@@ -176,6 +176,18 @@ def test_the_conjugate_undoes_the_rotation() raises:
     assert_same_rotation(back, Quaternion.identity())
 
 
+def test_sums_and_differences_are_component_wise() raises:
+    var a = Quaternion(1, 2, 3, 4)
+    var b = Quaternion(0.5, -1, 2, 8)
+    var sum = a + b
+    var difference = a - b
+    assert_equal(sum.x, Float32(1.5))
+    assert_equal(sum.w, Float32(12))
+    assert_equal(difference.y, Float32(3))
+    assert_equal(difference.z, Float32(1))
+    assert_equal(difference.w, Float32(-4))
+
+
 def test_normalizing_restores_unit_length() raises:
     var q = Quaternion(2, 0, 0, 2)
     q.normalize()

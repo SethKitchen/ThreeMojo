@@ -3394,7 +3394,8 @@ struct _Loader(Movable):
             # Keys that all lie at time zero hold a still pose, which glTF
             # allows. A clip here must last some time, so it gets one frame.
             var still = True
-            for track in tracks:
+            # The clip has a track here: an empty one was skipped above.
+            for track in tracks:  # pragma: no branch
                 if track.duration().to(SECOND) > 0:
                     still = False
             var duration = Optional[Duration](None)
