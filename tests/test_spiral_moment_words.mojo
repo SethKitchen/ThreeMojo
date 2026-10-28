@@ -10,6 +10,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 from tools._bigint import BigInt
 from tools._fraction import Fraction
 from tools._python_json import PyJson
+from tools.carla_stored_words import parsed_table_after_count
 from tools._spiral_moment_words import (
     INFINITY,
     MAX_FINITE,
@@ -293,6 +294,23 @@ def test_one_decimal_literal_is_read_as_an_integer() raises:
     assert_equal(
         result.text(result.item(result.root, 0)), "4607182418800017408"
     )
+
+
+def test_the_word_count_is_read_before_the_table() raises:
+    """The reviewed word count is applied before the table words are read."""
+    with assert_raises(contains="missing or malformed table declaration"):
+        _ = parsed_table_after_count('{"source":"nope"}')
+    var one = (
+        "comptime _SPIRAL_MOMENT_WORDS: Array[UInt64, 1] = [\n"
+        + "UInt64(0x3FF0000000000000),\n"
+        + "]\n"
+    )
+    var rejected = PyJson()
+    var rejected_root = rejected.new_dict()
+    rejected.set(rejected_root, "source", rejected.new_str(one))
+    rejected.root = rejected_root
+    with assert_raises(contains="wrong table declaration shape"):
+        _ = parsed_table_after_count(rejected.dumps())
 
 
 def main() raises:

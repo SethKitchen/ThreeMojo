@@ -424,6 +424,8 @@ It reads each stored hexadecimal word as an integer.
 
 It reads a stored table and its words as integers in one check.
 
+It reads the word count before that stored table in one check.
+
 It checks the moment pin sets, paths, dependency closure, legacy digest, and result pins.
 
 It builds the moment pin specification before that pin check in one check.

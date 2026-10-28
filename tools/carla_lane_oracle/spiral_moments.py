@@ -992,13 +992,36 @@ def _parsed_table(payload):
     return [int(item) for item in json.loads(result.stdout)]
 
 
+def _parsed_table_after_count(text):
+    """Read the word count, then the stored table words as integers."""
+    import os
+    import subprocess
+    import tempfile
+    payload = json.dumps({'source': text}, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='parsed-table-') as directory:
+        path = Path(directory) / 'table.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_stored_words',
+             '--table-after-count', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return [int(item) for item in json.loads(result.stdout)]
+
+
 def parse_table(data):
     try:
         text = data.decode('utf-8')
     except UnicodeDecodeError as error:
         raise CheckError(_moment_plan()['messages']['utf8']) from error
     try:
-        return _parsed_table({'source': text, 'count': _word_count()})
+        return _parsed_table_after_count(text)
     except ValueError as error:
         raise CheckError(str(error)) from error
 
