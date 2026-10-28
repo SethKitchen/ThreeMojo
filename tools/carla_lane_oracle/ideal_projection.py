@@ -8,6 +8,32 @@ and does not claim to parse or certify arbitrary Mojo programs.
 """
 import json
 _DIGESTS = None
+_MIGRATION_RECORD_DOCUMENT = None
+
+
+def migration_record_document():
+    """Return the reviewed migration paths and digests.
+
+    A later call reuses the same document. A failed read is not kept.
+    """
+    global _MIGRATION_RECORD_DOCUMENT
+    if _MIGRATION_RECORD_DOCUMENT is not None:
+        return _MIGRATION_RECORD_DOCUMENT
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_migration_records'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _MIGRATION_RECORD_DOCUMENT = json.loads(result.stdout)
+    return _MIGRATION_RECORD_DOCUMENT
 
 
 def _digests():

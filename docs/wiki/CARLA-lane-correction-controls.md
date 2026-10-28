@@ -247,6 +247,10 @@ It checks every lane predecessor in one check.
 
 It keeps the two dispatch sources and the five protected paths.
 
+It reuses that migration record document when the next checker asks for it.
+
+A failed read is tried again.
+
 It reads the dispatch migration record before those protected paths in one check.
 
 It reuses that dispatch record when the same bytes are read again.

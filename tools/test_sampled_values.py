@@ -758,5 +758,46 @@ class ComponentGateTests(unittest.TestCase):
         self.assertNotIn('carla_component_path', joined)
 
 
+class MigrationDocumentTests(unittest.TestCase):
+    def test_checkers_share_one_migration_record_document(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import ideal_projection
+        from tools.carla_lane_oracle import frozen_arc_producer_contracts as frozen
+        from tools.carla_lane_oracle import reviewed_cleanup_contracts as cleanup
+        from tools.carla_lane_oracle import speed_parser_contracts as speed
+        original_doc = ideal_projection._MIGRATION_RECORD_DOCUMENT
+        originals = (
+            (frozen, frozen._MIGRATION_RECORDS),
+            (cleanup, cleanup._MIGRATION_RECORDS),
+            (speed, speed._MIGRATION_RECORDS),
+        )
+        payload = (
+            '{"frozen":{"path":"f","sha":"1"},'
+            '"cleanup":{"path":"c","sha":"2"},'
+            '"speed":{"path":"s","sha":"3"}}'
+        )
+        try:
+            ideal_projection._MIGRATION_RECORD_DOCUMENT = None
+            for module, _saved in originals:
+                module._MIGRATION_RECORDS = None
+            ok = Mock(returncode=0, stdout=payload, stderr='')
+            with patch('subprocess.run', return_value=ok) as run:
+                self.assertEqual(frozen._migration_records()['frozen']['path'], 'f')
+                self.assertEqual(cleanup._migration_records()['cleanup']['path'], 'c')
+                self.assertEqual(speed._migration_records()['speed']['path'], 's')
+                self.assertEqual(run.call_count, 1)
+            ideal_projection._MIGRATION_RECORD_DOCUMENT = None
+            frozen._MIGRATION_RECORDS = None
+            failed = Mock(returncode=1, stdout='', stderr='broken record\n')
+            with patch('subprocess.run', return_value=failed):
+                with self.assertRaisesRegex(ValueError, 'broken record'):
+                    frozen._migration_records()
+            self.assertIsNone(ideal_projection._MIGRATION_RECORD_DOCUMENT)
+        finally:
+            ideal_projection._MIGRATION_RECORD_DOCUMENT = original_doc
+            for module, saved in originals:
+                module._MIGRATION_RECORDS = saved
+
+
 if __name__ == '__main__':
     unittest.main()
