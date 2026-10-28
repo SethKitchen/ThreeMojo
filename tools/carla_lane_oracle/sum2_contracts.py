@@ -178,25 +178,24 @@ def _cli_failures():
     return _CLI_FAILURES
 
 
-def _sum2_result(projection, guard):
-    """Return the Sum2 correspondence result in historical field order."""
+def _sum2_projected_result(payload, guard):
+    """Project the Sum2 spiral, then return the correspondence result."""
     import ast
-    import json
     import os
     import subprocess
     import tempfile
     from pathlib import Path
+    body = dict(payload)
+    body['environment_guard'] = guard
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps(
-        {'projection': projection, 'environment_guard': guard},
-        separators=(',', ':'))
-    with tempfile.TemporaryDirectory(prefix='sum2-result-') as directory:
-        path = Path(directory) / 'result.json'
-        path.write_text(payload)
+    text = json.dumps(body, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='sum2-projected-') as directory:
+        path = Path(directory) / 'projected.json'
+        path.write_text(text)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sum2_result',
-             str(path)],
+             '--projected', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -205,29 +204,6 @@ def _sum2_result(projection, guard):
         prefix = _cli_failures()['key']
         if message.startswith(prefix):
             raise KeyError(ast.literal_eval(message[len(prefix):])) from None
-        raise ValueError(message)
-    return json.loads(result.stdout)
-
-
-def _sum2_projection(payload):
-    """Return the ideal projection record for the Sum2 spiral."""
-    import os
-    import subprocess
-    import tempfile
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    text = json.dumps(payload, separators=(',', ':'))
-    with tempfile.TemporaryDirectory(prefix='sum2-projection-') as directory:
-        path = Path(directory) / 'projection.json'
-        path.write_text(text)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
-             'carla_moment_projection', str(path)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
     return json.loads(result.stdout)
 
@@ -267,11 +243,10 @@ def verify(root, *, _operation=None):
         if str(error).startswith('missing or ambiguous function: '):
             raise c.CheckError(str(error)) from error
         raise
-    projection = _sum2_projection({
+    return _sum2_projected_result({
         'legacy': pins['ideal_projection']['legacy_normalized_source'],
         'bounds': texts[helpers['bounds']],
         'begin': plan['spiral_begin'],
         'end': plan['spiral_end'],
         'interval': interval,
-    })
-    return _sum2_result(projection, guard_result)
+    }, guard_result)

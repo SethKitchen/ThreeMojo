@@ -10,6 +10,7 @@ environment guard are copied from the checks that just ran.
 """
 
 from tools._json_tools import quote_ascii
+from tools._moment_projection import moment_sum2_projection
 from tools._python_json import (
     PY_BOOL,
     PY_DICT,
@@ -107,3 +108,24 @@ def sum2_result(payload: String) raises -> String:
     doc.set(result, "environment_guard", guard)
     doc.set(result, "native_codegen_qualified", doc.new_bool(False))
     return _dump(doc, result)
+
+
+def sum2_projected_result(payload: String) raises -> String:
+    """Project the Sum2 spiral, then return the correspondence result.
+
+    Args:
+        payload: JSON with `legacy`, `bounds`, `begin`, `end`, `interval`,
+            and `environment_guard`.
+
+    Returns:
+        The result JSON in historical field order.
+
+    Raises:
+        Error: The projection changed, or `environment_guard` is missing.
+    """
+    var projection = moment_sum2_projection(payload)
+    var doc = PyJson.parse(payload)
+    var guard = doc.subtree(doc.at(doc.root, "environment_guard")).dumps()
+    return sum2_result(
+        '{"projection":' + projection + ',"environment_guard":' + guard + "}"
+    )

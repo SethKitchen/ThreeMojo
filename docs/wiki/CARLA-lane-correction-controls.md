@@ -264,6 +264,8 @@ It checks the stored-half helper result uses.
 
 It projects the Sum2 ideal spiral by removing the reviewed auxiliaries.
 
+It projects the Sum2 ideal spiral and returns its result in one check.
+
 It rewrites each stored-half call into a product with one half.
 
 It swaps each legacy half-rate product into rate times one half.

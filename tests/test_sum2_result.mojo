@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_equal, assert_raises
 
-from tools._sum2_result import sum2_result
+from tools._sum2_result import sum2_projected_result, sum2_result
 
 
 def test_the_sum2_result_keeps_historical_order() raises:
@@ -34,6 +34,12 @@ def test_a_missing_sum2_record_is_a_key_error() raises:
     """The result is not built without the environment guard."""
     with assert_raises(contains="KeyError: 'environment_guard'"):
         _ = sum2_result('{"projection":{}}')
+
+
+def test_a_sum2_projection_fails_before_the_result() raises:
+    """A missing spiral bound is reported before the result is built."""
+    with assert_raises(contains="KeyError: 'bounds'"):
+        _ = sum2_projected_result('{"legacy":"x"}')
 
 
 def main() raises:

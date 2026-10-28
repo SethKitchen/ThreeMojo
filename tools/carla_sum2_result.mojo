@@ -6,20 +6,25 @@
 """Build the reviewed Sum2 correspondence result.
 
     carla_sum2_result PATH
+    carla_sum2_result --projected PATH
 
 `PATH` is JSON with `projection` and `environment_guard`. The program
-prints the result.
+prints the result. `--projected` projects the Sum2 spiral first, then
+prints that result.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._sum2_result import sum2_result
+from tools._sum2_result import sum2_projected_result, sum2_result
 
 
 def _usage():
     """Print the command usage and stop."""
-    print("usage: carla_sum2_result PATH", file=stderr)
+    print(
+        "usage: carla_sum2_result PATH | carla_sum2_result --projected PATH",
+        file=stderr,
+    )
     exit(2)
 
 
@@ -30,6 +35,13 @@ def main() raises:
         Error: The command is invalid, or a required field is missing.
     """
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--projected":
+        try:
+            print(sum2_projected_result(Path(arguments[2]).read_text()), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) != 2:
         _usage()
     try:
