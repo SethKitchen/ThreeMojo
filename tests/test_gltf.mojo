@@ -56,6 +56,8 @@ from render.texture import (
 from renderers.renderer import Renderer
 from std.math import pi
 from std.pathlib import Path
+from tests.test_scratch import TestScratch, temporary_path
+from tools._process import run_program
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -286,6 +288,41 @@ def test_a_file_that_is_not_there_or_not_gltf_is_refused() raises:
         _ = read_gltf(HERE + "checker.png", scene, assets)
     with assert_raises():
         _ = read_gltf("assets/cube.obj", scene, assets)
+
+
+def test_percent_escapes_in_a_file_uri_are_decoded() raises:
+    # A space in a file name is written `%20` in a glTF URI. Escapes of
+    # either case read the same files.
+    var folder = temporary_path("percent/")
+    _ = run_program(["mkdir", "-p", folder], 10)
+    Path(folder + "tri angle.bin").write_bytes(
+        Path(HERE + "box.bin").read_bytes()
+    )
+    Path(folder + "checker.png").write_bytes(
+        Path(HERE + "checker.png").read_bytes()
+    )
+    var text = Path(HERE + "box.gltf").read_text()
+    Path(folder + "spaced.gltf").write_text(
+        text.replace('"box.bin"', '"tri%20angle.bin"').replace(
+            '"checker.png"', '"%63%68%65cker.p%6Eg"'
+        )
+    )
+    var scene = Scene()
+    var assets = Assets()
+    var model = read_gltf(folder + "spaced.gltf", scene, assets)
+    check_cube(model, scene, assets, 0)
+    # A % that is not followed by two hexadecimal digits is refused.
+    for uri in [
+        String("tri%2"),
+        String("tri%2G.bin"),
+        String("tri%!0.bin"),
+        String("tri%g0.bin"),
+    ]:
+        Path(folder + "bad.gltf").write_text(
+            text.replace('"box.bin"', '"' + uri + '"')
+        )
+        with assert_raises(contains="malformed percent escape"):
+            _ = read_gltf(folder + "bad.gltf", scene, assets)
 
 
 def test_the_loaded_cube_draws() raises:
@@ -1009,6 +1046,13 @@ def test_a_malformed_mesh_or_node_is_refused() raises:
         scene.meshes[shared.first_mesh].material,
         scene.meshes[shared.first_mesh + 1].material,
     )
+    # The default material is glTF's: fully metallic and fully rough, the
+    # same as an empty material object.
+    var fallback = assets.materials.get(
+        scene.meshes[shared.first_mesh].material
+    )
+    assert_almost_equal(fallback.metalness, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(fallback.roughness, Float32(1), atol=TOLERANCE)
 
 
 def test_a_malformed_material_or_texture_is_refused() raises:
@@ -1468,4 +1512,5 @@ def test_loader_entry_array_and_meshopt_boundaries() raises:
 
 
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

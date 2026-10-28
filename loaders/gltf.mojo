@@ -86,7 +86,9 @@ moves nothing here, where three.js adds the base positions to it as if
 they were offsets. A target without a `COLOR_0` changes no color, where
 three.js adds the base colors the same way. A channel on a node
 the default scene does not reach is left out, and so is an animation left
-with no channel. A skin joint the scene does not reach is refused. So is a specular
+with no channel. An animation whose keys all lie at time zero holds a still
+pose; its clip lasts one frame at 30 frames a second, where three.js makes
+a clip of no length. A skin joint the scene does not reach is refused. So is a specular
 color factor outside zero to one, which a `Color` cannot hold; any map
 that reads a third set of texture coordinates or past it, since a
 geometry here has only `uv` and `uv1`; and a skinned node that is
@@ -313,6 +315,9 @@ from std.math import inf, pi, sqrt
 from std.memory import bitcast
 from std.pathlib import Path
 from units.si import Angle, Duration, Length, METER, NANOMETER, RADIAN, SECOND
+
+# How long a clip of a still pose lasts: one frame at 30 frames a second.
+comptime _STILL_POSE_SECONDS = Float32(1.0 / 30.0)
 
 # The binary container's header: the magic `glTF`, the version, and the
 # two chunk types, as little-endian words.
@@ -1190,14 +1195,48 @@ def _slice(text: String, start: Int, end: Int) -> String:
     return String(unsafe_from_utf8=out)
 
 
+def _hex_value(byte: UInt8) -> Int:
+    """Return the value of one hexadecimal digit, or -1."""
+    if byte >= UInt8(ord("0")) and byte <= UInt8(ord("9")):
+        return Int(byte - UInt8(ord("0")))
+    var lower = byte | 0x20
+    if lower >= UInt8(ord("a")) and lower <= UInt8(ord("f")):
+        return Int(lower - UInt8(ord("a"))) + 10
+    return -1
+
+
+def _percent_decoded(uri: String) raises -> String:
+    """Return a relative URI with its `%XX` escapes decoded, as RFC 3986
+    writes a space or a non-ASCII byte in a file name.
+
+    Raises:
+        Error: If a `%` is not followed by two hexadecimal digits.
+    """
+    var raw = uri.as_bytes()
+    var out = List[UInt8](capacity=len(raw))
+    var index = 0
+    while index < len(raw):
+        if raw[index] != UInt8(ord("%")):
+            out.append(raw[index])
+            index += 1
+            continue
+        var high = _hex_value(raw[index + 1]) if index + 2 < len(raw) else -1
+        var low = _hex_value(raw[index + 2]) if index + 2 < len(raw) else -1
+        if high < 0 or low < 0:
+            raise Error("glTF: a URI has a malformed percent escape: " + uri)
+        out.append(UInt8(high * 16 + low))
+        index += 3
+    return String(from_utf8_lossy=out)
+
+
 def _uri_bytes(uri: String, directory: String) raises -> List[UInt8]:
     """Return the bytes a URI names: decoded from a `data:` URI, or read
-    from a file beside the document."""
+    from a file beside the document, its percent escapes decoded."""
     if uri.startswith("data:"):
         return _data_uri_bytes(uri)
     if uri.find(":") >= 0:
         raise Error("glTF: only a data URI or a relative path is read: " + uri)
-    return Path(directory + uri).read_bytes()
+    return Path(directory + _percent_decoded(uri)).read_bytes()
 
 
 struct _DracoPrimitive(Movable):
@@ -2415,8 +2454,12 @@ struct _Loader(Movable):
         the primitive carries them."""
         if index < 0:
             if not self.has_default_material:
+                # glTF's default material, as three.js's
+                # `createDefaultMaterial` makes it: fully metallic and rough.
                 self.default_material = assets.materials.add(
-                    standard_material(Color(255, 255, 255))
+                    standard_material(
+                        Color(255, 255, 255), roughness=1.0, metalness=1.0
+                    )
                 )
                 self.has_default_material = True
             if not tinted:
@@ -3459,7 +3502,18 @@ struct _Loader(Movable):
             var name = self.text(animation, "name")
             if name == "":
                 name = "animation_" + String(index)
-            self.model.animations.append(AnimationClip(name, tracks^))
+            # Keys that all lie at time zero hold a still pose, which glTF
+            # allows. A clip here must last some time, so it gets one frame.
+            var still = True
+            for track in tracks:
+                if track.duration().to(SECOND) > 0:
+                    still = False
+            var duration = Optional[Duration](None)
+            if still:
+                duration = Duration(_STILL_POSE_SECONDS, SECOND)
+            self.model.animations.append(
+                AnimationClip(name, tracks^, duration=duration)
+            )
 
     def channel_tracks(
         mut self, sampler: Int, target: Int, mut tracks: List[KeyframeTrack]
@@ -3491,9 +3545,20 @@ struct _Loader(Movable):
         for key in range(len(input[0])):  # pragma: no branch
             times.append(Duration(input[0][key], SECOND))
         var how = _interpolation_of(self.text(sampler, "interpolation"))
-        var output = self.accessor_floats(
-            self.required_integer(sampler, "output")
-        )
+        var output_index = self.required_integer(sampler, "output")
+        var output = self.accessor_floats(output_index)
+        if (
+            path == "rotation"
+            and self.required_integer(
+                self.entry("accessors", output_index), "componentType"
+            )
+            != COMPONENT_FLOAT
+        ):
+            # KHR_mesh_quantization rounds a key's components to 1/127 or
+            # 1/32767, which moves its length off one. Rescale each key.
+            _normalize_quaternion_keys(
+                output[0], 3 if how == CUBIC_SPLINE else 1
+            )
         if path != "weights":
             var width = kind.component_count()
             if output[1] != width:
@@ -3585,13 +3650,7 @@ def _gathered(
         out.set_attribute(
             geometry.names[slot], geometry.values[slot].gather(order)
         )
-    for target in range(geometry.morph_count()):
-        out.morph_positions.append(
-            geometry.morph_positions[target].gather(order)
-        )
-    for target in range(len(geometry.morph_normals)):
-        out.morph_normals.append(geometry.morph_normals[target].gather(order))
-    out.morph_relative = geometry.morph_relative
+    geometry.gather_morphs_into(out, order)
     return out^
 
 
@@ -3621,6 +3680,30 @@ def _interpolation_of(name: String) raises -> Interpolation:
     if name == "CUBICSPLINE":
         return CUBIC_SPLINE
     raise Error("glTF: an interpolation must be LINEAR, STEP or CUBICSPLINE")
+
+
+def _normalize_quaternion_keys(mut output: List[Float32], parts: Int):
+    """Scale each key's quaternion to unit length, leaving any tangents.
+
+    Args:
+        output: Four numbers a value, `parts` values a key, the quaternion
+            of a cubic spline key in the middle.
+        parts: One for a plain key, three for a cubic spline key.
+    """
+    var value = 1 if parts == 3 else 0
+    var key = 0
+    while (key * parts + value) * 4 + 3 < len(output):
+        var at = (key * parts + value) * 4
+        var length = sqrt(
+            Float64(output[at]) ** 2
+            + Float64(output[at + 1]) ** 2
+            + Float64(output[at + 2]) ** 2
+            + Float64(output[at + 3]) ** 2
+        )
+        if length > 0:
+            for lane in range(4):
+                output[at + lane] = Float32(Float64(output[at + lane]) / length)
+        key += 1
 
 
 def _track(

@@ -591,6 +591,33 @@ def test_morph_colors_and_target_names_are_read() raises:
     assert_equal(scene.meshes[2].morph_target_dictionary["0"], 0)
 
 
+def test_indexed_points_and_lines_keep_their_morph_colors() raises:
+    # Points and lines are read out through their index, and every part of
+    # a morph target goes with the vertices, its colors included.
+    for mode in [0, 1]:
+        var bin = Bin()
+        _ = bin.floats([0, 0, 0, 1, 0, 0, 0, 1, 0], "VEC3")
+        _ = bin.floats([1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1], "VEC4")
+        _ = bin.floats([0, 0, 1, 0, 0, 1, 0, 0, 1], "VEC3")
+        _ = bin.floats([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0], "VEC4")
+        _ = bin.ints([2, 1, 0, 1], UBYTE, "SCALAR")
+        var text = bin.document(
+            ',"meshes":[{"primitives":[{"mode":'
+            + String(mode)
+            + ',"indices":4,"attributes":{"POSITION":0,"COLOR_0":1},'
+            + '"targets":[{"POSITION":2,"COLOR_0":3}]}]}]'
+            + ',"nodes":[{"mesh":0}],"scenes":[{"nodes":[0]}],"scene":0'
+        )
+        var scene = Scene()
+        var assets = Assets()
+        var model = loaded(text, scene, assets)
+        ref drawn = assets.geometries.get(model.geometries[0])
+        assert_true(drawn.has_morph_colors())
+        # The first vertex is index 2, whose target color is blue.
+        assert_equal(drawn.morph_colors[0].data[2], 1)
+        assert_equal(drawn.morph_colors[0].count(), 4)
+
+
 def test_malformed_morph_targets_are_refused() raises:
     var bin = Bin()
     morph_bin(bin)
@@ -986,6 +1013,76 @@ def test_animations_become_clips() raises:
     assert_almost_equal(scene.get(model.nodes[1]).position.x, 1, atol=TOLERANCE)
 
 
+def test_a_still_pose_animation_lasts_one_frame() raises:
+    # glTF allows a sampler of one key. Keys that all lie at time zero hold
+    # a still pose, and the file still loads.
+    var bin = Bin()
+    _ = bin.floats([0], "SCALAR")
+    _ = bin.floats([1, 2, 3], "VEC3")
+    _ = bin.floats(triangle(), "VEC3")
+    var text = bin.document(
+        ',"meshes":[{"primitives":[{"attributes":{"POSITION":2}}]}]'
+        + ',"nodes":[{"mesh":0}],"scenes":[{"nodes":[0]}],"scene":0'
+        + ',"animations":[{"name":"Pose","samplers":[{"input":0,"output":1}],'
+        + '"channels":[{"sampler":0,"target":{"node":0,"path":"translation"}}]}]'
+    )
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(text, scene, assets)
+    assert_equal(len(model.animations), 1)
+    assert_almost_equal(
+        model.animations[0].duration().to(SECOND), 1.0 / 30.0, atol=1e-6
+    )
+    var mixer = AnimationMixer()
+    var action = mixer.add(AnimationAction(model.animations[0].copy()))
+    mixer.action(action).play()
+    mixer.update(scene, assets, Duration(0.5, SECOND))
+    assert_almost_equal(scene.get(model.nodes[0]).position.y, 2, atol=TOLERANCE)
+
+
+def _quantized_turn(values: List[Int], interpolation: String) raises -> String:
+    """Return a document whose one rotation sampler holds normalized BYTE
+    keys at times zero and one, as KHR_mesh_quantization allows."""
+    var bin = Bin()
+    _ = bin.floats([0, 1], "SCALAR")
+    _ = bin.ints(values, BYTE, "VEC4", ',"normalized":true')
+    return bin.document(
+        ',"extensionsUsed":["KHR_mesh_quantization"],'
+        + '"extensionsRequired":["KHR_mesh_quantization"]'
+        + ',"nodes":[{}],"scenes":[{"nodes":[0]}],"scene":0'
+        + ',"animations":[{"samplers":[{"input":0,"output":1'
+        + interpolation
+        + '}],"channels":[{"sampler":0,"target":{"node":0,"path":"rotation"}}]}]'
+    )
+
+
+def test_quantized_rotation_keys_are_rescaled_to_unit_length() raises:
+    # 90/127 rounds sin(45 degrees) up, so the raw key is 0.2 percent long.
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        _quantized_turn([0, 0, 0, 127, 90, 0, 0, 90], ""), scene, assets
+    )
+    var turn = (
+        model.animations[0].tracks[0].sample_quaternion(Duration(1, SECOND))
+    )
+    assert_almost_equal(turn.x, 0.7071068, atol=TOLERANCE)
+    assert_almost_equal(turn.w, 0.7071068, atol=TOLERANCE)
+    # A cubic spline key keeps its tangents and rescales its value.
+    var keys: List[Int] = [0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 0, 0]
+    keys.extend([0, 0, 0, 0, 90, 0, 0, 90, 0, 0, 0, 0])
+    var smooth = loaded(
+        _quantized_turn(keys, ',"interpolation":"CUBICSPLINE"'),
+        scene,
+        assets,
+    )
+    ref spline = smooth.animations[0].tracks[0]
+    assert_almost_equal(spline.values[4], 0.7071068, atol=TOLERANCE)
+    assert_equal(spline.in_tangents[4], 0)
+    # A key of no length has no direction and is still refused.
+    refuses(_quantized_turn([0, 0, 0, 0, 0, 0, 0, 127], ""), "unit length")
+
+
 def test_a_malformed_animation_is_refused() raises:
     var bin = Bin()
     refuses(animated(bin, "{}"), "animations must be an array")
@@ -1144,15 +1241,21 @@ def test_a_malformed_animation_is_refused() raises:
         assets,
     )
     assert_equal(len(model.animations), 0)
-    # A clip of one key lasts no time, which a clip refuses.
+    # A clip of one key at time zero holds a still pose for one frame.
     bin = Bin()
-    refuses(
+    var still_scene = Scene()
+    var still_assets = Assets()
+    var still = loaded(
         animated(
             bin,
             weights
             + '0,"path":"weights"}}],"samplers":[{"input":12,"output":3}]}]',
         ),
-        "longer than no time",
+        still_scene,
+        still_assets,
+    )
+    assert_almost_equal(
+        still.animations[0].duration().to(SECOND), 1.0 / 30.0, atol=1e-6
     )
 
 
