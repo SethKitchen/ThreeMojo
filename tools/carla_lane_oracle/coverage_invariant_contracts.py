@@ -267,38 +267,35 @@ def _gate_pair(names):
         raise ValueError(message)
 
 
-def _gate_places(rows):
-    import json
+def _invariant_predecessor(payload, record, filename):
+    """Return the indented coverage-invariant pin predecessor."""
     import os
     import subprocess
     import tempfile
     from pathlib import Path
+    request = json.dumps({
+        'after': record['after_sha256'],
+        'before': record['before_sha256'],
+        'label': filename,
+        'transitions': record['transitions'],
+    }, separators=(',', ':'))
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='invariant-places-') as directory:
+    with tempfile.TemporaryDirectory(prefix='invariant-predecessor-') as directory:
         folder = Path(directory)
-        (folder / 'labels.json').write_text(json.dumps(rows))
+        (folder / 'payload').write_bytes(payload)
+        (folder / 'request.json').write_text(request)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_invariant_gate',
-             '--places', str(folder)],
-            capture_output=True, text=True)
+             '--predecessor', str(folder)],
+            capture_output=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
+                 if line.strip() and b'Crashpad' not in line]
+        message = (lines[-1] if lines else result.stdout).decode(
+            'utf-8', 'replace').strip()
         raise ValueError(message)
-
-
-def _apply_transitions(pins, transitions):
-    if __package__:
-        from . import ideal_projection
-    else:
-        import ideal_projection
-    rows = ideal_projection.pin_transition_rows(pins, transitions)
-    _gate_places(rows)
-    updated = json.loads(ideal_projection.apply_pin_transitions(pins, transitions))
-    pins.clear()
-    pins.update(updated)
+    return result.stdout
 
 
 def _component_tool(mode, payload):
@@ -370,13 +367,7 @@ def predecessor_pins(root, filename):
     else:
         import coverage_followup_contracts as followup
     payload = followup.predecessor_pins(root, filename)
-    labels = _invariant_labels()
-    _gate_digest(payload, record['after_sha256'], labels['after'], filename)
-    pins = json.loads(payload, object_pairs_hook=source.unique_keys)
-    _apply_transitions(pins, record['transitions'])
-    original = _indent_json(pins)
-    _gate_digest(original, record['before_sha256'], labels['before'], filename)
-    return original
+    return _pin_predecessor(payload, record, filename)
 
 def verify(root, *, _operation=None):
     if __package__:
@@ -447,13 +438,13 @@ def _verify_owned(root, *, _operation):
 
 
 def _pin_predecessor(payload, record, filename):
+    import hashlib
     labels = _invariant_labels()
-    _gate_digest(payload, record['after_sha256'], labels['after'], filename)
-    pins = json.loads(payload, object_pairs_hook=source.unique_keys)
-    _apply_transitions(pins, record['transitions'])
-    original = _indent_json(pins)
-    _gate_digest(original, record['before_sha256'], labels['before'], filename)
-    return original
+    if hashlib.sha256(payload).hexdigest() != record['after_sha256']:
+        _gate_digest(payload, record['after_sha256'], labels['after'], filename)
+    # A repeated key is refused before placement. The digest check stays first.
+    json.loads(payload, object_pairs_hook=source.unique_keys)
+    return _invariant_predecessor(payload, record, filename)
 
 
 def predecessor_pin_pair(root):

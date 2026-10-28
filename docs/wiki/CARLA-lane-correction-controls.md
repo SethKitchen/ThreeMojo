@@ -114,6 +114,8 @@ It compares every coverage-invariant successor digest in one check.
 
 It checks every coverage-invariant predecessor in one check.
 
+It rebuilds one coverage-invariant pin predecessor in one check.
+
 It keeps the four coverage-invariant source paths.
 
 It keeps the six extra coverage-invariant inputs.
