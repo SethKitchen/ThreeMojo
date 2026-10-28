@@ -5,15 +5,7 @@ if __package__:
 else:
     import source_contracts as _typed_source
 
-if __package__:
-    from . import source_contracts as source
-else:
-    import source_contracts as source
 from pathlib import Path
-if __package__:
-    from . import source_contracts
-else:
-    import source_contracts
 EXPECTED = {'extensions/carla/spiral_grouped_roundoff_proof.mojo': 'cd92ac2f02c75fc420920fe3a73b4ddd28a4e5cf0d97785b4ae4eb0f54f2cbd7', 'extensions/carla/curve_interval.mojo': 'e2e87c519ed45fb4ec77d9a54aad08406461b17805287874c9b05ddb6bf49b11', 'extensions/carla/curve_trig.mojo': '523d5700201b957152eaa79ae6cce9ca8cb9a2a0098d5b105584667360a6de7f', 'extensions/carla/geometry.mojo': 'a1979bd37d0ea725f452e0a0a269c7aaef3cda485b291e8fe79b49b35850adcb', 'extensions/carla/curve_sum2.mojo': '3fbcbb7f6ba0b9120500698665f0419acf6618d8bd34b7e18b9d10896282383d'}
 
 def _pass_record():
@@ -90,72 +82,31 @@ RECORD_SHA256 = '4b72cd07de22d61d70c7aa489e566cd25468189b6a60b5e105fa26ea726e685
 PREDECESSOR_TOKEN_SHA256 = 'a8f3beca23c8d6a84d01f5eebecb0a01cd2102aad4e226ed6a782722733a86b7'
 
 
-def _run_record(arguments):
+def _gate_predecessor(record):
+    """Check the successor record, then return the earlier module."""
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='y-record-') as directory:
-        folder = Path(directory)
-        files = {}
-        for name, payload in arguments:
-            target = folder / name
-            target.write_bytes(payload)
-            files[name] = str(target)
-        command = ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_y_gate',
-                   '--record', files['record']]
-        if 'before' in files:
-            command.extend(['--before', files['before'], '--after', files['after'],
-                            '--before-sha', arguments[-2][1].decode(),
-                            '--after-sha', arguments[-1][1].decode()])
-        result = subprocess.run(command, capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-
-
-def _gate_record(payload):
-    _run_record([('record', payload)])
-
-
-def _gate_sources(record, before, after, before_sha, after_sha):
-    _run_record([
-        ('record', record), ('before', before), ('after', after),
-        ('before-sha', before_sha.encode()), ('after-sha', after_sha.encode()),
-    ])
-
-
-def _gate_identity(before, after, before_token, after_token):
-    import os
-    import subprocess
-    import tempfile
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='y-identity-') as directory:
-        folder = Path(directory)
-        before_path = folder / 'before.mojo'
-        after_path = folder / 'after.mojo'
-        before_path.write_text(before)
-        after_path.write_text(after)
+    with tempfile.TemporaryDirectory(prefix='y-predecessor-') as directory:
+        target = Path(directory) / 'record.json'
+        target.write_bytes(record)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_y_gate',
-             '--before-text', str(before_path), '--after-text', str(after_path),
-             '--before-token', before_token, '--after-token', after_token],
+             '--predecessor', str(target)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+    return result.stdout
 
 
 def predecessor_text(root, path, *, _operation=None):
     """Verify all actual Y premises before restoring its exact prior module."""
 # #333 explicit historical provenance views; current inputs remain operation-owned.
-    import json
     root = Path(root)
     if str(path) != MODULE:
         raise ValueError('Y projection permits only its exact grouped module')
@@ -163,20 +114,4 @@ def predecessor_text(root, path, *, _operation=None):
     # actual five-file graph must pass before any record can provide text.
     verify(root, _operation=_operation)
     payload = _typed_source.historical_bytes(root, root / RECORD, (root / RECORD).read_bytes(), _operation=_operation)
-    _gate_record(payload)
-    record = json.loads(payload, object_pairs_hook=source_contracts.unique_keys)
-    required = {'module', 'predecessor_file_sha256', 'successor_file_sha256',
-                'predecessor_token_sha256', 'successor_token_sha256',
-                'before_complete_module', 'after_complete_module',
-                'only_change', 'dependencies'}
-    if set(record) != required or record['module'] != MODULE:
-        raise ValueError('Wrong grouped Y record schema or module')
-    if record['dependencies'] != EXPECTED:
-        raise ValueError('Grouped Y record dependency set changed')
-    before = record['before_complete_module']
-    after = record['after_complete_module']
-    if not isinstance(before, str) or not isinstance(after, str):
-        raise ValueError('Grouped Y record must contain complete source text')
-    _gate_sources(payload, before.encode(), after.encode(), record['predecessor_file_sha256'], record['successor_file_sha256'])
-    _gate_identity(before, after, record['predecessor_token_sha256'], record['successor_token_sha256'])
-    return before
+    return _gate_predecessor(payload)

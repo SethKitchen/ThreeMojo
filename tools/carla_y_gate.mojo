@@ -221,13 +221,55 @@ def y_identity(
         raise Error("Grouped Y predecessor/successor token identity changed")
 
 
+def y_predecessor(record: String) raises -> String:
+    """Return the earlier grouped module after the successor record matches.
+
+    Args:
+        record: The grouped Y successor record.
+
+    Returns:
+        The recorded earlier module.
+
+    Raises:
+        Error: The record digest changed, the recorded module bytes differ,
+            or a module token changed. The record digest is checked before
+            the module bytes.
+    """
+    y_successor(
+        record.as_bytes(),
+        String("").as_bytes(),
+        String("").as_bytes(),
+        "",
+        "",
+        False,
+    )
+    var doc = PyJson.parse(record)
+    var before = doc.text(doc.at(doc.root, "before_complete_module"))
+    var after = doc.text(doc.at(doc.root, "after_complete_module"))
+    y_successor(
+        record.as_bytes(),
+        before.as_bytes(),
+        after.as_bytes(),
+        doc.text(doc.at(doc.root, "predecessor_file_sha256")),
+        doc.text(doc.at(doc.root, "successor_file_sha256")),
+        True,
+    )
+    y_identity(
+        before,
+        after,
+        doc.text(doc.at(doc.root, "predecessor_token_sha256")),
+        doc.text(doc.at(doc.root, "successor_token_sha256")),
+    )
+    return before
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_y_gate [--mismatches] --grouped PATH --interval PATH"
             " --trig PATH --geometry PATH --sum2 PATH | --before-text PATH --after-text"
-            " PATH --before-token HEX --after-token HEX"
+            " PATH --before-token HEX --after-token HEX | --predecessor PATH"
         ),
         file=stderr,
     )
@@ -241,6 +283,7 @@ def main() raises:
         Error: The command is invalid.
     """
     var mismatches = False
+    var predecessor = String("")
     var grouped = String("")
     var interval = String("")
     var trig = String("")
@@ -262,6 +305,12 @@ def main() raises:
         if word == "--mismatches":
             mismatches = True
             index += 1
+            continue
+        if word == "--predecessor":
+            if index + 1 >= len(arguments):
+                _usage()
+            predecessor = arguments[index + 1]
+            index += 2
             continue
         if (
             word == "--grouped"
@@ -313,6 +362,31 @@ def main() raises:
             index += 2
             continue
         _usage()
+    if predecessor.byte_length() > 0:
+        if (
+            mismatches
+            or grouped.byte_length() > 0
+            or interval.byte_length() > 0
+            or trig.byte_length() > 0
+            or geometry.byte_length() > 0
+            or sum2.byte_length() > 0
+            or record.byte_length() > 0
+            or before.byte_length() > 0
+            or after.byte_length() > 0
+            or before_sha.byte_length() > 0
+            or after_sha.byte_length() > 0
+            or before_text.byte_length() > 0
+            or after_text.byte_length() > 0
+            or before_token.byte_length() > 0
+            or after_token.byte_length() > 0
+        ):
+            _usage()
+        try:
+            print(y_predecessor(Path(predecessor).read_text()), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var identity = (
         before_text.byte_length() > 0
         or after_text.byte_length() > 0

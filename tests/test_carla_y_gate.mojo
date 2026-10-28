@@ -12,6 +12,7 @@ from tools._python_json import PyJson
 from tools.carla_y_gate import (
     y_finiteness,
     y_identity,
+    y_predecessor,
     y_successor,
     y_token_mismatches,
 )
@@ -86,6 +87,20 @@ def test_mismatches_keep_review_order() raises:
         partial.text(partial.item(partial.root, 0)),
         "extensions/carla/curve_interval.mojo",
     )
+
+
+def test_the_predecessor_record_returns_the_earlier_module() raises:
+    """The record digest is checked before the earlier module is returned."""
+    var record = Path(
+        "tools/carla_lane_oracle/grouped-y-successor-record.json"
+    ).read_text()
+    var doc = PyJson.parse(record)
+    assert_equal(
+        y_predecessor(record),
+        doc.text(doc.at(doc.root, "before_complete_module")),
+    )
+    with assert_raises(contains="Unreviewed grouped Y successor record"):
+        _ = y_predecessor(record + " ")
 
 
 def main() raises:

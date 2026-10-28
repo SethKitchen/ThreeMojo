@@ -92,6 +92,8 @@ It compares that grouped-table token digest in one check.
 
 It lists every module whose token differs, in review order, in one check.
 
+It checks the successor record, then returns the earlier grouped module in one check.
+
 `tools/carla_speed_gate.mojo` checks the speed-parser record, its module token, and its correctness tests.
 
 It keeps the speed-limit module and its two correctness tests.
