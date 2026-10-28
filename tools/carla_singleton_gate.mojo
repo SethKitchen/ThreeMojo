@@ -7,6 +7,7 @@
 
     carla_singleton_gate --migration PATH
     carla_singleton_gate --text PATH --decoded PATH
+    carla_singleton_gate --views-after-newlines TEXT PHYSICAL
     carla_singleton_gate --graphs DIR
     carla_singleton_gate --source-graphs PATH
     carla_singleton_gate --import-scopes PATH
@@ -31,6 +32,7 @@ from tools._lane_declarations import (
     checked_declaration_graphs,
     restored_declaration_graphs,
 )
+from tools._universal_newlines import universal_newlines
 from tools._python_json import MISSING, PY_LIST, PyJson, py_equal
 from tools._sha256 import sha256_hex
 
@@ -82,6 +84,20 @@ def singleton_views(text: String, decoded: String) raises:
     """
     if token_sha256(text) != token_sha256(decoded):
         _fail("consumer lane source text/bytes disagree")
+
+
+def singleton_views_after_newlines(text: String, physical: String) raises:
+    """Translate universal newlines, then compare the lane text views.
+
+    Args:
+        text: The text read from the lane source.
+        physical: The same file decoded from its bytes, before newline
+            translation.
+
+    Raises:
+        Error: The token digests disagree.
+    """
+    singleton_views(text, universal_newlines(physical))
 
 
 def singleton_path(actual: String, expected: String) raises:
@@ -254,7 +270,8 @@ def _usage():
     print(
         (
             "usage: carla_singleton_gate --migration PATH"
-            " | --text PATH --decoded PATH | --graphs DIR"
+            " | --text PATH --decoded PATH"
+            " | --views-after-newlines TEXT PHYSICAL | --graphs DIR"
             " | --source-graphs PATH"
             " | --import-scopes PATH"
             " | --declaration-graphs PATH"
@@ -283,6 +300,16 @@ def main() raises:
     var selector = String("")
     var wanted = String("")
     var arguments = argv()
+    if len(arguments) == 4 and arguments[1] == "--views-after-newlines":
+        try:
+            singleton_views_after_newlines(
+                Path(arguments[2]).read_text(),
+                String(unsafe_from_utf8=Path(arguments[3]).read_bytes()),
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var index = 1
     while index < len(arguments):
         var word = arguments[index]

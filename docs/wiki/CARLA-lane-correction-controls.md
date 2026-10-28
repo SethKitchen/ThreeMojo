@@ -80,6 +80,8 @@ It keeps the speed-parser contract prefix.
 
 It translates universal newlines before that lane text comparison.
 
+It translates those newlines and compares that lane text in one check.
+
 It selects the rounded lane minimum before restoring a changed declaration.
 
 It selects every rounded lane minimum in one check.

@@ -20,6 +20,7 @@ from tools.carla_singleton_gate import (
     singleton_restored_graphs,
     singleton_source_graphs,
     singleton_views,
+    singleton_views_after_newlines,
 )
 
 
@@ -41,6 +42,26 @@ def test_disagreeing_lane_views_are_refused() raises:
     ):
         singleton_views(
             "def changed():\n    pass\n", "def other():\n    pass\n"
+        )
+
+
+def test_translated_newlines_share_the_lane_token() raises:
+    """A carriage return before a line feed matches the text view."""
+    singleton_views_after_newlines(
+        "def f():\n    return 1\n", "def f():\r\n    return 1\r"
+    )
+
+
+def test_a_changed_lane_still_disagrees_after_newlines() raises:
+    """A different token still fails after newline translation."""
+    with assert_raises(
+        contains=(
+            "rounded LINE singleton contract: consumer lane source text/bytes"
+            " disagree"
+        )
+    ):
+        singleton_views_after_newlines(
+            "def changed():\n    pass\n", "def other():\r\n    pass\r\n"
         )
 
 

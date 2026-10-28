@@ -440,13 +440,36 @@ def _universal_newlines(text):
     return result.stdout
 
 
+def _views_after_newlines(text, physical):
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='singleton-views-') as directory:
+        folder = Path(directory)
+        text_path = folder / 'text.mojo'
+        physical_path = folder / 'physical.mojo'
+        text_path.write_text(text)
+        physical_path.write_bytes(physical.encode('utf-8'))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_singleton_gate',
+             '--views-after-newlines', str(text_path), str(physical_path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def _lane_text(root):
     """Compare actual text/byte views without imposing a historical file pin."""
     path = root/_singleton_paths()['lane']
     text = path.read_text()
     physical = path.read_bytes()
-    decoded = _universal_newlines(physical.decode('utf-8'))
-    _gate_views(text, decoded)
+    _views_after_newlines(text, physical.decode('utf-8'))
     return _typed_source.historical_text(root, path, physical.decode('utf-8'))
 
 
