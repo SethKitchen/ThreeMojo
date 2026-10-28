@@ -273,6 +273,9 @@ def _prepare_rounded(paths):
     _ROUNDED = chosen
 
 
+_MATCHED_PAIRS = {}
+
+
 def _significant_matches(pairs):
     """Return whether each source pair has the same significant tokens."""
     if not pairs:
@@ -299,7 +302,11 @@ def _significant_matches(pairs):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return [flag == 'true' for flag in json.loads(result.stdout)]
+    flags = [flag == 'true' for flag in json.loads(result.stdout)]
+    for (actual, source), flag in zip(pairs, flags):
+        if flag:
+            _MATCHED_PAIRS[(actual, source)] = True
+    return flags
 
 
 def _selected_minima(items):
@@ -365,7 +372,10 @@ def _reviewed_text(root, path, record):
         _prepare_rounded([path])
     if path not in _ROUNDED:
         return text
-    if _significant_matches([(text, record['modules'][path]['source'])])[0]:
+    pair = (text, record['modules'][path]['source'])
+    if _MATCHED_PAIRS.get(pair):
+        return text
+    if _significant_matches([pair])[0]:
         return text
     if __package__:
         from . import rounded_line_selector_contracts as successor

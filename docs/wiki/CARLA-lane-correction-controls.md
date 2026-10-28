@@ -108,6 +108,9 @@ It compares every rounded LINE module text in one check.
 
 It compares every rounded LINE source pair by its tokens in one check.
 
+It reuses a matching rounded LINE module when that module is read again.
+A changed module is compared again.
+
 It checks every rounded LINE consumer graph in one check.
 
 It keeps the consumer import scope before the first definition.

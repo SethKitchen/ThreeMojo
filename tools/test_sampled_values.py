@@ -595,5 +595,46 @@ class CurrentDispatchTokenTests(unittest.TestCase):
         self.assertEqual(calls, [[('text', 'aa', 'complete a.mojo')]])
 
 
+class RoundedMatchCacheTests(unittest.TestCase):
+    def test_a_repeated_rounded_match_is_reused(self):
+        from tools.carla_lane_oracle import rounded_line_singleton_contracts as singleton
+        calls = []
+        original_matches = singleton._significant_matches
+        original_rounded = singleton._ROUNDED
+        singleton._MATCHED_PAIRS.clear()
+        singleton._ROUNDED = {'notes/fake.mojo'}
+
+        def matches(pairs):
+            calls.append([(actual, source) for actual, source in pairs])
+            flags = [True] * len(pairs)
+            for (actual, source), flag in zip(pairs, flags):
+                if flag:
+                    singleton._MATCHED_PAIRS[(actual, source)] = True
+            return flags
+
+        singleton._significant_matches = matches
+        root = Path('rounded-match-cache')
+        path = 'notes/fake.mojo'
+        record = {'modules': {path: {'source': 'recorded'}}}
+        try:
+            (root / 'notes').mkdir(parents=True)
+            target = root / path
+            target.write_text('live')
+            first = singleton._reviewed_text(root, path, record)
+            second = singleton._reviewed_text(root, path, record)
+            self.assertEqual(first, 'live')
+            self.assertEqual(second, 'live')
+            self.assertEqual(len(calls), 1)
+            target.write_text('changed')
+            third = singleton._reviewed_text(root, path, record)
+            self.assertEqual(third, 'changed')
+            self.assertEqual(len(calls), 2)
+        finally:
+            singleton._significant_matches = original_matches
+            singleton._ROUNDED = original_rounded
+            singleton._MATCHED_PAIRS.clear()
+            shutil.rmtree(root, ignore_errors=True)
+
+
 if __name__ == '__main__':
     unittest.main()
