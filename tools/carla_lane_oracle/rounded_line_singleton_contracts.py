@@ -199,12 +199,42 @@ def read_record(root):
     return json.loads(payload, object_pairs_hook=source.unique_keys)
 
 
-def _same_text(actual, expected):
-    if __package__:
-        from . import ideal_projection
-    else:
-        import ideal_projection
-    return ideal_projection.texts_match(actual, expected)
+def _prepare_rounded(paths):
+    """Read the singleton paths and remember the rounded-line modules."""
+    global _SINGLETON_PATHS, _ROUNDED
+    if _ROUNDED is not None:
+        return
+    if not paths:
+        _ROUNDED = set()
+        return
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps(list(paths), separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='rounded-line-flags-') as directory:
+        record = Path(directory) / 'paths.json'
+        record.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_singleton_paths',
+             '--flags', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    data = json.loads(result.stdout)
+    if _SINGLETON_PATHS is None:
+        _SINGLETON_PATHS = data['paths']
+    chosen = set()
+    for path, flag in zip(paths, data['flags']):
+        if flag:
+            chosen.add(path)
+    _ROUNDED = chosen
 
 
 def _significant_matches(pairs):
@@ -267,6 +297,7 @@ def _selected_minima(items):
 
 
 _SINGLETON_PATHS = None
+_ROUNDED = None
 
 
 def _singleton_paths():
@@ -294,7 +325,9 @@ def _singleton_paths():
 
 def _reviewed_text(root, path, record):
     text = _typed_source.historical_text(root, root/path, (root/path).read_text())
-    if not _same_text(path, _singleton_paths()['rounded_line']):
+    if _ROUNDED is None:
+        _prepare_rounded([path])
+    if path not in _ROUNDED:
         return text
     if _significant_matches([(text, record['modules'][path]['source'])])[0]:
         return text
@@ -507,6 +540,7 @@ def _restored_graphs(restores, graphs):
 
 def verify_premises(root):
     record = read_record(root)
+    _prepare_rounded(list(record['modules']))
     # Whole module tokens bind imports, declaration owners and local names.
     checked = []
     for path, item in record['modules'].items():
@@ -586,6 +620,7 @@ def verify_premises(root):
 
 def verify(root):
     record = read_record(root)
+    _prepare_rounded(list(record['modules']))
     dependencies = []
     for path, item in record['modules'].items():
         dependencies.append((

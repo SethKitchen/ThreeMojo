@@ -106,6 +106,8 @@ It checks every consumer import scope when the lane scope matches in one check.
 
 It keeps the lane path, the rounded-line path, and the consumer messages.
 
+It compares each module path with that rounded-line path in one check.
+
 It keeps the rounded-line contract prefix.
 
 `tools/carla_frozen_arc_gate.mojo` checks the frozen ARC producer record, the producer functions, and the arc layout.
