@@ -238,6 +238,8 @@ It keeps the ten optional-runtime declaration groups.
 
 It keeps one semantic declaration without move sigils.
 
+It prefixes a bad move after that declaration check in one check.
+
 It binds every semantic declaration in one group together.
 
 It checks that group's edges in the same call.

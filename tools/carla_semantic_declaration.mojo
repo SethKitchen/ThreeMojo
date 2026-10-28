@@ -15,6 +15,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import semantic_declaration
+from tools._optional_runtime_messages import prefix_move_error
 
 
 def _usage():
@@ -38,5 +39,5 @@ def main() raises:
             end="",
         )
     except error:
-        print(String(error), file=stderr)
+        print(prefix_move_error(String(error)), file=stderr)
         exit(1)

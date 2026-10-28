@@ -7,7 +7,10 @@
 
 from std.testing import TestSuite, assert_equal
 
-from tools._optional_runtime_messages import optional_runtime_messages
+from tools._optional_runtime_messages import (
+    optional_runtime_messages,
+    prefix_move_error,
+)
 from tools._python_json import PyJson
 
 
@@ -43,6 +46,15 @@ def test_optional_runtime_contract_messages_stay_reviewed() raises:
         doc.text(doc.at(doc.root, "frontier")),
         "one original search frontier loop",
     )
+
+
+def test_a_bad_move_keeps_the_contract_prefix() raises:
+    """The move failure is prefixed after the contract messages are read."""
+    assert_equal(
+        prefix_move_error("unsupported move-token placement"),
+        "optional runtime contract: unsupported move-token placement",
+    )
+    assert_equal(prefix_move_error("other failure"), "other failure")
 
 
 def main() raises:

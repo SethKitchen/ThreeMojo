@@ -143,9 +143,6 @@ def _semantic_declaration(text, name):
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        contract = _runtime_contract()
-        if message == contract['move']:
-            message = contract['prefix'] + message
         raise ValueError(message)
     return result.stdout
 

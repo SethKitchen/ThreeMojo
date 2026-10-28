@@ -9,6 +9,8 @@ The checks still run in their existing order. These texts only say how a
 failure is reported.
 """
 
+from tools._python_json import PyJson
+
 
 def optional_runtime_messages() -> String:
     """Return the optional-runtime contract messages.
@@ -27,3 +29,24 @@ def optional_runtime_messages() -> String:
         + '"models":"optional runtime contract: model name set changed",'
         + '"frontier":"one original search frontier loop"}'
     )
+
+
+def prefix_move_error(message: String) raises -> String:
+    """Add the contract prefix to one bad move-token failure.
+
+    Args:
+        message: The declaration failure.
+
+    Returns:
+        The message with the contract prefix when it is the move failure.
+        Every other message stays unchanged.
+
+    Raises:
+        Error: The contract messages cannot be read. The declaration check
+            has already failed before these messages are read.
+    """
+    var messages = PyJson.parse(optional_runtime_messages())
+    var move = messages.text(messages.at(messages.root, "move"))
+    if message != move:
+        return message
+    return messages.text(messages.at(messages.root, "prefix")) + message
