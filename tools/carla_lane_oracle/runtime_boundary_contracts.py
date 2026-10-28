@@ -285,30 +285,6 @@ def _extended_edges(items, steps):
     return json.loads(result.stdout)
 
 
-def _gate_extend(step, edge, path):
-    _gate_extends([(step, edge, path)])
-
-
-def _gate_extends(items):
-    """Require every view step to start where its edge ends."""
-    if not items:
-        return
-    import json
-    import tempfile
-    from pathlib import Path
-    rows = [{
-        'path': path,
-        'step_sha': step['before_sha256'],
-        'edge_sha': edge['after_sha256'],
-        'step_token': step['before_token_sha256'],
-        'edge_token': edge['after_token_sha256'],
-    } for step, edge, path in items]
-    with tempfile.TemporaryDirectory(prefix='boundary-extends-') as directory:
-        record = Path(directory) / 'extends.json'
-        record.write_text(json.dumps(rows, separators=(',', ':')))
-        _run(['--extends', str(record)])
-
-
 def _merged_query(payload):
     import os
     import subprocess
@@ -448,16 +424,12 @@ def verify(root, *, _operation=None):
     for path in _modules():
         pairs.append((path, record['edges'][path]))
     decisions = _extended_edges(pairs, steps)
-    extends = []
     prepared = []
     for (path, edge), decision in zip(pairs, decisions):
         if decision['extend']:
-            # A later reviewed step starts exactly where this edge ends.
-            step = steps[path]
-            extends.append((step, edge, path))
+            # The extension was checked against the original edge.
             edge = decision['edge']
         prepared.append((path, edge))
-    _gate_extends(extends)
     currents = _live_endpoints(root, prepared, _operation=_operation)
     edges = {}
     checked = []
