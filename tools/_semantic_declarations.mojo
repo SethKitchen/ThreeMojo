@@ -11,6 +11,7 @@ the declarations with postfix move sigils removed.
 
 from tests._python_expr import require_fragment_checks
 from tests._python_tokens import semantic_declaration
+from tools._optional_runtime_messages import optional_runtime_messages
 from tools._python_json import MISSING, PyJson
 from tools._semantic_edges import semantic_edge_payload
 
@@ -345,3 +346,54 @@ def semantic_steps(payload: String) raises -> String:
             item_index += 1
         index += 1
     return "{}"
+
+
+def _prefixed_runtime_error(message: String) raises -> String:
+    """Add the contract prefix when a step failure still needs it.
+
+    Args:
+        message: The step failure.
+
+    Returns:
+        The message callers see after the contract check.
+
+    Raises:
+        Error: The contract messages cannot be read.
+    """
+    var messages = PyJson.parse(optional_runtime_messages())
+    var prefix = messages.text(messages.at(messages.root, "prefix"))
+    var move = messages.text(messages.at(messages.root, "move"))
+    var fragment = messages.text(messages.at(messages.root, "fragment"))
+    if message == move:
+        return prefix + message
+    if message.startswith(fragment) and not message.startswith(prefix):
+        return prefix + message
+    return message
+
+
+def semantic_steps_with_contract(payload: String) raises -> String:
+    """Read the contract messages, then check the semantic steps.
+
+    Args:
+        payload: JSON with `steps`. Each step has `group`, `items`,
+            `bind_labels`, `checks`, and `edges`. The contract supplies
+            `prefix`.
+
+    Returns:
+        An empty JSON object. The check raises when a group fails.
+
+    Raises:
+        Error: A group fails. The contract messages are read before the
+            steps. A move or fragment failure keeps its contract prefix.
+    """
+    var messages = PyJson.parse(optional_runtime_messages())
+    var doc = PyJson.parse(payload)
+    doc.set(
+        doc.root,
+        "prefix",
+        doc.new_str(messages.text(messages.at(messages.root, "prefix"))),
+    )
+    try:
+        return semantic_steps(doc.dumps())
+    except error:
+        raise Error(_prefixed_runtime_error(String(error)))

@@ -193,20 +193,12 @@ def _semantic_step(payload):
         path.write_text(text)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_semantic_step',
-             str(path)],
+             '--with-contract', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        contract = _runtime_contract()
-        if message == contract['move']:
-            message = contract['prefix'] + message
-        elif (
-            message.startswith(contract['fragment'])
-            and not message.startswith(contract['prefix'])
-        ):
-            message = contract['prefix'] + message
         raise ValueError(message)
     return json.loads(result.stdout)
 
@@ -557,7 +549,6 @@ def _run_semantic_steps(root, steps, operation):
             loaded.append((item, text))
         prepared.append((step, loaded))
     _semantic_step({
-        'prefix': _runtime_contract()['prefix'],
         'steps': [{
             'group': step['group'],
             'items': [{

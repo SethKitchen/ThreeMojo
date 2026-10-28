@@ -232,6 +232,8 @@ It keeps the lane-search function name.
 
 It keeps the optional-runtime contract messages.
 
+It reads those contract messages before the semantic steps in one check.
+
 It keeps the ten optional-runtime declaration groups.
 
 It keeps one semantic declaration without move sigils.

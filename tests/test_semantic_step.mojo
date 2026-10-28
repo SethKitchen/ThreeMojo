@@ -5,9 +5,13 @@
 
 """One optional-runtime group binds declarations before its edges."""
 
-from std.testing import TestSuite, assert_raises
+from std.testing import TestSuite, assert_equal, assert_raises
 
-from tools._semantic_declarations import semantic_step, semantic_steps
+from tools._semantic_declarations import (
+    semantic_step,
+    semantic_steps,
+    semantic_steps_with_contract,
+)
 
 
 def _step(source: String, name: String) -> String:
@@ -62,6 +66,23 @@ def test_optional_runtime_groups_keep_their_order() raises:
             + '"source":"def _same_cache_key():\\n    return 1\\n"}],'
             + '"bind_labels":[{"key":"helper","label":"helper"}],"checks":[],'
             + '"edges":["helper"]}]}'
+        )
+
+
+def test_empty_steps_read_the_contract_first() raises:
+    """No groups still read the contract and return an empty object."""
+    assert_equal(semantic_steps_with_contract('{"steps":[]}'), "{}")
+
+
+def test_a_bad_move_keeps_the_contract_prefix() raises:
+    """A bad move sigil is prefixed after the contract messages are read."""
+    with assert_raises(
+        contains="optional runtime contract: unsupported move-token placement"
+    ):
+        _ = semantic_steps_with_contract(
+            '{"steps":[{"group":"helper","items":[{"key":"helper","name":"f",'
+            + '"source":"def f():\\n    return x^ + 1\\n"}],'
+            + '"bind_labels":[],"checks":[],"edges":[]}]}'
         )
 
 
