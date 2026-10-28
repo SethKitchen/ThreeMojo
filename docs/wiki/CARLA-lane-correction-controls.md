@@ -206,6 +206,8 @@ It reads every dispatch premise declaration and compares its tokens in one check
 
 It checks every dispatch reference declaration token in one check.
 
+It checks those reference tokens before the grouped proof identity in one check.
+
 It chooses every dispatch premise fallback in one check.
 
 It compares every dispatch premise and chooses its fallback in one check.

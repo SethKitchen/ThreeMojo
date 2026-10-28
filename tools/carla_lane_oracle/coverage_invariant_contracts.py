@@ -513,7 +513,8 @@ def verify(root, *, _operation=None):
                 if not matched:
                     matched = accepted[path]
                 require(matched, _invariant_labels()['successor'] + path)
-            curve.verify(root, **operation_args)
+            curve.verify(
+                root, _then_grouped_identity=True, **operation_args)
             grouped.verify(root, **operation_args)
             if __package__:
                 from . import lane_control_contracts as lane

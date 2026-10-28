@@ -498,6 +498,55 @@ def _declaration_tokens(items):
         raise ValueError(message)
 
 
+def _tokens_then_identity(items):
+    """Check the declaration tokens, then read the grouped proof identity."""
+    if __package__:
+        from . import grouped_table_contracts as grouped
+    else:
+        import grouped_table_contracts as grouped
+    if not items:
+        grouped._ensure_identity()
+        return
+    if grouped._IDENTITY is not None:
+        _declaration_tokens(items)
+        grouped._ensure_identity()
+        return
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps({
+        'items': [
+            {
+                'source': source,
+                'name': name,
+                'owner': list(owner),
+                'token': token,
+                'label': label,
+            }
+            for source, name, owner, token, label in items
+        ],
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='tokens-identity-') as directory:
+        path = Path(directory) / 'declarations.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_gate',
+             '--declaration-identity', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    if grouped._IDENTITY is None:
+        grouped._IDENTITY = json.loads(result.stdout)
+    grouped._ensure_identity()
+
+
 def _gate_tokens(pairs):
     import json
     import os
@@ -612,7 +661,7 @@ def _declaration_fallbacks(items):
     return parsed['flags'], parsed['fallbacks']
 
 
-def verify_premises(root, *, _operation=None):
+def verify_premises(root, *, _operation=None, _then_grouped_identity=False):
     # Deliberately independent of complete-module successor digest checks.
     # Bind operation graphs, local guards, full caller bodies, and declarations.
     if _operation is not None:
@@ -699,14 +748,18 @@ def verify_premises(root, *, _operation=None):
     for item in record['reference_functions']:
         text = _typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation)
         references.append((item, text))
-    _declaration_tokens([
+    token_items = [
         (text, item['name'], [], item['token_sha256'],
          labels['reference'] + item['name'])
-        for item, text in references])
+        for item, text in references]
+    if _then_grouped_identity:
+        _tokens_then_identity(token_items)
+    else:
+        _declaration_tokens(token_items)
     return record
 
 
-def verify(root, *, _operation=None):
+def verify(root, *, _operation=None, _then_grouped_identity=False):
     if _operation is not None:
         _check_operation(root, _operation)
     record = read_record(root)
@@ -721,7 +774,11 @@ def verify(root, *, _operation=None):
         pairs.append((text, item['after_token_sha256'], labels['complete'] + path))
     if pairs and not tokens_done:
         _gate_tokens(pairs)
-    verify_premises(root, **operation_args)
+    verify_premises(
+        root,
+        _then_grouped_identity=_then_grouped_identity,
+        **operation_args,
+    )
     return record
 
 

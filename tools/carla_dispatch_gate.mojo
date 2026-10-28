@@ -10,6 +10,7 @@
     carla_dispatch_gate --bytes PATH --sha HEX --label TEXT
     carla_dispatch_gate --tokens DIR
     carla_dispatch_gate --declaration-tokens PATH
+    carla_dispatch_gate --declaration-identity PATH
     carla_dispatch_gate --edge HEX --expected HEX
     carla_dispatch_gate --graphs DIR
     carla_dispatch_gate --source-graphs PATH
@@ -25,6 +26,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import significant_graph_pairs, token_sha256
+from tools.carla_grouped_gate import grouped_table_identity
 from tools._migration_records import migration_records
 from tools._lane_declarations import declaration_token_checks
 from tools._python_json import MISSING, PY_DICT, PY_LIST, PyJson, py_equal
@@ -155,6 +157,28 @@ def dispatch_declaration_tokens(payload: String) raises:
         Error: A function cannot be read, or a token digest changed.
     """
     declaration_token_checks(payload, "curve support/dispatch contract: ")
+
+
+def declaration_tokens_then_identity(payload: String) raises -> String:
+    """Check the declaration tokens, then read the grouped proof identity.
+
+    Args:
+        payload: JSON with `items`. Each item has `source`, `name`,
+            `owner`, `token`, and `label`. An empty list skips the token
+            checks.
+
+    Returns:
+        The grouped proof identity, with `module`, `token`, and `consumer`.
+
+    Raises:
+        Error: A declaration cannot be read, or a token digest changed.
+            The tokens are checked before the identity is read.
+    """
+    var doc = PyJson.parse(payload)
+    var items = doc.at(doc.root, "items")
+    if doc.length(items) > 0:
+        dispatch_declaration_tokens(doc.subtree(items).dumps())
+    return grouped_table_identity()
 
 
 def dispatch_tokens(directory: String) raises:
@@ -361,6 +385,18 @@ def main() raises:
     if len(arguments) == 2 and arguments[1] == "--protected-bundle":
         try:
             print(dispatch_protected_bundle(), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--declaration-identity":
+        try:
+            print(
+                declaration_tokens_then_identity(
+                    Path(arguments[2]).read_text()
+                ),
+                end="",
+            )
         except error:
             print(String(error), file=stderr)
             exit(1)
