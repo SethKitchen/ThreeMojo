@@ -215,19 +215,63 @@ def _literal_count(text: String) -> Int:
     return value
 
 
+def _is_name_byte(byte: UInt8) -> Bool:
+    """Return True if `byte` can be part of a Mojo name."""
+    return (
+        (byte >= UInt8(ord("a")) and byte <= UInt8(ord("z")))
+        or (byte >= UInt8(ord("A")) and byte <= UInt8(ord("Z")))
+        or (byte >= UInt8(ord("0")) and byte <= UInt8(ord("9")))
+        or byte == UInt8(ord("_"))
+    )
+
+
+def _binds_range(line: String) -> Bool:
+    """Return True if one line may bind the name `range`.
+
+    Only the whole name counts: `ranged`, `node_range` and `self.range`
+    bind other names. A doubtful line counts as a binding.
+    """
+    var text = String(line.strip())
+    var bytes = text.as_bytes()
+    var at = text.find("range")
+    while at >= 0:
+        var end = at + 5
+        var whole = (at == 0 or not _is_name_byte(bytes[at - 1])) and (
+            end >= len(bytes) or not _is_name_byte(bytes[end])
+        )
+        if whole and (at == 0 or bytes[at - 1] != UInt8(ord("."))):
+            var left = String(text[byte=0:at].rstrip())
+            var right = String(text[byte=end:].lstrip())
+            for word in ["def", "fn", "var", "comptime", "ref", "for", "as"]:
+                if left == word or left.endswith(" " + word):
+                    return True
+            # An import list, on one line or as a line of its own.
+            if (left.startswith("from ") and " import " in left) or (
+                left == "" and right.startswith(",")
+            ):
+                return True
+            # A parameter, or an assignment at the start of a statement.
+            if right.startswith(":") and (
+                left == "" or left.endswith("(") or left.endswith(",")
+            ):
+                return True
+            if (
+                left == ""
+                and right.startswith("=")
+                and not right.startswith("==")
+            ):
+                return True
+        at = text.find("range", at + 1)
+    return False
+
+
 def _defines_range(source: String) -> Bool:
     """Return True if `source` may bind its own `range`.
 
     A module that does cannot have its `range(3)` trusted to run.
     """
-    for binding in [
-        String("def range"),
-        String("var range"),
-        String("range ="),
-        String("import range"),
-        String(" as range"),
-    ]:
-        if binding in source:
+    for line in source.splitlines():
+        if _binds_range(String(line)):
             return True
     return False
 

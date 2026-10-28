@@ -68,20 +68,8 @@ def mouth_mesh(
     var targets = List[BufferAttribute]()
     var turns = List[BufferAttribute]()
     for name in shapes:  # pragma: no branch
-        var shape = model.expression(name)
-        if not model.moves_part(shape, part):
-            # The shape leaves this part where it is: a zero target, as
-            # the difference of two equal meshes is, without placing the
-            # whole head again.
-            targets.append(
-                BufferAttribute(List[Float32](length=3 * total, fill=0), 3)
-            )
-            turns.append(
-                BufferAttribute(List[Float32](length=3 * total, fill=0), 3)
-            )
-            continue
         var weights = rest_expression(model)
-        weights[shape] = 1
+        weights[model.expression(name)] = 1
         var worn = model.part(place(h, model, count, weights), part)
         ref moved = worn.attribute_view(String(POSITION))
         ref turned = worn.attribute_view(String(NORMAL))

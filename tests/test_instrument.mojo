@@ -824,16 +824,46 @@ def test_possibly_empty_loop_keeps_its_branch() raises:
         assert_equal(result.branches, [2])
 
 
+def _loop_line(binding: String) -> Int:
+    """Return the line of the `range(3)` loop that follows `binding`."""
+    return binding.count("\n") + 2
+
+
 def test_a_rebound_range_keeps_the_branch() raises:
     for binding in [
         String("def range(n: Int) -> List[Int]:\n    return []\n"),
         String("from m import f as range\n"),
+        String("from m import f, range\n"),
+        String("from m import (\n    range,\n)\n"),
+        String("var range = 1\n"),
+        String("range = 1\n"),
+        String("def h(range: Int):\n    pass\n"),
+        String("def h(a: Int, range: Int):\n    pass\n"),
+        String("for range in names:\n    pass\n"),
     ]:
         var result = instrument(
             binding + "def f():\n    for i in range(3):\n        g(i)\n",
             String("m"),
         )
-        assert_equal(len(result.branches), 1)
+        assert_true(_loop_line(binding) in result.branches)
+
+
+def test_a_name_that_holds_range_does_not_rebind_it() raises:
+    # These bind other names, so `range(3)` is still the builtin.
+    for binding in [
+        String("var ranged = 1\n"),
+        String("var node_range = 1\n"),
+        String("node_range = 1\n"),
+        String("var range_2g = 1\n"),
+        String("self.range = 1\n"),
+        String("var n = len(range(4))\n"),
+        String("if range == 1:\n    pass\n"),
+    ]:
+        var result = instrument(
+            binding + "def f():\n    for i in range(3):\n        g(i)\n",
+            String("m"),
+        )
+        assert_true(_loop_line(binding) not in result.branches)
 
 
 def test_pragma_excludes_a_decision_from_branch_measurement() raises:
