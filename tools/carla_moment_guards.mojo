@@ -8,6 +8,7 @@
     carla_moment_guards --count PATH
     carla_moment_guards --names PATH
     carla_moment_guards --output PATH
+    carla_moment_guards --indented-report PATH
 
 `PATH` is the JSON payload for that guard. The program prints nothing
 when the guard matches.
@@ -17,6 +18,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._moment_guards import (
+    indented_report_guard,
     require_member,
     require_name_set,
     require_same_count,
@@ -29,7 +31,7 @@ def _usage():
     print(
         (
             "usage: carla_moment_guards --count PATH | --names PATH | --member"
-            " PATH | --output PATH"
+            " PATH | --output PATH | --indented-report PATH"
         ),
         file=stderr,
     )
@@ -51,6 +53,7 @@ def main() raises:
         and mode != "--names"
         and mode != "--member"
         and mode != "--output"
+        and mode != "--indented-report"
     ):
         _usage()
     try:
@@ -61,6 +64,8 @@ def main() raises:
             require_name_set(text)
         elif mode == "--member":
             require_member(text)
+        elif mode == "--indented-report":
+            print(indented_report_guard(text), end="")
         else:
             require_separate_output(text)
     except error:

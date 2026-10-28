@@ -9,6 +9,7 @@ The caller resolves paths and supplies the counts. This check compares
 those values and does not read the repository.
 """
 
+from tools._carla_assets import dumps_indent
 from tools._python_json import PyJson, py_equal
 
 
@@ -153,3 +154,34 @@ def require_separate_output(payload: String) raises:
                 )
             cursor += 1
         index += 1
+
+
+def indented_report_guard(payload: String) raises -> String:
+    """Indent the moment report, then check the output paths.
+
+    Args:
+        payload: JSON with `report`, `destinations`, and `protected`.
+            `report` is the report object. The path lists are resolved
+            strings.
+
+    Returns:
+        The indented report, including the final newline.
+
+    Raises:
+        Error: The report is missing, or one destination is a protected
+            path. The report is indented before the paths are checked.
+    """
+    var doc = PyJson.parse(payload)
+    var report = doc.at(doc.root, "report")
+    var indented = dumps_indent(doc, report, 2) + "\n"
+    var guard = PyJson()
+    var root = guard.new_dict()
+    guard.set(
+        root, "destinations", guard.adopt(doc, doc.at(doc.root, "destinations"))
+    )
+    guard.set(
+        root, "protected", guard.adopt(doc, doc.at(doc.root, "protected"))
+    )
+    guard.root = root
+    require_separate_output(guard.dumps())
+    return indented

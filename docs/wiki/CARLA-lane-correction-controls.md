@@ -408,6 +408,8 @@ It checks the stored table before that report meta in one check.
 
 It writes the moment report and the coefficient file with two-space indentation.
 
+It indents that moment report before the output-path guard in one check.
+
 It checks the stored array names, word counts, and output paths.
 
 It drops comments and blank lines from one source block.

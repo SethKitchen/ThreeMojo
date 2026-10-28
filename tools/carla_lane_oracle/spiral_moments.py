@@ -475,6 +475,34 @@ def _moment_guard(mode, payload):
         raise CheckError(str(error)) from error
 
 
+def _indented_report_guard(report, destinations, protected):
+    """Indent the moment report, then check the output paths."""
+    import os
+    import subprocess
+    import tempfile
+    payload = json.dumps({
+        'report': report,
+        'destinations': destinations,
+        'protected': protected,
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='indented-report-') as directory:
+        path = Path(directory) / 'report.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_guards',
+             '--indented-report', str(path)],
+            capture_output=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and b'Crashpad' not in line]
+        message = (lines[-1] if lines else result.stdout).decode(
+            'utf-8', 'replace').strip()
+        raise CheckError(message)
+    return result.stdout
+
+
 _NAME_SPEC = None
 
 
@@ -1297,10 +1325,6 @@ def main(argv=None):
                          root / source_contracts.PINS, root / sum2_guard_contracts.PINS] + [root / path for path in _dependencies()['paths']] + [root / record['path']
                          for group in report_plan['pin_groups']
                          for record in pins[group].values()]
-            if __package__:
-                from . import coverage_invariant_contracts as invariant
-            else:
-                import coverage_invariant_contracts as invariant
             if args.generate:
                 report_bytes, source, payload, coefficients = (
                     _report_then_products(report, rows))
@@ -1310,14 +1334,20 @@ def main(argv=None):
                     report_plan['words_name']: payload,
                     report_plan['coefficients_name']: coefficients,
                 }
+                _moment_guard('--output', {
+                    'destinations': [
+                        str((output / name).resolve()) for name in products],
+                    'protected': [str(path.resolve()) for path in protected],
+                })
             else:
+                name = report_plan['report_name']
                 products = {
-                    report_plan['report_name']: invariant._indent_json(report),
+                    name: _indented_report_guard(
+                        report,
+                        [str((output / name).resolve())],
+                        [str(path.resolve()) for path in protected],
+                    ),
                 }
-            _moment_guard('--output', {
-                'destinations': [str((output / name).resolve()) for name in products],
-                'protected': [str(path.resolve()) for path in protected],
-            })
             output.mkdir(parents=True, exist_ok=True)
             for name, data in products.items():
                 (output / name).write_bytes(data)

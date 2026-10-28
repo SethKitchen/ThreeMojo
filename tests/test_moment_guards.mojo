@@ -5,9 +5,10 @@
 
 """Stored-moment counts, names, and output paths stay checked."""
 
-from std.testing import TestSuite, assert_raises
+from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._moment_guards import (
+    indented_report_guard,
     require_member,
     require_name_set,
     require_same_count,
@@ -91,6 +92,31 @@ def test_an_output_path_inside_the_repository_is_refused() raises:
             '{"destinations":["/out/report.json","/repo/table.mojo"],'
             + '"protected":["/repo/pins.json","/repo/table.mojo"]}'
         )
+
+
+def test_the_report_is_indented_before_the_output_guard() raises:
+    """A missing report fails before an output path is checked."""
+    with assert_raises(contains="KeyError: 'report'"):
+        _ = indented_report_guard(
+            '{"destinations":["/out/report.json"],"protected":["/out/report.json"]}'
+        )
+    with assert_raises(
+        contains=(
+            "generation cannot overwrite repository source; use a separate"
+            " output directory"
+        )
+    ):
+        _ = indented_report_guard(
+            '{"report":{"source_sha256":"aa"},"destinations":["/src"],'
+            + '"protected":["/src"]}'
+        )
+    assert_equal(
+        indented_report_guard(
+            '{"report":{"source_sha256":"aa"},"destinations":["/out"],'
+            + '"protected":["/src"]}'
+        ),
+        '{\n  "source_sha256": "aa"\n}\n',
+    )
 
 
 def main() raises:
