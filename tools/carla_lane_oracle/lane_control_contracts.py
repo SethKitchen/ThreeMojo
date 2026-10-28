@@ -122,6 +122,36 @@ def _declarations(items):
     return json.loads(result.stdout)
 
 
+def _prepare(replacements, requests):
+    """Rename the frozen texts and read every declaration in one call."""
+    import os
+    import subprocess
+    import tempfile
+    payload = json.dumps({
+        'replacements': [
+            {'source': source, 'old': old, 'new': new}
+            for source, old, new in replacements
+        ],
+        'declarations': requests,
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='lane-prepare-') as directory:
+        path = Path(directory) / 'prepare.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_control_gate',
+             '--prepare', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise RuntimeError(message)
+    prepared = json.loads(result.stdout)
+    return prepared['replaced'], prepared['declared']
+
+
 def _gate(payload):
     import os
     import subprocess
@@ -253,7 +283,6 @@ def verify(root, *, _operation=None):
             item['before'],
             labels['definition'] + name + labels['call'],
             labels['definition'] + reference + labels['call']))
-    frozen_expected = _replace_firsts(replacements)
     premise_items = []
     for item in record['premises']:
         premise_items.append(item)
@@ -262,7 +291,7 @@ def verify(root, *, _operation=None):
             'name': item['name'],
             'owner': [],
         })
-    declared = _declarations(requests)
+    frozen_expected, declared = _prepare(replacements, requests)
     cursor = 0
     for index, item in enumerate(record['declarations']):
         pairs.append((declared[cursor], item['before'], labels['before']))

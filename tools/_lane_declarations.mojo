@@ -9,7 +9,7 @@ The caller supplies each source and function name. This check returns
 the declaration texts in that order.
 """
 
-from tests._python_tokens import declaration_text
+from tests._python_tokens import declaration_text, replace_firsts
 from tools._python_json import PyJson
 
 
@@ -54,3 +54,27 @@ def lane_declarations(payload: String) raises -> String:
         index += 1
     out.root = rows
     return out.dumps()
+
+
+def lane_control_prepare(payload: String) raises -> String:
+    """Rename the frozen texts, then read every requested declaration.
+
+    Args:
+        payload: JSON with `replacements` and `declarations`. Each
+            replacement has `source`, `old`, and `new`. Each declaration
+            has `source`, `name`, and `owner`.
+
+    Returns:
+        JSON with `replaced` and `declared`, in the requested order.
+
+    Raises:
+        Error: A replacement is missing a field, or a function cannot be read.
+    """
+    var doc = PyJson.parse(payload)
+    var replaced = replace_firsts(
+        doc.subtree(doc.at(doc.root, "replacements")).dumps()
+    )
+    var declared = lane_declarations(
+        doc.subtree(doc.at(doc.root, "declarations")).dumps()
+    )
+    return '{"replaced":' + replaced + ',"declared":' + declared + "}"

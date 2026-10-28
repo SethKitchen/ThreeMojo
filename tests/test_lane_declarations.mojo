@@ -7,7 +7,8 @@
 
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
-from tools._lane_declarations import lane_declarations
+from tests._python_tokens import replace_firsts
+from tools._lane_declarations import lane_control_prepare, lane_declarations
 from tools._python_json import PyJson
 
 
@@ -63,10 +64,54 @@ def test_a_missing_lane_declaration_is_refused() raises:
 
 def test_a_wrong_lane_owner_is_refused() raises:
     """A top-level function is not inside another struct."""
-    with assert_raises(
-        contains="guard caller owner/scope changed: f"
-    ):
+    with assert_raises(contains="guard caller owner/scope changed: f"):
         _ = lane_declarations(_payload("f", "Nope"))
+
+
+def test_prepare_renames_before_it_reads_declarations() raises:
+    """The renamed texts and the declarations come back in one result."""
+    var payload = (
+        '{"replacements":[{"source":"def f():\\n    return 1\\n",'
+        + '"old":"f","new":"reference_f"}],'
+        + '"declarations":[{"source":"def f():\\n    return 1\\n",'
+        + '"name":"f","owner":[]}]}'
+    )
+    var prepared = PyJson.parse(lane_control_prepare(payload))
+    var replaced = PyJson.parse(
+        replace_firsts(
+            '[{"source":"def f():\\n    return'
+            ' 1\\n","old":"f","new":"reference_f"}]'
+        )
+    )
+    var declared = PyJson.parse(
+        lane_declarations(
+            '[{"source":"def f():\\n    return 1\\n","name":"f","owner":[]}]'
+        )
+    )
+    var got_replaced = prepared.at(prepared.root, "replaced")
+    var got_declared = prepared.at(prepared.root, "declared")
+    assert_equal(
+        prepared.text(prepared.item(got_replaced, 0)),
+        replaced.text(replaced.item(replaced.root, 0)),
+    )
+    assert_equal(
+        prepared.text(prepared.item(got_declared, 0)),
+        declared.text(declared.item(declared.root, 0)),
+    )
+
+
+def test_prepare_reports_a_missing_declaration() raises:
+    """A missing function fails after the rename fields are accepted."""
+    var payload = (
+        '{"replacements":[{"source":"def f():\\n    return 1\\n",'
+        + '"old":"f","new":"reference_f"}],'
+        + '"declarations":[{"source":"def f():\\n    return 1\\n",'
+        + '"name":"absent","owner":[]}]}'
+    )
+    with assert_raises(
+        contains="missing or ambiguous actual guard declaration: absent"
+    ):
+        _ = lane_control_prepare(payload)
 
 
 def main() raises:

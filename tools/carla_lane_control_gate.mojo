@@ -7,6 +7,7 @@
 
     carla_lane_control_gate --migration PATH
     carla_lane_control_gate --tokens DIR
+    carla_lane_control_gate --prepare PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -16,6 +17,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
+from tools._lane_declarations import lane_control_prepare
 from tools._python_json import MISSING, PY_LIST, PY_STR, PyJson
 from tools._sha256 import sha256_hex
 
@@ -114,7 +116,10 @@ def lane_control_tokens(directory: String) raises:
 def _usage():
     """Print the command usage and stop."""
     print(
-        "usage: carla_lane_control_gate --migration PATH | --tokens DIR",
+        (
+            "usage: carla_lane_control_gate --migration PATH | --tokens DIR |"
+            " --prepare PATH"
+        ),
         file=stderr,
     )
     exit(2)
@@ -128,24 +133,37 @@ def main() raises:
     """
     var migration = String("")
     var tokens = String("")
+    var prepare = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
-        if word == "--migration" or word == "--tokens":
+        if word == "--migration" or word == "--tokens" or word == "--prepare":
             if index + 1 >= len(arguments):
                 _usage()
             var value = arguments[index + 1]
             if word == "--migration":
                 migration = value
-            else:
+            elif word == "--tokens":
                 tokens = value
+            else:
+                prepare = value
             index += 2
             continue
         _usage()
-    if (migration.byte_length() == 0) == (tokens.byte_length() == 0):
+    var modes = 0
+    if migration.byte_length() > 0:
+        modes += 1
+    if tokens.byte_length() > 0:
+        modes += 1
+    if prepare.byte_length() > 0:
+        modes += 1
+    if modes != 1:
         _usage()
     try:
+        if prepare.byte_length() > 0:
+            print(lane_control_prepare(Path(prepare).read_text()), end="")
+            return
         if tokens.byte_length() > 0:
             lane_control_tokens(tokens)
             return

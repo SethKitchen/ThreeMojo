@@ -398,6 +398,8 @@ It renames the first frozen lane declaration.
 
 It renames every frozen lane declaration in one check.
 
+It renames those declarations and reads every declaration in one check.
+
 It keeps the lane-control labels and the frozen reference prefix.
 
 It keeps the lane-control record digests.
