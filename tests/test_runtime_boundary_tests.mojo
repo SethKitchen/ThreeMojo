@@ -8,7 +8,11 @@
 from std.testing import TestSuite, assert_equal
 
 from tools._python_json import PyJson
-from tools.carla_runtime_boundary_gate import runtime_boundary_tests
+from tools.carla_runtime_boundary_gate import (
+    runtime_boundary_modules,
+    runtime_boundary_tests,
+    runtime_protected_bundle,
+)
 
 
 def test_twelve_tests_keep_nine_compile_fail_fixtures() raises:
@@ -35,6 +39,26 @@ def test_twelve_tests_keep_nine_compile_fail_fixtures() raises:
         "tests/compile_fail/carla_light_search_distance_rejects_raw_float64.mojo",
     )
     assert_equal(doc.text(doc.item(fixtures, 8)), doc.text(doc.item(tests, 11)))
+
+
+def test_the_migration_record_is_read_before_the_modules() raises:
+    """The runtime migration record stays ahead of the modules and tests."""
+    var doc = PyJson.parse(runtime_protected_bundle())
+    assert_equal(doc.key(doc.root, 0), "migration")
+    assert_equal(doc.key(doc.root, 1), "modules")
+    assert_equal(doc.key(doc.root, 2), "tests")
+    assert_equal(
+        doc.subtree(doc.at(doc.root, "modules")).dumps(),
+        runtime_boundary_modules(),
+    )
+    assert_equal(
+        doc.subtree(doc.at(doc.root, "tests")).dumps(),
+        runtime_boundary_tests(),
+    )
+    assert_equal(
+        doc.text(doc.at(doc.at(doc.root, "migration"), "path")),
+        "tools/carla_lane_oracle/runtime-boundary-successor.json",
+    )
 
 
 def main() raises:

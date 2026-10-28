@@ -68,6 +68,8 @@ It reads those paths before the migration record in one check.
 
 It reads the companion record paths after that migration record in one check.
 
+It lists the protected inputs from that same check.
+
 It keeps the accepted successor record path.
 
 It keeps the speed-parser contract prefix.
@@ -121,6 +123,8 @@ It keeps the rounded-line contract prefix.
 It reads the companion record paths after that frozen record check in one check.
 
 It keeps the frozen-arc source and the polynomial and road paths.
+
+It reads those paths before the frozen migration record in one check.
 
 It checks the guard pin digest before the frozen ARC successor token in one check.
 
@@ -570,6 +574,8 @@ It reads the consumer messages before those digests in one check.
 
 It keeps the render-actor module and its three bound tests.
 
+It reads the render migration record before those paths in one check.
+
 It keeps the render-actor consumer and test messages.
 
 It keeps the render-actor contract prefix.
@@ -599,6 +605,8 @@ It checks every runtime-boundary digest and writes each path in one check.
 It reads the consumer messages before those digests in one check.
 
 It keeps the four runtime-boundary module paths.
+
+It reads the runtime migration record before those modules and tests in one check.
 
 It keeps the twelve runtime-boundary test paths.
 

@@ -61,10 +61,14 @@ def _ensure_migration():
     MIGRATION_SHA256 = record['sha']
 
 _BOUND_TESTS = None
+_MODULES = None
 
 
 def _modules():
     """Return the four runtime-boundary module paths in reviewed order."""
+    global _MODULES
+    if _MODULES is not None:
+        return _MODULES
     import os
     import subprocess
     from pathlib import Path
@@ -78,7 +82,8 @@ def _modules():
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return tuple(json.loads(result.stdout))
+    _MODULES = tuple(json.loads(result.stdout))
+    return _MODULES
 
 
 def _bound_tests():
@@ -103,6 +108,36 @@ def _bound_tests():
     return _BOUND_TESTS
 
 
+def _protected_bundle():
+    """Read the runtime migration record, then the modules and tests."""
+    global MIGRATION, MIGRATION_SHA256, _MODULES, _BOUND_TESTS
+    if ('MIGRATION' in globals() and MIGRATION is not None
+            and _MODULES is not None and _BOUND_TESTS is not None):
+        return
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+         'carla_runtime_boundary_gate', '--protected-bundle'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    if 'MIGRATION' not in globals() or MIGRATION is None:
+        MIGRATION = parsed['migration']['path']
+        MIGRATION_SHA256 = parsed['migration']['sha']
+    if _MODULES is None:
+        _MODULES = tuple(parsed['modules'])
+    if _BOUND_TESTS is None:
+        _BOUND_TESTS = parsed['tests']
+
+
 def __getattr__(name):
     if name in ('MIGRATION', 'MIGRATION_SHA256'):
         _ensure_migration()
@@ -114,8 +149,8 @@ def __getattr__(name):
     if name == 'FIXTURES':
         return tuple(_bound_tests()['fixtures'])
     if name == 'PROTECTED_INPUTS':
-        _ensure_migration()
-        return (MIGRATION, *_modules(), *_bound_tests()['tests'])
+        _protected_bundle()
+        return (MIGRATION, *_MODULES, *_BOUND_TESTS['tests'])
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 

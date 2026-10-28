@@ -5,6 +5,7 @@
 
 """Check the render-actor reuse record and bound files.
 
+    carla_render_actor_gate --protected-bundle
     carla_render_actor_gate --migration PATH
     carla_render_actor_gate --bytes PATH --sha HEX [--token HEX] --label TEXT
     carla_render_actor_gate --bytes-all DIR
@@ -21,6 +22,7 @@ from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
 from tools._bound_consumer_messages import bound_consumer_messages
+from tools._migration_records import migration_records
 from tools._merged_edge import merged_edges
 from tools._python_json import (
     MISSING,
@@ -314,6 +316,23 @@ def render_actor_paths_after_record(migration: Span[UInt8, _]) raises -> String:
     return render_actor_paths()
 
 
+def render_protected_bundle() raises -> String:
+    """Read the render migration record, then the module paths.
+
+    Returns:
+        JSON with `migration` and `paths`. The migration record is read
+        before the paths.
+
+    Raises:
+        Error: The paths cannot be written. The migration record is read
+            before the paths.
+    """
+    var records = PyJson.parse(migration_records())
+    var migration = records.subtree(records.at(records.root, "render")).dumps()
+    var paths = render_actor_paths()
+    return '{"migration":' + migration + ',"paths":' + paths + "}"
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -334,6 +353,13 @@ def main() raises:
         Error: The command is invalid.
     """
     var arguments = argv()
+    if len(arguments) == 2 and arguments[1] == "--protected-bundle":
+        try:
+            print(render_protected_bundle(), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 3 and arguments[1] == "--paths-after-record":
         try:
             print(

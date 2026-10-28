@@ -5,6 +5,7 @@
 
 """Check the runtime-boundary record and bound files.
 
+    carla_runtime_boundary_gate --protected-bundle
     carla_runtime_boundary_gate --migration PATH
     carla_runtime_boundary_gate --bytes PATH --sha HEX [--token HEX] --label TEXT
     carla_runtime_boundary_gate --bytes-all DIR
@@ -25,6 +26,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
+from tools._migration_records import migration_records
 from tools._runtime_edge import emit_json, extend_runtime_edges
 from tools._bound_consumer_messages import bound_consumer_messages
 from tools._merged_edge import merged_edges
@@ -538,6 +540,32 @@ def runtime_boundary_tests() raises -> String:
     return doc.dumps()
 
 
+def runtime_protected_bundle() raises -> String:
+    """Read the runtime migration record, then the modules and tests.
+
+    Returns:
+        JSON with `migration`, `modules`, and `tests`. The migration
+        record is read before the modules. The tests are read last.
+
+    Raises:
+        Error: A list cannot be written. The migration record is read
+            before the modules and the tests.
+    """
+    var records = PyJson.parse(migration_records())
+    var migration = records.subtree(records.at(records.root, "runtime")).dumps()
+    var modules = runtime_boundary_modules()
+    var tests = runtime_boundary_tests()
+    return (
+        '{"migration":'
+        + migration
+        + ',"modules":'
+        + modules
+        + ',"tests":'
+        + tests
+        + "}"
+    )
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -562,6 +590,13 @@ def main() raises:
         Error: The command is invalid.
     """
     var arguments = argv()
+    if len(arguments) == 2 and arguments[1] == "--protected-bundle":
+        try:
+            print(runtime_protected_bundle(), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 3 and arguments[1] == "--after-steps":
         try:
             print(

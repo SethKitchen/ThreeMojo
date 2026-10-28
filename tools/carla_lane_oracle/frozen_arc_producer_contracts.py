@@ -85,17 +85,46 @@ def _ensure_paths():
     SOURCE_PATH = _paths()['source']
 
 
+def _protected_bundle():
+    """Read the frozen-arc paths, then the migration record."""
+    global _PATHS, SOURCE_PATH, MIGRATION, MIGRATION_SHA256
+    if (_PATHS is not None and 'MIGRATION' in globals()
+            and MIGRATION is not None):
+        SOURCE_PATH = _PATHS['source']
+        return
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
+         '--protected-bundle'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    if _PATHS is None:
+        _PATHS = parsed['paths']
+    SOURCE_PATH = _PATHS['source']
+    if 'MIGRATION' not in globals() or MIGRATION is None:
+        MIGRATION = parsed['migration']['path']
+        MIGRATION_SHA256 = parsed['migration']['sha']
+
+
 def __getattr__(name):
     if name in ('MIGRATION', 'MIGRATION_SHA256'):
         _ensure_migration()
         return MIGRATION if name == 'MIGRATION' else MIGRATION_SHA256
     if name in ('SOURCE_PATH', 'PROTECTED_INPUTS'):
-        _ensure_paths()
-        _ensure_migration()
+        _protected_bundle()
     if name == 'SOURCE_PATH':
         return SOURCE_PATH
     if name == 'PROTECTED_INPUTS':
-        return (MIGRATION, SOURCE_PATH, *_paths()['protected'])
+        return (MIGRATION, SOURCE_PATH, *_PATHS['protected'])
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 

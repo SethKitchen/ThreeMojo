@@ -91,6 +91,34 @@ def _actor_tests():
     return tuple(_paths()['tests'])
 
 
+def _protected_bundle():
+    """Read the render migration record, then the module paths."""
+    global MIGRATION, MIGRATION_SHA256, _PATHS
+    if ('MIGRATION' in globals() and MIGRATION is not None
+            and _PATHS is not None):
+        return
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_render_actor_gate',
+         '--protected-bundle'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    if 'MIGRATION' not in globals() or MIGRATION is None:
+        MIGRATION = parsed['migration']['path']
+        MIGRATION_SHA256 = parsed['migration']['sha']
+    if _PATHS is None:
+        _PATHS = parsed['paths']
+
+
 def __getattr__(name):
     if name in ('MIGRATION', 'MIGRATION_SHA256'):
         _ensure_migration()
@@ -100,7 +128,7 @@ def __getattr__(name):
     if name == 'TESTS':
         return _actor_tests()
     if name == 'PROTECTED_INPUTS':
-        _ensure_migration()
+        _protected_bundle()
         return (MIGRATION, *_actor_modules(), *_actor_tests())
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 

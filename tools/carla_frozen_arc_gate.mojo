@@ -5,6 +5,7 @@
 
 """Check the frozen ARC producer record.
 
+    carla_frozen_arc_gate --protected-bundle
     carla_frozen_arc_gate --migration PATH [--previous PATH]
     carla_frozen_arc_gate --bytes PATH --sha HEX --kind after|before|guard
     carla_frozen_arc_gate --digest-token PATH
@@ -36,6 +37,7 @@ from tests._python_tokens import (
 )
 from tools._carla_assets import dumps_indent
 from tools._frozen_pin_labels import frozen_pin_labels
+from tools._migration_records import migration_records
 from tools._record_paths import record_paths
 from tools._python_json import (
     MISSING,
@@ -551,6 +553,23 @@ def frozen_arc_paths() raises -> String:
     return doc.dumps()
 
 
+def frozen_protected_bundle() raises -> String:
+    """Read the frozen-arc paths, then the migration record.
+
+    Returns:
+        JSON with `paths` and `migration`. The paths are read before
+        the migration record.
+
+    Raises:
+        Error: The paths cannot be written. The paths are read before
+            the migration record.
+    """
+    var paths = frozen_arc_paths()
+    var records = PyJson.parse(migration_records())
+    var migration = records.subtree(records.at(records.root, "frozen")).dumps()
+    return '{"paths":' + paths + ',"migration":' + migration + "}"
+
+
 def frozen_record_paths(migration: Span[UInt8, _]) raises -> String:
     """Require the frozen record, then return the companion paths.
 
@@ -608,6 +627,13 @@ def main() raises:
     var predecessor = String("")
     var review = String("")
     var arguments = argv()
+    if len(arguments) == 2 and arguments[1] == "--protected-bundle":
+        try:
+            print(frozen_protected_bundle(), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 3 and arguments[1] == "--digest-token":
         try:
             frozen_digest_and_token(Path(arguments[2]).read_text())

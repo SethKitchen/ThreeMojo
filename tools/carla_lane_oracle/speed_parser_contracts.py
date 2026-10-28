@@ -85,8 +85,7 @@ def __getattr__(name):
         _ensure_migration()
         return MIGRATION if name == 'MIGRATION' else MIGRATION_SHA256
     if name in ('MODULE', 'TESTS', 'PROTECTED_INPUTS'):
-        _ensure_paths()
-        _ensure_migration()
+        _ensure_inputs()
     if name == 'MODULE':
         return MODULE
     if name == 'TESTS':
