@@ -10,6 +10,7 @@ from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tools._python_json import PyJson
 from tools._spiral_moment_derive import (
+    coefficient_integers_from_rows,
     coefficient_rows_from_decimals,
     coefficient_rows_json,
     coefficient_words_json,
@@ -519,6 +520,23 @@ def test_spelled_rows_still_check_the_table_source() raises:
     rows = rows.replace("0x0000000000000000", "nope")
     with assert_raises(contains="malformed moment source word"):
         _ = moment_source_from_rows(rows)
+
+
+def test_bad_rows_fail_before_the_coefficient_integers() raises:
+    """A short row list fails before the words are read as integers."""
+    with assert_raises(
+        contains="spiral moment derive: wrong derived table shape"
+    ):
+        _ = coefficient_integers_from_rows("[]")
+
+
+def test_spelled_rows_still_check_the_coefficient_integers() raises:
+    """Sixty-four rows still refuse a word that is not hexadecimal."""
+    var table = PyJson.parse(_table_payload(64, "unused"))
+    var rows = table.subtree(table.at(table.root, "rows")).dumps()
+    rows = rows.replace("0x0000000000000000", "nope")
+    with assert_raises(contains="malformed coefficient word"):
+        _ = coefficient_integers_from_rows(rows)
 
 
 def main() raises:

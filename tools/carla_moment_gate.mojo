@@ -12,6 +12,7 @@
     carla_moment_gate --verified-table PATH
     carla_moment_gate --payload-rows PATH
     carla_moment_gate --source-rows PATH
+    carla_moment_gate --integer-rows PATH
     carla_moment_gate --node-sums PATH
     carla_moment_gate --fractions PATH
 
@@ -26,6 +27,7 @@ from std.sys import argv, exit, stderr
 from tests._python_tokens import token_sha256
 from tools._fraction import Fraction
 from tools._spiral_moment_derive import (
+    coefficient_integers_from_rows,
     coefficient_rows_from_decimals,
     coefficient_rows_payload,
     coefficient_words_json,
@@ -175,7 +177,7 @@ def _usage():
             "usage: carla_moment_gate --module PATH --interval PATH"
             " --geometry PATH --trig PATH | --rows PATH | --decimal-rows PATH |"
             " --coefficient-words PATH | --verified-table PATH | --payload-rows"
-            " PATH | --source-rows PATH | --node-sums"
+            " PATH | --source-rows PATH | --integer-rows PATH | --node-sums"
             " PATH | --fractions PATH"
         ),
         file=stderr,
@@ -199,6 +201,7 @@ def main() raises:
     var verified_table = String("")
     var payload_rows = String("")
     var source_rows = String("")
+    var integer_rows = String("")
     var node_sums = String("")
     var fractions = String("")
     var arguments = argv()
@@ -216,6 +219,7 @@ def main() raises:
             or word == "--verified-table"
             or word == "--payload-rows"
             or word == "--source-rows"
+            or word == "--integer-rows"
             or word == "--node-sums"
             or word == "--fractions"
         ):
@@ -240,6 +244,8 @@ def main() raises:
                 payload_rows = value
             elif word == "--source-rows":
                 source_rows = value
+            elif word == "--integer-rows":
+                integer_rows = value
             elif word == "--node-sums":
                 node_sums = value
             elif word == "--fractions":
@@ -261,6 +267,8 @@ def main() raises:
     if payload_rows.byte_length() > 0:
         single += 1
     if source_rows.byte_length() > 0:
+        single += 1
+    if integer_rows.byte_length() > 0:
         single += 1
     if node_sums.byte_length() > 0:
         single += 1
@@ -304,6 +312,13 @@ def main() raises:
             elif source_rows.byte_length() > 0:
                 print(
                     moment_source_from_rows(Path(source_rows).read_text()),
+                    end="",
+                )
+            elif integer_rows.byte_length() > 0:
+                print(
+                    coefficient_integers_from_rows(
+                        Path(integer_rows).read_text()
+                    ),
                     end="",
                 )
             elif decimal_rows.byte_length() > 0:

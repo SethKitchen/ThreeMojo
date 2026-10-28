@@ -991,6 +991,23 @@ def moment_source_from_rows(rows: String) raises -> String:
     return moment_source(coefficient_words_json(rows))
 
 
+def coefficient_integers_from_rows(rows: String) raises -> String:
+    """Derive the coefficient words, then read them as integers.
+
+    Args:
+        rows: The JSON rows from the moment derivation.
+
+    Returns:
+        A JSON list of unsigned decimal words. Cosine words precede sine
+        words in each row.
+
+    Raises:
+        Error: The rows changed, or a coefficient word is malformed. The
+            rows are checked before the words are read.
+    """
+    return hex_integers_json(coefficient_words_json(rows))
+
+
 def coefficient_rows_payload(payload: String) raises -> String:
     """Return the derived rows for one JSON word document.
 
