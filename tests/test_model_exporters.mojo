@@ -532,6 +532,11 @@ def test_a_color_is_rounded_down_as_three_js_does() raises:
     assert_equal(color_byte(-1), 0)
     assert_equal(color_byte(2), color_byte(1))
     assert_equal(color_byte(1), 254)
+    # three.js's linear values for sRGB 16, 128 and 200, as its
+    # `ColorManagement` holds them. Its `LinearToSRGB` gives the bytes back.
+    assert_equal(color_byte(Float32(0.005181516520678997)), 16)
+    assert_equal(color_byte(Float32(0.2158605009317398)), 128)
+    assert_equal(color_byte(Float32(0.577580451965332)), 200)
     # A byte decoded as `read_ply` decodes it writes back as itself or one
     # below, as it does in three.js.
     for byte in range(256):

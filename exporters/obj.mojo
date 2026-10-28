@@ -53,7 +53,7 @@ from exporters.common import (
     format_js_float32,
     world_meshes,
 )
-from loaders.js_number import js_number_text, js_pow
+from loaders.js_number import js_linear_to_srgb, js_number_text
 from loaders.js_text import split_fields
 from objects.line import SEGMENTS, STRIP
 from std.pathlib import Path
@@ -114,22 +114,6 @@ def _write_face(
     out += "\n"
 
 
-def srgb_channel(value: Float32) -> Float64:
-    """Return a linear channel encoded to sRGB, as three.js's
-    `LinearToSRGB` works it out in doubles.
-
-    Args:
-        value: The linear channel.
-
-    Returns:
-        The sRGB channel. It is not clamped, as three.js's is not.
-    """
-    var wide = Float64(value)
-    if wide < 0.0031308:
-        return wide * 12.92
-    return 1.055 * js_pow(wide, 0.41666) - 0.055
-
-
 def _write_vertex_list(
     mut out: String, keyword: String, first: Int, count: Int
 ):
@@ -162,7 +146,9 @@ def _write_points(mut out: String, mesh: WorldMesh, vertex_base: Int) raises:
         if mesh.color_size > 0:
             for lane in range(3):  # pragma: no branch
                 out += " " + js_number_text(
-                    srgb_channel(mesh.colors[vertex * mesh.color_size + lane])
+                    js_linear_to_srgb(
+                        Float64(mesh.colors[vertex * mesh.color_size + lane])
+                    )
                 )
         out += "\n"
     _write_vertex_list(out, "p", vertex_base, mesh.vertex_count())

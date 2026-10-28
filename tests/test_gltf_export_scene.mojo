@@ -1078,6 +1078,30 @@ def test_a_cubic_spline_merges_only_with_cubic_splines_at_its_times() raises:
     small.refuses("cubic spline merges", animations=clip(third^))
 
 
+def test_an_animated_file_writes_a_fixed_matrix_as_trs() raises:
+    # An animated node cannot carry a `matrix`, so a node drawn with its
+    # own matrix is split into translation, rotation and scale.
+    var small = Small()
+    var held = named("held")
+    held.matrix_auto_update = False
+    held.matrix = translation(4, 5, 6)
+    var node = small.scene.add(held^)
+    small.mesh(node, small.shape)
+    var still = small.json()
+    var plain = at(still, still.root(), ["nodes", "2"])
+    assert_equal(still.number(at(still, plain, ["matrix", "12"])), 4)
+    var tracks = List[KeyframeTrack]()
+    tracks.append(
+        KeyframeTrack(node, MOVE, seconds([0, 1]), [4, 5, 6, 4, 6, 6])
+    )
+    var moving = small.json(animations=clip(tracks^))
+    var animated = at(moving, moving.root(), ["nodes", "2"])
+    assert_equal(at(moving, animated, ["matrix"]), NO_NODE)
+    assert_equal(moving.number(at(moving, animated, ["translation", "1"])), 5)
+    assert_equal(at(moving, animated, ["rotation"]), NO_NODE)
+    assert_equal(at(moving, animated, ["scale"]), NO_NODE)
+
+
 def test_node_tracks_are_written_and_the_rest_left_out() raises:
     var small = Small()
     small.mesh(small.first, small.morphed)

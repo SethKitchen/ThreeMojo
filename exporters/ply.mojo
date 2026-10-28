@@ -55,7 +55,7 @@ from loaders.ply import (
     PLY_BINARY_LITTLE_ENDIAN,
     PlyFormat,
 )
-from render.srgb import linear_to_srgb
+from loaders.js_number import js_linear_to_srgb
 from std.pathlib import Path
 from core.ordinal import require_valid
 
@@ -67,10 +67,12 @@ def color_byte(value: Float32) -> Int:
         value: The channel, in linear light.
 
     Returns:
-        The byte, from zero to 255: clamped, encoded and rounded down, as
-        three.js's `Math.floor(color * 255)`.
+        The byte, from zero to 255: clamped, encoded with three.js's
+        `LinearToSRGB` and rounded down, as three.js's
+        `Math.floor(color * 255)`.
     """
-    return Int(linear_to_srgb(min(max(value, Float32(0)), Float32(1))) * 255)
+    var clamped = min(max(value, Float32(0)), Float32(1))
+    return Int(js_linear_to_srgb(Float64(clamped)) * 255)
 
 
 def _format_name(format: PlyFormat) -> String:

@@ -610,6 +610,26 @@ def test_a_material_list_is_written_as_a_primitive_a_group() raises:
         scene.update()
         scene.add_mesh(Mesh(geometry, [red, blue], node))
         var files = export_gltf(scene, assets, GLTF_EMBEDDED)
+        # Every accessor is drawn: the whole index is not written beside
+        # the slices, as three.js writes only the slices.
+        var document = parse_json(String(unsafe_from_utf8=files.document))
+        var primitives = document.get(
+            document.at(document.get(document.root(), "meshes"), 0),
+            "primitives",
+        )
+        var drawn = 0
+        for at in range(document.length(primitives)):
+            var primitive = document.at(primitives, at)
+            drawn += document.length(document.get(primitive, "attributes"))
+            if document.has(primitive, "indices"):
+                drawn += 1
+        var shared = document.length(
+            document.get(document.at(primitives, 0), "attributes")
+        )
+        assert_equal(
+            document.length(document.get(document.root(), "accessors")),
+            drawn - shared,
+        )
         var back = read_back(files.document, files.binary, GLTF_EMBEDDED)
         ref read = back[0]
         assert_equal(len(read.meshes), 2)
