@@ -28,7 +28,8 @@ Like `Box3`, an octree holds bare `Float32` meters.
 
 **Differences from three.js.**
 
-- `from_graph_node` reads the plain meshes of a scene, `Scene.meshes`.
+- `core.scene_octree.from_graph_node` reads the plain meshes of a scene,
+  `Scene.meshes`.
   three.js also reads the geometry of a skinned mesh in its bind pose, and
   of an instanced mesh once, where its instances are not.
 - `triangles_per_leaf` and `max_level` hold at every level. three.js reads
@@ -50,10 +51,7 @@ face and push face contacts toward the front. A zero separation from a
 collinear edge has no unique normal and gives a zero direction.
 """
 
-from core.assets import Assets
 from core.layers import Layers
-from core.object3d import NodeId
-from core.scene import Scene
 from math.bounds import Box3, Sphere
 from math.capsule import Capsule
 from math.ray import Ray, _RayProducts
@@ -376,7 +374,7 @@ struct Octree(Movable):
     var box: Optional[Box3]
     # The box around every triangle, with no margin.
     var bounds: Box3
-    # Which layers `from_graph_node` reads.
+    # Which layers `core.scene_octree.from_graph_node` reads.
     var layers: Layers
     # How many triangles a box holds before it is split.
     var triangles_per_leaf: Int
@@ -738,47 +736,6 @@ struct Octree(Movable):
                 distance = along
                 best = OctreeRayHit(along, index, triangle, offset + ray.origin)
         return best
-
-    def from_graph_node(
-        mut self, mut scene: Scene, assets: Assets, node: NodeId
-    ) raises:
-        """Add the triangles of every mesh at and below a node, in world
-        space, and build. three.js: `fromGraphNode`.
-
-        The scene is updated first, as three.js updates the world matrices.
-        A mesh counts if its node shares a layer with `layers`, visible or
-        not.
-
-        Args:
-            scene: The scene.
-            assets: The geometry the meshes name.
-            node: Where to start.
-
-        Raises:
-            Error: If the node is not in the scene, the scene cannot update,
-                or a mesh names a geometry that is not there or has no
-                positions.
-        """
-        scene.update()
-        # The node itself is always the first.
-        for visited in scene.descendants(node):  # pragma: no branch
-            var layers = scene.get(visited).layers
-            if not self.layers.test(layers):
-                continue
-            var world = scene.world_matrix(visited)
-            for mesh in scene.meshes:
-                if mesh.node != visited:
-                    continue
-                ref geometry = assets.geometries.get(mesh.geometry)
-                for triangle in range(geometry.triangle_count()):
-                    self.add_triangle(
-                        Triangle(
-                            world.transform_point(geometry.corner(triangle, 0)),
-                            world.transform_point(geometry.corner(triangle, 1)),
-                            world.transform_point(geometry.corner(triangle, 2)),
-                        )
-                    )
-        self.build()
 
     def clear(mut self):
         """Empty the tree. three.js: `clear`."""

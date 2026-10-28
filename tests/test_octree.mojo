@@ -48,6 +48,7 @@ from std.testing import (
     assert_true,
 )
 from units.si import Length, METER
+from core.scene_octree import from_graph_node
 
 comptime TOLERANCE = Float64(2e-6)
 
@@ -716,7 +717,7 @@ def test_from_graph_node() raises:
     scene.add_mesh(Mesh(box, material, off_layer))
     scene.add_mesh(Mesh(box, material, outside))
     var tree = Octree()
-    tree.from_graph_node(scene, assets, root)
+    from_graph_node(tree, scene, assets, root)
     assert_equal(len(tree.triangles), 12)
     assert_vector(tree.bounds.min, 9.5, -0.5, -0.5)
     assert_vector(tree.bounds.max, 10.5, 0.5, 0.5)
@@ -726,11 +727,11 @@ def test_from_graph_node() raises:
     # The layer can be widened to read the other mesh.
     var wide = Octree()
     wide.layers = Layers.all()
-    wide.from_graph_node(scene, assets, root)
+    from_graph_node(wide, scene, assets, root)
     assert_equal(len(wide.triangles), 24)
     var nowhere = Octree()
     with assert_raises():
-        nowhere.from_graph_node(scene, assets, NodeId(99))
+        from_graph_node(nowhere, scene, assets, NodeId(99))
 
 
 def test_from_graph_node_with_nothing_to_read() raises:
@@ -739,7 +740,7 @@ def test_from_graph_node_with_nothing_to_read() raises:
     var bare = Scene()
     var root = bare.add(Object3D())
     var tree = Octree()
-    tree.from_graph_node(bare, assets, root)
+    from_graph_node(tree, bare, assets, root)
     assert_equal(len(tree.triangles), 0)
     var empty = BufferGeometry()
     empty.set_attribute(POSITION, BufferAttribute(List[Float32](), 3))
@@ -751,7 +752,7 @@ def test_from_graph_node_with_nothing_to_read() raises:
         )
     )
     var again = Octree()
-    again.from_graph_node(bare, assets, root)
+    from_graph_node(again, bare, assets, root)
     assert_equal(len(again.triangles), 0)
 
 

@@ -90,7 +90,7 @@ An `Octree` sorts triangles into nested boxes. A game builds it from a level onc
 | Member | Meaning |
 |---|---|
 | `add_triangle(t)`, `build()` | Add triangles, then cut the boxes. |
-| `from_graph_node(scene, assets, node)` | Add the meshes at and below a node, in world space, and build. |
+| `from_graph_node(octree, scene, assets, node)` | Add the meshes at and below a node, in world space, and build. It is in `core/scene_octree.mojo`, so the tree does not depend on the scene graph. |
 | `capsule_intersect(c)`, `sphere_intersect(s)` | The push that moves a collider out of the level, or None. |
 | `ray_intersect(ray)` | The nearest triangle a ray meets from its front, or None. |
 | `ray_triangles`, `sphere_triangles`, `capsule_triangles` | The triangles a shape can reach, each once. |
