@@ -255,14 +255,32 @@ def _ideal_current_matches(current, left_dump):
 
 
 def verify_projection(legacy, current, helper_text):
-    _gate(legacy.encode(), 'legacy')
-    verify_helper_projection(helper_text)
-    left_dump = _ideal_legacy_dump(legacy)
-    # The caller supplies the ideal spiral as source text.
-    _require_source_text(current, 'changed ideal generic declaration')
-    _ideal_current_matches(current, left_dump)
-    _gate(left_dump.encode(), 'projected')
-    return projection_result(_digests()['projected'])
+    """Check the legacy digest, the helper, and the projected graph."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps({
+        'legacy': legacy,
+        'current': current,
+        'helper': helper_text,
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='ideal-projection-') as directory:
+        path = Path(directory) / 'projection.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_moment_projection', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
 
 
 def _module_statements(text):
