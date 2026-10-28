@@ -130,6 +130,57 @@ def labeled_source_choices(payload: String) raises -> String:
     return '{"labels":' + labels_text + ',"choices":' + choices + "}"
 
 
+def labeled_choices_then_tokens(payload: String) raises -> String:
+    """Read the dispatch labels, choose each source, then check current tokens.
+
+    Args:
+        payload: A JSON list. Each item has `text`, `expected`, and
+            `path`. The dispatch path comes from the labels.
+
+    Returns:
+        JSON with `labels`, `choices`, and `tokens`. `tokens` is true
+        when every choice is `current` and each text has its recorded
+        digest.
+
+    Raises:
+        Error: A token changed outside the sample-dispatch module, or a
+            current source digest changed. The labels are read before the
+            choices. The token check runs only when every choice is
+            `current`.
+    """
+    var labeled = labeled_source_choices(payload)
+    var doc = PyJson.parse(labeled)
+    var labels = doc.at(doc.root, "labels")
+    var current = doc.text(doc.at(labels, "current"))
+    var choices = doc.at(doc.root, "choices")
+    var count = doc.length(choices)
+    var index = 0
+    var all_current = True
+    while index < count:
+        if doc.text(doc.item(choices, index)) != current:
+            all_current = False
+            break
+        index += 1
+    if not all_current:
+        var end = labeled.byte_length() - 1
+        var head = labeled[byte=0:end]
+        return String(head) + ',"tokens":false}'
+    var complete = doc.text(doc.at(labels, "complete"))
+    var sources = PyJson.parse(payload)
+    index = 0
+    while index < count:
+        var item = sources.item(sources.root, index)
+        var text = sources.text(sources.at(item, "text"))
+        var expected = sources.text(sources.at(item, "expected"))
+        var path = sources.text(sources.at(item, "path"))
+        if token_sha256(text) != expected:
+            raise Error("curve support/dispatch contract: " + complete + path)
+        index += 1
+    var done = labeled.byte_length() - 1
+    var prefix = labeled[byte=0:done]
+    return String(prefix) + ',"tokens":true}'
+
+
 def texts_match(payload: String) raises -> String:
     """Return whether two texts are the same string.
 

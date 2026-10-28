@@ -244,10 +244,10 @@ def _dispatch_query(mode, payload):
     return result.stdout.strip()
 
 
-def _labeled_choices(items):
+def _labeled_choices(items, *, tokens=False):
     """Read the dispatch labels, then choose each source."""
     if not items:
-        return {'labels': {}, 'choices': []}
+        return {'labels': {}, 'choices': [], 'tokens': tokens}
     import json
     import os
     import subprocess
@@ -261,7 +261,7 @@ def _labeled_choices(items):
         path.write_text(text)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_source',
-             '--labeled', str(path)],
+             '--labeled-tokens' if tokens else '--labeled', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -373,11 +373,13 @@ def _dispatch_choices(items):
     return json.loads(_dispatch_query('--choice', items))
 
 
-def reviewed_sources(root, items, *, _operation=None):
+def reviewed_sources(root, items, *, _operation=None, check_tokens=False):
     """Return each source after its reviewed choice."""
     if _operation is not None:
         _check_operation(root, _operation)
     if not items:
+        if check_tokens:
+            return [], True
         return []
     loaded = []
     for path, expected in items:
@@ -385,7 +387,7 @@ def reviewed_sources(root, items, *, _operation=None):
         loaded.append((path, expected, text))
     checked = _labeled_choices([
         {'text': text, 'expected': expected, 'path': path}
-        for path, expected, text in loaded])
+        for path, expected, text in loaded], tokens=check_tokens)
     labels = checked['labels']
     choices = checked['choices']
     restored = None
@@ -405,6 +407,8 @@ def reviewed_sources(root, items, *, _operation=None):
             restored = raw.verify(root, **operation)
         _gate_edge(restored['before_token_sha256'], expected)
         results.append(restored['before_source'])
+    if check_tokens:
+        return results, bool(checked.get('tokens'))
     return results
 
 
@@ -682,13 +686,13 @@ def verify(root, *, _operation=None):
     operation_args = {} if _operation is None else {'_operation': _operation}
     pairs = []
     source_items = list(record['sources'].items())
-    chosen = reviewed_sources(root, [
+    chosen, tokens_done = reviewed_sources(root, [
         (path, item['after_token_sha256']) for path, item in source_items
-    ], **operation_args)
+    ], check_tokens=True, **operation_args)
     labels = _dispatch_labels()
     for (path, item), text in zip(source_items, chosen):
         pairs.append((text, item['after_token_sha256'], labels['complete'] + path))
-    if pairs:
+    if pairs and not tokens_done:
         _gate_tokens(pairs)
     verify_premises(root, **operation_args)
     return record

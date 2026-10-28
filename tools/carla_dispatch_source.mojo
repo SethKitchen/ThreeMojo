@@ -9,11 +9,13 @@
     carla_dispatch_source --match PATH
     carla_dispatch_source --token-match PATH
     carla_dispatch_source --labeled PATH
+    carla_dispatch_source --labeled-tokens PATH
 
 `--choice` prints `current` or `restore`. `--match` prints `true` or
 `false` for one pair. A list prints those results in order.
 `--token-match` compares each source pair by its significant tokens.
 `--labeled` reads the dispatch labels before those source choices.
+`--labeled-tokens` checks the complete tokens when every choice is current.
 """
 
 from std.pathlib import Path
@@ -21,6 +23,7 @@ from std.sys import argv, exit, stderr
 
 from tests._python_tokens import significant_match_flags
 from tools._dispatch_source import (
+    labeled_choices_then_tokens,
     labeled_source_choices,
     reviewed_source_choice,
     reviewed_source_choices,
@@ -35,7 +38,7 @@ def _usage():
     print(
         (
             "usage: carla_dispatch_source --choice PATH | --match PATH |"
-            " --token-match PATH | --labeled PATH"
+            " --token-match PATH | --labeled PATH | --labeled-tokens PATH"
         ),
         file=stderr,
     )
@@ -57,10 +60,14 @@ def main() raises:
         and mode != "--match"
         and mode != "--token-match"
         and mode != "--labeled"
+        and mode != "--labeled-tokens"
     ):
         _usage()
     try:
         var text = Path(arguments[2]).read_text()
+        if mode == "--labeled-tokens":
+            print(labeled_choices_then_tokens(text), end="")
+            return
         if mode == "--labeled":
             print(labeled_source_choices(text), end="")
             return

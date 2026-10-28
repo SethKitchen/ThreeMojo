@@ -9,6 +9,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._python_tokens import significant_match_flags, token_sha256
 from tools._dispatch_source import (
+    labeled_choices_then_tokens,
     labeled_source_choices,
     reviewed_source_choice,
     reviewed_source_choices,
@@ -150,6 +151,40 @@ def test_an_unreviewed_path_fails_after_the_labels() raises:
     """A changed token outside the dispatch module fails after the labels."""
     with assert_raises(contains="unreviewed source successor: other.mojo"):
         _ = labeled_source_choices(
+            '[{"text":"def f():\\n    return 1\\n","expected":"nope",'
+            + '"path":"other.mojo"}]'
+        )
+
+
+def test_current_tokens_follow_the_source_choices() raises:
+    """A current source keeps its digest, and a restore waits."""
+    var digest = token_sha256("def f():\n    return 1\n")
+    var current = PyJson.parse(
+        labeled_choices_then_tokens(
+            '[{"text":"def f():\\n    return 1\\n","expected":"'
+            + digest
+            + '","path":"other.mojo"}]'
+        )
+    )
+    assert_equal(current.key(current.root, 2), "tokens")
+    assert_equal(current.flag(current.at(current.root, "tokens")), True)
+    assert_equal(
+        current.text(current.item(current.at(current.root, "choices"), 0)),
+        "current",
+    )
+    var restored = PyJson.parse(
+        labeled_choices_then_tokens(
+            '[{"text":"def f():\\n    return 1\\n","expected":"nope",'
+            + '"path":"extensions/carla/curve_sample_dispatch.mojo"}]'
+        )
+    )
+    assert_equal(restored.flag(restored.at(restored.root, "tokens")), False)
+    assert_equal(
+        restored.text(restored.item(restored.at(restored.root, "choices"), 0)),
+        "restore",
+    )
+    with assert_raises(contains="unreviewed source successor: other.mojo"):
+        _ = labeled_choices_then_tokens(
             '[{"text":"def f():\\n    return 1\\n","expected":"nope",'
             + '"path":"other.mojo"}]'
         )
