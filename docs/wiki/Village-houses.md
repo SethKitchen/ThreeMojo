@@ -1,6 +1,6 @@
 # Village houses
 
-A house of the [Village](Village) is a building model that a player can walk into. It has a front door that swings open, furnished rooms and a stair. Its facade is brick, fieldstone, timber framing or boards. A brick or stone house has a hearth.
+A house of the [Village](Village) is a building model that a player can walk into. It has a front door that swings open, furnished rooms and a stair. Its facade is brick, fieldstone, timber framing or boards. A brick or stone house has a hearth. A house can also be a barn.
 
 ![A street of tile roofs, a framed house, a brick house, and a man in a red tunic by a fireplace and a stair](out/village_houses.png)
 
@@ -47,7 +47,7 @@ var standing = stand_house(
 | Ground | A hall, with a counter and a table with chairs. A house 6 meters wide or more also has a chamber with a bed, on the plan's +x side. The hall takes 60 percent of the width. |
 | Each storey above | One living room, with a settle, a low table and a shelf. |
 
-The front door is 1 meter wide and 2.1 meters tall. It stands in the middle of the hall's front wall, the outside wall on the plan's -y side. `front_wall` finds that wall. `add_doors` then gives the chamber a door into the hall, 0.9 meters wide.
+The front door is 1 meter wide and 2.1 meters tall. A barn is different: see [The barn](#the-barn). It stands in the middle of the hall's front wall, the outside wall on the plan's -y side. `front_wall` finds that wall. `add_doors` then gives the chamber a door into the hall, 0.9 meters wide.
 
 `add_windows` cuts a row of windows in each outside wall, clear of the doors. A brick or stone house then gets a chimney breast. `furnish` places the furniture by its rules. See [Floor plans and interiors](Floor-plans-and-interiors).
 
@@ -60,7 +60,7 @@ The front door is 1 meter wide and 2.1 meters tall. It stands in the middle of t
 | `BRICK_FACADE` | Red brick in running bond | Stone quoins, stone lintels and sills, a hearth and a chimney | Clay tiles |
 | `STONE_FACADE` | Fieldstone in lime mortar | Stone quoins, oak lintels, a hearth and a chimney | Slates |
 | `TIMBER_FRAMED` | Lime plaster | Oak posts, rails and braces, a king post on each gable | Clay tiles |
-| `BOARDED` | Vertical boards | Battens over the joints, oak sills, no shutters | Clay tiles |
+| `BOARDED` | Vertical boards, with battens over the joints in the texture | Oak sills, no shutters | Clay tiles |
 
 `fieldstone` and `lime_plaster` give the materials of a stone wall and a framed wall. Their physical values are typical values, not design values.
 
@@ -70,12 +70,12 @@ The front door is 1 meter wide and 2.1 meters tall. It stands in the middle of t
 
 1. **Walls.** Each face of a wall is cut into cells at the edges of its openings. No cell is more than 1 meter across. The outside face wears the facade's texture. Its vertex colors darken it at its foot and under the eaves. The inside face wears lime plaster, and is darker in the corners of the room.
 2. **Windows.** A window has a painted frame, a mullion and a transom, panes of glass and a stone sill. The panes show the day from inside. A pair of shutters stands open against the wall.
-3. **Doors.** A door has an oak frame and a stone threshold. Its leaf is boards on ledges, with iron straps. The leaf hangs from a hinge node of its own.
+3. **Doors.** A door has an oak frame and a stone threshold. Its leaf is boards on ledges, with iron straps. The leaf hangs from a hinge node of its own. A door 2 meters wide or more hangs two leaves, one at each jamb. A leaf 1.2 meters wide or more has diagonal braces.
 4. **Rooms.** Each room has a floor of planks and a plastered ceiling. The ground storey's ceiling has oak joists.
-5. **The roof.** Two slopes of tiles or slates, 16 centimeters thick, reach 35 centimeters past the long walls. Boards line the underside of the eaves. A fascia, barge boards and a ridge close the edges. A chimney stack rises over the chimney breast.
+5. **The roof.** Two slopes of tiles or slates, 16 centimeters thick, reach 35 centimeters past the long walls. Boards line the underside of the eaves. A fascia, barge boards and a ridge close the edges. A chimney stack rises over the chimney breast. Each gable is cut into cells no more than 1 meter across, as a wall is.
 6. **The plinth and the steps.** A stone plinth reaches 40 centimeters below the lowest ground under the house. Stone steps lead up to the front door.
 
-The house hangs from one node at its lot's middle, at the floor's height. Each material is one mesh. So a house is eight meshes, and one more for each door.
+The house hangs from one node at its lot's middle, at the floor's height. Each material is one mesh. So a house is eight meshes, and one more for each door leaf.
 
 ## Surfaces
 
@@ -86,7 +86,7 @@ The house hangs from one node at its lot's middle, at the floor's height. Each m
 | `brick_texture` | 0.9 m | Running bond: bricks of 22.5 by 7.5 centimeters in a pale mortar |
 | `fieldstone_texture` | 1.2 m | Rounded stones of four tints, in a deep mortar |
 | `plaster_texture` | 2 m | Lime plaster, clouded |
-| `boards_texture` | 1.2 m | Six boards of 20 centimeters, with dark joints |
+| `boards_texture` | 1.2 m | Six boards of 20 centimeters, with a batten over each joint, lit on one edge and shaded on the other |
 | `wood_texture` | 1 m | Grain, with rare knots |
 | `ashlar_texture` | 0.8 m | Dressed blocks of 40 by 20 centimeters |
 | `tile_texture` | 1 m | Five courses of clay tiles |
@@ -124,6 +124,24 @@ A hall too short for the landing and the treads has no stair. `house_model` take
 A railing 1 meter high guards the well's open side upstairs. It reaches down to the ground floor, so it closes the stair's side as well. A railing crosses the well's foot upstairs, and a wall closes the space under the stair's top. `stand_house` draws oak treads and risers, a stringer, a handrail on balusters, a newel post and a balustrade. It cuts the well out of the hall's ceiling and the floor above, with oak trimmers round it.
 
 `Doors` opens each door while someone stands within 1.8 meters of its middle, on its floor. The leaf turns at 2.5 radians a second, to a little over a right angle. It closes when nobody is near. A leaf is not solid: the gap in the wall is where a character walks through.
+
+## The barn
+
+`HouseParameters.use` is a `HouseUse`: `DWELLING` or `BARN`. A bare integer does not compile. A dwelling is the default.
+
+| Part | A barn |
+|---|---|
+| Rooms | One open storage floor on each storey: the threshing floor, and a loft over it. |
+| Front door | 3.2 meters wide and 3 meters tall, in the middle of the front wall. Two leaves hang in it, and they swing out. |
+| Windows | 0.8 meters wide and 0.7 meters tall, with their sills 2.3 meters up, 3.6 meters apart. |
+| Stock | Stacks of hay along the west half of the back wall, and mangers along its east half. |
+| Hearth | None. |
+
+A barn must be 5 meters wide or more. Its storey must be 3.4 meters tall or more.
+
+The model holds the hay as shelves and the mangers as cabinets, with the sizes of `HAY` and `MANGER`. `stand_house` draws each shelf of a barn as a stack of straw bales tied with cords. It draws each other piece as a trough of boards on posts, with hay in it and a rack of slats over it.
+
+A barn's inside walls are bare boards, and its ceilings are planks. A loft door of two leaves is shut high in its east gable. A hoist beam reaches out over it, with a pulley and a rope. A gable too low for a loft door 60 centimeters tall has none.
 
 ## The hearth
 

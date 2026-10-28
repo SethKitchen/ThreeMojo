@@ -10,10 +10,13 @@ furniture."""
 from extensions.building.ids import ElementId, SpaceId
 from extensions.building.kinds import (
     BEDROOM,
+    CABINET,
     COLUMN,
     DOOR,
     KITCHEN,
     LIVING,
+    SHELF,
+    STORAGE,
     TABLE,
     WALL,
     WINDOW,
@@ -22,12 +25,18 @@ from extensions.building.material import brick
 from extensions.building.model import Element, Furnishing, Opening, Space
 from extensions.vegetation.ground import Ground
 from extensions.village.house import (
+    BARN,
+    BARN_DOOR,
     BOARDED,
     BRICK_FACADE,
     CHAMBERED,
+    DWELLING,
     FRONT_DOOR,
     Facade,
+    HAY,
     HouseParameters,
+    HouseUse,
+    MANGER,
     NATURAL,
     PAINT,
     BREAST_CLEAR,
@@ -376,6 +385,87 @@ def test_a_brick_or_stone_house_has_a_chimney_breast() raises:
     var stone = _two_storeys(9, 1)
     stone.facade = STONE_FACADE
     assert_true(Bool(house_breast(house_model(stone))))
+
+
+def _barn(storeys: Int = 1) -> HouseParameters:
+    """Return a boarded barn 13 meters wide and 8 meters deep, with
+    storeys 4.2 meters tall."""
+    return HouseParameters(
+        "barn",
+        Length(13.0, METER),
+        Length(8.0, METER),
+        storeys,
+        brick(),
+        BOARDED,
+        Length(4.2, METER),
+        use=BARN,
+    )
+
+
+def test_a_barn_has_an_open_floor_a_wide_door_and_stock() raises:
+    var barn = _barn()
+    barn.check()
+    assert_true(_house(9, 1).use == DWELLING)
+    assert_false(barn.chambered())
+    var model = house_model(barn)
+    # One open floor, for storage.
+    assert_equal(len(model.spaces), 1)
+    assert_equal(model.spaces[0].name, "threshing floor")
+    assert_true(model.spaces[0].use == STORAGE)
+    # A wide door in the front wall, and small windows high up.
+    var doors = 0
+    var windows = 0
+    for o in model.openings:
+        if o.kind == DOOR:
+            doors += 1
+            assert_almost_equal(Float32(o.width.value), BARN_DOOR.x)
+            assert_almost_equal(Float32(o.height.value), BARN_DOOR.y)
+        else:
+            windows += 1
+            assert_almost_equal(o.sill.value, 2.3, atol=1e-9)
+            assert_almost_equal(o.height.value, 0.7, atol=1e-9)
+    assert_equal(doors, 1)
+    assert_true(windows >= 4)
+    # Hay along the west half of the back wall, and mangers along the east
+    # half, facing into the barn, and no hearth.
+    assert_false(Bool(house_breast(model)))
+    var hay = 0
+    var mangers = 0
+    for piece in model.furnishings:
+        assert_true(piece.center.y > 3)
+        assert_almost_equal(piece.rotation.value, 3.141592653589793)
+        if piece.kind == SHELF:
+            hay += 1
+            assert_true(piece.center.x + Float64(HAY.x) / 2 < 0)
+        else:
+            assert_true(piece.kind == CABINET)
+            mangers += 1
+            assert_true(piece.center.x - Float64(MANGER.x) / 2 > 0)
+    assert_equal(hay, 2)
+    assert_equal(mangers, 2)
+    # A barn of brick has no hearth either, and its storeys above are
+    # lofts.
+    var lofted = _barn(2)
+    lofted.facade = BRICK_FACADE
+    var tall = house_model(lofted)
+    assert_false(Bool(house_breast(tall)))
+    assert_equal(tall.spaces[1].name, "loft 1")
+    assert_true(tall.spaces[1].use == STORAGE)
+
+
+def test_a_barn_is_checked() raises:
+    var barn = _barn()
+    barn.use = HouseUse(2)
+    with assert_raises(contains="dwelling or a barn"):
+        barn.check()
+    barn = _barn()
+    barn.width = Length(4.5, METER)
+    with assert_raises(contains="barn must be"):
+        barn.check()
+    barn = _barn()
+    barn.storey_height = Length(3.0, METER)
+    with assert_raises(contains="barn's storey"):
+        barn.check()
 
 
 def main() raises:

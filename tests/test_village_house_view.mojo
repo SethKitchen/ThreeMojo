@@ -26,8 +26,10 @@ from extensions.building.model import Element, Furnishing, Opening, Space
 from extensions.topology.arrangement import Point2
 from extensions.vegetation.ground import Canyon, Ground, Lot
 from extensions.village.house import (
+    BARN,
     BOARDED,
     BRICK_FACADE,
+    DWELLING,
     Facade,
     HouseParameters,
     STAIR_RISE,
@@ -53,7 +55,7 @@ from extensions.village.house_view import (
 )
 from extensions.village.surfaces import HouseLooks, house_looks
 from math.vector3 import Vector3
-from std.math import pi
+from std.math import pi, sin
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -407,6 +409,88 @@ def test_a_brick_house_has_a_fireplace_and_a_chimney_over_it() raises:
     assert_true(more > 150)
     assert_true(more < 200)
     assert_equal(len(hearth.interior.walls), len(plain.interior.walls) + 2)
+
+
+def _barn(pitch: Float32) -> HouseParameters:
+    """Return a boarded barn 13 meters wide and 8 meters deep, with a
+    storey 4.2 meters tall, under a roof of a pitch in degrees."""
+    return HouseParameters(
+        "barn",
+        Length(13.0, METER),
+        Length(8.0, METER),
+        1,
+        timber(),
+        BOARDED,
+        Length(4.2, METER),
+        Angle(pitch, DEGREE),
+        use=BARN,
+    )
+
+
+def _drawn(
+    mut assets: Assets, looks: HouseLooks, house: HouseParameters
+) raises -> Int:
+    """Stand a barn's model, drawn as the house says, and return its
+    triangles."""
+    var scene = Scene()
+    var barn = _barn(Float32(house.pitch.to(DEGREE)))
+    var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
+    return stand_house(
+        scene, assets, looks, house, house_model(barn), lot, _flat()
+    ).triangles
+
+
+def test_a_barn_hangs_two_leaves_that_swing_out() raises:
+    var assets = Assets()
+    var looks = house_looks(assets, 8, 1)
+    var scene = Scene()
+    var barn = _barn(35)
+    var lot = house_lot(barn, 0, 0, Angle(0.0, RADIAN))
+    var standing = stand_house(
+        scene, assets, looks, barn, house_model(barn), lot, _flat()
+    )
+    # One doorway, and a leaf at each of its jambs, turned half a turn
+    # from each other.
+    assert_equal(len(standing.interior.doorways), 1)
+    assert_equal(len(standing.hinges), 2)
+    ref first = standing.hinges[0]
+    ref second = standing.hinges[1]
+    assert_equal(first.door, 0)
+    assert_equal(second.door, 0)
+    assert_almost_equal(abs(first.shut - second.shut), pi, atol=1e-4)
+    # Each leaf's free edge swings out of the barn, toward the front: the
+    # model's -y, the scene's +z.
+    for hinge in standing.hinges:
+        var opened = hinge.shut + hinge.sense * 0.5
+        var shut_z = -sin(hinge.shut)
+        var open_z = -sin(opened)
+        assert_true(open_z - shut_z > 0.1)
+
+
+def test_a_barn_draws_its_hay_its_mangers_and_its_loft_door() raises:
+    var assets = Assets()
+    var looks = house_looks(assets, 8, 1)
+    # The same model drawn as a barn and as a dwelling: the barn draws
+    # bales and mangers where the dwelling draws a shelf and a cabinet.
+    var steep = _barn(35)
+    var dwelling = _barn(35)
+    dwelling.use = DWELLING
+    var stocked = _drawn(assets, looks, steep) - _drawn(assets, looks, dwelling)
+    assert_true(stocked > 600)
+    # A gable too low for a loft door has none.
+    var low = _barn(8)
+    var low_dwelling = _barn(8)
+    low_dwelling.use = DWELLING
+    var bare = _drawn(assets, looks, low) - _drawn(assets, looks, low_dwelling)
+    assert_true(stocked - bare > 100)
+
+
+def test_a_wide_door_leaf_is_braced() raises:
+    var narrow = door_leaf(1.0, 2.0, OAK)
+    var wide = door_leaf(1.6, 3.0, OAK)
+    # Four boards and the ledges, straps and ring of a narrow leaf; six
+    # boards and two braces more on a wide one.
+    assert_equal(wide.triangles() - narrow.triangles(), 4 * 12)
 
 
 def main() raises:

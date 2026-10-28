@@ -20,7 +20,7 @@ from extensions.scan.frame import supersplat_frame
 from extensions.vegetation.field import LodBand
 from extensions.vegetation.ground import Ground, Lot, Pond
 from extensions.vegetation.meadow import Planting
-from extensions.village.house import HouseParameters
+from extensions.village.house import BARN, DWELLING, HouseParameters
 from extensions.scan.occupancy import ScanRegion
 from extensions.village.scanned import (
     MAX_VOXELS,
@@ -267,12 +267,15 @@ def _refused(p: VillageParameters, text: String) raises:
 
 
 def test_village_parameters_are_checked() raises:
-    """The default village passes, with a pond and five houses; each field
-    out of range is refused, and so is a meadow or a house its own check
-    refuses."""
+    """The default village passes, with a pond and five houses, the second
+    of them a barn; each field out of range is refused, and so is a meadow
+    or a house its own check refuses."""
     var village = VillageParameters()
     village.check()
     assert_equal(len(village.houses), 5)
+    for k in range(5):
+        var use = BARN if k == 1 else DWELLING
+        assert_true(village.houses[k].house.use == use)
     assert_equal(len(village.props), len(default_props()))
     assert_true(village.meadow.ground.pond.radius.to(METER) > 0)
     var p = VillageParameters()

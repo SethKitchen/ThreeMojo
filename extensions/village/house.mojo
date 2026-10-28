@@ -51,14 +51,19 @@ from extensions.building.ids import (
     ConstructionId,
     ElementId,
     MaterialId,
+    SpaceId,
     StoreyId,
 )
 from extensions.building.kinds import (
     BEDROOM,
+    CABINET,
     COLUMN,
     DOOR,
+    FurnitureKind,
     KITCHEN,
     LIVING,
+    SHELF,
+    STORAGE,
     WALL,
 )
 from extensions.building.material import (
@@ -116,6 +121,21 @@ comptime PAINT = Vector3(0.030, 0.090, 0.060)
 # The front door's width and height, and an inside door's, in meters.
 comptime FRONT_DOOR = Vector3(1.0, 2.1, 0)
 comptime INSIDE_DOOR = Vector3(0.9, 2.0, 0)
+comptime BARN_DOOR = Vector3(3.2, 3.0, 0)
+"""A barn door's width and height, in meters."""
+comptime BARN_WIDTH = Float32(5)
+"""The narrowest barn, in meters: its door fits its front wall."""
+comptime BARN_STOREY = Float32(3.4)
+"""The lowest storey of a barn, in meters: its door fits under it."""
+comptime HAY = Vector3(2.2, 1.1, 1.6)
+"""A stack of hay's width along its wall, its depth and its height, in
+meters."""
+comptime MANGER = Vector3(2.0, 0.6, 0.9)
+"""A manger's width along its wall, its depth and its height, in
+meters."""
+comptime STALL_GAP = Float64(0.4)
+"""How far apart two stacks of hay or two mangers stand, and how far the
+middle of the back wall keeps clear, in meters."""
 # The share of the width the hall takes, when the house has a chamber.
 comptime HALL_SHARE = Float64(0.6)
 # The narrowest house, in meters, whose ground storey has a chamber.
@@ -165,6 +185,29 @@ comptime STONE_FACADE = Facade(1)
 comptime TIMBER_FRAMED = Facade(2)
 # Vertical boards with battens over the joints, as a barn has.
 comptime BOARDED = Facade(3)
+
+
+@fieldwise_init
+struct HouseUse(Equatable, ImplicitlyCopyable, Writable):
+    """What a house is for, as a type rather than a bare int."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the two uses there are.
+
+        Returns:
+            Whether the value names a use.
+        """
+        return ordinal_valid(self.value, 1)
+
+
+# A home: a hall, a chamber when it is wide, a front door, windows to see
+# by, and furniture.
+comptime DWELLING = HouseUse(0)
+# A barn: an open floor on each storey, a wide double door, small high
+# windows, and hay and mangers on its ground storey.
+comptime BARN = HouseUse(1)
 
 
 def fieldstone() -> BuildingMaterial:
@@ -228,6 +271,8 @@ struct HouseParameters(Copyable, Movable):
     var trim: Vector3
     # Which furniture, and which weathering of the walls.
     var seed: Int
+    # What the house is for.
+    var use: HouseUse
 
     def __init__(
         out self,
@@ -242,6 +287,7 @@ struct HouseParameters(Copyable, Movable):
         roof: Vector3 = NATURAL,
         trim: Vector3 = PAINT,
         seed: Int = 1,
+        use: HouseUse = DWELLING,
     ):
         """Create a house's parameters.
 
@@ -258,6 +304,7 @@ struct HouseParameters(Copyable, Movable):
                 the texture as it is.
             trim: The linear color of the doors, shutters and frames.
             seed: Which furniture, and which weathering of the walls.
+            use: What the house is for: a dwelling or a barn.
         """
         self.name = name^
         self.width = width
@@ -270,6 +317,7 @@ struct HouseParameters(Copyable, Movable):
         self.roof = roof
         self.trim = trim
         self.seed = seed
+        self.use = use
 
     def check(self) raises:
         """Refuse a house that cannot be built.
@@ -279,7 +327,8 @@ struct HouseParameters(Copyable, Movable):
                 there are not from 1 to 6 storeys, a storey is not from
                 2.4 to 6 meters tall, the facade is not one, the pitch is
                 not from 0 to 60 degrees, or a color channel is not from
-                0 to 1.
+                0 to 1. Also if the use is not one, or a barn is narrower
+                than `BARN_WIDTH` or its storey lower than `BARN_STOREY`.
         """
         require_between(
             self.width.to(METER),
@@ -304,6 +353,21 @@ struct HouseParameters(Copyable, Movable):
         )
         if not self.facade.is_valid():
             raise Error("A facade must be one of the four")
+        if not self.use.is_valid():
+            raise Error("A house's use must be a dwelling or a barn")
+        if self.use == BARN:
+            require_between(
+                self.width.to(METER),
+                BARN_WIDTH,
+                60,
+                "A barn must be from 5 to 60 meters wide",
+            )
+            require_between(
+                self.storey_height.to(METER),
+                BARN_STOREY,
+                6,
+                "A barn's storey must be from 3.4 to 6 meters tall",
+            )
         require_between(
             self.pitch.to(DEGREE),
             0,
@@ -319,8 +383,11 @@ struct HouseParameters(Copyable, Movable):
         """Return whether the ground storey has a chamber beside the hall.
 
         Returns:
-            Whether the house is `CHAMBERED` meters wide or more.
+            Whether the house is a dwelling `CHAMBERED` meters wide or
+            more.
         """
+        if self.use == BARN:
+            return False
         return self.width.to(METER) >= CHAMBERED
 
 
@@ -589,11 +656,55 @@ def _add_breast(mut building: Building, west: Float64) raises:
         )
 
 
+def _row(
+    mut building: Building,
+    kind: FurnitureKind,
+    size: Vector3,
+    first: Float64,
+    last: Float64,
+    back: Float64,
+) raises:
+    """Stand pieces of one size along the back wall of the ground storey's
+    first room, facing into it, from `first` toward `last` along the
+    plan's x while they fit, `back` being the wall's inside face."""
+    var width = Float64(size.x)
+    var step = width + STALL_GAP
+    var sense = Float64(1) if last > first else Float64(-1)
+    var x = first + sense * width / 2
+    while (last - x) * sense >= width / 2:
+        _ = building.add_furnishing(
+            kind,
+            SpaceId(0),
+            Point2(x, back - Float64(size.y) / 2 - 0.05),
+            Angle64(180, DEGREE64),
+            _m(width),
+            _m(Float64(size.y)),
+            _m(Float64(size.z)),
+        )
+        x += sense * step
+
+
+def _stock_barn(
+    mut building: Building, half_x: Float64, half_y: Float64
+) raises:
+    """Stack hay along the west half of a barn's back wall, the wall at the
+    plan's +y, and stand mangers along its east half. The walls' middle
+    lines stand `half_x` and `half_y` from the plan's middle."""
+    var half_t = building.constructions[0].thickness().value / 2
+    var back = half_y - half_t
+    _row(building, SHELF, HAY, -half_x + half_t + 0.1, -STALL_GAP, back)
+    _row(building, CABINET, MANGER, half_x - half_t - 0.1, STALL_GAP, back)
+
+
 def house_model(parameters: HouseParameters) raises -> Building:
     """Return a house's model, with its doors, windows and furniture.
 
     Args:
         parameters: The house.
+
+    A barn's ground storey is one open floor, with hay along the west
+    half of its back wall and mangers along the east half. Its front door
+    is `BARN_DOOR`, and its windows are small and high. It has no hearth.
 
     Returns:
         The model, centered on its plan's middle.
@@ -603,6 +714,7 @@ def house_model(parameters: HouseParameters) raises -> Building:
             be assembled.
     """
     parameters.check()
+    var barn = parameters.use == BARN
     var half_x = Float64(parameters.width.to(METER)) / 2
     var half_y = Float64(parameters.depth.to(METER)) / 2
     var outline: List[Point2] = [
@@ -640,13 +752,18 @@ def house_model(parameters: HouseParameters) raises -> Building:
                 ],
             )
         )
+    elif barn:
+        ground_rooms.append(
+            SpacePlan("threshing floor", STORAGE, outline.copy())
+        )
     else:
         ground_rooms.append(SpacePlan("hall", KITCHEN, outline.copy()))
     plans.append(StoreyPlan("ground storey", height, ground_rooms^))
     for storey in range(1, parameters.storeys):
-        var rooms: List[SpacePlan] = [
-            SpacePlan("room " + String(storey), LIVING, outline.copy())
-        ]
+        var room = SpacePlan("room " + String(storey), LIVING, outline.copy())
+        if barn:
+            room = SpacePlan("loft " + String(storey), STORAGE, outline.copy())
+        var rooms: List[SpacePlan] = [room^]
         plans.append(StoreyPlan("storey " + String(storey), height, rooms^))
     var materials: List[BuildingMaterial] = [
         parameters.cladding.copy(),
@@ -684,30 +801,40 @@ def house_model(parameters: HouseParameters) raises -> Building:
     )
     var front = front_wall(building)
     var length = building.wall_frame(front).length
-    var door_width = Float64(FRONT_DOOR.x)
+    var door = BARN_DOOR if barn else FRONT_DOOR
+    var door_width = Float64(door.x)
     _ = building.add_opening(
         DOOR,
         front,
         _m((length - door_width) / 2),
         _m(0),
         _m(door_width),
-        _m(Float64(FRONT_DOOR.y)),
+        _m(Float64(door.y)),
         None,
     )
     _ = add_doors(
         building, _m(Float64(INSIDE_DOOR.x)), _m(Float64(INSIDE_DOOR.y))
     )
-    _ = add_windows(
-        building,
-        WindowOptions(_m(2.6), _m(1.5), _m(0.9), _m(1.25), double_glazing()),
+    var windows = WindowOptions(
+        _m(2.6), _m(1.5), _m(0.9), _m(1.25), double_glazing()
     )
-    # A brick or a stone house has a hearth, and a chimney over it.
-    var hearth = (
-        parameters.facade == BRICK_FACADE or parameters.facade == STONE_FACADE
-    )
-    if hearth:
-        _add_breast(building, -half_x)
-    _ = furnish(building, parameters.seed)
+    if barn:
+        # Small windows high in the walls, far apart.
+        windows = WindowOptions(
+            _m(3.6), _m(2.8), _m(2.3), _m(0.7), double_glazing()
+        )
+    _ = add_windows(building, windows)
+    if barn:
+        _stock_barn(building, half_x, half_y)
+    else:
+        # A brick or a stone house has a hearth, and a chimney over it.
+        var hearth = (
+            parameters.facade == BRICK_FACADE
+            or parameters.facade == STONE_FACADE
+        )
+        if hearth:
+            _add_breast(building, -half_x)
+        _ = furnish(building, parameters.seed)
     var breast = house_breast(building)
     if breast:
         clear_breast(building, breast.value())

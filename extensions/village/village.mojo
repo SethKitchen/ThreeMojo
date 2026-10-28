@@ -49,6 +49,7 @@ from extensions.vegetation.meadow import (
 )
 from extensions.village.doors import Doors
 from extensions.village.house import (
+    BARN,
     BOARDED,
     BRICK_FACADE,
     HouseParameters,
@@ -167,7 +168,9 @@ struct VillageParameters(Copyable, Movable):
                     BOARDED,
                     Length(4.2, METER),
                     Angle(35.0, DEGREE),
+                    trim=Vector3(0.3, 0.045, 0.03),
                     seed=5,
+                    use=BARN,
                 ),
                 -7,
                 -58,
@@ -380,10 +383,8 @@ struct Village(Movable):
                 scene, assets, looks, house, model, lots[index], ground
             )
             # `house_model` gives every house a front door.
-            for k in range(len(standing.hinges)):  # pragma: no branch
-                self.doors.add(
-                    standing.hinges[k], standing.interior.doorways[k]
-                )
+            for hinge in standing.hinges:  # pragma: no branch
+                self.doors.add(hinge, standing.interior.doorways[hinge.door])
             self.houses.append(standing^)
         self.props = stand_props(scene, assets, looks, parameters.props, ground)
         self.scanned = None

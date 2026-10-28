@@ -15,17 +15,20 @@ it. It draws more of what an eye sees from close by:
    its openings, and no cell is wider or taller than `CELL`. The outside
    face wears the facade's texture. Its vertex colors darken it at its
    foot, where rain splashes, and under the eaves. The inside face wears
-   lime plaster, darker in the corners of the room, where less light
-   reaches. Each opening has reveals through the wall.
+   lime plaster, or bare boards in a barn, darker in the corners of the
+   room, where less light reaches. Each opening has reveals through the
+   wall.
 2. **Dressings.** A brick house has stone quoins at its corners, stone
    sills and stone lintels. A stone house has oak lintels. A framed house
-   has oak posts, rails and braces over its plaster. A boarded house has
-   battens over the joints of its boards. A window has a painted frame, a
-   mullion and a transom, panes of glass and a pair of open shutters. A
-   door has an oak frame, a stone threshold, and a leaf of boards on
-   ledges that turns on its own hinge node.
+   has oak posts, rails and braces over its plaster. A boarded house's
+   texture has battens over the joints of its boards. A window has a
+   painted frame, a mullion and a transom, panes of glass and a pair of
+   open shutters. A door has an oak frame, a stone threshold, and a leaf
+   of boards on ledges that turns on its own hinge node. A door
+   `DOUBLE_DOOR` wide or wider has two leaves, one at each jamb.
 3. **Floors and ceilings.** Each room has a floor of planks and a
-   plastered ceiling. The ground storey's ceiling has oak joists.
+   plastered ceiling, or a ceiling of planks in a barn. The ground
+   storey's ceiling has oak joists.
 4. **The stair.** Where `house_stair` finds a stair, it has oak treads
    and risers, a stringer on its open side, and a handrail on
    balusters. Its well is cut out of the hall's ceiling and the floor
@@ -33,14 +36,16 @@ it. It draws more of what an eye sees from close by:
    upstairs.
 5. **The roof.** A gable roof covers the flat roof of the model: two
    slopes of tiles or slates with a thickness, boards under the eaves, a
-   fascia, barge boards and a ridge. A gable closes each end. A brick or
-   stone house has a chimney.
+   fascia, barge boards and a ridge. A gable closes each end, cut into
+   cells as a wall is. A chimney stands over a chimney breast. A barn
+   has a loft door in its east gable, and a hoist beam over it.
 6. **The plinth and the steps.** A stone plinth reaches from just below
    the floor to below the lowest ground. Each step of the interior's
    floors is a block of stone.
 7. **Furniture.** Each furnishing of the model is drawn as its kind:
    a table on legs, a chair with a back, a bed with its blanket, and so
-   on.
+   on. In a barn, a shelf is a stack of straw bales, and any other piece
+   is a manger with a rack over it.
 
 The house hangs from one node at its lot's middle, at the floor's height,
 turned by the lot's turn. Each sheet of `extensions.village.sheet` is one
@@ -54,6 +59,7 @@ from core.scene import Scene
 from extensions.building.ids import ElementId
 from extensions.building.kinds import (
     BED,
+    CABINET,
     CHAIR,
     COFFEE_TABLE,
     COUNTER,
@@ -71,6 +77,7 @@ from extensions.building.model import Building, WallFrame
 from extensions.vegetation.ground import Ground, Lot
 from extensions.vegetation.noise import hash01
 from extensions.village.house import (
+    BARN,
     BOARDED,
     BRICK_FACADE,
     Breast,
@@ -108,7 +115,7 @@ from generators.utils import Vec3d
 from materials.material import MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from std.math import atan2, cos, sin, sqrt, tan
+from std.math import atan2, ceil, cos, sin, sqrt, tan
 from units.si import METER, RADIAN, Angle
 
 comptime CELL = Float64(1.0)
@@ -149,6 +156,18 @@ comptime FIREBOX_HEIGHT = Float32(0.85)
 """How high a fireplace's opening is, in meters."""
 comptime FIREBOX_HALF = Float32(0.45)
 """Half the width of a fireplace's opening, in meters."""
+comptime DOUBLE_DOOR = Float32(2)
+"""The narrowest door that hangs two leaves, one at each jamb, in
+meters."""
+comptime BRACED_LEAF = Float32(1.2)
+"""The narrowest door leaf that has diagonal braces between its ledges,
+in meters."""
+comptime STRAW = Vector3(1.0, 0.82, 0.42)
+"""The tint of straw over the plaster texture, as the hay props have."""
+comptime BALE = Vector3(0.9, 0.4, 0.45)
+"""A bale of straw's length, height and width, in meters."""
+comptime LOFT_DOOR = Vector3(1.4, 1.5, 0)
+"""A barn's loft door's width and its most height, in meters."""
 
 
 def painted(paint: Vector3) -> Vector3:
@@ -226,6 +245,8 @@ struct Hinge(ImplicitlyCopyable):
     var shut: Float32
     # Which way the leaf opens: +1 or -1 times the opening angle.
     var sense: Float32
+    # Which of the interior's doorways the leaf hangs in.
+    var door: Int
 
 
 struct _Sheets(Movable):
@@ -358,6 +379,30 @@ def _inside(openings: List[_Opening], u: Float32, v: Float32) -> Bool:
     return False
 
 
+def _inside_face(
+    mut sheet: Sheet,
+    a: Vector3,
+    b: Vector3,
+    c: Vector3,
+    d: Vector3,
+    k0: Vector3,
+    k1: Vector3,
+    k2: Vector3,
+    k3: Vector3,
+    u0: Float32,
+    u1: Float32,
+    v0: Float32,
+    v1: Float32,
+    sign: Float32,
+):
+    """Add one inside cell of a wall, from `a` to `d` along the wall and up,
+    facing along the normal when `sign` is +1 and against it when -1."""
+    if sign > 0:
+        sheet.painted_quad(a, b, c, d, k0, k1, k2, k3, u0, v0, u1, v1)
+    else:
+        sheet.painted_quad(b, a, d, c, k1, k0, k3, k2, -u1, v0, -u0, v1)
+
+
 def _wall_faces(
     mut sheets: _Sheets,
     face: _Face,
@@ -367,11 +412,13 @@ def _wall_faces(
     exterior: Bool,
     eaves: Float32,
     seed: Int,
+    boards: Bool,
 ):
     """Add a wall's two faces, cut into cells round its openings.
 
     `out_sign` is +1 when the outside is along the normal, and -1 when it
-    is against it."""
+    is against it. The inside faces are plaster, or bare boards when
+    `boards` is True."""
     var marks_u = List[Float64]()
     var marks_v = List[Float64]()
     for o in openings:
@@ -426,13 +473,39 @@ def _wall_faces(
                 var k1 = INDOORS * inside_shade(u1, v0, length, height)
                 var k2 = INDOORS * inside_shade(u1, v1, length, height)
                 var k3 = INDOORS * inside_shade(u0, v1, length, height)
-                if sign > 0:
-                    sheets.plaster.painted_quad(
-                        a, b, c, d, k0, k1, k2, k3, u0, v0, u1, v1
+                if boards:
+                    _inside_face(
+                        sheets.facade,
+                        a,
+                        b,
+                        c,
+                        d,
+                        k0,
+                        k1,
+                        k2,
+                        k3,
+                        u0,
+                        u1,
+                        v0,
+                        v1,
+                        sign,
                     )
                 else:
-                    sheets.plaster.painted_quad(
-                        b, a, d, c, k1, k0, k3, k2, -u1, v0, -u0, v1
+                    _inside_face(
+                        sheets.plaster,
+                        a,
+                        b,
+                        c,
+                        d,
+                        k0,
+                        k1,
+                        k2,
+                        k3,
+                        u0,
+                        u1,
+                        v0,
+                        v1,
+                        sign,
                     )
 
 
@@ -767,6 +840,10 @@ def door_leaf(width: Float32, height: Float32, paint: Vector3) raises -> Sheet:
     `height`, and from z -0.02 to 0.02 meters. Its iron straps are on its
     +z face, and its ledges on its -z face.
 
+    A leaf has at least four boards, each at most 25 centimeters wide. A
+    leaf `BRACED_LEAF` wide or wider has diagonal braces between its
+    ledges.
+
     Args:
         width: Its width, in meters.
         height: Its height, in meters.
@@ -779,7 +856,7 @@ def door_leaf(width: Float32, height: Float32, paint: Vector3) raises -> Sheet:
         Error: Never; the sizes are the caller's.
     """
     var sheet = Sheet(WOOD_TILE)
-    var boards = 4
+    var boards = max(4, Int(width / 0.25))
     var board = width / Float32(boards)
     for k in range(boards):  # pragma: no branch
         var shade = paint * (0.9 + 0.1 * Float32(k % 2))
@@ -806,6 +883,21 @@ def door_leaf(width: Float32, height: Float32, paint: Vector3) raises -> Sheet:
             Vector3(0, 0, 0.006),
             IRON,
         )
+    # A wide leaf has a brace between each two ledges, rising from the
+    # hinge's side, so it does not sag.
+    if width >= BRACED_LEAF:
+        for k in range(2):  # pragma: no branch
+            var y0 = 0.2 + Float32(k) * (height - 0.4) / 2 + 0.07
+            var y1 = 0.2 + Float32(k + 1) * (height - 0.4) / 2 - 0.07
+            var run = Vector3(width - 0.2, y1 - y0, 0)
+            var long = run.length()
+            sheet.box(
+                Vector3(width / 2, (y0 + y1) / 2, -0.035),
+                run * 0.5,
+                Vector3(-run.y, run.x, 0) * (0.06 / long),
+                Vector3(0, 0, 0.015),
+                paint * 0.8,
+            )
     # A ring to pull it by.
     sheet.box(
         Vector3(width - 0.12, height * 0.48, 0.04),
@@ -977,42 +1069,6 @@ def _timbers(
     )
 
 
-def _battens(
-    mut sheets: _Sheets,
-    face: _Face,
-    openings: List[_Opening],
-    half: Float32,
-    out_sign: Float32,
-):
-    """Add a batten over each joint of a boarded wall's boards, cut at
-    its openings."""
-    var w = out_sign * half
-    var n = face.normal * out_sign
-    var step = BOARDS_TILE / 6
-    var u = -half + step
-    while u < face.length + half - 0.05:
-        var spans = List[Tuple[Float32, Float32]]()
-        var start = Float32(0)
-        for o in openings:
-            if u > o.u0 - 0.04 and u < o.u1 + 0.04:
-                if o.v0 > start:
-                    spans.append((start, o.v0))
-                start = o.v1
-        spans.append((start, face.height))
-        # An opening fits in its wall, so each span has a length.
-        for s in spans:  # pragma: no branch
-            _bar(
-                sheets.wood,
-                face.at(u, s[0], w),
-                face.at(u, s[1], w),
-                n,
-                0.05,
-                0.025,
-                WHITE * 0.75,
-            )
-        u += step
-
-
 def _walls(
     mut sheets: _Sheets,
     building: Building,
@@ -1047,6 +1103,7 @@ def _walls(
             exterior,
             eaves,
             parameters.seed,
+            parameters.use == BARN,
         )
         for o in openings:
             _reveals(sheets, face, o, half, out_sign, exterior)
@@ -1056,10 +1113,9 @@ def _walls(
                 _window(sheets, face, o, half, out_sign, parameters)
         if not exterior:
             continue
+        # A boarded wall's battens are in its texture.
         if parameters.facade == TIMBER_FRAMED:
             _timbers(sheets, face, openings, half, out_sign)
-        elif parameters.facade == BOARDED:
-            _battens(sheets, face, openings, half, out_sign)
 
 
 @fieldwise_init
@@ -1095,12 +1151,34 @@ def _around(room: _Rect, hole: _Rect) -> List[_Rect]:
     ]
 
 
+def _ceiling(mut sheet: Sheet, r: _Rect, high: Float32, color: Vector3):
+    """Add a ceiling over a rectangle at a height, facing down."""
+    sheet.painted_quad(
+        Vector3(r.x0, high, r.z0),
+        Vector3(r.x1, high, r.z0),
+        Vector3(r.x1, high, r.z1),
+        Vector3(r.x0, high, r.z1),
+        color,
+        color,
+        color,
+        color,
+        r.x0,
+        r.z0,
+        r.x1,
+        r.z1,
+    )
+
+
 def _rooms(
-    mut sheets: _Sheets, building: Building, stair: Optional[Stair]
+    mut sheets: _Sheets,
+    building: Building,
+    stair: Optional[Stair],
+    barn: Bool,
 ) raises:
     """Add each room's floor of planks and its plastered ceiling, and the
-    ground storey's joists. A stair's well is cut out of the ceiling of
-    the room it rises from and the floor of the room above."""
+    ground storey's joists. A barn's ceilings are planks. A stair's well
+    is cut out of the ceiling of the room it rises from and the floor of
+    the room above."""
     var slab = Float32(0.2)
     var hole = _Rect(0, 0, 0, 0)
     if stair:
@@ -1148,20 +1226,10 @@ def _rooms(
             )
         var ceiling = INDOORS * 0.8
         for r in ceilings:  # pragma: no branch
-            sheets.plaster.painted_quad(
-                Vector3(r.x0, high, r.z0),
-                Vector3(r.x1, high, r.z0),
-                Vector3(r.x1, high, r.z1),
-                Vector3(r.x0, high, r.z1),
-                ceiling,
-                ceiling,
-                ceiling,
-                ceiling,
-                r.x0,
-                r.z0,
-                r.x1,
-                r.z1,
-            )
+            if barn:
+                _ceiling(sheets.planks, r, high, ceiling * 0.8)
+            else:
+                _ceiling(sheets.plaster, r, high, ceiling)
         if space.storey.value != 0:
             continue
         var z0 = room.z0
@@ -1480,6 +1548,48 @@ def _breast_view(mut sheets: _Sheets, building: Building, breast: Breast):
         )
 
 
+def _gable(
+    mut sheet: Sheet,
+    x: Float32,
+    sense: Float32,
+    n: Vector3,
+    base: Float32,
+    ridge: Float32,
+    edge: Float32,
+    low: Vector3,
+    high: Vector3,
+):
+    """Add a gable's triangle at `x`, from `base` up to `ridge`, `edge` to
+    each side at its foot, cut into rows and cells no more than `CELL`
+    across, so each cell reads its texture at the level it needs. Its
+    color runs from `low` at its foot to `high` at its peak, and its foot
+    runs from `sense * edge` to `-sense * edge`."""
+    var rows = max(1, Int(ceil((ridge - base) / Float32(CELL))))
+    var cols = max(1, Int(ceil(2 * edge / Float32(CELL))))
+    for k in range(rows):  # pragma: no branch
+        var f0 = Float32(k) / Float32(rows)
+        var f1 = Float32(k + 1) / Float32(rows)
+        var y0 = base + (ridge - base) * f0
+        var y1 = base + (ridge - base) * f1
+        var w0 = edge * (1 - f0)
+        var w1 = edge * (1 - f1)
+        var k0 = low + (high - low) * f0
+        var k1 = low + (high - low) * f1
+        for i in range(cols):  # pragma: no branch
+            var g0 = 1 - 2 * Float32(i) / Float32(cols)
+            var g1 = 1 - 2 * Float32(i + 1) / Float32(cols)
+            var a = Vector3(x, y0, sense * w0 * g0)
+            var b = Vector3(x, y0, sense * w0 * g1)
+            var c = Vector3(x, y1, sense * w1 * g1)
+            var d = Vector3(x, y1, sense * w1 * g0)
+            var ia = sheet.vertex(a, n, k0, a.z * n.x, a.y)
+            var ib = sheet.vertex(b, n, k0, b.z * n.x, b.y)
+            var ic = sheet.vertex(c, n, k1, c.z * n.x, c.y)
+            var id = sheet.vertex(d, n, k1, d.z * n.x, d.y)
+            sheet.triangle(ia, ib, ic)
+            sheet.triangle(ia, ic, id)
+
+
 def _roof(
     mut sheets: _Sheets,
     parameters: HouseParameters,
@@ -1567,16 +1677,12 @@ def _roof(
     var gx = half_w + half_t
     for end in range(2):  # pragma: no branch
         var sx = Float32(1) if end == 0 else Float32(-1)
-        var p0 = Vector3(sx * gx, base, _end_sign(end) * edge)
-        var p1 = Vector3(sx * gx, base, -_end_sign(end) * edge)
-        var p2 = Vector3(sx * gx, ridge, 0)
         var c0 = WHITE * outside_shade(0, base, ridge, parameters.seed)
         var c2 = WHITE * 0.75
         var n = Vector3(sx, 0, 0)
-        var i0 = sheets.facade.vertex(p0, n, c0, p0.z * sx, p0.y)
-        var i1 = sheets.facade.vertex(p1, n, c0, p1.z * sx, p1.y)
-        var i2 = sheets.facade.vertex(p2, n, c2, p2.z * sx, p2.y)
-        sheets.facade.triangle(i0, i1, i2)
+        _gable(
+            sheets.facade, sx * gx, _end_sign(end), n, base, ridge, edge, c0, c2
+        )
         if parameters.facade == TIMBER_FRAMED:
             # A king post and two rafters' worth of oak on the gable.
             _bar(
@@ -1959,8 +2065,236 @@ def _piece(
         )
 
 
-def _furniture(mut sheets: _Sheets, building: Building):
-    """Add each furnishing of the model."""
+def _hay(
+    mut sheets: _Sheets,
+    center: Vector3,
+    side: Vector3,
+    front: Vector3,
+    width: Float32,
+    depth: Float32,
+    height: Float32,
+    seed: Int,
+):
+    """Add a stack of straw bales that fills a piece's box, its top course
+    one bale shorter, each bale a little lighter or darker and tied with
+    two cords."""
+    var up = Vector3(0, 1, 0)
+    var across = max(1, Int(width / BALE.x + 0.5))
+    var deep = max(1, Int(depth / BALE.z + 0.5))
+    var courses = max(1, Int(height / BALE.y + 0.5))
+    var long = width / Float32(across)
+    var wide = depth / Float32(deep)
+    var tall = height / Float32(courses)
+    for k in range(courses):  # pragma: no branch
+        var count = across if k < courses - 1 else max(1, across - 1)
+        var start = -Float32(count) * long / 2
+        for i in range(count):  # pragma: no branch
+            for j in range(deep):  # pragma: no branch
+                var tint = STRAW * (
+                    0.85 + 0.3 * hash01(i + 11 * k, j + 7 * seed, 23)
+                )
+                var middle = (
+                    center
+                    + side * (start + long * (Float32(i) + 0.5))
+                    + front * (wide * (Float32(j) + 0.5) - depth / 2)
+                    + up * (tall * (Float32(k) + 0.5))
+                )
+                _block(
+                    sheets.plaster,
+                    middle,
+                    side,
+                    front,
+                    long / 2 - 0.015,
+                    tall / 2 - 0.008,
+                    wide / 2 - 0.015,
+                    tint,
+                )
+                for sx in [Float32(-1), Float32(1)]:  # pragma: no branch
+                    _block(
+                        sheets.wood,
+                        middle + side * (sx * long / 4),
+                        side,
+                        front,
+                        0.012,
+                        tall / 2 - 0.002,
+                        wide / 2 - 0.009,
+                        OAK * 0.6,
+                    )
+
+
+def _manger(
+    mut sheets: _Sheets,
+    center: Vector3,
+    side: Vector3,
+    front: Vector3,
+    width: Float32,
+    depth: Float32,
+    height: Float32,
+):
+    """Add a manger against its wall: a trough of boards on four posts,
+    with hay in it, and a rack of slats on the wall over it."""
+    var up = Vector3(0, 1, 0)
+    var hw = width / 2
+    var hd = depth / 2
+    var wood = OAK * 0.8
+    var floor = height * 0.55
+    _legs(sheets.wood, center, side, front, hw, hd, 0.05, floor, 0.05, wood)
+    # The trough's bottom, its front and back, and its ends.
+    _block(
+        sheets.wood,
+        center + up * floor,
+        side,
+        front,
+        hw,
+        0.025,
+        hd,
+        wood,
+    )
+    for sz in [Float32(1), Float32(-1)]:  # pragma: no branch
+        _block(
+            sheets.wood,
+            center + front * (sz * (hd - 0.025)) + up * ((floor + height) / 2),
+            side,
+            front,
+            hw,
+            (height - floor) / 2,
+            0.025,
+            wood * 1.1,
+        )
+        _block(
+            sheets.wood,
+            center + side * (sz * (hw - 0.025)) + up * ((floor + height) / 2),
+            side,
+            front,
+            0.025,
+            (height - floor) / 2,
+            hd - 0.05,
+            wood,
+        )
+    # Hay heaped in the trough.
+    _block(
+        sheets.plaster,
+        center + up * (height - 0.08),
+        side,
+        front,
+        hw - 0.06,
+        0.05,
+        hd - 0.06,
+        STRAW,
+    )
+    # The rack: two rails along the wall, and slats between them.
+    var low = height + 0.25
+    var high = height + 1.0
+    var back = center - front * (hd - 0.04)
+    for y in [low, high]:  # pragma: no branch
+        _block(sheets.wood, back + up * y, side, front, hw, 0.035, 0.035, wood)
+    var slats = Int(width / 0.15)
+    for k in range(slats + 1):  # pragma: no branch
+        _block(
+            sheets.wood,
+            back
+            + side * (-hw + 0.05 + (width - 0.1) * Float32(k) / Float32(slats))
+            + up * ((low + high) / 2),
+            side,
+            front,
+            0.015,
+            (high - low) / 2,
+            0.015,
+            wood * 1.1,
+        )
+
+
+def _loft(mut sheets: _Sheets, parameters: HouseParameters, half_t: Float32):
+    """Add a barn's loft door high in its east gable, shut, and a hoist
+    beam out from under the ridge over it, with its pulley and rope. A
+    gable too low for a door of 60 centimeters has none."""
+    var half_w = parameters.width.to(METER) / 2
+    var half_d = parameters.depth.to(METER) / 2
+    var base = parameters.storey_height.to(METER) * Float32(parameters.storeys)
+    var slope = tan(parameters.pitch.to(RADIAN))
+    var ridge = base + slope * (half_d + half_t)
+    var gx = half_w + half_t
+    var n = Vector3(1, 0, 0)
+    # The door's top stays under the roof at its sides.
+    var sill = base + 0.25
+    var tall = min(LOFT_DOOR.y, ridge - slope * (LOFT_DOOR.x / 2 + 0.15) - sill)
+    if tall < 0.6:
+        return
+    var paint = painted(parameters.trim)
+    var hw = LOFT_DOOR.x / 2
+    # Two leaves of boards, a frame round them, and the beam over them.
+    for sz in [Float32(1), Float32(-1)]:  # pragma: no branch
+        sheets.wood.box(
+            Vector3(gx + 0.03, sill + tall / 2, sz * hw / 2),
+            Vector3(0.02, 0, 0),
+            Vector3(0, tall / 2, 0),
+            Vector3(0, 0, hw / 2 - 0.01),
+            paint * (0.9 + 0.1 * sz),
+        )
+        _bar(
+            sheets.wood,
+            Vector3(gx, sill, sz * (hw + 0.05)),
+            Vector3(gx, sill + tall + 0.05, sz * (hw + 0.05)),
+            n,
+            0.1,
+            0.12,
+            OAK,
+        )
+        # A strap across each leaf.
+        for y in [sill + 0.25, sill + tall - 0.25]:  # pragma: no branch
+            sheets.wood.box(
+                Vector3(gx + 0.055, y, sz * hw / 2),
+                Vector3(0.006, 0, 0),
+                Vector3(0, 0.025, 0),
+                Vector3(0, 0, hw / 2 - 0.08),
+                IRON,
+            )
+    _bar(
+        sheets.wood,
+        Vector3(gx, sill - 0.05, -hw - 0.1),
+        Vector3(gx, sill - 0.05, hw + 0.1),
+        n,
+        0.1,
+        0.14,
+        OAK,
+    )
+    _bar(
+        sheets.wood,
+        Vector3(gx, sill + tall + 0.05, -hw - 0.1),
+        Vector3(gx, sill + tall + 0.05, hw + 0.1),
+        n,
+        0.1,
+        0.14,
+        OAK,
+    )
+    # The hoist beam, its pulley, and the rope down from it.
+    var beam = ridge - 0.45
+    sheets.wood.box(
+        Vector3(gx + 0.4, beam, 0),
+        Vector3(0.75, 0, 0),
+        Vector3(0, 0.09, 0),
+        Vector3(0, 0, 0.08),
+        OAK * 0.9,
+    )
+    sheets.wood.box(
+        Vector3(gx + 0.95, beam - 0.17, 0),
+        Vector3(0.06, 0, 0),
+        Vector3(0, 0.08, 0),
+        Vector3(0, 0, 0.04),
+        IRON,
+    )
+    sheets.wood.box(
+        Vector3(gx + 0.95, beam - 0.25 - 0.6, 0),
+        Vector3(0.012, 0, 0),
+        Vector3(0, 0.6, 0),
+        Vector3(0, 0, 0.012),
+        STRAW * 0.6,
+    )
+
+
+def _furniture(mut sheets: _Sheets, building: Building, barn: Bool):
+    """Add each furnishing of the model. In a barn, a shelf is a stack of
+    hay, and any other piece is a manger."""
     for index in range(len(building.furnishings)):
         ref piece = building.furnishings[index]
         ref storey = building.storeys[
@@ -1975,17 +2309,25 @@ def _furniture(mut sheets: _Sheets, building: Building):
             Float32(storey.elevation.value),
             -Float32(piece.center.y),
         )
-        _piece(
-            sheets,
-            piece.kind,
-            center,
-            side,
-            front,
-            Float32(piece.width.value),
-            Float32(piece.depth.value),
-            Float32(piece.height.value),
-            index,
-        )
+        var width = Float32(piece.width.value)
+        var depth = Float32(piece.depth.value)
+        var height = Float32(piece.height.value)
+        if not barn:
+            _piece(
+                sheets,
+                piece.kind,
+                center,
+                side,
+                front,
+                width,
+                depth,
+                height,
+                index,
+            )
+        elif piece.kind == SHELF:
+            _hay(sheets, center, side, front, width, depth, height, index)
+        else:
+            _manger(sheets, center, side, front, width, depth, height)
 
 
 struct StandingHouse(Movable):
@@ -2111,7 +2453,8 @@ def stand_house(
     var top = parameters.storey_height.to(METER) * Float32(parameters.storeys)
     _walls(sheets, building, parameters, top)
     var stair = house_stair(building)
-    _rooms(sheets, building, stair)
+    var barn = parameters.use == BARN
+    _rooms(sheets, building, stair, barn)
     if stair:
         _stair_view(sheets, stair.value())
     var breast = house_breast(building)
@@ -2124,7 +2467,9 @@ def stand_house(
     _steps(sheets, interior, lot, ground)
     if parameters.facade == BRICK_FACADE or parameters.facade == STONE_FACADE:
         _quoins(sheets, half_x + half_t, half_z + half_t, top)
-    _furniture(sheets, building)
+    _furniture(sheets, building, barn)
+    if barn and parameters.pitch.to(RADIAN) > 0:
+        _loft(sheets, parameters, half_t)
     var roof = (
         looks.slates if parameters.facade == STONE_FACADE else looks.tiles
     )
@@ -2147,10 +2492,11 @@ def stand_house(
     triangles += _add(
         scene, assets, sheets.daylight, looks.daylight, root, False
     )
-    # A leaf on a hinge for each door of the ground storey, in the order
-    # of the interior's doorways.
+    # A leaf on a hinge for each door of the ground storey, two for a
+    # wide one, in the order of the interior's doorways.
     var hinges = List[Hinge]()
     var paint = painted(parameters.trim)
+    var doorway = 0
     for index in range(len(building.openings)):  # pragma: no branch
         ref o = building.openings[index]
         if o.kind != DOOR:
@@ -2165,26 +2511,40 @@ def stand_house(
         var plane = Float32(0)
         if exterior:
             plane = out_sign * (half_t - Float32(FRAME_INSET) - 0.03)
-        var at = face.at(Float32(o.offset.value), Float32(o.sill.value), plane)
-        var shut = atan2(-face.along.z, face.along.x)
-        # The leaf's -z, turned shut, is (-sin shut, 0, -cos shut). An
-        # outside door swings into the house; an inside one along the
-        # wall's normal.
-        var swing = face.normal * (-out_sign if exterior else Float32(1))
-        # The leaf's -z is along the wall's normal, one way or the other,
-        # so `toward` is 1 or -1.
-        var toward = -sin(shut) * swing.x - cos(shut) * swing.z
-        var sense = toward / abs(toward)
-        var node = Object3D()
-        node.set_position(at.x, at.y, at.z)
-        node.rotate_y(Angle(shut, RADIAN))
-        node.parent = root
-        var hinge = scene.add(node^)
-        var leaf = door_leaf(
-            width - 0.02, height - 0.01, paint if exterior else OAK
-        )
-        triangles += _add(scene, assets, leaf, looks.wood, hinge, True)
+        # An outside door swings into the house, and an outside double
+        # door out of it, so its leaves keep its way clear. An inside door
+        # swings along the wall's normal.
+        var leaves = 2 if width >= DOUBLE_DOOR else 1
+        var into = -out_sign if leaves == 1 else out_sign
+        var swing = face.normal * (into if exterior else Float32(1))
+        var u0 = Float32(o.offset.value)
+        for leaf_index in range(leaves):  # pragma: no branch
+            # The first leaf hangs at the door's start and runs along the
+            # wall; a second hangs at its end and runs back.
+            var at = face.at(
+                u0 + width * Float32(leaf_index), Float32(o.sill.value), plane
+            )
+            var along = face.along * (1 - 2 * Float32(leaf_index))
+            var shut = atan2(-along.z, along.x)
+            # The leaf's -z, turned shut, is (-sin shut, 0, -cos shut),
+            # along the wall's normal one way or the other, so `toward`
+            # is 1 or -1.
+            var toward = -sin(shut) * swing.x - cos(shut) * swing.z
+            var sense = toward / abs(toward)
+            var node = Object3D()
+            node.set_position(at.x, at.y, at.z)
+            node.rotate_y(Angle(shut, RADIAN))
+            node.parent = root
+            var hinge = scene.add(node^)
+            var leaf = door_leaf(
+                width / Float32(leaves) - 0.02,
+                height - 0.01,
+                paint if exterior else OAK,
+            )
+            triangles += _add(scene, assets, leaf, looks.wood, hinge, True)
+            if host.storey.value == 0:
+                hinges.append(Hinge(hinge, shut, sense, doorway))
         if host.storey.value == 0:
-            hinges.append(Hinge(hinge, shut, sense))
+            doorway += 1
     var meshes = len(scene.meshes) - before
     return StandingHouse(root, meshes, triangles, interior^, hinges^)

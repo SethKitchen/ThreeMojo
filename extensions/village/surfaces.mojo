@@ -43,6 +43,8 @@ comptime BRICK_TILE = Float32(0.9)
 comptime FIELDSTONE_TILE = Float32(1.2)
 comptime PLASTER_TILE = Float32(2.0)
 comptime BOARDS_TILE = Float32(1.2)
+comptime BATTEN = Float32(0.125)
+"""Half a batten's width, as a share of a board's."""
 comptime WOOD_TILE = Float32(1.0)
 comptime ASHLAR_TILE = Float32(0.8)
 comptime TILE_TILE = Float32(1.0)
@@ -279,8 +281,12 @@ def boards_texture(size: Int, seed: Int) raises -> Texture:
         seed: Which boards are lighter or darker.
 
     Returns:
-        Six boards across, each its own shade, with grain up the board
-        and a dark joint between boards.
+        Six boards across, each its own shade, with grain up the board,
+        and a batten over each joint. A batten is lit along its left edge
+        and shaded along its right, and casts a thin shadow on the board
+        to its right, so it stands out from the boards without a mesh of
+        its own. A batten drawn as a mesh is thinner than a pixel from a
+        few meters away, and its rows of pixels beat into waves.
 
     Raises:
         Error: If `size` is below one.
@@ -293,17 +299,33 @@ def boards_texture(size: Int, seed: Int) raises -> Texture:
             var fu = (Float32(x) + 0.5) / Float32(size) * Float32(boards)
             var board = Int(fu)
             var local = fu - Float32(board)
-            if local < 0.05:
-                canvas.set(x, y, 34, 26, 20)
-                continue
+            # How far across the board from the nearest joint, from -0.5
+            # to 0.5, and which joint that is.
+            var across = local - Float32(1) if local > 0.5 else local
+            var joint = board + 1 if local > 0.5 else board
             var tone = 0.82 + hash01(board, 0, seed) * 0.3
-            # The grain runs up the board.
-            var grain = _grain(
+            var shade = tone * _grain(
                 v, Float32(board) / Float32(boards) + local / 6, seed
             )
-            var shade = tone * grain
+            if abs(across) < BATTEN:
+                # The batten: its own grain, a lit edge and a shaded one.
+                shade = (0.95 + hash01(joint, 1, seed) * 0.15) * _grain(
+                    v, across + Float32(joint) * 0.37, seed + 1
+                )
+                shade *= 1 + 0.3 * _rise(across, -BATTEN, -BATTEN * 0.7)
+                shade *= 1 - 0.45 * _rise(across, BATTEN, BATTEN * 0.7)
+            else:
+                # Its shadow on the board to its right.
+                var gap = across if across > 0 else Float32(1)
+                shade *= 1 - 0.4 * _rise(gap, BATTEN, BATTEN * 1.6)
             canvas.set(x, y, 128 * shade, 92 * shade, 60 * shade)
     return canvas.texture()
+
+
+def _rise(x: Float32, start: Float32, end: Float32) -> Float32:
+    """Return one at `start`, zero at `end`, and a straight line between,
+    held at zero and one beyond them."""
+    return min(Float32(1), max(Float32(0), (end - x) / (end - start)))
 
 
 def wood_texture(size: Int, seed: Int) raises -> Texture:

@@ -39,7 +39,7 @@ def test_a_door_opens_for_someone_near_and_shuts_after() raises:
     var scene = Scene()
     var node = scene.add(Object3D())
     var doors = Doors()
-    doors.add(Hinge(node, 0.25, -1), _door())
+    doors.add(Hinge(node, 0.25, -1, 0), _door())
     assert_equal(len(doors.angles), 1)
     assert_almost_equal(doors.ways[0].middle().x, 0.5, atol=1e-6)
     assert_almost_equal(doors.ways[0].middle().y, 0.5, atol=1e-6)
