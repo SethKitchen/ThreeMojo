@@ -12,10 +12,11 @@ the declaration texts in that order.
 from tests._python_tokens import (
     declaration_text,
     replace_firsts,
+    significant_graph_pairs,
     significant_json,
     token_sha256,
 )
-from tools._python_json import MISSING, PyJson
+from tools._python_json import MISSING, PY_LIST, PyJson
 
 
 def lane_declarations(payload: String) raises -> String:
@@ -166,6 +167,68 @@ def declaration_token_checks(payload: String, prefix: String) raises:
         if digest != doc.text(doc.at(item, "token")):
             raise Error(prefix + doc.text(doc.at(item, "label")))
         index += 1
+
+
+def restored_declaration_graphs(
+    payload: String, prefix: String, invalid: String
+) raises:
+    """Read each restored declaration, then compare every source graph.
+
+    Args:
+        payload: JSON with `restores` and `graphs`. Each restore has
+            `index`, `source`, `name`, and `owner`. Each graph has
+            `label`, `actual`, and `source`.
+        prefix: The contract prefix, including its trailing space.
+        invalid: The failure text used when `graphs` is not a list.
+
+    Raises:
+        Error: A function cannot be read, a source cannot be tokenized, or a token list changed.
+    """
+    var doc = PyJson.parse(payload)
+    var restores = doc.at(doc.root, "restores")
+    var graph_text = doc.subtree(doc.at(doc.root, "graphs")).dumps()
+    var restore_count = doc.length(restores)
+    if restore_count > 0:
+        var request = PyJson()
+        var rows = request.new_list()
+        var cursor = 0
+        while cursor < restore_count:
+            var item = doc.item(restores, cursor)
+            var row = request.new_dict()
+            request.set(
+                row,
+                "source",
+                request.new_str(doc.text(doc.at(item, "source"))),
+            )
+            request.set(
+                row, "name", request.new_str(doc.text(doc.at(item, "name")))
+            )
+            var owners = request.new_list()
+            var owner = doc.at(item, "owner")
+            var owner_count = doc.length(owner)
+            var slot = 0
+            while slot < owner_count:
+                request.append(
+                    owners, request.new_str(doc.text(doc.item(owner, slot)))
+                )
+                slot += 1
+            request.set(row, "owner", owners)
+            request.append(rows, row)
+            cursor += 1
+        request.root = rows
+        var declared = PyJson.parse(lane_declarations(request.dumps()))
+        var graphs = PyJson.parse(graph_text)
+        if graphs.kind(graphs.root) == PY_LIST:
+            cursor = 0
+            while cursor < restore_count:
+                var item = doc.item(restores, cursor)
+                var at = Int(doc.text(doc.at(item, "index")))
+                var graph = graphs.item(graphs.root, at)
+                var text = declared.text(declared.item(declared.root, cursor))
+                graphs.set(graph, "actual", graphs.new_str(text))
+                cursor += 1
+            graph_text = graphs.dumps()
+    significant_graph_pairs(graph_text, prefix, invalid)
 
 
 def lane_control_prepare(payload: String) raises -> String:

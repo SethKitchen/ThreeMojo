@@ -441,30 +441,41 @@ def _declared_matches(items):
     return parsed['declared'], [flag == 'true' for flag in parsed['flags']]
 
 
-def _declarations(items):
-    """Return the declaration texts in the requested order."""
+def _restored_graphs(restores, graphs):
+    """Read each restored declaration, then compare every source graph."""
+    if not restores and not graphs:
+        return
     import os
     import subprocess
     import tempfile
     from pathlib import Path
-    if not items:
-        return []
+    payload = json.dumps({
+        'restores': [{
+            'index': index,
+            'source': text,
+            'name': item['name'],
+            'owner': list(item['owner']),
+        } for index, item, text in restores],
+        'graphs': [{
+            'label': label,
+            'actual': actual,
+            'source': source,
+        } for actual, source, label in graphs],
+    }, separators=(',', ':'))
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    text = json.dumps(items, separators=(',', ':'))
-    with tempfile.TemporaryDirectory(prefix='singleton-declarations-') as directory:
-        path = Path(directory) / 'declarations.json'
-        path.write_text(text)
+    with tempfile.TemporaryDirectory(prefix='singleton-restored-graphs-') as directory:
+        path = Path(directory) / 'graphs.json'
+        path.write_text(payload)
         result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_declarations',
-             str(path)],
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_singleton_gate',
+             '--restored-graphs', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
 
 
 def verify_premises(root):
@@ -520,21 +531,11 @@ def verify_premises(root):
         if index in selected_match and not selected_match[index]:
             text = full_audit.reviewed_text(root, item['path'], text)
             restores.append((index, item, text))
-    restored = {}
-    if restores:
-        texts = _declarations([{
-            'source': text,
-            'name': item['name'],
-            'owner': list(item['owner']),
-        } for _index, item, text in restores])
-        for (index, _item, _text), actual in zip(restores, texts):
-            restored[index] = actual
     prepared = []
     for index, (item, _selected, _text) in enumerate(loaded):
-        actual = restored[index] if index in restored else declared[index]
-        prepared.append((actual, item['source'],
+        prepared.append((declared[index], item['source'],
                          labels['declaration'] + item['name']))
-    _significant_graphs(prepared)
+    _restored_graphs(restores, prepared)
     return record
 
 

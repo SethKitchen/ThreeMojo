@@ -9,6 +9,7 @@
     carla_singleton_gate --text PATH --decoded PATH
     carla_singleton_gate --graphs DIR
     carla_singleton_gate --source-graphs PATH
+    carla_singleton_gate --restored-graphs PATH
     carla_singleton_gate --selector PATH --wanted PATH
 
 The program checks the bytes it is given. It does not read the repository
@@ -19,6 +20,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import significant_graph_pairs, token_sha256
+from tools._lane_declarations import restored_declaration_graphs
 from tools._python_json import MISSING, PY_LIST, PyJson, py_equal
 from tools._sha256 import sha256_hex
 
@@ -102,6 +104,24 @@ def singleton_source_graphs(payload: String) raises:
     )
 
 
+def singleton_restored_graphs(payload: String) raises:
+    """Read each restored declaration, then compare every source graph.
+
+    Args:
+        payload: JSON with `restores` and `graphs`. Each restore has
+            `index`, `source`, `name`, and `owner`. Each graph has
+            `label`, `actual`, and `source`.
+
+    Raises:
+        Error: A function cannot be read, a source cannot be tokenized, or a token list changed.
+    """
+    restored_declaration_graphs(
+        payload,
+        "rounded LINE singleton contract: ",
+        "consumer import scope changed",
+    )
+
+
 def singleton_graphs(directory: String) raises:
     """Require each consumer token list to match its record.
 
@@ -131,6 +151,7 @@ def _usage():
             "usage: carla_singleton_gate --migration PATH"
             " | --text PATH --decoded PATH | --graphs DIR"
             " | --source-graphs PATH"
+            " | --restored-graphs PATH"
             " | --selector PATH --wanted PATH"
         ),
         file=stderr,
@@ -149,6 +170,7 @@ def main() raises:
     var decoded = String("")
     var graphs = String("")
     var source_graphs = String("")
+    var restored_graphs = String("")
     var selector = String("")
     var wanted = String("")
     var arguments = argv()
@@ -161,6 +183,7 @@ def main() raises:
             or word == "--decoded"
             or word == "--graphs"
             or word == "--source-graphs"
+            or word == "--restored-graphs"
             or word == "--selector"
             or word == "--wanted"
         ):
@@ -177,6 +200,8 @@ def main() raises:
                 graphs = value
             elif word == "--source-graphs":
                 source_graphs = value
+            elif word == "--restored-graphs":
+                restored_graphs = value
             elif word == "--selector":
                 selector = value
             else:
@@ -193,6 +218,8 @@ def main() raises:
         modes += 1
     if source_graphs.byte_length() > 0:
         modes += 1
+    if restored_graphs.byte_length() > 0:
+        modes += 1
     if selector.byte_length() > 0 or wanted.byte_length() > 0:
         modes += 1
     if (
@@ -204,6 +231,9 @@ def main() raises:
     try:
         if source_graphs.byte_length() > 0:
             singleton_source_graphs(Path(source_graphs).read_text())
+            return
+        if restored_graphs.byte_length() > 0:
+            singleton_restored_graphs(Path(restored_graphs).read_text())
             return
         if graphs.byte_length() > 0:
             singleton_graphs(graphs)
