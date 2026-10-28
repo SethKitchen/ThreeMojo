@@ -44,6 +44,7 @@
     carla_cleanup_gate --syntax PATH
     carla_cleanup_gate --classified-syntax PATH
     carla_cleanup_gate --classified-syntax-all PATH
+    carla_cleanup_gate --digest-then-syntax GRAPH DIGEST MESSAGE SOURCES
     carla_cleanup_gate --slice PATH --name NAME
     carla_cleanup_gate --fragment DIR
     carla_cleanup_gate --normalize PATH
@@ -869,6 +870,30 @@ def classified_syntax_all(payload: String) raises -> String:
     return out
 
 
+def digest_then_syntax(
+    graph: String, digest: String, message: String, payload: String
+) raises -> String:
+    """Check one graph digest, then classify every following source.
+
+    Args:
+        graph: The Python dump of the reviewed module.
+        digest: The reviewed SHA-256 of that dump.
+        message: The failure text when the digest differs.
+        payload: A JSON list of the following source texts.
+
+    Returns:
+        The classified syntax list. The digest is checked before that
+        list is built.
+
+    Raises:
+        Error: The digest differs, or the payload is not a list of
+            strings. The digest check runs before classification.
+    """
+    if sha256_hex(graph.as_bytes()) != digest:
+        raise Error(message)
+    return classified_syntax_all(payload)
+
+
 def cleanup_record_paths(migration: Span[UInt8, _]) raises -> String:
     """Require the cleanup record, then return the companion paths.
 
@@ -1001,6 +1026,21 @@ def main() raises:
         try:
             print(
                 cleanup_record_paths(Path(arguments[2]).read_bytes()),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 6 and arguments[1] == "--digest-then-syntax":
+        try:
+            print(
+                digest_then_syntax(
+                    Path(arguments[2]).read_text(),
+                    arguments[3],
+                    arguments[4],
+                    Path(arguments[5]).read_text(),
+                ),
                 end="",
             )
         except error:

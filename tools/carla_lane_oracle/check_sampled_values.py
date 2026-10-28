@@ -433,7 +433,11 @@ def _classified_sources(texts):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise CheckError(message)
-    items = json.loads(result.stdout)
+    return _prepared_rows(texts, json.loads(result.stdout))
+
+
+def _prepared_rows(texts, items):
+    """Return classified syntax rows and remember the successful ones."""
     if not isinstance(items, list) or len(items) != len(texts):
         raise CheckError('sampled projection step changed')
     prepared = []
@@ -458,12 +462,41 @@ def _classified_sources(texts):
     return prepared
 
 
-def _plain_reference_graphs(entries, label):
+def _digest_then_sources(prior, texts):
+    """Check one reviewed graph, then classify the following modules."""
+    if prior is None:
+        return _classified_sources(texts)
+    graph, digest, message = prior
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='digest-syntax-') as directory:
+        folder = Path(directory)
+        graph_path = folder / 'graph.txt'
+        sources_path = folder / 'sources.json'
+        graph_path.write_text(graph)
+        sources_path.write_text(json.dumps(list(texts), separators=(',', ':')))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--digest-then-syntax', str(graph_path), digest, message,
+             str(sources_path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        failure = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(failure)
+    return _prepared_rows(texts, json.loads(result.stdout))
+
+
+def _plain_reference_graphs(entries, label, prior=None):
     """Classify plain reference modules, then compare each graph."""
-    if not entries:
+    if not entries and prior is None:
         return
-    prepared = _classified_sources(
-        [text for _filename, text, _expected in entries])
+    prepared = _digest_then_sources(
+        prior, [text for _filename, text, _expected in entries])
     for (filename, text, expected_hash), item in zip(entries, prepared):
         if isinstance(item, str):
             raise CheckError(item)
@@ -475,14 +508,19 @@ def _plain_reference_graphs(entries, label):
 def _reviewed_reference_graphs(items, texts, reviewed, label, review):
     """Compare reference graphs, classifying each plain run in one check."""
     pending = []
+    prior = None
     for filename, expected_hash in items:
         if filename == reviewed:
-            _plain_reference_graphs(pending, label)
+            _plain_reference_graphs(pending, label, prior)
             pending = []
-            review(filename, expected_hash)
+            prior = (
+                review(filename, expected_hash),
+                expected_hash,
+                label + filename,
+            )
         else:
             pending.append((filename, texts[filename], expected_hash))
-    _plain_reference_graphs(pending, label)
+    _plain_reference_graphs(pending, label, prior)
 
 
 def syntax_tree(text, prepared=None, _prepare=True):
@@ -983,11 +1021,9 @@ def verify(root):
         reference_graphs = graphs['reference']
         closure = _sampled_closure()
 
-        def review(filename, expected_hash):
-            reference_graph = dump(reviewed_reference_tree(
+        def review(filename, _expected_hash):
+            return dump(reviewed_reference_tree(
                 texts[filename], root, _operation=_operation))
-            actual = hashlib.sha256(reference_graph.encode()).hexdigest()
-            require(actual == expected_hash, closure['reference_changed'] + filename)
 
         _reviewed_reference_graphs(
             reference_graphs.items(), texts, closure['reviewed'],

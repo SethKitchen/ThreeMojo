@@ -425,6 +425,8 @@ A changed token is refused.
 
 It prepares every other reference module after that reviewed graph in one check.
 
+It checks that reviewed graph before those other modules in one check.
+
 It slices and renames each copied sampled declaration.
 
 It removes the two derivative intersections from the blend helper.

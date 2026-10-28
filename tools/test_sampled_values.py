@@ -432,15 +432,38 @@ class PlainReferenceGraphTests(unittest.TestCase):
         def review(filename, expected):
             seen.append(filename)
             self.assertEqual(expected, 'keep')
+            return 'graph'
 
         texts = {'curve_trig.mojo': 'def ok():\n    return 1\n'}
-        with self.assertRaises(m.CheckError):
+        label = 'reference module changed; renewed review required: '
+        with self.assertRaises(m.CheckError) as caught:
             m._reviewed_reference_graphs([
                 ('curve_bounds.mojo', 'keep'),
                 ('curve_trig.mojo', '0' * 64),
-            ], texts, 'curve_bounds.mojo',
-                'reference module changed; renewed review required: ', review)
+            ], texts, 'curve_bounds.mojo', label, review)
         self.assertEqual(seen, ['curve_bounds.mojo'])
+        self.assertIn('curve_bounds.mojo', str(caught.exception))
+        self.assertNotIn('curve_trig.mojo', str(caught.exception))
+
+    def test_a_matching_reviewed_graph_reaches_the_plain_module(self):
+        import hashlib
+        graph = 'graph'
+        digest = hashlib.sha256(graph.encode()).hexdigest()
+        label = 'reference module changed; renewed review required: '
+
+        def review(filename, expected):
+            self.assertEqual(filename, 'curve_bounds.mojo')
+            self.assertEqual(expected, digest)
+            return graph
+
+        with self.assertRaises(m.CheckError) as caught:
+            m._reviewed_reference_graphs([
+                ('curve_bounds.mojo', digest),
+                ('curve_trig.mojo', '0' * 64),
+            ], {'curve_trig.mojo': 'def ok():\n    return 1\n'},
+                'curve_bounds.mojo', label, review)
+        self.assertIn('curve_trig.mojo', str(caught.exception))
+        self.assertNotIn('curve_bounds.mojo', str(caught.exception))
 
 
 if __name__ == '__main__':
