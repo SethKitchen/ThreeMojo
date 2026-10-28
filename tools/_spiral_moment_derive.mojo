@@ -12,8 +12,10 @@ The moments share one unscaled prefix sum across the counts 1 through 64.
 from std.pathlib import Path
 
 from tools._bigint import BigInt
+from tools._carla_assets import dumps_indent
 from tools._cli_failures import derive_prefix
 from tools._fraction import Fraction
+from tools._moment_check_plan import moment_check_plan
 from tools._payload_bytes import from_hex
 from tools._python_json import PyJson
 from tests._python_tokens import (
@@ -1024,24 +1026,43 @@ def moment_products_from_rows(rows: String) raises -> String:
 
 
 def write_moment_products(rows: String, output: Path) raises -> String:
-    """Write the table source, then the payload bytes.
+    """Write the table source, the payload bytes, then the coefficient rows.
 
     Args:
         rows: The JSON rows from the moment derivation.
         output: The file that receives the payload bytes.
 
     Returns:
-        The generated table source.
+        JSON with `source` and `coefficients`. `source` is the generated
+        table text. `coefficients` is the indented row document, including
+        the final newline.
 
     Raises:
         Error: The rows changed, a coefficient word is malformed, or the
-            payload hex is not bytes. The source is written before the
-            bytes are read.
+            payload hex is not bytes. The payload bytes are read before
+            the coefficient rows are indented.
     """
-    var doc = PyJson.parse(moment_products_from_rows(rows))
-    var payload = from_hex(doc.text(doc.at(doc.root, "be64")))
+    var products = PyJson.parse(moment_products_from_rows(rows))
+    var payload = from_hex(products.text(products.at(products.root, "be64")))
     output.write_bytes(Span(payload))
-    return doc.text(doc.at(doc.root, "source"))
+    var plan = PyJson.parse(moment_check_plan())
+    var key = plan.text(plan.at(plan.root, "counts_key"))
+    var rows_doc = PyJson.parse(rows)
+    var wrapped = PyJson()
+    var root = wrapped.new_dict()
+    wrapped.set(root, key, wrapped.adopt(rows_doc, rows_doc.root))
+    wrapped.root = root
+    var coefficients = dumps_indent(wrapped, wrapped.root, 2) + "\n"
+    var out = PyJson()
+    var body = out.new_dict()
+    out.set(
+        body,
+        "source",
+        out.new_str(products.text(products.at(products.root, "source"))),
+    )
+    out.set(body, "coefficients", out.new_str(coefficients))
+    out.root = body
+    return out.dumps()
 
 
 def coefficient_integers_from_rows(rows: String) raises -> String:

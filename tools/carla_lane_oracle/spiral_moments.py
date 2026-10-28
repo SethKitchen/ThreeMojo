@@ -968,7 +968,12 @@ def _generated_products(rows):
         if message.startswith(prefix):
             raise CheckError(message[len(prefix):])
         raise CheckError(message) from ValueError(message)
-    return result.stdout.encode('utf-8'), payload.read_bytes()
+    parsed = json.loads(result.stdout)
+    return (
+        parsed['source'].encode('utf-8'),
+        payload.read_bytes(),
+        parsed['coefficients'].encode('utf-8'),
+    )
 
 
 def generate_source(rows):
@@ -1263,12 +1268,11 @@ def main(argv=None):
                 import coverage_invariant_contracts as invariant
             products = {report_plan['report_name']: invariant._indent_json(report)}
             if args.generate:
-                source, payload = _generated_products(rows)
+                source, payload, coefficients = _generated_products(rows)
                 products.update({
                     _table().name: source,
                     report_plan['words_name']: payload,
-                    report_plan['coefficients_name']: invariant._indent_json(
-                        {report_plan['counts_key']: rows}),
+                    report_plan['coefficients_name']: coefficients,
                 })
             _moment_guard('--output', {
                 'destinations': [str((output / name).resolve()) for name in products],
