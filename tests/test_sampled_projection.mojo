@@ -6,7 +6,13 @@
 """The copied sampled helpers keep their reviewed projection."""
 
 from std.pathlib import Path
-from std.testing import TestSuite, assert_equal, assert_false, assert_true
+from std.testing import (
+    TestSuite,
+    assert_equal,
+    assert_false,
+    assert_raises,
+    assert_true,
+)
 
 from tests._python_tokens import (
     decorator_prefix,
@@ -15,7 +21,10 @@ from tests._python_tokens import (
 )
 from tools._python_json import PyJson
 from tools._sampled_declarations import sampled_declarations
-from tools._sampled_projection import project_reviewed_helpers
+from tools._sampled_projection import (
+    project_reviewed_helpers,
+    project_with_recipe,
+)
 from tools._sampled_value_gate import (
     drop_derivative_intersection,
     extract_sampled_function,
@@ -52,6 +61,12 @@ def test_decorator_prefix_map_matches_one_lookup() raises:
     assert_equal(
         doc.text(doc.at(doc.root, "other")), decorator_prefix(source, "other")
     )
+
+
+def test_a_missing_bounds_text_fails_before_the_helpers() raises:
+    """A missing bounds text fails before a helper is projected."""
+    with assert_raises(contains="KeyError: 'bounds'"):
+        _ = project_with_recipe("{}")
 
 
 def test_copied_helpers_keep_the_reviewed_projection() raises:

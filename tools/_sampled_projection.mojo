@@ -348,3 +348,26 @@ def project_reviewed_helpers(bounds: String, trig: String) raises -> String:
     out.set(envelope, "lane", lane)
     out.root = envelope
     return out.dumps()
+
+
+def project_with_recipe(payload: String) raises -> String:
+    """Read the projection steps, then project the copied helpers.
+
+    Args:
+        payload: JSON with `bounds` and `trig` source texts.
+
+    Returns:
+        JSON with `recipe` and `record`. `recipe` is the projection
+        steps. `record` is the copied helpers and the value dispatchers.
+
+    Raises:
+        Error: A helper, a role list, or a projection step changed. The
+            steps are read before the helpers are projected.
+    """
+    var recipe = sampled_projection_recipe()
+    var doc = PyJson.parse(payload)
+    var record = project_reviewed_helpers(
+        doc.text(doc.at(doc.root, "bounds")),
+        doc.text(doc.at(doc.root, "trig")),
+    )
+    return '{"recipe":' + recipe + ',"record":' + record + "}"

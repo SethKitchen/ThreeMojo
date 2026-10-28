@@ -563,10 +563,35 @@ def _project_batch(bounds, trig):
     return json.loads(result.stdout)
 
 
+def _recipe_and_batch(bounds, trig):
+    """Return the projection steps and the copied helpers."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps(
+        {'bounds': bounds, 'trig': trig}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='sampled-recipe-') as directory:
+        path = Path(directory) / 'sources.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_sampled_projection', '--with-recipe', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    return json.loads(result.stdout)
+
+
 def _project_sampled(bounds, trig, texts, names, copies):
     """Project the reviewed helpers, using Python only for the syntax texts."""
-    recipe = _projection_recipe()
-    record = _project_batch(bounds, trig)
+    checked = _recipe_and_batch(bounds, trig)
+    recipe = checked['recipe']
+    record = checked['record']
     expected = record['helpers']
     for name in copies:
         require(names[name] in expected, _sampled_closure()['step'])

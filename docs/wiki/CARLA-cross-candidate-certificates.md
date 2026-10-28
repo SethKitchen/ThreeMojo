@@ -115,6 +115,8 @@ It keeps the four sampled input modules.
 
 It keeps the sampled projection steps and their comparison texts.
 
+It reads those projection steps and the copied helpers in one check.
+
 It keeps the sampled reference names and the closure groups.
 
 It keeps the sampled refusal messages.
