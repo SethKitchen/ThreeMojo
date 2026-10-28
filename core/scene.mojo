@@ -1999,17 +1999,26 @@ def _gyroscope_world(parent: Matrix4, local: Matrix4) raises -> Matrix4:
     Returns:
         The world transform.
 
+    A transform scaled to zero along an axis has no turn to read. three.js
+    reads it as not a number and throws it away, keeping the position and
+    the axis lengths, so here a flat world transform keeps those and a flat
+    local transform turns the gyroscope by nothing.
+
     Raises:
-        Error: Never for a transform that decomposes.
+        Error: If a transform is not finite.
     """
     var world = Matrix4(copy=parent)
     world.multiply(local)
-    var at = Vector3(0, 0, 0)
+    var at = Vector3.from_matrix_position(world)
     var turn = Quaternion.identity()
-    var size = Vector3(1, 1, 1)
-    world.decompose(at, turn, size)
-    var own_at = Vector3(0, 0, 0)
+    var size = Vector3(
+        world.column_length(0), world.column_length(1), world.column_length(2)
+    )
+    if world.has_extent():
+        world.decompose(at, turn, size)
     var own_turn = Quaternion.identity()
-    var own_size = Vector3(1, 1, 1)
-    local.decompose(own_at, own_turn, own_size)
+    if local.has_extent():
+        var own_at = Vector3(0, 0, 0)
+        var own_size = Vector3(1, 1, 1)
+        local.decompose(own_at, own_turn, own_size)
     return compose(at, own_turn, size)

@@ -1535,11 +1535,18 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             The hits, nearest first, across every object on a layer this
             raycaster tests.
 
+        A mesh whose world transform projects, as a shadow mesh's does, or
+        scales an axis to nothing has no hit, as in three.js, where its
+        inverse is the zero matrix. `intersect_mesh` refuses such a mesh.
+
         Raises:
             Error: For anything the pickers above raise for.
         """
         var hits = List[Hit]()
         for index in range(len(scene.meshes)):
+            var world = scene.world_matrix(scene.meshes[index].node)
+            if not world.is_affine() or not world.has_extent():
+                continue
             hits.extend(self.intersect_mesh(scene, assets, index))
         for index in range(len(scene.instanced_meshes)):
             hits.extend(self.intersect_instanced_mesh(scene, assets, index))

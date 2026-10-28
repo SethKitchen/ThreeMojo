@@ -96,6 +96,35 @@ def test_a_gyroscope_keeps_its_own_turn() raises:
     )
 
 
+def test_a_parent_scaled_to_nothing_keeps_the_gyroscope_finite() raises:
+    # The first frame of a scale-in animation: the parent has no extent, so
+    # there is no turn to read. The gyroscope still lands where its parent
+    # carries it, as a plain node does, and so does a gyroscope that is
+    # itself scaled to nothing.
+    var scene = Scene()
+    var car = Object3D()
+    car.set_position(10, 0, 0)
+    car.set_scale(0, 0, 0)
+    var car_id = scene.add(car^)
+    var held = gyroscope()
+    held.parent = car_id
+    held.set_position(0, 0, 1)
+    var held_id = scene.add(held^)
+    var flat = gyroscope()
+    flat.parent = held_id
+    flat.set_scale(0, 1, 1)
+    var flat_id = scene.add(flat^)
+    scene.update()
+    var at = scene.world_position(held_id)
+    assert_almost_equal(at.x, 10, atol=1e-6)
+    assert_almost_equal(at.z, 0, atol=1e-6)
+    assert_almost_equal(scene.world_position(flat_id).x, 10, atol=1e-6)
+    # Grown back, the gyroscope decomposes as before.
+    scene.node(car_id).set_scale(1, 1, 1)
+    scene.update()
+    assert_almost_equal(scene.world_position(held_id).z, 1, atol=1e-6)
+
+
 def test_a_gyroscopes_children_ride_it() raises:
     var scene = _world()
     _assert_matrix(

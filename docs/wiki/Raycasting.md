@@ -146,7 +146,7 @@ A wide line is picked by `intersect_wide_line` alone, because a width in pixels 
 - An indexed line or points geometry raises.
 - A mesh that names a missing node, geometry or material raises. A geometry with no positions raises.
 - A stale scene raises. Call `scene.update()` first.
-- A mesh whose world transform flattens a dimension raises. It has no inverse to carry the ray through.
+- A mesh whose world transform flattens a dimension raises. It has no inverse to carry the ray through. `intersect_scene` passes over such a mesh, and over a projected mesh such as a shadow mesh, as three.js finds no hit on either.
 - `set_from_pixel` raises for an image with no size.
 
 ## Example
