@@ -427,6 +427,8 @@ It removes the two derivative intersections from the blend helper.
 
 It checks stored helpers and the value-only imports.
 
+It prepares the lane-value syntax after those stored helpers in one check.
+
 It checks the statement roles of four sampled declarations.
 
 The lane role check starts at the second statement.

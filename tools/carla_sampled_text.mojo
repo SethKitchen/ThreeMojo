@@ -24,6 +24,7 @@
     carla_sampled_text --primitive-aliases PATH
     carla_sampled_text --primitive-declaration PATH
     carla_sampled_text --stored-half-tail PATH
+    carla_sampled_text --helper-then-syntax PRIMITIVE TARGET
 
 The extract mode prints one top-level function. The rename mode prints the
 declaration with sampled identifiers renamed. The drop mode removes the first
@@ -77,6 +78,29 @@ from tools._sampled_value_gate import (
     sampled_value_fields,
     sampled_value_imports,
 )
+from tools.carla_cleanup_gate import classified_syntax_json
+
+
+def helper_fields_then_syntax(
+    primitive: String, target: String
+) raises -> String:
+    """Check the stored helpers, then prepare the lane-value syntax.
+
+    Args:
+        primitive: The interval module.
+        target: The lane-value module.
+
+    Returns:
+        The syntax JSON for `target`. The helper check runs before that
+        syntax is prepared.
+
+    Raises:
+        Error: A stored helper changed, or the target syntax is unclosed
+            or ambiguous. The helper check runs before the syntax is
+            prepared.
+    """
+    stored_helper_fields(primitive)
+    return classified_syntax_json(target)
 
 
 def _usage():
@@ -85,7 +109,8 @@ def _usage():
         (
             "usage: carla_sampled_text --extract PATH --name NAME | --rename"
             " PATH | --drop-intersection PATH --name first|second |"
-            " --helper-fields PATH | --value-fields PATH | --value-imports PATH"
+            " --helper-fields PATH | --helper-then-syntax PRIMITIVE TARGET |"
+            " --value-fields PATH | --value-imports PATH"
             " | --body-roles PATH | --check-roles PATH --name KIND |"
             " --body-dump PATH --index N | --return-elts PATH --index N |"
             " --return-pair PATH --index N | --top-level PATH --name NAMES |"
@@ -133,6 +158,19 @@ def main() raises:
     var index_text = String("")
     var strip_gates = False
     var arguments = argv()
+    if len(arguments) == 4 and arguments[1] == "--helper-then-syntax":
+        try:
+            print(
+                helper_fields_then_syntax(
+                    Path(arguments[2]).read_text(),
+                    Path(arguments[3]).read_text(),
+                ),
+                end="",
+            )
+        except error:
+            print(strip_sampled_gates(String(error)), file=stderr)
+            exit(1)
+        return
     var index = 1
     while index < len(arguments):
         var word = arguments[index]

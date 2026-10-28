@@ -77,6 +77,40 @@ def _sampled_declarations():
     return json.loads(result.stdout)
 
 
+def _helper_then_syntax(primitive, target):
+    """Check the stored helpers, then prepare the lane-value syntax."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='helper-syntax-') as directory:
+        folder = Path(directory)
+        primitive_path = folder / 'primitive.mojo'
+        target_path = folder / 'target.mojo'
+        primitive_path.write_text(primitive)
+        target_path.write_text(target)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sampled_text',
+             '--helper-then-syntax', str(primitive_path), str(target_path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    try:
+        data = json.loads(result.stdout)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if data.get('fallback'):
+        return None
+    try:
+        return data['source'], data['generics'], data['words']
+    except (KeyError, TypeError):
+        return None
+
+
 def _sampled_text(mode, text, name='', index=None, replacement=None):
     """Slice, rename, or dump one declaration with the Mojo text gate."""
     import os
@@ -859,8 +893,11 @@ def verify(root):
             sum2_contracts.verify(root, _operation=_operation)
         except ValueError as error:
             raise CheckError(str(error)) from error
-        _sampled_text('--helper-fields', texts[closure['primitive']])
-        target_tree = syntax_tree(target)
+        target_tree = syntax_tree(
+            target,
+            _helper_then_syntax(texts[closure['primitive']], target),
+            _prepare=False,
+        )
         reference_trees = {closure['reviewed']: reviewed_reference_tree(bounds, root, _operation=_operation), closure['syntax']: syntax_tree(trig)}
         for key, expected_hash in graphs['shared'].items():
             filename, name = key.split(':', 1)
