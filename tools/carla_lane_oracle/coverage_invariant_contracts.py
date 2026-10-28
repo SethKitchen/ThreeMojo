@@ -106,6 +106,45 @@ def _protected_tail():
     return _PROTECTED_TAIL
 
 
+def _dispatch_ready():
+    return ('MIGRATION' in curve.__dict__ and curve.MIGRATION is not None
+            and curve._PATHS is not None)
+
+
+def _input_bundle():
+    """Read the invariant migration and the dispatch paths, then the tail."""
+    global MIGRATION, MIGRATION_SHA256, _PROTECTED_TAIL
+    if ('MIGRATION' in globals() and MIGRATION is not None
+            and _PROTECTED_TAIL is not None and _dispatch_ready()):
+        return
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_invariant_gate',
+         '--input-bundle'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    if 'MIGRATION' not in globals() or MIGRATION is None:
+        MIGRATION = parsed['invariant']['path']
+        MIGRATION_SHA256 = parsed['invariant']['sha']
+    if not _dispatch_ready():
+        if 'MIGRATION' not in curve.__dict__ or curve.MIGRATION is None:
+            curve.MIGRATION = parsed['dispatch']['path']
+            curve.MIGRATION_SHA256 = parsed['dispatch']['sha']
+        if curve._PATHS is None:
+            curve._PATHS = parsed['paths']
+    if _PROTECTED_TAIL is None:
+        _PROTECTED_TAIL = tuple(parsed['tail'])
+
+
 def __getattr__(name):
     if name in ('MIGRATION', 'MIGRATION_SHA256'):
         _ensure_migration()
@@ -113,8 +152,8 @@ def __getattr__(name):
     if name == 'SOURCE_PATHS':
         return _sources()
     if name == 'PROTECTED_INPUTS':
-        _ensure_migration()
-        return (MIGRATION, *curve.PROTECTED_INPUTS, *_protected_tail())
+        _input_bundle()
+        return (MIGRATION, *curve.PROTECTED_INPUTS, *_PROTECTED_TAIL)
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 

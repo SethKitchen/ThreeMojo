@@ -78,6 +78,34 @@ def _paths():
     return _PATHS
 
 
+def _protected_bundle():
+    """Read the dispatch migration record, then the protected paths."""
+    global MIGRATION, MIGRATION_SHA256, _PATHS
+    if ('MIGRATION' in globals() and MIGRATION is not None
+            and _PATHS is not None):
+        return
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_gate',
+         '--protected-bundle'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    if 'MIGRATION' not in globals() or MIGRATION is None:
+        MIGRATION = parsed['migration']['path']
+        MIGRATION_SHA256 = parsed['migration']['sha']
+    if _PATHS is None:
+        _PATHS = parsed['paths']
+
+
 def __getattr__(name):
     if name in ('MIGRATION', 'MIGRATION_SHA256'):
         _ensure_migration()
@@ -85,9 +113,8 @@ def __getattr__(name):
     if name == 'SOURCE_PATHS':
         return tuple(_paths()['sources'])
     if name == 'PROTECTED_INPUTS':
-        _ensure_migration()
-        data = _paths()
-        return (MIGRATION, *data['sources'], *data['protected'])
+        _protected_bundle()
+        return (MIGRATION, *_PATHS['sources'], *_PATHS['protected'])
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 

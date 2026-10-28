@@ -8,7 +8,10 @@
 from std.testing import TestSuite, assert_equal
 
 from tools._python_json import PyJson
-from tools.carla_dispatch_gate import dispatch_paths
+from tools.carla_dispatch_gate import (
+    dispatch_paths,
+    dispatch_protected_bundle,
+)
 
 
 def test_sources_precede_the_protected_paths() raises:
@@ -40,6 +43,21 @@ def test_sources_precede_the_protected_paths() raises:
         doc.text(doc.item(protected, 4)),
         "extensions/carla/lane_refinement.mojo",
     )
+
+
+def test_the_migration_record_is_read_before_the_paths() raises:
+    """The dispatch migration record stays ahead of the protected paths."""
+    var wrapped = dispatch_protected_bundle()
+    var paths = dispatch_paths()
+    assert_equal(wrapped.startswith('{"migration":'), True)
+    var doc = PyJson.parse(wrapped)
+    assert_equal(doc.key(doc.root, 0), "migration")
+    assert_equal(doc.key(doc.root, 1), "paths")
+    assert_equal(
+        doc.text(doc.at(doc.at(doc.root, "migration"), "path")),
+        "tools/carla_lane_oracle/curve-support-dispatch-migration.json",
+    )
+    assert_equal(doc.subtree(doc.at(doc.root, "paths")).dumps(), paths)
 
 
 def main() raises:

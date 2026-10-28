@@ -5,6 +5,7 @@
 
 """Check the curve support and dispatch migration record.
 
+    carla_dispatch_gate --protected-bundle
     carla_dispatch_gate --migration PATH
     carla_dispatch_gate --bytes PATH --sha HEX --label TEXT
     carla_dispatch_gate --tokens DIR
@@ -24,6 +25,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import significant_graph_pairs, token_sha256
+from tools._migration_records import migration_records
 from tools._lane_declarations import declaration_token_checks
 from tools._python_json import MISSING, PY_DICT, PY_LIST, PyJson, py_equal
 from tools._sha256 import sha256_hex
@@ -302,6 +304,25 @@ def dispatch_paths() raises -> String:
     return doc.dumps()
 
 
+def dispatch_protected_bundle() raises -> String:
+    """Read the dispatch migration record, then the protected paths.
+
+    Returns:
+        JSON with `migration` and `paths`. The migration record is read
+        before the paths.
+
+    Raises:
+        Error: The paths cannot be written. The migration record is read
+            before the paths.
+    """
+    var records = PyJson.parse(migration_records())
+    var migration = records.subtree(
+        records.at(records.root, "dispatch")
+    ).dumps()
+    var paths = dispatch_paths()
+    return '{"migration":' + migration + ',"paths":' + paths + "}"
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -337,6 +358,13 @@ def main() raises:
     var source_graph_groups = String("")
     var pins = String("")
     var arguments = argv()
+    if len(arguments) == 2 and arguments[1] == "--protected-bundle":
+        try:
+            print(dispatch_protected_bundle(), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var index = 1
     while index < len(arguments):
         var word = arguments[index]

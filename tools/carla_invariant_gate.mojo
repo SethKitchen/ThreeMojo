@@ -5,6 +5,7 @@
 
 """Check the coverage-invariant record and its component digests.
 
+    carla_invariant_gate --input-bundle
     carla_invariant_gate --migration PATH [--prior PATH] [--components DIR]
     carla_invariant_gate --bytes PATH --sha HEX --kind after|before --label TEXT
     carla_invariant_gate --pair DIR
@@ -23,6 +24,8 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._carla_assets import dumps_indent
+from tools._migration_records import migration_records
+from tools.carla_dispatch_gate import dispatch_paths
 from tools._python_json import (
     MISSING,
     PY_BOOL,
@@ -479,6 +482,38 @@ def invariant_protected_tail() raises -> String:
     return doc.dumps()
 
 
+def invariant_input_bundle() raises -> String:
+    """Read the invariant migration and the dispatch paths, then the tail.
+
+    Returns:
+        JSON with `invariant`, `dispatch`, `paths`, and `tail`. The
+        migration records are read before the dispatch paths. The tail
+        is read last.
+
+    Raises:
+        Error: The paths or the tail cannot be written. The migration
+            records are read before the paths and the tail.
+    """
+    var records = PyJson.parse(migration_records())
+    var invariant = records.subtree(
+        records.at(records.root, "invariant")
+    ).dumps()
+    var dispatch = records.subtree(records.at(records.root, "dispatch")).dumps()
+    var paths = dispatch_paths()
+    var tail = invariant_protected_tail()
+    return (
+        '{"invariant":'
+        + invariant
+        + ',"dispatch":'
+        + dispatch
+        + ',"paths":'
+        + paths
+        + ',"tail":'
+        + tail
+        + "}"
+    )
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -509,6 +544,13 @@ def main() raises:
     var places = String("")
     var predecessor = String("")
     var arguments = argv()
+    if len(arguments) == 2 and arguments[1] == "--input-bundle":
+        try:
+            print(invariant_input_bundle(), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var index = 1
     while index < len(arguments):
         var word = arguments[index]

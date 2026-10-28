@@ -152,6 +152,8 @@ It keeps the four coverage-invariant source paths.
 
 It keeps the six extra coverage-invariant inputs.
 
+It reads the invariant migration and the dispatch paths before that protected tail in one check.
+
 It keeps the pin file names, the prior record, and the successor message.
 
 It reads those labels before the migration record in one check.
@@ -207,6 +209,8 @@ It selects the Map seed or the lane predecessor after that comparison.
 It checks every lane predecessor in one check.
 
 It keeps the two dispatch sources and the five protected paths.
+
+It reads the dispatch migration record before those protected paths in one check.
 
 It keeps the dispatch path, the choice names, and the premise messages.
 
