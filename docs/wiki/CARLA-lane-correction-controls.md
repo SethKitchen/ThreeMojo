@@ -118,6 +118,8 @@ A failed speed check is not kept.
 
 `tools/carla_raw_cut_gate.mojo` checks the raw-cut inverse record, the fixture token, the successor binding, and the operation graph.
 
+It checks that record digest before it checks a repeated key.
+
 It reads the predecessor token before it checks that binding.
 
 It refuses a repeated predecessor key before that token is read.
@@ -125,6 +127,8 @@ It refuses a repeated predecessor key before that token is read.
 `tools/carla_runtime_view_gate.mojo` checks the runtime-view record and its bound tests.
 
 `tools/carla_followup_gate.mojo` checks the coverage-followup record, the pin digests, the ordered pin pair, and the pin placements.
+
+It checks that record digest before it checks a repeated key.
 
 It rebuilds one coverage-followup pin predecessor in one check.
 
@@ -999,6 +1003,8 @@ It requires the helper and the current spiral to be text.
 It returns the eight ideal-projection result counts.
 
 `tools/carla_accepted_gate.mojo` checks the accepted successor record, the pin digests, the ordered pin pair, and the pin placements.
+
+It checks that record digest before it checks a repeated key.
 
 It rebuilds one accepted pin predecessor in one check.
 

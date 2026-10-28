@@ -5,6 +5,7 @@
 
 """A changed raw-cut record fails the gate."""
 
+from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tools.carla_raw_cut_gate import (
@@ -23,6 +24,20 @@ def test_a_changed_record_is_refused() raises:
         contains="raw cut inverse contract: unreviewed migration record"
     ):
         raw_cut_record(String("").as_bytes(), "")
+    with assert_raises(
+        contains="raw cut inverse contract: unreviewed migration record"
+    ):
+        raw_cut_record(String('{"a":1,"a":2}').as_bytes(), "")
+
+
+def test_the_reviewed_raw_cut_record_passes() raises:
+    """The reviewed record passes the digest and the repeated-key check."""
+    raw_cut_record(
+        Path(
+            "tools/carla_lane_oracle/raw-cut-inverse-migration.json"
+        ).read_bytes(),
+        "",
+    )
 
 
 def test_a_changed_predecessor_is_refused() raises:

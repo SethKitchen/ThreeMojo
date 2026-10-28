@@ -7258,6 +7258,14 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '    _gate(payload)\n',
          ),
         ),
+        (146, 147,
+         (
+          '    record = json.loads(payload, object_pairs_hook=source.unique_keys)\n',
+         ),
+         (
+          '    record = json.loads(payload)\n',
+         ),
+        ),
         (147, 153,
          (
           "    require(type(record['schema']) is int and record['schema'] == 1\n",
@@ -7798,6 +7806,14 @@ _TYPED_CHECKER_SOURCE_EDITS = {
          (
           '    payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())\n',
           '    _gate(payload)\n',
+         ),
+        ),
+        (106, 107,
+         (
+          '    record = json.loads(payload, object_pairs_hook=source.unique_keys)\n',
+         ),
+         (
+          '    record = json.loads(payload)\n',
          ),
         ),
         (107, 107,
@@ -11066,7 +11082,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '    payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())\n',
           '    _gate(payload)\n',
           '    read_record.payload = payload\n',
-          '    return json.loads(payload, object_pairs_hook=source.unique_keys)\n',
+          '    return json.loads(payload)\n',
           '\n',
           '\n',
           'def _declaration(text, name, owner):\n',

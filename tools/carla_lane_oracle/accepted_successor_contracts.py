@@ -144,7 +144,7 @@ def _gate_sources(pairs):
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
-    record = json.loads(payload, object_pairs_hook=source.unique_keys)
+    record = json.loads(payload)
     prior = _typed_source.historical_bytes(root, root/'tools/carla_lane_oracle/coverage-followup-migration.json', (root/'tools/carla_lane_oracle/coverage-followup-migration.json').read_bytes())
     _gate(payload, prior)
     components = []

@@ -188,7 +188,7 @@ def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
     read_record.payload = payload
-    return json.loads(payload, object_pairs_hook=source.unique_keys)
+    return json.loads(payload)
 
 
 def _declaration(text, name, owner):

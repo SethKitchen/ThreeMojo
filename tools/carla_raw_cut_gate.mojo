@@ -72,10 +72,11 @@ def raw_cut_record(migration: Span[UInt8, _], module: String) raises:
         module: The historical dispatch source. Empty skips that check.
 
     Raises:
-        Error: The record or the module token changed.
+        Error: The record digest, a repeated key, or the module token changed.
     """
     if sha256_hex(migration) != _MIGRATION_SHA256:
         _fail("unreviewed migration record")
+    reject_duplicate_pin_keys(migration)
     var doc = PyJson.parse(String(from_utf8_lossy=migration))
     if not _schema_one(doc) or doc.text(doc.at(doc.root, "path")) != _SOURCE:
         _fail("wrong successor source or schema")

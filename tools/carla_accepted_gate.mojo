@@ -28,6 +28,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
+from tools._duplicate_pin_keys import reject_duplicate_pin_keys
 from tools._pin_restore import restore_reviewed_pin
 from tools._python_json import (
     MISSING,
@@ -231,10 +232,11 @@ def accepted_record(
         check_prior: Whether to check the followup digest and the component set.
 
     Raises:
-        Error: The record, the followup digest, or a component digest changed.
+        Error: The record digest, a repeated key, the followup digest, or a component digest changed.
     """
     if sha256_hex(migration) != _MIGRATION_SHA256:
         _fail("unreviewed migration record")
+    reject_duplicate_pin_keys(migration)
     var doc = PyJson.parse(String(from_utf8_lossy=migration))
     _require_record(doc)
     if not check_prior:

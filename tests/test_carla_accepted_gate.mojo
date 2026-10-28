@@ -27,6 +27,27 @@ def test_a_changed_record_is_refused() raises:
         contains="accepted source successor: unreviewed migration record"
     ):
         accepted_record(String("").as_bytes(), String("").as_bytes(), "", False)
+    with assert_raises(
+        contains="accepted source successor: unreviewed migration record"
+    ):
+        accepted_record(
+            String('{"a":1,"a":2}').as_bytes(),
+            String("").as_bytes(),
+            "",
+            False,
+        )
+
+
+def test_the_reviewed_accepted_record_passes() raises:
+    """The reviewed record passes the digest and the repeated-key check."""
+    accepted_record(
+        Path(
+            "tools/carla_lane_oracle/accepted-successor-migration.json"
+        ).read_bytes(),
+        String("").as_bytes(),
+        "",
+        False,
+    )
 
 
 def test_a_changed_pin_is_refused() raises:
