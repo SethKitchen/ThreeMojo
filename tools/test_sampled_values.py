@@ -1374,6 +1374,54 @@ class RestoredScopeTests(unittest.TestCase):
                 )
 
 
+class CleanupPremiseCacheTests(unittest.TestCase):
+    def test_the_same_premise_texts_skip_the_second_catalog(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import frozen_arc_producer_contracts as frozen
+        from tools.carla_lane_oracle import reviewed_cleanup_contracts as cleanup
+        saved_cache = cleanup._CATALOG_FROZEN
+        saved_migration = frozen.__dict__.get('MIGRATION')
+        saved_sha = frozen.__dict__.get('MIGRATION_SHA256')
+        texts = ('line', 'arc', 'junction')
+        try:
+            cleanup._CATALOG_FROZEN = None
+            frozen.MIGRATION = None
+            ok = Mock(
+                returncode=0,
+                stdout='{"path":"frozen.json","sha":"abc"}',
+                stderr='',
+            )
+            with patch('subprocess.run', return_value=ok) as run:
+                cleanup._catalog_then_frozen(texts)
+                self.assertEqual(frozen.MIGRATION, 'frozen.json')
+                self.assertEqual(frozen.MIGRATION_SHA256, 'abc')
+                frozen.MIGRATION = None
+                cleanup._catalog_then_frozen(texts)
+                self.assertEqual(run.call_count, 1)
+                self.assertEqual(frozen.MIGRATION, 'frozen.json')
+                cleanup._catalog_then_frozen(('line', 'arc', 'other'))
+                self.assertEqual(run.call_count, 2)
+            failed = Mock(
+                returncode=1, stdout='', stderr='premise catalog changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'premise catalog changed'):
+                    cleanup._catalog_then_frozen(('bad', 'arc', 'junction'))
+                self.assertEqual(run.call_count, 1)
+                with self.assertRaisesRegex(ValueError, 'premise catalog changed'):
+                    cleanup._catalog_then_frozen(('bad', 'arc', 'junction'))
+                self.assertEqual(run.call_count, 2)
+        finally:
+            cleanup._CATALOG_FROZEN = saved_cache
+            if saved_migration is None:
+                frozen.__dict__.pop('MIGRATION', None)
+            else:
+                frozen.MIGRATION = saved_migration
+            if saved_sha is None:
+                frozen.__dict__.pop('MIGRATION_SHA256', None)
+            else:
+                frozen.MIGRATION_SHA256 = saved_sha
+
+
 class CleanupTokenCacheTests(unittest.TestCase):
     def test_the_same_cleanup_tokens_skip_the_second_check(self):
         from unittest.mock import Mock, patch

@@ -387,6 +387,11 @@ It reads the cleanup declaration catalog before those premise checks in one chec
 
 It checks those premise fragments before the frozen migration record in one check.
 
+It reuses that premise check when the same texts are read again.
+The three source files are still read.
+A changed text is checked again.
+A failed check is not kept.
+
 It checks the guard pin digest before the declaration catalog in one check.
 
 It reads that declaration catalog after the runtime pin predecessor in one check.

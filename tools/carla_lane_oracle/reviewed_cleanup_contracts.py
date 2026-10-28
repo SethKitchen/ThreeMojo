@@ -626,28 +626,42 @@ def _declarations(items):
     return json.loads(result.stdout)
 
 
+_CATALOG_FROZEN = None
+
+
 def _catalog_then_frozen(texts):
-    """Check the premise catalog, then read the frozen migration record."""
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    payload = json.dumps({'texts': list(texts)}, separators=(',', ':'))
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='catalog-frozen-') as directory:
-        path = Path(directory) / 'sources.json'
-        path.write_text(payload)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_premises',
-             '--catalog-migration', str(path)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    parsed = json.loads(result.stdout)
+    """Check the premise catalog, then read the frozen migration record.
+
+    The same texts are not checked again. A changed text is checked again.
+    A failed check is not kept.
+    """
+    global _CATALOG_FROZEN
+    key = tuple(texts)
+    cached = _CATALOG_FROZEN
+    if cached is not None and cached[0] == key:
+        parsed = cached[1]
+    else:
+        import os
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        payload = json.dumps({'texts': list(texts)}, separators=(',', ':'))
+        root = Path(__file__).resolve().parents[2]
+        mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+        with tempfile.TemporaryDirectory(prefix='catalog-frozen-') as directory:
+            path = Path(directory) / 'sources.json'
+            path.write_text(payload)
+            result = subprocess.run(
+                ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_premises',
+                 '--catalog-migration', str(path)],
+                capture_output=True, text=True)
+        if result.returncode != 0:
+            lines = [line.strip() for line in result.stderr.splitlines()
+                     if line.strip() and 'Crashpad' not in line]
+            message = lines[-1] if lines else result.stdout.strip()
+            raise ValueError(message)
+        parsed = json.loads(result.stdout)
+        _CATALOG_FROZEN = (key, parsed)
     if 'MIGRATION' not in frozen.__dict__ or frozen.MIGRATION is None:
         frozen.MIGRATION = parsed['path']
         frozen.MIGRATION_SHA256 = parsed['sha']
