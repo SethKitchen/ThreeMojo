@@ -5,9 +5,14 @@
 
 """Production paths skip hidden parts and non-production roots."""
 
-from std.testing import TestSuite, assert_equal
+from std.testing import TestSuite, assert_equal, assert_raises
 
-from tools._production_paths import keep_production, production_paths
+from tools._production_paths import (
+    keep_production,
+    nonproduction_roots,
+    production_paths,
+    reviewed_production_paths,
+)
 
 
 def test_a_production_module_stays_in_the_scan() raises:
@@ -36,6 +41,31 @@ def test_a_path_list_keeps_production_order() raises:
         ),
         "[true,false,false]",
     )
+
+
+def test_the_reviewed_roots_are_read_before_the_paths() raises:
+    """The non-production names are applied before the flag count."""
+    var roots = nonproduction_roots()
+    assert_equal(
+        roots,
+        '["tests","examples","bench","tools","docs","assets","out","coverage",'
+        + '"cache","build","node_modules"]',
+    )
+    var paths = (
+        '["extensions/carla/a.mojo","tools/a.mojo","docs/a.mojo",'
+        + '"extensions/.hidden/a.mojo","lane.mojo"]'
+    )
+    assert_equal(
+        reviewed_production_paths(paths, 5),
+        production_paths('{"roots":' + roots + ',"paths":' + paths + "}"),
+    )
+    assert_equal(
+        reviewed_production_paths(paths, 5), "[true,false,false,false,true]"
+    )
+    with assert_raises(
+        contains="optional runtime contract: production path set changed"
+    ):
+        _ = reviewed_production_paths("[]", 1)
 
 
 def main() raises:

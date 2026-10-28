@@ -252,6 +252,8 @@ It checks every optional-runtime group in one call.
 
 It checks the followup room, the recheck room, and the node fee.
 
+It reads the non-production roots before the production paths in one check.
+
 Mojo skips hidden and non-production paths, then keeps a file whose text contains a watched name.
 The objective-model file keeps its own helper names.
 Every other production module leaves those names out.

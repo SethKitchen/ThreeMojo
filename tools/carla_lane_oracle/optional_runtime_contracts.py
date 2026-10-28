@@ -21,11 +21,10 @@ else:
 from functools import lru_cache
 
 try:
-    import sum2_guard_contracts as guard
     import source_contracts
     import full_audit_cleanup_contracts as full_audit
 except ModuleNotFoundError:
-    from tools.carla_lane_oracle import sum2_guard_contracts as guard, source_contracts
+    from tools.carla_lane_oracle import source_contracts
     from tools.carla_lane_oracle import full_audit_cleanup_contracts as full_audit
 
 _NEW_MODULES = None
@@ -357,7 +356,7 @@ def _observed_consumers(items):
         raise ValueError(message)
 
 
-def _production_paths(roots, paths):
+def _production_paths(paths):
     """Return which relative paths stay in the production scan."""
     import json
     import os
@@ -368,24 +367,21 @@ def _production_paths(roots, paths):
         return []
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps(
-        {'roots': list(roots), 'paths': list(paths)}, separators=(',', ':'))
+    payload = json.dumps(list(paths), separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='production-paths-') as directory:
         record = Path(directory) / 'paths.json'
         record.write_text(payload)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo,
-             'carla_production_paths', str(record)],
+             'carla_production_paths', '--reviewed', str(record),
+             str(len(paths))],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    flags = json.loads(result.stdout)
-    if len(flags) != len(paths):
-        raise ValueError(_runtime_contract()['paths'])
-    return flags
+    return json.loads(result.stdout)
 
 
 def _watched_names():
@@ -440,7 +436,7 @@ def verify_no_containing_model_consumers(root, *, _operation=None):
     found = []
     for path in sorted(root.rglob('*.mojo')):
         found.append((path, path.relative_to(root).as_posix()))
-    keep = _production_paths(guard.NONPRODUCTION, [relative for _, relative in found])
+    keep = _production_paths([relative for _, relative in found])
     texts = []
     relatives = []
     for (path, relative), kept in zip(found, keep):

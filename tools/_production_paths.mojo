@@ -9,6 +9,7 @@ The first path part must stay out of the non-production roots. Any hidden
 part, including the file name, is left out.
 """
 
+from tools._optional_runtime_messages import optional_runtime_messages
 from tools._python_json import PyJson
 
 
@@ -115,3 +116,42 @@ def production_paths(payload: String) raises -> String:
         index += 1
     out.root = rows
     return out.dumps()
+
+
+def nonproduction_roots() -> String:
+    """Return the non-production top-level names.
+
+    Returns:
+        A JSON list in the reviewed order.
+    """
+    return (
+        '["tests","examples","bench","tools","docs","assets","out","coverage",'
+        + '"cache","build","node_modules"]'
+    )
+
+
+def reviewed_production_paths(
+    paths_json: String, expected: Int
+) raises -> String:
+    """Read the non-production roots, then choose the production paths.
+
+    Args:
+        paths_json: A JSON list of relative paths.
+        expected: The number of paths the caller sent.
+
+    Returns:
+        A JSON list of booleans, one per path.
+
+    Raises:
+        Error: The path list cannot be read, or the flag count differs
+            from `expected`. The roots are read before the paths.
+    """
+    var roots = nonproduction_roots()
+    var flags = production_paths(
+        '{"roots":' + roots + ',"paths":' + paths_json + "}"
+    )
+    var doc = PyJson.parse(flags)
+    if doc.length(doc.root) != expected:
+        var messages = PyJson.parse(optional_runtime_messages())
+        raise Error(messages.text(messages.at(messages.root, "paths")))
+    return flags

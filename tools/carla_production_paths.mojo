@@ -6,21 +6,49 @@
 """Choose production paths for the containing-model scan.
 
     carla_production_paths PATH
+    carla_production_paths --reviewed PATHS COUNT
 
-`PATH` is JSON with `roots` and `paths`. The program prints one boolean
-per path.
+`PATH` is JSON with `roots` and `paths`. `--reviewed` reads the
+non-production roots first. `PATHS` is a JSON list of relative paths.
+`COUNT` is the number of paths. The program prints one boolean per path.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._production_paths import production_paths
+from tools._production_paths import production_paths, reviewed_production_paths
 
 
 def _usage():
     """Print the command usage and stop."""
     print("usage: carla_production_paths PATH", file=stderr)
     exit(2)
+
+
+def _decimal(text: String) raises -> Int:
+    """Read one decimal count.
+
+    Args:
+        text: The count argument.
+
+    Returns:
+        The count.
+
+    Raises:
+        Error: The count is empty or not decimal.
+    """
+    var data = text.as_bytes()
+    if len(data) == 0:
+        raise Error("invalid production path count")
+    var value = 0
+    var index = 0
+    while index < len(data):
+        var byte = data[index]
+        if byte < 48 or byte > 57:
+            raise Error("invalid production path count")
+        value = value * 10 + Int(byte - 48)
+        index += 1
+    return value
 
 
 def main() raises:
@@ -30,6 +58,15 @@ def main() raises:
         Error: The command is invalid, or the payload is missing a field.
     """
     var arguments = argv()
+    if len(arguments) == 4 and arguments[1] == "--reviewed":
+        try:
+            var paths = Path(arguments[2]).read_text()
+            var count = _decimal(arguments[3])
+            print(reviewed_production_paths(paths, count), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) != 2:
         _usage()
     try:
