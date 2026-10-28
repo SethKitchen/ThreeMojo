@@ -278,95 +278,27 @@ def _runtime_predecessor(payload, record, prior_digest):
     return result.stdout
 
 
-def _significant_documents(texts):
-    import json
+def _producer_review(pairs, arc, stored):
+    """Check every producer function and the arc layout in one call."""
     import os
     import subprocess
     import tempfile
     from pathlib import Path
-    if not texts:
-        return []
+    payload = json.dumps({
+        'functions': [
+            {'name': name, 'actual': actual, 'source': source}
+            for actual, source, name in pairs
+        ],
+        'layout': {'source': arc, 'stored': stored},
+    }, separators=(',', ':'))
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='significant-json-') as directory:
-        folder = Path(directory)
-        for index, text in enumerate(texts):
-            (folder / f'{index}.text').write_text(text)
-        (folder / 'count').write_text(str(len(texts)))
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--significant-json', str(folder)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    return json.loads(result.stdout)
-
-
-def _gate_functions(pairs):
-    import json
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    rows = [{'name': name, 'actual': actual, 'expected': expected}
-            for actual, expected, name in pairs]
-    with tempfile.TemporaryDirectory(prefix='frozen-functions-') as directory:
-        folder = Path(directory)
-        (folder / 'labels.json').write_text(json.dumps(rows))
+    with tempfile.TemporaryDirectory(prefix='frozen-review-') as directory:
+        path = Path(directory) / 'review.json'
+        path.write_text(payload)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
-             '--functions', str(folder)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-
-
-def _routing(text):
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='frozen-routing-') as directory:
-        source = Path(directory) / 'source.mojo'
-        source.write_text(text)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
-             '--routing', str(source)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    return result.stdout
-
-
-def _gate_layout(actual, expected):
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='frozen-layout-') as directory:
-        folder = Path(directory)
-        left = folder / 'layout.txt'
-        right = folder / 'stored.txt'
-        left.write_text(actual)
-        right.write_text(expected)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
-             '--layout', str(left), '--stored', str(right)],
+             '--review', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -491,16 +423,10 @@ def verify_premises(root, *, _operation=None):
     prepared = [
         (declared[index], item['source'], item['name'])
         for index, (item, _text) in enumerate(loaded)]
-    if prepared:
-        docs = _significant_documents(
-            [text for actual, source, _ in prepared for text in (actual, source)])
-        _gate_functions([
-            (docs[index * 2], docs[index * 2 + 1], name)
-            for index, (_, _, name) in enumerate(prepared)])
     arc = _typed_source.historical_text(root, 'extensions/carla/curve_rounded_arc.mojo', _observe_text(root, 'extensions/carla/curve_rounded_arc.mojo',
                         (root/'extensions/carla/curve_rounded_arc.mojo').read_text(),
                         _operation=_operation), _operation=_operation)
-    _gate_layout(_routing(arc), record['rounded_arc_routing'])
+    _producer_review(prepared, arc, record['rounded_arc_routing'])
     return len(record['function_sources'])
 
 

@@ -208,6 +208,8 @@ It reports the declaration line span used by the selection contract.
 
 It reads every frozen ARC producer declaration in one check.
 
+It checks every frozen ARC producer function and the arc layout in one check.
+
 It lists the executable names checked by the optional-runtime contract.
 
 It removes an argument move sigil before that contract parses a function body.

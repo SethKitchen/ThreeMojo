@@ -10,6 +10,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._python_tokens import declaration_routing
+from tools._python_json import PyJson
 from tools._sha256 import sha256_hex
 from tools.carla_frozen_arc_gate import (
     frozen_arc_digest,
@@ -19,6 +20,7 @@ from tools.carla_frozen_arc_gate import (
     frozen_arc_prior,
     frozen_arc_record,
     frozen_arc_token,
+    frozen_producer_review,
     frozen_runtime_predecessor,
 )
 
@@ -250,6 +252,76 @@ def test_a_changed_runtime_predecessor_digest_is_refused() raises:
         )
     ):
         _ = frozen_runtime_predecessor(_pin().as_bytes(), _request("new", "00"))
+
+
+def _review(
+    actual: String, source: String, name: String, arc: String, stored: String
+) raises -> String:
+    """Return one producer-review payload.
+
+    Args:
+        actual: The live declaration.
+        source: The recorded declaration.
+        name: The function name.
+        arc: The rounded-arc source.
+        stored: The recorded routing.
+
+    Returns:
+        The review JSON.
+
+    Raises:
+        Error: The payload cannot be written.
+    """
+    var doc = PyJson()
+    var root = doc.new_dict()
+    var functions = doc.new_list()
+    var row = doc.new_dict()
+    doc.set(row, "name", doc.new_str(name))
+    doc.set(row, "actual", doc.new_str(actual))
+    doc.set(row, "source", doc.new_str(source))
+    doc.append(functions, row)
+    doc.set(root, "functions", functions)
+    var layout = doc.new_dict()
+    doc.set(layout, "source", doc.new_str(arc))
+    doc.set(layout, "stored", doc.new_str(stored))
+    doc.set(root, "layout", layout)
+    doc.root = root
+    return doc.dumps()
+
+
+def test_a_producer_review_accepts_the_recorded_function_and_layout() raises:
+    """Matching tokens and routing pass in one check."""
+    var arc = "def center():\n    return 1\n"
+    frozen_producer_review(
+        _review(arc, arc, "center", arc, declaration_routing(arc))
+    )
+
+
+def test_a_changed_producer_review_names_the_function() raises:
+    """A changed function fails before the layout is considered."""
+    var arc = "def center():\n    return 1\n"
+    var changed = "def center():\n    return 2\n"
+    with assert_raises(
+        contains=(
+            "frozen ARC producer contract: complete producer/Box function"
+            " changed: center"
+        )
+    ):
+        frozen_producer_review(
+            _review(changed, arc, "center", arc, "not-the-routing")
+        )
+
+
+def test_a_changed_producer_layout_is_refused_after_the_functions() raises:
+    """A changed arc routing fails after the functions match."""
+    var arc = "def center():\n    return 1\n"
+    with assert_raises(
+        contains=(
+            "frozen ARC producer contract: RoundedArc/Box field layout,"
+            " imports, or declaration owners changed"
+        )
+    ):
+        frozen_producer_review(_review(arc, arc, "center", arc, "[]"))
 
 
 def main() raises:

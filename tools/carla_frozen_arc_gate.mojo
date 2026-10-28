@@ -14,6 +14,7 @@
     carla_frozen_arc_gate --layout PATH --stored PATH
     carla_frozen_arc_gate --routing PATH
     carla_frozen_arc_gate --predecessor DIR
+    carla_frozen_arc_gate --review PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -25,7 +26,11 @@ predecessor.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tests._python_tokens import declaration_routing, token_sha256
+from tests._python_tokens import (
+    declaration_routing,
+    significant_json,
+    token_sha256,
+)
 from tools._carla_assets import dumps_indent
 from tools._python_json import (
     MISSING,
@@ -383,6 +388,42 @@ def frozen_arc_functions(directory: String) raises:
         index += 1
 
 
+def frozen_producer_review(payload: String) raises:
+    """Check every producer function and the arc layout.
+
+    Args:
+        payload: JSON with `functions` and `layout`. Each function has `name`, `actual`, and `source`. `layout` has `source` and `stored`.
+
+    Raises:
+        Error: A function token list changed, the arc source cannot be routed, or the routing changed.
+    """
+    var doc = PyJson.parse(payload)
+    var functions = doc.at(doc.root, "functions")
+    if doc.kind(functions) != PY_LIST:
+        _fail("complete producer/Box function changed")
+    var count = doc.length(functions)
+    var actuals = List[String]()
+    var sources = List[String]()
+    var index = 0
+    while index < count:
+        var row = doc.item(functions, index)
+        actuals.append(significant_json(doc.text(doc.at(row, "actual"))))
+        sources.append(significant_json(doc.text(doc.at(row, "source"))))
+        index += 1
+    index = 0
+    while index < count:
+        var row = doc.item(functions, index)
+        var name = doc.text(doc.at(row, "name"))
+        if actuals[index] != sources[index]:
+            _fail("complete producer/Box function changed: " + name)
+        index += 1
+    var layout = doc.at(doc.root, "layout")
+    frozen_arc_layout(
+        declaration_routing(doc.text(doc.at(layout, "source"))),
+        doc.text(doc.at(layout, "stored")),
+    )
+
+
 def frozen_arc_layout(actual: String, stored: String) raises:
     """Require the RoundedArc declaration routing to match the record.
 
@@ -445,7 +486,7 @@ def _usage():
             " | --source PATH --token HEX | --prior HEX --cleanup HEX"
             " | --places DIR | --functions DIR"
             " | --layout PATH --stored PATH | --routing PATH"
-            " | --predecessor DIR"
+            " | --predecessor DIR | --review PATH"
         ),
         file=stderr,
     )
@@ -473,6 +514,7 @@ def main() raises:
     var stored = String("")
     var routing = String("")
     var predecessor = String("")
+    var review = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -493,6 +535,7 @@ def main() raises:
             or word == "--stored"
             or word == "--routing"
             or word == "--predecessor"
+            or word == "--review"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -525,8 +568,10 @@ def main() raises:
                 stored = value
             elif word == "--routing":
                 routing = value
-            else:
+            elif word == "--predecessor":
                 predecessor = value
+            else:
+                review = value
             index += 2
             continue
         _usage()
@@ -549,6 +594,8 @@ def main() raises:
         modes += 1
     if predecessor.byte_length() > 0:
         modes += 1
+    if review.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if (layout.byte_length() == 0) != (stored.byte_length() == 0):
@@ -565,6 +612,9 @@ def main() raises:
     if previous.byte_length() > 0 and migration.byte_length() == 0:
         _usage()
     try:
+        if review.byte_length() > 0:
+            frozen_producer_review(Path(review).read_text())
+            return
         if predecessor.byte_length() > 0:
             print(
                 frozen_runtime_predecessor(
