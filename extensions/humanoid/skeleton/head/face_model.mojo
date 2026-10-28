@@ -619,6 +619,28 @@ struct FaceModel(Movable):
         """Return how many expression shapes the model has."""
         return len(self.expression_names)
 
+    def moves_part(self, shape: Int, part: FacePart) -> Bool:
+        """Return True if an expression shape moves a vertex of a part.
+
+        A shape that moves none leaves the part where it is, so the part's
+        morph target for it is zero.
+
+        Args:
+            shape: The expression's index, from `expression`.
+            part: The part.
+
+        Returns:
+            True if one of the vertices the shape moves lies in the part.
+        """
+        var words = self.bytes.unsafe_ptr().unsafe_bitcast[UInt16]()
+        var first = self.expression_vertices[shape] // 2
+        # Every expression of the model moves a vertex.
+        for k in range(self.expression_counts[shape]):  # pragma: no branch
+            var v = Int(words[unsafe_offset=first + k])
+            if v >= part.first and v < part.end:
+                return True
+        return False
+
     def no_identity(self) -> List[Float32]:
         """Return identity weights that give the mean head."""
         return List[Float32](length=self.identities(), fill=0)

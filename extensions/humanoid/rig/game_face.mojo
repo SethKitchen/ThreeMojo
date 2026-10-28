@@ -48,14 +48,13 @@ def _attribute_hash(mut value: UInt64, attribute: BufferAttribute) raises:
     """Hash finite Float32 components, preserving their exact order."""
     _mix(value, UInt64(attribute.count()))
     _mix(value, UInt64(attribute.item_size))
-    for i in range(attribute.count()):
-        # A reached component loop has a positive attribute item size.
-        for c in range(attribute.item_size):  # pragma: no branch
-            var x = attribute.component(i, c)
-            require_finite(
-                Float64(x), "Facial geometry must have finite components"
-            )
-            _mix(value, UInt64(bitcast[DType.uint32](x)))
+    # `packed` gives the components item after item: one copy of the list,
+    # where reading each component through its checks costs more.
+    for x in attribute.packed():
+        require_finite(
+            Float64(x), "Facial geometry must have finite components"
+        )
+        _mix(value, UInt64(bitcast[DType.uint32](x)))
 
 
 def facial_correspondence(geometry: BufferGeometry) raises -> String:
