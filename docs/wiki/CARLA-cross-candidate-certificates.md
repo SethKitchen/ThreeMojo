@@ -111,6 +111,8 @@ An extra helper or a changed body is refused.
 
 It keeps the reference, primitive, and shared graph digests.
 
+It checks the reference names after the graph digests in one check.
+
 It keeps the four sampled input modules.
 
 It keeps the sampled projection steps and their comparison texts.

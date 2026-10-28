@@ -10,7 +10,9 @@ graphs and compares those hashes with these pins.
 """
 
 from tools._json_tools import quote_ascii
+from tools._moment_guards import require_name_set
 from tools._python_json import PY_DICT, PyJson
+from tools._sampled_closure import sampled_closure
 
 
 def _dump(doc: PyJson, node: Int) -> String:
@@ -174,3 +176,55 @@ def sampled_graph_pins() -> String:
     doc.set(spec, "shared", shared)
     doc.root = spec
     return _dump(doc, doc.root)
+
+
+def sampled_graphs_and_names() raises -> String:
+    """Read the graph digests, then check the reference names.
+
+    Returns:
+        JSON with `graphs` and `closure`. `graphs` is the digest table.
+        `closure` is the reference-name record.
+
+    Raises:
+        Error: The reference names differ from the digest keys. The
+            digests are read before the names are checked.
+    """
+    var graphs = sampled_graph_pins()
+    var closure = sampled_closure()
+    var graphs_doc = PyJson.parse(graphs)
+    var closure_doc = PyJson.parse(closure)
+    var reference = graphs_doc.at(graphs_doc.root, "reference")
+    var names_doc = PyJson()
+    var root = names_doc.new_dict()
+    var found = names_doc.new_list()
+    var count = graphs_doc.length(reference)
+    var index = 0
+    while index < count:
+        names_doc.append(
+            found, names_doc.new_str(graphs_doc.key(reference, index))
+        )
+        index += 1
+    names_doc.set(root, "names", found)
+    var expected = names_doc.new_list()
+    var wanted = closure_doc.at(closure_doc.root, "reference_names")
+    var name_count = closure_doc.length(wanted)
+    index = 0
+    while index < name_count:
+        names_doc.append(
+            expected,
+            names_doc.new_str(
+                closure_doc.text(closure_doc.item(wanted, index))
+            ),
+        )
+        index += 1
+    names_doc.set(root, "expected", expected)
+    names_doc.set(
+        root,
+        "message",
+        names_doc.new_str(
+            closure_doc.text(closure_doc.at(closure_doc.root, "closure"))
+        ),
+    )
+    names_doc.root = root
+    require_name_set(names_doc.dumps())
+    return '{"graphs":' + graphs + ',"closure":' + closure + "}"

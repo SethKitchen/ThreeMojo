@@ -128,6 +128,28 @@ def _input_modules():
     return json.loads(result.stdout)
 
 
+def _graphs_and_names():
+    """Return the graph digests after the reference names match."""
+    import json
+    import os
+    import subprocess
+    global _SAMPLED_CLOSURE
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+         'carla_sampled_graph_pins', '--checked'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    parsed = json.loads(result.stdout)
+    _SAMPLED_CLOSURE = parsed['closure']
+    return parsed['graphs'], parsed['closure']
+
+
 def _graph_pins():
     """Return the reference, primitive, and shared graph digests."""
     import json
@@ -669,21 +691,8 @@ def verify(root):
         # Deliberately conservative closure: imports, aliases, all helper setup,
         # branch dispatch and every shared operation in all three reference
         # modules are bound. Any dependency change needs renewed source review.
-        try:
-            if __package__:
-                from . import ideal_projection
-            else:
-                import ideal_projection
-            graphs = _graph_pins()
-            reference_graphs = graphs['reference']
-            closure = _sampled_closure()
-            ideal_projection.moment_guard('--names', {
-                'names': list(reference_graphs),
-                'expected': list(closure['reference_names']),
-                'message': closure['closure'],
-            })
-        except ValueError as error:
-            raise CheckError(str(error)) from error
+        graphs, closure = _graphs_and_names()
+        reference_graphs = graphs['reference']
         closure = _sampled_closure()
         for filename, expected_hash in reference_graphs.items():
             reference_graph = (dump(reviewed_reference_tree(texts[filename], root, _operation=_operation))

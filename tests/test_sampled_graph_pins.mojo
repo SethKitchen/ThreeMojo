@@ -8,7 +8,10 @@
 from std.testing import TestSuite, assert_equal
 
 from tools._python_json import PyJson
-from tools._sampled_graph_pins import sampled_graph_pins
+from tools._sampled_graph_pins import (
+    sampled_graph_pins,
+    sampled_graphs_and_names,
+)
 
 
 def test_graph_digests_keep_their_reviewed_order() raises:
@@ -42,6 +45,16 @@ def test_graph_digests_keep_their_reviewed_order() raises:
         doc.text(doc.value(shared, 13)),
         "0ebd93d524b35c30cdd27fabc23dd40f1a53241477b0689c37b07b18bce5ad05",
     )
+
+
+def test_reference_names_match_the_digest_keys() raises:
+    """The closure names match the reference digest keys."""
+    var checked = PyJson.parse(sampled_graphs_and_names())
+    var graphs = checked.at(checked.root, "graphs")
+    var closure = checked.at(checked.root, "closure")
+    var reference = checked.at(graphs, "reference")
+    var names = checked.at(closure, "reference_names")
+    assert_equal(checked.length(reference), checked.length(names))
 
 
 def main() raises:
