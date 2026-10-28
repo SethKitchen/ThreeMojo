@@ -516,7 +516,7 @@ A function that a GPU kernel calls must not call `std.math.atan` or `atan2`. The
 
 `generate_uuid(rng)` is three.js's `generateUUID`, with the numbers from a `SeededRandom`.
 
-`quaternion_from_proper_euler(a, b, c, order)` is three.js's `setQuaternionFromProperEuler`. `order` is a `ProperEulerOrder`: `PROPER_XYX`, `PROPER_YZY`, `PROPER_ZXZ`, `PROPER_XZX`, `PROPER_YXY` or `PROPER_ZYZ`. An invalid one raises; three.js warns.
+`quaternion_from_proper_euler(a, b, c, order)` is three.js's `setQuaternionFromProperEuler`. It is in `math/quaternion.mojo`, beside the type it returns. `order` is a `ProperEulerOrder`: `PROPER_XYX`, `PROPER_YZY`, `PROPER_ZXZ`, `PROPER_XZX`, `PROPER_YXY` or `PROPER_ZYZ`. An invalid one raises; three.js warns.
 
 `normalize(value, component)` and `denormalize(value, component)` convert between a number and a stored integer. `component` is a `ComponentType`, such as `UINT8_COMPONENT`. three.js reads it from the typed array.
 
