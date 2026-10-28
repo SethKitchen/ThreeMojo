@@ -2610,43 +2610,51 @@ def expected_capture_command(contract, suite, profile):
 
 
 def validate_capture_command(command, envelope, root, build, capture=None, output=None):
-    """Validate actual argv before launch; record only its checked canonical form."""
-    root, build = Path(root).resolve(), Path(build).resolve()
-    contract = envelope['receipt']['execution']
-    if not command or not all(isinstance(word, str) for word in command):
-        raise ValueError('Coverage capture command identity is required')
-    try:
-        source = Path(command[command.index('--suite') + 1])
-        suite = (root / source).resolve().relative_to(build).as_posix()
-    except (ValueError, IndexError):
-        raise ValueError('Capture command does not identify a staged suite') from None
-    profile = 'raw'
-    if '--profile' in command:
-        try:
-            profile = command[command.index('--profile') + 1]
-        except IndexError:
-            raise ValueError('Missing capture execution profile') from None
-    expected = expected_capture_command(contract, suite, profile)
-    if len(command) != len(expected):
-        raise ValueError('Capture command differs from its sealed execution contract')
-    for index, (actual, wanted) in enumerate(zip(command, expected)):
-        is_path = wanted.startswith(('@ROOT@', '@BUILD@', '/'))
-        if index == 0:
-            normalized = _symbolic_path(_executable(actual, root), root, build)
-        elif is_path:
-            normalized = _symbolic_path(root / actual, root, build)
-        else:
-            normalized = actual
-        if normalized != wanted:
-            raise ValueError('Capture command differs from its sealed execution contract')
-    if os.environ.get('CC', 'cc') != contract['cc']:
-        raise ValueError('Capture native-compiler setting differs from its sealed contract')
-    stem = Path(suite).stem
-    if capture is not None and Path(capture).name != stem + '.txt.gz':
-        raise ValueError('Capture filename does not identify its sealed suite')
-    if output is not None and Path(output).name != stem + '.out':
-        raise ValueError('Capture stdout filename does not identify its sealed suite')
-    return {'suite': suite, 'profile': profile, 'command': expected}
+    """Validate actual argv before launch; record only its checked canonical form.
+
+    Args:
+        command: The command about to run.
+        envelope: The loop-proof envelope.
+        root: The repository root.
+        build: The build directory.
+        capture: The capture path, or none.
+        output: The stdout path, or none.
+
+    Returns:
+        The staged suite, the profile, and the sealed command.
+
+    Raises:
+        ValueError: The command does not match the sealed contract.
+    """
+    import subprocess
+    import tempfile
+    repo = Path(__file__).resolve().parents[1]
+    program = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
+    request = {
+        'execution': envelope['receipt']['execution'],
+        'command': list(command),
+    }
+    if capture is not None:
+        request['capture'] = str(capture)
+    if output is not None:
+        request['output'] = str(output)
+    with tempfile.TemporaryDirectory(prefix='coverage-validate-') as directory:
+        path = Path(directory) / 'request.json'
+        path.write_text(json.dumps(request), encoding='utf-8')
+        result = subprocess.run(
+            ['sh', str(repo / 'tools' / 'tool.sh'), program, 'coverage_execution',
+             'validate', '--root', str(root), '--build', str(build),
+             '--request', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        errors = [line.strip() for line in result.stderr.splitlines()
+                  if line.strip() and 'Crashpad' not in line]
+        message = errors[-1] if errors else result.stdout.strip()
+        prefix = 'coverage_execution: '
+        if message.startswith(prefix):
+            message = message[len(prefix):]
+        raise ValueError(message)
+    return json.loads(result.stdout)
 
 
 def _expand_path(value, root, build):

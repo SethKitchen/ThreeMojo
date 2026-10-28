@@ -7,7 +7,7 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tools.coverage_execution import execution_contract
+from tools.coverage_execution import execution_contract, validate_capture_command
 
 
 def test_an_unstaged_suite_is_refused() raises:
@@ -16,6 +16,17 @@ def test_an_unstaged_suite_is_refused() raises:
         _ = execution_contract(
             '{"inputs":["mod.mojo"],"suites":["tests/test_missing.mojo"],'
             + '"mojo":"mojo","python":"/usr/bin/python3"}',
+            "/tmp",
+            "/tmp/build",
+        )
+
+
+def test_a_command_without_a_suite_is_refused() raises:
+    """A command that does not name `--suite` is refused."""
+    with assert_raises(contains="Capture command does not identify a staged suite"):
+        _ = validate_capture_command(
+            '{"execution":{"suites":[],"profiles":["raw"],"compiler":[],'
+            + '"cache":"x","cc":"cc"},"command":["sh"]}',
             "/tmp",
             "/tmp/build",
         )

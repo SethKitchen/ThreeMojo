@@ -20,8 +20,11 @@ from tools._python_json import PyJson, dumps_canonical
 from tools.coverage_loop_begin import (
     _command,
     _command_words,
+    _executable,
     _hash_file,
+    _inside,
     _join,
+    _relative,
     _resolve,
     _shlex,
     _symbolic,
@@ -151,6 +154,229 @@ def execution_contract(request_text: String, root: String, build: String) raises
     return dumps_canonical(doc, node)
 
 
+def _find(words: List[String], text: String) -> Int:
+    """Return the index of `text`, or -1.
+
+    Args:
+        words: The words.
+        text: The word to find.
+
+    Returns:
+        The first index, or -1.
+    """
+    var index = 0
+    while index < len(words):
+        if words[index] == text:
+            return index
+        index += 1
+    return -1
+
+
+def _compiler(doc: PyJson, execution: Int) raises -> List[String]:
+    """Return the sealed compiler words.
+
+    Args:
+        doc: The request document.
+        execution: The execution object.
+
+    Returns:
+        Each compiler word's path or literal.
+
+    Raises:
+        Error: When a compiler word has neither field.
+    """
+    var words = List[String]()
+    var compiler = doc.at(execution, "compiler")
+    var index = 0
+    while index < doc.length(compiler):
+        var item = doc.item(compiler, index)
+        var path = doc.find(item, "path")
+        if path >= 0:
+            words.append(doc.text(path))
+        else:
+            words.append(doc.text(doc.at(item, "literal")))
+        index += 1
+    return words^
+
+
+def _sealed_command(
+    doc: PyJson, execution: Int, suite: String, profile: String
+) raises -> List[String]:
+    """Return the sealed capture command.
+
+    Args:
+        doc: The request document.
+        execution: The execution object.
+        suite: The staged suite.
+        profile: The capture profile.
+
+    Returns:
+        The symbolic command.
+
+    Raises:
+        Error: When the suite or profile is outside the contract.
+    """
+    var suites = _strings(doc, doc.at(execution, "suites"))
+    var profiles = _strings(doc, doc.at(execution, "profiles"))
+    if not _contains(suites, suite) or not _contains(profiles, profile):
+        raise Error("Capture suite/profile is outside the sealed execution contract")
+    var compiler = _compiler(doc, execution)
+    var command = List[String]()
+    command.append("@ROOT@/tools/tool.sh")
+    for word in compiler:
+        command.append(word)
+    if profile == "raw":
+        command.append("native_test_support")
+        command.append("run")
+    else:
+        command.append("coverage_hit_aot")
+        command.append("--profile")
+        command.append(profile)
+    command.append("--root")
+    command.append("@BUILD@")
+    command.append("--suite")
+    command.append("@BUILD@/" + suite)
+    command.append("--cache")
+    command.append(doc.text(doc.at(execution, "cache")))
+    command.append("--")
+    for word in compiler:
+        command.append(word)
+    command.append("run")
+    command.append("-I")
+    command.append("@BUILD@")
+    command.append("@BUILD@/" + suite)
+    return command^
+
+
+def _stem(suite: String) -> String:
+    """Return the suite stem the way `Path.stem` does.
+
+    Args:
+        suite: The staged suite path.
+
+    Returns:
+        The file name without its last suffix.
+    """
+    var slash = suite.rfind("/")
+    var name = suite if slash < 0 else String(suite[byte = slash + 1 :])
+    var dot = name.rfind(".")
+    if dot <= 0:
+        return name
+    return String(name[byte = 0 : dot])
+
+
+def _suite(command: List[String], root: String, build: String) raises -> String:
+    """Return the staged suite named by `--suite`.
+
+    Args:
+        command: The actual command.
+        root: The resolved repository root.
+        build: The resolved build directory.
+
+    Returns:
+        The suite path relative to `build`.
+
+    Raises:
+        Error: When the command does not name a staged suite.
+    """
+    var slot = _find(command, "--suite")
+    if slot < 0 or slot + 1 >= len(command):
+        raise Error("Capture command does not identify a staged suite")
+    var source = command[slot + 1]
+    var joined = source if source.startswith("/") else _join(root, source)
+    var resolved = _resolve(joined)
+    if not _inside(resolved, build):
+        raise Error("Capture command does not identify a staged suite")
+    return _relative(resolved, build)
+
+
+def validate_capture_command(
+    request_text: String, root: String, build: String
+) raises -> String:
+    """Return the checked capture command.
+
+    Args:
+        request_text: JSON with `execution`, `command`, and optional paths.
+        root: The repository root.
+        build: The build directory.
+
+    Returns:
+        JSON with `suite`, `profile`, and `command`.
+
+    Raises:
+        Error: When the command does not match the sealed contract.
+    """
+    var request = PyJson.parse(request_text)
+    var root_real = _resolve(root)
+    var build_real = _resolve(build)
+    var command = _strings(request, request.at(request.root, "command"))
+    if len(command) == 0:
+        raise Error("Coverage capture command identity is required")
+    var suite = _suite(command, root_real, build_real)
+    var profile = String("raw")
+    var profile_at = _find(command, "--profile")
+    if profile_at >= 0:
+        if profile_at + 1 >= len(command):
+            raise Error("Missing capture execution profile")
+        profile = command[profile_at + 1]
+    var execution = request.at(request.root, "execution")
+    var expected = _sealed_command(request, execution, suite, profile)
+    if len(command) != len(expected):
+        raise Error("Capture command differs from its sealed execution contract")
+    var index = 0
+    while index < len(command):
+        var wanted = expected[index]
+        var actual = command[index]
+        var normalized = actual
+        var path_word = (
+            wanted.startswith("@ROOT@")
+            or wanted.startswith("@BUILD@")
+            or wanted.startswith("/")
+        )
+        if index == 0:
+            normalized = _symbolic(_executable(actual, root_real), root_real, build_real)
+        elif path_word:
+            var joined = actual if actual.startswith("/") else _join(root_real, actual)
+            normalized = _symbolic(joined, root_real, build_real)
+        if normalized != wanted:
+            raise Error("Capture command differs from its sealed execution contract")
+        index += 1
+    if getenv("CC", "cc") != request.text(request.at(execution, "cc")):
+        raise Error("Capture native-compiler setting differs from its sealed contract")
+    var stem = _stem(suite)
+    var capture = request.find(request.root, "capture")
+    if capture >= 0 and _name_of(request.text(capture)) != stem + ".txt.gz":
+        raise Error("Capture filename does not identify its sealed suite")
+    var output = request.find(request.root, "output")
+    if output >= 0 and _name_of(request.text(output)) != stem + ".out":
+        raise Error("Capture stdout filename does not identify its sealed suite")
+    var doc = PyJson()
+    var node = doc.new_dict()
+    doc.root = node
+    doc.set(node, "suite", doc.new_str(suite))
+    doc.set(node, "profile", doc.new_str(profile))
+    var words = doc.new_list()
+    for word in expected:
+        doc.append(words, doc.new_str(word))
+    doc.set(node, "command", words)
+    return dumps_canonical(doc, node)
+
+
+def _name_of(path: String) -> String:
+    """Return the last path segment.
+
+    Args:
+        path: A path.
+
+    Returns:
+        The file name.
+    """
+    var slash = path.rfind("/")
+    if slash < 0:
+        return path
+    return String(path[byte = slash + 1 :])
+
+
 def _value(arguments: List[String], index: Int) raises -> String:
     """Return the argument after a flag.
 
@@ -170,22 +396,27 @@ def _value(arguments: List[String], index: Int) raises -> String:
 
 
 def main() raises:
-    """Print one execution contract.
+    """Print one execution contract or one checked capture command.
 
     Raises:
-        Error: The command is invalid, or the contract cannot be built.
+        Error: The command is invalid, or the check fails.
     """
     var arguments = List[String]()
     var given = argv()
     for index in range(1, len(given)):
         arguments.append(String(given[index]))
+    var validating = False
+    var start = 0
+    if len(arguments) > 0 and arguments[0] == "validate":
+        validating = True
+        start = 1
     var root = String()
     var build = String()
     var request = String()
     var saw_root = False
     var saw_build = False
     var saw_request = False
-    var index = 0
+    var index = start
     while index < len(arguments):
         var word = arguments[index]
         if word == "--root":
@@ -205,7 +436,11 @@ def main() raises:
     if not (saw_root and saw_build and saw_request):
         _usage()
     try:
-        print(execution_contract(Path(request).read_text(), root, build), end="")
+        var text = Path(request).read_text()
+        if validating:
+            print(validate_capture_command(text, root, build), end="")
+        else:
+            print(execution_contract(text, root, build), end="")
     except error:
         print(String(error), file=stderr)
         exit(1)
