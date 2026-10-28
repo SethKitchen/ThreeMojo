@@ -6,20 +6,32 @@
 """Check the five reviewed cleanup premise lists.
 
     carla_cleanup_premises DIRECTORY
+    carla_cleanup_premises --declared PATH
 
 `DIRECTORY` contains `sources.json` with `line`, `arc`, `bounds`, `center`,
-and `outward`.
+and `outward`. `--declared` reads the declarations from the module sources
+and then checks those five lists.
 """
 
+from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._cleanup_premises import prepare_cleanup_premises
+from tools._cleanup_premises import (
+    cleanup_declared_premises,
+    prepare_cleanup_premises,
+)
 from tools.carla_cleanup_gate import cleanup_premises
 
 
 def _usage():
     """Print the command usage and stop."""
-    print("usage: carla_cleanup_premises DIRECTORY", file=stderr)
+    print(
+        (
+            "usage: carla_cleanup_premises DIRECTORY | carla_cleanup_premises"
+            " --declared PATH"
+        ),
+        file=stderr,
+    )
     exit(2)
 
 
@@ -27,14 +39,23 @@ def main() raises:
     """Check the five premise declarations.
 
     Raises:
-        Error: The command is invalid, or a premise fragment changed.
+        Error: The command is invalid, a function cannot be read, or a premise fragment changed.
     """
     var arguments = argv()
-    if len(arguments) != 2:
+    var declared = String("")
+    var directory = String("")
+    if len(arguments) == 3 and arguments[1] == "--declared":
+        declared = arguments[2]
+    elif len(arguments) == 2:
+        directory = arguments[1]
+    else:
         _usage()
     try:
-        prepare_cleanup_premises(arguments[1])
-        cleanup_premises(arguments[1])
+        if declared.byte_length() > 0:
+            cleanup_declared_premises(Path(declared).read_text())
+        else:
+            prepare_cleanup_premises(directory)
+            cleanup_premises(directory)
     except error:
         print(String(error), file=stderr)
         exit(1)

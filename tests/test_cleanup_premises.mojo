@@ -10,6 +10,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._cleanup_premises import ordered_text, require_cleanup_premises
 from tests._python_tokens import def_token_sha256, token_sha256
+from tools._cleanup_premises import cleanup_declared_premises
 from tools._sha256 import sha256_hex
 from tests._winner_pin_predecessor import (
     restored_junction_cleanup,
@@ -230,6 +231,19 @@ def _changed_record(record: String) raises:
     """
     if sha256_hex((record + " ").as_bytes()) == _RECORD_SHA256:
         raise Error("reviewed cleanup source contract: unreviewed migration")
+
+
+def test_a_missing_declared_premise_is_refused() raises:
+    """A missing function fails before the premise fragments are checked."""
+    var payload = (
+        '{"sources":["def f():\\n    return 1\\n"],'
+        + '"declarations":[{"source":0,"name":"absent","owner":[],'
+        + '"key":"line"}]}'
+    )
+    with assert_raises(
+        contains="missing or ambiguous actual guard declaration: absent"
+    ):
+        cleanup_declared_premises(payload)
 
 
 def main() raises:

@@ -10,8 +10,11 @@ their labels stay in historical order.
 """
 
 from std.pathlib import Path
+from std.tempfile import mkdtemp
 
+from tests._python_tokens import declaration_text
 from tools._python_json import PyJson
+from tools.carla_cleanup_gate import cleanup_premises
 
 
 def _words(mut doc: PyJson, var fragments: List[String]) -> Int:
@@ -173,3 +176,50 @@ def prepare_cleanup_premises(directory: String) raises:
     var text = doc.dumps()
     doc.root = saved
     Path(directory + "/labels.json").write_text(text)
+
+
+def cleanup_declared_premises(payload: String) raises:
+    """Read each premise declaration, then check its fragments.
+
+    Args:
+        payload: JSON with `sources` and `declarations`. Each declaration
+            has `source`, `name`, `owner`, and `key`. `source` is an index
+            into `sources`.
+
+    Raises:
+        Error: A function cannot be read, or a premise fragment changed.
+    """
+    var doc = PyJson.parse(payload)
+    var sources = doc.at(doc.root, "sources")
+    var items = doc.at(doc.root, "declarations")
+    var texts = PyJson()
+    var root = texts.new_dict()
+    var count = doc.length(items)
+    var index = 0
+    while index < count:
+        var item = doc.item(items, index)
+        var source_at = Int(doc.text(doc.at(item, "source")))
+        var owners = List[String]()
+        var owner = doc.at(item, "owner")
+        var owner_count = doc.length(owner)
+        var cursor = 0
+        while cursor < owner_count:
+            owners.append(doc.text(doc.item(owner, cursor)))
+            cursor += 1
+        texts.set(
+            root,
+            doc.text(doc.at(item, "key")),
+            texts.new_str(
+                declaration_text(
+                    doc.text(doc.item(sources, source_at)),
+                    doc.text(doc.at(item, "name")),
+                    owners,
+                )
+            ),
+        )
+        index += 1
+    texts.root = root
+    var directory = mkdtemp(prefix="cleanup-declared-")
+    Path(directory + "/sources.json").write_text(texts.dumps())
+    prepare_cleanup_premises(directory)
+    cleanup_premises(directory)

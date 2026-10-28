@@ -406,6 +406,37 @@ def _declarations(items):
     return json.loads(result.stdout)
 
 
+def _declared_premises(texts, items):
+    """Read each premise declaration and check it in one call."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps({
+        'sources': list(texts),
+        'declarations': [{
+            'source': item['source'],
+            'name': item['name'],
+            'owner': list(item['owner']),
+            'key': item['key'],
+        } for item in items],
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='cleanup-declared-') as directory:
+        path = Path(directory) / 'declared.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_premises',
+             '--declared', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def verify_premises(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
@@ -418,14 +449,7 @@ def verify_premises(root, *, _operation=None):
                          (root/SOURCE_PATHS[2]).read_text(), _operation=_operation), _operation=_operation)
     texts = (line, arc, junction)
     items = _cleanup_declarations()['declarations']
-    declared = _declarations([{
-        'source': texts[item['source']],
-        'name': item['name'],
-        'owner': list(item['owner']),
-    } for item in items])
-    premises = {
-        item['key']: declared[index] for index, item in enumerate(items)}
-    _cleanup_premises(premises)
+    _declared_premises(texts, items)
 
 
 
