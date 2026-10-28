@@ -7,7 +7,11 @@
 
 from std.testing import TestSuite, assert_equal, assert_raises
 
-from tools._sampled_value_result import sampled_value_result
+from tools._sampled_value_result import (
+    sampled_result_from_frame,
+    sampled_value_result,
+)
+from tools._sha256 import sha256_hex
 
 comptime SCOPE = (
     "Current typed/conditioned source admission; historical "
@@ -88,6 +92,29 @@ def test_a_sampled_value_field_must_keep_its_type() raises:
         _ = sampled_value_result(
             '{"root":"r","shared":1,"modules":2,"primitive":"p","sources":{}}'
         )
+
+
+def test_a_short_frame_fails_before_the_result() raises:
+    """Too few framed payloads fail before the result is built."""
+    with assert_raises(contains="sampled source frame changed"):
+        _ = sampled_result_from_frame(
+            String("").as_bytes(),
+            '{"root":"r","shared":1,"modules":1,"primitive":"p","names":["a"],'
+            + '"successors":{}}',
+        )
+
+
+def test_one_framed_source_keeps_its_digest() raises:
+    """One framed payload becomes the first source digest."""
+    var digest = sha256_hex(String("ab").as_bytes())
+    var result = sampled_result_from_frame(
+        String("2\nab").as_bytes(),
+        '{"root":"r","shared":1,"modules":1,"primitive":"p","names":["a.mojo"],'
+        + '"successors":{}}',
+    )
+    assert_equal(result.find('"status":"PASS"') >= 0, True)
+    assert_equal(result.find(digest) >= 0, True)
+    assert_equal(result.find('"a.mojo"') >= 0, True)
 
 
 def main() raises:

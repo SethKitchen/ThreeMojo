@@ -531,6 +531,44 @@ def _sampled_result(root, shared, modules, primitive, sources, successors):
     return json.loads(result.stdout)
 
 
+def _digests_and_result(blobs, root, shared, modules, primitive, names, successors):
+    """Hash the observed sources, then return the sampled result."""
+    import ast
+    import os
+    import subprocess
+    import tempfile
+    framed = b''.join(
+        str(len(raw)).encode('ascii') + b'\n' + raw for raw in blobs)
+    payload = json.dumps({
+        'root': root,
+        'shared': shared,
+        'modules': modules,
+        'primitive': primitive,
+        'names': list(names),
+        'successors': successors,
+    }, separators=(',', ':'))
+    repo = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='sampled-framed-result-') as directory:
+        frame = Path(directory) / 'frame.bin'
+        meta = Path(directory) / 'meta.json'
+        frame.write_bytes(framed)
+        meta.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(repo / 'tools' / 'tool.sh'), mojo,
+             'carla_sampled_value_result', '--framed', str(frame), str(meta)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        prefix = _cli_failures()['key']
+        if message.startswith(prefix):
+            raise KeyError(ast.literal_eval(message[len(prefix):])) from None
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 _SAMPLED_CLOSURE = None
 
 
@@ -762,15 +800,12 @@ def verify(root):
         observed = [audit._observe_bytes(
             root, path.relative_to(root).as_posix(), path.read_bytes(),
             _operation=_operation) for path in paths.values()]
-        digests = _source_digests(observed)
-        physical_sources = {
-            name: digest for name, digest in zip(paths, digests)}
         if owns:
             _operation.finish(root)
-        return _sampled_result(
-            str(root.resolve()), len(graphs['shared']),
-            len(reference_graphs), graphs['primitive'],
-            physical_sources, current_edges)
+        return _digests_and_result(
+            observed, str(root.resolve()), len(graphs['shared']),
+            len(reference_graphs), graphs['primitive'], list(paths),
+            current_edges)
     finally:
         if owns:
             _operation.close()

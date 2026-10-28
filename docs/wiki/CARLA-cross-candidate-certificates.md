@@ -439,6 +439,8 @@ It requires one Jet primitive declaration.
 
 It strips a sampled gate prefix after that text check in one check.
 
+It reads the source digests before the sampled result in one check.
+
 That declaration keeps one Bool parameter.
 
 Mojo checks the live sampled module graphs.

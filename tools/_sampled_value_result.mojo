@@ -10,6 +10,7 @@ The repository root, the two measured counts, the primitive digest, the
 source digests, and the typed edges are copied from the check that just ran.
 """
 
+from tools._framed_sha256 import framed_sha256
 from tools._json_tools import quote_ascii
 from tools._python_json import (
     PY_BOOL,
@@ -20,6 +21,7 @@ from tools._python_json import (
     PY_STR,
     PyJson,
 )
+from tools._sampled_closure import sampled_closure
 
 
 def _dump(doc: PyJson, node: Int) raises -> String:
@@ -131,3 +133,54 @@ def sampled_value_result(payload: String) raises -> String:
         ),
     )
     return _dump(doc, result)
+
+
+def sampled_result_from_frame(
+    frame: Span[UInt8, _], meta: String
+) raises -> String:
+    """Hash the framed sources, then build the sampled result.
+
+    Args:
+        frame: Length lines followed by the exact payload bytes.
+        meta: JSON with `root`, `shared`, `modules`, `primitive`,
+            `names`, and `successors`.
+
+    Returns:
+        The result JSON in historical field order.
+
+    Raises:
+        Error: A frame is invalid, the digest count disagrees, or a
+            result field changed. The digests are read before the result.
+            A count error is `sampled source frame changed`.
+    """
+    var digests = PyJson.parse(framed_sha256(frame))
+    var doc = PyJson.parse(meta)
+    var names = doc.at(doc.root, "names")
+    if digests.length(digests.root) != doc.length(names):
+        var closure = PyJson.parse(sampled_closure())
+        raise Error(closure.text(closure.at(closure.root, "frame")))
+    var sources = String("{")
+    var count = doc.length(names)
+    var index = 0
+    while index < count:
+        if index > 0:
+            sources += ","
+        sources += quote_ascii(doc.text(doc.item(names, index)))
+        sources += ":"
+        sources += quote_ascii(digests.text(digests.item(digests.root, index)))
+        index += 1
+    sources += "}"
+    var payload = String('{"root":')
+    payload += quote_ascii(doc.text(doc.at(doc.root, "root")))
+    payload += ',"shared":'
+    payload += doc.text(doc.at(doc.root, "shared"))
+    payload += ',"modules":'
+    payload += doc.text(doc.at(doc.root, "modules"))
+    payload += ',"primitive":'
+    payload += quote_ascii(doc.text(doc.at(doc.root, "primitive")))
+    payload += ',"sources":'
+    payload += sources
+    payload += ',"successors":'
+    payload += _dump(doc, doc.at(doc.root, "successors"))
+    payload += "}"
+    return sampled_value_result(payload)
