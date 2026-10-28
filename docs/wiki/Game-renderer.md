@@ -78,6 +78,28 @@ The bench walks a scripted player through the village. It prints the median, the
 
 The pond's water is composed into the frame before it is stretched, because the water needs the depth.
 
+## Maps at each pixel
+
+By default the renderer reads a material's map at each vertex. Set `pixel_maps` to read it at each pixel instead:
+
+```mojo
+var fast = GameRenderer(640, 360)
+fast.pixel_maps = True
+```
+
+The village game sets it, so the houses show their brick, plaster, wood and tiles. See [Village houses](Village-houses#surfaces).
+
+1. **The levels.** The first time a map is drawn, the renderer reads it into linear floats. Each level halves the one before it, by the mean of each 2 by 2 block of texels. The chain stops at one texel or 16 levels.
+2. **The level of a triangle.** The setup compares a triangle's area on the screen with its area in texels. A triangle reads the level at which one texel covers about one pixel.
+3. **The texel.** The resolve mixes each pixel's texture coordinates from its three corners, with perspective. It mixes the four texels round them, bilinear. A map that repeats wraps round; any other map holds its edge.
+4. **The light.** The texel tints the pixel's light, the sun's and the sky's. The fog veils the tinted light after, at the pixel, so a far textured roof keeps its haze.
+
+A map read at each pixel ignores the texture's offset, repeat and rotation.
+
+## Depth across a long triangle
+
+The setup keeps each triangle's depth as a plane over the screen. It writes the plane from the first corner's depth and the other two corners' differences from it. A long thin triangle near the horizon has huge edge terms, which cancel. Weighted by the depths themselves, they once left a far triangle of ground nearer than a wall at some pixels. Weighted by the small differences, the far ground stays behind the wall.
+
 ## Shadows
 
 | Mode | What is drawn |
@@ -95,7 +117,7 @@ The still map keeps the casters as they were when it was drawn. So in the villag
 
 - `scene.meshes` and `scene.skinned_meshes`, opaque.
 - `BASIC`, `LAMBERT`, `PHONG`, `STANDARD` and `PHYSICAL` materials. A standard or a physical material is lit as a Lambert one.
-- Vertex colors, a color, an emissive color, and a map read at each vertex.
+- Vertex colors, a color, an emissive color, and a map read at each vertex or at each pixel.
 - A node program, only as a `GameShading` registered for it says. It can light a back face as its front, read a baked sun and sky, and sway in the wind.
 - Ambient, hemisphere and directional lights. The cascades of one sun count once.
 - Exponential squared fog, or no fog.
@@ -112,5 +134,5 @@ The two renderers differ in one way. `GameRenderer` lights each vertex and mixes
 ## Limits
 
 - The renderer draws no transparent or alpha-tested surface.
-- A map is read at the vertices, so a map's detail between the vertices is lost.
+- Without `pixel_maps`, a map is read at the vertices, so a map's detail between the vertices is lost.
 - The frame is drawn on the CPU. There is no GPU path for the game renderer yet.

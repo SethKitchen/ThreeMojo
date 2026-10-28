@@ -36,7 +36,8 @@ two differ: see the wiki page Game renderer.
 **What is drawn.** `scene.meshes` and `scene.skinned_meshes`, opaque, with
 `BASIC`, `LAMBERT`, `PHONG`, `STANDARD` and `PHYSICAL` materials, vertex
 colors, a color and an emissive color. A standard or physical material is
-lit as a Lambert one. A map is read at each vertex. A node program is
+lit as a Lambert one. A map is read at each vertex, or, with `pixel_maps`
+set, at each pixel: see `_PixelMaps`. A node program is
 drawn only as a `GameShading` registered for it says. Lights: ambient,
 hemisphere and directional, the cascades of one sun counted once. Fog:
 exponential squared or none. The background: a color or a cube.
@@ -85,6 +86,7 @@ from render.game_math import (
 )
 from render.tasks import TaskGroup
 from render.tonemap import aces_tone
+from render.texture import REPEAT, Texture
 from render.texture_store import TextureId
 from std.math import ceil, exp2, floor, inf, log2, max, min, sin, sqrt
 from std.memory import unsafe_memcpy
@@ -109,6 +111,99 @@ comptime I = SIMD[DType.int32, GAME_LANES]
 comptime _FRESNEL_SLOPE = Float32(-5.55473)
 comptime _FRESNEL_OFFSET = Float32(-6.98316)
 comptime BLINN_PHONG_G = Float32(0.25)
+comptime MIP_LEVELS = 16
+"""The most levels of a map read at each pixel."""
+comptime LEVEL_CODE = Float32(32)
+"""A triangle's map code is its map's slot times this, plus the level its
+pixels read. A triangle with no map read at each pixel has the code -1."""
+
+
+struct _PixelMaps(Movable):
+    """The maps read at each pixel: every level of each, as linear red,
+    green and blue floats in one array.
+
+    Each level halves the one before it, by the mean of each 2 by 2 block
+    of texels, down to one texel or `MIP_LEVELS` levels. A triangle reads
+    the level at which one texel covers about one pixel: the setup finds
+    it from the triangle's area on the screen and its area in texels.
+    """
+
+    var texels: List[Float32]
+    # For each level of each map: where its texels start, its width and
+    # its height.
+    var starts: List[Int32]
+    var widths: List[Int32]
+    var heights: List[Int32]
+    # For each map: where its levels start in the lists above, how many
+    # levels it has, and 1 if it repeats or 0 if it is clamped at its
+    # edges.
+    var firsts: List[Int32]
+    var levels: List[Int32]
+    var repeats: List[Int32]
+    # The slot of each texture id read so far.
+    var slot_of: Dict[Int, Int]
+
+    def __init__(out self):
+        self.texels = List[Float32]()
+        self.starts = List[Int32]()
+        self.widths = List[Int32]()
+        self.heights = List[Int32]()
+        self.firsts = List[Int32]()
+        self.levels = List[Int32]()
+        self.repeats = List[Int32]()
+        self.slot_of = Dict[Int, Int]()
+
+    def slot(mut self, texture: Texture, id: Int) raises -> Int:
+        """Return a texture's slot, reading its levels the first time."""
+        if id in self.slot_of:
+            return self.slot_of[id]
+        var slot = len(self.levels)
+        var w = max(1, texture.width)
+        var h = max(1, texture.height)
+        var level = List[Float32](length=w * h * 3, fill=0)
+        for y in range(h):
+            for x in range(w):
+                var c = texture.sample(
+                    (Float32(x) + 0.5) / Float32(w),
+                    (Float32(y) + 0.5) / Float32(h),
+                )
+                var at = (y * w + x) * 3
+                level[at] = c.r
+                level[at + 1] = c.g
+                level[at + 2] = c.b
+        self.firsts.append(Int32(len(self.starts)))
+        var count = 0
+        for _ in range(MIP_LEVELS):  # pragma: no branch
+            self.starts.append(Int32(len(self.texels)))
+            self.widths.append(Int32(w))
+            self.heights.append(Int32(h))
+            self.texels.extend(level.copy())
+            count += 1
+            if (w == 1 and h == 1) or count == MIP_LEVELS:
+                break
+            var w2 = max(1, w // 2)
+            var h2 = max(1, h // 2)
+            var half = List[Float32](length=w2 * h2 * 3, fill=0)
+            for y in range(h2):
+                for x in range(w2):
+                    var x0 = min(w - 1, 2 * x)
+                    var x1 = min(w - 1, 2 * x + 1)
+                    var y0 = min(h - 1, 2 * y)
+                    var y1 = min(h - 1, 2 * y + 1)
+                    for k in range(3):  # pragma: no branch
+                        half[(y * w2 + x) * 3 + k] = 0.25 * (
+                            level[(y0 * w + x0) * 3 + k]
+                            + level[(y0 * w + x1) * 3 + k]
+                            + level[(y1 * w + x0) * 3 + k]
+                            + level[(y1 * w + x1) * 3 + k]
+                        )
+            level = half^
+            w = w2
+            h = h2
+        self.levels.append(Int32(count))
+        self.repeats.append(Int32(1) if texture.wrap_s == REPEAT else 0)
+        self.slot_of[id] = slot
+        return slot
 
 
 @fieldwise_init
@@ -521,6 +616,10 @@ struct _Draw(ImplicitlyCopyable):
     var map: Int
     # Whether the sun's shadows fall on it.
     var receives: Bool
+    # Its map's slot when the map is read at each pixel, or -1; and the
+    # square root of the map's full-size texel count.
+    var pixel: Int
+    var texels: Float32
 
 
 @fieldwise_init
@@ -718,6 +817,10 @@ struct GameRenderer(Movable):
     var _skin_of: Dict[Int, Int]
     var _still_map: _SunMap
     var _moving_map: _SunMap
+    # Whether a map is read at each pixel rather than at each vertex, and
+    # the maps read so.
+    var pixel_maps: Bool
+    var _pixel: _PixelMaps
 
     def __init__(
         out self, width: Int, height: Int, exposure: Float32 = 1
@@ -772,6 +875,8 @@ struct GameRenderer(Movable):
         self._skin_of = Dict[Int, Int]()
         self._still_map = _SunMap(1)
         self._moving_map = _SunMap(1)
+        self.pixel_maps = False
+        self._pixel = _PixelMaps()
 
     def register(mut self, program: Int, var shading: GameShading):
         """Say what a node program does, so materials naming it are drawn.
@@ -1274,6 +1379,14 @@ struct GameRenderer(Movable):
                 look.side == DOUBLE_SIDE.value and not look.two_sided_light
             )
             var count = len(self._shapes[shape].value().parts[p].vertices)
+            var pixel = -1
+            var texels = Float32(1)
+            if self.pixel_maps and look.has_map:
+                ref texture = assets.textures.get(TextureId(looked[1]))
+                pixel = self._pixel.slot(texture, looked[1])
+                texels = sqrt(
+                    Float32(max(1, texture.width) * max(1, texture.height))
+                )
             draws.append(
                 _Draw(
                     shape,
@@ -1289,6 +1402,8 @@ struct GameRenderer(Movable):
                     geometry,
                     looked[1],
                     receives,
+                    pixel,
+                    texels,
                 )
             )
             first += count * (2 if twice else 1)
@@ -1326,7 +1441,7 @@ struct GameRenderer(Movable):
         var mapped: List[List[Float32]] = [[Float32(1), 1, 1]]
         var map_of = List[Int]()
         for d in draws:
-            if not d.look.has_map:
+            if not d.look.has_map or d.pixel >= 0:
                 map_of.append(-1)
                 continue
             ref shape = self._shapes[d.shape].value()
@@ -1672,6 +1787,11 @@ struct GameRenderer(Movable):
                     .unsafe_origin_cast[ImmutAnyOrigin](),
                     moving,
                     self.shadow_bias,
+                    Pointer(to=self._pixel)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    frame.fog,
+                    frame.fog_color,
                 )
             )
         group.wait()
@@ -1995,6 +2115,7 @@ def _light_range(
     if d.skylit >= 0:
         sky_values = part.baked[d.skylit].unsafe_ptr()
     ref look = d.look
+    var pixel = d.pixel >= 0
     var k = begin
     while k < end:
         var lanes = min(GAME_LANES, end - k)
@@ -2153,15 +2274,19 @@ def _light_range(
                         sr = sr + sent[0] * fr.sun[0] * catch
                         sg = sg + sent[1] * fr.sun[1] * catch
                         sb = sb + sent[2] * fr.sun[2] * catch
+            # A map read at each pixel tints the light before the fog
+            # veils it, so the resolve veils it there.
+            var keep = F(1)
             if fr.fog:
                 var veil = exp2_veil[GAME_LANES](fr.fog_density, depth)
-                var keep = 1 - veil
-                ar = ar * keep + fr.fog_color[0] * veil
-                ag = ag * keep + fr.fog_color[1] * veil
-                ab = ab * keep + fr.fog_color[2] * veil
-                sr = sr * keep
-                sg = sg * keep
-                sb = sb * keep
+                keep = 1 - veil
+                if not pixel:
+                    ar = ar * keep + fr.fog_color[0] * veil
+                    ag = ag * keep + fr.fog_color[1] * veil
+                    ab = ab * keep + fr.fog_color[2] * veil
+                    sr = sr * keep
+                    sg = sg * keep
+                    sb = sb * keep
             var base = dest.unsafe_offset((d.first + face * count + k) * STRIDE)
             # A baked sun replaces the shadow map: no lookup.
             var lookup = Float32(-1) if (
@@ -2169,6 +2294,17 @@ def _light_range(
             ) else Float32(0)
             for lane in range(lanes):  # pragma: no branch
                 var at = base.unsafe_offset(lane * STRIDE)
+                if pixel:
+                    # The fog's share kept, for a lookup, or -1 less it,
+                    # for none; and the texture coordinates.
+                    var src = Int(verts[unsafe_offset=k + lane])
+                    at[unsafe_offset=13] = (
+                        keep[lane] if lookup == 0 else -1 - keep[lane]
+                    )
+                    at[unsafe_offset=14] = shape.u[src]
+                    at[unsafe_offset=15] = shape.v[src]
+                else:
+                    at[unsafe_offset=13] = lookup
                 at[unsafe_offset=0] = cx[lane]
                 at[unsafe_offset=1] = cy[lane]
                 at[unsafe_offset=2] = cz[lane]
@@ -2182,7 +2318,6 @@ def _light_range(
                 at[unsafe_offset=10] = wx[lane]
                 at[unsafe_offset=11] = wy[lane]
                 at[unsafe_offset=12] = wz[lane]
-                at[unsafe_offset=13] = lookup
         k += lanes
 
 
@@ -2268,6 +2403,10 @@ __async def _setup_task(
     var tris = part.triangles.unsafe_ptr()
     var width = Float32(fr.width)
     var height = Float32(fr.height)
+    # A shadow map reads no map.
+    var slot = Float32(-1)
+    if d.pixel >= 0 and not fr.depth_only:
+        slot = Float32(d.pixel)
     for t in range(begin, end):  # pragma: no branch
         var i0 = Int32(d.first) + tris[unsafe_offset=t * 3]
         var i1 = Int32(d.first) + tris[unsafe_offset=t * 3 + 1]
@@ -2323,6 +2462,8 @@ __async def _setup_task(
                 i2,
                 width,
                 height,
+                slot,
+                d.texels,
             )
             continue
         if not (inside0 or inside1 or inside2):
@@ -2366,6 +2507,8 @@ __async def _setup_task(
                 polygon[k + 1],
                 width,
                 height,
+                slot,
+                d.texels,
             )
 
 
@@ -2380,9 +2523,12 @@ def _emit(
     i2: Int32,
     width: Float32,
     height: Float32,
+    slot: Float32,
+    texels: Float32,
 ):
     """Set up one triangle in front of the near plane, if it covers a
-    pixel."""
+    pixel. A triangle whose map `slot` is not negative reads the level of
+    its map, `texels` on a side, at which a texel covers about a pixel."""
     var a = _corner(vertices, batch, i0)
     var b = _corner(vertices, batch, i1)
     var c = _corner(vertices, batch, i2)
@@ -2433,13 +2579,29 @@ def _emit(
     plane[unsafe_offset=6] = a2
     plane[unsafe_offset=7] = b2
     plane[unsafe_offset=8] = c2
-    plane[unsafe_offset=9] = a0 * z0 + a1 * z1 + a2 * z2
-    plane[unsafe_offset=10] = b0 * z0 + b1 * z1 + b2 * z2
-    plane[unsafe_offset=11] = c0 * z0 + c1 * z1 + c2 * z2
+    # The depth plane, from the first corner's depth and the other two's
+    # differences from it. The edge terms of a long thin triangle are huge
+    # and cancel; weighting them by the small differences, rather than by
+    # the depths near one, keeps a distant sliver from coming out nearer
+    # than it is.
+    var d1 = z1 - z0
+    var d2 = z2 - z0
+    plane[unsafe_offset=9] = a1 * d1 + a2 * d2
+    plane[unsafe_offset=10] = b1 * d1 + b2 * d2
+    plane[unsafe_offset=11] = z0 + (c1 * d1 + c2 * d2)
     plane[unsafe_offset=12] = iw0
     plane[unsafe_offset=13] = iw1
     plane[unsafe_offset=14] = iw2
-    plane[unsafe_offset=15] = 0
+    var code = Float32(-1)
+    if slot >= 0:
+        var du1 = b[unsafe_offset=14] - a[unsafe_offset=14]
+        var dv1 = b[unsafe_offset=15] - a[unsafe_offset=15]
+        var du2 = c[unsafe_offset=14] - a[unsafe_offset=14]
+        var dv2 = c[unsafe_offset=15] - a[unsafe_offset=15]
+        var mapped = abs(du1 * dv2 - du2 * dv1) * texels * texels
+        var level = 0.5 * log2(max(mapped, Float32(1.0e-20)) / abs(area))
+        code = slot * LEVEL_CODE + min(LEVEL_CODE - 1, max(Float32(0), level))
+    plane[unsafe_offset=15] = code
     var bound = bounds.unsafe_offset(n * 4)
     bound[unsafe_offset=0] = Int32(Int(mnx))
     bound[unsafe_offset=1] = Int32(Int(mny))
@@ -2532,6 +2694,84 @@ __async def _raster_task(
                 x += GAME_LANES
 
 
+@always_inline
+def _pixel_texel(maps: _PixelMaps, code: F, u: F, v: F) -> Tuple[F, F, F]:
+    """Return each lane's color of its triangle's map at its texture
+    coordinates, bilinear within the level its code names.
+
+    Every lane must name a map: a lane with nothing to read names the
+    code 0, as some other lane's map."""
+    var slot = floor(code / LEVEL_CODE)
+    var wanted = (code - slot * LEVEL_CODE + 0.5).cast[DType.int32]()
+    var slots = slot.cast[DType.int64]()
+    var firsts = maps.firsts.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
+    var counts = maps.levels.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
+    var wraps = maps.repeats.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
+    var level = min(wanted, counts.unsafe_gather(slots) - 1)
+    var entry = (firsts.unsafe_gather(slots) + level).cast[DType.int64]()
+    var w = maps.widths.unsafe_ptr().unsafe_gather(entry)
+    var h = maps.heights.unsafe_ptr().unsafe_gather(entry)
+    var start = maps.starts.unsafe_ptr().unsafe_gather(entry)
+    var repeat = wraps.unsafe_gather(slots).eq(1)
+    var wf = w.cast[DType.float32]()
+    var hf = h.cast[DType.float32]()
+    # `v` counts up from the bottom row, as `Texture.sample` reads it.
+    var tx = u * wf - 0.5
+    var ty = v * hf - 0.5
+    var x0f = floor(tx)
+    var y0f = floor(ty)
+    var fx = tx - x0f
+    var fy = ty - y0f
+    var xs = _wrap_texel(x0f, wf, repeat)
+    var xs1 = _wrap_texel(x0f + 1, wf, repeat)
+    var ys = _wrap_texel(y0f, hf, repeat)
+    var ys1 = _wrap_texel(y0f + 1, hf, repeat)
+    var row0 = ys * w
+    var row1 = ys1 * w
+    # `start` counts floats, and a texel is three.
+    var i00 = (start + (row0 + xs) * 3).cast[DType.int64]()
+    var i10 = (start + (row0 + xs1) * 3).cast[DType.int64]()
+    var i01 = (start + (row1 + xs) * 3).cast[DType.int64]()
+    var i11 = (start + (row1 + xs1) * 3).cast[DType.int64]()
+    var texels = maps.texels.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
+    return (
+        _bilinear(texels, i00, i10, i01, i11, 0, fx, fy),
+        _bilinear(texels, i00, i10, i01, i11, 1, fx, fy),
+        _bilinear(texels, i00, i10, i01, i11, 2, fx, fy),
+    )
+
+
+@always_inline
+def _bilinear(
+    texels: Pointer[Float32, ImmutAnyOrigin],
+    i00: SIMD[DType.int64, GAME_LANES],
+    i10: SIMD[DType.int64, GAME_LANES],
+    i01: SIMD[DType.int64, GAME_LANES],
+    i11: SIMD[DType.int64, GAME_LANES],
+    channel: Int,
+    fx: F,
+    fy: F,
+) -> F:
+    """Return one channel mixed from four texels."""
+    var a = texels.unsafe_gather(i00 + Int64(channel))
+    var b = texels.unsafe_gather(i10 + Int64(channel))
+    var c = texels.unsafe_gather(i01 + Int64(channel))
+    var d = texels.unsafe_gather(i11 + Int64(channel))
+    var top = a + (b - a) * fx
+    var bottom = c + (d - c) * fx
+    return top + (bottom - top) * fy
+
+
+@always_inline
+def _wrap_texel(x: F, size: F, repeat: SIMD[DType.bool, GAME_LANES]) -> I:
+    """Return each lane's texel index along one side of `size` texels:
+    wrapped round for a repeating map, and held at the edge for one that
+    is clamped."""
+    var wrapped = x - size * floor(x / size)
+    var held = min(max(x, F(0)), size - 1)
+    return repeat.select(wrapped, held).cast[DType.int32]()
+
+
 __async def _resolve_task(
     ids: Pointer[Int32, ImmutAnyOrigin],
     depth: Pointer[Float32, ImmutAnyOrigin],
@@ -2554,6 +2794,9 @@ __async def _resolve_task(
     moving: Pointer[_SunMap, ImmutAnyOrigin],
     use_moving: Bool,
     bias: Float32,
+    maps: Pointer[_PixelMaps, ImmutAnyOrigin],
+    fog: Bool,
+    fog_color: SIMD[DType.float32, 4],
 ):
     """Shade, tone map and encode one tile, sixteen pixels at a time. A
     row of the visibility buffer holds `stride` pixels."""
@@ -2634,7 +2877,7 @@ __async def _resolve_task(
                 )
                 var shadow = F(1)
                 if use_still:
-                    var wants = drawn & vertices.unsafe_gather(va + 13).eq(0)
+                    var wants = drawn & vertices.unsafe_gather(va + 13).ge(0)
                     if wants.reduce_or():
                         var wx = _blend(vertices, va, vb, vc, 10, q0, q1, q2)
                         var wy = _blend(vertices, va, vb, vc, 11, q0, q1, q2)
@@ -2657,6 +2900,37 @@ __async def _resolve_task(
                     _blend(vertices, va, vb, vc, 6, q0, q1, q2)
                     + _blend(vertices, va, vb, vc, 9, q0, q1, q2) * shadow
                 )
+                var code = planes.unsafe_gather(p + 15)
+                var mapped = drawn & code.ge(0)
+                if mapped.reduce_or():
+                    var texel = _pixel_texel(
+                        maps[],
+                        mapped.select(code, F(0)),
+                        mapped.select(
+                            _blend(vertices, va, vb, vc, 14, q0, q1, q2), F(0)
+                        ),
+                        mapped.select(
+                            _blend(vertices, va, vb, vc, 15, q0, q1, q2), F(0)
+                        ),
+                    )
+                    lit_r = mapped.select(lit_r * texel[0], lit_r)
+                    lit_g = mapped.select(lit_g * texel[1], lit_g)
+                    lit_b = mapped.select(lit_b * texel[2], lit_b)
+                    if fog:
+                        # The fog's share kept, packed with the lookup.
+                        var packed = _blend(
+                            vertices, va, vb, vc, 13, q0, q1, q2
+                        )
+                        var keep = packed.ge(0).select(packed, -1 - packed)
+                        lit_r = mapped.select(
+                            lit_r * keep + fog_color[0] * (1 - keep), lit_r
+                        )
+                        lit_g = mapped.select(
+                            lit_g * keep + fog_color[1] * (1 - keep), lit_g
+                        )
+                        lit_b = mapped.select(
+                            lit_b * keep + fog_color[2] * (1 - keep), lit_b
+                        )
                 r = drawn.select(lit_r, r)
                 g = drawn.select(lit_g, g)
                 b = drawn.select(lit_b, b)

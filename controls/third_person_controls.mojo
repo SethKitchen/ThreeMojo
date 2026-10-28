@@ -314,6 +314,49 @@ struct ThirdPersonControls(Copyable, Movable):
             eye = Vector3(eye.x, lowest, eye.z)
         camera.place(eye, self.focus)
 
+    def place_within(
+        mut self,
+        mut camera: PerspectiveCamera,
+        floor: Length,
+        ceiling: Length,
+        reach: Float32,
+    ) raises:
+        """Stand the camera part of the way from the focus to the eye, at
+        least `clearance` below a ceiling and above a floor, looking at
+        the focus.
+
+        A game uses it when a wall stands between the focus and the eye,
+        or a room's ceiling is lower than the eye.
+
+        Args:
+            camera: The camera.
+            floor: The height of the floor or the ground under the eye.
+            ceiling: The height of the ceiling over the focus. A very
+                large height is the open sky.
+            reach: The share of the way from the focus to the eye, from 0
+                to 1.
+
+        Raises:
+            Error: If `check` refuses the camera, the floor is not finite,
+                the ceiling is not a number, or the reach is not from 0
+                to 1.
+        """
+        self.check()
+        require_finite(Float64(floor.to(METER)), "A floor must be finite")
+        var top = ceiling.to(METER)
+        if top != top:
+            raise Error("A ceiling must be a number")
+        if not (reach >= 0 and reach <= 1):
+            raise Error("A camera's reach must be from 0 to 1")
+        var eye = self.focus + (self.eye() - self.focus) * reach
+        var highest = top - self.clearance.to(METER)
+        if eye.y > highest:
+            eye = Vector3(eye.x, highest, eye.z)
+        var lowest = floor.to(METER) + self.clearance.to(METER)
+        if eye.y < lowest:
+            eye = Vector3(eye.x, lowest, eye.z)
+        camera.place(eye, self.focus)
+
 
 def _seconds(delta: Duration) raises -> Float32:
     """Return a frame's time in seconds, refusing a negative time."""
