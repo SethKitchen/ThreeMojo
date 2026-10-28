@@ -2134,8 +2134,6 @@ def gradient_place(
     A nonfinite coordinate or gradient is refused before the wrap. A
     finite coordinate is reduced by `gradient_sample_coordinate`.
 
-    Error: Never.
-
     Args:
         u: Horizontal coordinate.
         v: Vertical coordinate.

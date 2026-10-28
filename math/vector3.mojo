@@ -747,8 +747,6 @@ def component_max(a: Vector3, b: Vector3) -> Vector3:
 def radians_between(a: Vector3, b: Vector3) -> Float32:
     """Return the angle between two vectors, in radians.
 
-    Error: Never.
-
     Args:
         a: One vector.
         b: The other.
@@ -794,8 +792,6 @@ def reciprocal_unit(value: Vector3) -> Vector3:
 def midpoint(a: Vector3, b: Vector3) -> Vector3:
     """Return the point halfway from `a` to `b`.
 
-    Error: Never.
-
     Args:
         a: One end.
         b: The other end.
@@ -809,8 +805,6 @@ def midpoint(a: Vector3, b: Vector3) -> Vector3:
 
 def centroid(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
     """Return the average of three points.
-
-    Error: Never.
 
     Args:
         a: The first point.
@@ -829,8 +823,6 @@ def append_vector3(mut values: List[Float32], point: Vector3):
 
     Nothing. Three numbers are appended.
 
-    Error: Never.
-
     Args:
         values: The list that receives x, y, and z.
         point: The vector.
@@ -845,8 +837,6 @@ def vector3_from_float64(x: Float64, y: Float64, z: Float64) -> Vector3:
     """Return a `Vector3` from three `Float64` components.
 
     Each component is rounded to `Float32`.
-
-    Error: Never.
 
     Args:
         x: The first component.
@@ -866,8 +856,6 @@ def append_float64_xyz(
     """Append three `Float64` components as `Float32`.
 
     Nothing. Three numbers are appended.
-
-    Error: Never.
 
     Args:
         values: The list that receives the components.

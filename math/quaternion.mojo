@@ -598,8 +598,6 @@ def quaternion_from_float64(
 
     Each component is rounded to `Float32`.
 
-    Error: Never.
-
     Args:
         x: The first component.
         y: The second component.
@@ -617,8 +615,6 @@ def append_quaternion(mut values: List[Float32], rotation: Quaternion):
     """Append `rotation`'s four components, x, y, z, then w.
 
     Nothing. Four numbers are appended.
-
-    Error: Never.
 
     Args:
         values: The list that receives the components.

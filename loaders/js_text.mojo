@@ -201,8 +201,6 @@ def text_lines(text: String) -> List[String]:
     A carriage return becomes a line feed, then the text is split at each
     line feed. An empty line is kept.
 
-    Error: Never.
-
     Args:
         text: The text.
 

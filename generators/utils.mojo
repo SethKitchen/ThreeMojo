@@ -320,8 +320,6 @@ def append_z_up_as_y_up(
 
     Nothing. Six numbers are appended.
 
-    Error: Never.
-
     Args:
         positions: The position list.
         normals: The normal list.

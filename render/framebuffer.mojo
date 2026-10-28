@@ -134,8 +134,6 @@ struct Color(Equatable, ImplicitlyCopyable):
 def rgb_is_white(color: Color) -> Bool:
     """Return True when red, green, and blue are all 255.
 
-    Error: Never.
-
     Args:
         color: The color. Alpha is not read.
 
@@ -148,8 +146,6 @@ def rgb_is_white(color: Color) -> Bool:
 
 def rgb_is_black(color: Color) -> Bool:
     """Return True when red, green, and blue are all zero.
-
-    Error: Never.
 
     Args:
         color: The color. Alpha is not read.
@@ -165,8 +161,6 @@ def append_color(mut values: List[UInt8], color: Color):
     """Append `color`'s four channels.
 
     Nothing. Four bytes are appended.
-
-    Error: Never.
 
     Args:
         values: The list that receives red, green, blue, and alpha.
@@ -808,8 +802,6 @@ def append_float_rgb(mut values: List[Float32], color: FloatColor):
 
     Nothing. Three numbers are appended.
 
-    Error: Never.
-
     Args:
         values: The list that receives the three channels.
         color: The linear color. Alpha is not written.
@@ -825,8 +817,6 @@ def append_float_color(mut values: List[Float32], color: FloatColor):
 
     Nothing. Four numbers are appended.
 
-    Error: Never.
-
     Args:
         values: The list that receives red, green, blue, and alpha.
         color: The linear color.
@@ -840,8 +830,6 @@ def append_float_color(mut values: List[Float32], color: FloatColor):
 
 def opaque_from_linear(red: Float64, green: Float64, blue: Float64) -> Color:
     """Return linear light as the opaque sRGB bytes a material holds.
-
-    Error: Never.
 
     Args:
         red: Linear red.
@@ -864,8 +852,6 @@ def unit_byte(value: Float32) -> UInt8:
     to the nearest byte. A half rounds up. NaN and positive infinity are
     one, so the byte is 255. Negative infinity is zero.
 
-    Error: Never.
-
     Args:
         value: The fraction.
 
@@ -884,8 +870,6 @@ def rounded_byte(value: Float64) -> UInt8:
 
     A half rounds up.
 
-    Error: Never.
-
     Args:
         value: The number.
 
@@ -900,8 +884,6 @@ def rounded_byte(value: Float32) -> UInt8:
     """Return a number held from 0 to 255 and rounded to a byte.
 
     A half rounds up.
-
-    Error: Never.
 
     Args:
         value: The number.

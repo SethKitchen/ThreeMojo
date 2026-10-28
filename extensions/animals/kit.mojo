@@ -383,8 +383,6 @@ def lid_unless_behind(
 ) -> Float64:
     """Return the lid distance, or one when the point is behind the eye.
 
-    Error: Never.
-
     Args:
         e: The eye.
         head_origin: The head origin. The nearer eye is the one on the

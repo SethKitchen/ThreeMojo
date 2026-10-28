@@ -208,8 +208,6 @@ def adler32(bytes: Span[UInt8, _]) -> UInt32:
     at its end, which is the same answer as reducing them after every byte
     and a small fraction of the divisions.
 
-    Error: Never.
-
     Args:
         bytes: The bytes to checksum.
 

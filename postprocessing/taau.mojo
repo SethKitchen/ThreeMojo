@@ -247,8 +247,6 @@ def previous_window_depth(
     """Return the last frame's depth at a place, moved into this frame's
     view: three.js's `samplePreviousDepth`, reading the nearest texel.
 
-    Error: Never.
-
     Args:
         previous: The last frame's window depth.
         u: Across, zero at the left.

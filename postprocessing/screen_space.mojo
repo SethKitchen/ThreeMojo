@@ -1388,8 +1388,6 @@ def _ssr_max_step(width: Int, height: Int) -> Float32:
     Returns:
         The diagonal, cut toward zero. A diagonal past what an integer
         holds is the `Float32` of that square root.
-
-    Error: Never.
     """
     var span = Float64(width) * Float64(width) + Float64(height) * Float64(
         height

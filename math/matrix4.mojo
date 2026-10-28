@@ -1016,8 +1016,6 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         That length is the scale along the axis. three.js reads it as
         the length of `matrix[axis].xyz`.
 
-        Error: Never.
-
         Args:
             axis: Which column, zero for x through two for z.
 
@@ -1075,8 +1073,6 @@ def require_axis_extent(
 
 def column_major_matrix(elements: List[Float32]) -> Matrix4:
     """Return a matrix filled from sixteen column-major numbers.
-
-    Error: Never.
 
     Args:
         elements: Sixteen numbers. The first four are the first column.

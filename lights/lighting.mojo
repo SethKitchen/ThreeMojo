@@ -220,8 +220,6 @@ def light_cosines(
     of zero. A directional light passes a length of one, which leaves the
     dot unchanged.
 
-    Error: Never.
-
     Args:
         normal: The surface normal.
         toward: The vector toward the light, before it is normalized.

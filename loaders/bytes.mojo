@@ -56,8 +56,6 @@ def ascii_space(byte: Int) -> Bool:
 def ascii_space(byte: UInt8) -> Bool:
     """Return True for an ASCII white space byte.
 
-    Error: Never.
-
     Args:
         byte: A byte value.
 
@@ -72,8 +70,6 @@ def ascii_space(byte: UInt8) -> Bool:
 def space_tab_return(byte: UInt8) -> Bool:
     """Return True for a space, a tab, or a carriage return.
 
-    Error: Never.
-
     Args:
         byte: A byte value.
 
@@ -87,8 +83,6 @@ def space_tab_return(byte: UInt8) -> Bool:
 def space_tab_line(byte: Int) -> Bool:
     """Return True for a space, a tab, a line feed, or a carriage return.
 
-    Error: Never.
-
     Args:
         byte: A byte value.
 
@@ -101,8 +95,6 @@ def space_tab_line(byte: Int) -> Bool:
 
 def space_tab_line(byte: UInt8) -> Bool:
     """Return True for a space, a tab, a line feed, or a carriage return.
-
-    Error: Never.
 
     Args:
         byte: A byte value.
@@ -129,8 +121,6 @@ def ascii_digit(byte: Int) -> Bool:
 def ascii_digit(byte: UInt8) -> Bool:
     """Return True for an ASCII decimal digit.
 
-    Error: Never.
-
     Args:
         byte: A byte value.
 
@@ -143,8 +133,6 @@ def ascii_digit(byte: UInt8) -> Bool:
 
 def ascii_space_at(bytes: Span[UInt8, _], at: Int) -> Bool:
     """Return True when `at` names an ASCII white space byte.
-
-    Error: Never.
 
     Args:
         bytes: The bytes to read.
@@ -160,8 +148,6 @@ def ascii_space_at(bytes: Span[UInt8, _], at: Int) -> Bool:
 def ascii_digit_at(bytes: Span[UInt8, _], at: Int) -> Bool:
     """Return True when `at` names an ASCII decimal digit.
 
-    Error: Never.
-
     Args:
         bytes: The bytes to read.
         at: The index to read.
@@ -176,8 +162,6 @@ def ascii_digit_at(bytes: Span[UInt8, _], at: Int) -> Bool:
 def letter_or_underscore(byte: UInt8) -> Bool:
     """Return True for a letter or `_`.
 
-    Error: Never.
-
     Args:
         byte: A byte value.
 
@@ -190,8 +174,6 @@ def letter_or_underscore(byte: UInt8) -> Bool:
 
 def is_sign_mark(byte: Int) -> Bool:
     """Return True for `+` or `-`.
-
-    Error: Never.
 
     Args:
         byte: A byte value.
@@ -206,8 +188,6 @@ def is_sign_mark(byte: Int) -> Bool:
 def is_sign_mark(byte: UInt8) -> Bool:
     """Return True for `+` or `-`.
 
-    Error: Never.
-
     Args:
         byte: A byte value.
 
@@ -221,8 +201,6 @@ def is_sign_mark(byte: UInt8) -> Bool:
 def is_exponent_mark(byte: Int) -> Bool:
     """Return True for `e` or `E`.
 
-    Error: Never.
-
     Args:
         byte: A byte value.
 
@@ -235,8 +213,6 @@ def is_exponent_mark(byte: Int) -> Bool:
 
 def is_exponent_mark(byte: UInt8) -> Bool:
     """Return True for `e` or `E`.
-
-    Error: Never.
 
     Args:
         byte: A byte value.
@@ -252,8 +228,6 @@ def js_float_byte(byte: UInt8) -> Bool:
     """Return True when `byte` can sit inside a JavaScript number.
 
     The bytes are a digit, `.`, `e`, `+`, and `-`.
-
-    Error: Never.
 
     Args:
         byte: The byte.
@@ -273,8 +247,6 @@ def js_float_byte(byte: UInt8) -> Bool:
 
 def js_float_byte_at(bytes: Span[UInt8, _], at: Int) -> Bool:
     """Return True when `at` names a byte a JavaScript number can hold.
-
-    Error: Never.
 
     Args:
         bytes: The bytes to read.
@@ -421,8 +393,6 @@ def hex_digit_value(byte: Int) -> Int:
 
 def is_hex_digit(byte: Int) -> Bool:
     """Return True for one ASCII hexadecimal digit.
-
-    Error: Never.
 
     Args:
         byte: A byte value. A value outside 0 through 255 is not a digit.

@@ -142,8 +142,6 @@ def sprite_span(
     divide by. The last two numbers are the cosine and the sine of the
     material's rotation about the line of sight.
 
-    Error: Never.
-
     Args:
         world: The node's world matrix.
         center: The node's origin in camera space.
@@ -178,8 +176,6 @@ def sprite_place(
 
     The corner starts on the unit square, moves so `anchor` sits on the
     node, scales, and turns about the line of sight.
-
-    Error: Never.
 
     Args:
         center: The node's origin in camera space.

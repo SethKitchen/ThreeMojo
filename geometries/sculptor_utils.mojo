@@ -156,8 +156,6 @@ def point_of(values: List[Float32], vertex: Int) -> Point3:
 def point3_of(v: Vector3) -> Point3:
     """Return a vector widened to doubles.
 
-    Error: Never.
-
     Args:
         v: The vector.
 
