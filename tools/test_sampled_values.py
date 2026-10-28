@@ -1115,5 +1115,31 @@ class SelectionGroupedTests(unittest.TestCase):
                 selection._predecessor_then_grouped({'path': 'other.mojo'}, 'nope')
 
 
+class RestoredScopeTests(unittest.TestCase):
+    def test_the_restored_scope_and_the_minima_are_one_call(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import rounded_line_singleton_contracts as singleton
+        ok = Mock(returncode=0, stdout='["true"]', stderr='')
+        with patch('subprocess.run', return_value=ok) as run:
+            flags = singleton._restored_scope_then_minima(
+                ['stale'], 0, 'def f():\n    return 1\n', [''], ['ok'],
+                [('extensions/carla/lane_refinement.mojo',
+                  '_rounded_axis_lane_minimum', ())],
+            )
+        self.assertEqual(flags, [True])
+        self.assertEqual(run.call_count, 1)
+        command = ' '.join(str(part) for part in run.call_args[0][0])
+        self.assertIn('--restored-scope-then-minima', command)
+        self.assertNotIn('carla_import_scopes', command)
+        failed = Mock(returncode=1, stdout='', stderr='lane scope changed\n')
+        with patch('subprocess.run', return_value=failed):
+            with self.assertRaisesRegex(ValueError, 'lane scope changed'):
+                singleton._restored_scope_then_minima(
+                    ['stale'], 0, 'def f():\n    return 1\n', ['nope'],
+                    ['lane scope changed'],
+                    [('p', 'n', ())],
+                )
+
+
 if __name__ == '__main__':
     unittest.main()

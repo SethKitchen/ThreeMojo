@@ -131,6 +131,10 @@ It checks those import scopes before the lane minima in one check.
 
 It checks those restored graphs before the lane minima in one check.
 
+It reads the restored import scope before those graphs and the lane minima in one check.
+
+A restored scope still fails before a graph is accepted.
+
 It keeps the lane path, the rounded-line path, and the consumer messages.
 
 It compares each module path with that rounded-line path in one check.

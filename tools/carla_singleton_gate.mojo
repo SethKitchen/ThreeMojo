@@ -13,6 +13,7 @@
     carla_singleton_gate --import-scopes PATH
     carla_singleton_gate --scopes-then-minima PATH
     carla_singleton_gate --graphs-then-minima PATH
+    carla_singleton_gate --restored-scope-then-minima PATH
     carla_singleton_gate --declaration-graphs PATH
     carla_singleton_gate --restored-graphs PATH
     carla_singleton_gate --selector PATH --wanted PATH
@@ -256,6 +257,59 @@ def graphs_then_minima(payload: String) raises -> String:
     return selected_lane_minima(doc.subtree(doc.at(doc.root, "minima")).dumps())
 
 
+def restored_scope_then_minima(payload: String) raises -> String:
+    """Read the restored import scope, then check the graphs and minima.
+
+    Args:
+        payload: JSON with `prefixes`, `lane`, `text`, `expected`, `labels`,
+            and `minima`. `lane` is the prefix index replaced by the scope of
+            `text`.
+
+    Returns:
+        A JSON list of `true` or `false`, in minima order.
+
+    Raises:
+        Error: The restored scope fails before a graph is accepted. A graph
+            change fails before a minimum is accepted.
+    """
+    var doc = PyJson.parse(payload)
+    var text = doc.text(doc.at(doc.root, "text"))
+    var wrapper = PyJson()
+    var texts = wrapper.new_list()
+    wrapper.append(texts, wrapper.new_str(text))
+    wrapper.root = texts
+    var extracted = PyJson.parse(import_scope_prefixes(wrapper.dumps()))
+    var lane_prefix = extracted.text(extracted.item(extracted.root, 0))
+    var at = Int(doc.text(doc.at(doc.root, "lane")))
+    var prefixes = doc.at(doc.root, "prefixes")
+    var expected = doc.at(doc.root, "expected")
+    var labels = doc.at(doc.root, "labels")
+    var built = PyJson()
+    var graphs = built.new_list()
+    var index = 0
+    var count = doc.length(prefixes)
+    while index < count:
+        var actual_text = doc.text(doc.item(prefixes, index))
+        if index == at:
+            actual_text = lane_prefix
+        var row = built.new_dict()
+        built.set(
+            row, "label", built.new_str(doc.text(doc.item(labels, index)))
+        )
+        built.set(row, "actual", built.new_str(actual_text))
+        built.set(
+            row, "source", built.new_str(doc.text(doc.item(expected, index)))
+        )
+        built.append(graphs, row)
+        index += 1
+    built.root = graphs
+    var graphs_text = built.dumps()
+    var minima_text = doc.subtree(doc.at(doc.root, "minima")).dumps()
+    return graphs_then_minima(
+        '{"graphs":' + graphs_text + ',"minima":' + minima_text + "}"
+    )
+
+
 def singleton_checked_declarations(payload: String) raises -> String:
     """Read every declaration, then check every graph when each selected one matches.
 
@@ -326,6 +380,7 @@ def _usage():
             " | --views-after-newlines TEXT PHYSICAL | --graphs DIR"
             " | --source-graphs PATH"
             " | --import-scopes PATH"
+            " | --restored-scope-then-minima PATH"
             " | --declaration-graphs PATH"
             " | --restored-graphs PATH"
             " | --selector PATH --wanted PATH"
@@ -372,6 +427,16 @@ def main() raises:
     if len(arguments) == 3 and arguments[1] == "--graphs-then-minima":
         try:
             print(graphs_then_minima(Path(arguments[2]).read_text()), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--restored-scope-then-minima":
+        try:
+            print(
+                restored_scope_then_minima(Path(arguments[2]).read_text()),
+                end="",
+            )
         except error:
             print(String(error), file=stderr)
             exit(1)

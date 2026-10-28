@@ -173,6 +173,41 @@ def _graphs_then_minima(pairs, minima):
     return [flag == 'true' for flag in json.loads(result.stdout)]
 
 
+def _restored_scope_then_minima(prefixes, lane_index, text, expected, labels, minima):
+    """Read the restored import scope, then check the graphs and minima."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps({
+        'prefixes': list(prefixes),
+        'lane': lane_index,
+        'text': text,
+        'expected': list(expected),
+        'labels': list(labels),
+        'minima': [
+            {'path': path, 'name': name, 'owner': list(owner)}
+            for path, name, owner in minima
+        ],
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='restored-scope-minima-') as directory:
+        path = Path(directory) / 'scopes.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_singleton_gate',
+             '--restored-scope-then-minima', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return [flag == 'true' for flag in json.loads(result.stdout)]
+
+
 def _significant_graphs(pairs):
     """Compare every source pair by its significant tokens."""
     if not pairs:
@@ -664,14 +699,17 @@ def verify_premises(root):
         scope_items, lane_index, labels['import_scope'], minimum_items)
     if checked['restore']:
         prefixes = checked['prefixes']
-        path, text, expected = scope_items[lane_index]
+        path, text, _expected = scope_items[lane_index]
         text = full_audit.reviewed_text(root, path, text)
-        prefixes[lane_index] = _import_scope(text)
-        prepared = []
-        for index, (path, _text, expected) in enumerate(scope_items):
-            prepared.append((prefixes[index], expected,
-                             labels['import_scope'] + path))
-        selected_flags = _graphs_then_minima(prepared, minimum_items)
+        selected_flags = _restored_scope_then_minima(
+            prefixes,
+            lane_index,
+            text,
+            [expected for _path, _text, expected in scope_items],
+            [labels['import_scope'] + path
+             for path, _text, _expected in scope_items],
+            minimum_items,
+        )
     else:
         selected_flags = [flag == 'true' for flag in checked['minima']]
     loaded = []

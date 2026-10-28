@@ -8,7 +8,11 @@
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._python_json import PyJson
-from tools.carla_singleton_gate import graphs_then_minima, scopes_then_minima
+from tools.carla_singleton_gate import (
+    graphs_then_minima,
+    restored_scope_then_minima,
+    scopes_then_minima,
+)
 
 
 def test_missing_scope_texts_fail_before_the_minima() raises:
@@ -53,6 +57,32 @@ def test_matching_graphs_select_the_lane_minimum() raises:
         )
     )
     assert_equal(doc.length(doc.root), 1)
+    assert_equal(doc.text(doc.item(doc.root, 0)), "true")
+
+
+def test_a_restored_scope_fails_before_the_minima() raises:
+    """A changed restored scope fails before a minimum field is read."""
+    with assert_raises(contains="lane scope changed"):
+        _ = restored_scope_then_minima(
+            '{"prefixes":["stale"],"lane":0,"text":"def f():\\n    return'
+            ' 1\\n",'
+            + '"expected":["not-the-scope"],"labels":["lane scope changed"],'
+            + '"minima":[{"path":1}]}'
+        )
+
+
+def test_a_matching_restored_scope_selects_the_lane_minimum() raises:
+    """The scope before the first definition selects the lane minimum."""
+    var doc = PyJson.parse(
+        restored_scope_then_minima(
+            '{"prefixes":["stale"],"lane":0,"text":"def f():\\n    return'
+            ' 1\\n",'
+            + '"expected":["def f():\\n    return 1\\n"],"labels":["ok"],'
+            + '"minima":['
+            + '{"path":"extensions/carla/lane_refinement.mojo",'
+            + '"name":"_rounded_axis_lane_minimum","owner":[]}]}'
+        )
+    )
     assert_equal(doc.text(doc.item(doc.root, 0)), "true")
 
 
