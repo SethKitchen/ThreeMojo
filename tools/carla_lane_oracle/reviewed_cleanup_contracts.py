@@ -883,7 +883,11 @@ def _pinned_dependency_words(items):
 
 
 def _words_then_paths(items):
-    """Check the pinned dependency words, then read the cleanup paths."""
+    """Check the pinned dependency words, then read the cleanup paths.
+
+    Accepted words are recorded. A later check does not send them again.
+    A failed check is not recorded.
+    """
     global _CLEANUP_PATHS, SOURCE_PATHS, PREMISE_PATHS
     if not items:
         _ensure_paths()
@@ -921,6 +925,8 @@ def _words_then_paths(items):
         _CLEANUP_PATHS = json.loads(result.stdout)
     SOURCE_PATHS = tuple(_CLEANUP_PATHS['sources'])
     PREMISE_PATHS = tuple(_CLEANUP_PATHS['premises'])
+    for path, text, expected in items:
+        _CHECKED_DEPENDENCY_WORDS.add((path, text, expected))
 
 
 def verify_dependencies(items):

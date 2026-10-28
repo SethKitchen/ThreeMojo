@@ -1649,6 +1649,57 @@ class ProductionScanTests(unittest.TestCase):
         )
 
 
+class CleanupPathWordTests(unittest.TestCase):
+    def test_a_paths_check_records_the_accepted_words(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import reviewed_cleanup_contracts as cleanup
+        saved_words = set(cleanup._CHECKED_DEPENDENCY_WORDS)
+        saved_paths = cleanup._CLEANUP_PATHS
+        saved_sources = cleanup.__dict__.get('SOURCE_PATHS')
+        saved_premises = cleanup.__dict__.get('PREMISE_PATHS')
+        ok = Mock(
+            returncode=0,
+            stdout='{"sources":["a.mojo"],"premises":["b.mojo"]}',
+            stderr='',
+        )
+        try:
+            cleanup._CHECKED_DEPENDENCY_WORDS.clear()
+            cleanup._CLEANUP_PATHS = None
+            with patch('subprocess.run', return_value=ok) as run:
+                cleanup._words_then_paths([('p', 'text', 'aa')])
+                cleanup._pinned_dependency_words([{
+                    'text': 'text', 'expected': 'aa', 'path': 'p',
+                }])
+                self.assertEqual(run.call_count, 1)
+                self.assertIn(('p', 'text', 'aa'), cleanup._CHECKED_DEPENDENCY_WORDS)
+                cleanup._pinned_dependency_words([{
+                    'text': 'other', 'expected': 'aa', 'path': 'p',
+                }])
+                self.assertEqual(run.call_count, 2)
+            cleanup._CLEANUP_PATHS = None
+            failed = Mock(returncode=1, stdout='', stderr='word changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'word changed'):
+                    cleanup._words_then_paths([('bad', 'bad', 'aa')])
+                self.assertNotIn(
+                    ('bad', 'bad', 'aa'), cleanup._CHECKED_DEPENDENCY_WORDS)
+                with self.assertRaisesRegex(ValueError, 'word changed'):
+                    cleanup._words_then_paths([('bad', 'bad', 'aa')])
+                self.assertEqual(run.call_count, 2)
+        finally:
+            cleanup._CHECKED_DEPENDENCY_WORDS.clear()
+            cleanup._CHECKED_DEPENDENCY_WORDS.update(saved_words)
+            cleanup._CLEANUP_PATHS = saved_paths
+            if saved_sources is None:
+                cleanup.__dict__.pop('SOURCE_PATHS', None)
+            else:
+                cleanup.SOURCE_PATHS = saved_sources
+            if saved_premises is None:
+                cleanup.__dict__.pop('PREMISE_PATHS', None)
+            else:
+                cleanup.PREMISE_PATHS = saved_premises
+
+
 class Sum2OptionalReuseCacheTests(unittest.TestCase):
     def test_the_same_sum2_and_optional_texts_skip_the_second_check(self):
         from unittest.mock import Mock, patch

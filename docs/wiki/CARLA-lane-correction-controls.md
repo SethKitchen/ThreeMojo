@@ -427,6 +427,9 @@ A failed check is not kept.
 
 It checks those selected words before the cleanup paths in one check.
 
+It records the accepted words from that paths check.
+A later word check does not send those words again.
+
 It selects each reviewed declaration and checks that each premise fragment occurs once, in order.
 
 It keeps the five reviewed premise fragment lists.
