@@ -38,6 +38,7 @@ from extensions.village.house import (
     HouseUse,
     MANGER,
     NATURAL,
+    OUTSIDE_WALL,
     PAINT,
     BREAST_CLEAR,
     BREAST_DEPTH,
@@ -261,7 +262,7 @@ def test_a_house_of_two_storeys_has_a_stair() raises:
     assert_almost_equal(stair.height(), 2.8, atol=1e-9)
     # Its foot keeps a landing clear of the hall's west wall, and its
     # fourteen treads run along the back wall's inside face.
-    var half = Float64(0.2325) / 2
+    var half = OUTSIDE_WALL / 2
     assert_almost_equal(stair.x0, -4.5 + half + STAIR_LANDING, atol=1e-9)
     assert_almost_equal(stair.x1 - stair.x0, 14 * STAIR_GOING, atol=1e-9)
     assert_almost_equal(stair.y1, 3.5 - half, atol=1e-9)
@@ -338,8 +339,12 @@ def test_a_stair_clears_the_furniture_in_its_way() raises:
 def test_a_brick_or_stone_house_has_a_chimney_breast() raises:
     var model = house_model(_two_storeys())
     var breast = house_breast(model).value()
+    # The outside wall is as thick as `OUTSIDE_WALL` says.
+    assert_almost_equal(
+        model.constructions[0].thickness().value, OUTSIDE_WALL, atol=1e-12
+    )
     # Against the west gable wall's inside face, on each storey.
-    var half = Float64(0.2325) / 2
+    var half = OUTSIDE_WALL / 2
     assert_almost_equal(breast.x0, -4.5 + half, atol=1e-9)
     assert_almost_equal(breast.x1 - breast.x0, BREAST_DEPTH, atol=1e-9)
     assert_almost_equal((breast.y0 + breast.y1) / 2, BREAST_Y, atol=1e-9)

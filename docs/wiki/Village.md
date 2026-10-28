@@ -109,8 +109,9 @@ The water's ocean spectrum is 256 texels on a side, and its glare is 128 texels.
 | `HAY_BALE` | A bale of hay, tied with two cords | Its length |
 | `FENCE` | Posts at most 2 meters apart, and two rails, a meter tall | Its length |
 | `BENCH` | A plank on two trestles | Its length |
+| `WOODPILE` | Split logs stacked under a board lid, their ends out, 0.6 meters deep and 1.15 meters tall | Its length |
 
-The default village has a well and a bench by the trail, and barrels, crates and hay before the barn. A fence closes a garden behind the stone cottage, and a bench stands before the framed house. Each prop but a fence is a solid lot of the terrain, and each fence is a wall span. The residents' routes keep off the props.
+The default village has a well and a bench by the trail, and barrels, crates and hay before the barn. A fence closes a garden behind the stone cottage, and a bench stands before the framed house. A woodpile stands outside the hearth's gable of each house with a hearth: `woodpile_by` places it, and `hearthed` says which houses have one. Each prop but a fence is a solid lot of the terrain, and each fence is a wall span. The residents' routes keep off the props.
 
 ## Lots
 

@@ -4,7 +4,7 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """The things that stand about the village: a well, barrels, crates, hay
-bales, fences and benches.
+bales, fences, benches and woodpiles.
 
 Each `Prop` is a kind, a place on the ground, a turn about +y and a
 length. `stand_props` draws every prop with the houses' materials, in one
@@ -19,6 +19,7 @@ for each prop but a fence, and a `WallSpan` for each fence.
 | `HAY_BALE` | A bale of hay | Its length; it is half as wide and tall |
 | `FENCE` | Posts every 2 meters, and two rails | Its length, along its own x |
 | `BENCH` | A plank on two trestles | Its length |
+| `WOODPILE` | Split logs stacked under a board lid, their ends out | Its length, along its own x; it is `WOODPILE_DEPTH` deep and `WOODPILE_HEIGHT` tall |
 
 A prop stands on the ground at its middle, and its foot reaches a little
 below the ground, so a slope shows no gap.
@@ -57,6 +58,12 @@ comptime HAY = Vector3(1.0, 0.82, 0.42)
 """The tint of hay over the plaster texture."""
 comptime IRON = Vector3(0.06, 0.06, 0.065)
 """The tint of iron hoops over the wood texture."""
+comptime WOODPILE_DEPTH = Float32(0.6)
+"""How deep a woodpile is, along its own z, in meters."""
+comptime WOODPILE_HEIGHT = Float32(1.15)
+"""How tall a woodpile is, to the top of its lid, in meters."""
+comptime LOG = Float32(0.065)
+"""The radius of a log's end in a woodpile, in meters."""
 
 
 @fieldwise_init
@@ -66,12 +73,12 @@ struct PropKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the six kinds there are.
+        """Return True if this is one of the seven kinds there are.
 
         Returns:
             Whether the value names a kind.
         """
-        return ordinal_valid(self.value, 5)
+        return ordinal_valid(self.value, 6)
 
 
 comptime WELL = PropKind(0)
@@ -80,6 +87,7 @@ comptime CRATE = PropKind(2)
 comptime HAY_BALE = PropKind(3)
 comptime FENCE = PropKind(4)
 comptime BENCH = PropKind(5)
+comptime WOODPILE = PropKind(6)
 
 
 @fieldwise_init
@@ -104,7 +112,7 @@ struct Prop(ImplicitlyCopyable):
                 meters.
         """
         if not self.kind.is_valid():
-            raise Error("A prop's kind must be one of the six")
+            raise Error("A prop's kind must be one of the seven")
         require_between(
             self.x, -1.0e4, 1.0e4, "A prop must stand within 10 kilometers"
         )
@@ -371,6 +379,63 @@ def _bench(mut sheets: _PropSheets, frame: _Frame, length: Float32):
         )
 
 
+def _woodpile(mut sheets: _PropSheets, frame: _Frame, length: Float32):
+    """Add a woodpile: a stack of split logs, their light ends in rows on
+    its front, its own +z, under a lid of boards."""
+    var half = length / 2
+    var deep = WOODPILE_DEPTH / 2
+    var top = WOODPILE_HEIGHT - 0.06
+    # The stack, dark with bark, and the lid over it.
+    frame.block(
+        sheets.wood,
+        Vector3(0, (top - SUNK) / 2, 0),
+        half,
+        (top + SUNK) / 2,
+        deep,
+        OAK * 0.55,
+    )
+    frame.block(
+        sheets.wood,
+        Vector3(0, top + 0.03, 0.04),
+        half + 0.08,
+        0.03,
+        deep + 0.1,
+        OAK * 0.9,
+    )
+    # The logs' ends: an octagon each, in staggered rows.
+    var n = frame.z
+    var up = Vector3(0, 1, 0)
+    var across = max(1, Int(length / (2.2 * LOG)))
+    var rows = max(1, Int(top / (1.9 * LOG)))
+    var step_x = length / Float32(across)
+    var step_y = top / Float32(rows)
+    for row in range(rows):  # pragma: no branch
+        var shift = Float32(row % 2) * 0.5 - 0.25
+        for k in range(across):  # pragma: no branch
+            var middle = frame.at(
+                -half + step_x * (Float32(k) + 0.5 + shift * 0.5),
+                step_y * (Float32(row) + 0.5),
+                deep + 0.004,
+            )
+            var tone = 1.5 + 0.25 * Float32((row * 7 + k * 3) % 4) / 3
+            var core = sheets.wood.vertex(middle, n, OAK * tone, 0, 0)
+            var rim = List[Int]()
+            for corner in range(8):
+                var angle = Float32(corner) * Float32(pi) / 4
+                var p = (
+                    middle
+                    + frame.x * (LOG * cos(angle))
+                    + up * (LOG * sin(angle))
+                )
+                rim.append(
+                    sheets.wood.vertex(
+                        p, n, OAK * (tone * 0.75), LOG * cos(angle), LOG
+                    )
+                )
+            for corner in range(8):
+                sheets.wood.triangle(core, rim[corner], rim[(corner + 1) % 8])
+
+
 def _footprint(prop: Prop) -> Lot:
     """Return the ground a prop that is not a fence takes up."""
     var half_x = prop.length / 2
@@ -382,6 +447,8 @@ def _footprint(prop: Prop) -> Lot:
         half_z = prop.length / 4
     elif prop.kind == BENCH:
         half_z = 0.18
+    elif prop.kind == WOODPILE:
+        half_z = WOODPILE_DEPTH / 2
     return Lot(prop.x, prop.z, half_x, half_z, prop.turn.to(RADIAN))
 
 
@@ -452,8 +519,10 @@ def stand_props(
             _crate(sheets, frame, prop.length)
         elif prop.kind == HAY_BALE:
             _hay(sheets, frame, prop.length)
-        else:
+        elif prop.kind == BENCH:
             _bench(sheets, frame, prop.length)
+        else:
+            _woodpile(sheets, frame, prop.length)
     _add(scene, assets, sheets.wood, looks.wood, root, standing)
     _add(scene, assets, sheets.ashlar, looks.ashlar, root, standing)
     _add(scene, assets, sheets.plaster, looks.plaster, root, standing)

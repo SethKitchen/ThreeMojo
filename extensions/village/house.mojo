@@ -118,6 +118,9 @@ from units.si import (
 comptime NATURAL = Vector3(1, 1, 1)
 # The linear color of painted wood: doors, shutters and frames.
 comptime PAINT = Vector3(0.030, 0.090, 0.060)
+comptime OUTSIDE_WALL = Float64(0.2325)
+"""How thick a house's outside wall is, in meters: 12 centimeters of
+cladding, 10 of mineral wool and 1.25 of gypsum board."""
 # The front door's width and height, and an inside door's, in meters.
 comptime FRONT_DOOR = Vector3(1.0, 2.1, 0)
 comptime INSIDE_DOOR = Vector3(0.9, 2.0, 0)

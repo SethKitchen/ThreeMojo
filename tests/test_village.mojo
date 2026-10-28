@@ -20,7 +20,15 @@ from extensions.scan.frame import supersplat_frame
 from extensions.vegetation.field import LodBand
 from extensions.vegetation.ground import Ground, Lot, Pond, lot_openness
 from extensions.vegetation.meadow import Planting
-from extensions.village.house import BARN, DWELLING, HouseParameters
+from extensions.village.house import (
+    BARN,
+    BOARDED,
+    DWELLING,
+    HouseParameters,
+    OUTSIDE_WALL,
+    STONE_FACADE,
+    TIMBER_FRAMED,
+)
 from extensions.scan.occupancy import ScanRegion
 from extensions.village.scanned import (
     MAX_VOXELS,
@@ -31,8 +39,15 @@ from extensions.village.scanned import (
     scan_lot,
     stand_scan,
 )
-from extensions.village.props import CRATE, FENCE, WELL, Prop
-from extensions.village.interior import Doorway
+from extensions.village.props import (
+    CRATE,
+    FENCE,
+    WELL,
+    WOODPILE,
+    WOODPILE_DEPTH,
+    Prop,
+)
+from extensions.village.interior import Doorway, PLINTH_OVERHANG
 from extensions.village.village import (
     HousePlacement,
     PATH_OUT,
@@ -41,6 +56,8 @@ from extensions.village.village import (
     VillageParameters,
     door_path,
     default_props,
+    hearthed,
+    woodpile_by,
 )
 from extensions.water.pebbles import pebble_bed
 from extensions.water.resolution import SpectrumResolution
@@ -280,7 +297,11 @@ def test_village_parameters_are_checked() raises:
     for k in range(5):
         var use = BARN if k == 1 else DWELLING
         assert_true(village.houses[k].house.use == use)
-    assert_equal(len(village.props), len(default_props()))
+    # The default props, and a woodpile by the brick house's and the stone
+    # cottage's hearths.
+    assert_equal(len(village.props), len(default_props()) + 2)
+    for k in range(len(default_props()), len(village.props)):
+        assert_true(village.props[k].kind == WOODPILE)
     assert_true(village.meadow.ground.pond.radius.to(METER) > 0)
     var p = VillageParameters()
     p.meadow.rocks = 2000
@@ -425,6 +446,39 @@ def test_a_footpath_leads_from_a_front_door_to_the_trail() raises:
     assert_equal(len(door_path(door, open)), 1)
     var far = Doorway(200, 4, 1, 0, 0, -1, 1, 2.1, 0, True)
     assert_equal(len(door_path(far, trail)), 1)
+
+
+def test_a_hearth_keeps_its_woodpile_by_its_gable() raises:
+    # A brick or a stone dwelling has a hearth; a framed one, a boarded
+    # one, and a barn of brick have none.
+    var house = _house(2)
+    assert_true(hearthed(house))
+    house.facade = STONE_FACADE
+    assert_true(hearthed(house))
+    house.facade = TIMBER_FRAMED
+    assert_false(hearthed(house))
+    house.facade = BOARDED
+    assert_false(hearthed(house))
+    var barn = _house(1)
+    barn.storey_height = Length(4.0, METER)
+    barn.use = BARN
+    assert_false(hearthed(barn))
+    # Unturned, at (10, 20): the woodpile stands out from the west gable's
+    # plinth, toward the back, the scene's -z, and faces -x.
+    var placed = HousePlacement(_house(2), 10, 20, Angle(0.0, DEGREE))
+    var pile = woodpile_by(placed)
+    var half_x = placed.house.width.to(METER) / 2
+    var out = Float32(OUTSIDE_WALL) / 2 + PLINTH_OVERHANG
+    assert_true(pile.kind == WOODPILE)
+    assert_almost_equal(
+        pile.x, 10 - half_x - out - WOODPILE_DEPTH / 2 - 0.03, atol=1e-4
+    )
+    assert_true(pile.z < 20)
+    var turn = pile.turn.to(RADIAN)
+    # Its own z, (sin, cos) of its turn, points along -x.
+    assert_almost_equal(sin(turn), -1, atol=1e-5)
+    assert_almost_equal(cos(turn), 0, atol=1e-5)
+    pile.check()
 
 
 def main() raises:

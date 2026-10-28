@@ -53,6 +53,8 @@ from extensions.vegetation.meadow import (
 from extensions.village.doors import Doors
 from extensions.village.house import (
     BARN,
+    DWELLING,
+    OUTSIDE_WALL,
     BOARDED,
     BRICK_FACADE,
     HouseParameters,
@@ -64,7 +66,11 @@ from extensions.village.house import (
     house_model,
     lime_plaster,
 )
-from extensions.village.interior import Doorway, house_interior
+from extensions.village.interior import (
+    Doorway,
+    PLINTH_OVERHANG,
+    house_interior,
+)
 from extensions.village.house_view import StandingHouse, stand_house
 from extensions.village.props import (
     BARREL,
@@ -75,6 +81,8 @@ from extensions.village.props import (
     Prop,
     StandingProps,
     WELL,
+    WOODPILE,
+    WOODPILE_DEPTH,
     stand_props,
 )
 from extensions.village.surfaces import house_looks
@@ -86,6 +94,7 @@ from extensions.water.resolution import SpectrumResolution
 from render.framebuffer import Framebuffer
 from renderers.renderer import Renderer
 from math.vector3 import Vector3
+from std.math import atan2, cos, sin
 from units.si import DEGREE, METER, RADIAN, SECOND, Angle, Duration, Length
 
 # The water's clock at the start, in seconds: the Clearwater page's.
@@ -283,6 +292,11 @@ struct VillageParameters(Copyable, Movable):
             ),
         ]
         self.props = default_props()
+        # A house with a hearth keeps its firewood by the hearth's gable.
+        for index in range(len(self.houses)):  # pragma: no branch
+            ref placed = self.houses[index]
+            if hearthed(placed.house):
+                self.props.append(woodpile_by(placed))
         self.scan_x = 22
         self.scan_z = -78
         self.scan_turn = Angle(28.0, DEGREE)
@@ -358,6 +372,51 @@ def default_props() -> List[Prop]:
         Prop(FENCE, -9, 13, Angle(90.0, DEGREE), 4),
         Prop(BENCH, 16.3, -21.5, Angle(-80.0, DEGREE), 1.6),
     ]
+
+
+def hearthed(house: HouseParameters) -> Bool:
+    """Return whether a house has a hearth: a brick or a stone dwelling.
+
+    Args:
+        house: The house.
+
+    Returns:
+        Whether `house_model` gives it a chimney breast.
+    """
+    if house.use != DWELLING:
+        return False
+    return house.facade == BRICK_FACADE or house.facade == STONE_FACADE
+
+
+def woodpile_by(placed: HousePlacement) -> Prop:
+    """Return a woodpile against a house's west gable, outside the wall
+    that its hearth stands in, toward the back of the house.
+
+    Args:
+        placed: The house and where it stands.
+
+    Returns:
+        A woodpile along the gable, its logs' ends out from the wall, as
+        long as the gable allows up to 2 meters.
+    """
+    ref house = placed.house
+    var half_x = house.width.to(METER) / 2
+    var half_y = house.depth.to(METER) / 2
+    var length = min(Float32(2), 2 * half_y - 1.2)
+    # In the plan: just out from the gable's plinth, its middle toward
+    # the back wall, the plan's +y.
+    var wall = Float32(OUTSIDE_WALL) / 2 + PLINTH_OVERHANG
+    var px = -half_x - wall - WOODPILE_DEPTH / 2 - 0.03
+    var py = half_y - 0.4 - length / 2
+    # A plan point (x, y) stands at the lot's (x, -y), turned by the turn.
+    var turn = placed.turn.to(RADIAN)
+    var c = cos(turn)
+    var s = sin(turn)
+    var x = placed.x + px * c - py * s
+    var z = placed.z - px * s - py * c
+    # Its own x runs along the plan's -y, so its own z points out of the
+    # gable, along the plan's -x.
+    return Prop(WOODPILE, x, z, Angle(atan2(-c, s), RADIAN), length)
 
 
 def _require_near(x: Float32, z: Float32, what: String) raises:
