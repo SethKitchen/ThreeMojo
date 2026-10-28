@@ -1,11 +1,10 @@
-# ADAPTED table-lookup control. Original oracle words, fixtures,
-# assertions and the five-second gate are retained. Only imports,
-# coefficient access and the optional lookup-unit debit differ.
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-# GENERATED source-only controls; not compiled or run by the oracle author.
-# Immutable words come from derive_controls.py, direct exact-rational quadrature.
-# Never alter the TestSuite default per-test five-second duration gate.
+
+"""The table expansion matches the reference SPIRAL jet at eligible sites.
+
+The expected words come from exact-rational quadrature.
+"""
 
 from extensions.carla.curve_bounds import (
     _geometry_distance,

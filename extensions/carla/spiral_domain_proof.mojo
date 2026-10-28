@@ -12,14 +12,14 @@ heading. This module never evaluates a canonical scalar lane witness.
 """
 
 from extensions.carla.curve_sum2 import _sum2_supported_environment
-from extensions.carla.curve_interval import _Interval, _Jet, _stored_half
+from extensions.carla.curve_interval import _Interval, _Jet
 from extensions.carla.geometry import RoadGeometry, SPIRAL
 from extensions.carla.road import Road
 from extensions.carla.road_info import _info_index_si as info_index
 from extensions.carla.spiral_moment_proof import _all_spiral_nodes_quadrant_zero
 from extensions.carla.spiral_moment_table import (
     _SpiralMomentProof,
-    _ideal_moment_polynomial,
+    _moment_jets,
 )
 from math.vector3 import Vector3
 from std.math import inf, isfinite
@@ -294,16 +294,11 @@ def _spiral_proof_branch(
     # a standalone unchecked cached-bound entry.
     # Called only after fresh record/count/clamp/station containment checks.
     # The immutable original-root q0 proof applies to the actual d graph.
-    var handle = _SpiralMomentProof(pieces)
-    var rate = _Jet.constant(
-        (geometry.curvature_end - geometry.curvature_start) / geometry.length
+    var jets = _moment_jets(
+        _SpiralMomentProof(pieces), geometry, d, translation
     )
-    var u = _Jet.constant(0.5) * rate * d * d
-    var z = u * u
-    var x = d * _ideal_moment_polynomial(handle, False, z)
-    var y = d * u * _ideal_moment_polynomial(handle, True, z)
-    x = (_Jet.constant(geometry.x) - _Jet.constant(Float64(translation.x))) + x
-    y = (_Jet.constant(geometry.y) + _Jet.constant(Float64(translation.y))) + y
+    var x = jets[0]
+    var y = jets[1]
     # Match the COMPLETE zero-translation ideal reference, including origin.
     # Table width is already in ideal intervals, never a scalar roundoff term.
     x.error = proof.first_x_error
@@ -317,7 +312,4 @@ def _spiral_proof_branch(
         x.error = inf[DType.float64]()
         y.error = inf[DType.float64]()
     # Keep the original fresh graph/error; the lane tail keeps its trig guard.
-    var heading = _Jet.constant(geometry.heading) + d * (
-        _Jet.constant(geometry.curvature_start) + _stored_half(rate) * d
-    )
-    return (x, y, heading)
+    return (x, y, jets[2])

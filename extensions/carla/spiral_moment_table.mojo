@@ -84,6 +84,33 @@ def _ideal_moment_polynomial(
     return result
 
 
+def _moment_jets(
+    proof: _SpiralMomentProof,
+    geometry: RoadGeometry,
+    d: _Jet,
+    translation: Vector3,
+) -> Tuple[_Jet, _Jet, _Jet]:
+    # The ideal Taylor expansion of a zero-heading, zero-start-curvature
+    # spiral at `d`. Each caller sets the x and y errors it can claim.
+    var rate = _Jet.constant(
+        (geometry.curvature_end - geometry.curvature_start) / geometry.length
+    )
+    # u = beta*d^2. The simplified graph is used ONLY for real-polynomial
+    # values and derivatives. Its computed error is never a scalar certificate.
+    var u = _Jet.constant(0.5) * rate * d * d
+    var z = u * u
+    var x = d * _ideal_moment_polynomial(proof, False, z)
+    var y = d * u * _ideal_moment_polynomial(proof, True, z)
+    x = (_Jet.constant(geometry.x) - _Jet.constant(Float64(translation.x))) + x
+    y = (_Jet.constant(geometry.y) + _Jet.constant(Float64(translation.y))) + y
+    # Preserve the original heading jet/error graph: lane-offset trigonometry
+    # uses this error for branch selection. Do not replace it with `u`.
+    var heading = _Jet.constant(geometry.heading) + d * (
+        _Jet.constant(geometry.curvature_start) + _stored_half(rate) * d
+    )
+    return (x, y, heading)
+
+
 def _try_spiral_moment_expansion(
     proof: _SpiralMomentProof,
     geometry: RoadGeometry,
@@ -121,25 +148,12 @@ def _try_spiral_moment_expansion(
         return None
     if not _all_spiral_nodes_quadrant_zero(geometry, d, proof.pieces):
         return None
-    var rate = _Jet.constant(
-        (geometry.curvature_end - geometry.curvature_start) / geometry.length
-    )
-    # u = beta*d^2. The simplified graph is used ONLY for real-polynomial
-    # values and derivatives. Its computed error is never a scalar certificate.
-    var u = _Jet.constant(0.5) * rate * d * d
-    var z = u * u
-    var x = d * _ideal_moment_polynomial(proof, False, z)
-    var y = d * u * _ideal_moment_polynomial(proof, True, z)
-    x = (_Jet.constant(geometry.x) - _Jet.constant(Float64(translation.x))) + x
-    y = (_Jet.constant(geometry.y) + _Jet.constant(Float64(translation.y))) + y
-    # Preserve the original heading jet/error graph: lane-offset trigonometry
-    # uses this error for branch selection. Do not replace it with `u`.
-    var heading = _Jet.constant(geometry.heading) + d * (
-        _Jet.constant(geometry.curvature_start) + _stored_half(rate) * d
-    )
+    var jets = _moment_jets(proof, geometry, d, translation)
+    var x = jets[0]
+    var y = jets[1]
     # This makes accidental use as a standalone actual rounded-value bound
     # unknown. _lane_jet_model's coordinate addition and the final expansion
     # distance use the value/derivative fields and keep error separate.
     x.error = inf[DType.float64]()
     y.error = inf[DType.float64]()
-    return (x, y, heading)
+    return (x, y, jets[2])

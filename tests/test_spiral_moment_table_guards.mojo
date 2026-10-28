@@ -1,14 +1,11 @@
-# ADAPTED table-lookup control. Original oracle words, fixtures,
-# assertions and the five-second gate are retained. Only imports,
-# coefficient access and the optional lookup-unit debit differ.
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
-"""SOURCE ONLY. Bounded guard controls, not compiled or run by this author.
+"""The SPIRAL moment lookup and builder refuse bad budgets, counts and sites.
 
-Keep the original TestSuite per-test five-second duration gate. Every ordinary
-site obtains distance/counts from the unchanged helpers. Explicit malformed
-payload/count tests below are adversarial API controls, never production callers.
+Every ordinary site obtains distance/counts from the unchanged helpers. The
+malformed payload and count tests are adversarial API controls, never
+production callers.
 """
 
 from extensions.carla.curve_bounds import _geometry_distance, _spiral_counts
@@ -19,6 +16,7 @@ from extensions.carla.curve_interval import (
     _next_up,
 )
 from extensions.carla.geometry import RoadGeometry, SPIRAL, LINE
+from extensions.carla.spiral_moment_proof import _try_build_spiral_moments
 from extensions.carla.spiral_moment_table import (
     _SpiralMomentProof,
     _try_lookup_spiral_moments,
@@ -100,6 +98,51 @@ def test_invalid_counts_and_invalid_budget_preserve_debit() raises:
     assert_equal(overdrawn, 5)
     var zero = 0
     var no_negative_cap = _try_lookup_spiral_moments(4, zero, -1)
+    if no_negative_cap:
+        raise Error("Negative build allowance accepted")
+    assert_equal(zero, 0)
+
+
+def test_builder_allowance_below_at_and_above_exact_work() raises:
+    var counts: List[Int] = [1, 3, 4, 6, 7, 22, 64]
+    for count in counts:
+        var work = 110 * count
+        var spent = 17
+        var below = _try_build_spiral_moments(count, spent, 17 + work - 1)
+        if below:
+            raise Error("Underbudget proof was constructed")
+        assert_equal(spent, 17)
+        var exact = _try_build_spiral_moments(count, spent, 17 + work)
+        if not exact:
+            raise Error("Exact-budget proof was rejected")
+        assert_equal(spent, 17 + work)
+        spent = 17
+        var above = _try_build_spiral_moments(count, spent, 18 + work)
+        if not above:
+            raise Error("Above-budget proof was rejected")
+        assert_equal(spent, 17 + work)
+
+
+def test_builder_invalid_counts_and_invalid_budget_preserve_debit() raises:
+    var counts: List[Int] = [-2, -1, 0, 65]
+    for count in counts:
+        var spent = 3
+        var rejected = _try_build_spiral_moments(count, spent, 100000)
+        if rejected:
+            raise Error("Invalid or unsupported count was constructed")
+        assert_equal(spent, 3)
+    var negative = -1
+    var no_negative = _try_build_spiral_moments(4, negative, 440)
+    if no_negative:
+        raise Error("Negative spent budget accepted")
+    assert_equal(negative, -1)
+    var overdrawn = 5
+    var no_overdrawn = _try_build_spiral_moments(4, overdrawn, 4)
+    if no_overdrawn:
+        raise Error("Already-overdrawn budget accepted")
+    assert_equal(overdrawn, 5)
+    var zero = 0
+    var no_negative_cap = _try_build_spiral_moments(4, zero, -1)
     if no_negative_cap:
         raise Error("Negative build allowance accepted")
     assert_equal(zero, 0)

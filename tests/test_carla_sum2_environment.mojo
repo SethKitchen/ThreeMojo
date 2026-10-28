@@ -24,10 +24,7 @@ from extensions.carla.spiral_moment_table import (
     _SpiralMomentProof as TableProof,
     _try_spiral_moment_expansion as table_expansion,
 )
-from extensions.carla.spiral_moment_proof import (
-    _try_build_spiral_moments,
-    _try_spiral_moment_expansion as dynamic_expansion,
-)
+from extensions.carla.spiral_moment_proof import _try_build_spiral_moments
 from tests._spiral_grouped_fp_controls import (
     _assert_grouped_refuses_hostile_state,
 )
@@ -92,12 +89,6 @@ def test_sum2_refuses_unsupported_cpu_state_and_restores_controls() raises:
     var proof_geometry = proof_road.info.geometries[0].geometry.copy()
     var d = _Jet.variable(0.5, 0.5)
     var table = TableProof(cached.first_count)
-    var work = 0
-    var dynamic = (
-        _try_build_spiral_moments(cached.first_count, work, 10000)
-        .value()
-        .copy()
-    )
     var captured = _SpiralRootCapture()
     _ = _lane_jet_capture(proof_road, 0, 0, 0.4, 0.7, captured)
     var normal_terms = 7
@@ -113,13 +104,6 @@ def test_sum2_refuses_unsupported_cpu_state_and_restores_controls() raises:
     assert_true(
         Bool(
             table_expansion(table, proof_geometry, d, counts, Vector3(0, 0, 0))
-        )
-    )
-    assert_true(
-        Bool(
-            dynamic_expansion(
-                dynamic, proof_geometry, d, counts, Vector3(0, 0, 0)
-            )
         )
     )
     var sampled_dispatch_road = _dispatch_road()
@@ -179,13 +163,6 @@ def test_sum2_refuses_unsupported_cpu_state_and_restores_controls() raises:
                     not Bool(
                         table_expansion(
                             table, proof_geometry, d, counts, Vector3(0, 0, 0)
-                        )
-                    )
-                )
-                assert_true(
-                    not Bool(
-                        dynamic_expansion(
-                            dynamic, proof_geometry, d, counts, Vector3(0, 0, 0)
                         )
                     )
                 )

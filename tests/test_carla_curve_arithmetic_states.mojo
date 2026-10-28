@@ -34,8 +34,8 @@ from extensions.carla.road import Road
 from extensions.carla.road_info import RoadInfoGeometry
 from extensions.carla.spiral_domain_proof import _SpiralRootCapture
 from extensions.carla.spiral_roundoff_proof import _try_spiral_roundoff_envelope
-from extensions.carla.spiral_moment_proof import (
-    _try_build_spiral_moments,
+from extensions.carla.spiral_moment_table import (
+    _try_lookup_spiral_moments,
     _try_spiral_moment_expansion,
 )
 from math.vector3 import Vector3
@@ -195,7 +195,7 @@ def test_moment_expansion_rejects_a_naturally_clamped_end_station() raises:
     var road = _road(geometry.copy())
     _valid(road)
     var terms = 0
-    var proof = _try_build_spiral_moments(4, terms, 10000)
+    var proof = _try_lookup_spiral_moments(4, terms, 10000)
     assert_true(Bool(proof))
     for s in [2.05, 2.125]:
         var d = _geometry_distance(geometry, _Jet.variable(s, s))

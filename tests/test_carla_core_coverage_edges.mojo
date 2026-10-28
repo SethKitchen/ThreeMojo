@@ -1,10 +1,6 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Additive direct controls motivated by the historical coverage gaps.
-
-SOURCE ONLY: not compiled or run. These controls do not replace, shorten, or
-relax any original suite, workload, assertion, tolerance, or five-second gate.
-"""
+"""Direct tests of CARLA interval and proof paths that no other suite reaches."""
 
 from extensions.carla.curve_interval import (
     _Interval,

@@ -17,15 +17,11 @@ from extensions.carla.spiral_grouped_roundoff_proof import (
     _try_spiral_grouped_roundoff_envelope,
 )
 from extensions.carla.spiral_roundoff_proof import _try_spiral_roundoff_envelope
-from extensions.carla.spiral_moment_proof import (
-    _try_spiral_moment_expansion as _dynamic_expansion,
-)
 from extensions.carla.spiral_moment_table import (
     _try_spiral_moment_expansion as _table_expansion,
 )
 from math.vector3 import Vector3
 from std.testing import TestSuite, assert_equal, assert_true
-from tests.test_spiral_moment_guards import _proof as _dynamic_proof
 from tests.test_spiral_moment_table_guards import _proof as _table_proof
 from tests._spiral_domain_controls import _geometry, _road, _capture
 
@@ -70,7 +66,6 @@ def test_matching_payload_counts_do_not_validate_corrupted_distance() raises:
     var captured = _capture(road, 2.125, 2.25)
     assert_equal(captured.first_count, 4)
     assert_equal(captured.last_count, 4)
-    var dynamic = _dynamic_proof(4)
     var table = _table_proof(4)
     for malformed in [False, True]:
         var d = captured.d
@@ -80,14 +75,6 @@ def test_matching_payload_counts_do_not_validate_corrupted_distance() raises:
             assert_equal(actual_counts[0], -1)
             assert_equal(actual_counts[1], -1)
         # Matching count metadata alone must not bless a corrupted Jet.
-        assert_equal(
-            Bool(
-                _dynamic_expansion(
-                    dynamic, geometry, d, (4, 4), Vector3(0, 0, 0)
-                )
-            ),
-            not malformed,
-        )
         assert_equal(
             Bool(
                 _table_expansion(table, geometry, d, (4, 4), Vector3(0, 0, 0))
