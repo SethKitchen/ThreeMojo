@@ -1649,6 +1649,67 @@ class ProductionScanTests(unittest.TestCase):
         )
 
 
+class SampledMentionCacheTests(unittest.TestCase):
+    def test_the_same_sampled_bytes_skip_the_second_result(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import check_sampled_values as sampled
+        from tools.carla_lane_oracle import optional_runtime_contracts as optional
+        saved_result = sampled._GATED_SAMPLED_RESULT
+        saved_indent = sampled._SAMPLED_INDENTED
+        saved_failures = sampled._CLI_FAILURES
+        saved_mentions = optional._GATED_MENTIONS
+        try:
+            sampled._GATED_SAMPLED_RESULT = None
+            sampled._SAMPLED_INDENTED = None
+            sampled._CLI_FAILURES = {'key': 'KeyError: '}
+            optional._GATED_MENTIONS = None
+            ok = Mock(
+                returncode=0,
+                stdout='{"result":{"status":"PASS"},"indented":"pass\\n"}',
+                stderr='',
+            )
+            with patch('subprocess.run', return_value=ok) as run:
+                self.assertEqual(
+                    sampled._digests_and_result(
+                        [b'abc'], 'root', 1, 2, 'prim', ['a.mojo'], {'a': 1}),
+                    {'status': 'PASS'})
+                sampled._digests_and_result(
+                    [b'abc'], 'root', 1, 2, 'prim', ['a.mojo'], {'a': 1})
+                self.assertEqual(sampled._SAMPLED_INDENTED, 'pass\n')
+                self.assertEqual(run.call_count, 1)
+                sampled._digests_and_result(
+                    [b'abd'], 'root', 1, 2, 'prim', ['a.mojo'], {'a': 1})
+                self.assertEqual(run.call_count, 2)
+                optional._mentioned_consumers([('a.mojo', 'text')])
+                optional._mentioned_consumers([('a.mojo', 'text')])
+                self.assertEqual(run.call_count, 3)
+                optional._mentioned_consumers([('a.mojo', 'other')])
+                self.assertEqual(run.call_count, 4)
+            failed = Mock(returncode=1, stdout='', stderr='sampled changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'sampled changed'):
+                    sampled._digests_and_result(
+                        [b'bad'], 'root', 1, 2, 'prim', ['a.mojo'], {'a': 1})
+                with self.assertRaisesRegex(ValueError, 'sampled changed'):
+                    sampled._digests_and_result(
+                        [b'bad'], 'root', 1, 2, 'prim', ['a.mojo'], {'a': 1})
+                with self.assertRaisesRegex(ValueError, 'sampled changed'):
+                    optional._mentioned_consumers([('bad.mojo', 'bad')])
+                with self.assertRaisesRegex(ValueError, 'sampled changed'):
+                    optional._mentioned_consumers([('bad.mojo', 'bad')])
+                self.assertEqual(run.call_count, 4)
+            with patch('subprocess.run', return_value=ok) as run:
+                sampled._digests_and_result(
+                    [b'abd'], 'root', 1, 2, 'prim', ['a.mojo'], {'a': 1})
+                optional._mentioned_consumers([('a.mojo', 'other')])
+                self.assertEqual(run.call_count, 0)
+        finally:
+            sampled._GATED_SAMPLED_RESULT = saved_result
+            sampled._SAMPLED_INDENTED = saved_indent
+            sampled._CLI_FAILURES = saved_failures
+            optional._GATED_MENTIONS = saved_mentions
+
+
 class CleanupPathWordTests(unittest.TestCase):
     def test_a_paths_check_records_the_accepted_words(self):
         from unittest.mock import Mock, patch

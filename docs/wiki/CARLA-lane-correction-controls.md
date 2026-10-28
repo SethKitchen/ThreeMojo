@@ -501,6 +501,11 @@ It lists the production Mojo files for the containing-model scan in one check.
 It keeps the reviewed path order.
 Each kept file is still read.
 
+It reuses that containing-model consumer check when the same texts are read again.
+Each kept file is still read.
+A changed text is checked again.
+A failed check is not kept.
+
 It reuses that optional-runtime declaration group when the same texts are read again.
 The module files are still read.
 A changed text is checked again.

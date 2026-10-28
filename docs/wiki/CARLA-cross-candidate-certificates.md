@@ -170,6 +170,11 @@ It returns the sampled value result after those body checks.
 
 It hashes each observed source byte string before that result.
 
+It reuses that sampled result when the same bytes are read again.
+The source files are still read.
+A changed byte is checked again.
+A failed check is not kept.
+
 It writes the sampled value result with two-space indentation.
 
 It indents that sampled value result after the result in one check.

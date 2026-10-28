@@ -312,8 +312,16 @@ def executable_names(text):
     return frozenset(_lexical_directory('--names', [text])[0])
 
 
+_GATED_MENTIONS = None
+
+
 def _mentioned_consumers(items):
-    """Check consumers after the watched-name mentions."""
+    """Check consumers after the watched-name mentions.
+
+    The same texts are not checked again. A changed text is checked again.
+    A failed check is not kept.
+    """
+    global _GATED_MENTIONS
     import json
     import os
     import subprocess
@@ -327,12 +335,16 @@ def _mentioned_consumers(items):
         raw = text.encode('utf-8')
         framed += str(len(raw)).encode('ascii') + b'\n' + raw
         paths.append(path)
+    paths_text = json.dumps(paths, separators=(',', ':'))
+    key = (bytes(framed), paths_text)
+    if _GATED_MENTIONS == key:
+        return
     with tempfile.TemporaryDirectory(prefix='mentioned-consumers-') as directory:
         folder = Path(directory)
         texts_path = folder / 'texts.bin'
         paths_path = folder / 'paths.json'
         texts_path.write_bytes(framed)
-        paths_path.write_text(json.dumps(paths, separators=(',', ':')))
+        paths_path.write_text(paths_text)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo,
              'carla_optional_consumers', '--mentioned', str(texts_path),
@@ -343,6 +355,7 @@ def _mentioned_consumers(items):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+    _GATED_MENTIONS = key
 
 
 def _observed_consumers(items):

@@ -906,9 +906,16 @@ def _sampled_result(root, shared, modules, primitive, sources, successors):
 _SAMPLED_INDENTED = None
 
 
+_GATED_SAMPLED_RESULT = None
+
+
 def _digests_and_result(blobs, root, shared, modules, primitive, names, successors):
-    """Hash the observed sources, then return the result and its indent."""
-    global _SAMPLED_INDENTED
+    """Hash the observed sources, then return the result and its indent.
+
+    The same bytes are not checked again. A changed byte is checked again.
+    A failed check is not kept.
+    """
+    global _SAMPLED_INDENTED, _GATED_SAMPLED_RESULT
     import ast
     import os
     import subprocess
@@ -923,6 +930,10 @@ def _digests_and_result(blobs, root, shared, modules, primitive, names, successo
         'names': list(names),
         'successors': successors,
     }, separators=(',', ':'))
+    cached = _GATED_SAMPLED_RESULT
+    if cached is not None and cached[0] == framed and cached[1] == payload:
+        _SAMPLED_INDENTED = cached[3]
+        return cached[2]
     repo = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='sampled-framed-result-') as directory:
@@ -945,6 +956,7 @@ def _digests_and_result(blobs, root, shared, modules, primitive, names, successo
         raise ValueError(message)
     parsed = json.loads(result.stdout)
     _SAMPLED_INDENTED = parsed['indented']
+    _GATED_SAMPLED_RESULT = (framed, payload, parsed['result'], parsed['indented'])
     return parsed['result']
 
 
