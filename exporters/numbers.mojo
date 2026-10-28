@@ -20,9 +20,13 @@ vertex value as a double and writes JavaScript's `String` of it:
 so a value passed through as it is has the same text. A value that
 three.js works out through a matrix in doubles, and this port in
 `Float32`s, has the same text only when both are exact.
+
+**A color is written in sRGB as three.js converts it.** `js_linear_to_srgb`
+is three.js's `LinearToSRGB` in doubles, each product rounded before the
+sum uses it, as JavaScript rounds.
 """
 
-from loaders.js_number import js_number_text
+from loaders.js_number import js_number_text, js_pow
 from std.math import isfinite
 
 
@@ -80,3 +84,26 @@ def format_js_float32(value: Float32) raises -> String:
     """
     require_finite_written_number(value)
     return js_number_text(Float64(value))
+
+
+@no_inline
+def _js_product(a: Float64, b: Float64) -> Float64:
+    """Return `a * b`, rounded before a sum uses it, as JavaScript rounds."""
+    return a * b
+
+
+def js_linear_to_srgb(value: Float64) -> Float64:
+    """Return three.js's `LinearToSRGB` of a linear channel, in doubles.
+
+    The exporters write colors with it, so each byte or number they write
+    is the one three.js writes. It is not clamped, as three.js's is not.
+
+    Args:
+        value: The linear channel.
+
+    Returns:
+        The sRGB channel.
+    """
+    if value < 0.0031308:
+        return _js_product(value, 12.92)
+    return _js_product(1.055, js_pow(value, 0.41666)) - 0.055

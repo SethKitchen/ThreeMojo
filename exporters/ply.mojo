@@ -55,7 +55,7 @@ from loaders.ply import (
     PLY_BINARY_LITTLE_ENDIAN,
     PlyFormat,
 )
-from loaders.js_number import js_linear_to_srgb
+from exporters.numbers import js_linear_to_srgb
 from std.pathlib import Path
 from core.ordinal import require_valid
 

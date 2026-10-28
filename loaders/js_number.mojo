@@ -805,29 +805,6 @@ def js_pow(base: Float64, exponent: Float64) -> Float64:
     return external_call["pow", Float64](base, exponent)
 
 
-@no_inline
-def _js_product(a: Float64, b: Float64) -> Float64:
-    """Return `a * b`, rounded before a sum uses it, as JavaScript rounds."""
-    return a * b
-
-
-def js_linear_to_srgb(value: Float64) -> Float64:
-    """Return three.js's `LinearToSRGB` of a linear channel, in doubles.
-
-    The exporters write colors with it, so each byte or number they write
-    is the one three.js writes. It is not clamped, as three.js's is not.
-
-    Args:
-        value: The linear channel.
-
-    Returns:
-        The sRGB channel.
-    """
-    if value < 0.0031308:
-        return _js_product(value, 12.92)
-    return _js_product(1.055, js_pow(value, 0.41666)) - 0.055
-
-
 def js_log2(value: Float64) -> Float64:
     """Return JavaScript's `Math.log2(value)`, to within a unit in the
     last place, from the C library, as `js_pow` is.

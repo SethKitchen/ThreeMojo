@@ -37,7 +37,7 @@ from exporters.common import (
 from exporters.numbers import format_js_float32
 from exporters.gltf import GltfExportOptions, export_gltf, write_gltf
 from exporters.obj import export_obj
-from loaders.js_number import js_linear_to_srgb
+from exporters.numbers import js_linear_to_srgb
 from exporters.ply import export_ply, write_ply
 from exporters.stl import STL_BINARY, export_stl
 from exporters.usdz import usdz_files
