@@ -300,6 +300,39 @@ def executable_names(text):
     return frozenset(_lexical_directory('--names', [text])[0])
 
 
+def _mentioned_consumers(items):
+    """Check consumers after the watched-name mentions."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    framed = bytearray()
+    paths = []
+    for path, text in items:
+        raw = text.encode('utf-8')
+        framed += str(len(raw)).encode('ascii') + b'\n' + raw
+        paths.append(path)
+    with tempfile.TemporaryDirectory(prefix='mentioned-consumers-') as directory:
+        folder = Path(directory)
+        texts_path = folder / 'texts.bin'
+        paths_path = folder / 'paths.json'
+        texts_path.write_bytes(framed)
+        paths_path.write_text(json.dumps(paths, separators=(',', ':')))
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_optional_consumers', '--mentioned', str(texts_path),
+             str(paths_path), str(len(paths))],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def _observed_consumers(items):
     import json
     import os
@@ -416,13 +449,7 @@ def verify_no_containing_model_consumers(root, *, _operation=None):
         text = _typed_source.historical_text(root, path, source._observe_text(root, (path).relative_to(root).as_posix(), path.read_text(), _operation=_operation), _operation=_operation)
         texts.append(text)
         relatives.append(relative)
-    hits = _model_mentions(texts)
-    chosen = []
-    for relative, text, hit in zip(relatives, texts, hits):
-        if not hit:
-            continue
-        chosen.append((relative, text))
-    _observed_consumers(chosen)
+    _mentioned_consumers(list(zip(relatives, texts)))
 
 
 def _search_edges(source, name, mode):

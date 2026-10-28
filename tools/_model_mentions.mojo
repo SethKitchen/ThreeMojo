@@ -126,6 +126,28 @@ def model_mentions(names_json: String, framed: String) raises -> String:
     return out.dumps()
 
 
+def framed_texts(framed: String) raises -> List[String]:
+    """Return every framed text.
+
+    Args:
+        framed: Length lines followed by the exact UTF-8 bytes of each text.
+
+    Returns:
+        The texts, in order. An empty frame returns an empty list.
+
+    Raises:
+        Error: A length line is invalid.
+    """
+    var data = framed.as_bytes()
+    var cursor = 0
+    var texts = List[String]()
+    while cursor < len(data):
+        var size = _length(data, cursor)
+        texts.append(String(framed[byte = cursor : cursor + size]))
+        cursor += size
+    return texts^
+
+
 def named_model_mentions(framed: String, expected: Int) raises -> String:
     """Read the watched names, then find them in the framed texts.
 

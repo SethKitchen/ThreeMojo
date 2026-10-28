@@ -16,7 +16,10 @@ from std.pathlib import Path
 
 from tests._python_tokens import _tokenize
 
+from tools._model_mentions import framed_texts, model_mentions
+from tools._optional_runtime_messages import optional_runtime_messages
 from tools._python_json import PyJson
+from tools._watched_model_names import watched_model_names
 
 
 comptime _NAME = 1
@@ -254,6 +257,47 @@ def _check_text(path: String, text: String) raises:
         )
     if path == _LANE and removed:
         _fail("containing-objective model search state reintroduced")
+
+
+def _models_changed() raises:
+    """Raise the model-name set failure.
+
+    Raises:
+        Error: The framed texts and the path list disagree.
+    """
+    var messages = PyJson.parse(optional_runtime_messages())
+    raise Error(messages.text(messages.at(messages.root, "models")))
+
+
+def mentioned_consumers(
+    framed: String, paths_json: String, expected: Int
+) raises:
+    """Read the watched names, then check the texts that mention one.
+
+    Args:
+        framed: Length lines followed by the exact UTF-8 bytes of each text.
+        paths_json: A JSON list of module paths, one per framed text.
+        expected: The number of texts the caller framed.
+
+    Raises:
+        Error: A length line is invalid, the flag count differs from
+            `expected`, or a mentioned module names a reviewed helper.
+            The watched names are read before the texts.
+    """
+    var names = watched_model_names()
+    var flags_text = model_mentions(names, framed)
+    var flags = PyJson.parse(flags_text)
+    if flags.length(flags.root) != expected:
+        _models_changed()
+    var paths = PyJson.parse(paths_json)
+    if paths.length(paths.root) != expected:
+        _models_changed()
+    var texts = framed_texts(framed)
+    var index = 0
+    while index < expected:
+        if flags.flag(flags.item(flags.root, index)):
+            _check_text(paths.text(paths.item(paths.root, index)), texts[index])
+        index += 1
 
 
 def require_observed_consumers(payload: String) raises:
