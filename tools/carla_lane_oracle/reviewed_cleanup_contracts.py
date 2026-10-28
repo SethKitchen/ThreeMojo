@@ -900,9 +900,12 @@ def verify(root, *, _operation=None):
         _check_operation(root, _operation)
     operation_args = {} if _operation is None else {'_operation': _operation}
     record = read_record(root)
-    _, guard_payload = frozen._verified_pin_pair(root, record['runtime_pins_after_sha256'], **operation_args)
-    labels = _declarations_after_digest(
-        guard_payload, record['guard_pins_after_sha256'])
+    labels = frozen._verified_pin_pair(
+        root,
+        record['runtime_pins_after_sha256'],
+        _guard_sha=record['guard_pins_after_sha256'],
+        **operation_args,
+    )
     pairs = []
     paths = []
     for path, transition in record['sources'].items():

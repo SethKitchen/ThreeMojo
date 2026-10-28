@@ -292,26 +292,29 @@ def _gate_prior(actual, expected):
         raise ValueError(message)
 
 
-def _runtime_predecessor(payload, record, prior_digest):
-    """Return the indented runtime pin predecessor."""
-    import ast
+def _predecessor_request(payload, record, prior_digest):
+    """Check the pin digest and refuse a repeated key before the predecessor."""
     import hashlib
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
     if hashlib.sha256(payload).hexdigest() != record['runtime_pins_after_sha256']:
         raise ValueError(
             'frozen ARC producer contract: unreviewed runtime pin successor')
     # A repeated key is refused before placement. The digest check stays first.
     json.loads(payload, object_pairs_hook=source.unique_keys)
-    labels = _frozen_labels()
-    request = json.dumps({
+    return json.dumps({
         'after': record['runtime_pins_after_sha256'],
         'before': prior_digest,
-        'groups': labels['groups'],
         'transitions': record['runtime_token_successors'],
     }, separators=(',', ':'))
+
+
+def _runtime_predecessor(payload, record, prior_digest):
+    """Read the frozen pin labels, then return the indented predecessor."""
+    import ast
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    request = _predecessor_request(payload, record, prior_digest)
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='frozen-predecessor-') as directory:
@@ -320,7 +323,7 @@ def _runtime_predecessor(payload, record, prior_digest):
         (folder / 'request.json').write_text(request)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
-             '--predecessor', str(folder)],
+             '--predecessor-labels', str(folder)],
             capture_output=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -334,6 +337,39 @@ def _runtime_predecessor(payload, record, prior_digest):
                 pass
         raise ValueError(message)
     return result.stdout
+
+
+def _predecessor_then_declarations(payload, record, prior_digest, guard, guard_sha):
+    """Read the pin labels, rebuild the predecessor, then return the catalog."""
+    import ast
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    request = _predecessor_request(payload, record, prior_digest)
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='frozen-predecessor-catalog-') as directory:
+        folder = Path(directory)
+        (folder / 'payload').write_bytes(payload)
+        (folder / 'request.json').write_text(request)
+        (folder / 'guard').write_bytes(guard)
+        (folder / 'sha').write_text(guard_sha)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
+             '--predecessor-declarations', str(folder)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        if message.startswith('KeyError: '):
+            try:
+                raise KeyError(ast.literal_eval(message[len('KeyError: '):]))
+            except (SyntaxError, ValueError):
+                pass
+        raise ValueError(message)
+    return json.loads(result.stdout)
 
 
 def _producer_review(pairs, arc, stored):
@@ -683,8 +719,12 @@ def _runtime_pin_predecessor(payload, record, prior_digest):
     return _runtime_predecessor(payload, record, prior_digest)
 
 
-def _verified_pin_pair(root, prior_digest, *, _operation=None):
-    """Reconstruct frozen runtime bytes and retain the invariant guard bytes."""
+def _verified_pin_pair(root, prior_digest, *, _operation=None, _guard_sha=None):
+    """Reconstruct frozen runtime bytes and retain the invariant guard bytes.
+
+    When `_guard_sha` is set, the predecessor and the declaration catalog
+    are one check. That call returns the catalog.
+    """
     if _operation is not None:
         _check_operation(root, _operation)
     record = read_record(root)
@@ -696,5 +736,9 @@ def _verified_pin_pair(root, prior_digest, *, _operation=None):
     runtime_payload, guard_payload = (invariant.predecessor_pin_pair(root)
         if _operation is None else
         invariant._predecessor_pin_pair(root, _operation=_operation))
-    runtime_predecessor = _runtime_pin_predecessor(runtime_payload, record, prior_digest)
-    return runtime_predecessor, guard_payload
+    if _guard_sha is None:
+        runtime_predecessor = _runtime_pin_predecessor(
+            runtime_payload, record, prior_digest)
+        return runtime_predecessor, guard_payload
+    return _predecessor_then_declarations(
+        runtime_payload, record, prior_digest, guard_payload, _guard_sha)

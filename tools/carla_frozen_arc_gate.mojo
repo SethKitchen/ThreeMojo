@@ -17,6 +17,8 @@
     carla_frozen_arc_gate --layout PATH --stored PATH
     carla_frozen_arc_gate --routing PATH
     carla_frozen_arc_gate --predecessor DIR
+    carla_frozen_arc_gate --predecessor-labels DIR
+    carla_frozen_arc_gate --predecessor-declarations DIR
     carla_frozen_arc_gate --review PATH
     carla_frozen_arc_gate --review-labels PATH
 
@@ -24,7 +26,10 @@ The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
 An absent previous file checks only the migration record.
 `DIR` holds `payload` and `request.json`. The program prints the
-predecessor.
+predecessor. `--predecessor-labels` reads the frozen pin labels before
+that predecessor. The request omits `groups`.
+`--predecessor-declarations` also holds `guard` and `sha`. It reads the
+declaration catalog after that predecessor.
 """
 
 from std.pathlib import Path
@@ -37,7 +42,9 @@ from tests._python_tokens import (
     token_sha256,
 )
 from tools._carla_assets import dumps_indent
+from tools._cleanup_declarations import cleanup_declarations_after_digest
 from tools._frozen_pin_labels import frozen_pin_labels
+from tools._json_tools import quote_ascii
 from tools._invariant_labels import invariant_labels_with_migration
 from tools._migration_records import migration_records
 from tools._record_paths import record_paths
@@ -421,6 +428,64 @@ def frozen_runtime_predecessor(
     return predecessor
 
 
+def frozen_predecessor_with_labels(
+    payload: Span[UInt8, _], request: String
+) raises -> String:
+    """Read the frozen pin labels, then rebuild the runtime predecessor.
+
+    Args:
+        payload: The active runtime pin bytes.
+        request: JSON with `after`, `before`, and `transitions`.
+
+    Returns:
+        The predecessor as `json.dumps` writes it with `indent=2`, plus a
+        newline.
+
+    Raises:
+        Error: The digest, the placements, or a pin transition changed.
+            The labels are read before the predecessor is rebuilt.
+    """
+    var labels = PyJson.parse(frozen_pin_labels())
+    var groups = labels.text(labels.at(labels.root, "groups"))
+    var supplied = request
+    if request.byte_length() > 0 and request.find('"groups"') < 0:
+        var opener = String(request[byte=0:1])
+        if opener == "{":
+            var tail = String(request[byte=1:])
+            var quoted = quote_ascii(groups)
+            if tail == "}":
+                supplied = '{"groups":' + quoted + "}"
+            else:
+                supplied = '{"groups":' + quoted + "," + tail
+    return frozen_runtime_predecessor(payload, supplied)
+
+
+def frozen_predecessor_then_declarations(
+    payload: Span[UInt8, _],
+    request: String,
+    guard: Span[UInt8, _],
+    expected: String,
+) raises -> String:
+    """Read the pin labels, rebuild the predecessor, then return the catalog.
+
+    Args:
+        payload: The active runtime pin bytes.
+        request: JSON with `after`, `before`, and `transitions`.
+        guard: The reconstructed guard-pin bytes.
+        expected: The required guard-pin SHA-256 hex digest.
+
+    Returns:
+        JSON with `junction`, `unreviewed`, and `declarations`. The
+        predecessor is checked before the catalog is returned.
+
+    Raises:
+        Error: The predecessor changed, or the guard digest changed. The
+            predecessor is checked before the catalog is returned.
+    """
+    _ = frozen_predecessor_with_labels(payload, request)
+    return cleanup_declarations_after_digest(guard, expected)
+
+
 def frozen_arc_functions(directory: String) raises:
     """Require each producer function token list to match its record.
 
@@ -618,7 +683,8 @@ def _usage():
             " | --source PATH --token HEX | --prior HEX --cleanup HEX"
             " | --places DIR | --functions DIR"
             " | --layout PATH --stored PATH | --routing PATH"
-            " | --predecessor DIR | --review PATH"
+            " | --predecessor DIR | --predecessor-labels DIR"
+            " | --predecessor-declarations DIR | --review PATH"
         ),
         file=stderr,
     )
@@ -683,6 +749,36 @@ def main() raises:
         try:
             print(
                 producer_review_then_labels(Path(arguments[2]).read_text()),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--predecessor-labels":
+        try:
+            var directory = arguments[2]
+            print(
+                frozen_predecessor_with_labels(
+                    Path(directory + "/payload").read_bytes(),
+                    Path(directory + "/request.json").read_text(),
+                ),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--predecessor-declarations":
+        try:
+            var directory = arguments[2]
+            print(
+                frozen_predecessor_then_declarations(
+                    Path(directory + "/payload").read_bytes(),
+                    Path(directory + "/request.json").read_text(),
+                    Path(directory + "/guard").read_bytes(),
+                    Path(directory + "/sha").read_text(),
+                ),
                 end="",
             )
         except error:

@@ -148,6 +148,8 @@ It writes that restored pin with two-space indentation.
 
 It rebuilds one frozen runtime pin predecessor in one check.
 
+It reads the frozen pin labels before that runtime predecessor in one check.
+
 It relabels one runtime pin failure when the cause is the reviewed contract error.
 
 `tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the pin digests, the ordered pin pair, and the pin placements.
@@ -287,6 +289,8 @@ It reads the cleanup declaration catalog before those premise checks in one chec
 It checks those premise fragments before the frozen migration record in one check.
 
 It checks the guard pin digest before the declaration catalog in one check.
+
+It reads that declaration catalog after the runtime pin predecessor in one check.
 
 It keeps the winner-sign record and the runtime pin path.
 
