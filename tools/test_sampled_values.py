@@ -387,6 +387,18 @@ print('PASS: alias unowned; intentionally stopped before verification')
         self.assertEqual(result.stderr, '')
 
 
+class RestoredSyntaxCacheTests(unittest.TestCase):
+    def tearDown(self):
+        m._RESTORED_SYNTAX.clear()
+
+    def test_the_shared_bridge_reuses_the_restored_syntax(self):
+        prepared = ('def ok():\n    return 1\n', [], {'def_word': 'def'})
+        m._RESTORED_SYNTAX[('source', 'replacement')] = ('historical', prepared)
+        restored, syntax = m._restored_then_syntax('source', 'replacement')
+        self.assertEqual(restored, 'historical')
+        self.assertEqual(syntax, prepared)
+
+
 class PlainReferenceGraphTests(unittest.TestCase):
     def test_a_graph_mismatch_precedes_a_later_syntax_error(self):
         label = 'reference module changed; renewed review required: '

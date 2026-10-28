@@ -283,6 +283,7 @@ def translated(text):
 _SYNTAX_WORDS = None
 _PREPARED_SYNTAX = {}
 _MISSING_SYNTAX = object()
+_RESTORED_SYNTAX = {}
 
 
 _CARLA_PACKAGE = None
@@ -585,6 +586,9 @@ def reviewed_reference_tree(text, root=ROOT, *, _operation=None):
 
 def _restored_then_syntax(text, replacement):
     """Restore the historical capture, then prepare its Python syntax."""
+    cached = _RESTORED_SYNTAX.get((text, replacement))
+    if cached is not None:
+        return cached
     import os
     import subprocess
     import tempfile
@@ -609,11 +613,14 @@ def _restored_then_syntax(text, replacement):
     parsed = json.loads(result.stdout)
     syntax = parsed['syntax']
     if syntax.get('fallback'):
-        return parsed['restored'], None
-    return (
-        parsed['restored'],
-        (syntax['source'], syntax['generics'], syntax['words']),
-    )
+        cached = (parsed['restored'], None)
+    else:
+        cached = (
+            parsed['restored'],
+            (syntax['source'], syntax['generics'], syntax['words']),
+        )
+    _RESTORED_SYNTAX[(text, replacement)] = cached
+    return cached
 
 
 def _restored_after_refusal(text, replacement):

@@ -463,6 +463,8 @@ It checks that refusal before restoring the historical capture in one check.
 
 It prepares the Python syntax after that restored capture in one check.
 
+It reuses that restored syntax when the shared bridge reads the same capture.
+
 It checks the Jet and value aliases before the primitive hash.
 
 It slices the stored-half declaration from its marker.
