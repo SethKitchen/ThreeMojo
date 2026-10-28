@@ -2440,32 +2440,119 @@ def _command_identity(command, root, build):
     return result
 
 
+def _mojo_command(mojo):
+    """Return the producer command text for the checkpoint program.
+
+    Args:
+        mojo: A command string, a word list, or none.
+
+    Returns:
+        The command text. None selects `.venv/bin/mojo`.
+    """
+    if mojo is None:
+        return '.venv/bin/mojo'
+    if isinstance(mojo, str):
+        return mojo
+    return shlex.join(str(word) for word in mojo)
+
+
+def _run_coverage_begin(root, build, compiler, flags, mojo, sources):
+    """Ask Mojo for one generation checkpoint and return that document.
+
+    Args:
+        root: The repository root.
+        build: The build directory. The program writes the checkpoint here.
+        compiler: The compiler text.
+        flags: The flag text.
+        mojo: The producer command.
+        sources: The module names, in command order.
+
+    Returns:
+        The checkpoint document.
+
+    Raises:
+        ValueError: The checkpoint program rejects the inputs.
+    """
+    import subprocess
+    repo = Path(__file__).resolve().parents[1]
+    program = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
+    command = [
+        'sh', str(repo / 'tools' / 'tool.sh'), program, 'coverage_loop_begin',
+        '--root', str(root), '--build', str(build),
+        '--compiler', compiler, '--flags', flags,
+        '--mojo', _mojo_command(mojo), '--sources',
+        *[str(name) for name in sources],
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        errors = [line.strip() for line in result.stderr.splitlines()
+                  if line.strip() and 'Crashpad' not in line]
+        message = errors[-1] if errors else result.stdout.strip()
+        prefix = 'coverage_loop_begin: '
+        if message.startswith(prefix):
+            message = message[len(prefix):]
+        raise ValueError(message)
+    text = (Path(build) / 'generation-inputs.json').read_bytes()
+    if not text.endswith(b'\n'):
+        raise ValueError('Missing generation checkpoint')
+    return json.loads(text[:-1])
+
+
 def generation_checkpoint(root, build, compiler, flags, mojo, sources):
+    """Return the generation checkpoint without keeping the program's writes.
+
+    Args:
+        root: The repository root.
+        build: The build directory used to exclude staged files.
+        compiler: The compiler text.
+        flags: The flag text.
+        mojo: The producer command.
+        sources: The module names, in command order.
+
+    Returns:
+        The checkpoint document.
+
+    Raises:
+        ValueError: The checkpoint program rejects the inputs.
+    """
     root, build = Path(root).resolve(), Path(build).resolve()
-    names = list(sources)
-    if not names or len(names) != len(set(names)):
-        raise ValueError('Generation requires distinct source identities')
-    for name in names:
-        if not name.endswith('.mojo'):
-            raise ValueError('Generation source must be a Mojo module')
-        relative_source(root, name)
-    return {'schema': 'coverage-generation-v1', 'root_inputs': maintained_inputs(root, exclude=build),
-            'python': sys.version, 'compiler': compiler, 'flags': flags,
-            'compiler_command': _command_identity(mojo or ['.venv/bin/mojo'], root, build),
-            'producer_arguments': ['run', *shlex.split(flags), 'coverage/build_cli.mojo', '@BUILD@', *names],
-            'sources': names}
+    ready = build / 'origins.ready'
+    path = build / 'generation-inputs.json'
+    saved_ready = ready.read_bytes() if ready.is_file() else None
+    saved_json = path.read_bytes() if path.is_file() else None
+    try:
+        return _run_coverage_begin(root, build, compiler, flags, mojo, sources)
+    finally:
+        if saved_ready is None:
+            if ready.exists():
+                ready.unlink()
+        else:
+            ready.write_bytes(saved_ready)
+        if saved_json is None:
+            if path.exists():
+                path.unlink()
+        else:
+            path.write_bytes(saved_json)
 
 
 def begin_generation(root, build, compiler, flags, *, mojo=None, sources):
-    """Checkpoint before loading/compiling the trusted producer, never after."""
-    build = Path(build)
-    build.mkdir(parents=True, exist_ok=True)
-    (build / 'origins.ready').write_bytes(b'')
-    path = build / 'generation-inputs.json'
-    path.unlink(missing_ok=True)
-    checkpoint = generation_checkpoint(root, build, compiler, flags, mojo, sources)
-    path.write_bytes(canonical(checkpoint) + b'\n')
-    return checkpoint
+    """Checkpoint before loading/compiling the trusted producer, never after.
+
+    Args:
+        root: The repository root.
+        build: The build directory.
+        compiler: The compiler text.
+        flags: The flag text.
+        mojo: The producer command. None selects `.venv/bin/mojo`.
+        sources: The module names, in command order.
+
+    Returns:
+        The checkpoint document.
+
+    Raises:
+        ValueError: The checkpoint program rejects the inputs.
+    """
+    return _run_coverage_begin(root, build, compiler, flags, mojo, sources)
 
 
 def execution_contract(root, build, inputs, *, mojo=None, capture_cache=None, suites=None):
