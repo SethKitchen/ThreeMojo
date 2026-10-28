@@ -8,6 +8,7 @@
     carla_lane_control_gate --migration PATH
     carla_lane_control_gate --tokens DIR
     carla_lane_control_gate --prepare PATH
+    carla_lane_control_gate --prepare-labeled PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -17,7 +18,10 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
-from tools._lane_declarations import lane_control_prepare
+from tools._lane_declarations import (
+    lane_control_prepare,
+    lane_control_prepare_with_labels,
+)
 from tools._python_json import MISSING, PY_LIST, PY_STR, PyJson
 from tools._sha256 import sha256_hex
 
@@ -118,7 +122,7 @@ def _usage():
     print(
         (
             "usage: carla_lane_control_gate --migration PATH | --tokens DIR |"
-            " --prepare PATH"
+            " --prepare PATH | --prepare-labeled PATH"
         ),
         file=stderr,
     )
@@ -134,11 +138,17 @@ def main() raises:
     var migration = String("")
     var tokens = String("")
     var prepare = String("")
+    var prepare_labeled = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
-        if word == "--migration" or word == "--tokens" or word == "--prepare":
+        if (
+            word == "--migration"
+            or word == "--tokens"
+            or word == "--prepare"
+            or word == "--prepare-labeled"
+        ):
             if index + 1 >= len(arguments):
                 _usage()
             var value = arguments[index + 1]
@@ -146,6 +156,8 @@ def main() raises:
                 migration = value
             elif word == "--tokens":
                 tokens = value
+            elif word == "--prepare-labeled":
+                prepare_labeled = value
             else:
                 prepare = value
             index += 2
@@ -158,9 +170,19 @@ def main() raises:
         modes += 1
     if prepare.byte_length() > 0:
         modes += 1
+    if prepare_labeled.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     try:
+        if prepare_labeled.byte_length() > 0:
+            print(
+                lane_control_prepare_with_labels(
+                    Path(prepare_labeled).read_text()
+                ),
+                end="",
+            )
+            return
         if prepare.byte_length() > 0:
             print(lane_control_prepare(Path(prepare).read_text()), end="")
             return

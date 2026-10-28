@@ -152,6 +152,34 @@ def _prepare(replacements, requests):
     return prepared['replaced'], prepared['declared']
 
 
+def _prepare_with_labels(payload):
+    """Read the lane-control labels, then prepare the declarations."""
+    global _LANE_LABELS
+    import json
+    import os
+    import subprocess
+    import tempfile
+    text = json.dumps(payload, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='lane-prepare-labeled-') as directory:
+        path = Path(directory) / 'prepare.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_control_gate',
+             '--prepare-labeled', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise RuntimeError(message)
+    prepared = json.loads(result.stdout)
+    if _LANE_LABELS is None:
+        _LANE_LABELS = prepared['labels']
+    return prepared['replaced'], prepared['declared'], prepared['labels']
+
+
 def _gate(payload):
     import os
     import subprocess
@@ -266,32 +294,31 @@ def verify(root, *, _operation=None):
             import lane_order_contracts as order
         current = order.predecessor_source(root, **operation_args)
 
-    labels = _lane_labels()
-    pairs = [(current, record['after_source'], labels['successor'])]
-    requests = []
-    replacements = []
+    declaration_rows = []
     for item in record['declarations']:
-        name = item['name']
-        requests.append({'source': record['before_source'], 'name': name, 'owner': []})
-        requests.append({'source': current, 'name': name, 'owner': []})
         test = _typed_source.historical_text(root, 'tests/test_carla_lane_control_successor.mojo', _observe_text(root, 'tests/test_carla_lane_control_successor.mojo',
                              (root / 'tests/test_carla_lane_control_successor.mojo').read_text(),
                              _operation=_operation), _operation=_operation)
-        reference = labels['reference'] + name
-        requests.append({'source': test, 'name': reference, 'owner': []})
-        replacements.append((
-            item['before'],
-            labels['definition'] + name + labels['call'],
-            labels['definition'] + reference + labels['call']))
+        declaration_rows.append({
+            'name': item['name'],
+            'before': item['before'],
+            'test': test,
+        })
     premise_items = []
+    premise_rows = []
     for item in record['premises']:
         premise_items.append(item)
-        requests.append({
-            'source': _typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root / item['path']).read_text(), _operation=_operation), _operation=_operation),
+        premise_rows.append({
             'name': item['name'],
-            'owner': [],
+            'source': _typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root / item['path']).read_text(), _operation=_operation), _operation=_operation),
         })
-    frozen_expected, declared = _prepare(replacements, requests)
+    frozen_expected, declared, labels = _prepare_with_labels({
+        'before_source': record['before_source'],
+        'current': current,
+        'declarations': declaration_rows,
+        'premises': premise_rows,
+    })
+    pairs = [(current, record['after_source'], labels['successor'])]
     cursor = 0
     for index, item in enumerate(record['declarations']):
         pairs.append((declared[cursor], item['before'], labels['before']))

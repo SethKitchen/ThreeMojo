@@ -496,6 +496,8 @@ It renames every frozen lane declaration in one check.
 
 It renames those declarations and reads every declaration in one check.
 
+It reads the lane-control labels before that prepare in one check.
+
 It keeps the lane-control labels and the frozen reference prefix.
 
 It keeps the lane-control record digests.

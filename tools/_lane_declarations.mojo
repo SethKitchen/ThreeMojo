@@ -16,6 +16,7 @@ from tests._python_tokens import (
     significant_json,
     token_sha256,
 )
+from tools._lane_control_labels import lane_control_labels
 from tools._premise_fallback import premise_fallbacks
 from tools._python_json import MISSING, PY_LIST, PyJson
 
@@ -359,3 +360,97 @@ def lane_control_prepare(payload: String) raises -> String:
         doc.subtree(doc.at(doc.root, "declarations")).dumps()
     )
     return '{"replaced":' + replaced + ',"declared":' + declared + "}"
+
+
+def _request(
+    mut doc: PyJson, requests: Int, source: String, name: String
+) raises:
+    """Append one declaration request with an empty owner.
+
+    Args:
+        doc: The document that owns the list.
+        requests: The request list.
+        source: The module text.
+        name: The function name.
+
+    Raises:
+        Error: The request cannot be stored.
+    """
+    var row = doc.new_dict()
+    doc.set(row, "source", doc.new_str(source))
+    doc.set(row, "name", doc.new_str(name))
+    doc.set(row, "owner", doc.new_list())
+    doc.append(requests, row)
+
+
+def lane_control_prepare_with_labels(payload: String) raises -> String:
+    """Read the lane-control labels, then prepare the declarations.
+
+    Args:
+        payload: JSON with `before_source`, `current`, `declarations`, and
+            `premises`. Each declaration has `name`, `before`, and `test`.
+            Each premise has `name` and `source`.
+
+    Returns:
+        JSON with `replaced`, `declared`, and `labels`. The labels are the
+        reviewed label object.
+
+    Raises:
+        Error: A label or a field is missing, or a function cannot be read.
+            The labels are read before the declarations.
+    """
+    var labels_text = lane_control_labels()
+    var labels = PyJson.parse(labels_text)
+    var definition = labels.text(labels.at(labels.root, "definition"))
+    var call = labels.text(labels.at(labels.root, "call"))
+    var reference = labels.text(labels.at(labels.root, "reference"))
+    var doc = PyJson.parse(payload)
+    var before_source = doc.text(doc.at(doc.root, "before_source"))
+    var current = doc.text(doc.at(doc.root, "current"))
+    var declarations = doc.at(doc.root, "declarations")
+    var premises = doc.at(doc.root, "premises")
+    var out = PyJson()
+    var replacements = out.new_list()
+    var requests = out.new_list()
+    var count = doc.length(declarations)
+    var index = 0
+    while index < count:
+        var item = doc.item(declarations, index)
+        var name = doc.text(doc.at(item, "name"))
+        var before = doc.text(doc.at(item, "before"))
+        var test = doc.text(doc.at(item, "test"))
+        var replacement = out.new_dict()
+        out.set(replacement, "source", out.new_str(before))
+        out.set(replacement, "old", out.new_str(definition + name + call))
+        out.set(
+            replacement,
+            "new",
+            out.new_str(definition + reference + name + call),
+        )
+        out.append(replacements, replacement)
+        _request(out, requests, before_source, name)
+        _request(out, requests, current, name)
+        _request(out, requests, test, reference + name)
+        index += 1
+    var premise_count = doc.length(premises)
+    index = 0
+    while index < premise_count:
+        var item = doc.item(premises, index)
+        _request(
+            out,
+            requests,
+            doc.text(doc.at(item, "source")),
+            doc.text(doc.at(item, "name")),
+        )
+        index += 1
+    var body = out.new_dict()
+    out.set(body, "replacements", replacements)
+    out.set(body, "declarations", requests)
+    var saved = out.root
+    out.root = body
+    var text = out.dumps()
+    out.root = saved
+    var prepared = lane_control_prepare(text)
+    var end = prepared.byte_length() - 1
+    var head = prepared[byte=0:end]
+    return String(head) + ',"labels":' + labels_text + "}"

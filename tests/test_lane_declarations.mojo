@@ -8,11 +8,13 @@
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tests._python_tokens import replace_firsts
+from tools._lane_control_labels import lane_control_labels
 from tools._lane_declarations import (
     declaration_fallbacks,
     declaration_match_flags,
     declaration_texts_and_flags,
     lane_control_prepare,
+    lane_control_prepare_with_labels,
     lane_declarations,
 )
 from tools._python_json import PyJson
@@ -104,6 +106,52 @@ def test_prepare_renames_before_it_reads_declarations() raises:
         prepared.text(prepared.item(got_declared, 0)),
         declared.text(declared.item(declared.root, 0)),
     )
+
+
+def test_prepare_reads_the_labels_before_the_declarations() raises:
+    """The frozen name uses the reviewed reference prefix."""
+    var source = "def f():\\n    return 1\\n"
+    var reference = "def _referencef():\\n    return 1\\n"
+    var payload = (
+        '{"before_source":"'
+        + source
+        + '","current":"'
+        + source
+        + '","declarations":[{"name":"f","before":"'
+        + source
+        + '","test":"'
+        + reference
+        + '"}],"premises":[]}'
+    )
+    var prepared = PyJson.parse(lane_control_prepare_with_labels(payload))
+    var got_labels = prepared.at(prepared.root, "labels")
+    var labels = PyJson.parse(lane_control_labels())
+    assert_equal(
+        prepared.text(prepared.at(got_labels, "reference")),
+        labels.text(labels.at(labels.root, "reference")),
+    )
+    assert_equal(prepared.text(prepared.at(got_labels, "definition")), "def ")
+    var replaced = prepared.at(prepared.root, "replaced")
+    assert_equal(
+        prepared.text(prepared.item(replaced, 0)),
+        "def _referencef():\n    return 1\n",
+    )
+    var declared = prepared.at(prepared.root, "declared")
+    assert_equal(prepared.length(declared), 3)
+    with assert_raises(
+        contains="missing or ambiguous actual guard declaration: absent"
+    ):
+        _ = lane_control_prepare_with_labels(
+            '{"before_source":"'
+            + source
+            + '","current":"'
+            + source
+            + '","declarations":[{"name":"absent","before":"'
+            + source
+            + '","test":"'
+            + source
+            + '"}],"premises":[]}'
+        )
 
 
 def test_prepare_reports_a_missing_declaration() raises:
