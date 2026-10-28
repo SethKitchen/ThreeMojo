@@ -2909,30 +2909,39 @@ def bind_capture(capture, output, envelope, command, *, root, build):
 
 
 def verify_captures(captures, envelope):
-    for capture in captures:
-        capture = Path(capture)
-        binding = _load_json(capture_receipt_path(capture))
-        expected_keys = {'schema', 'proof_sha256', 'capture', 'capture_sha256', 'output', 'output_sha256', 'command', 'suite', 'profile'}
-        if not isinstance(binding, dict) or set(binding) != expected_keys:
-            raise ValueError('Malformed coverage capture receipt: ' + capture.name)
-        name = binding['output']
-        if (not isinstance(binding['command'], list) or not binding['command']
-                or not all(isinstance(argument, str) for argument in binding['command'])):
-            raise ValueError('Missing coverage capture command identity')
-        expected = expected_capture_command(envelope['receipt']['execution'],
-                                            binding['suite'], binding['profile'])
-        if binding['command'] != expected:
-            raise ValueError('Modified capture command provenance')
-        stem = Path(binding['suite']).stem
-        if binding['capture'] != stem + '.txt.gz' or binding['output'] != stem + '.out':
-            raise ValueError('Capture files do not identify the recorded suite')
-        if not isinstance(name, str) or Path(name).name != name or name in {'', '.', '..'}:
-            raise ValueError('Invalid coverage output identity')
-        if (binding['schema'] != SCHEMA or binding['proof_sha256'] != envelope['sha256']
-                or binding['capture'] != capture.name
-                or binding['capture_sha256'] != file_sha256(capture)
-                or binding['output_sha256'] != file_sha256(capture.parent / name)):
-            raise ValueError('Stale or modified coverage capture: ' + capture.name)
+    """Check each capture receipt against the sealed envelope.
+
+    Args:
+        captures: The capture paths.
+        envelope: The loop-proof envelope.
+
+    Raises:
+        ValueError: A receipt or a captured file does not match.
+        FileNotFoundError: A receipt or a captured file is missing.
+    """
+    if not captures:
+        return
+    import subprocess
+    import tempfile
+    repo = Path(__file__).resolve().parents[1]
+    program = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='coverage-captures-') as directory:
+        envelope_path = Path(directory) / 'envelope.json'
+        envelope_path.write_text(json.dumps(envelope), encoding='utf-8')
+        result = subprocess.run(
+            ['sh', str(repo / 'tools' / 'tool.sh'), program, 'coverage_captures',
+             str(envelope_path), *[str(item) for item in captures]],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        errors = [line.strip() for line in result.stderr.splitlines()
+                  if line.strip() and 'Crashpad' not in line]
+        message = errors[-1] if errors else result.stdout.strip()
+        if message.startswith('missing capture receipt:') or message.startswith(
+                'missing capture file:'):
+            raise FileNotFoundError(message)
+        if message.startswith('KeyError:'):
+            raise KeyError(message[len('KeyError: '):])
+        raise ValueError(message)
 
 
 def _hair_census_reference(names, text):
