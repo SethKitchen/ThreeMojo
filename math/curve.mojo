@@ -309,11 +309,15 @@ def u_to_t(table: List[Float32], u: Float32) raises -> Float32:
     require_length_table(len(table))
     var last = len(table) - 1
     var target = u * table[last]
+    # The first sample at or past the target, by binary search as three.js.
     var index = 1
-    for step in range(1, last + 1):  # pragma: no branch
-        index = step
-        if table[step] >= target:
-            break
+    var high = last
+    while index < high:
+        var middle = (index + high) // 2
+        if table[middle] >= target:
+            high = middle
+        else:
+            index = middle + 1
     var span = table[index] - table[index - 1]
     var within = Float32(0)
     if span > 0:
