@@ -146,6 +146,63 @@ def declaration_texts_and_flags(payload: String) raises -> String:
     return '{"declared":' + declared_json + ',"flags":' + out.dumps() + "}"
 
 
+def checked_declaration_graphs(
+    payload: String, prefix: String, invalid: String
+) raises -> String:
+    """Read every declaration, then check every graph when each selected one matches.
+
+    Args:
+        payload: A JSON list. Each item has `source`, `name`, `owner`, `graph`,
+            and `label`. `expected` is optional.
+        prefix: The contract prefix, including its trailing space.
+        invalid: The failure text used when the graph list cannot be read.
+
+    Returns:
+        `restore` is false when every graph matches. It is true, with
+        `declared` and `flags`, when a selected declaration differs.
+
+    Raises:
+        Error: A function cannot be read, or a graph changed while every selected declaration matches.
+    """
+    var body = declaration_texts_and_flags(payload)
+    var parsed = PyJson.parse(body)
+    var flags = parsed.at(parsed.root, "flags")
+    var count = parsed.length(flags)
+    var index = 0
+    var restore = False
+    while index < count:
+        if parsed.text(parsed.item(flags, index)) != "true":
+            restore = True
+        index += 1
+    if restore:
+        return '{"restore":true,' + String(body[byte=1:])
+    var declared = parsed.at(parsed.root, "declared")
+    var doc = PyJson.parse(payload)
+    var graphs = PyJson()
+    var rows = graphs.new_list()
+    count = doc.length(doc.root)
+    index = 0
+    while index < count:
+        var item = doc.item(doc.root, index)
+        var row = graphs.new_dict()
+        graphs.set(
+            row, "label", graphs.new_str(doc.text(doc.at(item, "label")))
+        )
+        graphs.set(
+            row,
+            "actual",
+            graphs.new_str(parsed.text(parsed.item(declared, index))),
+        )
+        graphs.set(
+            row, "source", graphs.new_str(doc.text(doc.at(item, "graph")))
+        )
+        graphs.append(rows, row)
+        index += 1
+    graphs.root = rows
+    significant_graph_pairs(graphs.dumps(), prefix, invalid)
+    return '{"restore":false}'
+
+
 def declaration_token_checks(payload: String, prefix: String) raises:
     """Read each declaration, then require its token digest.
 

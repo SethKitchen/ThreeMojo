@@ -82,6 +82,8 @@ It compares every selected rounded LINE declaration in one check.
 
 It reads every rounded LINE declaration and compares each selected one in one check.
 
+It checks every declaration graph when every selected declaration matches in one check.
+
 It restores every changed rounded LINE declaration and checks every graph in one check.
 
 It compares every rounded LINE module text in one check.

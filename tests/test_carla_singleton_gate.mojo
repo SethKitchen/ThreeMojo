@@ -13,6 +13,7 @@ from tests._python_tokens import declaration_text
 from tools._python_json import PyJson
 from tools.carla_singleton_gate import (
     checked_import_scopes,
+    singleton_checked_declarations,
     singleton_graphs,
     singleton_path,
     singleton_record,
@@ -320,6 +321,47 @@ def test_matching_import_scopes_need_no_restore() raises:
         + '"expected":["import a"],"labels":["lane"],"lane":0}'
     )
     var parsed = PyJson.parse(checked_import_scopes(payload))
+    assert_true(not parsed.flag(parsed.at(parsed.root, "restore")))
+
+
+def test_a_selected_mismatch_returns_before_the_graph() raises:
+    """A selected mismatch is returned before another declaration graph is checked.
+    """
+    var payload = (
+        '[{"source":"def f():\\n    return 1\\n","name":"f","owner":[],'
+        + '"expected":"def f():\\n    return 2\\n","graph":"def f():\\n   '
+        ' return 2\\n",'
+        + '"label":"first"},'
+        + '{"source":"def g():\\n    return 1\\n","name":"g","owner":[],'
+        + '"graph":"def g():\\n    return 9\\n","label":"later"}]'
+    )
+    var parsed = PyJson.parse(singleton_checked_declarations(payload))
+    assert_true(parsed.flag(parsed.at(parsed.root, "restore")))
+
+
+def test_a_matching_selection_checks_the_other_declaration_graph() raises:
+    """An unselected graph fails after every selected declaration matches."""
+    var payload = (
+        '[{"source":"def f():\\n    return 1\\n","name":"f","owner":[],'
+        + '"expected":"def f():\\n    return 1\\n","graph":"def f():\\n   '
+        ' return 1\\n",'
+        + '"label":"first"},'
+        + '{"source":"def g():\\n    return 1\\n","name":"g","owner":[],'
+        + '"graph":"def g():\\n    return 9\\n","label":"later"}]'
+    )
+    with assert_raises(contains="rounded LINE singleton contract: later"):
+        _ = singleton_checked_declarations(payload)
+
+
+def test_matching_declaration_graphs_need_no_restore() raises:
+    """Matching declarations pass in one check."""
+    var payload = (
+        '[{"source":"def f():\\n    return 1\\n","name":"f","owner":[],'
+        + '"expected":"def f():\\n    return 1\\n","graph":"def f():\\n   '
+        ' return 1\\n",'
+        + '"label":"first"}]'
+    )
+    var parsed = PyJson.parse(singleton_checked_declarations(payload))
     assert_true(not parsed.flag(parsed.at(parsed.root, "restore")))
 
 

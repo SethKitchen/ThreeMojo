@@ -10,6 +10,7 @@
     carla_singleton_gate --graphs DIR
     carla_singleton_gate --source-graphs PATH
     carla_singleton_gate --import-scopes PATH
+    carla_singleton_gate --declaration-graphs PATH
     carla_singleton_gate --restored-graphs PATH
     carla_singleton_gate --selector PATH --wanted PATH
 
@@ -26,7 +27,10 @@ from tests._python_tokens import (
     significant_match_flags,
     token_sha256,
 )
-from tools._lane_declarations import restored_declaration_graphs
+from tools._lane_declarations import (
+    checked_declaration_graphs,
+    restored_declaration_graphs,
+)
 from tools._python_json import MISSING, PY_LIST, PyJson, py_equal
 from tools._sha256 import sha256_hex
 
@@ -184,6 +188,27 @@ def checked_import_scopes(payload: String) raises -> String:
     return '{"restore":false}'
 
 
+def singleton_checked_declarations(payload: String) raises -> String:
+    """Read every declaration, then check every graph when each selected one matches.
+
+    Args:
+        payload: A JSON list. Each item has `source`, `name`, `owner`, `graph`,
+            and `label`. `expected` is optional.
+
+    Returns:
+        `restore` is false when every graph matches. It is true, with
+        `declared` and `flags`, when a selected declaration differs.
+
+    Raises:
+        Error: A function cannot be read, or a graph changed while every selected declaration matches.
+    """
+    return checked_declaration_graphs(
+        payload,
+        "rounded LINE singleton contract: ",
+        "consumer import scope changed",
+    )
+
+
 def singleton_restored_graphs(payload: String) raises:
     """Read each restored declaration, then compare every source graph.
 
@@ -232,6 +257,7 @@ def _usage():
             " | --text PATH --decoded PATH | --graphs DIR"
             " | --source-graphs PATH"
             " | --import-scopes PATH"
+            " | --declaration-graphs PATH"
             " | --restored-graphs PATH"
             " | --selector PATH --wanted PATH"
         ),
@@ -252,6 +278,7 @@ def main() raises:
     var graphs = String("")
     var source_graphs = String("")
     var import_scopes = String("")
+    var declaration_graphs = String("")
     var restored_graphs = String("")
     var selector = String("")
     var wanted = String("")
@@ -266,6 +293,7 @@ def main() raises:
             or word == "--graphs"
             or word == "--source-graphs"
             or word == "--import-scopes"
+            or word == "--declaration-graphs"
             or word == "--restored-graphs"
             or word == "--selector"
             or word == "--wanted"
@@ -285,6 +313,8 @@ def main() raises:
                 source_graphs = value
             elif word == "--import-scopes":
                 import_scopes = value
+            elif word == "--declaration-graphs":
+                declaration_graphs = value
             elif word == "--restored-graphs":
                 restored_graphs = value
             elif word == "--selector":
@@ -305,6 +335,8 @@ def main() raises:
         modes += 1
     if import_scopes.byte_length() > 0:
         modes += 1
+    if declaration_graphs.byte_length() > 0:
+        modes += 1
     if restored_graphs.byte_length() > 0:
         modes += 1
     if selector.byte_length() > 0 or wanted.byte_length() > 0:
@@ -322,6 +354,14 @@ def main() raises:
         if import_scopes.byte_length() > 0:
             print(
                 checked_import_scopes(Path(import_scopes).read_text()), end=""
+            )
+            return
+        if declaration_graphs.byte_length() > 0:
+            print(
+                singleton_checked_declarations(
+                    Path(declaration_graphs).read_text()
+                ),
+                end="",
             )
             return
         if restored_graphs.byte_length() > 0:

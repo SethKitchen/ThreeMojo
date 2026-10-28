@@ -441,38 +441,31 @@ def _declaration(text, name, owner):
     return result.stdout
 
 
-def _declared_matches(items):
-    """Return every declaration text and the selected token comparisons."""
-    if not items:
-        return [], []
+def _checked_declaration_graphs(rows):
+    """Read every declaration, then check every graph when each selected one matches."""
+    if not rows:
+        return {'restore': False, 'declared': [], 'flags': []}
     import json
     import os
     import subprocess
     import tempfile
     from pathlib import Path
-    rows = []
-    for source, name, owner, expected in items:
-        row = {'source': source, 'name': name, 'owner': list(owner)}
-        if expected is not None:
-            row['expected'] = expected
-        rows.append(row)
-    payload = json.dumps(rows, separators=(',', ':'))
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='declared-matches-') as directory:
+    text = json.dumps(rows, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='declaration-graphs-') as directory:
         path = Path(directory) / 'declarations.json'
-        path.write_text(payload)
+        path.write_text(text)
         result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_declarations',
-             '--texts', str(path)],
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_singleton_gate',
+             '--declaration-graphs', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    parsed = json.loads(result.stdout)
-    return parsed['declared'], [flag == 'true' for flag in parsed['flags']]
+    return json.loads(result.stdout)
 
 
 def _restored_graphs(restores, graphs):
@@ -555,26 +548,39 @@ def verify_premises(root):
     for (item, _owner), selected in zip(minimum_items, selected_flags):
         text = _lane_text(root) if selected else _typed_source.historical_text(root, root/item['path'], (root/item['path']).read_text())
         loaded.append((item, selected, text))
-    declared, selected_flags = _declared_matches([
-        (text, item['name'], item['owner'], item['source'] if selected else None)
-        for item, selected, text in loaded])
-    selected_match = {}
-    flag_index = 0
-    for index, (_item, selected, _text) in enumerate(loaded):
-        if not selected:
-            continue
-        selected_match[index] = selected_flags[flag_index]
-        flag_index += 1
-    restores = []
-    for index, (item, _selected, text) in enumerate(loaded):
-        if index in selected_match and not selected_match[index]:
-            text = full_audit.reviewed_text(root, item['path'], text)
-            restores.append((index, item, text))
-    prepared = []
-    for index, (item, _selected, _text) in enumerate(loaded):
-        prepared.append((declared[index], item['source'],
-                         labels['declaration'] + item['name']))
-    _restored_graphs(restores, prepared)
+    rows = []
+    for item, selected, text in loaded:
+        row = {
+            'source': text,
+            'name': item['name'],
+            'owner': list(item['owner']),
+            'graph': item['source'],
+            'label': labels['declaration'] + item['name'],
+        }
+        if selected:
+            row['expected'] = item['source']
+        rows.append(row)
+    checked = _checked_declaration_graphs(rows)
+    if checked['restore']:
+        declared = checked['declared']
+        selected_flags = [flag == 'true' for flag in checked['flags']]
+        selected_match = {}
+        flag_index = 0
+        for index, (_item, selected, _text) in enumerate(loaded):
+            if not selected:
+                continue
+            selected_match[index] = selected_flags[flag_index]
+            flag_index += 1
+        restores = []
+        for index, (item, _selected, text) in enumerate(loaded):
+            if index in selected_match and not selected_match[index]:
+                text = full_audit.reviewed_text(root, item['path'], text)
+                restores.append((index, item, text))
+        prepared = []
+        for index, (item, _selected, _text) in enumerate(loaded):
+            prepared.append((declared[index], item['source'],
+                             labels['declaration'] + item['name']))
+        _restored_graphs(restores, prepared)
     return record
 
 
