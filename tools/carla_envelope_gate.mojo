@@ -12,6 +12,7 @@
     carla_envelope_gate --successor PATH
     carla_envelope_gate --module-successor PATH
     carla_envelope_gate --admission PATH
+    carla_envelope_gate --predecessor DIR
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -21,6 +22,8 @@ module first. `--successor` reads `actual` and `expected` function text
 and requires the same significant tokens. `--module-successor` selects
 the live function from `source` before that comparison.
 `--admission` checks the admission token, then the capture-function gap.
+`--predecessor` checks `record.json`, then prints the earlier function
+from that record after the live module in `module.mojo` matches.
 """
 
 from std.pathlib import Path
@@ -183,6 +186,36 @@ def envelope_module_successor(payload: String) raises:
         raise Error("Envelope budget successor function changed")
 
 
+def envelope_predecessor(record: String, source: String) raises -> String:
+    """Return the earlier capture function after the successor matches.
+
+    Args:
+        record: The envelope budget contract record.
+        source: The module that declares the live capture function.
+
+    Returns:
+        The recorded earlier capture function.
+
+    Raises:
+        Error: The record digest changed, the record cannot be read, the
+            live function cannot be read, or its significant tokens differ.
+            The record digest is checked before the live function.
+    """
+    envelope_record(record.as_bytes())
+    var doc = PyJson.parse(record)
+    var pair = PyJson()
+    var body = pair.new_dict()
+    pair.set(body, "source", pair.new_str(source))
+    pair.set(
+        body,
+        "expected",
+        pair.new_str(doc.text(doc.at(doc.root, "after_complete_function"))),
+    )
+    pair.root = body
+    envelope_module_successor(pair.dumps())
+    return doc.text(doc.at(doc.root, "before_complete_function"))
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -190,6 +223,7 @@ def _usage():
             "usage: carla_envelope_gate --migration PATH"
             " | --source PATH --token HEX | --span PATH | --module-span PATH"
             " | --successor PATH | --module-successor PATH | --admission PATH"
+            " | --predecessor DIR"
         ),
         file=stderr,
     )
@@ -210,6 +244,7 @@ def main() raises:
     var module_span = String("")
     var module_successor = String("")
     var admission = String("")
+    var predecessor = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -223,6 +258,7 @@ def main() raises:
             or word == "--module-span"
             or word == "--module-successor"
             or word == "--admission"
+            or word == "--predecessor"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -241,6 +277,8 @@ def main() raises:
                 module_successor = value
             elif word == "--admission":
                 admission = value
+            elif word == "--predecessor":
+                predecessor = value
             else:
                 token = value
             index += 2
@@ -261,6 +299,8 @@ def main() raises:
         modes += 1
     if admission.byte_length() > 0:
         modes += 1
+    if predecessor.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if source.byte_length() > 0 and token.byte_length() == 0:
@@ -276,6 +316,8 @@ def main() raises:
     if module_successor.byte_length() > 0 and token.byte_length() > 0:
         _usage()
     if admission.byte_length() > 0 and token.byte_length() > 0:
+        _usage()
+    if predecessor.byte_length() > 0 and token.byte_length() > 0:
         _usage()
     try:
         if source.byte_length() > 0:
@@ -295,6 +337,18 @@ def main() raises:
             return
         if admission.byte_length() > 0:
             envelope_admission(Path(admission).read_text())
+            return
+        if predecessor.byte_length() > 0:
+            var folder = predecessor
+            if not folder.endswith("/"):
+                folder += "/"
+            print(
+                envelope_predecessor(
+                    Path(folder + "record.json").read_text(),
+                    Path(folder + "module.mojo").read_text(),
+                ),
+                end="",
+            )
             return
         envelope_record(Path(migration).read_bytes())
     except error:

@@ -5,7 +5,8 @@
 
 """A changed envelope budget record fails the gate."""
 
-from std.testing import TestSuite, assert_raises
+from std.pathlib import Path
+from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._python_tokens import declaration_text, token_sha256
 from tools._python_json import PyJson
@@ -13,6 +14,7 @@ from tools.carla_envelope_gate import (
     envelope_admission,
     envelope_module_span,
     envelope_module_successor,
+    envelope_predecessor,
     envelope_record,
     envelope_successor,
     envelope_token,
@@ -160,6 +162,30 @@ def test_the_admission_token_precedes_the_gap() raises:
         envelope_admission(_admission(marked, marked, "00"))
     with assert_raises(contains="Intervening span can access budget parameters"):
         envelope_admission(_admission(source, marked, token))
+
+
+def test_the_predecessor_record_returns_the_earlier_function() raises:
+    """The record digest is checked before the earlier function is returned."""
+    var record = Path(
+        "tools/carla_lane_oracle/envelope-budget-contract.json"
+    ).read_text()
+    var source = Path("extensions/carla/curve_bounds.mojo").read_text()
+    var doc = PyJson.parse(record)
+    var earlier = doc.text(doc.at(doc.root, "before_complete_function"))
+    assert_equal(
+        envelope_predecessor(record, source),
+        earlier,
+    )
+    with assert_raises(
+        contains="Unreviewed envelope budget predecessor record"
+    ):
+        _ = envelope_predecessor(record + " ", source)
+    var changed = source.replace(
+        "    var at = info_index(road.info.geometries, low)\n",
+        "    var at = info_index(road.info.geometries, low)\n    terms = -1\n",
+    )
+    with assert_raises(contains="Envelope budget successor function changed"):
+        _ = envelope_predecessor(record, changed)
 
 
 def main() raises:

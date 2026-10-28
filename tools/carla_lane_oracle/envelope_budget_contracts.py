@@ -40,24 +40,27 @@ def verify(root, *, _operation=None):
     return verify_text((Path(root)/MODULE).read_text(), root=root, _operation=_operation)
 
 
-def _gate(payload):
+def _gate_predecessor(source, record):
+    """Check the record, then return the earlier capture function."""
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='envelope-gate-') as directory:
-        record = Path(directory) / 'migration.json'
-        record.write_bytes(payload)
+    with tempfile.TemporaryDirectory(prefix='envelope-predecessor-') as directory:
+        folder = Path(directory)
+        (folder / 'record.json').write_bytes(record)
+        (folder / 'module.mojo').write_text(source)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_envelope_gate',
-             '--migration', str(record)],
+             '--predecessor', str(folder)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+    return result.stdout
 
 
 def _gate_admission(checked, source, token):
@@ -85,39 +88,11 @@ def _gate_admission(checked, source, token):
         raise ValueError(message)
 
 
-def _gate_module_successor(source, expected):
-    """Select the capture function, then match the recorded successor."""
-    import json
-    import os
-    import subprocess
-    import tempfile
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps(
-        {'source': source, 'expected': expected}, separators=(',', ':'))
-    with tempfile.TemporaryDirectory(prefix='envelope-module-successor-') as directory:
-        target = Path(directory) / 'successor.json'
-        target.write_text(payload)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_envelope_gate',
-             '--module-successor', str(target)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-
-
 def historical_function(text, *, root=None):
     """Return the bound predecessor only after verifying the exact successor."""
 # #333 explicit historical provenance views; current inputs remain operation-owned.
-    import json
     verify_text(text, root=root)
     record_path = (Path(root)/'tools/carla_lane_oracle/envelope-budget-contract.json'
                    if root is not None else Path(__file__).with_name('envelope-budget-contract.json'))
     payload = _typed_source.historical_bytes(root, record_path, record_path.read_bytes())
-    _gate(payload)
-    record = json.loads(payload, object_pairs_hook=source_contracts.unique_keys)
-    _gate_module_successor(text, record['after_complete_function'])
-    return record['before_complete_function']
+    return _gate_predecessor(text, payload)
