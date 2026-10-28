@@ -270,6 +270,8 @@ The dispatch setup stays after the depth refusal.
 A moved debit or a changed cut is refused.
 It checks the fresh producer and the search memos in that order.
 
+It reads the run declaration before those search edges in one check.
+
 Mojo checks the live lane-center edges.
 The proof memo and the translated memo keep the station and scale words.
 The grouped caller keeps the prepaid fallback.

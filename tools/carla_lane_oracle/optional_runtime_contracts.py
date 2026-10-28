@@ -464,6 +464,29 @@ def verify_search_semantics(run):
         run._runtime_name, 'search')
 
 
+def _search_after_declaration(source, name):
+    """Read one declaration, then check its search edges."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='search-declaration-') as directory:
+        path = Path(directory) / 'source.mojo'
+        path.write_text(source)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_runtime_search_edges', '--after-declaration',
+             str(path), name],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def _semantic_edges(group, nodes):
     """Check one optional-runtime fragment group."""
     import json
@@ -571,7 +594,7 @@ def verify_semantics(root, *, _operation=None):
     # Only the complete live gate and exact center inverse admit a predecessor;
     # current lane failures may differ diagnostically from historical fixtures.
     previous = full_audit.reviewed_lane_before_center_text(root, _operation=_operation)
-    verify_search_semantics(body_from_source(previous, plan['search']))
+    _search_after_declaration(previous, plan['search'])
     # Retain the sampled-reference gate after raw-inverse diagnostics.
     if __package__:
         from .ideal_projection import verify_try_only_reference
