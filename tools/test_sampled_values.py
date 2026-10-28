@@ -1115,6 +1115,35 @@ class SelectionGroupedTests(unittest.TestCase):
                 selection._predecessor_then_grouped({'path': 'other.mojo'}, 'nope')
 
 
+class LaneViewCacheTests(unittest.TestCase):
+    def test_the_same_lane_views_skip_the_second_comparison(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import rounded_line_singleton_contracts as singleton
+        saved = singleton._LANE_VIEWS
+        try:
+            singleton._LANE_VIEWS = None
+            ok = Mock(returncode=0, stdout='', stderr='')
+            with patch('subprocess.run', return_value=ok) as run:
+                singleton._views_after_newlines('text\n', 'text\n')
+                singleton._views_after_newlines('text\n', 'text\n')
+                self.assertEqual(run.call_count, 1)
+                singleton._views_after_newlines('text\n', 'other\n')
+                self.assertEqual(run.call_count, 2)
+            failed = Mock(returncode=1, stdout='', stderr='lane text changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'lane text changed'):
+                    singleton._views_after_newlines('bad', 'bad')
+                self.assertEqual(run.call_count, 1)
+                with self.assertRaisesRegex(ValueError, 'lane text changed'):
+                    singleton._views_after_newlines('bad', 'bad')
+                self.assertEqual(run.call_count, 2)
+            with patch('subprocess.run', return_value=ok) as run:
+                singleton._views_after_newlines('text\n', 'other\n')
+                self.assertEqual(run.call_count, 0)
+        finally:
+            singleton._LANE_VIEWS = saved
+
+
 class RestoredScopeTests(unittest.TestCase):
     def test_the_restored_scope_and_the_minima_are_one_call(self):
         from unittest.mock import Mock, patch

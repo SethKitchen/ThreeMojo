@@ -548,7 +548,15 @@ def _universal_newlines(text):
     return result.stdout
 
 
+_LANE_VIEWS = None
+
+
 def _views_after_newlines(text, physical):
+    """Compare the lane text and byte views once for the same bytes."""
+    global _LANE_VIEWS
+    key = (text, physical)
+    if _LANE_VIEWS == key:
+        return
     import os
     import subprocess
     import tempfile
@@ -570,6 +578,7 @@ def _views_after_newlines(text, physical):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+    _LANE_VIEWS = key
 
 
 def _lane_text(root):
