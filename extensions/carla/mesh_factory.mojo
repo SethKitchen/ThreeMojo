@@ -80,6 +80,7 @@ from extensions.carla.road_info import (
     RoadId,
     SOLID,
     _info_at_si as info_at,
+    _info_index_si,
 )
 from extensions.carla.rtree import PointCloudRtree
 from extensions.carla.transform import CarlaTransform
@@ -1910,15 +1911,22 @@ struct MeshFactory(Movable):
         var s = s_start
         ref marks = road.sections[section].lanes[lane].info.marks
         var steps = 0
+        # The mark of the record that holds at s, read once per record:
+        # s only grows, so most steps stay on the record before.
+        var held = Optional[LaneMarking](None)
+        var held_at = -1
         while True:
             if steps >= 4194304:
                 raise Error("Lane mark sampling exhausted its work limit")
             steps += 1
-            var found = info_at(marks, s)
-            if not Bool(found):
+            var at = _info_index_si(marks, s)
+            if at < 0:
                 # CARLA would loop forever here.
                 break
-            var info = LaneMarking._from_si(found.value())
+            if at != held_at:
+                held = LaneMarking._from_si(marks[at])
+                held_at = at
+            var info = held.value()
             var base = len(draft.positions)
             if info.type == SOLID:
                 var e: Tuple[Vector3, Vector3]
