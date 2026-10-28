@@ -583,6 +583,31 @@ def _moment_plan():
     return _MOMENT_PLAN
 
 
+def _plan_with_files():
+    """Read the moment check plan, then the pin file, table, and word count."""
+    global _MOMENT_PLAN, _MOMENT_FILES
+    if _MOMENT_PLAN is not None and _MOMENT_FILES is not None:
+        return
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_check_plan',
+         '--with-files'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    parsed = json.loads(result.stdout)
+    if _MOMENT_PLAN is None:
+        _MOMENT_PLAN = parsed['plan']
+    if _MOMENT_FILES is None:
+        _MOMENT_FILES = parsed['files']
+
+
 _DEPENDENCIES_READY = False
 
 
@@ -637,6 +662,7 @@ def _require_moment_pins(pins):
 
 
 def verify_inputs(root):
+    _plan_with_files()
     messages = _moment_plan()['messages']
     arrays = _moment_plan()['arrays']
     pins = json.loads(_typed_source.historical_text(root, root / _pins(), (root / _pins()).read_text(encoding='utf-8')),
@@ -1077,6 +1103,7 @@ def _cli_failures():
 
 
 def main(argv=None):
+    _plan_with_files()
     plan = _moment_plan()
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()

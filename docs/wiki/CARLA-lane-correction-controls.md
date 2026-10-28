@@ -22,6 +22,8 @@ It keeps the moment proof path and the interval path.
 
 It keeps the moment pin file, the stored table, and the word count.
 
+It reads the moment check plan before the pin file, the table, and the word count in one check.
+
 `tools/carla_selection_gate.mojo` checks the selection-producer token digests and the phase-constant bounds.
 
 It keeps the two selection producer digests.
