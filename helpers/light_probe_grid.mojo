@@ -37,7 +37,7 @@ from helpers.light_probe import (
 from lights.light_probe_grid import LightProbeGrid
 from materials.glsl import compile_shader_material
 from materials.material import MaterialId, shader_material
-from materials.nodes import NodeProgramId
+from materials.node_program_id import NodeProgramId
 from objects.mesh import Mesh
 from units.si import Length, METER
 

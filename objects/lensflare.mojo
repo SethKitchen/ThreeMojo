@@ -51,7 +51,7 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from materials.glsl import compile_shader_material
 from materials.material import ADDITIVE, MaterialId, shader_material
-from materials.nodes import NodeProgramId
+from materials.node_program_id import NodeProgramId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from objects.reflector import view_renderer

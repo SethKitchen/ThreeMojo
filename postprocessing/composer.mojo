@@ -223,7 +223,7 @@ from postprocessing.screen_space import (
     ssr_light,
 )
 from materials.material import MaterialId
-from materials.nodes import NodeProgramId
+from materials.node_program_id import NodeProgramId
 from render.antialias import SUPERSAMPLE
 from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
 from render.framebuffer import (

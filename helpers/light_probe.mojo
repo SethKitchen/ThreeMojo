@@ -41,7 +41,7 @@ from geometries.sphere import sphere
 from lights.light import LIGHT_PROBE, Light
 from materials.glsl import compile_shader_material
 from materials.material import MaterialId, shader_material
-from materials.nodes import NodeProgramId
+from materials.node_program_id import NodeProgramId
 from objects.mesh import Mesh
 from units.si import Length, METER
 

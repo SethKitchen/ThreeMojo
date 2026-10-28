@@ -128,6 +128,7 @@ level the surface's own coordinates pick. WebGPU instead measures the
 derivatives of the coordinate the node computes.
 """
 
+from materials.node_program_id import NO_NODES, NodeProgramId
 from core.ordinal import index_in_count
 from core.extent import require_closed_count
 from core.ordinal import (
@@ -864,26 +865,6 @@ struct NodeVar(Equatable, ImplicitlyCopyable, Writable):
             Whether the value is zero or more.
         """
         return self.value >= 0
-
-
-@fieldwise_init
-struct NodeProgramId(Equatable, ImplicitlyCopyable, Writable):
-    """Which program in a `NodeProgramStore`, as a type rather than a bare
-    int. See `core.object3d.NodeId` for why these are wrapped."""
-
-    var value: Int
-
-    def is_valid(self) -> Bool:
-        """Return True if this can name a program, or is `NO_NODES`.
-
-        Returns:
-            Whether the value is zero or more, or is `NO_NODES`.
-        """
-        return self.value >= 0 or self == NO_NODES
-
-
-# What a material holds when no graph replaces any of its shading.
-comptime NO_NODES = NodeProgramId(-1)
 
 
 def _letter_of(lane: Int) -> String:

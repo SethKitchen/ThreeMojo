@@ -63,7 +63,7 @@ from objects.skinned_mesh import (
     SKIN_WEIGHT,
     require_skin_width,
 )
-from render.rasterizer import check_data_map
+from render.texture import check_data_map
 from render.texture_store import NO_TEXTURE, TextureStore
 from math.finite import require_finite
 from std.math import floor
