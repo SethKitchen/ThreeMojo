@@ -139,6 +139,14 @@ comptime OAK = Vector3(0.48, 0.48, 0.48)
 """The tint of dark oak over the wood texture."""
 comptime GLASS = Vector3(0.07, 0.09, 0.11)
 """The linear color of a window pane seen from outside."""
+comptime SKY_GLASS = Vector3(0.26, 0.32, 0.4)
+"""The color of a pane at its top, where it shows the sky. It darkens to
+`GLASS` at the pane's foot, where it shows the ground."""
+comptime CREAM = Vector3(0.6, 0.56, 0.47)
+"""The linear color of the paint on a brick or stone house's window
+frames."""
+comptime ZINC = Vector3(0.42, 0.44, 0.47)
+"""The tint of the gutters and the downpipes over the plaster texture."""
 comptime DAYLIGHT = Vector3(0.78, 0.84, 0.9)
 """The color of a window pane seen from inside, lit by the day beyond."""
 comptime INDOORS = Vector3(1.08, 0.88, 0.68)
@@ -602,6 +610,11 @@ def _window(
     var n = face.normal * out_sign
     var plane = out_sign * (half - Float32(FRAME_INSET))
     var paint = painted(parameters.trim)
+    # A brick or a stone house's frames are cream; its shutters keep the
+    # trim.
+    var frame = paint
+    if parameters.facade == BRICK_FACADE or parameters.facade == STONE_FACADE:
+        frame = painted(CREAM)
     var bar = Float32(0.06)
     var deep = Float32(0.07)
     var back = plane - out_sign * deep / 2
@@ -613,7 +626,7 @@ def _window(
         n,
         bar,
         deep,
-        paint,
+        frame,
     )
     _bar(
         sheets.wood,
@@ -622,7 +635,7 @@ def _window(
         n,
         bar,
         deep,
-        paint,
+        frame,
     )
     _bar(
         sheets.wood,
@@ -631,7 +644,7 @@ def _window(
         n,
         bar,
         deep,
-        paint,
+        frame,
     )
     _bar(
         sheets.wood,
@@ -640,7 +653,7 @@ def _window(
         n,
         bar,
         deep,
-        paint,
+        frame,
     )
     # A mullion and a transom.
     var mid = (o.u0 + o.u1) / 2
@@ -653,7 +666,7 @@ def _window(
         n,
         thin,
         deep * 0.8,
-        paint,
+        frame,
     )
     _bar(
         sheets.wood,
@@ -662,7 +675,7 @@ def _window(
         n,
         thin,
         deep * 0.8,
-        paint,
+        frame,
     )
     # The panes, facing out and in: along `side` and up, a quad faces
     # along `n`.
@@ -670,8 +683,20 @@ def _window(
     var low = face.at((o.u0 + o.u1) / 2, o.v0 + bar, plane)
     var high = face.at((o.u0 + o.u1) / 2, o.v1 - bar, plane)
     var across = side * ((o.u1 - o.u0) / 2 - bar)
-    sheets.glass.quad(
-        low - across, low + across, high + across, high - across, GLASS
+    # The glass shows the sky at its top and the ground at its foot.
+    sheets.glass.painted_quad(
+        low - across,
+        low + across,
+        high + across,
+        high - across,
+        GLASS,
+        GLASS,
+        SKY_GLASS,
+        SKY_GLASS,
+        0,
+        0,
+        2 * across.length(),
+        (high - low).length(),
     )
     sheets.daylight.quad(
         low + across, low - across, high - across, high + across, DAYLIGHT
@@ -907,6 +932,99 @@ def door_leaf(width: Float32, height: Float32, paint: Vector3) raises -> Sheet:
         IRON,
     )
     return sheet^
+
+
+def _string_courses(
+    mut sheets: _Sheets,
+    half_x: Float32,
+    half_z: Float32,
+    parameters: HouseParameters,
+):
+    """Add a band of dressed stone round the house's outside faces at each
+    upper storey's floor, `half_x` and `half_z` being the faces' half
+    sizes. It stands proud of the quoins, so it runs over them."""
+    var height = parameters.storey_height.to(METER)
+    var proud = Float32(0.035)
+    for storey in range(1, parameters.storeys):
+        var y = height * Float32(storey)
+        for sz in [Float32(1), Float32(-1)]:
+            # Along x, on the faces at either end of z.
+            _cube(
+                sheets.ashlar,
+                -half_x - proud,
+                half_x + proud,
+                y - 0.08,
+                y + 0.08,
+                sz * half_z - proud,
+                sz * half_z + proud,
+                STONE * 0.95,
+            )
+            # Along z, on the faces at either end of x.
+            _cube(
+                sheets.ashlar,
+                sz * half_x - proud,
+                sz * half_x + proud,
+                y - 0.08,
+                y + 0.08,
+                -half_z - proud,
+                half_z + proud,
+                STONE * 0.95,
+            )
+
+
+def _gutters(
+    mut sheets: _Sheets,
+    parameters: HouseParameters,
+    half_t: Float32,
+    foot: Float32,
+):
+    """Add a gutter along each eave of the gable roof, and a downpipe from
+    each end of each gutter down the wall to the ground at `foot`, which
+    is below the floor, with a swan neck from the gutter to the wall."""
+    var half_w = parameters.width.to(METER) / 2
+    var half_d = parameters.depth.to(METER) / 2
+    var base = parameters.storey_height.to(METER) * Float32(parameters.storeys)
+    var slope = tan(parameters.pitch.to(RADIAN))
+    var eave = base - slope * EAVES
+    var hx = half_w + half_t + VERGE
+    var gutter = half_d + half_t + EAVES
+    var wall = half_d + half_t
+    var across = Vector3(1, 0, 0)
+    for side in range(2):
+        var sz = Float32(1) if side == 0 else Float32(-1)
+        _bar(
+            sheets.plaster,
+            Vector3(-hx, eave - 0.05, sz * (gutter - 0.03)),
+            Vector3(hx, eave - 0.05, sz * (gutter - 0.03)),
+            Vector3(0, 0, sz),
+            0.1,
+            0.12,
+            ZINC,
+        )
+        for end in range(2):
+            var x = (Float32(1) if end == 0 else Float32(-1)) * (
+                half_w + half_t - 0.3
+            )
+            var pipe = sz * (wall + 0.05)
+            var bend = eave - 0.35
+            _bar(
+                sheets.plaster,
+                Vector3(x - 0.04, foot, pipe),
+                Vector3(x - 0.04, bend, pipe),
+                across,
+                0.08,
+                0.08,
+                ZINC * 0.9,
+            )
+            _bar(
+                sheets.plaster,
+                Vector3(x - 0.035, bend, pipe),
+                Vector3(x - 0.035, eave - 0.08, sz * (gutter + 0.03)),
+                across,
+                0.07,
+                0.07,
+                ZINC * 0.9,
+            )
 
 
 def _quoins(
@@ -2463,10 +2581,13 @@ def stand_house(
     var half_t = Float32(building.constructions[0].thickness().value) / 2
     if parameters.pitch.to(RADIAN) > 0:
         _roof(sheets, parameters, half_t, breast)
+        _gutters(sheets, parameters, half_t, feet[0] - floor)
     _plinth(sheets, half_x, half_z, feet[0] - floor)
     _steps(sheets, interior, lot, ground)
     if parameters.facade == BRICK_FACADE or parameters.facade == STONE_FACADE:
         _quoins(sheets, half_x + half_t, half_z + half_t, top)
+    if parameters.facade == BRICK_FACADE:
+        _string_courses(sheets, half_x + half_t, half_z + half_t, parameters)
     _furniture(sheets, building, barn)
     if barn and parameters.pitch.to(RADIAN) > 0:
         _loft(sheets, parameters, half_t)

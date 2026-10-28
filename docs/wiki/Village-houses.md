@@ -57,8 +57,8 @@ The front door is 1 meter wide and 2.1 meters tall. A barn is different: see [Th
 
 | Facade | Walls | Dressings | Roof |
 |---|---|---|---|
-| `BRICK_FACADE` | Red brick in running bond | Stone quoins, stone lintels and sills, a hearth and a chimney | Clay tiles |
-| `STONE_FACADE` | Fieldstone in lime mortar | Stone quoins, oak lintels, a hearth and a chimney | Slates |
+| `BRICK_FACADE` | Red brick in running bond | Stone quoins, a stone band at each upper floor, stone lintels and sills, cream window frames, a hearth and a chimney | Clay tiles |
+| `STONE_FACADE` | Fieldstone in lime mortar | Stone quoins, oak lintels, cream window frames, a hearth and a chimney | Slates |
 | `TIMBER_FRAMED` | Lime plaster | Oak posts, rails and braces, a king post on each gable | Clay tiles |
 | `BOARDED` | Vertical boards, with battens over the joints in the texture | Oak sills, no shutters | Clay tiles |
 
@@ -69,10 +69,10 @@ The front door is 1 meter wide and 2.1 meters tall. A barn is different: see [Th
 `stand_house` reads the model as the general render view does. It draws more of what an eye sees from close by.
 
 1. **Walls.** Each face of a wall is cut into cells at the edges of its openings. No cell is more than 1 meter across. The outside face wears the facade's texture. Its vertex colors darken it at its foot and under the eaves. The inside face wears lime plaster, and is darker in the corners of the room.
-2. **Windows.** A window has a painted frame, a mullion and a transom, panes of glass and a stone sill. The panes show the day from inside. A pair of shutters stands open against the wall.
+2. **Windows.** A window has a painted frame, a mullion and a transom, panes of glass and a stone sill. From outside, a pane shows the sky at its top and darkens toward its foot. The panes show the day from inside. A pair of shutters stands open against the wall, in the trim's paint.
 3. **Doors.** A door has an oak frame and a stone threshold. Its leaf is boards on ledges, with iron straps. The leaf hangs from a hinge node of its own. A door 2 meters wide or more hangs two leaves, one at each jamb. A leaf 1.2 meters wide or more has diagonal braces.
 4. **Rooms.** Each room has a floor of planks and a plastered ceiling. The ground storey's ceiling has oak joists.
-5. **The roof.** Two slopes of tiles or slates, 16 centimeters thick, reach 35 centimeters past the long walls. Boards line the underside of the eaves. A fascia, barge boards and a ridge close the edges. A chimney stack rises over the chimney breast. Each gable is cut into cells no more than 1 meter across, as a wall is.
+5. **The roof.** Two slopes of tiles or slates, 16 centimeters thick, reach 35 centimeters past the long walls. Boards line the underside of the eaves. A fascia, barge boards and a ridge close the edges. A chimney stack rises over the chimney breast. Each gable is cut into cells no more than 1 meter across, as a wall is. A zinc gutter runs along each eave. A downpipe runs from each end of each gutter down the wall to the ground.
 6. **The plinth and the steps.** A stone plinth reaches 40 centimeters below the lowest ground under the house. Stone steps lead up to the front door.
 
 The house hangs from one node at its lot's middle, at the floor's height. Each material is one mesh. So a house is eight meshes, and one more for each door leaf.

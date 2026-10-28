@@ -8,6 +8,7 @@ windows, the doors on their hinges, the roof, the plinth and the steps,
 and every kind of furniture."""
 
 from core.assets import Assets
+from core.buffer_geometry import COLOR
 from core.scene import Scene
 from extensions.building.ids import ElementId, SpaceId
 from extensions.building.kinds import (
@@ -44,7 +45,11 @@ from extensions.village.house import (
     lime_plaster,
 )
 from extensions.village.house_view import (
+    CREAM,
+    GLASS,
     OAK,
+    SKY_GLASS,
+    ZINC,
     WOOD_MEAN,
     door_leaf,
     facade_look,
@@ -54,6 +59,7 @@ from extensions.village.house_view import (
     stand_house,
 )
 from extensions.village.surfaces import HouseLooks, house_looks
+from materials.material import MaterialId
 from math.vector3 import Vector3
 from std.math import pi, sin
 from std.testing import (
@@ -499,6 +505,55 @@ def test_a_wide_door_leaf_is_braced() raises:
     # Four boards and the ledges, straps and ring of a narrow leaf; six
     # boards and two braces more on a wide one.
     assert_equal(wide.triangles() - narrow.triangles(), 4 * 12)
+
+
+def _has_color(
+    scene: Scene, assets: Assets, material: MaterialId, color: Vector3
+) raises -> Bool:
+    """Return whether a mesh of a material has a vertex of a color."""
+    for mesh in scene.meshes:
+        if mesh.material.value != material.value:
+            continue
+        ref colors = assets.geometries.get(mesh.geometry).attribute_view(
+            String(COLOR)
+        )
+        for v in range(colors.count()):
+            if (colors.vector3(v) - color).length() < 1e-4:
+                return True
+    return False
+
+
+def test_a_house_is_dressed_by_its_facade() raises:
+    var assets = Assets()
+    var looks = house_looks(assets, 8, 1)
+    # A brick house of two storeys has a band of stone round it at its
+    # upper floor, a block along each face, where a stone house has none.
+    var brick = Scene()
+    var stone = Scene()
+    var bricks = _stand(brick, assets, looks, _house(6, 2))
+    var stones = _stand(stone, assets, looks, _house(6, 2, STONE_FACADE))
+    assert_equal(bricks - stones, 4 * 12)
+    var one = Scene()
+    var two = Scene()
+    assert_equal(
+        _stand(one, assets, looks, _house(6, 1)),
+        _stand(two, assets, looks, _house(6, 1, STONE_FACADE)),
+    )
+    # Its panes show the sky at their tops and the ground at their feet,
+    # and its frames are cream; a framed house's frames are not.
+    assert_true(_has_color(brick, assets, looks.glass, SKY_GLASS))
+    assert_true(_has_color(brick, assets, looks.glass, GLASS))
+    assert_true(_has_color(brick, assets, looks.wood, painted(CREAM)))
+    var framed = Scene()
+    _ = _stand(framed, assets, looks, _house(6, 2, TIMBER_FRAMED))
+    assert_false(_has_color(framed, assets, looks.wood, painted(CREAM)))
+    # A pitched roof has zinc gutters and downpipes; a flat one has none.
+    assert_true(_has_color(brick, assets, looks.plaster, ZINC))
+    var flat = _house(6, 2)
+    flat.pitch = Angle(0.0, DEGREE)
+    var level = Scene()
+    _ = _stand(level, assets, looks, flat)
+    assert_false(_has_color(level, assets, looks.plaster, ZINC))
 
 
 def main() raises:
