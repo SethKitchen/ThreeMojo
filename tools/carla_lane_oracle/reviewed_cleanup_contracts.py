@@ -808,6 +808,47 @@ def _pinned_dependency_words(items):
         raise ValueError(message)
 
 
+def _words_then_paths(items):
+    """Check the pinned dependency words, then read the cleanup paths."""
+    global _CLEANUP_PATHS, SOURCE_PATHS, PREMISE_PATHS
+    if not items:
+        _ensure_paths()
+        return
+    if _CLEANUP_PATHS is not None:
+        _pinned_dependency_words([
+            {'text': text, 'expected': expected, 'path': path}
+            for path, text, expected in items])
+        SOURCE_PATHS = tuple(_CLEANUP_PATHS['sources'])
+        PREMISE_PATHS = tuple(_CLEANUP_PATHS['premises'])
+        return
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps([
+        {'text': text, 'expected': expected, 'path': path}
+        for path, text, expected in items
+    ], separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='words-paths-') as directory:
+        record = Path(directory) / 'choice.json'
+        record.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_dependency_words', '--pinned-paths', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    if _CLEANUP_PATHS is None:
+        _CLEANUP_PATHS = json.loads(result.stdout)
+    SOURCE_PATHS = tuple(_CLEANUP_PATHS['sources'])
+    PREMISE_PATHS = tuple(_CLEANUP_PATHS['premises'])
+
+
 def verify_dependencies(items):
     """Read the dependency pins, then run the selected word checks."""
     if not items:
@@ -867,7 +908,10 @@ def verify(root, *, _operation=None):
         dependencies.append((path, _typed_source.historical_text(root, path, _observe_text(
             root, path, (root/path).read_text(), _operation=_operation), _operation=_operation),
             expected['token_sha256']))
-    verify_dependencies(dependencies)
+    if _operation is None:
+        _words_then_paths(dependencies)
+    else:
+        verify_dependencies(dependencies)
     verify_premises(root, **operation_args)
     frozen.verify(root, **operation_args)
     if _operation is None:

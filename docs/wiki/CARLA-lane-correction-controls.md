@@ -252,6 +252,8 @@ It chooses every dependency check and checks its selected words in one check.
 
 It reads the dependency pins before those selected words in one check.
 
+It checks those selected words before the cleanup paths in one check.
+
 It selects each reviewed declaration and checks that each premise fragment occurs once, in order.
 
 It keeps the five reviewed premise fragment lists.

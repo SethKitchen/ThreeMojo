@@ -11,7 +11,7 @@ geometry tokens may differ and still keep their stored words.
 
 from tests._python_tokens import token_sha256
 from tools._cleanup_dependency_pins import cleanup_dependency_pins
-from tools.carla_cleanup_gate import cleanup_words
+from tools.carla_cleanup_gate import cleanup_paths, cleanup_words
 from tools._python_json import MISSING, PyJson
 
 
@@ -174,3 +174,23 @@ def pinned_dependency_words(payload: String) raises:
         index += 1
     out.root = rows
     checked_dependency_words(out.dumps())
+
+
+def pinned_words_then_paths(payload: String) raises -> String:
+    """Check the pinned dependency words, then read the cleanup paths.
+
+    Args:
+        payload: A JSON list. Each item has `text`, `expected`, and
+            `path`. An empty list skips the word checks.
+
+    Returns:
+        The cleanup paths, with `sources` and `premises`.
+
+    Raises:
+        Error: A dependency is unreviewed or a word list changed. The
+            word checks run before the paths are read.
+    """
+    var doc = PyJson.parse(payload)
+    if doc.length(doc.root) > 0:
+        pinned_dependency_words(payload)
+    return cleanup_paths()

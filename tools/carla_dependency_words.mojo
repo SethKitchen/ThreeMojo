@@ -8,6 +8,7 @@
     carla_dependency_words PATH
     carla_dependency_words --checked PATH
     carla_dependency_words --pinned PATH
+    carla_dependency_words --pinned-paths PATH
 
 `PATH` is the dependency JSON. One object prints `match`, `trig`, or
 `geometry`. A list prints those names in order. `--checked` chooses
@@ -23,6 +24,7 @@ from tools._dependency_words import (
     dependency_word_choice,
     dependency_word_choices,
     pinned_dependency_words,
+    pinned_words_then_paths,
 )
 from tools._python_json import PY_LIST, PyJson
 
@@ -32,7 +34,8 @@ def _usage():
     print(
         (
             "usage: carla_dependency_words PATH | carla_dependency_words"
-            " --checked PATH | carla_dependency_words --pinned PATH"
+            " --checked PATH | carla_dependency_words --pinned PATH |"
+            " carla_dependency_words --pinned-paths PATH"
         ),
         file=stderr,
     )
@@ -46,6 +49,16 @@ def main() raises:
         Error: The command is invalid, or a dependency is unreviewed.
     """
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--pinned-paths":
+        try:
+            print(
+                pinned_words_then_paths(Path(arguments[2]).read_text()),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 3 and (
         arguments[1] == "--checked" or arguments[1] == "--pinned"
     ):

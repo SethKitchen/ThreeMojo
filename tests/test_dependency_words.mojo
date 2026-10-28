@@ -13,7 +13,9 @@ from tools._dependency_words import (
     dependency_word_choice,
     dependency_word_choices,
     pinned_dependency_words,
+    pinned_words_then_paths,
 )
+from tools.carla_cleanup_gate import cleanup_paths
 from tools._python_json import PyJson
 
 
@@ -315,6 +317,17 @@ def test_the_reviewed_trig_pin_selects_the_word_check() raises:
                 "extensions/carla/curve_trig.mojo",
             )
         )
+
+
+def test_a_missing_word_field_fails_before_the_paths() raises:
+    """A dependency without text fails before the cleanup paths are read."""
+    with assert_raises(contains="KeyError: 'text'"):
+        _ = pinned_words_then_paths("[{}]")
+
+
+def test_empty_words_read_the_cleanup_paths() raises:
+    """An empty dependency list still returns the cleanup paths."""
+    assert_equal(pinned_words_then_paths("[]"), cleanup_paths())
 
 
 def main() raises:
