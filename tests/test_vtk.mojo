@@ -10,6 +10,7 @@ from core.binary import append_big_endian
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from loaders.json import JsonDocument, NULL, parse_json
 from loaders.vtk import (
+    _index_length,
     parse_vtk,
     parse_vtk_ascii,
     parse_vtk_binary,
@@ -189,6 +190,20 @@ def _binary(
     return out^
 
 
+def test_a_wrapped_index_length_is_refused() raises:
+    assert_equal(_index_length(4, 1), 3)
+    assert_equal(_index_length(10, 2), 12)
+    assert_equal(_index_length(0, 0), 0)
+    with assert_raises(contains="negative length"):
+        _ = _index_length(2, 1)
+    with assert_raises(contains="negative length"):
+        _ = _index_length(0, Int.MAX // 3 + 1)
+    with assert_raises(contains="longer"):
+        _ = _index_length(6148914691236518912, 0)
+    with assert_raises(contains="longer"):
+        _ = _index_length(0, Int.MIN)
+
+
 def test_what_three_js_throws_on_in_binary_is_refused() raises:
     with assert_raises(contains="never ends"):
         _ = parse_vtk_binary(_binary(["DATASET POLYDATA"], [], []))
@@ -196,6 +211,14 @@ def test_what_three_js_throws_on_in_binary_is_refused() raises:
         _ = parse_vtk_binary(_binary(["DATASET X\n"], [], []))
     with assert_raises(contains="POINTS line has no count"):
         _ = parse_vtk_binary(_binary(["POINTS x float\n"], [], []))
+    with assert_raises(contains="POINTS line has no count"):
+        _ = parse_vtk_binary(
+            _binary(["POINTS 10000000000000000000 float\n"], [], [])
+        )
+    with assert_raises(contains="POINTS line has no count"):
+        _ = parse_vtk_binary(
+            _binary(["POINTS -10000000000000000000 float\n"], [], [])
+        )
     with assert_raises(contains="POINT_DATA line has no count"):
         _ = parse_vtk_binary(_binary(["POINT_DATA\n"], [], []))
     with assert_raises(contains="negative length"):
@@ -421,6 +444,47 @@ def test_what_three_js_throws_on_in_xml_is_refused() raises:
     # no cells.
     with assert_raises(contains="no cells"):
         _ = parse_vtk_xml(_vtp(root, String(whole) + whole, data))
+
+
+def test_a_zlib_block_past_its_header_size_is_refused() raises:
+    # One stored block of four bytes, and a header that allows one.
+    with assert_raises(contains="more than was expected"):
+        _ = parse_vtk_xml(
+            _vtp(
+                ' header_type="UInt32" compressor="z"',
+                _PIECE
+                + '<Points><DataArray type="Float32" NumberOfComponents="3"'
+                + ' format="binary">AQAAAAQAAAABAAAACwAAAAAAeAEBBAD7/wECAwQ='
+                + "</DataArray></Points>"
+                + _POLYS
+                + "</Piece>",
+            )
+        )
+
+
+def test_a_full_last_zlib_block_reads_as_vtk_writes_it() raises:
+    # VTK writes the last block's size as 0 when that block is full, and
+    # as its size when it is not: both give the same three numbers.
+    for encoded in [
+        "AQAAAAwAAAAAAAAAFwAAAAAAeAEBDADz/wAAgD8AAABAAABAQAlDAYA=",
+        "AQAAAAwAAAAMAAAAFwAAAAAAeAEBDADz/wAAgD8AAABAAABAQAlDAYA=",
+    ]:
+        var read = parse_vtk_xml(
+            _vtp(
+                ' header_type="UInt32" compressor="z"',
+                _PIECE
+                + '<Points><DataArray type="Float32" NumberOfComponents="3"'
+                + ' format="binary">'
+                + encoded
+                + "</DataArray></Points>"
+                + _POLYS
+                + "</Piece>",
+            )
+        )
+        var points = read.attribute_view(String(POSITION)).packed()
+        assert_equal(len(points), 3)
+        assert_equal(points[0], 1)
+        assert_equal(points[2], 3)
 
 
 def test_text_edges_are_read_as_three_js_reads_them() raises:

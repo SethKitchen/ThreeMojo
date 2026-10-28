@@ -552,7 +552,9 @@ def open_at(
     var fd: Int
     while True:
         fd = Int(
-            external_call["openat", c_int](
+            # The mode goes through `...`, which Apple Silicon passes on
+            # the stack: the call must say which arguments are fixed.
+            external_call["openat", c_int, num_fixed_args=3](
                 c_int(directory),
                 _at(Int(path.unsafe_ptr())),
                 c_int(flags),

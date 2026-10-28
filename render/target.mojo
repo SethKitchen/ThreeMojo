@@ -313,10 +313,12 @@ def sample_grid(samples: Int) -> Int:
 
     Returns:
         The side of the grid: one for zero or one sample, two for four,
-        three for nine and four for sixteen.
+        three for nine and four for sixteen. A larger count is still four.
     """
     var side = 1
-    while (side + 1) * (side + 1) <= samples:
+    # Stop at a side of four. Past that, `(side + 1)` squared wraps and
+    # the walk does not finish.
+    while side * side < MAX_SAMPLES and (side + 1) * (side + 1) <= samples:
         side += 1
     return side
 
@@ -743,13 +745,17 @@ struct RenderTarget(Movable, SampleSource):
                 default, takes one.
 
         Raises:
-            Error: If either dimension is not positive, `check_target`
-                refuses the type or the outputs, or `check_samples`
-                refuses the sample count.
+            Error: If either dimension is not positive, the pixel count
+                does not fit, `check_target` refuses the type or the
+                outputs, or `check_samples` refuses the sample count.
         """
         require_positive_extent(
             width, height, "Render target dimensions must be positive"
         )
+        # Divide before multiplying. A wrapped product would allocate the
+        # wrong number of pixels.
+        if width > Int.MAX // height:
+            raise Error("A render target is larger than this port draws")
         check_target(type, outputs)
         check_samples(samples)
         self.samples = samples

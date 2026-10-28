@@ -265,8 +265,14 @@ export class GpuSplat {
       if (exports.tm_splat_info(app.handle, Info.SCAN) !== this.scan) this.loadScan();
       const order = exports.tm_splat_info(app.handle, Info.ORDER);
       if (order !== this.sorted) {
-        device.queue.writeBuffer(this.buffers.order, 0, this.words(Part.ORDER, Uint32Array));
-        this.sorted = order;
+        const indices = this.words(Part.ORDER, Uint32Array);
+        // A missed copy must stay stale, so the next frame tries again.
+        // `buffer` gives every buffer at least 16 bytes, so a scan of
+        // fewer than four splats fills only the start of its buffer.
+        if (Math.max(16, indices.byteLength) === this.buffers.order.size) {
+          device.queue.writeBuffer(this.buffers.order, 0, indices);
+          this.sorted = order;
+        }
       }
       const view = this.words(Part.VIEW);
       device.queue.writeBuffer(this.buffers.view, 0, view);

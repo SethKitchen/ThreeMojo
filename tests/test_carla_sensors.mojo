@@ -90,11 +90,13 @@ from extensions.carla.radar import (
     RadarDetection,
 )
 from extensions.carla.semantic_lidar import (
+    _postprocess,
     LidarMeasurement,
     SemanticLidarMeasurement,
     hss_points_per_laser,
     hss_resolution_from,
     lidar_description_from,
+    require_lidar_rays,
     round_half_from_zero,
     scan_hss_lidar,
     scan_ray_cast_lidar,
@@ -485,6 +487,20 @@ def test_semantic_lidar_edges() raises:
     assert_equal(round_half_from_zero(-2.4), -2)
 
 
+def test_a_lidar_channel_count_this_port_cannot_cast_is_refused() raises:
+    var d = LidarDescription()
+    d.channels = 16777217
+    with assert_raises(contains="larger than this port"):
+        d.validate()
+    with assert_raises(contains="larger than this port"):
+        _ = d.laser_angles()
+    d.channels = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        _ = d.laser_angles()
+    d.channels = 1
+    assert_equal(len(d.laser_angles()), 1)
+
+
 def test_ray_cast_lidar_drops_as_carla_does() raises:
     var scene = _Planes(True, 10)
     var d = _lidar()
@@ -537,6 +553,29 @@ def test_ray_cast_lidar_drops_as_carla_does() raises:
     )
 
 
+def test_a_lidar_counts_its_points_in_float_as_carla_does() raises:
+    var d = LidarDescription()
+    d.channels = 32
+    assert_equal(d.points_per_laser(_s(0.05)), 88)
+    # CARLA's float product: 5 points a second for 0.7 seconds is 4, and
+    # one past 2^24 rounds to 2^24.
+    d.channels = 1
+    d.points_per_second = 5
+    assert_equal(d.points_per_laser(_s(0.7)), 4)
+    d.points_per_second = 16777217
+    assert_equal(d.points_per_laser(_s(1)), 16777216)
+    d.points_per_second = 56000
+    with assert_raises(contains="does not fit"):
+        _ = d.points_per_laser(_s(Float32(1e20)))
+    d.channels = 0
+    with assert_raises(contains="does not fit"):
+        _ = d.points_per_laser(_s(0.05))
+    d.channels = 1
+    d.points_per_second = -6000000000000000000
+    with assert_raises(contains="does not fit"):
+        _ = d.points_per_laser(_s(2))
+
+
 def test_hss_lidar_fixed_sweep() raises:
     var scene = _Planes(True, 10)
     var d = _lidar()
@@ -554,6 +593,34 @@ def test_hss_lidar_fixed_sweep() raises:
     assert_equal(hss_points_per_laser(d, _deg(0.456)), 196)
     d.horizontal_fov = _deg(-10)
     assert_false(Bool(scan_hss_lidar(scene, _pose(0, 0, 2), d, _deg(1), rng)))
+    var wide = _lidar()
+    wide.channels = 1
+    wide.horizontal_fov = Angle(Float32(1e20), DEGREE)
+    with assert_raises(contains="does not fit"):
+        _ = hss_points_per_laser(wide, _deg(0.01))
+    # The widest finite field over the finest step overflows to infinity.
+    wide.horizontal_fov = Angle(Float32(3e38), DEGREE)
+    with assert_raises(contains="does not fit"):
+        _ = hss_points_per_laser(wide, _deg(0.01))
+    # A laser of no ray fits whatever the channel count, and a laser whose
+    # rays all miss keeps no detection.
+    require_lidar_rays(16777216, 0)
+    var none = _lidar()
+    none.channels = 1
+    var quiet = _postprocess(
+        _pose(0, 0, 2),
+        none,
+        [List[SensorHit]()],
+        0,
+        0,
+        _deg(0),
+        rng,
+    )
+    assert_equal(len(quiet.detections), 0)
+    wide.channels = 16777216
+    wide.horizontal_fov = Angle(Float32(1e10), DEGREE)
+    with assert_raises(contains="larger than this port"):
+        _ = scan_hss_lidar(scene, _pose(0, 0, 2), wide, _deg(0.01), rng)
     # A limit of zero turns the intensity drop-off into beta alone.
     var zero = _lidar()
     zero.dropoff_general_rate = 0
@@ -663,6 +730,21 @@ def test_radar_settings() raises:
     assert_equal(d.points_per_second, 1500)
     assert_equal(d.noise_seed, 0)
     assert_equal(d.points_in(_s(0.05)), 75)
+    # CARLA's float product: 10 points a second for 0.7 seconds is 7, and
+    # one past 2^24 rounds to 2^24.
+    d.points_per_second = 10
+    assert_equal(d.points_in(_s(0.7)), 7)
+    d.points_per_second = 16777217
+    assert_equal(d.points_in(_s(1)), 16777216)
+    d.points_per_second = 1500
+    with assert_raises(contains="does not fit"):
+        _ = d.points_in(_s(Float32(1e20)))
+    d.points_per_second = -6000000000000000000
+    with assert_raises(contains="does not fit"):
+        _ = d.points_in(_s(2))
+    d.points_per_second = 1500
+    with assert_raises(contains="does not fit"):
+        _ = d.points_in(_s(nan[DType.float32]()))
 
 
 def test_accelerometer_is_the_parabolas_curvature() raises:
@@ -1149,6 +1231,26 @@ def test_event_camera_refractory_period() raises:
     assert_almost_equal(Float64(up[1].t), 1090009000.9, atol=8)
 
 
+def test_event_camera_refuses_a_step_that_does_not_move() raises:
+    # A threshold changed to zero is refused before the frame is stored.
+    var dvs = DVSCamera(_linear(30), 1, 1, 0)
+    _ = dvs.simulate(_frame([100]), Duration64(1.0))
+    dvs.config.positive_threshold = 0
+    with assert_raises(contains="must be positive"):
+        _ = dvs.simulate(_frame([200]), Duration64(1.1))
+    assert_equal(dvs.current_time, 1000000000)
+    # A dark pixel that becomes bright never leaves the crossing walk.
+    var dark = DVSCamera(_linear(Float32(1e-20)), 1, 1, 0)
+    _ = dark.simulate(_frame([0]), Duration64(0.0))
+    with assert_raises(contains="larger than this port"):
+        _ = dark.simulate(_frame([255]), Duration64(0.1))
+    # The previous level itself does not move.
+    var mid = DVSCamera(_linear(Float32(1e-20)), 1, 1, 0)
+    _ = mid.simulate(_frame([100]), Duration64(0.0))
+    with assert_raises(contains="larger than this port"):
+        _ = mid.simulate(_frame([110]), Duration64(0.1))
+
+
 def test_event_camera_time_going_back() raises:
     # A frame from before the last event: its crossings fall before that
     # event and give none, though the reference still moves.
@@ -1566,6 +1668,8 @@ def test_header_and_images_bytes() raises:
         _hex(optical_flow_data(0, 0, 90, List[Float32]())),
         "00000000000000000000b442",
     )
+    with assert_raises(contains="larger than this port"):
+        _ = optical_flow_data(1 << 31, 1 << 32, 90, List[Float32]())
     assert_equal(
         _hex(dvs_data(0, 0, 90, List[DVSEvent]())), "00000000000000000000b442"
     )

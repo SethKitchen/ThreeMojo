@@ -76,7 +76,13 @@ from math.finite import (
     require_positive_finite,
     require_non_negative_finite,
 )
-from math.utils import rec709_luminance, saturate
+from math.utils import (
+    rec709_luminance,
+    saturate,
+    texel_center,
+    texel_ndc,
+    texel_ndc_up,
+)
 from math.norm import squared_length3
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3, mix_delta3
@@ -270,9 +276,21 @@ __async def _depth_task(
     height: Int,
     first: Int,
     past: Int,
+    bound: Float32,
+    flat: Bool,
 ):
     _depth_rows(
-        plan, surface[], ripples[], depth, shown, width, height, first, past
+        plan,
+        surface[],
+        ripples[],
+        depth,
+        shown,
+        width,
+        height,
+        first,
+        past,
+        bound,
+        flat,
     )
 
 
@@ -286,28 +304,192 @@ def _depth_rows(
     height: Int,
     first: Int,
     past: Int,
+    bound: Float32,
+    flat: Bool,
 ):
     """Test rows `first` up to `past` against the image depth, as
-    `Framebuffer.test_depth` does: a nearer water point claims its pixel."""
+    `Framebuffer.test_depth` does: a nearer water point claims its pixel.
+
+    `bound` is a height no wave rises above: see `_height_bound`. With
+    `flat`, the water is tested where the still plane is rather than where
+    the waves are, which moves its edge by at most the waves' height."""
     var look = plan.look
     for y in range(first, past):  # pragma: no branch
         for x in range(width):  # pragma: no branch
-            var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
-            var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
-            if _ray(look, ndc_x, ndc_y, plan.aspect).y > -0.0015:
+            var ndc_x = texel_ndc(x, width)
+            var ndc_y = texel_ndc_up(y, height)
+            var rd = _ray(look, ndc_x, ndc_y, plan.aspect)
+            if rd.y > -0.0015:
                 continue
-            var hit = _surface_hit(
-                look, ndc_x, ndc_y, plan.aspect, surface, ripples
-            )
-            var point = plan.eye + hit.direction * hit.distance
+            # No wave rises above `bound`, so no water along this ray is
+            # nearer than the plane at that height. A pixel whose scene is
+            # nearer than that keeps its pixel whatever the waves do.
+            var slot = y * width + x
+            var wd = _unit(rd.x, rd.y, rd.z)
+            var nearest = (bound - look.py) / wd.y
+            if nearest > 0:
+                var z_near = plan.clip.transform_point(
+                    plan.eye + wd * nearest
+                ).z
+                if z_near >= depth[unsafe_offset=slot]:
+                    continue
+            var point: Vector3
+            if flat:
+                point = plan.eye + wd * (-look.py / min(wd.y, -0.0015))
+            else:
+                var hit = _surface_hit(
+                    look, ndc_x, ndc_y, plan.aspect, surface, ripples
+                )
+                point = plan.eye + hit.direction * hit.distance
             var z = plan.clip.transform_point(point).z
             if not (z >= -1.0 and z <= 1.0):
                 continue
-            var slot = y * width + x
             if z >= depth[unsafe_offset=slot]:
                 continue
             depth[unsafe_offset=slot] = z
             shown[unsafe_offset=slot] = True
+
+
+def _height_bound(surface: SurfaceField, ripples: RippleField) -> Float32:
+    """Return a height no wave of `_wave_height` rises above.
+
+    Each sample is a bilinear mix of texels, so it is never above the
+    highest texel. `_wave_height` adds the first tile, 0.041 of the second
+    and the ripple.
+    """
+    var n = surface.surface_side(0)
+    var top = Float32(0)
+    # A surface and a ripple window have at least one texel.
+    for x in range(n):  # pragma: no branch
+        for z in range(n):  # pragma: no branch
+            top = max(top, abs(surface.surface_texel(0, x, z).height))
+    var ripple = Float32(0)
+    for h in ripples.height:  # pragma: no branch
+        ripple = max(ripple, abs(h))
+    return top * (1 + 0.10 * 0.41) + ripple + 1.0e-3
+
+
+def _grid_corners(
+    x: Int, y: Int, width: Int, height: Int, step: Int
+) -> Tuple[Int, Int, Int, Int]:
+    """Return the grid samples left of, right of, above and below a pixel.
+
+    The samples are the pixels whose columns and rows are multiples of
+    `step`, and the last column and the last row.
+    """
+    var x0 = (x // step) * step
+    var y0 = (y // step) * step
+    return (x0, min(x0 + step, width - 1), y0, min(y0 + step, height - 1))
+
+
+def _water_rows(shown: List[Bool], width: Int, height: Int) -> Tuple[Int, Int]:
+    """Return the first row that shows water and the row past the last, or
+    zero and zero for none."""
+    var first = height
+    var past = 0
+    for y in range(height):  # pragma: no branch
+        var row = y * width
+        for x in range(width):  # pragma: no branch
+            if shown[row + x]:
+                first = min(first, y)
+                past = y + 1
+                break
+    if past == 0:
+        return (0, 0)
+    return (first, past)
+
+
+def _grid_of(
+    shown: List[Bool], width: Int, height: Int, step: Int
+) -> List[Bool]:
+    """Return the grid samples that the shown pixels are mixed from."""
+    var marks = List[Bool](length=width * height, fill=False)
+    var rows = _water_rows(shown, width, height)
+    for y in range(rows[0], rows[1]):
+        for x in range(width):  # pragma: no branch
+            if not shown[y * width + x]:
+                continue
+            var c = _grid_corners(x, y, width, height, step)
+            marks[c[2] * width + c[0]] = True
+            marks[c[2] * width + c[1]] = True
+            marks[c[3] * width + c[0]] = True
+            marks[c[3] * width + c[1]] = True
+    return marks^
+
+
+def _fill_from_grid(
+    mut hdr: List[Float32],
+    shown: List[Bool],
+    width: Int,
+    height: Int,
+    step: Int,
+    workers: Int = 0,
+):
+    """Mix each shown pixel from the four grid samples round it.
+
+    A sample's own pixel keeps its shading. The samples are read from a
+    copy, so a pixel written never feeds another. Disjoint runs of rows
+    mix in parallel.
+    """
+    var rows = _water_rows(shown, width, height)
+    if rows[1] == 0:
+        return
+    var mixed = hdr.copy()
+    var count = rows[1] - rows[0]
+    var tasks = row_tasks(workers, 8, count)
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _fill_task(
+                hdr.unsafe_ptr()
+                .unsafe_mut_cast[False]()
+                .unsafe_origin_cast[ImmutAnyOrigin](),
+                mixed.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                shown.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+                width,
+                height,
+                step,
+                rows[0] + task * count // tasks,
+                rows[0] + (task + 1) * count // tasks,
+            )
+        )
+    group.wait()
+    _ = len(shown)
+    hdr = mixed^
+
+
+__async def _fill_task(
+    hdr: Pointer[Float32, ImmutAnyOrigin],
+    mixed: MutPointer[Float32, MutAnyOrigin],
+    shown: Pointer[Bool, ImmutAnyOrigin],
+    width: Int,
+    height: Int,
+    step: Int,
+    first: Int,
+    past: Int,
+):
+    """Mix rows `first` up to `past`: see `_fill_from_grid`."""
+    for y in range(first, past):  # pragma: no branch
+        for x in range(width):  # pragma: no branch
+            if not shown[unsafe_offset=y * width + x]:
+                continue
+            var c = _grid_corners(x, y, width, height, step)
+            var fx = Float32(0)
+            var fy = Float32(0)
+            if c[1] > c[0]:
+                fx = Float32(x - c[0]) / Float32(c[1] - c[0])
+            if c[3] > c[2]:
+                fy = Float32(y - c[2]) / Float32(c[3] - c[2])
+            for ch in range(3):
+                var a = hdr[unsafe_offset=(c[2] * width + c[0]) * 3 + ch]
+                var b = hdr[unsafe_offset=(c[2] * width + c[1]) * 3 + ch]
+                var d = hdr[unsafe_offset=(c[3] * width + c[0]) * 3 + ch]
+                var e = hdr[unsafe_offset=(c[3] * width + c[1]) * 3 + ch]
+                var top = a + (b - a) * fx
+                var bottom = d + (e - d) * fx
+                mixed[unsafe_offset=(y * width + x) * 3 + ch] = (
+                    top + (bottom - top) * fy
+                )
 
 
 def _radiance_image(
@@ -414,8 +596,8 @@ def _radiance_rows(
         for x in range(width):  # pragma: no branch
             if not every and not shown[y * width + x]:
                 continue
-            var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
-            var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
+            var ndc_x = texel_ndc(x, width)
+            var ndc_y = texel_ndc_up(y, height)
             var rgb = lit_radiance(
                 look,
                 ndc_x,
@@ -1231,8 +1413,8 @@ def grade_pixel(
     cr *= 0.63
     cg *= 0.63
     cb *= 0.63
-    var u = (Float32(x) + 0.5) / Float32(width) - 0.5
-    var v = (Float32(y) + 0.5) / Float32(height) - 0.5
+    var u = texel_center(x, width) - 0.5
+    var v = texel_center(y, height) - 0.5
     var vig = 1.0 - 0.22 * (u * u + (v * 0.8) * (v * 0.8)) * 2.2
     cr *= vig
     cg *= vig
@@ -1262,6 +1444,14 @@ def grade_pixel(
 def _fract_time(clock: Duration) -> Float32:
     var t = clock.value * 7.13
     return t - floor_f(t)
+
+
+def _at_rest(field: RippleField) -> Bool:
+    """Return True if every height and speed of a ripple window is zero."""
+    for k in range(len(field.height)):  # pragma: no branch
+        if field.height[k] != 0 or field.velocity[k] != 0:
+            return False
+    return True
 
 
 struct WaterScene(Movable):
@@ -1296,9 +1486,33 @@ struct WaterScene(Movable):
     decides how many run at once, so it is not a thread limit. Every count
     draws the same image, because each pixel has one writer and the serial
     arithmetic. The glare pass is always serial."""
+    var shade_step: Int
+    """The pixels between two of the water's shaded samples in `compose`.
+    One, the default, shades every pixel. A larger step shades one pixel
+    in `shade_step` on each axis, and mixes the pixels between from the
+    four samples round each, as a game draws costly water at a lower
+    resolution. It also tests the water's depth where the still plane is,
+    not where the waves are."""
+    var refresh_every: Int
+    """How many `compose` calls share one ocean surface and its caustics.
+    One, the default, finds them again for every frame. A larger count
+    finds them again on every `refresh_every`th call, and the calls
+    between draw the waves as they were then. With a count of two or
+    more, the work is split over two calls: one finds the next surface,
+    and the call after it finds its caustics and shows both. No call pays
+    for the two together after the first."""
     var _spectrum: ComplexField
     var _ripples: RippleField
+    # True when a step has left every ripple height and speed at zero:
+    # the next step without a drop would give the same window again.
+    var _calm: Bool
     var _glare: Optional[GlareKernels]
+    var _surface_kept: Optional[SurfaceField]
+    var _caustics_kept: Optional[CausticField]
+    # The next surface, found and not yet shown: its caustics come on the
+    # next call.
+    var _surface_next: Optional[SurfaceField]
+    var _composed: Int
 
     def __init__(
         out self,
@@ -1332,10 +1546,17 @@ struct WaterScene(Movable):
         self.steps = 0
         self.sun = sun_direction()
         self.workers = 0
+        self.shade_step = 1
+        self.refresh_every = 1
+        self._surface_kept = None
+        self._caustics_kept = None
+        self._surface_next = None
+        self._composed = 0
         self._spectrum = build_spectrum(
             ocean, Length(_PATCH_METERS), _TARGET_SLOPE
         )
         self._ripples = RippleField(ocean, clearwater_ripple_size())
+        self._calm = False
         self._glare = None
 
     def reset(mut self) raises:
@@ -1347,8 +1568,17 @@ struct WaterScene(Movable):
             Error: If the ripple window cannot be allocated.
         """
         self._ripples = RippleField(self.ocean, clearwater_ripple_size())
+        self._calm = False
         self.clock = self.start
         self.steps = 0
+        self._forget()
+
+    def _forget(mut self):
+        """Drop the kept surface and caustics, so the next `compose` finds
+        them again."""
+        self._surface_kept = None
+        self._caustics_kept = None
+        self._surface_next = None
 
     def set_sun(mut self, toward: Vector3) raises:
         """Light the water from the direction `toward`, such as a scene's
@@ -1373,6 +1603,7 @@ struct WaterScene(Movable):
         self.sun = Vector3(
             toward.x / length, toward.y / length, toward.z / length
         )
+        self._forget()
 
     def advance(mut self, dt: Duration, drop: Bool) raises:
         """Step the ripple equation once, then move the clock by `dt`.
@@ -1381,6 +1612,9 @@ struct WaterScene(Movable):
             dt: The simulated time this step covers. It must be finite and
                 nonnegative.
             drop: True taps the middle of the ripple window this step.
+
+        A window whose heights and speeds are all zero gives the same
+        window again without a drop, so its step is skipped.
 
         Raises:
             Error: If `dt` is not finite or is negative, or the next clock
@@ -1394,8 +1628,11 @@ struct WaterScene(Movable):
         require_finite(
             Float64(next_clock), "The next water clock must be finite"
         )
-        var strength = Float32(0.07) if drop else Float32(0.0)
-        step_ripple(self._ripples, 0.0, 0.0, 0.5, 0.5, 0.022, strength)
+        # A calm window stays calm without a drop, so its step is skipped.
+        if drop or not self._calm:
+            var strength = Float32(0.07) if drop else Float32(0.0)
+            step_ripple(self._ripples, 0.0, 0.0, 0.5, 0.5, 0.022, strength)
+            self._calm = _at_rest(self._ripples)
         self.clock = Duration(next_clock, SECOND)
         self.steps += 1
 
@@ -1414,6 +1651,7 @@ struct WaterScene(Movable):
             Length(_DEPTH_METERS),
             self.caustic_grid,
             self.caustic_resolution,
+            self.workers,
         )
 
     def compose[
@@ -1451,7 +1689,9 @@ struct WaterScene(Movable):
 
         Raises:
             Error: If the camera is not a centered perspective camera, it
-                is not above the water, is attached, or a matrix is invalid.
+                is not above the water, is attached, or a matrix is invalid;
+                or if `shade_step` is not from 1 to 64, or `refresh_every`
+                is below one.
         """
         return self._compose_view(
             image,
@@ -1494,7 +1734,9 @@ struct WaterScene(Movable):
         Raises:
             Error: If the camera's view is invalid, its node is absent, or
                 the attached scene is stale. Also if the projection is not
-                centered perspective, or the camera is not above the water.
+                centered perspective, the camera is not above the water,
+                `shade_step` is not from 1 to 64, or `refresh_every` is
+                below one.
         """
         return self._compose_view(
             image,
@@ -1514,9 +1756,30 @@ struct WaterScene(Movable):
     ) raises -> Int:
         # Both public paths resolve exactly one view before any image writes.
         var plan = _compose_plan(image, projection, view, water_level)
-        var surface = self._surface()
-        var caustics = self._caustics(surface)
+        if self.shade_step < 1 or self.shade_step > 64:
+            raise Error("The water's shade step must be from 1 to 64 pixels")
+        if self.refresh_every < 1:
+            raise Error("The water's refresh must come every frame or more")
+        var phase = self._composed % self.refresh_every
+        # The kept surface and its caustics are set together.
+        if self.refresh_every == 1 or not self._surface_kept:
+            var fresh = self._surface()
+            self._caustics_kept = self._caustics(fresh)
+            self._surface_kept = fresh^
+        elif phase == 0:
+            self._surface_next = self._surface()
+        elif phase == 1 and self._surface_next:
+            var fresh = self._surface_next.take()
+            self._caustics_kept = self._caustics(fresh)
+            self._surface_kept = fresh^
+        self._composed += 1
+        ref surface = self._surface_kept.value()
+        ref caustics = self._caustics_kept.value()
         var shown = self._compose_depth(image, plan, surface)
+        var step = self.shade_step
+        var shaded = shown.copy() if step == 1 else _grid_of(
+            shown, image.width, image.height, step
+        )
         var hdr = _radiance_image(
             plan.look,
             plan.aspect,
@@ -1528,9 +1791,13 @@ struct WaterScene(Movable):
             self.sun,
             image.width,
             image.height,
-            shown,
+            shaded,
             self.workers,
         )
+        if step > 1:
+            _fill_from_grid(
+                hdr, shown, image.width, image.height, step, self.workers
+            )
         return self._compose_write(image, hdr, shown)
 
     def _compose_depth(
@@ -1542,6 +1809,8 @@ struct WaterScene(Movable):
         var width = image.width
         var height = image.height
         var shown = List[Bool](length=width * height, fill=False)
+        var bound = _height_bound(surface, self._ripples)
+        var flat = self.shade_step > 1
         var tasks = row_tasks(self.workers, 8, height)
         var group = TaskGroup()
         for task in range(tasks):  # pragma: no branch
@@ -1558,6 +1827,8 @@ struct WaterScene(Movable):
                     height,
                     task * height // tasks,
                     (task + 1) * height // tasks,
+                    bound,
+                    flat,
                 )
             )
         group.wait()
@@ -1779,8 +2050,8 @@ def _caustic_picture(
     var image = Framebuffer(width, height, Color(0, 0, 0))
     for y in range(height):  # pragma: no branch
         for x in range(width):  # pragma: no branch
-            var u = (Float32(x) + 0.5) / Float32(width)
-            var v = (Float32(y) + 0.5) / Float32(height)
+            var u = texel_center(x, width)
+            var v = texel_center(y, height)
             var sample = _caustic_at(field, u, v)
             image.set_pixel(
                 x,

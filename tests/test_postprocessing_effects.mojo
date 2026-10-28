@@ -50,6 +50,7 @@ from postprocessing.composer import (
     texture_pass,
 )
 from postprocessing.effects import (
+    _bokeh2_taps_fit,
     Bokeh2Settings,
     bokeh2_light,
     bokeh2_penta,
@@ -96,6 +97,7 @@ from postprocessing.effects import (
     reference_cell,
     sine_hash,
     texture_light,
+    texture_overlay,
 )
 from postprocessing.sampling import LightView
 from postprocessing.screen_space import DepthView
@@ -253,6 +255,12 @@ def test_the_builders_refuse_what_no_pass_could_run() raises:
         _ = bokeh_pass(meters(-1))
     with assert_raises(contains="glitch map"):
         _ = glitch_pass(0)
+    with assert_raises(contains="glitch map"):
+        _ = glitch_pass(-1)
+    with assert_raises(contains="glitch map"):
+        _ = glitch_pass(4097)
+    with assert_raises(contains="glitch map"):
+        _ = glitch_pass(Int.MAX)
     with assert_raises(contains="halftone radius"):
         _ = halftone_pass(0)
     with assert_raises(contains="must name a texture"):
@@ -409,6 +417,21 @@ def test_the_glitch_starts_as_three_js_s_constructor_draws() raises:
     assert_equal(settings.state, Int(random.state))
     assert_true(settings.trigger >= 120 and settings.trigger <= 240)
     assert_equal(len(glitch_heightmap(0, 7)), 0)
+    var huge = GlitchSettings(Int.MAX, 3)
+    assert_equal(huge.trigger, 120)
+    assert_equal(huge.state, 0)
+    with assert_raises(contains="glitch map"):
+        check_glitch(huge)
+    var negative = GlitchSettings(-1, 3)
+    assert_equal(negative.state, 0)
+    with assert_raises(contains="glitch map"):
+        check_glitch(negative)
+    with assert_raises(contains="glitch map"):
+        _ = glitch_heightmap(-1, 7)
+    with assert_raises(contains="glitch map"):
+        _ = glitch_heightmap(4097, 7)
+    with assert_raises(contains="glitch map"):
+        _ = glitch_heightmap(Int.MAX, 7)
 
 
 def test_the_glitch_draws_wild_then_small_then_bypasses() raises:
@@ -926,6 +949,16 @@ def test_the_texture_is_blended_over_by_its_opacity() raises:
         assert_almost_equal(under.colors[slot].a, Float32(0.5), atol=0.01)
 
 
+def test_a_texture_overlay_must_fit() raises:
+    var texture = data_texture(1, 1, [1.0, 0.0, 0.0, 1.0])
+    with assert_raises(contains="at least one pixel"):
+        _ = texture_overlay(texture, 0, 1)
+    with assert_raises(contains="at least one pixel"):
+        _ = texture_overlay(texture, 1, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = texture_overlay(texture, 1 << 32, 1 << 32)
+
+
 # --- in the composer ---------------------------------------------------------
 
 
@@ -1071,6 +1104,15 @@ def test_bokeh2_keeps_its_focus_sharp_and_blurs_the_rest() raises:
     # Seven meters off it, the rings of taps average the columns.
     var soft = bokeh2_pixel(view, depth, 12, 5, settings)
     assert_true(abs(soft.r - frame.colors[5 * WIDTH + 12].r) > 1e-4)
+    # A count the rings cannot finish keeps the pixel.
+    var huge = settings
+    huge.rings = Int.MAX
+    var held = bokeh2_pixel(view, depth, 12, 5, huge)
+    assert_almost_equal(held.r, frame.colors[5 * WIDTH + 12].r, atol=1e-5)
+    huge.rings = 3
+    huge.samples = 16777217
+    held = bokeh2_pixel(view, depth, 12, 5, huge)
+    assert_almost_equal(held.r, frame.colors[5 * WIDTH + 12].r, atol=1e-5)
     # Focused on the far half by the depth at a point, the near half
     # blurs instead; with a pentagon, a blurred depth, the focus shown
     # and the vignette, every branch of the shader runs.
@@ -1131,6 +1173,24 @@ def test_bokeh2_settings_are_checked() raises:
     sampleless.samples = 0
     with assert_raises(contains="a ring"):
         check_bokeh2(sampleless)
+    var wide = Bokeh2Settings()
+    wide.rings = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        check_bokeh2(wide)
+    wide.rings = 3
+    wide.samples = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        check_bokeh2(wide)
+    wide.rings = 100
+    wide.samples = 10000
+    with assert_raises(contains="larger than this port"):
+        check_bokeh2(wide)
+    wide.rings = 1
+    wide.samples = 16777216
+    check_bokeh2(wide)
+    # A count below one fits, because that walk does not run.
+    assert_true(_bokeh2_taps_fit(0, 5))
+    assert_true(_bokeh2_taps_fit(3, 0))
     assert_true(bokeh2_pass().kind == BOKEH2)
     with assert_raises(contains="a ring"):
         _ = bokeh2_pass(empty)

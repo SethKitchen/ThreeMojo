@@ -455,9 +455,21 @@ def _position_only(matrix: Matrix4) -> Matrix4:
 
 def _inverse(matrix: Matrix4) -> Matrix4:
     """Return the inverse of a matrix, zeros for a singular one, as
-    three.js's `invert` gives."""
+    three.js's `invert` gives.
+
+    The inverse of an affine matrix is affine, but Float32 arithmetic can
+    leave its last row at (0, 0, 0, 0.99999994). A skeleton refuses such a
+    bind, and real files hold binds that do this. So the last row of the
+    inverse of an affine matrix is set to (0, 0, 0, 1), unless the matrix is
+    singular and the inverse is all zeros.
+    """
     var out = Matrix4(copy=matrix)
     out.invert()
+    if matrix.is_affine() and out.elements[15] != 0:
+        out.elements[3] = 0
+        out.elements[7] = 0
+        out.elements[11] = 0
+        out.elements[15] = 1
     return out^
 
 
@@ -892,7 +904,9 @@ def load_fbx(
             not there; a polygon is not closed, has no area or crosses
             itself; models are connected in a loop or nest deeper than
             `MAX_MODEL_DEPTH`; a mesh model has no geometry; or a camera,
-            a light or a material is refused by its builder; or a skin, a
+            a light or a material is refused by its builder; a rotation
+            order, an inherit type, a light type or a camera projection is
+            not a whole number; or a skin, a
             blend shape or an animation stack is malformed or names what
             is not there.
     """
@@ -1047,6 +1061,27 @@ struct _Loader(Movable):
         if entry == NO_FBX_NODE:
             return default
         return self.document.number(entry, 4)
+
+    def whole(self, node: Int, name: String, default: Int) raises -> Int:
+        """Return a `P` entry's whole number, or a default when it is absent.
+
+        Args:
+            node: The node that holds `Properties70`.
+            name: The property's name.
+            default: The number when the property is absent.
+
+        Returns:
+            The number.
+
+        Raises:
+            Error: If the property is there and is not a whole number that
+                fits in an integer. `Int` of a float past 2^63 is not that
+                number.
+        """
+        var entry = self.entry(node, name)
+        if entry == NO_FBX_NODE:
+            return default
+        return self.document.integer(entry, 4)
 
     def vector(
         self, node: Int, name: String, default: Vector3
@@ -1376,8 +1411,8 @@ struct _Loader(Movable):
             model, "GeometricRotation", Vector3(0, 0, 0)
         )
         data.scale = self.vector(model, "GeometricScaling", Vector3(1, 1, 1))
-        data.order = fbx_euler_order(Int(self.value(model, "RotationOrder", 0)))
-        data.inherit_type = Int(self.value(model, "InheritType", 0))
+        data.order = fbx_euler_order(self.whole(model, "RotationOrder", 0))
+        data.inherit_type = self.whole(model, "InheritType", 0)
         return generate_transform(data)
 
     def build_geometry(mut self, id: Int, mut assets: Assets) raises:
@@ -1613,15 +1648,15 @@ struct _Loader(Movable):
             node, "ScalingOffset", Vector3(0, 0, 0)
         )
         data.scaling_pivot = self.vector(node, "ScalingPivot", Vector3(0, 0, 0))
-        data.order = fbx_euler_order(Int(self.value(node, "RotationOrder", 0)))
-        data.inherit_type = Int(self.value(node, "InheritType", 0))
+        data.order = fbx_euler_order(self.whole(node, "RotationOrder", 0))
+        data.inherit_type = self.whole(node, "InheritType", 0)
         data.parent_matrix = parent_matrix
         data.parent_world = parent_world
         var local = generate_transform(data)
         var attribute = self.attribute(id)
         var light_type = -1
         if kind == "Light" and attribute != NO_FBX_NODE:
-            light_type = Int(self.value(attribute, "LightType", 0))
+            light_type = self.whole(attribute, "LightType", 0)
         if light_type == 1 or light_type == 2:
             # three.js's directional and spot lights stand one unit up their
             # own y before the model's transform is applied to them.
@@ -1649,7 +1684,7 @@ struct _Loader(Movable):
         """Add the camera a `Camera` model's attribute describes, as
         three.js's `createCamera` builds it. An orthographic one is left
         out, as three.js leaves it out."""
-        if Int(self.value(attribute, "CameraProjectionType", 0)) == 1:
+        if self.whole(attribute, "CameraProjectionType", 0) == 1:
             return
         var near = DEFAULT_NEAR_PLANE
         if self.entry(attribute, "NearPlane") != NO_FBX_NODE:
@@ -2128,7 +2163,7 @@ struct _Loader(Movable):
                 self.model.models[at],
                 placed.position,
                 placed.scale,
-                fbx_euler_order(Int(self.value(node, "RotationOrder", 0))),
+                fbx_euler_order(self.whole(node, "RotationOrder", 0)),
                 self.vector(node, "PreRotation", Vector3(0, 0, 0)),
                 self.vector(node, "PostRotation", Vector3(0, 0, 0)),
             )

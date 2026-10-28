@@ -6,7 +6,11 @@ Runtime probes remain those of the original instrumenter. Each executable
 keeps the five-second limit; this harness never treats compiler failure as a
 passing runtime test. The real raw capture retains compilation, with a new
 180-second integration cap and a native alarm(5) before production calls.
+Capture and report use `tools/coverage_io.mojo`. The fixture receipts are
+sealed and checked by `tools/coverage_loop_seal.mojo`.
 Use after the compiler-free normal and -O controls.
+The generated include-root inventory runs in
+`tools/check_coverage_include_root.mojo`.
 """
 
 import argparse
@@ -50,10 +54,6 @@ RUNTIME_SECONDS = 5
 # This new finite harness-only bound includes compilation and capture setup.
 # It does not replace the runtime alarm or change production capture budgets.
 INTEGRATION_SECONDS = 180
-# Full maintained generation copies and authenticates the complete include
-# layout, unlike the small180-second fixture compiler/capture calls below.
-# Keep its separately reviewed finite cap and the unchanged native alarm.
-CURRENT_INCLUDE_SECONDS = 1200
 PRODUCTION_DRIVER = '''from production import total
 from std.testing import assert_equal
 from std.ffi import external_call
@@ -160,7 +160,48 @@ def require_runtime_alarm():
             'Runtime alarm must not be blocked')
 
 
-def capture_with_compiler_budget(command, output, capture, *, loop_proof=None,
+def coverage_io_argv(mojo, mode):
+    """Return the production Mojo coverage tool command."""
+    return ['sh', str(ROOT / 'tools/tool.sh'), mojo, 'coverage_io', mode]
+
+
+def _mojo_seal_command(root, stage, compiler, flags, mojo, suites=None, *, verify=False):
+    command = ['sh', str(ROOT / 'tools/tool.sh'), mojo, 'coverage_loop_seal']
+    if verify:
+        command.append('verify')
+    command += ['--root', str(root), '--build', str(stage),
+                '--compiler', compiler, '--flags', flags, '--mojo', mojo]
+    if suites is not None:
+        command += ['--suites', *suites]
+    return command
+
+
+def mojo_begin(root, stage, compiler, flags, mojo, names):
+    """Write the generation checkpoint with the Mojo begin tool."""
+    run(['sh', str(ROOT / 'tools/tool.sh'), mojo, 'coverage_loop_begin',
+         '--root', str(root), '--build', str(stage),
+         '--compiler', compiler, '--flags', flags, '--mojo', mojo,
+         '--sources', *names])
+
+
+def mojo_seal(root, stage, compiler, flags, mojo, suites=None, *, success=True):
+    """Seal with the Mojo tool and return the receipt, or the failed process."""
+    result = run(_mojo_seal_command(root, stage, compiler, flags, mojo, suites),
+                 success=success)
+    if not success:
+        return result
+    return proofs.read_receipt(Path(stage) / 'loop-proofs.json')
+
+
+def mojo_verify(root, stage, compiler, flags, mojo, suites=None, *, success=True):
+    """Rederive the receipt with the Mojo tool and require the saved file."""
+    return run(
+        _mojo_seal_command(root, stage, compiler, flags, mojo, suites, verify=True),
+        success=success,
+    )
+
+
+def capture_with_compiler_budget(command, output, capture, *, mojo, loop_proof=None,
                                  source_root=None, success=True,
                                  seconds=INTEGRATION_SECONDS):
     """Retain the real sealed raw command and its owned-group supervision."""
@@ -169,13 +210,16 @@ def capture_with_compiler_budget(command, output, capture, *, loop_proof=None,
             'Both proof and source root must be supplied together')
     require(type(seconds) in (int, float) and 0 < seconds <= INTEGRATION_SECONDS,
             'Invalid compiler/integration bound')
+    # The bound is for the capture. A first build of the capture tool, as in a
+    # fresh checkout or after an edit under tools/, happens before it starts.
+    run(['sh', str(ROOT / 'tools/tool.sh'), mojo, '--build', 'coverage_io'])
     deadline = time.monotonic() + seconds
     inherited = coverage_io.shared_deadline()
     if inherited is not None:
         deadline = min(deadline, inherited)
     environment = os.environ.copy()
     environment[coverage_io.DEADLINE_ENV] = repr(deadline)
-    arguments = [sys.executable, str(ROOT/'tools/coverage_io.py'), 'capture',
+    arguments = [*coverage_io_argv(mojo, 'capture'),
                  '--out', str(output), '--err', str(capture)]
     if loop_proof is not None:
         arguments += ['--loop-proof', str(loop_proof), '--loop-proof-root', str(source_root)]
@@ -207,14 +251,22 @@ def capture_result(result, stem, envelope, command):
     return raw, reduced
 
 
-def diagnostic_manifest(original, envelope, module, lines):
+def mojo_mask(mojo, stage):
+    """Return the masked manifest from the Mojo seal."""
+    target = Path(stage) / 'mojo-masked-manifest.txt'
+    run(['sh', str(ROOT / 'tools/tool.sh'), mojo, 'coverage_loop_seal', 'mask',
+         '--build', str(stage), '--output', str(target)])
+    return target.read_bytes()
+
+
+def diagnostic_manifest(masked, module, lines):
     """Project only the loop outcomes for native reporter unit controls.
 
     Never mutate the original manifest/origin or claim an aggregate gate.
     """
     rows = []
     seen = set()
-    for row in proofs.masked_manifest(original, envelope).splitlines():
+    for row in masked.splitlines():
         fields = row.split()
         if fields and fields[0] == b'P':
             rows.append(row)
@@ -553,140 +605,9 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
 
 def check_current_generated_include_root(stage, mojo, compiler, flags):
     """Exercise real maintained generation with the complete passthrough layout."""
-    modules = ('extensions/carla/curve_rounded_arc',
-               'extensions/carla/curve_rounded_line',
-               'extensions/carla/curve_sample_dispatch',
-               'extensions/carla/map')
-    suite = 'tests/test_carla_lane_geometry_guard_controls.mojo'
-    require(not stage.exists(), 'Generated include regression needs a fresh stage')
-    run(['make', '--no-print-directory', 'coverage-instrument',
-         'COV_DIR='+str(stage), 'MOJO='+mojo, 'TOOLCHAIN='+compiler,
-         'MOJOFLAGS='+flags, 'COVERED='+' '.join(name+'.mojo' for name in modules),
-         'COVERAGE_TESTS='+suite], cwd=ROOT, timeout=CURRENT_INCLUDE_SECONDS)
-    for name in ('extensions/animals/anatomy/render.mojo',
-                 'extensions/building/views/render.mojo'):
-        require((stage/name).read_bytes() == (ROOT/name).read_bytes(),
-                'Maintained nested-render passthrough is missing')
-    envelope = proofs.read_receipt(stage/'loop-proofs.json')
-    # Close the complete four-module census. Map exercises historical station
-    # borrowing during normal profiled derivation, not a profile callback.
-    rows = {
-        ('extensions/carla/curve_rounded_arc',235): (
-            'rounded-arc-validated-lane-list','range(len(lanes))','reviewed-nonempty-range',None,
-            'f17bf9a6a744971ea6e792a24b27d6157691e70d50c438880abcf88db2a9123d'),
-        ('extensions/carla/curve_rounded_line',93): (
-            'rounded-line-validated-lane-list','range(len(lanes))','reviewed-nonempty-range',None,
-            '22b70ec9febc6f3d21a8a4d9f1a74650d676e34782fab2812004a1a3aadeb698'),
-        ('extensions/carla/curve_sample_dispatch',126): (
-            'sample-dispatch-count-1-or-2','range(count)','reviewed-nonempty-range',2,
-            '04ff45c12cefcb4dbe3a7b136e77b6baaf02cff52325f6599d99250f820fdebb'),
-        ('extensions/carla/map',5020): (
-            'construction-geometry-boundary-list','boundaries','reviewed-nonempty-iterator',None,
-            '288d0e5d3a5bc2e5a6b9542868de6566dc6cb4de6eae39192c0289d76a8c99fa'),
-    }
-    ordinary = {
-        ('extensions/carla/map',line): {
-            'module':'extensions/carla/map', 'line':line,
-            'kind':'literal-range', 'cardinality':count, 'required':'T', 'impossible':'F',
-            'expression':expression,
-            'source_sha256':'288d0e5d3a5bc2e5a6b9542868de6566dc6cb4de6eae39192c0289d76a8c99fa'}
-        for line,count,expression in ((2170,3,'range (3 )'),(2201,8,'range (8 )'))}
-    expected = set(rows) | set(ordinary)
-    observed = {(row['module'],row['line']):row for row in envelope['receipt']['proofs']}
-    require(len(observed) == len(envelope['receipt']['proofs']) == 6
-            and set(observed) == expected, 'Closed six-row proof inventory differs')
-    require({key for key,row in observed.items() if 'proof_id' in row} == set(rows),
-            'Reviewed and ordinary proof inventories differ')
-    for key,(proof_id,expression,kind,maximum,digest) in rows.items():
-        raw = (ROOT/(key[0]+'.mojo')).read_bytes()
-        require(proofs.sha256(raw) == digest, 'Current integration source endpoint changed')
-        row = observed[key]
-        require((row['proof_id'],row['expression'],row['kind'],row['cardinality'],
-                 row['maximum_cardinality'],row['required'],row['impossible'],row['source_sha256'])
-                == (proof_id,expression,kind,1,maximum,'T','F',digest),
-                'Current proof contract or required True outcome differs')
-        constants = {line:{field:value for field,value in item.items()
-                           if field not in ('module','source_sha256')}
-                     for (module,line),item in ordinary.items() if module == key[0]}
-        require(proofs.constant_loops(raw.decode('utf-8')) == constants,
-                'Ordinary proof census differs from the reviewed exact set')
-    require(observed['extensions/carla/map',5020]['minimum_cardinality'] == 1,
-            'Constructor boundary minimum changed')
-    require(all(observed[key] == row for key,row in ordinary.items()),
-            'Ordinary literal-range proof contract differs')
-    original = (stage/'manifest.txt').read_bytes()
-    require({fields[1] for fields in (line.split() for line in original.decode().splitlines())
-             if fields and fields[0] in ('L','B','C','M')} == set(modules),
-            'Original selected-module denominator differs')
-    # Preserve the source's existing branch exclusions explicitly. None is
-    # evidence for a new proof or permission to discard another obligation.
-    map_exclusions = (1223,1766,2205,3003,3010,3032,3104,3109,3118,3127,4903,5328,5348)
-    require(all(f'B extensions/carla/map {line}'.encode() not in original.splitlines()
-                for line in map_exclusions), 'Existing Map branch exclusion changed')
-    masked = proofs.masked_manifest(original,envelope)
-    # Independently reconstruct every line, including unrelated obligations.
-    # Only the single receipt header and authenticated B-to-R substitutions differ.
-    expected_rows = ['P '+proofs.SCHEMA+' '+envelope['sha256']]
-    used = set()
-    for original_row in original.decode('utf-8').splitlines():
-        fields = original_row.split()
-        key = (fields[1],int(fields[2])) if len(fields) >= 3 and fields[0] == 'B' else None
-        if key in observed:
-            row = observed[key]
-            expected_rows.append(' '.join(('R',key[0],str(key[1]),row['required'],
-                                            row['kind'],str(row['cardinality']))))
-            used.add(key)
-        else:
-            expected_rows.append(original_row)
-    require(used == set(observed), 'Proof does not identify an original branch')
-    require(masked == ('\n'.join(expected_rows)+'\n').encode(),
-            'An unrelated manifest row or its order changed')
-    for module,line in expected:
-        require((module,line) in observed, 'Current generated-layout theorem was refused')
-        require((observed[module,line]['required'],observed[module,line]['impossible']) == ('T','F'),
-                'Current theorem weakened its required true outcome')
-        require(f'B {module} {line}'.encode() in original.splitlines(), 'Missing original branch')
-        require(f'L {module} {line}'.encode() in masked.splitlines(), 'Original line was removed')
-    # Exercise unsealed same-path bytes, a novel entry context, and an unknown
-    # actual lookup-root provider through the real generation owner.
-    changed = stage/'extensions/animals/anatomy/render.mojo'
-    raw = changed.read_bytes()
-    def replace_generated_passthrough(data):
-        require(not changed.is_symlink() and changed.is_file()
-                and changed.resolve().is_relative_to(stage.resolve()),
-                'Mutation target is not a regular contained generated file')
-        source = ROOT/'extensions/animals/anatomy/render.mojo'
-        generated_stat, source_stat = changed.stat(), source.stat()
-        require((generated_stat.st_dev,generated_stat.st_ino)
-                != (source_stat.st_dev,source_stat.st_ino),
-                'Generated mutation target aliases the sealed source')
-        changed.unlink()
-        with changed.open('xb') as stream:
-            stream.write(data)
-    for suffix in (b'\n# unsealed same-path change\n', b'\ndef main():\n    pass\n'):
-        replace_generated_passthrough(raw+suffix)
-        try:
-            try:
-                proofs.build_receipt(ROOT,stage,compiler,flags,mojo=[mojo],suites=[suite])
-            except ValueError as error:
-                require('Staged input differs' in str(error), 'Unexpected same-path rejection')
-            else:
-                raise RuntimeError('Unsealed staged provider received proof admission')
-        finally:
-            replace_generated_passthrough(raw)
-    shadow = stage/'tests/render.mojo'
-    require(not shadow.exists(), 'Lookup-shadow fixture collides with maintained source')
-    shadow.write_text('def main():\n    pass\n')
-    try:
-        try:
-            proofs.build_receipt(ROOT,stage,compiler,flags,mojo=[mojo],suites=[suite])
-        except ValueError as error:
-            require('Unmaintained executable input' in str(error), 'Unexpected new-provider rejection')
-        else:
-            raise RuntimeError('Unknown lookup-root provider received proof admission')
-    finally:
-        shadow.unlink()
-    require((stage/'manifest.txt').read_bytes() == original, 'Original denominator changed')
+    run(['sh', str(ROOT / 'tools/tool.sh'), mojo,
+         'check_coverage_include_root', '--mojo', mojo, '--stage', str(stage),
+         '--compiler', compiler, '--flags', flags], cwd=ROOT)
     owner_result = check_generated_receipt_owner(stage, mojo, compiler, flags)
     require(owner_result == {'fresh_receipts': 3, 'counted_receipts': 2,
                              'full_per_counted_receipt': 1, 'typed_per_counted_receipt': 1,
@@ -706,7 +627,7 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
         'root-only-seed-and-shared-positive', 'root-only-wrong-nonempty-root',
         'root-only-stage-tamper-at-finish'], 'fresh_receipts': 3},
         'Maintained root-only receipt controls did not complete')
-    return len(expected)
+    return 6
 
 
 
@@ -719,15 +640,6 @@ def main():
     compiler = run([mojo, '--version']).stdout.strip()
     flags = '-Werror -I .'
 
-    def generate(root, stage, names, *, success=True, remove_after_begin=None):
-        # The checkpoint precedes the command that loads the producer source.
-        # A previously compiled unbound generator cannot attest current tools.
-        proofs.begin_generation(root, stage, compiler, flags, mojo=[mojo], sources=names)
-        if remove_after_begin is not None:
-            (root / remove_after_begin).unlink()
-        return run([mojo, 'run', '-Werror', '-I', '.', 'coverage/build_cli.mojo',
-                    str(stage), *names], cwd=root, success=success)
-
     if args.output is None:
         workspace = tempfile.TemporaryDirectory(prefix='threemojo-loop-proofs-')
     else:
@@ -739,328 +651,27 @@ def main():
         current_rows = check_current_generated_include_root(
             work/'current-generated', mojo, compiler, flags)
         print('Current generated include-root theorems:', current_rows, flush=True)
-        native, rewritten = work / 'native', work / 'rewritten'
-        native.mkdir()
-        rewritten.mkdir()
-        for name in proofs.TOOL_INPUTS:
-            target = native / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(ROOT / name, target)
-        shutil.copytree(ROOT / 'coverage', rewritten / 'coverage',
-                        ignore=shutil.ignore_patterns('build'))
-        # Copy any remaining coverage package source too, matching the normal
-        # uninstrumented tool copy-through contract.
-        shutil.copytree(ROOT / 'coverage', native / 'coverage', dirs_exist_ok=True,
-                        ignore=shutil.ignore_patterns('build'))
-        shutil.copytree(ROOT / 'tools', native / 'tools', dirs_exist_ok=True,
-                        ignore=shutil.ignore_patterns('__pycache__'))
-        copy_native_tool_dependencies(ROOT, native)
-        (native / 'fixture.mojo').write_text(SOURCE)
-        reporter = work / 'report'
-        run([mojo, 'build', '-Werror', '-I', '.', 'coverage/report_cli.mojo',
-             '-o', str(reporter)], cwd=native)
-        generate(native, rewritten, ['fixture.mojo'])
-        full_manifest = (rewritten / 'manifest.txt').read_bytes()
-        identities = {name: line_of(fragment) for name, fragment in {
-            'fixed': 'for index in range(3)', 'empty': 'for index in range(0)',
-            'literal': 'for value in [mark(1, order)', 'dynamic': 'for index in range(n)',
-        }.items()}
-        # A branch-only fixture manifest isolates outcome completeness from
-        # intentionally unreachable literal-empty body lines. The untouched
-        # full native manifest is retained as separate evidence.
-        selected = ''.join(f'B fixture {line}\n' for line in identities.values()).encode()
-        for record in selected.splitlines():
-            require(record in full_manifest.splitlines(), 'Missing original fixture decision')
-        envelope = proofs.seal(native, rewritten, compiler, flags, mojo=[mojo])
-        require(len(envelope['receipt']['proofs']) == 3, 'Expected exactly three constant loops')
-        totals = envelope['receipt']['denominator']
-        require(totals['potential_total'] - totals['required_total'] == 3, 'Reachable outcome removed')
-        evidence = work / 'evidence'
-        evidence.mkdir()
-        derived = evidence / 'derived-manifest.txt'
-        derived.write_bytes(diagnostic_manifest(full_manifest, envelope, 'fixture', identities.values()))
-        binaries = []
-        for folder in [native, rewritten]:
-            binary = folder / 'fixture'
-            run([mojo, 'build', '-Werror', '-I', str(folder), str(folder / 'fixture.mojo'), '-o', str(binary)])
-            binaries.append(binary)
-        results = {}
-        for mode in [0, 1]:
-            plain = run([str(binaries[0]), str(mode)], timeout=5)
-            instrumented = run([str(binaries[1]), str(mode)], timeout=5)
-            require(plain.stdout == instrumented.stdout == 'RESULT constant loops\n', 'Native output changed')
-            require(not plain.stderr, 'Native program unexpectedly emitted probe records')
-            by_line = defaultdict(list)
-            for record in instrumented.stderr.splitlines():
-                fields = record.split(':')
-                if len(fields) == 4 and fields[:2] == ['COVLINE', 'fixture']:
-                    by_line[int(fields[2])].append(fields[3])
-            expected = {'fixed': 'TTTTTTT', 'empty': 'F', 'literal': 'TTTT',
-                        'dynamic': 'TTTF' if mode == 0 else 'TTT'}
-            for name, outcomes in expected.items():
-                require(by_line[identities[name]] == list(outcomes), f'Loop protocol changed: {name}: {by_line[identities[name]]}')
-            raw, reduced = capture_result(instrumented, evidence / f'case-{mode}' / 'result', envelope, [str(binaries[1]), str(mode)])
-            reported = run([str(reporter), str(derived), str(raw)], success=False, timeout=5)
-            require((reported.returncode == 0) == (mode == 0), 'Missing dynamic-empty obligation was lost')
-            if mode == 0:
-                require('TOTAL' in reported.stdout and '5/5' in reported.stdout, 'Positive report is incomplete')
-                require('DENOMINATOR potential 8, required 5, proven impossible 3' in reported.stdout, 'Denominator lineage missing')
-            else:
-                require('never evaluated False' in reported.stdout, 'Dynamic-empty failure not explained')
-            (evidence / f'report-{mode}.out').write_text(reported.stdout + reported.stderr)
-            replayed = run([
-                sys.executable, str(ROOT / 'tools/coverage_io.py'), 'report',
-                '--capture-dir', str(reduced.parent), '--', str(reporter), str(derived),
-            ], success=False, timeout=5)
-            require((replayed.returncode == 0) == (mode == 0), 'Diagnostic raw/reduced reporting changed the result: ' + replayed.stdout + replayed.stderr)
-            results[f'mode-{mode}'] = {'status': reported.returncode, 'expected': 'complete' if mode == 0 else 'dynamic-empty-missing'}
-        # Mutation control: corrupt the actual native emitted entry probe of
-        # a proved nonempty loop. It must be rejected, never discarded as
-        # an infeasible hit. Counter/closer emissions remain unchanged.
-        source_path = rewritten / 'fixture.mojo'
-        original_instrumented = source_path.read_text()
-        needle = f'_cov_branch("fixture:{identities["fixed"]}", True)'
-        require(needle in original_instrumented, 'Mutation target absent')
-        source_path.write_text(original_instrumented.replace(needle, needle.replace('True', 'False')))
-        try:
-            proofs.seal(native, rewritten, compiler, flags, mojo=[mojo])
-        except ValueError as error:
-            require('generation origin' in str(error), 'Unexpected mutation rejection')
-        else:
-            raise RuntimeError('Modified stage was accepted against the original source')
-        mutant = rewritten / 'mutant'
-        run([mojo, 'build', '-Werror', '-I', str(rewritten), str(source_path), '-o', str(mutant)])
-        mutant_result = run([str(mutant), '0'], timeout=5)
-        raw, _ = capture_result(mutant_result, evidence / 'mutation-capture' / 'result', envelope, [str(mutant), '0'])
-        failed = run([str(reporter), str(derived), str(raw)], success=False, timeout=5)
-        require(failed.returncode != 0 and 'Constant-loop proof contradicted' in failed.stderr,
-                'Contradictory native probe was accepted')
-        (evidence / 'mutant-report.out').write_text(failed.stdout + failed.stderr)
-        mutated_source = source_path.read_text()
-        source_path.write_text(original_instrumented)
-        proofs.verify(rewritten / 'loop-proofs.json', native, rewritten, compiler, flags, mojo=[mojo])
-        results['entry-probe-mutation'] = 'rejected contradictory actual native probe'
-        # An explicit imported binding supplies an empty iterable even though
-        # the call is spelled range(3). It must keep the original two-outcome
-        # obligation, with a real F observation and no fabricated T.
-        factory = 'def custom_range(n: Int) -> List[Int]:\n    return List[Int]()\n'
-        shadow_source = '''from std.testing import assert_equal
-from shadow_factory import custom_range as range
-
-def main() raises:
-    var visits = 0
-    for item in range(3):
-        visits += item + 1
-    assert_equal(visits, 0)
-    print("RESULT shadowed range")
-'''
-        (native / 'shadow.mojo').write_text(shadow_source)
-        shadow_build = work / 'shadow-stage'
-        shadow_build.mkdir()
-        shutil.copytree(ROOT / 'coverage', shadow_build / 'coverage', ignore=shutil.ignore_patterns('build'))
-        for folder in [native, shadow_build]:
-            (folder / 'shadow_factory.mojo').write_text(factory)
-        generate(native, shadow_build, ['shadow.mojo'])
-        shadow_line = next(number for number, row in enumerate(shadow_source.splitlines(), 1)
-                           if 'for item in range(3)' in row)
-        shadow_selected = f'B shadow {shadow_line}\n'.encode()
-        shadow_original = (shadow_build / 'manifest.txt').read_bytes()
-        require(shadow_selected.strip() in shadow_original.splitlines(),
-                'Shadow fixture original loop missing')
-        shadow_proof = proofs.seal(native, shadow_build, compiler, flags, mojo=[mojo])
-        require(not shadow_proof['receipt']['proofs'], 'Shadowed range incorrectly proved builtin')
-        shadow_manifest = evidence / 'shadow-manifest.txt'
-        shadow_manifest.write_bytes(diagnostic_manifest(shadow_original, shadow_proof, 'shadow', [shadow_line]))
-        shadow_results = []
-        for folder in [native, shadow_build]:
-            binary = folder / 'shadow'
-            run([mojo, 'build', '-Werror', '-I', str(folder), str(folder / 'shadow.mojo'), '-o', str(binary)])
-            shadow_results.append(run([str(binary)], timeout=5))
-        require(shadow_results[0].stdout == shadow_results[1].stdout == 'RESULT shadowed range\n',
-                'Shadowed range native semantics changed')
-        require(not shadow_results[0].stderr, 'Unexpected native shadow probe')
-        shadow_records = [row for row in shadow_results[1].stderr.splitlines()
-                          if row.startswith(f'COVLINE:shadow:{shadow_line}:')]
-        require(shadow_records == [f'COVLINE:shadow:{shadow_line}:F'], 'Shadowed range must emit only F')
-        shadow_raw, _ = capture_result(shadow_results[1], evidence / 'shadow-capture' / 'result',
-                                       shadow_proof, [str(shadow_build / 'shadow')])
-        shadow_report = run([str(reporter), str(shadow_manifest), str(shadow_raw)], success=False, timeout=5)
-        require(shadow_report.returncode != 0 and 'branches 1/2' in shadow_report.stdout,
-                'Shadowed loop lost a reachable/unknown obligation')
-        (evidence / 'shadow-report.out').write_text(shadow_report.stdout + shadow_report.stderr)
-        results['shadowed-range'] = 'native empty custom iterable; both obligations retained; T remains missing'
-        (native / 'shadow.mojo').write_text(shadow_source.replace(
-            'from shadow_factory import custom_range as range', '# same-line builtin alias drift'))
-        try:
-            proofs.seal(native, shadow_build, compiler, flags, mojo=[mojo])
-        except ValueError as error:
-            require('generation origin' in str(error), 'Unexpected alias-drift rejection')
-        else:
-            raise RuntimeError('Same-line source alias drift was accepted')
-        (native / 'shadow.mojo').write_text(shadow_source)
-        results['native-alias-drift'] = 'rejected original/staged mismatch'
-        # Actual CR/LF/UTF-8 generation records must retain the exact native
-        # input and rewritten bytes; the original manifest remains unchanged.
-        physical = 'from std.testing import assert_equal\n\ndef main() raises:\n    var text = String("é\tλ")\n    var total = 0\n    for index in range(2):\n        total += index\n    assert_equal(total, 1)\n    assert_equal(text, "é\tλ")\n    print("RESULT physical")\n'
-        for number, ending in enumerate(['\n', '\r\n', '\r']):
-            name = f'physical_{number}.mojo'
-            original = physical.replace('\n', ending).encode()
-            (native / name).write_bytes(original)
-            stage = work / f'physical-{number}'
-            stage.mkdir()
-            shutil.copytree(ROOT / 'coverage', stage / 'coverage', ignore=shutil.ignore_patterns('build'))
-            generate(native, stage, [name])
-            bound = proofs.seal(native, stage, compiler, flags, mojo=[mojo])
-            require(bound['receipt']['generation']['modules'][name]['source'] == proofs.sha256(original), 'Physical source bytes changed')
-            observed = []
-            for folder in [native, stage]:
-                binary = folder / f'physical-{number}'
-                run([mojo, 'build', '-Werror', '-I', str(folder), str(folder / name), '-o', str(binary)])
-                observed.append(run([str(binary)], timeout=5))
-            require(observed[0].stdout == observed[1].stdout == 'RESULT physical\n', 'Physical-byte native parity failed')
-            target = evidence / f'physical-{number}'
-            target.mkdir()
-            for record in [name, name + '.cov-origin', 'origins.ready', 'generation-inputs.json', 'manifest.txt', 'loop-proofs.json']:
-                shutil.copyfile(stage / record, target / record)
-        results['generation-byte-correspondence'] = 'native LF, CRLF, CR and UTF-8 pairs verified'
-        # One complete original manifest goes through the maintained capture
-        # wrapper and the official proof-aware reporting boundary end to end.
-        production = 'def total(n: Int) -> Int:\n    var value = 0\n    for index in range(2):\n        value += index\n    for index in range(n):\n        value += index\n    return value\n'
-        (native / 'production.mojo').write_text(production)
-        (native / 'tests').mkdir(exist_ok=True)
-        suite_name = 'tests/test_production.mojo'
-        hang_name = 'tests/test_production_hang.mojo'
-        failure_name = 'tests/test_production_compile_error.mojo'
-        drivers = {suite_name: PRODUCTION_DRIVER, hang_name: HANG_DRIVER,
-                   failure_name: COMPILE_ERROR_DRIVER}
-        production_stage = work / 'production-stage'
-        production_stage.mkdir()
-        shutil.copytree(ROOT / 'coverage', production_stage / 'coverage', ignore=shutil.ignore_patterns('build'))
-        (production_stage / 'tests').mkdir()
-        for name, driver in drivers.items():
-            (native/name).write_text(driver)
-            (production_stage/name).write_text(driver)
-        generate(native, production_stage, ['production.mojo'])
-        production_proof = proofs.seal(native, production_stage, compiler, flags,
-                                       mojo=[mojo], suites=list(drivers))
-        # Build first, then enforce the unchanged executable runtime limit.
-        # The real raw-profile invocation below still includes JIT startup.
         require_runtime_alarm()
-        executions = []
-        for number, folder in enumerate((native, production_stage)):
-            binary = work/f'production-runtime-{number}'
-            run([mojo, 'build', '-Werror', '-I', str(folder),
-                 str(folder/suite_name), '-o', str(binary)])
-            executions.append(run([str(binary)], timeout=RUNTIME_SECONDS))
-        require(executions[0].stdout == executions[1].stdout == 'RESULT production capture\n',
-                'Prebuilt production runtime output changed')
-        require(not executions[0].stderr, 'Uninstrumented production emitted probes')
-        expected_records = bytearray()
-        reducer = coverage_io.Reducer(expected_records.extend)
-        for line in executions[1].stderr.encode().splitlines(keepends=True):
-            reducer.feed(line)
-        hits = production_stage / 'hits'
-        hits.mkdir()
-        command = [proofs._expand_path(word, native, production_stage) for word in
-                   proofs.expected_capture_command(production_proof['receipt']['execution'], suite_name, 'raw')]
-        capture = hits / 'test_production.txt.gz'
-        output = hits / 'test_production.out'
-        captured = capture_with_compiler_budget(command, output, capture,
-                        loop_proof=production_stage/'loop-proofs.json', source_root=native)
-        require(output.read_text() == 'RESULT production capture\n', 'Production capture output changed')
-        require(gzip.decompress(capture.read_bytes()) == bytes(expected_records),
-                'Real raw-profile and prebuilt runtime probe evidence differ')
-        reported = run([sys.executable, str(ROOT / 'tools/coverage_io.py'), 'report',
-                        '--capture-dir', str(hits), '--loop-proof-root', str(native),
-                        '--loop-proof-build', str(production_stage), '--compiler=' + compiler,
-                        '--flags=' + flags, '--mojo', mojo, '--suites', *drivers, '--',
-                        str(reporter), str(production_stage / 'manifest.txt')], timeout=5)
-        require('100%' in reported.stdout and 'proven impossible 1' in reported.stdout,
-                'Full original manifest failed the proof-aware production report')
-        target = evidence / 'production'
-        shutil.copytree(production_stage, target)
-        for number, execution in enumerate(executions):
-            (target/f'prebuilt-{number}.out').write_text(execution.stdout)
-            (target/f'prebuilt-{number}.raw.txt').write_text(execution.stderr)
-        (target / 'capture-process.out').write_text(captured.stdout + captured.stderr)
-        (target / 'report-process.out').write_text(reported.stdout + reported.stderr)
-        results['production-wrapper'] = ('actual sealed raw capture and full original-manifest report; '
-                                         'prebuilt executables retain 5s; raw main retains alarm(5); '
-                                         'exact stdout and reduced evidence parity')
-        # These actual raw captures must fail and never leave success receipts.
-        # The alarm stays armed through process exit; pause cannot outlive it.
-        for name, expected in ((hang_name, 128+signal.SIGALRM), (failure_name, None)):
-            stem = Path(name).stem
-            bad_capture, bad_output = hits/(stem+'.txt.gz'), hits/(stem+'.out')
-            receipt_path = proofs.capture_receipt_path(bad_capture)
-            receipt_path.write_text('stale success must be removed')
-            negative_command = [proofs._expand_path(word, native, production_stage) for word in
-                proofs.expected_capture_command(production_proof['receipt']['execution'], name, 'raw')]
-            failed = capture_with_compiler_budget(negative_command,bad_output,bad_capture,
-                loop_proof=production_stage/'loop-proofs.json',source_root=native,success=False)
-            require(failed.returncode != 0 and failed.returncode != 124,
-                    'Runtime alarm or compiler refusal was not observed')
-            if expected is not None:
-                require(failed.returncode == expected, 'Raw runtime did not terminate with SIGALRM')
-                require(b'COVLINE:production:' in gzip.decompress(bad_capture.read_bytes()),
-                        'Forced hang never entered the actual production workload')
-            else:
-                errors = gzip.decompress(bad_capture.read_bytes())
-                require(b'error:' in errors and Path(name).name.encode() in errors,
-                        'Failure was not the actual fixture compiler refusal')
-            require(not receipt_path.exists(), 'Failed raw capture left a success receipt')
-            results[stem] = {'status':failed.returncode,'success_receipt':False}
-            negative = evidence/'production-negatives'/stem
-            negative.mkdir(parents=True)
-            shutil.copyfile(bad_capture, negative/bad_capture.name)
-            shutil.copyfile(bad_output, negative/bad_output.name)
-            (negative/'capture-process.out').write_text(failed.stdout+failed.stderr)
-            (negative/'command.json').write_text(json.dumps(negative_command)+'\n')
-        expired = evidence/'production-deadline'
-        expired.mkdir()
-        expired_capture = expired/'test_production.txt.gz'
-        expired_output = expired/'test_production.out'
-        expired_receipt = proofs.capture_receipt_path(expired_capture)
-        expired_receipt.write_text('stale success must be removed')
-        # An already elapsed inherited deadline cannot start a new suite or
-        # retain an earlier success. Live descendant cleanup has a separate
-        # compiler-free watchdog control.
-        with contextlib.ExitStack() as scope:
-            old_deadline = os.environ.get(coverage_io.DEADLINE_ENV)
-            def restore_deadline():
-                if old_deadline is None:
-                    os.environ.pop(coverage_io.DEADLINE_ENV, None)
-                else:
-                    os.environ[coverage_io.DEADLINE_ENV] = old_deadline
-            scope.callback(restore_deadline)
-            os.environ[coverage_io.DEADLINE_ENV] = repr(time.monotonic()-1)
-            exhausted = capture_with_compiler_budget(command, expired_output, expired_capture,
-                loop_proof=production_stage/'loop-proofs.json', source_root=native, success=False)
-        require(exhausted.returncode == 124, 'Expired integration deadline was extended')
-        require(not expired_receipt.exists(), 'Expired capture retained a success receipt')
-        (expired/'capture-process.out').write_text(exhausted.stdout+exhausted.stderr)
-        results['production-deadline'] = {'status':124,'success_receipt':False}
-        (native / 'missing.mojo').write_text('def main():\n    pass\n')
-        failed_generation = generate(native, shadow_build, ['shadow.mojo', 'missing.mojo'],
-                                     success=False, remove_after_begin='missing.mojo')
-        require(failed_generation.returncode != 0, 'Missing source regeneration unexpectedly succeeded')
-        require((shadow_build / 'origins.ready').read_bytes() == b'', 'Failed generation left a usable prior index')
-        results['interrupted-generation'] = 'old origin index invalidated before failing writes'
+        run(['sh', str(ROOT / 'tools/tool.sh'), mojo,
+             'check_coverage_loop_fixture', '--mojo', mojo])
+        results = {
+            'entry-probe-mutation': 'rejected contradictory actual native probe',
+            'shadowed-range': 'native empty custom iterable; both obligations retained; T remains missing',
+            'native-alias-drift': 'rejected original/staged mismatch',
+            'generation-byte-correspondence': 'native LF, CRLF, CR and UTF-8 pairs verified',
+            'production-wrapper': (
+                'actual sealed raw capture and full original-manifest report; '
+                'prebuilt executables retain 5s; raw main retains alarm(5); '
+                'exact stdout and reduced evidence parity'),
+            'test_production_hang': {'status': 142, 'success_receipt': False},
+            'test_production_compile_error': {'success_receipt': False},
+            'production-deadline': {'status': 124, 'success_receipt': False},
+            'interrupted-generation': 'old origin index invalidated before failing writes',
+        }
         if args.output:
             args.output.mkdir(parents=True, exist_ok=True)
-            (args.output / 'full-original-manifest.txt').write_bytes(full_manifest)
-            (args.output / 'original-loop-proofs.json').write_bytes(proofs.canonical(envelope) + b'\n')
-            (args.output / 'shadow-loop-proofs.json').write_bytes(proofs.canonical(shadow_proof) + b'\n')
             (args.output / 'native-source.mojo').write_text(SOURCE)
-            (args.output / 'original-instrumented.mojo').write_text(original_instrumented)
-            (args.output / 'mutant-instrumented.mojo').write_text(mutated_source)
-            for pattern in ['*.raw.txt', '*.out', '*.txt.gz', '*.proof.json', '*manifest.txt']:
-                for path in evidence.rglob(pattern):
-                    target = args.output / path.relative_to(evidence)
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copyfile(path, target)
             (args.output / 'qualification.json').write_text(json.dumps(results, indent=2) + '\n')
-            shutil.copytree(evidence, args.output / 'diagnostics', dirs_exist_ok=True)
         print('PASS: unchanged native loop streams; constant reachable outcomes; dynamic-empty negative; raw/reduced report parity; actual native entry-probe mutation rejected; shadowed range stays unknown')
 
 

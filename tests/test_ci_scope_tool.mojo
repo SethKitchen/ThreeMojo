@@ -393,7 +393,7 @@ def test_tool_tests_and_the_workflow_only_run_tools() raises:
     var value = _plan(
         _change(
             [
-                "tools/test_build_tools.py",
+                "tools/test_sampled_values.py",
                 "tools/test_coverage_lifecycle.py",
                 "tools/test_parallel_unittest.py",
                 ".github/workflows/ci.yml",
@@ -818,7 +818,7 @@ def test_unknown_inputs_select_the_full_audit() raises:
         "Makefile",
         "unknown.cfg",
         "tools/new_runtime.py",
-        "tools/test_environment.py",
+        "tools/cache_key.py",
         ".github/workflows/other.yml",
         "new_package/module.mojo",
         "untracked.mojo",
@@ -1003,14 +1003,16 @@ def test_nul_paths_deletion_and_untracked_sources() raises:
     tree.write('assets/quotes "x"\n雪.bin', "b")
     tree.remove("core/other.mojo")
     tree.write("tools/new.py", "")
+    tree.write("tests/new suite.mojo", "")
     tree.write("notes.txt", "")
     var changed = changed_paths(tree.root, "HEAD")
     assert_true(Bool(changed))
     var value = changed.value().copy()
-    assert_equal(len(value), 3)
+    assert_equal(len(value), 4)
     assert_false(value['assets/quotes "x"\n雪.bin'])
     assert_true(value["core/other.mojo"])
     assert_false(value["tools/new.py"])
+    assert_false(value["tests/new suite.mojo"])
     tree.close()
 
 
@@ -1085,7 +1087,7 @@ def test_dedicated_discovery_jobs_use_the_tools_selection_flag() raises:
 
 def test_aggregate_requires_success_only_for_applicable_jobs() raises:
     for value in [
-        _plan(_change(["tools/test_build_tools.py"])),
+        _plan(_change(["tools/test_sampled_values.py"])),
         _full(),
         _plan(Dict[String, Bool]()),
     ]:
@@ -1201,7 +1203,7 @@ def test_make_reads_the_scoped_lists_before_the_hash_and_in_recursion() raises:
 
 
 def test_tool_targets_get_no_list_overrides() raises:
-    var value = _plan(_change(["tools/test_build_tools.py"]))
+    var value = _plan(_change(["tools/test_sampled_values.py"]))
     for target in [
         "test-tools",
         "test-tools-discovery",
@@ -1291,7 +1293,9 @@ def test_the_inventory_matches_the_makefile() raises:
     var tree = Tree()
     var wrapper = String("include Makefile\ninventory:\n")
     for entry in variables:
-        wrapper += "\t@printf '%s\\n' '" + entry[0] + "=$(" + entry[1] + ")'\n"
+        # make prints each list itself: a list as one shell argument is
+        # longer than Linux allows.
+        wrapper += "\t@:$(info " + entry[0] + "=$(" + entry[1] + "))\n"
     tree.write("inventory.mk", wrapper)
     var result = run_program(
         [

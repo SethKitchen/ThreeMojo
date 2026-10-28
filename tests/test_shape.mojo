@@ -595,6 +595,19 @@ def test_an_extrusion_refuses_what_it_cannot_build() raises:
         _ = extrude(square(4), Length(0, METER))
     with assert_raises():
         _ = extrude(square(4), Length(2, METER), steps=0)
+    with assert_raises(contains="larger than this port"):
+        _ = extrude(square(4), Length(2, METER), steps=Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = extrude(square(4), Length(2, METER), steps=16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = extrude(square(4), Length(2, METER), curve_segments=Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = extrude(
+            square(4),
+            Length(2, METER),
+            bevel_enabled=True,
+            bevel_segments=Int.MAX,
+        )
     with assert_raises():
         _ = extrude(square(4), Length(2, METER), curve_segments=0)
     with assert_raises():

@@ -6,7 +6,8 @@
 """A file tree in a temporary directory, for the tests of the project tools."""
 
 from std.collections import Set
-from std.os.path import isfile, realpath
+from std.os import listdir, makedirs, remove, rmdir
+from std.os.path import isdir, isfile, islink, realpath
 from std.pathlib import Path
 from std.tempfile import mkdtemp
 
@@ -28,13 +29,8 @@ struct Tree(Movable):
         """Write a file, and make its directories."""
         var slash = relative.rfind("/")
         if slash > 0:
-            _ = run_program(
-                [
-                    "mkdir",
-                    "-p",
-                    self.root + "/" + String(relative[byte=:slash]),
-                ],
-                10,
+            makedirs(
+                self.root + "/" + String(relative[byte=:slash]), exist_ok=True
             )
         Path(self.root + "/" + relative).write_text(text)
 
@@ -80,7 +76,25 @@ struct Tree(Movable):
     def close(self) raises:
         """Remove the tree. A test calls it last, which also keeps the tree
         alive until the test ends."""
-        _ = run_program(["rm", "-rf", self.root], 10)
+        _remove_all(self.root)
+
+
+def _remove_all(path: String):
+    """Remove a file, a link or a directory tree, as `rm -rf` does.
+
+    The tests remove many trees, and a removal in this process is faster
+    than a `rm` process. A link is removed and not followed. An entry that
+    cannot be removed stays, and the other entries are still removed.
+    """
+    try:
+        if isdir(path) and not islink(path):
+            for name in listdir(path):
+                _remove_all(path + "/" + name)
+            rmdir(path)
+        else:
+            remove(path)
+    except:
+        pass
 
 
 def tool_mojo() raises -> String:

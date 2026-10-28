@@ -72,9 +72,10 @@ from render.texture import (
     Wrap,
     float_texture,
     gradient_place,
+    gradient_sample_coordinate,
     texture_grad_finite,
 )
-from std.math import floor
+from std.math import floor, isfinite
 
 comptime Lanes = SIMD[DType.float32, 4]
 
@@ -178,14 +179,26 @@ struct ComputeNodes(ImplicitlyCopyable, NodeSource):
             v: Up, from zero to one.
 
         Returns:
-            The texel's four floats, as they are.
+            The texel's four floats, as they are. A coordinate past
+            1048576 is reduced by its wrap mode first. A coordinate that
+            is not finite is read at zero.
         """
-        var ix = Int(floor(u * Float32(self.size_x)))
-        var iy = Int(floor(v * Float32(self.size_y)))
-        ix = _wrapped(ix, self.size_x, Int(self.wraps[unsafe_offset=slot * 2]))
-        iy = _wrapped(
-            iy, self.size_y, Int(self.wraps[unsafe_offset=slot * 2 + 1])
-        )
+        var su = u
+        var sv = v
+        var wrap_s = Wrap(Int(self.wraps[unsafe_offset=slot * 2]))
+        var wrap_t = Wrap(Int(self.wraps[unsafe_offset=slot * 2 + 1]))
+        if not isfinite(su):
+            su = 0
+        else:
+            su = gradient_sample_coordinate(su, wrap_s)
+        if not isfinite(sv):
+            sv = 0
+        else:
+            sv = gradient_sample_coordinate(sv, wrap_t)
+        var ix = Int(floor(su * Float32(self.size_x)))
+        var iy = Int(floor(sv * Float32(self.size_y)))
+        ix = _wrapped(ix, self.size_x, wrap_s.value)
+        iy = _wrapped(iy, self.size_y, wrap_t.value)
         var at = (slot * self.size_x * self.size_y + iy * self.size_x + ix) * 4
         return FloatColor(
             self.images[unsafe_offset=at],
@@ -403,6 +416,28 @@ struct ComputeVariable(Copyable, Movable):
         self.images.append(initial^)
 
 
+def require_computation_size(size_x: Int, size_y: Int) raises:
+    """Refuse a computation image this port cannot build.
+
+    Nothing. The call returns when both sides are positive and four
+    floats a texel fit in an integer.
+
+    Args:
+        size_x: How many texels across.
+        size_y: How many texels up.
+
+    Raises:
+        Error: If either size is not positive, or the texel buffer does
+            not fit in an integer.
+    """
+    if size_x <= 0 or size_y <= 0:
+        raise Error("A computation's images need a size")
+    # Four floats a texel. A side of 2^31 wraps that product to zero,
+    # so an empty image looks like the right size.
+    if size_x > (Int.MAX // 4) // size_y:
+        raise Error("A computation's images are larger than this port builds")
+
+
 struct GPUComputationRenderer(Movable):
     """Float images stepped by fragment shaders, three.js's
     `GPUComputationRenderer`."""
@@ -424,23 +459,28 @@ struct GPUComputationRenderer(Movable):
             size_y: How many texels up.
 
         Raises:
-            Error: If either size is not positive.
+            Error: If either size is not positive, or the texel buffer
+                does not fit in an integer.
         """
-        if size_x <= 0 or size_y <= 0:
-            raise Error("A computation's images need a size")
+        require_computation_size(size_x, size_y)
         self.size_x = size_x
         self.size_y = size_y
         self.variables = List[ComputeVariable]()
         self.programs = List[NodeProgram]()
         self.current = 0
 
-    def create_texture(self) -> List[Float32]:
+    def create_texture(self) raises -> List[Float32]:
         """Return an image of zeros, three.js's `createTexture`, for a
         variable's first image.
 
         Returns:
             Four zeros a texel.
+
+        Raises:
+            Error: If either size is not positive, or the texel buffer
+                does not fit in an integer.
         """
+        require_computation_size(self.size_x, self.size_y)
         return List[Float32](length=self.size_x * self.size_y * 4, fill=0)
 
     def add_variable(
@@ -460,8 +500,10 @@ struct GPUComputationRenderer(Movable):
             Its place, for `set_variable_dependencies` and the rest.
 
         Raises:
-            Error: If the image is not the computation's size.
+            Error: If either size is not positive, the texel buffer does
+                not fit in an integer, or the image is not that size.
         """
+        require_computation_size(self.size_x, self.size_y)
         if len(initial) != self.size_x * self.size_y * 4:
             raise Error("A variable's image must be the computation's size")
         self.variables.append(ComputeVariable(name, fragment_shader, initial^))
@@ -497,8 +539,11 @@ struct GPUComputationRenderer(Movable):
         images.
 
         Raises:
-            Error: If a shader is refused by the GLSL subset.
+            Error: If either size is not positive, the texel buffer does
+                not fit in an integer, or a shader is refused by the
+                GLSL subset.
         """
+        require_computation_size(self.size_x, self.size_y)
         self.programs = List[NodeProgram]()
         var resolution = (
             "#define resolution vec2( "
@@ -545,8 +590,11 @@ struct GPUComputationRenderer(Movable):
         """Step every variable once, three.js's `compute`.
 
         Raises:
-            Error: If `init` has not compiled the shaders.
+            Error: If either size is not positive, the texel buffer does
+                not fit in an integer, or `init` has not compiled the
+                shaders.
         """
+        require_computation_size(self.size_x, self.size_y)
         require_computation_ready(len(self.programs), len(self.variables))
         var packed = self.packed()
         var next = 1 - self.current
@@ -605,8 +653,10 @@ struct GPUComputationRenderer(Movable):
             The texture, rows from the top as a texture holds them.
 
         Raises:
-            Error: If the variable is not there.
+            Error: If either size is not positive, the texel buffer does
+                not fit in an integer, or the variable is not there.
         """
+        require_computation_size(self.size_x, self.size_y)
         var image = self.current_image(variable)
         var rows = List[Float32](capacity=len(image))
         for y in range(self.size_y - 1, -1, -1):  # pragma: no branch

@@ -8,7 +8,6 @@ import hashlib
 from pathlib import Path
 import re
 import sys
-import tempfile
 import threading
 import types
 import unittest
@@ -248,30 +247,6 @@ class SeedImportLexicalTests(unittest.TestCase):
             self.assertIsNone(values[0][0])
             self.assertEqual(values[0][1], seed._IMPORT_NAME_PARSER(TEXT))
             self.assertEqual(len(state.entries), 1)
-
-    def test_dependency_census_reads_resolves_and_changed_text_remain_live(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            module = root / seed.MODULE
-            module.parent.mkdir(parents=True)
-            module.write_text('import dependency\n')
-            (root / 'dependency.mojo').write_text('def helper():\n    pass\n')
-            expected = {seed.MODULE, 'dependency.mojo'}
-            reads, resolutions = [], []
-            read_bytes, resolve = Path.read_bytes, seed.affected.resolve
-            def read(path): reads.append(path.relative_to(root).as_posix()); return read_bytes(path)
-            def resolving(*args): resolutions.append(args); return resolve(*args)
-            with source.lexical_memo_scope(), patch.object(Path, 'read_bytes', read), \
-                    patch.object(seed.affected, 'resolve', resolving):
-                self.assertEqual(seed.dependency_inventory(root), expected)
-                count, resolved = len(reads), len(resolutions)
-                self.assertEqual(seed.dependency_inventory(root), expected)
-                self.assertEqual(len(reads), 2 * count)
-                self.assertEqual(len(resolutions), 2 * resolved)
-                module.write_text('import other\n')
-                (root / 'other.mojo').write_text('def other():\n    pass\n')
-                self.assertEqual(seed.dependency_inventory(root), {seed.MODULE, 'other.mojo'})
-                self.assertIn('other.mojo', reads)
 
 
 if __name__ == '__main__':

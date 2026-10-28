@@ -61,6 +61,7 @@ from math.vector3 import Vector3
 from std.ffi import external_call
 from std.math import (
     cos,
+    isfinite,
     sin,
     trunc,
 )
@@ -309,12 +310,27 @@ def _next_angle(
     return Angle(_fmod(current + of_tick, fov) * _TO_RADIANS, RADIAN)
 
 
-def _per_laser(description: LidarDescription, tick: Duration) -> Int:
-    return round_half_from_zero(
-        Float32(description.points_per_second)
-        * tick.to(SECOND)
-        / Float32(description.channels)
-    )
+def _per_laser(description: LidarDescription, tick: Duration) raises -> Int:
+    # The same `Float32` quotient as `points_per_laser`, as CARLA has it,
+    # and one past 2^63 is refused before `Int`.
+    return description.points_per_laser(tick)
+
+
+def require_lidar_rays(channels: Int, per_laser: Int) raises:
+    """Refuse a ray list whose length does not fit.
+
+    Nothing. The call returns when `channels * per_laser` fits in an
+    integer. A laser with no ray has an empty list.
+
+    Args:
+        channels: How many lasers.
+        per_laser: How many rays one laser fires.
+
+    Raises:
+        Error: If the product does not fit in an integer.
+    """
+    if per_laser > 0 and channels > Int.MAX // per_laser:
+        raise Error("A LiDAR ray count is larger than this port casts")
 
 
 def semantic_detection(
@@ -379,6 +395,7 @@ def scan_semantic_lidar[
     var per_laser = _per_laser(description, tick)
     if per_laser <= 0:
         return None
+    require_lidar_rays(description.channels, per_laser)
     var keep = List[Bool](length=description.channels * per_laser, fill=True)
     var hits = _cast_channels(
         scene,
@@ -481,6 +498,7 @@ def scan_ray_cast_lidar[
     var per_laser = _per_laser(description, tick)
     if per_laser <= 0:
         return None
+    require_lidar_rays(description.channels, per_laser)
     var keep = _dropoff_mask(description, description.channels * per_laser, rng)
     var hits = _cast_channels(
         scene,
@@ -519,7 +537,8 @@ def hss_points_per_laser(
         field of view counts as zero.
 
     Raises:
-        Error: If the resolution or field of view is nonfinite.
+        Error: If the resolution or field of view is nonfinite, or the
+            ray count does not fit in an integer.
     """
     validate_sensor_float(resolution.value, "horizontal_resolution")
     validate_sensor_float(description.horizontal_fov.value, "horizontal_fov")
@@ -529,7 +548,14 @@ def hss_points_per_laser(
         _MIN_HSS_RESOLUTION,
     )
     var fov = max(description.horizontal_fov.to(DEGREE), 0)
-    return round_half_from_zero(fov / step)
+    var quotient = fov / step
+    var scaled = Float64(quotient) + 0.5
+    # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
+    # a count. The field of view is held at zero or more and the step is
+    # positive, so the quotient is never negative.
+    if not isfinite(scaled) or scaled >= Float64(Int.MAX):
+        raise Error("A LiDAR point count does not fit in an integer")
+    return round_half_from_zero(quotient)
 
 
 def scan_hss_lidar[
@@ -564,6 +590,7 @@ def scan_hss_lidar[
     var per_laser = hss_points_per_laser(description, resolution)
     if per_laser == 0:
         return None
+    require_lidar_rays(description.channels, per_laser)
     var step = max(
         _roundf(resolution.to(DEGREE) / _MIN_HSS_RESOLUTION)
         * _MIN_HSS_RESOLUTION,

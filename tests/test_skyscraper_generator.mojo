@@ -421,6 +421,16 @@ def test_footprint_and_faces() raises:
     assert_equal(bays.count, 5)
     assert_almost_equal(bays.margin, 0.0, atol=1e-12)
     assert_equal(faces[0].bays(100).count, 1)
+    with assert_raises(contains="positive distance"):
+        _ = faces[0].bays(0)
+    with assert_raises(contains="positive distance"):
+        _ = faces[0].bays(inf[DType.float64]())
+    with assert_raises(contains="larger than this port"):
+        _ = faces[0].bays(1e-8)
+    var huge = _small()
+    huge.footprint_width = Length(1e8, METER)
+    with assert_raises(contains="larger than this port"):
+        _ = SkyscraperStyle(huge)
 
 
 def test_modules_match_three_counts() raises:

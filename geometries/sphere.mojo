@@ -30,6 +30,7 @@ from geometries.surface import (
     record_kind,
     record_phi,
     record_sweep,
+    require_grid_cells,
     require_positive_radius,
     require_three_segments,
 )
@@ -69,7 +70,8 @@ def sphere(
 
     Raises:
         Error: If the radius is not positive, either segment count is too
-            small to close a surface, or an angle is not finite.
+            small to close a surface, the grid has more than 16777216
+            cells, or an angle is not finite.
     """
     require_positive_radius(radius.value, "sphere")
     require_three_segments(
@@ -77,6 +79,11 @@ def sphere(
     )
     if height_segments < 2:
         raise Error("A sphere needs at least two segments from pole to pole")
+    require_grid_cells(
+        width_segments,
+        height_segments,
+        "A sphere's segment count is larger than this port builds",
+    )
     var phi0 = phi_start.to(RADIAN)
     var phi_run = phi_length.to(RADIAN)
     var theta0 = theta_start.to(RADIAN)

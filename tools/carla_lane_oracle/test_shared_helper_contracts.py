@@ -145,7 +145,9 @@ class SharedHelperIntegrationControls(unittest.TestCase):
     def test_typed_render_fixture_requires_the_complete_current_graph(self):
         fixture = 'tests/test_carla_render_scene.mojo'
         raw = (self.root/fixture).read_bytes()
-        self.assertTrue(cleanup.typed_boundary.is_current(fixture, raw))
+        # #792 extended the typed endpoint; the PR780 predecessor is that endpoint.
+        self.assertTrue(cleanup.typed_boundary.is_current(
+            fixture, cleanup.pr780_successor.predecessor_bytes(fixture, raw)))
         self.assertEqual(cleanup.typed_boundary.edge(fixture)['before_sha256'],
                          helpers.TESTS[fixture])
         polynomial = 'extensions/carla/polynomial.mojo'

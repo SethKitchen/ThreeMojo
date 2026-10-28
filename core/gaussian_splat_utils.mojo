@@ -326,7 +326,8 @@ def packed_band(count: Int, degree: Int) raises -> List[UInt8]:
         `count * sh_band_words(degree) * 4` bytes of 128.
 
     Raises:
-        Error: If the degree is not 1 through 3, or the count is negative.
+        Error: If the degree is not 1 through 3, the count is negative,
+            or `count` times the bytes of one splat does not fit in Int.
     """
     require_positive(
         degree, "Gaussian splat: a packed band has a degree of 1 to 3"
@@ -334,9 +335,13 @@ def packed_band(count: Int, degree: Int) raises -> List[UInt8]:
     require_non_negative(
         count, "Gaussian splat: a splat count cannot be negative"
     )
-    return List[UInt8](
-        length=count * sh_band_words(degree) * 4, fill=SH_ZERO_BYTE
-    )
+    var words = sh_band_words(degree)
+    var per_splat = words * 4
+    # `count * per_splat` wraps to a negative length, and that list is
+    # built. The band then holds none of its bytes.
+    if count > Int.MAX // per_splat:
+        raise Error("A Gaussian splat band is larger than this port stores")
+    return List[UInt8](length=count * per_splat, fill=SH_ZERO_BYTE)
 
 
 def band_words(bytes: List[UInt8]) raises -> List[UInt32]:

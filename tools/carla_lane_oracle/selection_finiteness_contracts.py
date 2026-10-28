@@ -35,15 +35,37 @@ def _scalar(text,name):
     literal=moments.literal_from_tokens(s[len(prefix):-1],'selector constant '+name)
     return moments.fraction_of_word(moments.decimal_word(literal))
 
-def verify_text(modules,interval,trig):
-    if set(modules)!=set(EXPECTED):raise ValueError('Wrong selection producer set')
-    for p,text in modules.items():
-        if source_contracts.token_sha256(text)!=EXPECTED[p]:raise ValueError('Selection producer/input/error/phase graph changed: '+p)
-    if source_contracts.token_sha256(interval)!=INTERVAL:raise ValueError('Ordering or nonnegative-error arithmetic changed')
-    k=_scalar(trig,'_INV_HALF_PI');limit=_scalar(trig,'_PHASE_LIMIT')
-    if not 0<k<=1:raise ValueError('Selector multiplier bound')
-    if not 0<limit<=1048576:raise ValueError('Finite phase bound')
-    return {'status':'PASS','ordered_theta':True,'nonnegative_error':True,'selector_endpoint_magnitude_below':4194304}
+def verify_text(modules, interval, trig):
+    import json
+    import os
+    import subprocess
+    import tempfile
+    if set(modules) != set(EXPECTED):
+        raise ValueError('Wrong selection producer set')
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='selection-gate-') as directory:
+        folder = Path(directory)
+        names = {
+            '--grouped': 'extensions/carla/spiral_grouped_roundoff_proof.mojo',
+            '--roundoff': 'extensions/carla/spiral_roundoff_proof.mojo',
+        }
+        command = ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_selection_gate']
+        for flag, path in names.items():
+            target = folder / flag.strip('-') 
+            target.write_text(modules[path])
+            command.extend([flag, str(target)])
+        for flag, text in (('--interval', interval), ('--trig', trig)):
+            target = folder / flag.strip('-')
+            target.write_text(text)
+            command.extend([flag, str(target)])
+        result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
 
 def _producer_text(root, path, *, _operation=None):
     """Admit only the exact current Y successor before a selection view."""

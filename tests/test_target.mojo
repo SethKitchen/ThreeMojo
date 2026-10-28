@@ -101,6 +101,9 @@ def test_dimensions_must_be_positive() raises:
         _ = RenderTarget(0, 2, Color(0, 0, 0))
     with assert_raises():
         _ = RenderTarget(2, -1, Color(0, 0, 0))
+    # 3037000500 squared does not fit in a signed integer.
+    with assert_raises(contains="larger than this port"):
+        _ = RenderTarget(3037000500, 3037000500, Color(0, 0, 0))
 
 
 def test_coordinates_outside_the_target_are_rejected() raises:

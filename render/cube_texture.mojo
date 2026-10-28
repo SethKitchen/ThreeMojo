@@ -839,7 +839,8 @@ def face_direction(face: Int, x: Int, y: Int, size: Int) -> Vector3:
 
     The inverse of `face_uv`: the texel's center as a coordinate, `v`
     counting up from the bottom row, then the point that coordinate names
-    on the plane one unit out along `face_forward`.
+    on the plane one unit out along `face_forward`. A face above 2^23
+    measures that center in `Float64`.
 
     Args:
         face: `POSITIVE_X` through `NEGATIVE_Z`.
@@ -855,8 +856,17 @@ def face_direction(face: Int, x: Int, y: Int, size: Int) -> Vector3:
     var up = face_up(face)
     var right = forward
     right.cross(up)
-    var across = (Float32(x) + 0.5) / Float32(size) * 2 - 1
-    var upward = 1 - (Float32(y) + 0.5) / Float32(size) * 2
+    # A `Float32` face above 2^23 cannot add the half that marks a texel
+    # center, so the last texel reads as the edge. A smaller face keeps
+    # the `Float32` quotient.
+    var across: Float32
+    var upward: Float32
+    if size > 8388608:
+        across = Float32((Float64(x) + 0.5) / Float64(size) * 2 - 1)
+        upward = Float32(1 - (Float64(y) + 0.5) / Float64(size) * 2)
+    else:
+        across = (Float32(x) + 0.5) / Float32(size) * 2 - 1
+        upward = 1 - (Float32(y) + 0.5) / Float32(size) * 2
     return forward + right * across + up * upward
 
 

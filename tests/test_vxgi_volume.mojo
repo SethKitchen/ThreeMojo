@@ -22,11 +22,14 @@ from lights.light import (
 from lights.lighting import falloff
 from lights.vxgi_cone_tracer import (
     UNBOUNDED,
+    VxgiGrid,
     floats_of,
     half_rounded,
     unorm8,
 )
 from lights.vxgi_volume import (
+    _grid_index,
+    _padded,
     VXGIVolume,
     VXGI_DIRECTIONAL,
     VXGI_PI,
@@ -44,7 +47,7 @@ from math.bounds import Box3
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from std.math import cos, nan, sqrt
+from std.math import cos, inf, nan, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -156,6 +159,137 @@ def bits(volume: VXGIVolume, x: Int, y: Int, z: Int) -> Int32:
     ]
 
 
+def _record(
+    ax: Float32,
+    ay: Float32,
+    az: Float32,
+    bx: Float32,
+    by: Float32,
+    bz: Float32,
+    cx: Float32,
+    cy: Float32,
+    cz: Float32,
+) -> List[Float32]:
+    """Return one triangle record in the collector's layout."""
+    var values = List[Float32]()
+    values.extend([ax, ay, az, 0, bx, by, bz, 0, cx, cy, cz, 0])
+    values.extend([1, 1, 1, 0, 0, 0, 0, 0])
+    return values^
+
+
+def _small_grid() -> VxgiGrid:
+    """Return an 8-voxel grid of voxel size 1/8."""
+    return VxgiGrid(Vector3(0, 0, 0), Vector3(1, 1, 1), 0.125, 8, 8, 8, 1, 1)
+
+
+def _setup(grid: VxgiGrid, values: List[Float32]) -> VoxelTriangle:
+    """Set up one record while `values` is still alive."""
+    return VoxelTriangle(floats_of(values), 0, grid)
+
+
+def test_a_triangle_past_an_integer_lies_past_the_grid() raises:
+    var grid = _small_grid()
+    var near = _setup(
+        grid, _record(0.1, 0.1, 0.1, 0.2, 0.1, 0.1, 0.1, 0.2, 0.15)
+    )
+    assert_equal(near.i0, 1)
+    assert_equal(near.i1, 3)
+    assert_equal(near.j0, 1)
+    assert_equal(near.j1, 3)
+    assert_true(near.usable)
+    var far = _setup(
+        grid,
+        _record(
+            Float32(1e20),
+            0.2,
+            0.2,
+            Float32(1e20),
+            0.4,
+            0.2,
+            Float32(1e20),
+            0.2,
+            0.4,
+        ),
+    )
+    assert_equal(far.i0, 3)
+    assert_equal(far.i1, 6)
+    var far_column = far.column(4, 4)
+    assert_true(far_column[1] > far_column[2])
+    assert_false(far.covers(4, 4, 0))
+    var past = _setup(
+        grid,
+        _record(
+            Float32(1e20),
+            Float32(1e20),
+            Float32(1e20),
+            Float32(1e20),
+            Float32(2e20),
+            Float32(1e20),
+            Float32(1e20),
+            Float32(1e20),
+            Float32(2e20),
+        ),
+    )
+    assert_true(past.i0 > past.i1)
+    assert_false(past.covers(0, 0, 0))
+    var under = _setup(
+        grid,
+        _record(
+            Float32(-1e20),
+            Float32(-1e20),
+            Float32(-1e20),
+            Float32(-1e20),
+            Float32(-2e20),
+            Float32(-1e20),
+            Float32(-1e20),
+            Float32(-1e20),
+            Float32(-2e20),
+        ),
+    )
+    assert_true(under.i0 > under.i1)
+    assert_false(under.covers(0, 0, 0))
+    var below = _setup(
+        grid,
+        _record(
+            Float32(-1e20),
+            0.2,
+            0.2,
+            Float32(-1e20),
+            0.4,
+            0.2,
+            Float32(-1e20),
+            0.2,
+            0.4,
+        ),
+    )
+    assert_equal(below.i0, 3)
+    assert_equal(below.i1, 6)
+    var below_column = below.column(4, 4)
+    assert_true(below_column[1] > below_column[2])
+    assert_false(below.covers(4, 4, 0))
+    var deep = _setup(
+        grid,
+        _record(
+            0.2,
+            0.2,
+            Float32(1e20),
+            0.4,
+            0.2,
+            Float32(1e20),
+            0.2,
+            0.4,
+            Float32(1e20),
+        ),
+    )
+    assert_true(deep.i0 <= deep.i1)
+    assert_false(deep.covers(3, 3, 0))
+    var missing = _setup(
+        grid,
+        _record(nan[DType.float32](), 0.2, 0.2, 0.3, 0.2, 0.2, 0.2, 0.4, 0.3),
+    )
+    assert_false(missing.covers(3, 3, 3))
+
+
 def test_a_light_type_is_one_of_three() raises:
     assert_true(VXGI_DIRECTIONAL.is_valid())
     assert_true(VXGI_POINT.is_valid())
@@ -203,6 +337,21 @@ def test_a_record_holds_what_three_js_writes() raises:
     assert_equal(record[12], 0)
 
 
+def test_a_grid_index_or_an_axis_that_does_not_fit_is_refused() raises:
+    # A coordinate at no place lies past the high side of the grid.
+    assert_equal(_grid_index(nan[DType.float32]()), Int.MAX)
+    assert_equal(_grid_index(Float32(-1e30)), Int.MIN)
+    assert_equal(_grid_index(2.5), 2)
+    # An axis is its size, a voxel each side, up to the coarsest step.
+    assert_equal(_padded(6, 1, 4), 8)
+    # A voxel count past an integer is refused, and so is a group count
+    # whose voxels do not fit in one.
+    with assert_raises(contains="larger than this port"):
+        _ = _padded(1e300, 1, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = _padded(9223372036854774784.0, 1, 1 << 20)
+
+
 def test_a_volume_refuses_settings_it_cannot_use() raises:
     var volume = VXGIVolume(0)
     with assert_raises(contains="resolution must be positive"):
@@ -211,6 +360,16 @@ def test_a_volume_refuses_settings_it_cannot_use() raises:
     volume.bounces = -1
     with assert_raises(contains="bounces"):
         volume.validate()
+    volume = VXGIVolume()
+    volume.bounces = 16777217
+    with assert_raises(contains="larger than this port"):
+        volume.validate()
+    volume = VXGIVolume()
+    volume.bounces = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        volume.validate()
+    with assert_raises(contains="larger than this port"):
+        volume.update_lighting()
     volume = VXGIVolume()
     volume.max_lights = -1
     with assert_raises(contains="light count"):
@@ -244,6 +403,16 @@ def test_a_volume_refuses_settings_it_cannot_use() raises:
         with assert_raises(contains="bounce cone"):
             volume.validate()
     VXGIVolume().validate()
+    var scene = Scene()
+    var assets = Assets()
+    var huge = VXGIVolume(1 << 22)
+    huge.bounds = Box3(Vector3(-1, -1, -1), Vector3(1, 1, 1))
+    with assert_raises(contains="larger than this port"):
+        huge.prepare_voxels(scene, assets)
+    var open = VXGIVolume(8)
+    open.bounds = Box3(Vector3(0, 0, 0), Vector3(inf[DType.float32](), 1, 1))
+    with assert_raises(contains="larger than this port"):
+        open.prepare_voxels(scene, assets)
 
 
 def test_the_grid_fits_the_floor_as_three_js_fits_it() raises:

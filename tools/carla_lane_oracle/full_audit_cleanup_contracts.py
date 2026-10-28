@@ -9,6 +9,7 @@ modified. Every projection is named and follows fresh physical admission.
 """
 import ast
 from contextlib import nullcontext
+from contextvars import ContextVar
 import hashlib
 import importlib.util
 import io
@@ -158,7 +159,7 @@ PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
  'tools/carla_lane_oracle/border_parser_contracts.py': '734d7b24aaf4e9f537cd7f0d7c7b8094d9c29106770b66c4a7a24cab74604dd4',
  'tools/carla_lane_oracle/pr760_arithmetic_stage.py': PR760_STAGE_SHA256,
- 'tools/carla_lane_oracle/pr780_source_successor.py': '455f08ce0f739d35b9a1f51435a8049e7cda7e3e939e63e1b7fc354e8d55f44e',
+ 'tools/carla_lane_oracle/pr780_source_successor.py': 'db5260f896d6faef87d0d57797dc13b6904812b157a25dca2ae2d342bc19185e',
  'tools/carla_lane_oracle/scaled_float32_contracts.py': 'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',
  'tools/affected.py': 'dcf533b9cd995902f53578aa93b98a32ca732643ccfa6ab7e30f95fd8b321eb3',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
@@ -168,7 +169,7 @@ DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f
  'tools/carla_lane_oracle/map_station_contracts.py': 'caca22f46767ced3037d839a7941cb73a8ccf816238ad2037e28715f060055b7',
  'tools/carla_lane_oracle/runtime_view_contracts.py': '67316129402fac643be3c6e49ceef94bcb25c1ef92f81fd764a6abb583f89e34',
  'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
- 'tools/carla_lane_oracle/source_contracts.py': '6a1f6f3efed801d586976fb3f7acff672d61409fbc61c957b8bf7cd808d3fda8',
+ 'tools/carla_lane_oracle/source_contracts.py': '41c7beca0d045d43d51f6100ba4f45a41baa0f8d784498845e22cfdfd3de504f',
  'tools/carla_lane_oracle/sum2_guard_contracts.py': '8c1d646c1dd70e1e7c9453077b63060ca506f76d2493137af0dd0a9a68012570',
  'tools/carla_lane_oracle/lane_order_contracts.py': '314b1fae1f274c7223ab5dec50ad4cb97760c31926844ca92e1e6aa8560b4889',
  'tools/carla_lane_oracle/typed_boundary_contracts.py': '59cc73b325af897981a2d7299cf2d4ed3c61d3ea64d5f958f2b85aef51666362',
@@ -726,7 +727,11 @@ def _code_equal(left, right):
 
 
 def _compiled_functions(raw, filename):
-    module_code = compile(raw, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize)
+    tree = ast.parse(raw)
+    module_code = compile(tree, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize)
+    _compiled_functions.last = module_code
+    _compiled_functions.last_raw = raw
+    _compiled_functions.last_tree = tree
     return {item.co_name: item for item in module_code.co_consts if isinstance(item, types.CodeType)}
 
 
@@ -745,7 +750,11 @@ def _compiled_defaults(raw):
                 result[owner + statement.name] = (positional or None, keyword or None)
             elif isinstance(statement, ast.ClassDef):
                 collect(statement.body, owner + statement.name + '.')
-    collect(ast.parse(raw).body)
+    if getattr(_compiled_functions, 'last_raw', None) is raw:
+        statements = _compiled_functions.last_tree.body
+    else:
+        statements = ast.parse(raw).body
+    collect(statements)
     return result
 
 
@@ -765,11 +774,10 @@ _IMPORT_MODULE_CODE = {}
 _IMPORT_DEFAULTS = {}
 _SELF_PATH = Path(__file__).resolve()
 _SELF_RAW = _SELF_PATH.read_bytes()
-require(_code_identity(sys._getframe().f_code) == _code_identity(compile(
-        _SELF_RAW, __file__, 'exec', dont_inherit=True, optimize=sys.flags.optimize)),
+_IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)
+require(_code_equal(sys._getframe().f_code, _compiled_functions.last),
         'executing checker code does not match source')
 _IMPORT_IDENTITIES[str(_SELF_PATH)] = sha(_SELF_RAW)
-_IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)
 _IMPORT_MODULE_CODE[str(_SELF_PATH)] = sys._getframe().f_code
 _IMPORT_DEFAULTS[str(_SELF_PATH)] = _compiled_defaults(_SELF_RAW)
 for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, conditioned_cubic, scaled_float32, pr760_stage, pr780_successor):
@@ -786,8 +794,7 @@ for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), cons
     require(sha(_raw) == DEPENDENCY_TOOL_SHA256.get(_relative), 'unreviewed dependency checker bytes: ' + _relative)
     _executed = getattr(_module, '_EXECUTED_MODULE_CODE', None)
     require(isinstance(_executed, types.CodeType)
-            and _code_identity(_executed) == _code_identity(compile(_raw, _module.__file__, 'exec',
-                dont_inherit=True, optimize=sys.flags.optimize)),
+            and _code_equal(_executed, _compiled_functions.last),
             'executed dependency module differs from captured source: ' + _relative)
     _IMPORT_MODULE_CODE[str(_path)] = _executed
     _IMPORT_DEFAULTS[str(_path)] = _compiled_defaults(_raw)
@@ -892,6 +899,23 @@ def _canonical_relative_text(text):
             and '//' not in text and '/./' not in text and '/../' not in text)
 
 
+# One census reuses directory checks. None means every call checks again.
+# Each thread has its own value, and a new thread starts with None. The
+# token puts back the exact earlier value, so concurrent censuses cannot
+# leave a stale cache behind.
+_CHECKED_DIRS = ContextVar('full_audit_checked_dirs', default=None)
+
+
+def _use_dir_cache():
+    """Start a directory cache for one census. Callers restore the old value."""
+    return _CHECKED_DIRS.set(set())
+
+
+def _restore_dir_cache(previous):
+    """Put the directory cache back, including the uncached state."""
+    _CHECKED_DIRS.reset(previous)
+
+
 def _regular(root, relative):
     if os.name == 'posix' and Path is pathlib.Path and _canonical_relative_text(relative):
         parts = tuple(relative.split('/'))
@@ -899,6 +923,26 @@ def _regular(root, relative):
     else:
         parts = Path(relative).parts
         require(parts and not Path(relative).is_absolute() and '..' not in parts, 'unsafe input path')
+    checked = _CHECKED_DIRS.get()
+    if (checked is not None and os.name == 'posix' and type(root) is PosixPath
+            and _canonical_relative_text(relative)):
+        root_key = os.fspath(root)
+        if root_key not in checked:
+            require(_root_unaliased(root), 'symbolic root or ancestor')
+            checked.add(root_key)
+        current = root_key
+        last = len(parts) - 1
+        for index, part in enumerate(parts):
+            current += '/' + part
+            if index != last and current in checked:
+                continue
+            info = os.lstat(current)
+            require(not stat.S_ISLNK(info.st_mode), 'symlink input: ' + relative)
+            if index == last:
+                require(stat.S_ISREG(info.st_mode), 'input is not a regular file: ' + relative)
+            else:
+                checked.add(current)
+        return Path(current)
     path = Path(root)
     require(_root_unaliased(path), 'symbolic root or ancestor')
     for part in parts:
@@ -951,6 +995,14 @@ def inventory(root, *, _snapshots=None, _production=None):
 
 
 def dependency_inventory(root, *, roots=(), entries=(), _known=None, _snapshots=None):
+    previous = _use_dir_cache()
+    try:
+        return _dependency_inventory(root, roots=roots, entries=entries, _known=_known, _snapshots=_snapshots)
+    finally:
+        _restore_dir_cache(previous)
+
+
+def _dependency_inventory(root, *, roots, entries, _known, _snapshots):
     inputs, affected = _sibling('cache_key'), _sibling('affected')
     known = _known if _known is not None else {p.as_posix() for p in inputs.input_paths(root) if p.suffix == '.mojo'}
     found, pending = set(), list(roots)
@@ -1239,28 +1291,37 @@ def provenance_after_sha256(edge):
 
 def _helper_entry_census(root, *, _operation=None):
     """Observe actual source bytes that determine the compiled entry contexts."""
-    known = {path.as_posix() for path in _sibling('cache_key').input_paths(root)
-             if path.suffix == '.mojo'}
-    _operation_known_paths(root, known, _operation=_operation)
-    image = {}
-    for path in sorted(known):
-        raw = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
-        require(type(raw) is bytes, 'render entry source is not physical bytes: ' + path)
-        image[path] = raw
-    entries = tuple(_sibling('affected').entry_directories(
-        {path: _physical_text(raw) for path, raw in image.items()}))
-    return entries, image
+    # The reads stay in this frame: controls patch them by their caller.
+    previous = _use_dir_cache()
+    try:
+        known = {path.as_posix() for path in _sibling('cache_key').input_paths(root)
+                 if path.suffix == '.mojo'}
+        _operation_known_paths(root, known, _operation=_operation)
+        image = {}
+        for path in sorted(known):
+            raw = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
+            require(type(raw) is bytes, 'render entry source is not physical bytes: ' + path)
+            image[path] = raw
+        entries = tuple(_sibling('affected').entry_directories(
+            {path: _physical_text(raw) for path, raw in image.items() if b'main' in raw}))
+        return entries, image
+    finally:
+        _restore_dir_cache(previous)
 
 
 def _helper_entry_census_finish(root, image, *, _operation=None):
     """Keep all entry-classifying reads, then finish with a fresh path census."""
-    for path, raw in image.items():
-        actual = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
-        require(type(actual) is bytes and actual == raw, 'render entry source changed: ' + path)
-    known = {path.as_posix() for path in _sibling('cache_key').input_paths(root)
-             if path.suffix == '.mojo'}
-    _operation_known_paths(root, known, _operation=_operation)
-    require(known == set(image), 'render entry path census changed')
+    previous = _use_dir_cache()
+    try:
+        for path, raw in image.items():
+            actual = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
+            require(type(actual) is bytes and actual == raw, 'render entry source changed: ' + path)
+        known = {path.as_posix() for path in _sibling('cache_key').input_paths(root)
+                 if path.suffix == '.mojo'}
+        _operation_known_paths(root, known, _operation=_operation)
+        require(known == set(image), 'render entry path census changed')
+    finally:
+        _restore_dir_cache(previous)
 
 
 def _include_entry_context(location, source_image, *, _operation=None):
@@ -3087,9 +3148,9 @@ def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
                     _operation=_operation, _selection=_pr760)
     active = []
     for path, raw in sources.items():
+        retained = pr780_successor.predecessor_bytes(path, raw).decode('utf-8') if pr780_successor.reviewed_edge(path) is not None and sha(raw) == pr780_successor.reviewed_edge(path)['after_sha256'] else raw.decode('utf-8')
         prior = (_pr760['predecessors'][path] if _pr760 and path in _pr760['predecessors']
-                 else pr760_stage.predecessor_source(path, raw.decode('utf-8'))
-                 if current and path in pr760_stage.CARLA_REGISTRY_PATHS else raw.decode('utf-8'))
+                 else pr760_stage.predecessor_source(path, retained) if current and path in pr760_stage.CARLA_REGISTRY_PATHS else retained)
         raw = prior.encode('utf-8')
         require(sha(raw) in (shared_helpers.BEFORE_SHA256[path], shared_helpers.AFTER_SHA256[path]),
                 'unknown shared-helper endpoint: ' + path)
@@ -3111,7 +3172,7 @@ def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
         if current and path in pr760_stage.CARLA_REGISTRY_PATHS:
             historical = (_pr760['predecessors'][path] if _pr760 else
                 pr760_stage.predecessor_source(path, raw.decode('utf-8'))).encode('utf-8')
-        if path in tests and typed_boundary.is_current(path, raw):
+        if path in tests and (typed_boundary.is_current(path, raw) or pr780_successor.reviewed_edge(path) is not None and sha(raw) == pr780_successor.reviewed_edge(path)['after_sha256']):
             # Arithmetic capture has no typed fixture edge. Supplemental native
             # fixtures use the complete current graph before exact provenance;
             # source/provider extraction identities remain unchanged.
@@ -3120,7 +3181,7 @@ def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
                 _operation=_operation, _inputs=_inputs, _input_owner=_input_owner).encode('utf-8')
             typed_fixtures[path] = raw
         require(sha(historical) == expected[path], 'shared-helper fixture changed: ' + path)
-    texts = {path: raw.decode('utf-8') for path, raw in sources.items()}
+    texts = {path: (pr780_successor.predecessor_bytes(path, raw).decode('utf-8') if pr780_successor.reviewed_edge(path) is not None and sha(raw) == pr780_successor.reviewed_edge(path)['after_sha256'] else raw.decode('utf-8')) for path, raw in sources.items()}
     texts.update({path: bound[path].decode('utf-8') for path in providers})
     if current:
         texts = {path: (_pr760['predecessors'][path] if _pr760 and path in _pr760['predecessors']
@@ -3233,6 +3294,12 @@ def shared_helper_edges(root, *, paths=None, include_roots=(), _inputs=None,
     """Return only live, physically admitted helper extraction descriptors."""
     bindings = shared_helper_proof_bindings(root, paths=paths, include_roots=include_roots,
         _inputs=_inputs, _input_owner=_input_owner, _operation=_operation)
+    # A reviewed PR780 successor extends a helper endpoint. Its exact
+    # predecessor, which the bindings above admitted, selects the edge.
+    bindings = {path: (pr780_successor.reviewed_edge(path)['before_sha256']
+                       if pr780_successor.reviewed_edge(path) is not None
+                       and digest == pr780_successor.reviewed_edge(path)['after_sha256'] else digest)
+                for path, digest in bindings.items()}
     return _pr760_composed_edges(shared_helpers, bindings)
 
 
@@ -4277,7 +4344,7 @@ PR760_IMPLEMENTATION_PREDECESSORS = {'tools/carla_lane_oracle/pr760-border_parse
  'tools/carla_lane_oracle/pr760-winner_sign-predecessor.txt': '2ed96052d6568fee1bb7700515b7ad03bd38edafc7ca413fc1c03bb9ad5f6aad'}
 PR760_IMPLEMENTATION_SUCCESSORS = {'tools/carla_lane_oracle/border_parser_contracts.py': '734d7b24aaf4e9f537cd7f0d7c7b8094d9c29106770b66c4a7a24cab74604dd4',
  'tools/carla_lane_oracle/seed_count_contracts.py': 'daa8f391a18e54a3fae958150673c134897db52ce5de87291f613f84df7c6d90',
- 'tools/carla_lane_oracle/source_contracts.py': '6a1f6f3efed801d586976fb3f7acff672d61409fbc61c957b8bf7cd808d3fda8',
+ 'tools/carla_lane_oracle/source_contracts.py': '41c7beca0d045d43d51f6100ba4f45a41baa0f8d784498845e22cfdfd3de504f',
  'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f'}
 
 

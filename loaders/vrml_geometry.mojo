@@ -542,6 +542,24 @@ def _weighted(
     return sum.normalized()
 
 
+def _require_grid_count(x_dimension: Int, z_dimension: Int) raises:
+    """Refuse a grid whose point-index length does not fit in `Int`.
+
+    A dimension comes from `_whole`, so it can be almost `1e15`. The
+    product `xDimension * zDimension` then wraps, and a later `index * 3`
+    wraps sooner. Either one makes a short index look valid.
+
+    Args:
+        x_dimension: The points along x.
+        z_dimension: The points along z.
+
+    Raises:
+        Error: If `3 * x_dimension * z_dimension` does not fit.
+    """
+    if z_dimension > 0 and x_dimension > (Int.MAX // 3) // z_dimension:
+        raise Error("VRML: an elevation grid is larger than this port builds")
+
+
 def elevation_grid(
     height: List[Float64],
     x_dimension: Int,
@@ -549,7 +567,7 @@ def elevation_grid(
     x_spacing: Float64,
     z_spacing: Float64,
     ccw: Bool,
-) -> Tuple[List[Float64], List[Float64]]:
+) raises -> Tuple[List[Float64], List[Float64]]:
     """Return the points and the triangles of an elevation grid, as
     three.js's `buildElevationGridNode` makes them.
 
@@ -567,7 +585,11 @@ def elevation_grid(
 
     Returns:
         Three numbers a point, and three point indices a triangle.
+
+    Raises:
+        Error: If the grid's index length does not fit in an integer.
     """
+    _require_grid_count(x_dimension, z_dimension)
     var vertices = List[Float64]()
     for i in range(z_dimension):
         for j in range(x_dimension):
@@ -592,7 +614,7 @@ def elevation_grid(
 
 def grid_values(
     data: List[Float64], x_dimension: Int, z_dimension: Int, per_vertex: Bool
-) -> List[Float64]:
+) raises -> List[Float64]:
     """Return an elevation grid's colors or normals, three values each.
 
     Per vertex, it is one value a point, in the order the points are
@@ -607,7 +629,11 @@ def grid_values(
 
     Returns:
         The values, three each.
+
+    Raises:
+        Error: If the grid's index length does not fit in an integer.
     """
+    _require_grid_count(x_dimension, z_dimension)
     var out = List[Float64]()
     if per_vertex:
         for index in range(z_dimension * x_dimension):
@@ -631,7 +657,7 @@ def grid_uvs(
     has_tex_coord: Bool,
     x_dimension: Int,
     z_dimension: Int,
-) -> List[Float64]:
+) raises -> List[Float64]:
     """Return an elevation grid's texture coordinates, one pair a point.
 
     Without a `TextureCoordinate` node three.js makes
@@ -646,7 +672,11 @@ def grid_uvs(
 
     Returns:
         Two values a point.
+
+    Raises:
+        Error: If the grid's index length does not fit in an integer.
     """
+    _require_grid_count(x_dimension, z_dimension)
     var out = List[Float64]()
     for i in range(z_dimension):
         for j in range(x_dimension):

@@ -29,7 +29,7 @@ triangles kept.
 """
 
 from core.buffer_geometry import BufferGeometry
-from geometries.surface import indexed_surface
+from geometries.surface import indexed_surface, require_grid_cells
 from math.norm import squared_length3
 from std.math import sqrt
 from units.si import Length, METER
@@ -1526,14 +1526,20 @@ def teapot(
         A geometry with `position`, `normal`, `uv` and an index.
 
     Raises:
-        Error: If `size` is not positive and finite, or `segments` is less
-            than two. three.js raises a smaller count to two.
+        Error: If `size` is not positive and finite, `segments` is less
+            than two, or a patch has more than 16777216 cells. three.js
+            raises a smaller count to two.
     """
     var half = Float64(size.value)
     if not (half > 0 and half < Float64.MAX):
         raise Error("A teapot needs a positive, finite size")
     if segments < 2:
         raise Error("A teapot patch needs two segments or more")
+    require_grid_cells(
+        segments,
+        segments,
+        "A teapot's segment count is larger than this port builds",
+    )
     var patches = _patches()
     var points = _points()
     var max_height = MODEL_HEIGHT * (1.0 if blinn else BLINN_SCALE)

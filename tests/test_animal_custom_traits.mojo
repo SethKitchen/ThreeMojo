@@ -31,6 +31,7 @@ from extensions.animals.registry import (
     FROG,
     GOAT,
     PIG,
+    SHARK,
     SHEEP,
     SNAKE,
     SpeciesId,
@@ -50,14 +51,16 @@ from extensions.animals.species.deer import _catmull
 from extensions.animals.species.fish import GOLDFISH, fish_paint
 from extensions.animals.species.frog import HEAD_O, frog_paint
 from extensions.animals.species.goat import ALPINE, M_EARS, _hl, _mark_sd
+from extensions.animals.species.pig import SPOTTED, _markings
 from extensions.animals.species.shark import _scaled, _trail_dist
 from extensions.animals.species.snake import RATTLESNAKE, _segments
-from extensions.animals.traits import Traits
+from extensions.animals.traits import Traits, trait_repeats
 from extensions.sdf.field import SdfModel
 from extensions.sdf.ids import CONE, ELLIPSOID, BoneId
 from extensions.sdf.sculpt import cone_or_ball
 from extensions.sdf.vector import V3, length
-from std.testing import TestSuite, assert_equal, assert_true
+from std.math import inf, isfinite, nan
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
 def _draw(
@@ -245,6 +248,74 @@ def test_zero_feature_counts_are_reachable_traits() raises:
     var dm = _sculpt(DEER, deer)
     assert_true(_count(dm, "beam") > 0)
     assert_equal(_count(dm, "tine"), 0)
+
+
+def test_a_trait_repeat_count_this_port_cannot_build_is_refused() raises:
+    assert_equal(trait_repeats(0.0), 0)
+    assert_equal(trait_repeats(3.7), 3)
+    assert_equal(trait_repeats(-1.0), 0)
+    assert_equal(trait_repeats(-1e20), 0)
+    assert_equal(trait_repeats(Float64(16777216)), 16777216)
+    var bad = nan[DType.float64]()
+    with assert_raises(contains="larger than this port"):
+        _ = trait_repeats(bad)
+    bad = inf[DType.float64]()
+    with assert_raises(contains="larger than this port"):
+        _ = trait_repeats(bad)
+    bad = -inf[DType.float64]()
+    with assert_raises(contains="larger than this port"):
+        _ = trait_repeats(bad)
+    bad = Float64(16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = trait_repeats(bad)
+
+    var shark = _draw(SHARK)
+    shark.set("nicks", Float64(16777217))
+    with assert_raises(contains="larger than this port"):
+        _ = _sculpt(SHARK, shark)
+
+    var snake = _draw(SNAKE, FEMALE, ADULT, RATTLESNAKE)
+    snake.set("rattleSegs", Float64(16777217))
+    with assert_raises(contains="larger than this port"):
+        _ = _sculpt(SNAKE, snake)
+
+    var pig = _draw(PIG)
+    pig.set("teats", Float64(16777217))
+    with assert_raises(contains="larger than this port"):
+        _ = _sculpt(PIG, pig)
+    pig.set("teats", 1.0)
+    var one = _sculpt(PIG, pig)
+    assert_equal(_count(one, "teat"), 2)
+    for p in one.prims:
+        if one.tags[p.tag.value] == "teat":
+            assert_true(isfinite(p.c.x) and isfinite(p.c.y) and isfinite(p.c.z))
+
+    var deer = _draw(DEER, MALE)
+    deer.set("antlers", 1.0)
+    deer.set("tines", Float64(16777217))
+    with assert_raises(contains="larger than this port"):
+        _ = _sculpt(DEER, deer)
+
+
+def test_a_mark_count_this_port_cannot_paint_is_refused() raises:
+    var t = Traits(FEMALE, ADULT, SPOTTED)
+    var pal = Palette()
+    var c = V3(0.8, 0.6, 0.5)
+    var o = V3(0, 0, 0)
+    pal.set("spots", V3(Float64(16777217), 0, 0))
+    with assert_raises(contains="larger than this port"):
+        _ = _markings(pal, t, 0, "body", "spine1", 0.0, o, V3(0, 0.6, 0), c, o)
+    pal.set("spots", V3(nan[DType.float64](), 0, 0))
+    with assert_raises(contains="larger than this port"):
+        _ = _markings(pal, t, 0, "body", "spine1", 0.0, o, V3(0, 0.6, 0), c, o)
+    var goat = Traits(FEMALE, ADULT, ALPINE)
+    var n = V3(0, 1, 0)
+    pal.set("patches", V3(Float64(16777217), 0, 0))
+    with assert_raises(contains="larger than this port"):
+        _ = _mark_sd(pal, goat, 0, 0, "body", "spine1", 0.0, o, o, n)
+    pal.set("patches", V3(nan[DType.float64](), 0, 0))
+    with assert_raises(contains="larger than this port"):
+        _ = _mark_sd(pal, goat, 0, 0, "body", "spine1", 0.0, o, o, n)
 
 
 def test_empty_helpers_keep_their_existing_empty_results() raises:

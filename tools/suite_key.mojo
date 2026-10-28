@@ -47,7 +47,7 @@ comptime TOOLING = [
     "tools/tool.sh",
     "tools/run_suite.mojo",
     "tools/compiler_telemetry.mojo",
-    "tools/native_test_support.py",
+    "tools/native_test_support.mojo",
 ]
 """The files besides this tool's own sources that decide how a suite is
 built and run."""
@@ -66,7 +66,7 @@ comptime FIXTURES = [
     ),
 ]
 """The C fixture each suite links. It is the `FIXTURES` table of
-`tools/native_test_support.py`, and a test keeps the two the same."""
+`tools/native_test_support.mojo`, and a test keeps the two the same."""
 
 
 def fixture_inputs(files: List[String]) -> List[String]:

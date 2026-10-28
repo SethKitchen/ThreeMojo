@@ -2,6 +2,8 @@
 
 `exporters/object_json.mojo` writes a scene and its assets as three.js JSON. `loaders/object_loader.mojo` reads that JSON back into a scene and its assets. The format is version 4 of three.js's JSON Object format. three.js: `Object3D.toJSON` and `ObjectLoader`.
 
+A version outside 4 inclusive and 5 exclusive is refused.
+
 ![A cube written as JSON and read back turns under its lamp](out/scenejson.png)
 
 `examples/json_scene.mojo` writes the scene, reads it back, and draws that.
@@ -84,6 +86,8 @@ A `Mesh` and a `SkinnedMesh` carry their `morphTargetInfluences`, one number for
 
 A light's `target` names an object by its uuid. When no object has that uuid, the target is the origin. This is the default target of three.js. A light's `shadow` gives `intensity`, `bias`, `normalBias`, `radius`, `mapSize` and the planes of its camera. A directional light's shadow camera gives `left`, `right`, `top` and `bottom`.
 
+A `mapSize` that is not a whole number from 1 to 8192 is refused.
+
 The writer writes a shadow's `intensity` only when it is not one, as three.js's `LightShadow.toJSON` does. Neither three.js nor this port writes `autoUpdate`, `needsUpdate` or a light's `power`, which follows from its intensity.
 
 The writer makes the same objects. A node that carries one thing becomes that thing. A node that carries more than one thing becomes an `Object3D`, with one child object for each thing at the identity. A light or a camera on other layers than its node is also a child object. A light with no node, as an ambient light usually is, is a child of the scene. The reader then gives that light a node of its own.
@@ -111,6 +115,8 @@ A skeleton entry has the uuids of its `bones` and their `boneInverses`. The bone
 A skeleton entry can leave out `boneInverses`, or give an empty list. Then the reader calculates each inverse from the world matrix of its bone, as three.js's `Skeleton.calculateInverses` does. Thus the mesh is bound in the pose that the document gives.
 
 A batched mesh joins its geometries into one `BufferGeometry`, as three.js's `BatchedMesh` holds them. Each `geometryInfo` entry gives the `vertexStart`, `vertexCount`, `indexStart` and `indexCount` of one geometry. Each `instanceInfo` entry gives the `geometryIndex` of one instance. The instance matrices are in `matricesTexture`, and the instance colors are in `colorsTexture`. Both are `DataTexture` entries with a `Float32Array` image. The colors are linear, as three.js keeps them.
+
+A count past 9007199254740992 instances is refused.
 
 The writer also writes the `indirectTexture` that three.js reads.
 
@@ -222,6 +228,8 @@ The writer writes each texture with its two wraps, its two filters, its `flipY` 
 
 The reader decodes a PNG, a JPEG or a TGA image from a `data:` URL or from a file beside the document. `wrap` gives `wrap_s` and `wrap_t`. `magFilter` and `minFilter` give the two filters, and a mipmap `minFilter` with `generateMipmaps` builds the chain. `flipY` gives `flip_y`, and the rows stay as the file has them. `mapping` is `UVMapping` or an equirectangular one on a flat texture.
 
+A wrap that is not one of the three whole numbers is refused.
+
 `colorSpace` `srgb` is `SRGB`. `srgb-linear` and the empty `NoColorSpace` are `LINEAR`.
 
 A `channel` of 1 reads the second set of texture coordinates, `uv1`.
@@ -318,6 +326,7 @@ The reader raises for a document that is not JSON, for each refusal in [Not port
 - A uuid that is named two times, or that names nothing.
 - An object, geometry, material or fog type that has no counterpart here.
 - A shadow map that is not square.
+- A shadow map size that is not a whole number from 1 to 8192.
 - A shadow camera whose right edge is not beyond its left edge, or whose top is not above its bottom.
 - A shadow that `LightShadow.validate` refuses, when the light does not cast too.
 - An LOD level that names no object, that is the LOD itself, or that is above the LOD.

@@ -1,0 +1,10 @@
+reject|optional-item-and
+reject|optional-item-or
+reject|optional-copyonly-and
+reject|optional-copyonly-or
+reject|optional-copydrop-and
+reject|optional-copydrop-or
+reject|optional-moveonly-and
+reject|optional-moveonly-or
+positive|36
+string|240

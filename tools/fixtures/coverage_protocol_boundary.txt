@@ -1,0 +1,41 @@
+from coverage.runtime import _emit, _emit_hit, hit, branch, begin, leaf, finish
+from std.sys import argv
+from render.tasks import TaskGroup
+
+__async def emit_many(record: String):
+    for _ in range(100):
+        _emit(record)
+
+def main() raises:
+    var size = Int(String(argv()[1]))
+    if size == -1:
+        hit("literal:1")
+        _ = branch("literal:2", True)
+        var values = List[Int]()
+        _ = begin(values, 2)
+        _ = leaf(True, values, "literal:4.0", 0)
+        _ = leaf(False, values, "literal:4.1", 1)
+        _ = finish(False, values, "literal:4")
+        return
+    if size == -511:
+        _emit_hit("éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé:1", "\n")
+        return
+    if size == -512:
+        _emit_hit("ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééx:1", "\n")
+        return
+    if size == -513:
+        _emit_hit("ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééxx:1", "\n")
+        return
+    var concurrent = size == 0
+    if concurrent:
+        size = 512
+    var record = String("COVEVAL2:é:1:T:")
+    record += "T" * (size - record.byte_length() - 2)
+    record += ";\n"
+    if concurrent:
+        var group = TaskGroup()
+        for _ in range(8):
+            group.create_task(emit_many(record))
+        group.wait()
+    else:
+        _emit(record)

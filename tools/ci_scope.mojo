@@ -110,16 +110,18 @@ comptime BUILD_TOOLS = [
     "tools/coverage_shard.mojo",
     "tools/example_inputs.mojo",
     "tools/run_suite.mojo",
+    "tools/shell_log.mojo",
+    "tools/suite_tools.mojo",
 ]
 """The Mojo tools the Makefile runs to select, split, key and judge the checks. A
 change to one, or to any file it imports, changes the selection itself."""
 
 comptime GLOBAL_TOOLS = [
     "tools/cache_key.py",
-    "tools/suite_key.py",
-    "tools/run_suite.py",
+    "tools/suite_key.mojo",
+    "tools/run_suite.mojo",
     "tools/native_test_support.py",
-    "tools/test_environment.py",
+    "tools/native_test_support.mojo",
     "tools/fixture_runtime.mojo",
     "tools/compiler_telemetry.mojo",
 ]
@@ -129,6 +131,9 @@ comptime COVERAGE_TOOLS = [
     "tools/check_coverage_sources.mojo",
     "tools/check_coverage_loops.mojo",
     "tools/coverage_hit_faults.mojo",
+    "tools/check_coverage_hit_profile.mojo",
+    "tools/check_coverage_protocol.mojo",
+    "tools/check_build_tools.mojo",
 ]
 """The Mojo programs that `make test-coverage-tool` runs. A change to one, or
 to any file it imports, runs the coverage tool check."""

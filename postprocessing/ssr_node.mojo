@@ -101,8 +101,8 @@ def check_ssr_node(settings: SsrNodeSettings) raises:
 
     Raises:
         Error: If a number is not finite, the distance or the scale is not
-            positive, the thickness is negative, or the blur's reach is
-            negative.
+            positive, the thickness is negative, the blur's reach is
+            negative, or the blur's reach is above 2047.
     """
     if not (
         isfinite(settings.max_distance.value)
@@ -117,6 +117,8 @@ def check_ssr_node(settings: SsrNodeSettings) raises:
         raise Error("An SSR node's distance and scale must be positive")
     if settings.thickness.value < 0 or settings.blur_quality < 0:
         raise Error("An SSR node's thickness and blur must not be negative")
+    if settings.blur_quality > 2047:
+        raise Error("An SSR blur's reach is larger than this port takes")
 
 
 struct SsrNodeFrame(ImplicitlyCopyable):
@@ -320,7 +322,7 @@ def ssr_node_pixel(
 
 def ssr_node_blur(
     source: LightView, width: Int, height: Int, size: Int, separation: Int
-) -> List[FloatColor]:
+) raises -> List[FloatColor]:
     """Return three.js's `boxBlur` of raw values at another size: the mean
     of a square of `2 * size + 1` taps a side, `separation` of the
     source's pixels apart, at least one.
@@ -334,7 +336,17 @@ def ssr_node_blur(
 
     Returns:
         The blur, row by row from the top.
+
+    Raises:
+        Error: If a side is below one, the pixel count does not fit, or
+            the reach is above 2047 taps from the center.
     """
+    if size > 2047:
+        raise Error("An SSR blur's reach is larger than this port takes")
+    if width < 1 or height < 1:
+        raise Error("An SSR blur must be at least one pixel each way")
+    if width > Int.MAX // height:
+        raise Error("An SSR blur is larger than this port builds")
     var sep = Float32(max(separation, 1))
     var step_u = sep / Float32(source.width)
     var step_v = sep / Float32(source.height)

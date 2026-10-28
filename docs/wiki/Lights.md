@@ -143,7 +143,7 @@ A probe of a uniform sky of radiance one gives an irradiance of pi. A white matt
 
 ### How a probe is measured
 
-`sh_from_cube` reads every texel of the six faces in linear light. It weights each texel by the solid angle it covers and projects it onto the nine terms. This is three.js's arithmetic. The direction of a texel is `face_direction`, this project's one cube convention. three.js walks the faces of an image cube in its own layout instead, with the px image toward -x.
+`sh_from_cube` reads every texel of the six faces in linear light. It weights each texel by the solid angle it covers and projects it onto the nine terms. This is three.js's arithmetic. The direction of a texel is `face_direction`, this project's one cube convention. three.js walks the faces of an image cube in its own layout instead, with the px image toward -x. A face above 8388608 texels measures a texel center in `Float64`.
 
 ### The GPU
 
@@ -315,7 +315,13 @@ sun.shadow.blur_samples = 8
 
 **PCF soft.** `soft_texel` finds the texel corner nearest to the fragment and reads a four-by-four block around it. `soft_shadow` adds the four middle taps whole. It mixes the outer taps by `soft_fraction`, the distance of the fragment past that corner. The sum divided by nine is the lit fraction of a box three texels wide. This is three.js's `getShadow` under `SHADOWMAP_TYPE_PCF_SOFT`, tap for tap.
 
+A coordinate that does not fit in an integer reads the edge.
+
 **Variance shadow maps.** A variance map keeps two numbers for each texel: the mean of the depth and its standard deviation. `vsm_moments` makes them from the drawn depths with three.js's two `VSMPass` passes. The first pass reads `blur_samples` depths down each column, from `radius` texels before to `radius` texels after. The second pass reads the result across each row. Each read is linear between the four nearest texel centers: `bilinear_texel` and `bilinear`.
+
+A coordinate that does not fit in an integer reads the edge.
+
+A side below one, a side whose square does not fit, a short depth list, or no sample is refused.
 
 `vsm_shadow` reads the map at the fragment, linearly. A fragment no deeper than the mean is lit. Beyond the mean, Chebyshev's inequality bounds the lit fraction by the variance over the variance plus the squared distance. three.js maps that bound from 0.3 to 0.95 onto zero to one, to cut the light that leaks between casters. This port does the same.
 
@@ -408,7 +414,7 @@ csm.update(scene, camera)
 var frame = renderer.render(scene, assets, camera)
 ```
 
-The constructor adds one casting directional light for each cascade to the scene, each with a node and a target node under `parent`. `update` moves each light behind its slice and snaps it to whole texels of its map, so the shadow does not crawl. Call `update_frustums` after the camera's projection, `mode` or `fade` changes. `remove` takes the lights off their parent. `dispose` makes them plain directional lights.
+The constructor adds one casting directional light for each cascade to the scene, each with a node and a target node under `parent`. `update` moves each light behind its slice and snaps it to whole texels of its map, so the shadow does not crawl. Call `update_frustums` after the camera's projection, `mode` or `fade` changes. `remove` takes the lights off their parent. `dispose` makes them plain directional lights. A cascade count above 16777216 is refused.
 
 | Mode | three.js | Breaks |
 |---|---|---|

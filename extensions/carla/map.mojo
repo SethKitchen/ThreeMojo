@@ -3952,12 +3952,17 @@ struct Map(Movable):
             The waypoints, road by road.
 
         Raises:
-            Error: If the distance is not positive.
+            Error: If the distance is not positive, or a road needs more
+                waypoints than this port walks.
         """
         if not isfinite(distance) or not (distance > 0.0):
             raise Error("Waypoint spacing must be positive")
         var out = List[Waypoint]()
         for road in self.roads:
+            if not (road.length / distance < Float64(16777216)):
+                raise Error(
+                    "A generated waypoint count is larger than this port walks"
+                )
             var s = EPSILON
             while s < road.length - EPSILON:
                 for index in road._sections_at_si(s):
@@ -3971,7 +3976,7 @@ struct Map(Movable):
                                 )
                             )
                 var following = s + distance
-                if not isfinite(following) or following <= s:
+                if not isfinite(following):
                     raise Error(
                         "Waypoint spacing cannot advance at this station"
                     )

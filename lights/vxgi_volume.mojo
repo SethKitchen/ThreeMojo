@@ -101,6 +101,9 @@ comptime SHADOW_STEPS = 256
 
 # The steps of any other cone, three.js's `maxSteps` default.
 comptime CONE_STEPS = 128
+# The most bounces a volume caches. Each bounce walks every voxel, and
+# `range` of `Int.MAX` never ends.
+comptime MAX_VXGI_BOUNCES = 16777216
 
 # How far a cone starts from its voxel, in voxels, three.js's `1.5`.
 comptime ORIGIN_OFFSET = Float32(1.5)
@@ -113,6 +116,22 @@ comptime MIN_RESOLUTION = 8
 
 # three.js's `PI`, which the irradiance is divided by.
 comptime VXGI_PI = Float32(3.141592653589793)
+
+
+def require_vxgi_bounces(bounces: Int) raises:
+    """Refuse a bounce count this port cannot cache.
+
+    Nothing. The call returns when the count is in range. A negative
+    count is refused separately, as "cannot be negative".
+
+    Args:
+        bounces: How many bounces the volume caches.
+
+    Raises:
+        Error: If the count is above 16777216.
+    """
+    if bounces > MAX_VXGI_BOUNCES:
+        raise Error("A VXGI bounce count is larger than this port caches")
 
 
 @fieldwise_init
@@ -239,13 +258,36 @@ def _swizzled(
     return (y, z, x)
 
 
+def _grid_index(value: Float32) -> Int:
+    """Return the sub-voxel a coordinate falls in.
+
+    A coordinate that is not finite, or that does not fit in an integer,
+    lies past the high side of the grid. A coordinate past the low side
+    of an integer lies past the low side. A coordinate inside the grid is
+    `floor` of that coordinate.
+
+    Args:
+        value: A sub-voxel coordinate.
+
+    Returns:
+        The index, or `Int.MAX` / `Int.MIN` when the coordinate lies past
+        the grid.
+    """
+    if not (isfinite(value) and value < Float32(Int.MAX)):
+        return Int.MAX
+    if value <= -Float32(Int.MAX):
+        return Int.MIN
+    return Int(floor(value))
+
+
 struct VoxelTriangle(ImplicitlyCopyable):
     """One triangle record set up for conservative voxelization, in
     sub-voxel space and turned so its dominant axis is `k`: the first half
     of three.js's `VXGI.Voxelize` kernel.
 
     The host walks its columns, three.js's loops. A kernel asks it of the
-    eight sub-voxels of its own voxel. Both decide with `column`.
+    eight sub-voxels of its own voxel. Both decide with `column`. A
+    coordinate that does not fit in an integer lies past the grid.
     """
 
     # Whether the triangle covers anything: its plane has a dominant axis.
@@ -337,10 +379,10 @@ struct VoxelTriangle(ImplicitlyCopyable):
         var max_j = max(q0[1], max(q1[1], q2[1]))
         self.low_k = min(q0[2], min(q1[2], q2[2]))
         self.high_k = max(q0[2], max(q1[2], q2[2]))
-        self.i0 = max(Int(floor(min_i)), 0)
-        self.i1 = min(Int(floor(max_i)), Int(sd[0]) - 1)
-        self.j0 = max(Int(floor(min_j)), 0)
-        self.j1 = min(Int(floor(max_j)), Int(sd[1]) - 1)
+        self.i0 = max(_grid_index(min_i), 0)
+        self.i1 = min(_grid_index(max_i), Int(sd[0]) - 1)
+        self.j0 = max(_grid_index(min_j), 0)
+        self.j1 = min(_grid_index(max_j), Int(sd[1]) - 1)
         self.top_k = Int(sd[2]) - 1
         var area_sign = glsl_sign(n[2])
         self.e0 = _edge(q0[0], q0[1], q1[0], q1[1], area_sign)
@@ -375,9 +417,9 @@ struct VoxelTriangle(ImplicitlyCopyable):
             self.q0z
             - (self.nx * (cx - self.q0x) + self.ny * (cy - self.q0y)) / self.nz
         )
-        var k0 = max(Int(floor(max(depth - self.half_extent, self.low_k))), 0)
+        var k0 = max(_grid_index(max(depth - self.half_extent, self.low_k)), 0)
         var k1 = min(
-            Int(floor(min(depth + self.half_extent, self.high_k))), self.top_k
+            _grid_index(min(depth + self.half_extent, self.high_k)), self.top_k
         )
         return (inside, k0, k1)
 
@@ -1058,10 +1100,11 @@ struct VXGIVolume(Movable):
 
         Raises:
             Error: If the resolution is not positive, the bounces or the
-                lights are negative, the minimum opacity or the step scale
-                is not finite, the step scale is not positive, the distance
-                is negative or not finite, or a cone's aperture is not
-                between zero and a half turn.
+                lights are negative, the bounce count is above 16777216,
+                the minimum opacity or the step scale is not finite, the
+                step scale is not positive, the distance is negative or
+                not finite, or a cone's aperture is not between zero and
+                a half turn.
         """
         require_positive(
             self.resolution, "A VXGI volume's resolution must be positive"
@@ -1069,6 +1112,7 @@ struct VXGIVolume(Movable):
         require_non_negative(
             self.bounces, "A VXGI volume's bounces cannot be negative"
         )
+        require_vxgi_bounces(self.bounces)
         require_non_negative(
             self.max_lights, "A VXGI volume's light count cannot be negative"
         )
@@ -1119,7 +1163,8 @@ struct VXGIVolume(Movable):
 
         Raises:
             Error: If the settings are refused by `validate`, the bounds
-                have no size, or anything the collector raises.
+                have no size, the voxel count does not fit in an integer,
+                or anything the collector raises.
         """
         self.validate()
         var bounds = self.bounds
@@ -1142,6 +1187,10 @@ struct VXGIVolume(Movable):
         var gx = _padded(sx, voxel, multiple)
         var gy = _padded(sy, voxel, multiple)
         var gz = _padded(sz, voxel, multiple)
+        # The chain is under twice the base grid, and each voxel stores
+        # four floats. Eight times the base count has to fit.
+        if gx > (Int.MAX // 8 // gy) // gz:
+            raise Error("A VXGI volume is larger than this port builds")
         levels = min(levels, Int(floor(log2(Float64(max(gx, gy))))) + 1)
         var low = Vector3(
             Float32(Float64(bounds.min.x) - voxel),
@@ -1315,11 +1364,15 @@ struct VXGIVolume(Movable):
         """
         return tan(self.bounce_cone_angle.value * 0.5)
 
-    def update_lighting(mut self):
+    def update_lighting(mut self) raises:
         """Inject the light and cache the bounces on the host: three.js's
         `_updateLighting`, with its `VXGI.Inject`, `VXGI.RadianceMip` and
         `VXGI.Bounce` kernels. The volume must be voxelized.
+
+        Raises:
+            Error: If the bounce count is above 16777216.
         """
+        require_vxgi_bounces(self.bounces)
         var count = self.grid.level_count(0)
         var records = floats_of(self.triangles)
         var shining = floats_of(self.lights)
@@ -1453,11 +1506,29 @@ def _check_aperture(angle: Angle, what: String) raises:
         )
 
 
-def _padded(size: Float64, voxel: Float64, multiple: Int) -> Int:
+def _padded(size: Float64, voxel: Float64, multiple: Int) raises -> Int:
     """Return an axis's voxel count: its size, one voxel each side, rounded
-    up to the coarsest level's step."""
+    up to the coarsest level's step.
+
+    Args:
+        size: The axis length, in meters.
+        voxel: The voxel edge, in meters.
+        multiple: The coarsest level's step. It is at least one.
+
+    Returns:
+        The voxel count.
+
+    Raises:
+        Error: If the count does not fit in an integer.
+    """
     var cells = ceil(size / voxel) + 2
-    return Int(ceil(cells / Float64(multiple))) * multiple
+    if not (isfinite(cells) and cells < Float64(Int.MAX)):
+        raise Error("A VXGI volume is larger than this port builds")
+    # A finite count of cells gives a finite count of groups.
+    var groups = ceil(cells / Float64(multiple))
+    if not (groups < Float64(Int.MAX // multiple)):
+        raise Error("A VXGI volume is larger than this port builds")
+    return Int(groups) * multiple
 
 
 def _store(mut volume: List[Float32], index: Int, texel: Lanes):

@@ -62,6 +62,27 @@ def test_invalid_counts_do_not_advance_the_random_generator() raises:
         assert_equal(random.state, before)
 
 
+def test_a_key_count_above_the_store_is_refused_before_the_walk() raises:
+    # 2e6 seconds is twenty million keys. The count fits in an integer,
+    # and the key index is a Float32, so the walk is refused.
+    var random = SeededRandom(7)
+    var before = random.state
+    assert_equal(_key_count(Duration(Float32(2e6), SECOND)), 20000000)
+    with assert_raises(contains="larger than this port"):
+        _ = create_shake_animation(
+            NodeId(0),
+            Duration(Float32(2e6), SECOND),
+            Vector3(1, 1, 1),
+            random,
+        )
+    assert_equal(random.state, before)
+    with assert_raises(contains="larger than this port"):
+        _ = create_pulsation_animation(
+            NodeId(0), Duration(Float32(2e6), SECOND), 1, random
+        )
+    assert_equal(random.state, before)
+
+
 def test_representable_boundary_is_counted_without_allocating() raises:
     var boundary = Float32(Int.MAX // 3) / 10
     var below = bitcast[DType.float32](bitcast[DType.uint32](boundary) - 1)

@@ -182,7 +182,7 @@ var fog = assets.materials.add(
 )
 ```
 
-The material is drawn from its back faces, blended, with no depth test and no depth write, as three.js's is. `steps` is three.js's `steps`, 25 by default. Change it with `set_steps`. A fragment's ray works like this:
+The material is drawn from its back faces, blended, with no depth test and no depth write, as three.js's is. `steps` is three.js's `steps`, 25 by default. Change it with `set_steps`. A step count above 4096 is refused. A fragment's ray works like this:
 
 1. The ray runs from the camera to the fragment when the camera is more than twice the mesh's bounding radius from it. Otherwise the ray runs from the fragment to the camera. The radius is the geometry's bounding sphere in world space, three.js's `modelRadius`.
 2. The ray takes `steps` equal steps. The first step is `OFFSET_NODE` of a step from the start, or at the start.
@@ -713,6 +713,8 @@ The library is three.js's: the math, the adjustments, the mix, the channels, the
 - `emission_color` multiplies `emission`, as the specification says. three.js reads `emissionColor`, which no document names.
 - A `gltf_pbr` surface is left as a plain physical material, as three.js leaves it.
 - `normalmap`, `heighttonormal`, `tangent`, `frame`, the unified noises and the matrix nodes are refused. The program has no tangents, no frame count and no matrices of those types.
+- An extract index that is not a whole number from zero to three is refused.
+- A fractal octave count that is not a whole number from zero to 1024 is refused.
 
 ## In a file
 

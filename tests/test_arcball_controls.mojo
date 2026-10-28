@@ -15,6 +15,7 @@ same input. A pointer is at the center of its pixel, a wheel notch is a
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.arcball_controls import (
+    _apart,
     ArcballControls,
     ArcballModifier,
     ArcballMouse,
@@ -1739,6 +1740,58 @@ def test_an_orthographic_zoom_as_three_js_does() raises:
     rig.send(POINTER_MOVE, 70, 50, SECONDARY)
     _level(rig.camera, -0.719113, 0.561928, 5)
     rig.send(POINTER_UP, 70, 50, SECONDARY)
+
+
+def test_a_wide_view_keeps_the_pixel_center_inside() raises:
+    var camera = _perspective()
+    var controls = ArcballControls(camera)
+    controls._width = 100
+    controls._height = 100
+    var small = controls._ndc(50.5, 50.5)
+    assert_equal(small.x, Float32(50.5) / Float32(100) * 2 - 1)
+    assert_equal(small.y, (Float32(100) - Float32(50.5)) / Float32(100) * 2 - 1)
+    var wide = 16777217
+    controls._width = wide
+    controls._height = wide
+    var center = Float64(wide - 1) + 0.5
+    var ndc = controls._ndc(center, 0.5)
+    assert_equal(ndc.x, Float32(center / Float64(wide) * 2 - 1))
+    assert_true(ndc.x < 1)
+    # Each bound of the small quotient, with the others inside it.
+    controls._width = wide
+    controls._height = 100
+    var across = controls._ndc(50.5, 0.5)
+    assert_equal(across.x, Float32(50.5 / Float64(wide) * 2 - 1))
+    controls._width = 100
+    controls._height = wide
+    var down = controls._ndc(0.5, 50.5)
+    assert_equal(
+        down.y, Float32((Float64(wide) - 50.5) / Float64(wide) * 2 - 1)
+    )
+    controls._height = 100
+    var big_x = controls._ndc(8388608.5, 0.5)
+    assert_equal(big_x.x, Float32(8388608.5 / Float64(100) * 2 - 1))
+    var big_y = controls._ndc(0.5, 8388608.5)
+    assert_equal(
+        big_y.y, Float32((Float64(100) - 8388608.5) / Float64(100) * 2 - 1)
+    )
+    var low_x = controls._ndc(-8388608, 0.5)
+    assert_equal(low_x.x, Float32(-8388608 / Float64(100) * 2 - 1))
+    var low_y = controls._ndc(0.5, -8388608)
+    assert_equal(
+        low_y.y, Float32((Float64(100) - -8388608) / Float64(100) * 2 - 1)
+    )
+    # Two adjacent pixels past 2^24 are one pixel apart, not the same point.
+    assert_equal(_apart(16777216.5, 0.5, 16777217.5, 0.5), 1)
+    assert_equal(_apart(10.5, 20.5, 14.5, 23.5), 5)
+    assert_equal(_apart(-8388608, 0.5, -8388607, 0.5), 1)
+    assert_equal(_apart(8388608.5, 0.5, 8388609.5, 0.5), 1)
+    assert_equal(_apart(0.5, -8388608, 0.5, -8388607), 1)
+    assert_equal(_apart(0.5, 8388608.5, 0.5, 8388609.5), 1)
+    assert_equal(_apart(0.5, 0.5, -8388608, 0.5), Float32(8388608.5))
+    assert_equal(_apart(0.5, 0.5, 8388608.5, 0.5), Float32(8388608))
+    assert_equal(_apart(0.5, 0.5, 0.5, -8388608), Float32(8388608.5))
+    assert_equal(_apart(0.5, 0.5, 0.5, 8388608.5), Float32(8388608))
 
 
 def main() raises:

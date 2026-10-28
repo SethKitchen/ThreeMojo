@@ -179,10 +179,12 @@ def cube_uv_lod_max(height: Int) -> Int:
 
     Returns:
         `lod_max`, the base-two logarithm of a quarter of the height,
-        rounded down.
+        rounded down. A height past the sizes an integer can name reads
+        as sixty.
     """
     var lod = 0
-    while (4 << (lod + 1)) <= height:
+    # `4 << 61` wraps, so a larger shift is not a taller image.
+    while lod < 60 and (4 << (lod + 1)) <= height:
         lod += 1
     return lod
 

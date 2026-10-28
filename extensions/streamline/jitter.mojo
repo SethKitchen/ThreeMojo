@@ -40,15 +40,18 @@ def jitter_phase_count(render: FrameSize, output: FrameSize) raises -> Int:
         rounded up. It is never below eight.
 
     Raises:
-        Error: If a size has a side below one pixel, or the render is wider
-            than the output.
+        Error: If a size has a side below one pixel, the render is wider
+            than the output, or the count does not fit in an integer.
     """
     if render.width < 1 or render.height < 1:
         raise Error("A render must be at least one pixel each way")
     if output.width < render.width:
         raise Error("A render must not be wider than the output")
     var ratio = Float64(output.width) / Float64(render.width)
-    return Int(ceil(8.0 * ratio * ratio))
+    var wide = ceil(8.0 * ratio * ratio)
+    if not (wide < Float64(Int.MAX)):
+        raise Error("A jitter phase count does not fit in an integer")
+    return Int(wide)
 
 
 def jitter_offset(index: Int, phase_count: Int) raises -> Vector2:

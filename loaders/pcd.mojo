@@ -42,11 +42,13 @@ known; a `SIZE`, `TYPE` or `COUNT` line whose length is not the number of
 fields; a type other than `F`, `I` and `U`, or a size its type does not
 have; a count below one; a `WIDTH`, `HEIGHT` or `POINTS` that is not a
 whole number of zero or more; `x`, `y` and `z`, or the three normals,
-not all given; an `rgb` of other than four bytes; a text row with fewer
-values than its fields, or a value that is not a number; a coordinate
+not all given; an `rgb` of other than four bytes, or a text `rgb` that
+does not fit in an integer; a text row with fewer values than its
+fields, or a value that is not a number; a coordinate
 that is not finite as a `Float32`; a file that ends early; and LZF data
-that is not valid or does not fill its declared size. three.js reads
-past most of these and yields `NaN`, or throws a `RangeError`.
+that is not valid or does not fill its declared size. A product that does
+not fit in an integer is refused before allocation. three.js reads past
+most of these and yields `NaN`, or throws a `RangeError`.
 """
 
 from std.math import isfinite
@@ -440,6 +442,45 @@ struct PcdModel(Movable):
         self.labels = labels^
 
 
+def _product(left: Int, right: Int, message: String) raises -> Int:
+    """Return `left * right` when the product fits in `Int`.
+
+    Both factors are zero or more. A zero factor gives zero. The check
+    divides before it multiplies, so an untrusted header cannot overflow
+    the product.
+
+    Args:
+        left: The first factor.
+        right: The second factor.
+        message: The error text when the product does not fit.
+
+    Returns:
+        The product.
+
+    Raises:
+        Error: If `message` applies, because the product does not fit.
+    """
+    if right != 0 and left > Int.MAX // right:
+        raise Error(message)
+    return left * right
+
+
+def _point_bytes(points: Int, row_size: Int) raises -> Int:
+    """Return the bytes `points` rows occupy.
+
+    Args:
+        points: How many points the header names.
+        row_size: How many bytes one point takes.
+
+    Returns:
+        `points * row_size`. A row of no bytes occupies none.
+
+    Raises:
+        Error: If the product does not fit in `Int`.
+    """
+    return _product(points, row_size, "PCD: the points do not fit")
+
+
 def _whole(text: String, what: String) raises -> Int:
     """Return a whole number of a header line.
 
@@ -542,7 +583,11 @@ def parse_pcd_header(bytes: List[UInt8]) raises -> PcdHeader:
     )
     header.header_length = word_end + 1
     if not points_given:
-        header.points = header.width * header.height
+        header.points = _product(
+            header.width,
+            header.height,
+            "PCD: WIDTH times HEIGHT does not fit",
+        )
     if len(header.counts) == 0:
         for _ in range(len(header.fields)):
             header.counts.append(1)
@@ -550,10 +595,16 @@ def parse_pcd_header(bytes: List[UInt8]) raises -> PcdHeader:
     var sum = 0
     for index in range(len(header.fields)):
         header.offsets.append(sum)
-        if header.data == PCD_ASCII:
-            sum += header.counts[index]
-        else:
-            sum += header.sizes[index] * header.counts[index]
+        var add = header.counts[index]
+        if header.data != PCD_ASCII:
+            add = _product(
+                header.sizes[index],
+                header.counts[index],
+                "PCD: a field does not fit",
+            )
+        if add > Int.MAX - sum:
+            raise Error("PCD: a row does not fit")
+        sum += add
     header.row_size = sum
     return header^
 
@@ -720,8 +771,8 @@ struct _Reader:
             The value, with red in bits 16 to 23.
 
         Raises:
-            Error: If the data ends first, or a text value is not a
-                number.
+            Error: If the data ends first, a text value is not a number,
+                or a text integer does not fit in `Int`.
         """
         if self.header.data != PCD_ASCII:
             var at = self.at(field, point, 0)
@@ -732,6 +783,15 @@ struct _Reader:
         var value = self.number(field, point)
         if self.header.types[field] == PCD_FLOAT:
             return Int(bitcast[DType.int32](Float32(value)))
+        # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is
+        # not the number. A uint32 text color is below that.
+        if not (value > -Float64(Int.MAX) and value < Float64(Int.MAX)):
+            raise Error(
+                "PCD point "
+                + String(point)
+                + ": `rgb` does not fit in an integer: "
+                + String(value)
+            )
         return Int(value)
 
 
@@ -774,14 +834,19 @@ def parse_pcd(bytes: List[UInt8]) raises -> PcdModel:
                 lines.append(line^)
         points = len(lines)
     elif header.data == PCD_BINARY:
-        var end = start + header.points * header.row_size
-        if end > len(bytes):
+        # An empty row still visits every point. More points than the file
+        # has bytes cannot be a real cloud, and the visit would not end.
+        if header.row_size == 0 and header.points > len(bytes):
+            raise Error("PCD: the points do not fit")
+        var payload = _point_bytes(header.points, header.row_size)
+        # The header ends inside the file, so `start` is not past its end.
+        if payload > len(bytes) - start:
             raise Error(
                 "PCD: the file ends before its "
                 + String(header.points)
                 + " points"
             )
-        data = copy_byte_range(bytes, start, end)
+        data = copy_byte_range(bytes, start, start + payload)
     else:
         if start + 8 > len(bytes):
             raise Error("PCD: the file ends before its compressed sizes")
@@ -790,7 +855,9 @@ def parse_pcd(bytes: List[UInt8]) raises -> PcdModel:
         if start + 8 + packed > len(bytes):
             raise Error("PCD: the file ends inside its compressed data")
         data = decompress_lzf(copy_bytes(bytes, start + 8, packed), size)
-        if len(data) < header.points * header.row_size:
+        if header.row_size == 0 and header.points > len(bytes):
+            raise Error("PCD: the points do not fit")
+        if len(data) < _point_bytes(header.points, header.row_size):
             raise Error(
                 "PCD: the compressed data is too small for its "
                 + String(header.points)
@@ -832,7 +899,8 @@ def parse_pcd(bytes: List[UInt8]) raises -> PcdModel:
             )
         if label >= 0:
             var value = reader.number(label, point)
-            if value != floor(value):
+            var fits = value > -Float64(Int.MAX) and value < Float64(Int.MAX)
+            if value != floor(value) or not fits:
                 raise Error(
                     "PCD point "
                     + String(point)

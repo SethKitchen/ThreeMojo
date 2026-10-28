@@ -142,8 +142,8 @@ jobs:
           # uv venv installs an import hook; proof-bearing environments cannot.
           "$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv
 
-      - name: Install Mojo only for selected native checks
-        if: needs.scope.outputs.run_native == 'true' || needs.scope.outputs.run_docs == 'true' || needs.scope.outputs.run_coverage_tools == 'true' || needs.scope.outputs.run_portability == 'true'
+      - name: Install Mojo for selected checks
+        if: needs.scope.outputs.run_native == 'true' || needs.scope.outputs.run_docs == 'true' || needs.scope.outputs.run_coverage_tools == 'true' || needs.scope.outputs.run_portability == 'true' || needs.scope.outputs.run_export == 'true'
         run: |
           uv pip install --python .venv/bin/python "mojo==1.2.0"
           .venv/bin/mojo --version
@@ -166,15 +166,6 @@ jobs:
       - name: Documentation
         if: needs.scope.outputs.run_docs == 'true'
         run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- docs-check
-
-      # Only the offline CARLA exporter fixture needs these two packages.
-      # Keep its exact wheels in a separate environment from Mojo/MAX.
-      - name: Test CARLA far-asset baking
-        if: needs.scope.outputs.run_export == 'true'
-        run: |
-          uv venv .venv-carla-export --python .venv/bin/python
-          uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0"
-          .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
 
   # The #333 oracle proofs take hours of processor time, more than one
   # lint job holds, so the tool regressions run over several runners.
@@ -291,6 +282,9 @@ jobs:
 
       - name: Install the pinned Mojo toolchain
         run: |
+          # The toolchain identity suite builds its own environment from this
+          # interpreter. The image venv on PATH is CPython with distro hooks.
+          uv python install --no-bin 3.12.14
           uv venv --prompt ThreeMojo
           uv pip install "mojo==1.2.0"
           .venv/bin/mojo --version
@@ -310,6 +304,13 @@ jobs:
       # memory, so the runner needs no display.
       - name: Install Xvfb
         run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      # Town image tests compare with NumPy 2.3.5 and Pillow 12.3.0.
+      - name: Install NumPy and Pillow
+        run: |
+          python3 -m venv "$RUNNER_TEMP/image-python"
+          "$RUNNER_TEMP/image-python/bin/pip" install --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0" "fast-simplification==0.1.11"
+          echo "$RUNNER_TEMP/image-python/bin" >> "$GITHUB_PATH"
 
       - name: test-cpu
         env:
@@ -360,8 +361,8 @@ jobs:
           # uv venv installs an import hook; proof-bearing environments cannot.
           "$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv
 
-      - name: Install Mojo only for selected native checks
-        if: needs.scope.outputs.run_native == 'true' || needs.scope.outputs.run_docs == 'true' || needs.scope.outputs.run_coverage_tools == 'true' || needs.scope.outputs.run_portability == 'true'
+      - name: Install Mojo for selected checks
+        if: needs.scope.outputs.run_native == 'true' || needs.scope.outputs.run_docs == 'true' || needs.scope.outputs.run_coverage_tools == 'true' || needs.scope.outputs.run_portability == 'true' || needs.scope.outputs.run_export == 'true'
         run: |
           uv pip install --python .venv/bin/python "mojo==1.2.0"
           .venv/bin/mojo --version
@@ -384,15 +385,6 @@ jobs:
       - name: Documentation
         if: needs.scope.outputs.run_docs == 'true'
         run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- docs-check
-
-      # Only the offline CARLA exporter fixture needs these two packages.
-      # Keep its exact wheels in a separate environment from Mojo/MAX.
-      - name: Test CARLA far-asset baking
-        if: needs.scope.outputs.run_export == 'true'
-        run: |
-          uv venv .venv-carla-export --python .venv/bin/python
-          uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0"
-          .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
 
   tools-macos:
     needs: scope
@@ -527,10 +519,40 @@ jobs:
       - name: Install Xvfb
         run: brew install xorg-server
 
+      # Town image tests compare with NumPy 2.3.5 and Pillow 12.3.0. The
+      # suites run `python3` from PATH, so the packages go into a venv that
+      # is put on PATH, as on Linux. `uv pip install --python python3`
+      # selected ./.venv, which is not on PATH.
+      - name: Install NumPy and Pillow
+        run: |
+          python3 -m venv "$RUNNER_TEMP/image-python"
+          "$RUNNER_TEMP/image-python/bin/pip" install --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0" "fast-simplification==0.1.11"
+          echo "$RUNNER_TEMP/image-python/bin" >> "$GITHUB_PATH"
+
       # Serialize outer compiler processes to limit oversubscription while
       # preserving every check and the per-test time limit.
       - name: check-cpu
         run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- ${{ matrix.target }} JOBS=1
+
+      # A reader of the job log can get only its last lines, and the suites
+      # run in name order. When a suite fails, this step runs each suite
+      # that has no stamp once more, so that its output is at the end of the
+      # log. The job fails all the same.
+      - name: Repeat the failed suites
+        if: failure()
+        run: |
+          [ -f .cache/suites-to-run ] || exit 0
+          while read -r suite key; do
+            name=$(basename "$suite" .mojo)
+            [ -e ".cache/suites/$name-$key" ] && continue
+            echo "Repeat: $suite"
+            sh tools/tool.sh .venv/bin/mojo native_test_support run --root . \
+              --suite "$suite" --cache .cache/native -- \
+              .venv/bin/mojo build -I . --Werror -o ".cache/bin/$name" "$suite" \
+              </dev/null \
+              && sh tools/tool.sh .venv/bin/mojo run_suite --seconds 5 \
+                --suite "$suite" -- ".cache/bin/$name" </dev/null || true
+          done < .cache/suites-to-run
 
 
   # Coverage runs beside the suites rather than after them, and is split the
@@ -585,17 +607,23 @@ jobs:
           python3 -m venv --prompt ThreeMojo .venv
           .venv/bin/python -m pip install "mojo==1.2.0"
           .venv/bin/mojo --version
+          python3 -m pip install --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0" "fast-simplification==0.1.11"
 
       # The native window's suite runs under coverage too.
       - name: Install Xvfb
-        run: apt-get update && apt-get install -y --no-install-recommends xvfb libx11-6
+        run: apt-get update && apt-get install -y --no-install-recommends xvfb libx11-6 passwd
 
       # Linux-only private probe profile; raw/JIT remains available locally.
       # Keep the full suite inventory and the original group deadline.
       - name: capture
         run: |
-          sh tools/tool.sh .venv/bin/mojo ci_scope run -- coverage-instrument
-          sh tools/tool.sh .venv/bin/mojo ci_scope run -- coverage-capture SHARD=${{ matrix.shard }}/8 COV_BUDGET=9000 COV_PROFILE=aot-hits
+          # The image's root user can read a mode 000 directory, so the
+          # inventory refusal checks would not run. Capture as a normal user.
+          id runner >/dev/null 2>&1 || useradd --create-home --uid 1001 --shell /bin/bash runner
+          chown -R runner:runner "$GITHUB_WORKSPACE"
+          runuser --user runner --preserve-environment -- env HOME=/home/runner \
+            bash -c 'cd "$1" && sh tools/tool.sh .venv/bin/mojo ci_scope run -- coverage-instrument && sh tools/tool.sh .venv/bin/mojo ci_scope run -- coverage-capture SHARD='"${{ matrix.shard }}"'/8 COV_BUDGET=9000 COV_PROFILE=aot-hits' \
+            bash "$GITHUB_WORKSPACE"
 
       # Compressed as captured, so a group's streams are megabytes, not the
       # gigabytes the raw probes would be. Nothing to upload when no measured

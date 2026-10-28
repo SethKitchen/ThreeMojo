@@ -162,6 +162,10 @@ def run_program(
             + 'kill "$w" 2>/dev/null; wait "$w" 2>/dev/null\n'
             + "printf '%d' \"$rc\"\n"
         )
+        # Keep the second shell. `run` starts the first one with this
+        # program's signal mask, and on Linux `hold_signals` blocks SIGTERM.
+        # dash, the `sh` of Linux, starts the second shell with no signal
+        # blocked, so the `kill` that stops the timer still works.
         var reported = run("sh -c " + shell_quote(script))
         var status = Int(reported)
         var bytes = Path(output).read_bytes()

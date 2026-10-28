@@ -68,6 +68,7 @@ from render.framebuffer import TRANSPARENT_BLACK, Color, FloatColor
 from render.target import RenderTarget
 from std.math import cos, isfinite, pow, sin, sqrt
 from units.si import Angle, RADIAN
+from math.utils import scaled_side
 
 
 @fieldwise_init
@@ -1362,9 +1363,13 @@ def check_god_rays(settings: GodRaysSettings) raises:
         raise Error("A god-ray resolution scale runs above zero to one")
 
 
-def god_rays_size(size: Int, scale: Float32) -> Int:
+def god_rays_size(size: Int, scale: Float32) raises -> Int:
     """Return the rays' width or height: the frame's times the scale, cut
     to a whole number as WebGL cuts a target's size, and at least one.
+
+    The product is `math.utils.scaled_side`'s: `Float32` to 2^24, so 1000 times
+    0.9 is 900 as in JavaScript, and `Float64` past it. The cut is toward
+    zero.
 
     Args:
         size: The frame's width or height.
@@ -1372,8 +1377,20 @@ def god_rays_size(size: Int, scale: Float32) -> Int:
 
     Returns:
         The size in pixels.
+
+    Raises:
+        Error: If the product is not finite or does not fit in an integer.
     """
-    return max(1, Int(Float32(size) * scale))
+    var scaled = scaled_side(size, scale)
+    # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
+    # the size. A float below `-2^63` is not one either.
+    if (
+        not isfinite(scaled)
+        or scaled < -Float64(Int.MAX)
+        or scaled >= Float64(Int.MAX)
+    ):
+        raise Error("A god-ray size does not fit in an integer")
+    return max(1, Int(scaled))
 
 
 def god_rays_step(filter_length: Float32, index: Int) -> Float32:
@@ -1608,7 +1625,7 @@ def _generate(
 
 def god_rays(
     view: DepthView, sun: Vector3, settings: GodRaysSettings
-) -> List[FloatColor]:
+) raises -> List[FloatColor]:
     """Return the rays: the mask blurred toward the sun by three generate
     passes, each a sixth of the step of the one before, at the rays' size.
 
@@ -1620,6 +1637,9 @@ def god_rays(
     Returns:
         The rays, row by row from the top, `god_rays_size` of the frame's
         width by its height.
+
+    Raises:
+        Error: If a ray size does not fit in an integer.
     """
     var width = god_rays_size(view.width, settings.resolution_scale)
     var height = god_rays_size(view.height, settings.resolution_scale)
@@ -1650,7 +1670,7 @@ def god_rays_light(
     view: DepthView,
     sun: Vector3,
     settings: GodRaysSettings,
-):
+) raises:
     """Lay god rays over the frame: three.js's god-rays example after its
     scene is drawn.
 
@@ -1659,6 +1679,9 @@ def god_rays_light(
         view: The frame's depth, drawn as the scene is.
         sun: The sun's texture coordinate and clip z; see `god_rays_sun`.
         settings: The intensity, the reach and the fake sun.
+
+    Raises:
+        Error: If a ray size does not fit in an integer.
     """
     var rays = god_rays(view, sun, settings)
     var rays_view = LightView(

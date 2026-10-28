@@ -66,6 +66,7 @@ from postprocessing.screen_space import (
     ssao_light,
     ssao_noise,
     ssao_occlusion,
+    _ssr_max_step,
     ssr_blur,
     ssr_light,
     ssr_reflections,
@@ -326,6 +327,14 @@ def test_ssao_settings_no_pass_could_run_are_refused() raises:
     bad.kernel_size = 0
     with assert_raises():
         check_ssao(bad)
+    bad.kernel_size = 16777217
+    with assert_raises(contains="larger than this port"):
+        check_ssao(bad)
+    bad.kernel_size = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        check_ssao(bad)
+    bad.kernel_size = 16777216
+    check_ssao(bad)
     # The composer asks too.
     var step = ssao_pass()
     step.ssao.kernel_size = 0
@@ -373,6 +382,15 @@ def test_sao_settings_no_pass_could_run_are_refused() raises:
     bad.blur_radius = -1
     with assert_raises():
         check_sao(bad)
+    bad = SaoSettings()
+    bad.blur_radius = 16777217
+    with assert_raises(contains="larger than this port"):
+        check_sao(bad)
+    bad.blur_radius = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        check_sao(bad)
+    bad.blur_radius = 16777216
+    check_sao(bad)
     bad = SaoSettings()
     bad.blur_depth_cutoff = -1
     with assert_raises():
@@ -633,6 +651,10 @@ def test_the_ssao_kernel_crowds_toward_the_surface_above_it() raises:
     assert_true(ssao_kernel(16, 8)[5].x != kernel[5].x)
     with assert_raises():
         _ = ssao_kernel(0, 7)
+    with assert_raises(contains="larger than this port"):
+        _ = ssao_kernel(16777217, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = ssao_kernel(Int.MAX, 1)
     var noise = ssao_noise(3)
     assert_equal(len(noise), 16)
     for value in noise:
@@ -689,6 +711,17 @@ def test_the_ssao_blur_averages_five_by_five() raises:
     assert_almost_equal(
         ssao_blur(edge, 7, 7)[0], Float32(16.0 / 25.0), atol=TOLERANCE
     )
+
+
+def test_a_screen_space_frame_must_fit() raises:
+    with assert_raises(contains="at least one pixel"):
+        _ = ssao_blur(List[Float32](), 0, 1)
+    with assert_raises(contains="at least one pixel"):
+        _ = ssr_blur(List[FloatColor](), 1, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = ssao_blur(List[Float32](), 1 << 32, 1 << 32)
+    with assert_raises(contains="larger than this port"):
+        _ = ssr_blur(List[FloatColor](), 1 << 32, 1 << 32)
 
 
 def test_ssao_light_leaves_each_output() raises:
@@ -786,6 +819,12 @@ def test_blur_weights_are_three_js_gaussian() raises:
         var expected = exp(-(x * x) / 8) / (sqrt(Float32(2 * pi)) * 2)
         assert_almost_equal(weights[tap], expected, atol=TOLERANCE)
     assert_equal(len(blur_weights(0, 1)), 1)
+    with assert_raises(contains="negative"):
+        _ = blur_weights(-1, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = blur_weights(16777217, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = blur_weights(Int.MAX, 1)
 
 
 def test_the_depth_limited_blur_stops_at_a_step() raises:
@@ -988,6 +1027,16 @@ def test_a_hit_farther_from_the_surface_than_the_reach_is_not_reflected() raises
     settings.max_distance = meters(100)
     var far = ssr_reflections(view, colors, normals, settings)
     assert_true(far[0].a > 0)
+
+
+def test_a_wide_frame_keeps_its_diagonal() raises:
+    # Two by two is `floor(sqrt(8))`.
+    assert_equal(_ssr_max_step(2, 2), Float32(2))
+    # `4000000000` squared does not fit in an integer. The diagonal is the
+    # width itself.
+    assert_equal(_ssr_max_step(4000000000, 1), Float32(4000000000))
+    # Two sides of `Int.MAX` have a diagonal past 2^63.
+    assert_true(_ssr_max_step(Int.MAX, Int.MAX) > Float32(1e19))
 
 
 def test_ssr_reflects_only_the_selected_and_bounces_off_the_last_frame() raises:

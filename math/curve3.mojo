@@ -318,9 +318,11 @@ struct Curve3(Copyable, Movable):
         """Return the Catmull-Rom segment `t` falls in, as a cubic, three.js's
         `CatmullRomCurve3.getPoint` up to its last line."""
         var count = len(self.points)
-        var p = Float32(self.segments()) * t
+        # `Float64`, as JavaScript's number is. A `Float32` product drops
+        # whole segments past 2^24, so `t` of one misses the last point.
+        var p = Float64(self.segments()) * Float64(t)
         var index = Int(floor(p))
-        var weight = p - Float32(index)
+        var weight = Float32(p - Float64(index))
         var p0: Vector3
         var p1: Vector3
         var p2: Vector3
@@ -475,8 +477,9 @@ struct Curve3(Copyable, Movable):
             The points, first to last, in meters.
 
         Raises:
-            Error: If `divisions` is less than one, its sample count cannot
-                fit in Int, or the mutable curve is not valid.
+            Error: If `divisions` is less than one, above 16777216, its
+                sample count cannot fit in Int, or the mutable curve is
+                not valid.
         """
         return parameter_samples[Self.point](self, divisions)
 
@@ -492,8 +495,9 @@ struct Curve3(Copyable, Movable):
             last the curve's whole length.
 
         Raises:
-            Error: If `divisions` is less than one, its sample count cannot
-                fit in Int, or the mutable curve is not valid.
+            Error: If `divisions` is less than one, above 16777216, its
+                sample count cannot fit in Int, or the mutable curve is
+                not valid.
         """
         return prefix_lengths(self.sample(divisions))
 
@@ -589,8 +593,9 @@ struct Curve3(Copyable, Movable):
             The points, first to last, in meters.
 
         Raises:
-            Error: If `divisions` is less than one, its sample count cannot
-                fit in Int, or the mutable curve is not valid.
+            Error: If `divisions` is less than one, above 16777216, its
+                sample count cannot fit in Int, or the mutable curve is
+                not valid.
         """
         return arc_samples[Self.point](self, divisions, self.arc_table())
 
@@ -608,9 +613,9 @@ struct Curve3(Copyable, Movable):
             The tangents, normals and binormals, `segments + 1` of each.
 
         Raises:
-            Error: If `segments` is less than one, its sample count cannot
-                fit in Int, the curve is not valid or stops at a step, or
-                two steps point straight opposite ways.
+            Error: If `segments` is less than one, above 16777216, its
+                sample count cannot fit in Int, the curve is not valid or
+                stops at a step, or two steps point straight opposite ways.
         """
         var tangents = arc_samples[Self.tangent](
             self, segments, self.arc_table()
@@ -1004,7 +1009,9 @@ struct CurvePath3(Copyable, Movable):
 
         Raises:
             Error: If the path has no curves, a curve is not valid, divisions
-                is less than one, or a sample count cannot fit in Int.
+                is less than one, a curve that is not a straight run asks
+                for more than 16777216 runs, or a sample count cannot fit
+                in Int.
         """
         self._need_curves()
         require_at_least_one(
@@ -1043,7 +1050,8 @@ struct CurvePath3(Copyable, Movable):
 
         Raises:
             Error: If the path has no curves, a curve is not valid, divisions
-                is less than one, or a sample count cannot fit in Int.
+                is less than one, above 16777216, or a sample count cannot
+                fit in Int.
         """
         self._need_curves()
         return parameter_samples[Self.point](self, divisions)
@@ -1063,8 +1071,9 @@ struct CurvePath3(Copyable, Movable):
 
         Raises:
             Error: If the path has no curves, segments is less than one, a
-                sample count cannot fit in Int, a curve is not valid or
-                stops at a step, or two steps point straight opposite ways.
+                sample count cannot fit in Int or is above 16777216, a curve
+                is not valid or stops at a step, or two steps point straight
+                opposite ways.
         """
         var tangents = parameter_samples[Self.tangent](self, segments)
         return transport_frames(tangents, closed)

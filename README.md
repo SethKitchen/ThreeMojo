@@ -129,7 +129,131 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 19</summary>
+<summary>Implemented: 82</summary>
+
+- [x] [Literal loop receipt](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#constant-loop-outcome-proofs): `tools/coverage_loop_seal.mojo` writes and checks the sealed loop receipt [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Coverage generation checkpoint](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/coverage_loop_begin.mojo` writes the generation checkpoint [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Coverage capture](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/coverage_io.mojo` captures one suite, reports a failed suite's last lines, checks the loop proof, and replays the captures [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Compiled coverage profile](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/coverage_hit_aot.mojo` builds a compiled capture and keeps the source path [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Coverage group deadline](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/coverage_group.mojo` gives every capture one deadline [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [CARLA environment list](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_environment.mojo` writes each town's environment list [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [CARLA town layout dump](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-town-packages): `tools/carla_town_layout.mojo` installs the layout mod and dumps each town [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [CARLA vehicle export](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_vehicle_export.mojo` exports each vehicle and merges its meshes [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [CARLA environment record](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_environment_record.mojo` rounds each position to four decimal places [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [CARLA town base color](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_albedo.mojo` reads a material's base color [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [CARLA town picture materials](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_attach.mojo` adds a plain material and each picture material [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [CARLA far building picture](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_bake.mojo` draws a far building and writes its picture [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [CARLA far tree picture](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_tree.mojo` draws a far tree and writes its picture [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [CARLA town mesh level](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_lower.mojo` lowers one mesh or keeps its leaf cards [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [CARLA town copy groups](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_group.mojo` places each copy and merges one tile [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [CARLA town mesh plan](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_plan.mojo` chooses which meshes stay and which far level each uses [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [CARLA town package writer](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_write.mojo` writes the loose glTF and packs the binary glTF [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [CARLA vehicle package](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_gltf_package.mojo` writes one vehicle glTF package [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [CARLA material rebuild](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_gltf_rebuild.mojo` applies each material and writes its textures [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Packaged CARLA texture files](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_texture_store.mojo` writes each color and cut-out picture [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Town mesh simplification](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_simplify.mojo` collapses a near mesh and welds a far mesh [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Vehicle mesh decimation](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_gltf_decimate.mojo` simplifies each free vehicle part [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Packaged CARLA texture pixels](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_image_pack.mojo` builds each color, cut-out and tree picture [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [UModel package class for a CARLA vehicle](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_umodel_class.mojo` reads the class UModel lists for a package [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Pillow image reads for CARLA textures](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_image.mojo` reads a PNG or a JPEG into the pixels Pillow reads. It turns each byte into unit color [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Pillow JPEG files for CARLA textures](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_jpeg.mojo` writes a JPEG with Pillow's libjpeg settings [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Pillow PNG files for CARLA textures](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_png.mojo` writes an optimized PNG with Pillow's row filters [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Quadric mesh collapses](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_simplify.mojo` records the same collapses as fast-simplification and replays them [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Town triangle share](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_share.mojo` keeps one grass blade in ten and shares each kind's cap [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [CARLA town package](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-town-packages): `tools/carla_town_build.mojo` builds one town package from its layout [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Format argument batches](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-the-tool-tests): `tools/check_format_arguments.mojo` checks 1789 formatter paths [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Private test directory](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): the coverage capture and the suite runner keep a private temporary root [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Owned process group](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): the coverage capture kills its child group from `tools/coverage_io.py` [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Mojo capture profile](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): the loop receipt binds `tools/coverage_hit_aot.mojo` [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Mojo suite runner](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): the loop receipt binds `tools/run_suite.mojo` [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Mojo suite key](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): `tools/suite_key.mojo` keys the suite stamps [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Town build summary](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-town-packages): `tools/carla_town_build.mojo` prints each town's triangle counts and package size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Vehicle package command](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_gltf_package.mojo` writes one vehicle package [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Synthetic town package](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#test-the-town-exporter): `tests/test_carla_town_package.mojo` checks colors, slots, a repeated build, and a hidden grid cell [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Masked cutoff pictures](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#test-the-town-exporter): `tests/test_carla_town_cutoff.mojo` keeps a low cutoff and clears a high cutoff [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Python town bake removal](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#test-the-town-exporter): the Python files `build_towns.py`, `carla_gltf_fix.py`, and `test_build_towns.py` are removed [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Constant-loop fixture](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/check_coverage_loop_fixture.mojo` checks the constant loops, a shadowed range, physical line endings, the production capture, and generated-stage mutations [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Include-root proofs](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/check_coverage_include_root.mojo` instruments the lane modules and checks the six closed loop proofs [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Spiral-domain token gate](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_distance_gate.mojo` checks the spiral-domain token digest and the interval token digest [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Moment producer bounds](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_moment_gate.mojo` checks the moment-producer token digests and the stored coefficient bounds [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Selection producer bounds](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_selection_gate.mojo` checks the selection-producer token digests and the phase-constant bounds [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Neutral CARLA texture plan](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_texture_plan.mojo` names a neutral texture and chooses its fitted size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Vehicle body and glass](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_vehicle_pick.mojo` chooses the largest skeletal mesh and the static glass [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Cut-out channel of a foliage mask](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_mask_channel.mojo` chooses the mask channel with the most extreme samples [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Pillow image resize for CARLA textures](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_image_resize.mojo` resizes textures with Pillow's Lanczos and box filters and stores unit color as bytes [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Tile of a placed town copy](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_place.mojo` chooses the tile from the copy's origin [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Simplification target for a CARLA mesh](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_simplify_target.mojo` chooses how many triangles a simplified mesh keeps [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Collapse map for a simplified mesh](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-vehicle-zips): `tools/carla_collapse_map.mojo` keeps the first corner that fell into each new one and copies its texture values [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Nearest triangles for a simplified town face](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_near.mojo` finds the original triangles nearest that face's center [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Triangle choice for a simplified town face](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_choose.mojo` picks the original triangle that face reads [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [C ABI host tools in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/C-ABI-and-hosts#run-it): frame compare, wasm32 retarget, the isolated page server and the Metal string run as Mojo [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Oracle runner in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-the-tool-tests): `tools/parallel_unittest.mojo` runs the CARLA oracle units in parallel [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Native test fixtures in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): `make test-cpu` links the C fixtures with `tools/native_test_support.mojo` [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Compiled coverage profile check in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-measure-coverage#choose-the-capture-profile): `tools/check_coverage_hit_profile.mojo` checks cold and warm phase records [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Lint and format log in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): `tools/shell_log.mojo` writes the lint lines and the format run id [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Coverage protocol check in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#evaluation-protocol): `tools/check_coverage_protocol.mojo` checks vectors, pipes, and write faults [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+
+- [x] [Coverage grouping checker in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#compiler-hang): `tools/check_coverage_grouping.mojo` compares the Boolean, custom-truth, and Optional fixtures [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [CI planner in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): `tools/ci_scope.mojo` selects, runs and checks the hosted CI jobs with byte-identical plans [#769](https://github.com/SethKitchen/ThreeMojo/issues/769)
 
@@ -502,8 +626,9 @@ A checked box records implemented scope. It does not establish engineering or cl
 The anatomy combines measured inputs with authored templates. See the [bounded validity report](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity) for template estimates, numerical evidence and unsupported uses.
 
 <details>
-<summary>Implemented: 49</summary>
+<summary>Implemented: 62</summary>
 
+- [x] [Mixamo animations](https://github.com/SethKitchen/ThreeMojo/wiki/Mixamo-animations): download every Mixamo animation from your own Adobe account, retarget it onto the game humanoid, and bake one `.glb`. Run live against Mixamo [#849](https://github.com/SethKitchen/ThreeMojo/issues/849)
 - [x] [Audio-aligned game faces](https://github.com/SethKitchen/ThreeMojo/wiki/Audio-aligned-game-faces): caller-provided phonemes or visemes, audio-clock transport, preserved facial LOD and validated glTF bakes [#299](https://github.com/SethKitchen/ThreeMojo/issues/299)
 
 - [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a stature-scaled femur, with bone tissue and a PBR look [#312](https://github.com/SethKitchen/ThreeMojo/issues/312)
@@ -533,10 +658,16 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Canonical anatomy pair diagnostics](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity#geometry-diagnostics): complete selected-side pair inventory, tissue-class execution, bounded sampling and explicit unsupported domains [#596](https://github.com/SethKitchen/ThreeMojo/issues/596)
 - [x] [Canonical anatomy overlap repair](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity#localize-sampled-overlaps): source-bound witness localization at three grids, classified bone, knee and spine overlaps, and zero-volume interface rules [#595](https://github.com/SethKitchen/ThreeMojo/issues/595)
 - [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot [#326](https://github.com/SethKitchen/ThreeMojo/issues/326)
+- [x] [Garments](https://github.com/SethKitchen/ThreeMojo/wiki/Garments): skin shells with clean hems, fabrics with true-size bump maps, dyes, wear, a wardrobe, and garments fitted to any body [#851](https://github.com/SethKitchen/ThreeMojo/issues/851)
+- [x] [Outfits and armor](https://github.com/SethKitchen/ThreeMojo/wiki/Outfits-and-armor): dressing from the skin out, rigid and lamed plate, sockets, a shield and a sword, saved outfits [#852](https://github.com/SethKitchen/ThreeMojo/issues/852)
+- [x] [Cloth and spring bones](https://github.com/SethKitchen/ThreeMojo/wiki/Cloth-and-spring-bones): VRM-style spring chains, and XPBD cloaks solved by color on CPU threads or a GPU [#853](https://github.com/SethKitchen/ThreeMojo/issues/853)
+- [x] [Attire estimates](https://github.com/SethKitchen/ThreeMojo/wiki/Attire-estimates): garment and worn mass, locomotion cost, coverage, protection at a point, noise and visibility, with evidence grades [#854](https://github.com/SethKitchen/ThreeMojo/issues/854)
 - [x] [Persistent scene water](https://github.com/SethKitchen/ThreeMojo/wiki/Water#animate-it): `WaterScene` keeps its state and composes with a scene. `GpuWater` shades it on a CUDA or Apple Metal GPU, with CPU comparisons and 1080p benchmarks [#300](https://github.com/SethKitchen/ThreeMojo/issues/300)
 - [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare [#327](https://github.com/SethKitchen/ThreeMojo/issues/327)
 - [x] [Vegetation](https://github.com/SethKitchen/ThreeMojo/wiki/Vegetation): ten million culled grass blades, gusts, dirt and a trail, swaying trees grown by space colonization, and a clouded sky
 - [x] [Village](https://github.com/SethKitchen/ThreeMojo/wiki/Village): gabled houses and a building cut out of a scan, on lots in the meadow, beside a pond of Clearwater water
+- [x] [Village walk](https://github.com/SethKitchen/ThreeMojo/wiki/Village-walk): villagers, animals, and a player who walks, runs and jumps by gamepad before a third-person camera [#847](https://github.com/SethKitchen/ThreeMojo/issues/847)
+- [x] [Game renderer](https://github.com/SethKitchen/ThreeMojo/wiki/Game-renderer): the village walk at 24 frames a second and 1920 by 1080 on four CPU cores, with four quality presets [#855](https://github.com/SethKitchen/ThreeMojo/issues/855)
 - [x] [CARLA lane borders](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-borders): border-only OpenDRIVE lanes get width records from their borders, with ASAM's precedence and refusal rules [#577](https://github.com/SethKitchen/ThreeMojo/issues/577)
 - [x] [CARLA map budgets](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-map-budgets): typed construction and certified-query work limits, checked before the work, with exhaustion kept apart from no lane [#580](https://github.com/SethKitchen/ThreeMojo/issues/580)
 - [x] [Certified CARLA query pruning](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-index-admission#per-segment-skip): each segment's own curve deviation skips candidates that cannot win, with the same answers [#685](https://github.com/SethKitchen/ThreeMojo/issues/685)

@@ -26,7 +26,7 @@ from extensions.carla.capture import nearest_hit
 from extensions.carla.sensor_attributes import validate_sensor_float
 from extensions.carla.transform import CarlaTransform
 from math.vector3 import Vector3
-from std.math import cos, exp, log, sin, sqrt, trunc
+from std.math import cos, exp, isfinite, log, sin, sqrt, trunc
 from units.si import (
     DEGREE,
     PER_METER,
@@ -40,6 +40,27 @@ from units.si import (
     Length,
     METER,
 )
+
+
+# A laser angle is a Float32, and the maximum integer never finishes the
+# laser list.
+comptime MAX_LIDAR_CHANNELS = 16777216
+
+
+def require_lidar_channels(channels: Int) raises:
+    """Refuse a LiDAR channel count this port cannot cast.
+
+    Nothing. The call returns when the count is at most 16777216. A
+    count below one is left for `validate`.
+
+    Args:
+        channels: How many lasers.
+
+    Raises:
+        Error: If the count is above 16777216.
+    """
+    if channels > MAX_LIDAR_CHANNELS:
+        raise Error("A LiDAR channel count is larger than this port casts")
 
 
 struct LidarDescription(ImplicitlyCopyable):
@@ -112,6 +133,7 @@ struct LidarDescription(ImplicitlyCopyable):
         )
         if self.channels < 1:
             raise Error("A LiDAR needs at least one channel")
+        require_lidar_channels(self.channels)
         if not (self.range.value > 0.0):
             raise Error("A LiDAR needs a positive range")
         if rotating:
@@ -147,13 +169,17 @@ struct LidarDescription(ImplicitlyCopyable):
         if self.noise_stddev.value < 0.0:
             raise Error("A LiDAR's noise cannot be negative")
 
-    def laser_angles(self) -> List[Angle]:
+    def laser_angles(self) raises -> List[Angle]:
         """Return each laser's elevation, `CreateLasers`.
 
         Returns:
             One angle per channel, from the upper limit down to the lower.
             One channel points at the upper limit.
+
+        Raises:
+            Error: If the channel count is above 16777216.
         """
+        require_lidar_channels(self.channels)
         var out = List[Angle]()
         var upper = self.upper_fov.to(DEGREE)
         var delta = Float32(0.0)
@@ -165,8 +191,12 @@ struct LidarDescription(ImplicitlyCopyable):
             out.append(Angle(upper - Float32(i) * delta, DEGREE))
         return out^
 
-    def points_per_laser(self, tick: Duration) -> Int:
+    def points_per_laser(self, tick: Duration) raises -> Int:
         """Return how many rays one laser fires in one tick.
+
+        The quotient and its rounding are `Float32`, as CARLA's
+        `RoundHalfFromZero(PointsPerSecond * DeltaTime / float(ChannelCount))`
+        is: 5 points a second on one channel for 0.7 seconds is 4 points.
 
         Args:
             tick: The simulation step.
@@ -174,13 +204,26 @@ struct LidarDescription(ImplicitlyCopyable):
         Returns:
             The points per second times the tick over the channels,
             rounded half away from zero.
+
+        Raises:
+            Error: If the rounded count is not finite or does not fit in
+                an integer.
         """
         var exact = (
             Float32(self.points_per_second)
             * tick.to(SECOND)
             / Float32(self.channels)
         )
-        return Int(exact + 0.5)
+        var scaled = Float64(exact + 0.5)
+        # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
+        # a count. A float below `-2^63` is not one either.
+        if (
+            not isfinite(scaled)
+            or scaled < -Float64(Int.MAX)
+            or scaled >= Float64(Int.MAX)
+        ):
+            raise Error("A LiDAR point count does not fit in an integer")
+        return Int(scaled)
 
     def intensity(self, distance: Length) -> Float32:
         """Return a hit's intensity, `ComputeIntensity`.
@@ -272,7 +315,8 @@ def scan_lidar(
 
     Raises:
         Error: If the description is not valid, `tick` is not positive,
-            or a mesh cannot be tested.
+            the point count does not fit in an integer, or a mesh cannot
+            be tested.
     """
     description.validate()
     if not (tick.value > 0.0):

@@ -37,8 +37,10 @@ PR791 adds or extends five sources in the same table:
 The scan renderer changes these files. It adds tiled and level-of-detail splat
 drawing, and it adds the compile-fail records of the new scan types. The
 vegetation extension merges into the same change. Its two compile-fail records,
-for `PlantKind` and `ClusterFate`, are in the same expectation edge. Each
-source has exact before and after digests, token digests and line edits. The
+for `PlantKind` and `ClusterFate`, are in the same expectation edge. The attire
+extension adds ten more records to that edge, one for each of its kind types.
+
+Each source has exact before and after digests, token digests and line edits. The
 before digest is the digest on main. For the expectation file that is the PR776
 digest. The prior files join the PR776 and PR760 pins in the same way as the
 PR780 sources.
@@ -46,6 +48,25 @@ PR780 sources.
 The cohort is still complete. A table with some of these sources at the old
 digest and some at the new digest is refused. Native tests and full coverage
 remain separate requirements.
+
+## PR843 merged sources
+
+PR843 merges main, PR792, PR848, PR850 and PR856 into one branch. The merged
+branch changes 165 pinned sources. PR792 changes 162 of them: its controls,
+animation, CARLA, post-processing and rendering changes, and their tests. The
+other three come from PR843 and PR850.
+
+147 of these sources had no edge. Each new edge starts at the pinned digest.
+18 sources already had an edge. Each of those edges keeps its before side,
+and only its after side changes. The table then has 249 edges. The rules of
+the PR791 sources apply to these sources too.
+
+The village walk then changes five more pinned sources: `core/fog.mojo`,
+`core/geometry_store.mojo`, `render/tonemap.mojo`, `tests/test_water.mojo`
+and the compile-fail expectations. Each gets an edge, and the table has 252
+edges. The fog veil and the ACES curve stay in `core/fog.mojo` and
+`render/tonemap.mojo`, and the game renderer imports them from there. So the
+fixed dependency closures do not change.
 
 ## Qualification controls
 

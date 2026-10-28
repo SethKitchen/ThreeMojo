@@ -79,6 +79,8 @@
 - [Vegetation](Vegetation)
   - [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters)
 - [Village](Village)
+  - [Village walk](Village-walk)
+  - [Game renderer](Game-renderer)
 - [Streamline](Streamline)
 - [Animals](Animals)
   - [Animal anatomy](Animal-anatomy)
@@ -135,9 +137,14 @@
 - [Genome](Genome)
 - [Game humanoid](Game-humanoid)
 - [Humanoid fidelity](Humanoid-fidelity)
+- [Mixamo animations](Mixamo-animations)
 - [Audio-aligned game faces](Audio-aligned-game-faces)
 - [Converted assets](Converted-assets)
 - [Mesh quality](Mesh-quality)
+- [Garments](Garments)
+- [Outfits and armor](Outfits-and-armor)
+- [Cloth and spring bones](Cloth-and-spring-bones)
+- [Attire estimates](Attire-estimates)
 - [Segment inertia](Segment-inertia)
 
 **Explanation**

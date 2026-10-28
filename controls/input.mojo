@@ -25,6 +25,7 @@ window that reads the bytes converts a cell to the pixels it shows.
 from core.extent import require_positive_extent
 from loaders.bytes import ascii_digit
 from core.ordinal import ordinal_valid
+from math.utils import texel_ndc
 
 comptime ESCAPE_BYTE = 27
 # '[' opens a control sequence after an escape.
@@ -277,6 +278,25 @@ def require_view_size(width: Int, height: Int) raises:
     require_positive_extent(
         width, height, "A view must have a positive width and height"
     )
+
+
+def pixel_center_ndc(pixel: Int, count: Int) -> Float32:
+    """Return a pixel's center in normalized device space, from minus one
+    to one.
+
+    A `Float32` side above 2^23 cannot add the half that marks the center,
+    so the last pixel reads as the edge. The center is measured in
+    `Float64` from there and stored as `Float32`. A smaller side keeps the
+    `Float32` quotient.
+
+    Args:
+        pixel: The column or row, in pixels.
+        count: The side, in pixels. It must be positive.
+
+    Returns:
+        The center, from minus one to one.
+    """
+    return texel_ndc(pixel, count)
 
 
 def refuse_invalid(what: String, value: Int) raises:

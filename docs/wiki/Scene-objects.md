@@ -134,7 +134,7 @@ var id = assets.geometries.add(cubes.geometry())
 | `isolation`, `flat_shading`, `count` | `isolation`, `material.flatShading`, `count` |
 | `geometry()`, `replace_geometry(assets, id)` | the geometry and its `needsUpdate` |
 
-The arithmetic is three.js's, step by step, in doubles, and the field, the normals and the vertices are stored as floats. So each vertex, normal, color and coordinate is the float that three.js makes. The normals stay cached between updates, as in three.js. Call `reset` before you build a new field.
+The arithmetic is three.js's, step by step, in doubles, and the field, the normals and the vertices are stored as floats. So each vertex, normal, color and coordinate is the float that three.js makes. The normals stay cached between updates, as in three.js. Call `reset` before you build a new field. A resolution whose normal buffer does not fit in an integer is refused.
 
 ## Grounded skybox
 

@@ -9,7 +9,8 @@
 The tower stands on a footprint: a rectangle with one corner cut at 45
 degrees. Each edge of the footprint is a face with its own frame: `u`
 along the edge, `v` up and `n` out. The tower is three tiers, a base, a
-shaft and a crown, and each tier is cut into floors and bays. The crown
+shaft and a crown, and each tier is cut into floors and bays. A face or a
+tower that needs more than 16777216 bays is refused. The crown
 steps back from the shaft by a setback.
 
 A few authored pieces, a window, a pier, a pinnacle, a unit box and a
@@ -57,7 +58,7 @@ from math.path import Path, Shape
 from math.sine import fraction
 from math.utils import SeededRandom, js_round, min3
 from math.vector2 import Vector2, vector2_from_float64
-from std.math import floor, pi, sin, sqrt
+from std.math import floor, isfinite, pi, sin, sqrt
 from units.si import Length, METER
 from core.ordinal import require_valid
 
@@ -302,7 +303,7 @@ struct FaceFrame(ImplicitlyCopyable):
             self.point(u, v, w),
         )
 
-    def bays(self, bay_width: Float64) -> Bays:
+    def bays(self, bay_width: Float64) raises -> Bays:
         """Return how many bays of a width fit, with the rest split into
         the two end margins.
 
@@ -311,7 +312,15 @@ struct FaceFrame(ImplicitlyCopyable):
 
         Returns:
             The bays. One at least.
+
+        Raises:
+            Error: If the bay width is not a finite positive distance, or
+                the face needs more bays than this port builds.
         """
+        if not isfinite(bay_width) or not (bay_width > 0.0):
+            raise Error("A bay width must be a finite positive distance")
+        if not (self.length / bay_width < Float64(16777216)):
+            raise Error("A bay count is larger than this port builds")
         var count = max(1, Int(floor(self.length / bay_width)))
         return Bays(
             count, (self.length - Float64(count) * bay_width) / 2, bay_width
@@ -427,7 +436,8 @@ struct SkyscraperStyle(Copyable, Movable):
 
         Raises:
             Error: If the base style or a chamfer corner is not one there
-                is, or a size is not positive and finite.
+                is, a size is not positive and finite, or the tower needs
+                more bays than this port builds.
         """
         var random = generator_random(p.seed)
         var base = 0.10 + random.next() * 0.07
@@ -509,6 +519,12 @@ struct SkyscraperStyle(Copyable, Movable):
             * BRICK_LENGTH,
         )
         self.total_height = meters(p.total_height)
+        var span = max(self.footprint_width, self.footprint_depth)
+        var openings = (span / self.bay_width) * (
+            self.total_height / self.floor_height
+        )
+        if not (openings < Float64(16777216)):
+            raise Error("A bay count is larger than this port builds")
 
 
 def build_footprint(
@@ -783,7 +799,7 @@ def _add_windows(
     bottom: Float64,
     height: Float64,
     with_ac: Bool,
-):
+) raises:
     """Place a tier's windows, their glass and rooms, and the air
     conditioners on some shaft windows, three.js's `addWindows`."""
     ref s = parts.style
@@ -850,7 +866,7 @@ def _add_piers(
     frame: FaceFrame,
     bottom: Float64,
     height: Float64,
-):
+) raises:
     """Place a pier on every bay edge but the far end, which the next face
     places, three.js's `addPiers`."""
     var bays = frame.bays(parts.style.bay_width)
@@ -862,7 +878,7 @@ def _add_piers(
 
 def _add_storefront(
     mut parts: SkyscraperParts, frame: FaceFrame, height: Float64
-):
+) raises:
     """Place the ground floor's shopfronts, three.js's `addStorefront`: a
     bulkhead and a signboard along the face, and per shop a pier, the
     display glass, two mullions and, on about half, an awning."""
@@ -1538,7 +1554,7 @@ def _add_tier(
     height: Float64,
     pier_height: Float64,
     with_ac: Bool,
-):
+) raises:
     """Place one tier's facade on every face: windows, the wall behind
     them, the spandrel bands and the piers."""
     for i in range(len(faces)):  # pragma: no branch

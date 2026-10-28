@@ -30,7 +30,8 @@ from extensions.water.spectrum import (
     evolve_spectrum,
 )
 from math.norm import squared_length2
-from std.math import floor
+from std.math import floor, isfinite
+from std.sys import is_gpu
 from units.si import SECOND, Duration, Length
 
 
@@ -268,6 +269,57 @@ def clearwater_surface(time: Duration) raises -> SurfaceField:
     )
 
 
+def _index_fits(px: Float32) -> Bool:
+    """Return True when `px` is a finite texel index.
+
+    Args:
+        px: A texel coordinate, in texels.
+
+    Returns:
+        True when `Int` of its floor is that coordinate.
+    """
+    # `Float32(Int.MAX)` is 2^63, as `Float64(Int.MAX)` is, so the test is
+    # the same in `Float32`, which a Metal kernel can run.
+    return isfinite(px) and px < Float32(Int.MAX) and px > -Float32(Int.MAX)
+
+
+def _local_meters(coord: Float32, patch: Float32) -> Tuple[Bool, Float32]:
+    """Return one coordinate folded into the first patch.
+
+    Args:
+        coord: A world position, in meters.
+        patch: The patch length, in meters.
+
+    Returns:
+        Whether the position is finite, and its place in the first patch.
+    """
+    # Metal has no `Float64`, so a kernel folds in `Float32`. Only a
+    # position past 2^63 texels comes here.
+    comptime wide = DType.float32 if is_gpu() else DType.float64
+    var turns = Scalar[wide](coord) / Scalar[wide](patch)
+    if not isfinite(turns):
+        return (False, Float32(0))
+    var part = turns - floor(turns)
+    return (True, Float32(part * Scalar[wide](patch)))
+
+
+def _local_turn(turns: Float32) -> Tuple[Bool, Float32]:
+    """Return a repeating texture coordinate folded into zero to one.
+
+    Args:
+        turns: How many patches across the position is.
+
+    Returns:
+        Whether the coordinate is finite, and its fraction.
+    """
+    # Metal has no `Float64`, so a kernel folds in `Float32`.
+    comptime wide = DType.float32 if is_gpu() else DType.float64
+    var turn = Scalar[wide](turns)
+    if not isfinite(turn):
+        return (False, Float32(0))
+    return (True, Float32(turn - floor(turn)))
+
+
 def _wrap(index: Int, n: Int) -> Int:
     # Mojo's remainder is non-negative, so a negative index already wraps.
     return index % n
@@ -289,12 +341,24 @@ def sample_surface[
     Returns:
         The bilinear height and slopes. Variance for LEAN mapping is
         `slope_sq` minus the squared filtered slope, and it is not negative.
+        A position that does not fit in an integer repeats. A position
+        that is not finite is flat.
     """
     var n = surface.surface_side(0)
-    var u = x / surface.surface_patch()
-    var v = z / surface.surface_patch()
-    var px = u * Float32(n) - 0.5
-    var pz = v * Float32(n) - 0.5
+    var patch = surface.surface_patch()
+    var sx = x
+    var sz = z
+    var px = sx / patch * Float32(n) - 0.5
+    var pz = sz / patch * Float32(n) - 0.5
+    if not _index_fits(px) or not _index_fits(pz):
+        var ok_x: Bool
+        var ok_z: Bool
+        ok_x, sx = _local_meters(x, patch)
+        ok_z, sz = _local_meters(z, patch)
+        if not ok_x or not ok_z:
+            return SurfaceSample(0, 0, 0, 0)
+        px = sx / patch * Float32(n) - 0.5
+        pz = sz / patch * Float32(n) - 0.5
     var x0 = Int(floor(px))
     var z0 = Int(floor(pz))
     var fx = px - Float32(x0)
@@ -333,8 +397,19 @@ def sample_surface_smooth[
     """
     var n = Float32(surface.surface_side(0))
     var patch = surface.surface_patch()
-    var px = x / patch * n - 0.5
-    var pz = z / patch * n - 0.5
+    var sx = x
+    var sz = z
+    var px = sx / patch * n - 0.5
+    var pz = sz / patch * n - 0.5
+    if not _index_fits(px) or not _index_fits(pz):
+        var ok_x: Bool
+        var ok_z: Bool
+        ok_x, sx = _local_meters(x, patch)
+        ok_z, sz = _local_meters(z, patch)
+        if not ok_x or not ok_z:
+            return SurfaceSample(0, 0, 0, 0)
+        px = sx / patch * n - 0.5
+        pz = sz / patch * n - 0.5
     var ix = floor(px)
     var iz = floor(pz)
     var fx = px - ix
@@ -457,8 +532,19 @@ def _sample_level[
     S: SurfaceTexels
 ](surface: S, level: Int, u: Float32, v: Float32) -> SurfaceSample:
     var n = surface.surface_side(level)
-    var px = u * Float32(n) - 0.5
-    var pz = v * Float32(n) - 0.5
+    var su = u
+    var sv = v
+    var px = su * Float32(n) - 0.5
+    var pz = sv * Float32(n) - 0.5
+    if not _index_fits(px) or not _index_fits(pz):
+        var ok_u: Bool
+        var ok_v: Bool
+        ok_u, su = _local_turn(u)
+        ok_v, sv = _local_turn(v)
+        if not ok_u or not ok_v:
+            return SurfaceSample(0, 0, 0, 0)
+        px = su * Float32(n) - 0.5
+        pz = sv * Float32(n) - 0.5
     var x0 = Int(floor(px))
     var z0 = Int(floor(pz))
     var fx = px - Float32(x0)

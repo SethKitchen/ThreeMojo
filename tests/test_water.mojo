@@ -15,6 +15,9 @@ from materials.material import BASIC, Material
 from objects.mesh import Mesh
 from renderers.renderer import Renderer
 from extensions.water.caustics import (
+    _Splat,
+    _caustic_high,
+    _caustic_low,
     _splat,
     CausticField,
     caustic_covers,
@@ -22,7 +25,7 @@ from extensions.water.caustics import (
     render_caustics,
 )
 from extensions.water.field import ComplexField, complex_mul, fft2
-from extensions.water.filter import anisotropic_step
+from extensions.water.filter import anisotropic_step, lod_blend
 from extensions.water.frame import (
     CameraLook,
     WaterScene,
@@ -30,6 +33,8 @@ from extensions.water.frame import (
     _blur_rows,
     _compose_plan,
     _depth_rows,
+    _at_rest,
+    _height_bound,
     _grade_rows,
     _graded_image,
     _radiance_image,
@@ -262,6 +267,15 @@ def test_ripples() raises:
     assert_almost_equal(down.height, 0.0)
     var up = sample_ripple(field, 0.0, 40.0)
     assert_almost_equal(up.height, 0.0)
+    var missing_x = sample_ripple(field, nan[DType.float32](), 0.0)
+    assert_almost_equal(missing_x.height, 0.0)
+    assert_almost_equal(missing_x.slope_x, 0.0)
+    var missing_z = sample_ripple(field, 0.0, nan[DType.float32]())
+    assert_almost_equal(missing_z.height, 0.0)
+    step_ripple(field, nan[DType.float32](), 0.0, 0.5, 0.5, 0.08, 0.07)
+    assert_almost_equal(sample_ripple(field, 0.0, 0.0).height, 0.0)
+    step_ripple(field, 0.0, nan[DType.float32](), 0.5, 0.5, 0.08, 0.07)
+    assert_almost_equal(sample_ripple(field, 0.0, 0.0).slope_z, 0.0)
 
 
 def test_optics() raises:
@@ -348,6 +362,8 @@ def test_caustics() raises:
     _ = flat_shift(Vector3(0.0, 1.0, 0.0), 1.6)
     with assert_raises():
         _ = CausticField(0, Length(4.6))
+    with assert_raises(contains="larger than this port"):
+        _ = CausticField(1 << 31, Length(4.6))
     with assert_raises():
         _ = CausticField(4, Length(-1.0))
     var flat = _filled(0.0, 0.0, 0.0)
@@ -367,6 +383,22 @@ def test_caustics() raises:
         _ = render_caustics(flat, sun, Length(1.6), 0, 4)
     with assert_raises():
         _ = render_caustics(flat, sun, Length(0.0), 2, 4)
+    with assert_raises(contains="larger than this port"):
+        _ = render_caustics(flat, sun, Length(1.6), Int.MAX, 4)
+    with assert_raises(contains="larger than this port"):
+        _ = render_caustics(flat, sun, Length(1.6), 1 << 31, 4)
+    # A bed 1e20 meters down sends the refracted triangles past every texel.
+    var far = render_caustics(flat, Vector3(0.6, 0.8, 0.0), Length(1e20), 2, 8)
+    assert_equal(far.channel(0, 0, 0), 0.0)
+    assert_equal(far.channel(4, 4, 1), 0.0)
+    assert_equal(_caustic_low(Float32(1.2)), 1)
+    assert_equal(_caustic_high(Float32(3.8)), 4)
+    assert_equal(_caustic_low(Float32(1e20)), Int.MAX)
+    assert_equal(_caustic_high(Float32(1e20)), Int.MAX)
+    assert_equal(_caustic_low(Float32(-1e20)), Int.MIN)
+    assert_equal(_caustic_high(Float32(-1e20)), Int.MIN)
+    assert_equal(_caustic_low(nan[DType.float32]()), Int.MAX)
+    assert_equal(_caustic_high(nan[DType.float32]()), Int.MAX)
     var inside = 0
     var outside = 0
     for y in range(-1, 4):
@@ -445,6 +477,16 @@ def test_the_glare_grid_maps_the_image_and_back() raises:
     assert_true(tall[0] >= 1 and tall[0] < 48)
     var thin = glare_grid_size(4, 1000, 1)
     assert_equal(thin[1], 1)
+    # A Float32 height of 2^25 + 1 is 2^25, so the wide side rounds to 2.
+    var odd = glare_grid_size(4, 16777216, 33554433)
+    assert_equal(odd[0], 1)
+    # A side of zero makes the fit infinite. `Int` of that was not below
+    # one, so the grid width stayed zero.
+    with assert_raises(contains="positive"):
+        _ = glare_grid_size(4, 0, 10)
+    with assert_raises(contains="positive"):
+        _ = glare_grid_size(4, 10, 0)
+    assert_equal(odd[1], 3)
     # Every grid point samples a pixel inside the image, and every pixel reads
     # a grid point inside the grid, at both ends of each axis.
     for x in range(size[0]):
@@ -462,6 +504,36 @@ def test_the_glare_grid_maps_the_image_and_back() raises:
     assert_equal(glare_cell_x(0, 640, size[0]), 0)
     assert_equal(glare_cell_x(639, 640, size[0]), size[0] - 1)
     assert_equal(glare_cell_y(359, 360, size[1]), size[1] - 1)
+    # A width past 2^24 is not a whole `Float32`. The last column and the
+    # last pixel must stay inside the image and the grid.
+    assert_equal(glare_sample_x(16777216, 16777217, 100), 99)
+    assert_equal(glare_sample_y(16777216, 16777217, 100), 99)
+    assert_equal(glare_sample_x(2, 3, 16777217), 13981014)
+    assert_equal(glare_cell_x(16777216, 16777217, 48), 47)
+    assert_equal(glare_cell_y(16777216, 16777217, 48), 47)
+    # A wide image or a wide grid on either axis uses the wide arithmetic.
+    assert_equal(glare_sample_y(2, 3, 16777217), 13981014)
+    assert_equal(glare_cell_x(2, 3, 16777217), 11184811)
+    assert_equal(glare_cell_y(2, 3, 16777217), 11184811)
+    # A coordinate at the far side reads the last column or row.
+    assert_equal(glare_sample_x(10, 10, 100), 99)
+    assert_equal(glare_sample_y(10, 10, 100), 99)
+    assert_equal(glare_cell_x(640, 640, 48), 47)
+    assert_equal(glare_cell_y(360, 360, 48), 47)
+    # Past 2^53 the last column's ratio is one, so it used to read one
+    # past the image and one past the grid. A zero side is not a column.
+    assert_equal(glare_sample_x(Int.MAX - 1, Int.MAX, 100), 99)
+    assert_equal(glare_sample_y(Int.MAX - 1, Int.MAX, 100), 99)
+    assert_equal(glare_cell_x(Int.MAX - 1, Int.MAX, 48), 47)
+    assert_equal(glare_cell_y(Int.MAX - 1, Int.MAX, 48), 47)
+    assert_equal(glare_sample_x(0, 0, 100), 0)
+    assert_equal(glare_sample_x(0, 2, 0), 0)
+    assert_equal(glare_sample_y(0, 0, 100), 0)
+    assert_equal(glare_sample_y(0, 2, 0), 0)
+    assert_equal(glare_cell_x(0, 0, 4), 0)
+    assert_equal(glare_cell_x(3, 10, 0), 0)
+    assert_equal(glare_cell_y(0, 0, 4), 0)
+    assert_equal(glare_cell_y(3, 10, 0), 0)
     # The convolution refuses a grid that does not fit its kernels, or samples
     # that are not the grid's.
     var kernels = glare_kernels(SpectrumResolution(8))
@@ -813,6 +885,56 @@ def test_texture_filter() raises:
     )
     assert_equal(mid.taps, 1)
     assert_almost_equal(mid.lod, 2.0, atol=1e-4)
+    var values = List[Float32]()
+    values.append(0)
+    values.append(0)
+    values.append(0)
+    values.append(0)
+    values.append(8)
+    values.append(8)
+    values.append(8)
+    values.append(0)
+    values.append(2)
+    for slot in range(9):
+        var trial = values.copy()
+        trial[slot] = nan[DType.float32]()
+        var broken = anisotropic_step(
+            trial[0],
+            trial[1],
+            trial[2],
+            trial[3],
+            trial[4],
+            trial[5],
+            trial[6],
+            trial[7],
+            trial[8],
+        )
+        assert_equal(broken.taps, 1)
+        assert_equal(broken.lod, 0)
+    var capped = anisotropic_step(
+        1.0, 0.0, 0.0, 0.0001, 64.0, 64.0, Float32(1e20), 1.0, 2.0
+    )
+    assert_equal(capped.taps, 4096)
+    var none = lod_blend(0, 0)
+    assert_equal(none[0], 0)
+    assert_equal(none[1], 0)
+    var blend = lod_blend(1.5, 4)
+    assert_equal(blend[0], 1)
+    assert_equal(blend[1], 2)
+    assert_almost_equal(blend[2], 0.5)
+    var top = lod_blend(4, 4)
+    assert_equal(top[0], 4)
+    assert_equal(top[1], 4)
+    var huge = lod_blend(Float32(1e20), 4)
+    assert_equal(huge[0], 4)
+    assert_equal(huge[1], 4)
+    assert_equal(huge[2], 0)
+    var missing = lod_blend(nan[DType.float32](), 4)
+    assert_equal(missing[0], 4)
+    assert_equal(missing[1], 4)
+    var below = lod_blend(-1, 4)
+    assert_equal(below[0], 0)
+    assert_equal(below[1], 1)
     var stones = _stones()
     var sharp = sample_pebble_grad(stones, 0.25, 0.25, 0.0, 0.0, 0.0, 0.0)
     var plain = sample_pebble(stones, 0.25, 0.25)
@@ -1022,12 +1144,79 @@ def test_water_samples_use_texture_texel_centers() raises:
     )
     # Repeat sampling wraps the half-texel on the left, rather than shifting it.
     assert_almost_equal(sample_surface(surface, 0, 2.5).height, Float32(3.5))
+    # 2^63 meters is not a texel index. The patch is 8 m, so it repeats
+    # onto the same sample as the origin.
+    var origin = sample_surface(surface, 0, 2.5)
+    var spun = sample_surface(surface, Float32(9223372036854775808.0), 2.5)
+    assert_almost_equal(spun.height, origin.height)
+    var down = sample_surface(surface, 2.5, Float32(-9223372036854775808.0))
+    assert_almost_equal(down.height, sample_surface(surface, 2.5, 0).height)
+    var missing = sample_surface(surface, nan[DType.float32](), 2.5)
+    assert_almost_equal(missing.height, 0)
+    assert_almost_equal(missing.slope_x, 0)
+    assert_almost_equal(
+        sample_surface_smooth(
+            surface, Float32(9223372036854775808.0), 2.5
+        ).height,
+        sample_surface_smooth(surface, 0, 2.5).height,
+    )
+    assert_almost_equal(
+        sample_surface_filtered(
+            surface, nan[DType.float32](), 2.5, 0, 0, 0, 0, False
+        ).height,
+        0,
+    )
     var pixels: List[Float32] = [1, 0, 0, 0, 1, 0]
     var bed = PebbleBed(2, 1, pixels^)
     assert_almost_equal(sample_pebble(bed, 0.25, 0.5).r, Float32(1))
     assert_almost_equal(sample_pebble(bed, 0.25, 0.5).g, Float32(0))
+    var missing_u = sample_pebble(bed, nan[DType.float32](), 0.5)
+    assert_almost_equal(missing_u.r, 0)
+    var missing_v = sample_pebble(bed, 0.25, nan[DType.float32]())
+    assert_almost_equal(missing_v.g, 0)
     assert_almost_equal(
         sample_pebble_grad(bed, 0.75, 0.5, 0, 0, 0, 0).g, Float32(1)
+    )
+    var missing_grad = sample_pebble_grad(
+        bed, inf[DType.float32](), 0.5, 0, 0, 0, 0
+    )
+    assert_almost_equal(missing_grad.b, 0)
+    var missing_grad_v = sample_pebble_grad(
+        bed, 0.25, nan[DType.float32](), 0, 0, 0, 0
+    )
+    assert_almost_equal(missing_grad_v.r, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = PebbleBed(1 << 31, 1 << 31, List[Float32]())
+
+
+def test_a_far_axis_repeats_beside_a_near_or_missing_axis() raises:
+    var grid = ComplexField(SpectrumResolution(8))
+    for y in range(8):
+        for x in range(8):
+            grid.put(x, y, 0, Float32(x + 8 * y))
+    var surface = SurfaceField(Length(8), grid^)
+    # 2^63 meters is not a texel index. The patch is 8 m, so it repeats
+    # onto the origin.
+    var far = Float32(9223372036854775808.0)
+    var missing = nan[DType.float32]()
+    assert_almost_equal(
+        sample_surface_smooth(surface, 2.5, far).height,
+        sample_surface_smooth(surface, 2.5, 0).height,
+    )
+    assert_almost_equal(
+        sample_surface_filtered(surface, far, 2.5, 0, 0, 0, 0, False).height,
+        sample_surface_filtered(surface, 0, 2.5, 0, 0, 0, 0, False).height,
+    )
+    # A position with one missing axis is flat, also when the other axis
+    # is far.
+    assert_almost_equal(sample_surface(surface, far, missing).height, 0)
+    assert_almost_equal(sample_surface_smooth(surface, missing, 2.5).height, 0)
+    assert_almost_equal(sample_surface_smooth(surface, far, missing).height, 0)
+    assert_almost_equal(
+        sample_surface_filtered(
+            surface, 2.5, missing, 0, 0, 0, 0, False
+        ).height,
+        0,
     )
 
 
@@ -1053,13 +1242,31 @@ def test_spectrum_and_glare_refuse_invalid_sizes_at_entry() raises:
 
 
 def test_caustic_splat_rejects_collapsed_and_caps_tight_focus() raises:
-    var image = CausticField(1, Length(1))
+    var plane = List[Float32](length=1, fill=0)
     var x = List[Float32](length=9, fill=0.5)
     var z = List[Float32](length=9, fill=0.5)
     var live = List[Int](length=9, fill=1)
+    # One texel on a patch of a meter, the green channel, no shift.
+    var splat = _Splat(1, 1, 1, 1, 0, 0, 0.5, 1)
+    var out = plane.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()
+    var xs = (
+        x.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[ImmutAnyOrigin]()
+    )
+    var zs = (
+        z.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[ImmutAnyOrigin]()
+    )
+    var lives = (
+        live.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[ImmutAnyOrigin]()
+    )
     # A point has no area and deposits no light, even on a pixel center.
-    _splat(image, x, z, live, 0, 1, 2, 1, 0, 0, 0, 0, 0.5, 1)
-    assert_almost_equal(image.channel(0, 0, 1), Float32(0))
+    _splat(out, xs, zs, lives, 0, 1, 2, 0, 0, splat)
+    assert_almost_equal(plane[0], Float32(0))
     # A small but nonzero triangle retains its energy cap. An epsilon-area
     # rejection would erase this valid focus instead of bounding it.
     x[1] = 0.49
@@ -1068,8 +1275,11 @@ def test_caustic_splat_rejects_collapsed_and_caps_tight_focus() raises:
     z[4] = 0.49
     x[7] = 0.5
     z[7] = 0.51
-    _splat(image, x, z, live, 0, 1, 2, 1, 0, 0, 0, 0, 0.5, 1)
-    assert_almost_equal(image.channel(0, 0, 1), Float32(40))
+    _splat(out, xs, zs, lives, 0, 1, 2, 0, 0, splat)
+    assert_almost_equal(plane[0], Float32(40))
+    _ = len(x)
+    _ = len(z)
+    _ = len(live)
 
 
 def _assert_same_picture(a: Framebuffer, b: Framebuffer) raises:
@@ -1779,6 +1989,8 @@ def test_parallel_post_and_depth_equal_one_serial_pass() raises:
         height,
         0,
         height,
+        _height_bound(surface, water._ripples),
+        False,
     )
     assert_true(shown == serial_shown)
     assert_true(image.depth == reference)
@@ -2003,6 +2215,77 @@ def test_one_worker_draws_and_composes_what_every_core_does() raises:
     )
     assert_true(wide.pixels == serial_image.pixels)
     assert_true(wide.depth == serial_image.depth)
+
+
+def test_cheaper_water_shades_a_grid_and_keeps_its_surface() raises:
+    var stones = _stones()
+    var width = 29
+    var height = 41
+    var camera = _page_camera(width, height)
+    var fine = _scene(Duration(5.0, SECOND))
+    var coarse = _scene(Duration(5.0, SECOND))
+    coarse.shade_step = 4
+    coarse.refresh_every = 3
+    var one = Framebuffer(width, height, Color(0, 0, 0))
+    var two = Framebuffer(width, height, Color(0, 0, 0))
+    var drawn = fine.compose(one, camera, Length(0.0, METER), stones)
+    assert_true(drawn > 0)
+    assert_true(coarse.compose(two, camera, Length(0.0, METER), stones) > 0)
+    # Shaded on a grid and mixed between, the water is near the fine one.
+    var near = 0
+    for i in range(width * height):
+        var a = one.pixels[i * 4]
+        var b = two.pixels[i * 4]
+        if abs(Int(a) - Int(b)) < 40:
+            near += 1
+    assert_true(near > width * height * 3 // 4)
+    # An eye just above the still water, below the highest wave, tests
+    # every pixel where the waves are.
+    var low = _page_camera(width, height)
+    low.place(Vector3(0, 0.002, 0), Vector3(0, -0.5, -3))
+    var skim = Framebuffer(width, height, Color(0, 0, 0))
+    assert_true(fine.compose(skim, low, Length(0.0, METER), stones) > 0)
+    # The surface found on the third call is shown from the fourth.
+    for _ in range(4):
+        var frame = Framebuffer(width, height, Color(0, 0, 0))
+        _ = coarse.compose(frame, camera, Length(0.0, METER), stones)
+    assert_false(Bool(coarse._surface_next))
+    # A view with no water rows draws nothing.
+    var sky = Framebuffer(width, height, Color(0, 0, 0))
+    for i in range(width * height):
+        sky.depth[i] = -1
+    assert_equal(coarse.compose(sky, camera, Length(0.0, METER), stones), 0)
+    with assert_raises(contains="shade step"):
+        coarse.shade_step = 0
+        _ = coarse.compose(sky, camera, Length(0.0, METER), stones)
+    with assert_raises(contains="shade step"):
+        coarse.shade_step = 65
+        _ = coarse.compose(sky, camera, Length(0.0, METER), stones)
+    with assert_raises(contains="refresh"):
+        coarse.shade_step = 2
+        coarse.refresh_every = 0
+        _ = coarse.compose(sky, camera, Length(0.0, METER), stones)
+
+
+def test_calm_ripples_skip_their_step_and_caustics_split_by_channel() raises:
+    var water = _scene(Duration(5.0, SECOND))
+    water.advance(Duration(1.0 / 60.0, SECOND), False)
+    assert_true(water._calm)
+    var still = water._ripples.normal.copy()
+    water.advance(Duration(1.0 / 60.0, SECOND), False)
+    assert_true(water._ripples.normal == still)
+    water.reset()
+    assert_false(water._calm)
+    # A window that is level but still moving is not at rest.
+    water._ripples.velocity[3] = 0.01
+    assert_false(_at_rest(water._ripples))
+    # One worker splats the channels in turn; every core gives its bits.
+    var surface = water._surface()
+    water.workers = 1
+    var serial = water._caustics(surface)
+    water.workers = 0
+    var parallel = water._caustics(surface)
+    assert_true(serial.samples == parallel.samples)
 
 
 def main() raises:

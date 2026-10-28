@@ -44,6 +44,7 @@ from render.framebuffer import Color, FloatColor
 from renderers.renderer import Renderer
 from units.si import Angle, DEGREE, Length, METER
 from render.target import RenderTarget
+from std.math import nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -96,6 +97,23 @@ def test_the_gaussian_weights_are_three_js_s() raises:
     gaussian_blur_light(spread, settings)
     assert_true(spread.colors[4 * W + 8].r > 0)
     assert_equal(scaled_size(W, 0.5), 6)
+    # A `Float32` product of 16777217 is 16777216. JavaScript keeps it.
+    assert_equal(scaled_size(16777217, 1), 16777217)
+    with assert_raises(contains="does not fit"):
+        _ = scaled_size(Int.MAX, 1)
+    with assert_raises(contains="does not fit"):
+        _ = scaled_size(Int.MIN, 1.5)
+    with assert_raises(contains="does not fit"):
+        _ = scaled_size(1, nan[DType.float32]())
+    # A kernel past 2^24 is not a stable weight index, and the walk does
+    # not finish.
+    with assert_raises(contains="kernel"):
+        _ = gaussian_coefficients(Float32(1e20))
+    var wide = DisplaySettings()
+    wide.sigma = Float32(1e20)
+    var held = even(FloatColor(0.5, 0.5, 0.5, 1))
+    with assert_raises(contains="kernel"):
+        gaussian_blur_light(held, wide)
     # A sigma of zero is one weight: the frame times it.
     var sharp = DisplaySettings()
     sharp.sigma = 0
@@ -103,6 +121,20 @@ def test_the_gaussian_weights_are_three_js_s() raises:
     gaussian_blur_light(still, sharp)
     assert_true(still.colors[3 * W + 5].a > 0)
     assert_equal(scaled_size(1, 0.1), 1)
+
+
+def test_a_scaled_frame_must_fit() raises:
+    var settings = DisplaySettings()
+    settings.resolution_scale = Float32(1 << 31)
+    var frame = RenderTarget(2, 2, Color(0, 0, 0))
+    with assert_raises(contains="larger than this port"):
+        gaussian_blur_light(frame, settings)
+    with assert_raises(contains="larger than this port"):
+        anamorphic_light(frame, settings)
+    settings.resolution_scale = 1
+    settings.down_sample_ratio = Float32(1) / Float32(1 << 31)
+    with assert_raises(contains="larger than this port"):
+        lensflare_light(frame, settings)
 
 
 def test_the_box_and_hash_blurs_keep_an_even_frame() raises:
@@ -215,6 +247,44 @@ def test_the_display_settings_and_builders_are_checked() raises:
     assert_true(lensflare_pass(0.2).kind == LENSFLARE)
     with assert_raises(contains="repeat"):
         _ = hash_blur_pass(repeats=0)
+    with assert_raises(contains="larger than this port"):
+        _ = box_blur_pass(2048, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = box_blur_pass(Int.MAX, 1)
+    var boxed = even(FloatColor(0.25, 0.5, 0.75, 1))
+    var broad = DisplaySettings()
+    broad.size = Int.MAX
+    box_blur_light(boxed, broad)
+    assert_almost_equal(boxed.colors[20].g, Float32(0.5), atol=1e-5)
+    # A size below zero also keeps the pixel.
+    var shrunk = even(FloatColor(0.25, 0.5, 0.75, 1))
+    var below = DisplaySettings()
+    below.size = -1
+    box_blur_light(shrunk, below)
+    assert_almost_equal(shrunk.colors[20].g, Float32(0.5), atol=1e-5)
+    with assert_raises(contains="larger than this port"):
+        _ = hash_blur_pass(repeats=16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = hash_blur_pass(repeats=Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = anamorphic_pass(0.9, 3, Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = lensflare_pass(ghost_samples=16777217)
+    var kept = even(FloatColor(0.25, 0.5, 0.75, 1))
+    var heavy = DisplaySettings()
+    heavy.repeats = Int.MAX
+    hash_blur_light(kept, heavy)
+    assert_almost_equal(kept.colors[20].b, Float32(0.75), atol=1e-5)
+    var streak = RenderTarget(2, 2, Color(0, 0, 0))
+    var wide = DisplaySettings()
+    wide.samples = 16777217
+    with assert_raises(contains="larger than this port"):
+        anamorphic_light(streak, wide)
+    wide.samples = 32
+    wide.ghost_samples = Int.MAX
+    wide.down_sample_ratio = 1
+    with assert_raises(contains="larger than this port"):
+        lensflare_light(streak, wide)
 
 
 def test_each_display_pass_runs_in_the_composer() raises:

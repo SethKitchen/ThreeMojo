@@ -40,7 +40,7 @@ A host that is not a Mojo program must call `tm_init` once, before any other
 function.
 """
 
-from std.memory import Layout
+from std.memory import Layout, unsafe_memcpy
 from std.runtime import initialize_runtime
 from window.capi_abi import ABI_VERSION, MAX_SIDE, GpuInfo, GpuPart
 from window.water_app import BED, WaterApp
@@ -157,11 +157,10 @@ def tm_asset(
     """
     if length <= 0:
         return 1
-    var file = List[UInt8](capacity=Int(length))
-    var index = 0
-    while index < Int(length):
-        file.append(bytes.unsafe_offset(index).unsafe_load())
-        index += 1
+    # One bulk copy. A byte loop here copies the photograph one byte at a
+    # time and dominates the hand-off.
+    var file = List[UInt8](length=Int(length), fill=0)
+    unsafe_memcpy(dest=file.unsafe_ptr(), src=bytes, count=Int(length))
     try:
         _app(handle)[].set_bed(file)
     except:

@@ -45,7 +45,7 @@ class LocalSuccessorReceiptTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text('compiler-free modeled instrumented local successor\n')
         self.manifest = ''.join(f'B {module} {line}\n' for module, lines in (
-            (CAP, (3757, 3886, 4046, 4047, 4048, 4049, 4050)),
+            (CAP, (3757, 3886, 4053, 4054, 4055, 4056, 4057)),
             (HAIR, (221, 225, 229, 231, 235, 236))) for line in lines).encode()
         (self.fixture.build/'manifest.txt').write_bytes(self.manifest)
         self.regenerate()
@@ -62,12 +62,12 @@ class LocalSuccessorReceiptTests(unittest.TestCase):
         self.assertEqual(dict(counts), {})
         self.assert_closed(owners, False)
         self.assertEqual({(p['module'], p['line']) for p in receipt['proofs']},
-                         {(CAP, 4049), (HAIR, 229), (HAIR, 235)})
+                         {(CAP, 4056), (HAIR, 229), (HAIR, 235)})
         masked = loops.masked_manifest(self.manifest, {'receipt': receipt, 'sha256': loops.sha256(loops.canonical(receipt))}).decode()
-        for module, line in ((CAP, 4049), (HAIR, 229), (HAIR, 235)):
+        for module, line in ((CAP, 4056), (HAIR, 229), (HAIR, 235)):
             self.assertIn(f'R {module} {line} T ', masked)
             self.assertNotIn(f'B {module} {line}\n', masked)
-        for module, line in ((CAP, 3757), (CAP, 3886), (CAP, 4046), (CAP, 4047), (CAP, 4048), (CAP, 4050),
+        for module, line in ((CAP, 3757), (CAP, 3886), (CAP, 4053), (CAP, 4054), (CAP, 4055), (CAP, 4057),
                              (HAIR, 221), (HAIR, 225), (HAIR, 231), (HAIR, 236)):
             self.assertIn(f'B {module} {line}\n', masked)
         self.assertEqual(receipt['denominator']['proven_impossible'], 3)
@@ -94,7 +94,7 @@ class LocalSuccessorReceiptTests(unittest.TestCase):
         with patch.object(Path, 'open', projected), self.traced() as (_, owners):
             with self.assertRaises(ValueError):
                 receipt = self.derive()
-                self.assertIn((CAP, 4049),
+                self.assertIn((CAP, 4056),
                               {(p['module'], p['line']) for p in receipt['proofs']})
         self.assertTrue(visits)
         self.assertEqual(target.read_bytes(), changed)

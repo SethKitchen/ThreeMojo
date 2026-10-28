@@ -68,6 +68,7 @@ from postprocessing.gtao import (
     denoise_disk,
     denoise_noise,
     gtao_denoise,
+    gtao_grid_side,
     gtao_light,
     gtao_noise,
     gtao_occlusion,
@@ -576,6 +577,14 @@ def test_a_cube_texture_pass_draws_the_cube_the_camera_faces() raises:
     var half = RenderTarget(4, 4, BLACK)
     cube_texture_light(half, overlay, 0.5)
     same_color(half.colors[5], FloatColor(0.5, 0, 0.5, 1), 1e-3)
+    with assert_raises(contains="at least one pixel"):
+        _ = cube_overlay(assets.cube_textures.get(sky), camera, scene, 0, 1)
+    with assert_raises(contains="at least one pixel"):
+        _ = cube_overlay(assets.cube_textures.get(sky), camera, scene, 1, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = cube_overlay(
+            assets.cube_textures.get(sky), camera, scene, 1 << 32, 1 << 32
+        )
     var step = cube_texture_pass(sky, 0.5)
     assert_true(step.kind == CUBE_TEXTURE)
     near(step.strength, 0.5)
@@ -674,6 +683,23 @@ def test_gtao_settings_are_three_js_s_and_checked() raises:
     few.denoise_samples = 1
     with assert_raises(contains="two samples"):
         check_gtao(few)
+    var wide = GtaoSettings()
+    wide.samples = 16777217
+    with assert_raises(contains="larger than this port"):
+        check_gtao(wide)
+    wide.samples = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        check_gtao(wide)
+    wide = GtaoSettings()
+    wide.denoise_samples = 16777217
+    with assert_raises(contains="larger than this port"):
+        check_gtao(wide)
+    wide.denoise_samples = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        check_gtao(wide)
+    wide.samples = 16777216
+    wide.denoise_samples = 16777216
+    check_gtao(wide)
     var tight = GtaoSettings()
     tight.denoise_radius = 0.5
     with assert_raises(contains="one pixel"):
@@ -694,6 +720,19 @@ def test_the_magic_square_and_the_noises() raises:
         )
     # An even size is made the odd size above it.
     assert_equal(len(magic_square(4)), 25)
+    assert_equal(len(magic_square(0)), 1)
+    with assert_raises(contains="larger than this port"):
+        _ = magic_square(-1)
+    with assert_raises(contains="larger than this port"):
+        _ = magic_square(4096)
+    with assert_raises(contains="larger than this port"):
+        _ = magic_square(Int.MAX - 1)
+    with assert_raises(contains="larger than this port"):
+        _ = magic_square(Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = gtao_noise(4096)
+    with assert_raises(contains="larger than this port"):
+        _ = gtao_noise(Int.MAX)
     var noise = gtao_noise()
     assert_equal(len(noise), 25)
     for index in range(25):
@@ -701,6 +740,10 @@ def test_the_magic_square_and_the_noises() raises:
         var y = noise[index].g * 2 - 1
         near(sqrt(x * x + y * y), 1, 0.02)
         near(noise[index].b, Float32(127) / 255)
+    with assert_raises(contains="larger than this port"):
+        _ = denoise_noise(1, 4097)
+    with assert_raises(contains="larger than this port"):
+        _ = denoise_noise(1, Int.MAX)
     var denoise = denoise_noise(3, 4)
     assert_equal(len(denoise), 16)
     for index in range(16):
@@ -709,6 +752,10 @@ def test_the_magic_square_and_the_noises() raises:
     near(same[7], denoise[7])
     var disk = denoise_disk(4, 1, 1)
     assert_equal(len(disk), 4)
+    with assert_raises(contains="larger than this port"):
+        _ = denoise_disk(Int.MAX, 2, 1)
+    with assert_raises(contains="larger than this port"):
+        _ = denoise_disk(16777217, 1, 1)
     near(disk[0].z, 0)
     near(disk[3].z, 1)
     near(disk[1].x, 0, 1e-5)
@@ -757,6 +804,9 @@ def test_gtao_occlusion_is_one_on_the_sky_and_below_one_in_a_corner() raises:
     )
     var up = List[Vector3](length=4, fill=Vector3(0, 0, 1))
     near(gtao_occlusion(sky, up, noise, 0, 0, settings), 1)
+    var huge = settings
+    huge.samples = Int.MAX
+    near(gtao_occlusion(sky, up, noise, 0, 0, huge), 1)
     # A noise texel of 0.5, 0.5 names no direction. three.js normalizes a
     # zero vector there and reads NaN; the port samples the pixel itself,
     # which raises no horizon, so only the normal's cosine is left. An
@@ -774,6 +824,8 @@ def test_gtao_occlusion_is_one_on_the_sky_and_below_one_in_a_corner() raises:
     var facing = (-center).dot(Vector3(0, 0, 1)) / center.length()
     assert_true(facing > 0.5)
     near(gtao_occlusion(wall, up, still, 0, 0, GtaoSettings()), facing)
+    with assert_raises(contains="larger than this port"):
+        _ = gtao_occlusion(wall, up, still, 0, 0, huge)
 
 
 def test_gtao_denoise_is_one_without_a_surface() raises:
@@ -800,6 +852,36 @@ def test_gtao_denoise_is_one_without_a_surface() raises:
         meters(20),
     )
     near(gtao_denoise(ao_view, sky, normals, noise, disk, 4, 6, settings), 1)
+    _ = ao^
+
+
+def test_gtao_noise_side_fits_the_list() raises:
+    var wall = DepthView(
+        List[Float32](length=1, fill=-0.5),
+        1,
+        1,
+        Matrix4(),
+        meters(0.1),
+        meters(20),
+    )
+    var up = List[Vector3](length=1, fill=Vector3(0, 0, 1))
+    var settings = GtaoSettings()
+    with assert_raises(contains="needs a texel"):
+        _ = gtao_occlusion(wall, up, List[FloatColor](), 0, 0, settings)
+    var ao = List[FloatColor](length=1, fill=FloatColor(0.5, 0.5, 0.5, 1))
+    with assert_raises(contains="needs a texel"):
+        _ = gtao_denoise(
+            LightView(ao, 1, 1),
+            wall,
+            up,
+            List[Float32](),
+            List[Vector3](),
+            0,
+            0,
+            settings,
+        )
+    # `Float32` of this length rounds up to a square one texel past it.
+    assert_equal(gtao_grid_side(16785408), 4096)
     _ = ao^
 
 

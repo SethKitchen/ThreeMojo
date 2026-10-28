@@ -13,6 +13,7 @@ with exact integers and fractions, so they are correct for every double.
 """
 
 from std.math import isinf, isnan, log10
+from std.memory import bitcast
 
 from tools._bigint import BigInt
 from tools._fraction import Fraction
@@ -241,3 +242,54 @@ def python_repr(value: Float64) raises -> String:
     return (
         sign + String(digits[byte=:point]) + "." + String(digits[byte=point:])
     )
+
+
+def cached_repr(
+    value: Float64, mut cache: Dict[UInt64, String]
+) raises -> String:
+    """Return `repr(value)`, reusing a repeated double in `cache`.
+
+    Args:
+        value: The double.
+        cache: Reprs already computed, keyed by the double's bits.
+
+    Returns:
+        The same text as `python_repr(value)`.
+
+    Raises:
+        Error: Never for a double; it signals an internal failure.
+    """
+    var bits = bitcast[DType.uint64](value)
+    var found = cache.get(bits)
+    if found:
+        return found.value()
+    var text = python_repr(value)
+    cache[bits] = text
+    return text
+
+
+def append_ascii(mut data: List[UInt8], text: String):
+    """Append `text` to a byte buffer.
+
+    A picture has hundreds of thousands of numbers. Appending each one to
+    a `String` copies the whole picture. This appends the characters once.
+
+    Args:
+        data: The buffer that receives the characters.
+        text: The characters to append.
+    """
+    var raw = text.as_bytes()
+    for index in range(len(raw)):
+        data.append(raw[index])
+
+
+def ascii_text(data: List[UInt8]) -> String:
+    """Return the text stored in `data`.
+
+    Args:
+        data: UTF-8 bytes, without a trailing NUL.
+
+    Returns:
+        The text.
+    """
+    return String(from_utf8_lossy=Span(data))

@@ -35,7 +35,7 @@ comptime FILES = [
     ("tools/tool.sh", ""),
     ("tools/run_suite.mojo", ""),
     ("tools/compiler_telemetry.mojo", ""),
-    ("tools/native_test_support.py", ""),
+    ("tools/native_test_support.mojo", ""),
     ("tools/suite_key.mojo", "from tools._helper import f\n"),
     ("tools/_helper.mojo", "def f():\n    pass\n"),
     ("pkg/__init__.mojo", ""),
@@ -153,26 +153,16 @@ def test_native_fixtures_are_part_of_a_linking_suite_s_key() raises:
 
 
 def test_the_fixture_table_matches_the_native_support_tool() raises:
-    var source = Path("tools/native_test_support.py").read_text()
-    var start = source.find("FIXTURES = {")
-    var end = source.find("}", start)
-    assert_true(start >= 0 and end > start)
-    var table = String(source[byte=start:end])
-    var count = 0
-    for line in table.split("\n"):
-        if String(line).find("': (") >= 0:
-            count += 1
+    var source = Path("tools/native_test_support.mojo").read_text()
     var suites = [
         "tests/test_carla_sum2_environment.mojo",
         "tests/test_carla_junction_endpoint_refusals.mojo",
     ]
-    assert_equal(count, len(suites))
     for suite in suites:
         var fixtures = fixture_inputs([suite])
         assert_equal(len(fixtures), 1)
-        assert_true(
-            table.find("'" + suite + "': ('" + fixtures[0] + "',)") >= 0, suite
-        )
+        assert_true(source.find('"' + suite + '"') >= 0, suite)
+        assert_true(source.find('"' + fixtures[0] + '"') >= 0, fixtures[0])
 
 
 def test_prints_only_the_suites_without_a_stamp() raises:

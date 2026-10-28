@@ -59,7 +59,9 @@ def _texel(image: List[Float32], x: Int, y: Int, lane: Int) -> Float32:
     return image[(y * SIZE_X + x) * 4 + lane]
 
 
-def _starting_positions(computation: GPUComputationRenderer) -> List[Float32]:
+def _starting_positions(
+    computation: GPUComputationRenderer,
+) raises -> List[Float32]:
     """Return an image whose texel (x, y) holds (x, y, 0, 1)."""
     var image = computation.create_texture()
     for y in range(SIZE_Y):
@@ -153,6 +155,67 @@ void main() {
                 assert_equal(
                     _texel(image, x, y, lane), _texel(before, x, y, lane)
                 )
+
+
+def _read(wrap: Int, u: Float32, v: Float32) -> Float32:
+    """Return the red of a 2 by 2 image whose red is `x + 2y + 1`."""
+    var code = List[Float32](length=4, fill=0)
+    var images = List[Float32]()
+    for y in range(2):
+        for x in range(2):
+            images.append(Float32(x + 2 * y + 1))
+            images.append(0)
+            images.append(0)
+            images.append(1)
+    var wraps = List[Int32]()
+    wraps.append(Int32(wrap))
+    wraps.append(Int32(wrap))
+    var source = ComputeNodes(
+        code.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[Untracked](),
+        images.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[Untracked](),
+        wraps.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[Untracked](),
+        2,
+        2,
+        0,
+        0,
+    )
+    var red = source.sample(0, u, v).r
+    _ = code^
+    _ = images^
+    _ = wraps^
+    return red
+
+
+def test_a_coordinate_past_1048576_is_reduced_before_the_index() raises:
+    assert_equal(
+        _read(CLAMP.value, Float32(1e20), 0.25), _read(CLAMP.value, 1, 0.25)
+    )
+    assert_equal(
+        _read(CLAMP.value, Float32(-1e20), 0.25), _read(CLAMP.value, 0, 0.25)
+    )
+    assert_equal(
+        _read(CLAMP.value, nan[DType.float32](), 0.25),
+        _read(CLAMP.value, 0, 0.25),
+    )
+    assert_equal(
+        _read(CLAMP.value, 0.25, nan[DType.float32]()),
+        _read(CLAMP.value, 0.25, 0),
+    )
+    assert_equal(
+        _read(REPEAT.value, Float32(1e20), 0.25), _read(REPEAT.value, 0, 0.25)
+    )
+    assert_equal(
+        _read(MIRROR.value, Float32(1e20), 0.25), _read(MIRROR.value, 0, 0.25)
+    )
+    assert_equal(
+        _read(MIRROR.value, Float32(-1e20), 0.25), _read(MIRROR.value, 0, 0.25)
+    )
 
 
 def test_a_neighbor_is_read_across_a_wrapped_edge() raises:
@@ -274,6 +337,8 @@ def test_a_computation_of_nothing_steps_nothing() raises:
 def test_a_computation_refuses_what_it_cannot_run() raises:
     with assert_raises(contains="need a size"):
         _ = GPUComputationRenderer(0, 2)
+    with assert_raises(contains="larger than this port"):
+        _ = GPUComputationRenderer(1 << 31, 1 << 31)
     with assert_raises(contains="need a size"):
         _ = GPUComputationRenderer(2, 0)
     var computation = GPUComputationRenderer(SIZE_X, SIZE_Y)
@@ -288,6 +353,32 @@ def test_a_computation_refuses_what_it_cannot_run() raises:
         computation.compute()
     with assert_raises(contains="no variable"):
         _ = computation.current_image(3)
+
+
+def test_a_changed_computation_size_is_refused() raises:
+    var computation = GPUComputationRenderer(4, 4)
+    computation.size_x = 0
+    with assert_raises(contains="need a size"):
+        _ = computation.create_texture()
+    computation.size_x = 4
+    computation.size_y = -1
+    with assert_raises(contains="need a size"):
+        _ = computation.create_texture()
+    computation.size_x = 1 << 31
+    computation.size_y = 1 << 31
+    with assert_raises(contains="larger than this port"):
+        _ = computation.create_texture()
+    with assert_raises(contains="larger than this port"):
+        _ = computation.add_variable("a", SLOW, List[Float32]())
+    assert_equal(len(computation.variables), 0)
+    computation.size_x = 4
+    computation.size_y = Int.MAX
+    with assert_raises(contains="larger than this port"):
+        computation.compute()
+    with assert_raises(contains="larger than this port"):
+        _ = computation.current_texture(0)
+    computation.size_y = 4
+    assert_equal(len(computation.create_texture()), 64)
 
 
 def test_explicit_compute_gradients_fail_closed_before_sampling() raises:

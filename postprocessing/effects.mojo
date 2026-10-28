@@ -371,13 +371,20 @@ struct GlitchSettings(ImplicitlyCopyable):
         first trigger, from one generator seeded with `seed`.
 
         Args:
-            size: The map's texels a side, three.js's `dt_size`.
+            size: The map's texels a side, three.js's `dt_size`. A side
+                below zero or above 4096 leaves the map undrawn.
             seed: The generator's seed.
         """
         self.size = size
         self.seed = seed
         self.go_wild = False
         self.frame = 0
+        # A negative side, or one past 4096, makes a square that wraps or
+        # does not finish. The pass check still refuses that side.
+        if size < 0 or size > GLITCH_MAX_SIZE:
+            self.trigger = GLITCH_TRIGGER_LOW
+            self.state = 0
+            return
         var random = SeededRandom(seed)
         var index = 0
         while index < size * size:
@@ -408,19 +415,24 @@ def check_glitch(settings: GlitchSettings) raises:
     require_positive(settings.trigger, "A glitch trigger must be positive")
 
 
-def glitch_heightmap(size: Int, seed: Int) -> List[Float32]:
+def glitch_heightmap(size: Int, seed: Int) raises -> List[Float32]:
     """Return the displacement map `GlitchPass.generateHeightmap` draws:
     one number from zero to one per texel, row by row from the bottom.
 
     Args:
-        size: Texels a side.
+        size: Texels a side, zero through 4096. Zero returns an empty map.
         seed: The generator's seed.
 
     Returns:
         The map, `size` squared values.
+
+    Raises:
+        Error: If `size` is negative or above 4096.
     """
+    if size < 0 or size > GLITCH_MAX_SIZE:
+        raise Error("A glitch map is one through 4096 texels a side")
     var random = SeededRandom(seed)
-    var values = List[Float32](capacity=max(size * size, 0))
+    var values = List[Float32](capacity=size * size)
     var index = 0
     while index < size * size:
         values.append(Float32(random.next()))
@@ -1358,7 +1370,7 @@ def clear_light(mut frame: RenderTarget, color: Color):
 
 def texture_overlay(
     texture: Texture, width: Int, height: Int
-) -> List[FloatColor]:
+) raises -> List[FloatColor]:
     """Return a texture sampled at the center of every pixel of a frame,
     through its own wrap and filter: what a texture pass adds.
 
@@ -1372,7 +1384,14 @@ def texture_overlay(
 
     Returns:
         One texel per pixel, row by row from the top.
+
+    Raises:
+        Error: If a side is below one, or the pixel count does not fit.
     """
+    if width < 1 or height < 1:
+        raise Error("A texture overlay must be at least one pixel each way")
+    if width > Int.MAX // height:
+        raise Error("A texture overlay is larger than this port builds")
     var texels = List[FloatColor](capacity=width * height)
     var y = 0
     while y < height:
@@ -1423,7 +1442,9 @@ def texture_pixel(
     )
 
 
-def texture_light(mut frame: RenderTarget, texture: Texture, opacity: Float32):
+def texture_light(
+    mut frame: RenderTarget, texture: Texture, opacity: Float32
+) raises:
     """Draw a texture over the frame: three.js's `TexturePass`, which
     draws `CopyShader` with premultiplied normal blending.
 
@@ -1435,6 +1456,10 @@ def texture_light(mut frame: RenderTarget, texture: Texture, opacity: Float32):
         frame: The frame, changed in place.
         texture: The image, sampled through its own wrap and filter.
         opacity: What the texture is scaled by.
+
+    Raises:
+        Error: If the frame is below one pixel, or its pixel count does
+            not fit.
     """
     var texels = texture_overlay(texture, frame.width, frame.height)
     for slot in range(len(frame.colors)):  # pragma: no branch
@@ -1785,8 +1810,9 @@ def check_bokeh2(settings: Bokeh2Settings) raises:
 
     Raises:
         Error: If a number is not finite; a texture size is negative; the
-            near plane is not in front of the far one; or there are fewer
-            than one ring or one sample.
+            near plane is not in front of the far one; there are fewer
+            than one ring or one sample; or the rings' taps pass
+            16777216.
     """
     var finite = (
         isfinite(settings.texture_width)
@@ -1812,6 +1838,36 @@ def check_bokeh2(settings: Bokeh2Settings) raises:
         raise Error("A bokeh 2 near plane must lie in front of its far plane")
     if settings.rings < 1 or settings.samples < 1:
         raise Error("A bokeh 2 needs a ring and a sample at least")
+    if not _bokeh2_taps_fit(settings.rings, settings.samples):
+        raise Error(
+            "A bokeh 2 ring or sample count is larger than this port takes"
+        )
+
+
+# One ring of `samples` taps, the next of twice that, through `rings`.
+# The sum is `samples * rings * (rings + 1) / 2`. Past 16777216 taps the
+# index is no longer a `Float32` integer, and the maximum integer does
+# not finish the walk. `rings + 1` also wraps at the maximum integer.
+comptime MAX_BOKEH2_TAPS = 16777216
+
+
+def _bokeh2_taps_fit(rings: Int, samples: Int) -> Bool:
+    """Return whether a bokeh's rings stay within 16777216 taps.
+
+    Args:
+        rings: How many rings.
+        samples: How many taps the first ring takes.
+
+    Returns:
+        Whether the walk fits. A count below one fits, because that loop
+        does not run.
+    """
+    if rings > MAX_BOKEH2_TAPS or samples > MAX_BOKEH2_TAPS:
+        return False
+    if rings < 1 or samples < 1:
+        return True
+    var pairs = rings * (rings + 1) // 2
+    return samples <= MAX_BOKEH2_TAPS // pairs
 
 
 def bokeh2_penta(pw: Float32, ph: Float32, rings: Int) -> Float32:
@@ -1948,7 +2004,7 @@ def bokeh2_pixel(
     var h = 1 / th * blur * settings.max_blur + noise_y
     var here = source.sample(u, v)
     var col = Vector3(here.r, here.g, here.b)
-    if blur >= 0.05:
+    if blur >= 0.05 and _bokeh2_taps_fit(settings.rings, settings.samples):
         var s = Float32(1)
         var rings = Float32(settings.rings)
         for i in range(1, settings.rings + 1):  # pragma: no branch

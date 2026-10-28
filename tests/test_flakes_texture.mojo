@@ -67,6 +67,8 @@ def test_a_flakes_texture_has_a_pixel_on_each_side() raises:
         _ = flakes_texture(0, 4)
     with assert_raises(contains="at least one pixel on each side"):
         _ = flakes_texture(4, 0)
+    with assert_raises(contains="larger than this port"):
+        _ = flakes_texture(1 << 32, 1 << 32)
     # One pixel is still a texture, under every disc.
     var one = flakes_texture(1, 1, seed=1)
     assert_true(one.pixels[2] >= 185)

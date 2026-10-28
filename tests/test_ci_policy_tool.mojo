@@ -772,7 +772,7 @@ def test_coverage_keeps_all_shards_and_its_report_dependency() raises:
     )
     # The group count in the command matches the matrix.
     assert_true(
-        jobs["coverage-capture"].find("SHARD=${{ matrix.shard }}/8 ") >= 0
+        jobs["coverage-capture"].find("SHARD='\"${{ matrix.shard }}\"'/8") >= 0
     )
     assert_true(
         jobs["coverage"].find(

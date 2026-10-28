@@ -53,7 +53,7 @@ from extensions.carla.road_info import LaneId, RoadId, SectionId
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from extensions.carla.world import EpisodeSettings, World
 from math.vector3 import Vector3
-from std.math import floor
+from std.math import floor, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -511,6 +511,78 @@ def test_route_polygon_check() raises:
             world, _ids(ahead), Length(15, METER)
         ).obstacle_was_found
     )
+
+
+def test_lane_plan_refuses_a_walk_that_does_not_finish() raises:
+    var world = _world(_two_lane())
+    var car = _car(world, 5.3, 1.75)
+    var agent = BasicAgent(world, car)
+    var w = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 5.3)
+    with assert_raises(contains="larger than this port"):
+        _ = agent.generate_lane_change_path(
+            world.map, w, OPTION_CHANGE_LANE_RIGHT, Length(1e20, METER)
+        )
+    with assert_raises(contains="larger than this port"):
+        _ = agent.generate_lane_change_path(
+            world.map,
+            w,
+            OPTION_CHANGE_LANE_RIGHT,
+            Length(10, METER),
+            Length(1e20, METER),
+        )
+    with assert_raises(contains="larger than this port"):
+        _ = agent.generate_lane_change_path(
+            world.map,
+            w,
+            OPTION_CHANGE_LANE_RIGHT,
+            Length(10, METER),
+            Length(25, METER),
+            Length(25, METER),
+            True,
+            16777217,
+        )
+    with assert_raises(contains="positive distance"):
+        _ = agent.generate_lane_change_path(
+            world.map,
+            w,
+            OPTION_CHANGE_LANE_RIGHT,
+            Length(10, METER),
+            Length(25, METER),
+            Length(25, METER),
+            True,
+            1,
+            Length(0, METER),
+        )
+    with assert_raises(contains="positive distance"):
+        _ = agent.generate_lane_change_path(
+            world.map,
+            w,
+            OPTION_CHANGE_LANE_RIGHT,
+            Length(10, METER),
+            Length(25, METER),
+            Length(25, METER),
+            True,
+            1,
+            Length(nan[DType.float32](), METER),
+        )
+    # At this station a two-meter step does not move, so the walk stops.
+    ref road = world.map.road(RoadId(1))
+    var saved = road.length
+    road.length = 1e17
+    var far = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 1e17 - 10)
+    var stuck = agent.generate_lane_change_path(
+        world.map,
+        far,
+        OPTION_CHANGE_LANE_RIGHT,
+        Length(10, METER),
+        Length(10, METER),
+        Length(10, METER),
+        False,
+        1,
+        Length(2, METER),
+    )
+    road.length = saved
+    assert_equal(len(stuck), 0)
 
 
 def test_junction_uses_boxes() raises:

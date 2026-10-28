@@ -108,6 +108,21 @@ def test_a_loft_around_an_upright_rod_is_the_rod_and_its_cover() raises:
     assert_true(loft.high.y > Float32(0.8))
 
 
+def test_a_long_rod_along_a_section_still_fits() raises:
+    # The slice count is `Int` of the length over half the finest radius,
+    # then held at sixteen. A rod of 1e20 along the section used to cast
+    # that ratio before the cap.
+    var loft = fit_loft(
+        _rod(Vector3(0, 0, 0), Vector3(Float32(1e20), 0, 0), Float32(1e-5)),
+        AXIS_Z,
+        -0.1,
+        0.1,
+        3,
+        _covers(3, 0),
+    )
+    assert_equal(loft.count, 3)
+
+
 def test_a_rod_along_the_sections_cuts_a_strip() raises:
     # A tendon that runs along a foot's section, as one over the ankle
     # does, is sliced lengthwise into a long strip.

@@ -60,7 +60,7 @@ from materials.material import PHONG, Material, MaterialId
 from objects.mesh import Mesh
 from render.framebuffer import Color, opaque_from_linear
 from math.vector3 import append_float64_xyz
-from std.math import isfinite, sqrt
+from std.math import floor, isfinite, sqrt
 from std.pathlib import Path
 
 
@@ -460,11 +460,13 @@ def _index(value: Float64) raises -> Int:
     Raises:
         Error: If it is not a whole number of zero or more.
     """
-    var whole = Int(value)
-    var bad = value < 0 or Float64(whole) != value
-    if bad:
+    # `Float64(Int.MAX)` rounds up to 2^63. Check the range before `Int`.
+    var whole = (
+        value >= 0 and value < Float64(Int.MAX) and floor(value) == value
+    )
+    if not whole:
         raise Error("AMF: a vertex index that is not a whole number")
-    return whole
+    return Int(value)
 
 
 def _scaled_normal(

@@ -942,6 +942,29 @@ def _nanoseconds(seconds: Float64) -> Int:
     return Int(seconds * 1e9)
 
 
+def _require_crossing_step(
+    previous: Float32, current: Float32, step: Float32
+) raises:
+    """Refuse a contrast step that does not finish the crossing walk.
+
+    The walk adds `step` when the pixel rises and subtracts it when the
+    pixel falls. A step that leaves either gray level unchanged never
+    finishes.
+
+    Args:
+        previous: The gray level of the last frame.
+        current: The gray level of this frame.
+        step: The positive contrast threshold for this direction.
+
+    Raises:
+        Error: If the step does not change the previous level or the
+            current level.
+    """
+    var delta = step if current >= previous else -step
+    if previous + delta == previous or current + delta == current:
+        raise Error("An event camera crossing count is larger than this port")
+
+
 # The latest frame time, about 291.5 years. CARLA interpolates an event's
 # time inside a tick in Float32 nanoseconds, which can overshoot the tick by
 # about 8 * 2**-24 of its length, and a stored event time goes to seconds and
@@ -1006,9 +1029,10 @@ struct DVSCamera(Copyable, Movable):
             sets the reference and gives none.
 
         Raises:
-            Error: If the frame's size is not the camera's, or the time is
+            Error: If the frame's size is not the camera's, the time is
                 not finite, is negative, or has too many nanoseconds for
-                an `Int`.
+                an `Int`, the settings are no longer valid, or the
+                contrast step does not change either gray level.
         """
         if image.width != self.width or image.height != self.height:
             raise Error("An event camera's frame must be its size")
@@ -1022,6 +1046,7 @@ struct DVSCamera(Copyable, Movable):
                 "An event camera's time must be finite, nonnegative and at"
                 " most 9.2e9 seconds"
             )
+        self.config.validate()
         self.last_image = List[Float32]()
         for y in range(self.height):  # pragma: no branch
             for x in range(self.width):  # pragma: no branch
@@ -1061,6 +1086,7 @@ struct DVSCamera(Copyable, Movable):
                 if sigma > 0:
                     c += self.rng.normal(0, sigma)
                     c = max(Float32(0.01), c)
+                _require_crossing_step(it, itdt, c)
                 var cross = self.ref_values[i]
                 while True:
                     cross += pol * c

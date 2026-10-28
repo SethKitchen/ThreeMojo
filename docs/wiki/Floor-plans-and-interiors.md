@@ -33,6 +33,8 @@ The core is a run of rooms at the middle of one band. `PlanOptions` sets the cor
 
 `plan_floor` refuses a footprint that is not convex. It also refuses one narrower than a corridor and two rooms, or shorter than the core and two rooms.
 
+A floor whose room count passes 16777216 is refused. A furniture walk of more than 16777216 places is refused.
+
 ## Cut doors and windows
 
 Call `add_doors` before `add_windows`, so that windows stay clear of doors.
@@ -45,6 +47,8 @@ _ = add_windows(building, WindowOptions(bay, pier, sill, height, double_glazing(
 `add_doors` gives each room one door, in the middle of the longest wall it shares with a corridor or lobby. A room with no such wall, or with one too short for the door, gets a door into a neighbor. The door goes in the longest wall that has no door yet, as in a suite. A lobby gets a double-width entrance in its longest outside wall.
 
 `add_windows` cuts a row of windows in every outside wall. The wall is divided evenly into the fewest bays no wider than the bay width. Each window is its bay less the pier. A window that would cut a door is left out. A row taller than the wall cuts nothing.
+
+A wall whose bay count passes 16777216 is refused.
 
 ## Furnish rooms
 

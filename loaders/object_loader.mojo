@@ -235,6 +235,7 @@ from lights.light import (
     light_probe,
     spot_light,
 )
+from lights.shadow import MAX_MAP_SIZE
 from loaders.gltf import decode_base64, decode_image
 from materials.node_json import read_node_program
 from loaders.node_loader import NodeLoader, plain_material_type
@@ -469,6 +470,30 @@ def euler_order_of(name: String) raises -> EulerOrder:
     return orders[at]
 
 
+def wrap_number(value: Float32) raises -> Int:
+    """Return the three.js wrapping constant a finite number names.
+
+    Args:
+        value: The number from a texture's `wrap` array.
+
+    Returns:
+        `RepeatWrapping`, `ClampToEdgeWrapping` or
+        `MirroredRepeatWrapping`.
+
+    Raises:
+        Error: If the number is not one of those three whole values. A
+            value past 2^24 is not a stable integer.
+    """
+    if not (value >= Float32(REPEAT_WRAPPING)) or not (
+        value <= Float32(MIRRORED_REPEAT_WRAPPING)
+    ):
+        raise Error("Object JSON: a wrap that is none of the three")
+    var code = Int(value)
+    if Float32(code) != value:
+        raise Error("Object JSON: a wrap that is none of the three")
+    return code
+
+
 def wrap_of(code: Int) raises -> Wrap:
     """Return the `Wrap` a three.js wrapping constant names.
 
@@ -501,6 +526,28 @@ def wrap_code(wrap: Wrap) -> Int:
     if wrap == MIRROR:
         return MIRRORED_REPEAT_WRAPPING
     return REPEAT_WRAPPING
+
+
+def shadow_map_size(value: Float32) raises -> Int:
+    """Return a shadow map's side from one number of `mapSize`.
+
+    Args:
+        value: One side, in texels.
+
+    Returns:
+        That side, a whole number from 1 to 8192.
+
+    Raises:
+        Error: If `value` is not a whole number in that range. A float
+            past 2^24 is not a stable integer, so the range is checked
+            before the cast.
+    """
+    if not (value >= Float32(1)) or not (value <= Float32(MAX_MAP_SIZE)):
+        raise Error("A shadow map must be one to 8192 texels a side")
+    var side = Int(value)
+    if Float32(side) != value:
+        raise Error("A shadow map must be one to 8192 texels a side")
+    return side
 
 
 def is_mipmap_filter(code: Int) -> Bool:
@@ -1043,8 +1090,11 @@ struct _Loader(Movable):
         )
         if self.text(metadata, "type", "") != "Object":
             raise Error("Object JSON: metadata.type must be Object")
-        var version = Int(self.number(metadata, "version", 0))
-        if version != FORMAT_MAJOR:
+        # Major version 4 includes 4.5. `Int` of 1e20 is not that major.
+        var version = self.number(metadata, "version", 0)
+        if not (version >= Float32(FORMAT_MAJOR)) or not (
+            version < Float32(FORMAT_MAJOR + 1)
+        ):
             raise Error("Object JSON: only version 4 of the format is read")
 
     def library(self, key: String) raises -> Int:
@@ -1458,8 +1508,8 @@ struct _Loader(Movable):
         var wrap_s = CLAMP
         var wrap_t = CLAMP
         if len(wraps) == 2:
-            wrap_s = wrap_of(Int(wraps[0]))
-            wrap_t = wrap_of(Int(wraps[1]))
+            wrap_s = wrap_of(wrap_number(wraps[0]))
+            wrap_t = wrap_of(wrap_number(wraps[1]))
         var sampling = self.sampling(item)
         var image = decode_image(self.image_bytes(self.text(item, "image", "")))
         var built = texture_from(
@@ -2617,7 +2667,7 @@ struct _Loader(Movable):
             if len(size) == 2:
                 if size[0] != size[1]:
                     raise Error("Object JSON: a shadow map must be square")
-                built.shadow.map_size = Int(size[0])
+                built.shadow.map_size = shadow_map_size(size[0])
             var camera = self.entry(shadow, "camera")
             if camera != NO_NODE:
                 built.shadow.near = Length(

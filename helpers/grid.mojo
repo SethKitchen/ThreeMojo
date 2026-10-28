@@ -21,7 +21,7 @@ are decoded to linear light on the way in; see `Why color is linear`.
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
 from core.ordinal import require_positive
-from math.curve_checks import require_at_least_one
+from math.curve_checks import MAX_CURVE_DIVISIONS, require_at_least_one
 from render.framebuffer import Color, FloatColor, append_float_rgb
 from units.si import Length, METER
 
@@ -53,11 +53,16 @@ def grid_helper(
         along z at each step, in the order three.js writes them.
 
     Raises:
-        Error: If `size` is not positive or `divisions` is below one.
+        Error: If `size` is not positive, or `divisions` is below one or
+            above 16777216.
     """
     var side = size.to(METER)
     require_positive(side, "A grid helper needs a positive size")
     require_at_least_one(divisions, "A grid helper needs at least one division")
+    if divisions > MAX_CURVE_DIVISIONS:
+        raise Error(
+            "A grid helper's division count is larger than this port draws"
+        )
     var half = side / 2
     var step = side / Float32(divisions)
     var middle = FloatColor(srgb=center_color)

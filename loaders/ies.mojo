@@ -217,9 +217,14 @@ def _count(value: Float64, what: String) raises -> Int:
     """Return a count read as a number.
 
     Raises:
-        Error: If it is not a whole number of zero or more.
+        Error: If it is not a whole number of zero or more, or it does
+            not fit in an integer.
     """
-    var whole = value >= 0 and floor(value) == value
+    # `Float64(Int.MAX)` rounds up to 2^63. A value at or above it does
+    # not fit, and `Int` of it is not the number.
+    var whole = (
+        value >= 0 and value < Float64(Int.MAX) and floor(value) == value
+    )
     if not whole:
         raise Error("IES: " + what + " is not a whole number")
     return Int(value)
@@ -420,6 +425,10 @@ def ies_byte(value: Float64) -> UInt8:
     `Math.min( v * 0xFF, 0xFF )` into a `Uint8Array`, which cuts it toward
     zero and wraps it modulo 256.
 
+    NaN and negative infinity are zero. A positive product is held at 255
+    before the cut. A finite magnitude at or past 2^63 is a multiple of
+    2048, so its byte is zero. `Int` of that magnitude is not the number.
+
     Args:
         value: The value; NaN, an empty row, is zero.
 
@@ -429,6 +438,10 @@ def ies_byte(value: Float64) -> UInt8:
     if isnan(value):
         return 0
     var scaled = min(value * 255, 255)
+    # The positive side is held at 255. Only a large negative product, or
+    # negative infinity, sits at or past 2^63.
+    if scaled < -Float64(Int.MAX):
+        return 0
     var whole = Int(scaled)
     return UInt8(((whole % 256) + 256) % 256)
 

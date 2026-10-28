@@ -145,6 +145,18 @@ def test_a_click_finds_three_s_disk() raises:
     assert_false(Bool(helper.axis_at(100, 100, WIDTH, HEIGHT, camera)))
 
 
+def test_a_wide_image_keeps_the_helper_corner() raises:
+    var helper = ViewHelper()
+    var width = 16777217
+    var height = 300
+    var y = Float32(height) - Float32(VIEW_HELPER_DIM // 2)
+    # `Float32` of this width is one pixel low, so its corner is too.
+    var corner = Float32(width) - Float32(VIEW_HELPER_DIM)
+    var camera = frame_at(0, 0, -5)
+    var hit = helper.axis_at(corner + 81, y, width, height, camera)
+    assert_true(hit.value() == NEGATIVE_Z)
+
+
 def test_a_click_takes_the_nearest_disk() raises:
     var helper = ViewHelper()
     var corner = Float32(VIEW_HELPER_DIM // 2)

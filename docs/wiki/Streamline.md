@@ -96,7 +96,7 @@ DLSS 4.5 is the second-generation transformer model. NVIDIA names its Super Reso
 
 ## Render size
 
-`estimated_render_size` gives the size to plan an allocation with before a device exists. It uses NVIDIA's published ratios, rounded to the nearest pixel. A 4K output gives 2560 by 1440 in Quality, 2227 by 1253 in Balanced and 1920 by 1080 in Performance.
+`estimated_render_size` gives the size to plan an allocation with before a device exists. It uses NVIDIA's published ratios, rounded to the nearest pixel. A 4K output gives 2560 by 1440 in Quality, 2227 by 1253 in Balanced and 1920 by 1080 in Performance. A scale of one keeps the side, including one past 2^53.
 
 `estimated_optimal_settings` also gives the range that dynamic resolution can use. The smallest size is half the output in Quality, Balanced and Performance, and 0.99 of it in DLAA. The largest size is the output. Ultra Performance has one size.
 
@@ -108,7 +108,7 @@ The size that `slDLSSGetOptimalSettings` returns is the size to render at. `Opti
 
 DLSS needs a camera moved by a fraction of a pixel each frame. `jitter_offset` gives the Halton offsets in bases two and three, less a half, in render pixels. They are the offsets that `JitteredCamera` takes.
 
-`jitter_phase_count` gives eight samples for every output pixel that one render pixel covers. That is this port's rule. Streamline requires no count.
+`jitter_phase_count` gives eight samples for every output pixel that one render pixel covers. That is this port's rule. Streamline requires no count. A count that does not fit in an integer is refused.
 
 Streamline does not say which way its `jitterOffset` points. A running `sl.dlss` answered. The `jitterOffset` is the negative of the offset that `JitteredCamera` takes, in render pixels, with x across and y down. `frame_constants` negates the offset that it gets.
 
@@ -141,7 +141,7 @@ Each buffer must have the size of its kind, the number of channels that the guid
 
 `Upscaler` is the trait a program draws through. `SpatialUpscaler` implements it on the CPU with the EASU and RCAS passes of [FSR1](Post-processing). It runs where DLSS cannot.
 
-It is not DLSS. It reads the color only, so it adds no detail that the render lacks. It does not denoise, so `supports` is false for Ray Reconstruction. A program that wants a denoised path-traced frame without DLSS must denoise it first with the passes in [Post-processing](Post-processing).
+It is not DLSS. It reads the color only, so it adds no detail that the render lacks. It does not denoise, so `supports` is false for Ray Reconstruction. A program that wants a denoised path-traced frame without DLSS must denoise it first with the passes in [Post-processing](Post-processing). A render or an output whose pixel count does not fit in an integer is refused.
 
 `examples/streamline.mojo` shows the fallback. It renders a scene at the Balanced render size. It puts three images side by side. The first is the render, stretched with the nearest texel. The second is the same render through `SpatialUpscaler`. The third is the scene rendered at the output size.
 

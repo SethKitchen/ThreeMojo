@@ -18,6 +18,7 @@ square grid's are. See `helpers.grid`.
 
 from core.buffer_geometry import BufferGeometry
 from core.ordinal import require_positive
+from math.curve_checks import MAX_CURVE_DIVISIONS
 from helpers.segments import Segments
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
@@ -63,12 +64,21 @@ def polar_grid_helper(
         per segment, with a `color` attribute in linear light.
 
     Raises:
-        Error: If `radius` is not positive, or a count is negative.
+        Error: If `radius` is not positive, a count is negative, or a
+            count is above 16777216.
     """
     var reach = radius.to(METER)
     require_positive(reach, "A polar grid helper needs a positive radius")
     if sectors < 0 or rings < 0 or divisions < 0:
         raise Error("A polar grid helper cannot have a negative count")
+    if (
+        sectors > MAX_CURVE_DIVISIONS
+        or rings > MAX_CURVE_DIVISIONS
+        or divisions > MAX_CURVE_DIVISIONS
+    ):
+        raise Error(
+            "A polar grid helper's count is larger than this port draws"
+        )
     var odd = FloatColor(srgb=color1)
     var even = FloatColor(srgb=color2)
     var segments = Segments()

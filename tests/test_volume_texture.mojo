@@ -248,6 +248,66 @@ def test_bilinear_blends_the_eight_around_the_coordinate() raises:
     assert_close(volume.sample(0.25, 0.25, -0.75), 4, -4, 0, 1)
 
 
+def test_a_coordinate_past_1048576_is_reduced_before_the_index() raises:
+    var volume = Data3DTexture(cube_of_floats())
+    var edge = volume.sample(1, 0.25, 0.25)
+    var huge = volume.sample(Float32(1e20), 0.25, 0.25)
+    assert_close(huge, edge.r, edge.g, edge.b, edge.a)
+    var origin = volume.sample(0, 0.25, 0.25)
+    var before = volume.sample(Float32(-1e20), 0.25, 0.25)
+    assert_close(before, origin.r, origin.g, origin.b, origin.a)
+    var missing = volume.sample(nan[DType.float32](), 0.75, 0.25)
+    var held = volume.sample(0, 0.75, 0.25)
+    assert_close(missing, held.r, held.g, held.b, held.a)
+    volume.wrap_s = REPEAT
+    var repeated = volume.sample(Float32(1e20), 0.25, 0.25)
+    assert_close(repeated, origin.r, origin.g, origin.b, origin.a)
+    volume.wrap_s = CLAMP
+    volume.wrap_t = MIRROR
+    var mirrored = volume.sample(0.25, Float32(1e20), 0.25)
+    var mirrored_back = volume.sample(0.25, Float32(-1e20), 0.25)
+    var mirror_origin = volume.sample(0.25, 0, 0.25)
+    assert_close(
+        mirrored,
+        mirror_origin.r,
+        mirror_origin.g,
+        mirror_origin.b,
+        mirror_origin.a,
+    )
+    assert_close(
+        mirrored_back,
+        mirror_origin.r,
+        mirror_origin.g,
+        mirror_origin.b,
+        mirror_origin.a,
+    )
+    volume.filter = BILINEAR
+    volume.wrap_t = CLAMP
+    var blended = volume.sample(Float32(1e20), 0.75, 0.75)
+    var blend_edge = volume.sample(1, 0.75, 0.75)
+    assert_close(
+        blended, blend_edge.r, blend_edge.g, blend_edge.b, blend_edge.a
+    )
+    var quiet = volume.sample(0.75, nan[DType.float32](), 0.75)
+    var quiet_edge = volume.sample(0.75, 0, 0.75)
+    assert_close(quiet, quiet_edge.r, quiet_edge.g, quiet_edge.b, quiet_edge.a)
+    var stack = DataArrayTexture(cube_of_floats())
+    var layer_edge = stack.sample(1, 0.25, 0)
+    var layer_huge = stack.sample(Float32(1e20), 0.25, 0)
+    assert_close(
+        layer_huge, layer_edge.r, layer_edge.g, layer_edge.b, layer_edge.a
+    )
+    var layer_missing = stack.sample(0.25, 0.25, nan[DType.float32]())
+    var layer_first = stack.sample(0.25, 0.25, 0)
+    assert_close(
+        layer_missing,
+        layer_first.r,
+        layer_first.g,
+        layer_first.b,
+        layer_first.a,
+    )
+
+
 def test_filtering_is_straight_so_a_clear_texel_keeps_its_color() raises:
     var image = VolumeImage.of_floats(2, 1, 1, [1, 0, 0, 0, 0, 0, 1, 1])
     var volume = Data3DTexture(image^, filter=BILINEAR)
@@ -273,6 +333,9 @@ def test_a_layer_rounds_to_the_nearest_and_stays_inside() raises:
     assert_equal(array_layer(0.5, 3), 1)
     assert_equal(array_layer(1.6, 3), 2)
     assert_equal(array_layer(9, 3), 2)
+    assert_equal(array_layer(nan[DType.float32](), 3), 0)
+    assert_equal(array_layer(inf[DType.float32](), 3), 2)
+    assert_equal(array_layer(-inf[DType.float32](), 3), 0)
 
 
 def test_an_array_textures_layers_decode_in_order() raises:

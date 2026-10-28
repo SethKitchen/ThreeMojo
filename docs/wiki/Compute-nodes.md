@@ -37,7 +37,7 @@ A `StorageBufferStore` owns the buffers. A `StorageBufferNode` names one buffer,
 | `store.set_array(node, floats)` | `attribute.array.set( floats )` |
 | `store.texture(storage_texture)` | The storage texture as a material reads it |
 
-An element is a `float` or a vector of two, three or four floats. A `uint` element holds a whole number as a float. It is exact up to 2 ** 24.
+An element is a `float` or a vector of two, three or four floats. A `uint` element holds a whole number as a float. It is exact up to 2 ** 24. A count or a texture whose floats do not fit in an integer is refused. A workgroup array whose copy does not fit is refused.
 
 A material reads a buffer after a run. Copy `store.array(node)` into a geometry attribute, or read `store.texture(texture)` as a float texture.
 
@@ -62,7 +62,7 @@ A `ComputeKernel` holds a `NodeGraph`, `kernel.graph`, and the statements built 
 | `workgroup_barrier()`, `storage_barrier()`, `texture_barrier()` | The three barriers |
 | `compute(count, workgroup_size)` | `.compute( count, [ workgroupSize ] )` |
 
-`compute` compiles the kernel to a `ComputeNode`. The workgroup size is 64 unless you set it. A node runs `count` invocations in workgroups along x. Change the count with `set_count`. Set a uniform with `node.program.set_uniform`.
+`compute` compiles the kernel to a `ComputeNode`. The workgroup size is 64 unless you set it. A node runs `count` invocations in workgroups along x. Change the count with `set_count`. Set a uniform with `node.program.set_uniform`. A count or a workgroup size that does not fit the dispatch is refused when the node runs.
 
 ## Statements
 
@@ -105,7 +105,7 @@ A subgroup is one invocation. `subgroup_size()` is one. Each subgroup function g
 
 `BitonicSort(store, data, workgroup_size)` sorts a buffer of floats in place, the smallest value first. The count must be a power of two. `sort.compute(runner, store)` runs every step. `sort.compute_step(runner, store)` runs one step.
 
-`CountingSort(store, count, bin_count, workgroup_size)` orders the places `0` to `count - 1` by a bin. Set the bin with `set_bin_node(bin_node)`. The bin node is a function that builds the bin from the kernel. `sort.order` holds the sorted places after `compute`. `compute_cpu(store, bins)` gives the same order without a compute program.
+`CountingSort(store, count, bin_count, workgroup_size)` orders the places `0` to `count - 1` by a bin. Set the bin with `set_bin_node(bin_node)`. The bin node is a function that builds the bin from the kernel. `sort.order` holds the sorted places after `compute`. `compute_cpu(store, bins)` gives the same order without a compute program. A place count or a bin count above 16777216 is refused.
 
 The prefix pass of a counting sort is one invocation with two statements for each bin. The default of 4096 bins takes a few seconds to build.
 

@@ -57,7 +57,7 @@ for frame in range(60):
     var image = scene.draw(320, 180, FRAME, True, bed, Angle(-0.72, RADIAN))
 ```
 
-`advance` steps the ripple equation once, then moves the clock. Its `Bool` taps the middle of the ripple window. The step must be finite and nonnegative. The resulting clock must also be finite. A refused step leaves the ripples, clock and step count unchanged.
+`advance` steps the ripple equation once, then moves the clock. Its `Bool` taps the middle of the ripple window. The step must be finite and nonnegative. The resulting clock must also be finite. A refused step leaves the ripples, clock and step count unchanged. A ripple sample that is not finite reads as outside the window.
 
 `draw` makes a picture at the scene's clock and does not change the simulation. Equal steps give equal pictures.
 
@@ -103,7 +103,7 @@ The water shades the pebble bed under the surface, not the scene's geometry unde
 
 `SpectrumResolution` is a power of two from 4 through 256. The still uses 256, the same ocean grid as the page. The patch is 4.6 meters. The mean depth is 1.6 meters. The root-mean-square slope is 0.078. Mipmaps and anisotropy filter the ocean, the caustics and the pebbles.
 
-The caustic grid in the still is 64. The page uses 256.
+The caustic grid in the still is 64. The page uses 256. A side whose texel buffer does not fit in an integer is refused. A ray grid whose vertex buffer does not fit in an integer is refused. A caustic triangle that does not fit in an integer lies past the texture. A pebble image whose texel buffer does not fit in an integer is refused.
 
 ## Frame
 
@@ -111,9 +111,13 @@ The caustic grid in the still is 64. The page uses 256.
 
 ## Sampling and light transport
 
-Texture coordinates name texel centers at `(i + 0.5) / n`, as in WebGL. Bilinear, cubic and mip samples use the same convention. Caustic triangles use a half-open edge rule, so a shared edge receives light once. A flat surface under a vertical sun has unit caustic intensity.
+Texture coordinates name texel centers at `(i + 0.5) / n`, as in WebGL. Bilinear, cubic and mip samples use the same convention. Caustic triangles use a half-open edge rule, so a shared edge receives light once. A flat surface under a vertical sun has unit caustic intensity. An image side above 8388608 pixels measures that center in `Float64`. A surface position that does not fit in an integer repeats, and one that is not finite is flat.
 
-Underwater absorption and ripple lookup follow the refracted sun direction. The sun is not treated as vertical when it is near the horizon. Invalid spectrum and glare sizes are refused before their grids are allocated.
+A pebble coordinate that is not finite is black.
+
+A footprint that is not finite reads the base level. A mip level that does not fit in an integer reads the coarsest level.
+
+Underwater absorption and ripple lookup follow the refracted sun direction. The sun is not treated as vertical when it is near the horizon. Invalid spectrum and glare sizes are refused before their grids are allocated. A glare image below one pixel is refused. A glare coordinate past 2^53 reads the last cell.
 
 ## Shade it on a GPU
 

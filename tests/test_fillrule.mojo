@@ -26,6 +26,7 @@ from render.fillrule import (
     sample,
     snap,
 )
+from std.math import inf, nan
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
 
 
@@ -55,6 +56,60 @@ def test_snap_handles_coordinates_left_of_the_origin() raises:
     # case. floor(-1 * 16 + 0.5) = floor(-15.5) = -16.
     assert_equal(snap(-1.0), -16)
     assert_equal(snap(-0.5), -8)
+
+
+def _covers_far(y_far: Float32, px: Int, py: Int) -> Bool:
+    """Return whether pixel (`px`, `py`) is inside a tall triangle.
+
+    The base runs from (0.5, 0.5) to (4.5, 0.5). The third corner is
+    (0.5, `y_far`). On an eight-pixel image the left four columns are
+    inside once that corner is more than a few pixels below the base.
+    """
+    var ax = snap(Float32(0.5))
+    var ay = snap(Float32(0.5))
+    var bx = snap(Float32(4.5))
+    var by = snap(Float32(0.5))
+    var cx = snap(Float32(0.5))
+    var cy = snap(y_far)
+    var area = edge_at(ax, ay, bx, by, cx, cy)
+    if area < 0:
+        var tx = bx
+        var ty = by
+        bx = cx
+        by = cy
+        cx = tx
+        cy = ty
+    var sx = sample(px)
+    var sy = sample(py)
+    var ab = edge_at(ax, ay, bx, by, sx, sy)
+    var bc = edge_at(bx, by, cx, cy, sx, sy)
+    var ca = edge_at(cx, cy, ax, ay, sx, sy)
+    return not (
+        ab + bias(ax, ay, bx, by) < 0
+        or bc + bias(bx, by, cx, cy) < 0
+        or ca + bias(cx, cy, ax, ay) < 0
+    )
+
+
+def test_a_coordinate_past_the_guard_band_stays_on_it() raises:
+    # 2^25 pixels is 2^29 subpixel steps, and the edge product still fits.
+    var band = (1 << 25) * SUBPIXEL
+    assert_equal(snap(Float32(1 << 25)), band)
+    assert_equal(snap(Float32(1 << 58)), band)
+    assert_equal(snap(Float32(1e20)), band)
+    assert_equal(snap(inf[DType.float32]()), band)
+    assert_equal(snap(nan[DType.float32]()), band)
+    assert_equal(snap(Float32(-(1 << 25))), -band)
+    assert_equal(snap(Float32(-1e20)), -band)
+    assert_equal(snap(-inf[DType.float32]()), -band)
+    # The same pixels as a corner a thousand pixels down. A snap of 2^58
+    # used to wrap the edge product, so this triangle covered nothing.
+    for y in range(8):
+        for x in range(8):
+            assert_equal(
+                _covers_far(Float32(1e20), x, y),
+                _covers_far(Float32(1000), x, y),
+            )
 
 
 def test_sample_lands_on_the_pixel_center() raises:

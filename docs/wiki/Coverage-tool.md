@@ -229,7 +229,7 @@ Module IDs must fit in 480 UTF-8 bytes. This reserves enough bytes for line numb
 
 A `write` interrupted before any byte is sent returns `-1` with `EINTR`. The runtime retries the complete record only for that result. It terminates on an oversized record, any other error, or a short write, including a zero-byte write. The parser rejects incomplete vector records. These checks prevent a partial capture from passing as a shorter complete vector.
 
-The runtime uses the C library already used by the project. The pinned private `std.sys._libc_errno` adapter reads thread-local `errno` through `__errno_location` on Linux and `__error` on macOS. The native protocol checks inject repeated `EINTR` and other write results, and interrupt a blocked pipe with a real signal. It requires no helper library, global counter, thread-local key or new access permission. Linux x86-64 tests exercise overlapping task calls and concurrent 512-byte records through actual pipes. macOS and Linux aarch64 use the same POSIX guarantee, but require their own native execution checks.
+The runtime uses the C library already used by the project. The pinned private `std.sys._libc_errno` adapter reads thread-local `errno` through `__errno_location` on Linux and `__error` on macOS. `tools/check_coverage_protocol.mojo` injects repeated `EINTR` and other write results, and interrupts a blocked pipe with a real signal. It requires no helper library, global counter, thread-local key or new access permission. Linux x86-64 tests exercise overlapping task calls and concurrent 512-byte records through actual pipes. macOS and Linux aarch64 use the same POSIX guarantee, but require their own native execution checks.
 
 All generated helper aliases and local names now avoid source identifiers. See [trait defaults and generated names](#trait-defaults-and-generated-names).
 
@@ -271,7 +271,9 @@ The verifier rejects missing, duplicate, extra, truncated, mixed-module or trail
 
 These records are a trusted producer contract, not independent authentication of arbitrary user-forged files or an arbitrary precompiled producer. Direct diagnostic uses of `build_cli` without a checkpoint retain the original unmasked manifest but cannot be sealed for feasibility reporting.
 
-After instrumentation and copy-through, `tools/coverage_loop_proofs.py` writes `loop-proofs.json`. Its literal inference recognizes a conservative subset in nongeneric top-level function bodies. Direct builtin `range` calls can have one or two nonnegative integer literals no larger than 2^31-1. Direct builtin list literals cannot use expansion or comprehension.
+After instrumentation and copy-through, `tools/coverage_loop_seal.mojo` writes `loop-proofs.json`. Its literal inference recognizes a conservative subset in nongeneric top-level function bodies. Direct builtin `range` calls can have one or two nonnegative integer literals no larger than 2^31-1. Direct builtin list literals cannot use expansion or comprehension. A reviewed proof is added when every digest in `tools/coverage_reviewed_loops.json` matches. A staged file whose bytes differ from its generated or original source is refused.
+
+A reviewed row can also name a census: identifiers and the Mojo files that name them. The row holds only while exactly those files name one of the identifiers as a whole word, in code or in a string. A new file that names one withdraws the row. The typed-boundary CARLA rows also name an image. Their admission uses only the row's own digests and census. The receipt then binds every Mojo input and the listed authority files, as the Python seal's typed admission binds them.
 
 The integer limit keeps endpoint and cardinality arithmetic representable on supported CPU targets. Literal inference does not fold named constants or expressions, inspect producer invariants, or infer positive dynamic lengths. For literal inference, methods, nested functions, generic functions, unresolved syntax, and ambiguous bindings retain both requirements.
 
@@ -297,7 +299,7 @@ Each successful capture receives a `*.txt.gz.proof.json` receipt binding those i
 
 Filenames must identify the same suite. The command stored in the receipt is its validated canonical form, not an unchecked command log. Inputs are checked before and after execution, and a failed replacement attempt removes its old success receipt before preflight. Shard placement and the supported raw/AOT transport choice do not change loop meanings or select different proofs.
 
-The official `coverage_io.py report` path independently rederives proofs, validates all source/tool/capture bindings, and creates a temporary manifest. Its final check must match the exact initial receipt; concurrent source changes followed by a successful reseal cannot return an old success. A `P constant-loops-v2 <sha256>` record identifies the validated proof receipt.
+The official report path rederives the loop receipt in `tools/coverage_loop_seal.mojo`, checks the source, tool, and capture bindings, and writes a temporary manifest. Its final check must match the exact initial receipt; concurrent source changes followed by a successful reseal cannot return an old success. A `P constant-loops-v2 <sha256>` record identifies the validated proof receipt.
 
 Each affected `B module line` becomes an `R` outcome record. Literal records use `literal-range` or `literal-list` and their exact cardinality. Reviewed range records use `reviewed-nonempty-range`. Reviewed byte and child iterators use `reviewed-nonempty-iterator`. Both reasons require True with minimum cardinality one. All other entries remain unchanged.
 
@@ -306,6 +308,8 @@ The native reporter rejects malformed masks, duplicate/compound-decision conflic
 The native reporter on an original manifest remains conservative. Its parser checks derived record structure and runtime contradictions; the official Python wrapper owns source and tool identity validation. Do not use an arbitrary hand-written masked manifest as an independently validated coverage result. Stale sources, tool versions, manifests, proof metadata, or capture receipts require regeneration/recapture, not weaker validation.
 
 The official Mojo wheel launcher receives a relocatable identity. Its absolute Python shebang is normalized only after the interpreter is validated. The exact launcher body, interpreter bytes and capabilities, wheel metadata, compiler, linker, runtime libraries, Python package code and Mojo import payload stay content-bound. A different checkout or venv directory can therefore match without making different compiler bytes equivalent.
+
+The compiler payload is hundreds of megabytes, and one report binds it several times. `.cache/toolchain-payload-files` keeps each payload file's digest with its size, change and modification times and inode, as `tools/cache_key.mojo` keeps its own list. A file whose four values are the same is not read again. A file that changed less than two seconds before the list was written is read again.
 
 The actual interpreter prefix, isolated site inventory and resolved Mojo entry point must match the bound venv. System site packages, .pth hooks, customizers, package initialization hooks and launcher-directory import shadows are rejected. Compiler environment overrides that redirect the wheel driver or import tree are rejected. Unrecognized command wrappers keep their exact byte identity; they do not gain an inferred identity for a downstream compiler. Native qualification through such a wrapper must bind that downstream compiler separately. The maintained hosted jobs invoke the official wheel launcher directly.
 
@@ -357,11 +361,13 @@ The runtime obeys these rules:
 - `_starts` and `_bracket` compare bytes. They give the results of `startswith` and `find`. The compile-time helpers use them, not the methods.
 - The `Bool` identity check stays first in `node`.
 
-`make test-coverage-tool` checks these rules. `check_coverage_grouping.py` fails if a compile-time helper of `node` calls `startswith` or `find`. It compares `_starts` and `_bracket` with `startswith` and `find` on 272 name pairs. It also builds a fixture of mixed pure operators with one compiler thread. The build must stop in 120 seconds, and the native and instrumented output must agree.
+`make test-coverage-tool` checks these rules. `tools/check_coverage_grouping.mojo` fails if a compile-time helper of `node` calls `startswith` or `find`. It compares `_starts` and `_bracket` with `startswith` and `find` on 272 name pairs. It also builds a fixture of mixed pure operators with one compiler thread. The build must stop in 120 seconds, and the native and instrumented output must agree.
+
+`make test-coverage-tool` also runs `tools/check_build_tools.mojo`. That program runs `make`. It checks that each partial check has its own cache key. It also checks that coverage staging copies the helper libraries beside their suites. Each check takes longer than five seconds, so the checks are a program and not a suite.
 
 ## Capture storage
 
-The Makefile reduces each suite's stderr as it arrives, and compresses what is left. The report reads two things: the set of distinct probe payloads, and each decision's distinct MC/DC evaluations. A probe in a loop repeats both millions of times. `tools/coverage_io.py`'s `Reducer` keeps each payload once, as a `COVLINE:` record, and each distinct complete `COVEVAL2` record once.
+The Makefile reduces each suite's stderr as it arrives, and compresses what is left. The report reads two things: the set of distinct probe payloads, and each decision's distinct MC/DC evaluations. A probe in a loop repeats both millions of times. `tools/coverage_io.mojo`'s `Reducer` keeps each payload once, as a `COVLINE:` record, and each distinct complete `COVEVAL2` record once.
 
 The report receives evaluations in first-completion order. The reducer has no pending evaluation state. Its storage depends on distinct hits and vectors, not the number of repeated or abandoned evaluations.
 
@@ -371,7 +377,11 @@ The reporter reads the captures through named pipes, one suite at a time. Other 
 
 ## Capture scheduling and progress
 
-CPU test groups use imported source size. Coverage groups use `tools/coverage_shard.mojo` and `tools/coverage_costs.json`. Probe output can take much longer than compilation. The scheduler puts the longest estimated capture in the group with the lowest total cost. Each group starts its longest captures first.
+CPU test groups use imported source size. Coverage groups use `tools/coverage_shard.mojo` and `tools/coverage_costs.json`. Probe output can take much longer than compilation. The scheduler puts the longest estimated capture in the group with the lowest total cost. Each group starts its longest captures first. `tools/coverage_group.mojo` gives every capture in a group one deadline and then runs the command.
+
+`make coverage` runs each raw capture with `tools/native_test_support.mojo`. A suite that links the C fixture is built and then run in that capture's process group. `tools/coverage_hit_aot.mojo` runs a compiled capture. It builds the suite and keeps the source path as the program name. `tools/coverage_io.mojo` captures one suite, keeps each probe record once, checks the loop proof, and replays the captures to the reporter. `tools/coverage_loop_begin.mojo` writes the generation checkpoint before the producer runs.
+
+The loop receipt binds `tools/coverage_hit_aot.mojo`. The Python file `tools/coverage_hit_aot.py` is removed. `tools/check_coverage_loop_fixture.mojo` checks the constant-loop fixture, a shadowed range, physical line endings, the production capture, and generated-stage mutations. `tools/check_coverage_include_root.mojo` instruments the lane modules and checks the six closed loop proofs.
 
 Ties use the suite path and group number. Every affected suite stays in exactly one group. CI uses eight groups and a budget of 9000 seconds a group. The budget is a hang detector, not a target. Hosted runners differ: one took a quarter longer than another on the same group.
 
@@ -389,7 +399,13 @@ A new suite gets a source-size estimate. The scheduler uses the median measured 
 
 Missing profile entries never remove a suite. Invalid costs fail the scheduling command. Timing data changes only placement and order, never coverage requirements or test validation.
 
-Each capture prints its start, first probe, elapsed time and exit status. A running capture prints progress once per minute. Before the first probe, compilation or startup can still be in progress. Once probes arrive, the log identifies runtime work and gives the record count.
+Each capture prints its start, first probe, elapsed time and exit status. A running capture prints progress once per minute. Before the first probe, compilation or startup can still be in progress. Once probes arrive, the log identifies runtime work and gives the record count. A failed capture prints the last 30 lines of standard output and the last 30 standard-error lines that do not start with `COV`. A compiled capture writes a phase file and reports a missing finish record.
+
+Each capture creates a private temporary directory. Its parent is the resolved `TMPDIR` when that variable is set. The command sees the directory as `TMPDIR` and as `THREEMOJO_TEST_TMPDIR`. The compiler cache is inside the directory. The tool removes the directory after any outcome.
+
+A compiled profile records each launch request before that program starts. The build request keeps the compiler arguments. The program request keeps the source path and the number of program arguments. The finish record gives the status. A raw profile records no launch request.
+
+A cancellation signal stops the captured session. SIGINT exits 130, SIGTERM exits 143, and SIGHUP exits 129. A deadline stops that session and exits 124. A bad probe record stops the session and keeps the error.
 
 Output is flushed at each update. Failed CI captures upload separate diagnostic artifacts. The report job does not use those artifacts as completed captures.
 

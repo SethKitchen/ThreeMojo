@@ -65,6 +65,7 @@ old captures must not be reused as evidence for a new source or cache scope.
 controls. `make test-coverage-tool` keeps all existing raw protocol checks and
 adds native cold/warm phase, argv, complete-vector and Linux transport-fault
 controls. The new native tests retain the five-second per-test limit.
+`tools/check_coverage_hit_profile.mojo` runs the cold and warm profile checks.
 
 The local pilot used published production source and full 908-module
 instrumentation with an explicit x86-64-v3 target. Its 1,776.6-second capture

@@ -53,7 +53,10 @@ GROUP_PATHS = {
 # successor edit. Their historical view is the exact predecessor.
 HISTORICAL_SUCCESSOR_PATHS = frozenset((
     PREFIX + 'assets.mojo', PREFIX + 'model_cache.mojo', PREFIX + 'sensor.mojo',
-    PREFIX + 'speed_limits.mojo', 'tests/test_carla_speed_parser_exceptions.mojo'))
+    PREFIX + 'speed_limits.mojo', 'tests/test_carla_speed_parser_exceptions.mojo',
+    PREFIX + 'lidar.mojo', PREFIX + 'semantic_lidar.mojo', PREFIX + 'render_post.mojo',
+    PREFIX + 'render_sky.mojo', PREFIX + 'render_textures.mojo',
+    PREFIX + 'render_weather.mojo'))
 QUALIFIER_FILES = ('curve_bounds.mojo', 'curve_trig.mojo',
                    'curve_interval.mojo', 'lane_value_bounds.mojo')
 QUALIFIERS = {'var', 'mut', 'out', 'ref', 'comptime', 'raises'}
@@ -172,7 +175,9 @@ def tokens(text):
     return list(_token_snapshot(text))
 
 
-@lru_cache(maxsize=1024)
+# One audit pass hashes more than a thousand distinct sources. A smaller
+# memo evicts each one before the next pass reads it again.
+@lru_cache(maxsize=4096)
 def token_sha256(text):
     # Retain INDENT/DEDENT, statement boundaries, every qualifier, string,
     # operator and literal. Ignore comments and continuation/blank lines.

@@ -10,6 +10,7 @@
 that has no measurement.
 """
 
+from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -18,6 +19,7 @@ from std.testing import (
     assert_true,
 )
 
+from loaders.json import parse_json
 from tests._tree import Tree
 from tools._schedule import load_costs, parse_shard, schedule, split, strip_dot
 from tools.coverage_shard import group as coverage_group
@@ -232,6 +234,37 @@ def test_the_repository_profile_starts_the_known_expensive_suites_first() raises
     assert_equal(groups[2][0], "tests/test_carla_world.mojo")
     assert_equal(strip_dot("./a"), "a")
     assert_equal(strip_dot("a/./b"), "a/./b")
+
+
+def test_the_coverage_profile_keeps_the_censored_measurement() raises:
+    """The profile records every suite and labels the unfinished capture."""
+    var costs = load_costs("tools/coverage_costs.json")
+    assert_equal(len(costs), 718)
+    assert_equal(costs["tests/test_hair_styles.mojo"], 1471.6)
+    assert_equal(costs["tests/test_carla_map.mojo"], 5354.3)
+    var document = parse_json(Path("tools/coverage_costs.json").read_text())
+    var root = document.root()
+    assert_equal(document.number(document.get(root, "source_run_attempt")), 1.0)
+    assert_equal(document.number(document.get(root, "workers_per_shard")), 4.0)
+    assert_equal(
+        document.number(document.get(root, "completed_measurements")), 717.0
+    )
+    var estimates = document.get(root, "scheduling_estimates")
+    assert_equal(document.length(estimates), 1)
+    var suite = "tests/test_carla_recorder_world.mojo"
+    assert_equal(document.key(estimates, 0), suite)
+    var estimate = document.get(estimates, suite)
+    assert_equal(
+        document.string(document.get(estimate, "kind")),
+        "right_censored_timeout_lower_bound",
+    )
+    assert_equal(document.number(document.get(estimate, "exit_code")), 124.0)
+    assert_equal(document.number(document.get(estimate, "seconds")), 8281.5)
+    var last = document.get(estimate, "last_completed_capture")
+    assert_equal(document.number(document.get(last, "seconds")), 6622.2)
+    assert_equal(
+        costs[suite], document.number(document.get(estimate, "seconds"))
+    )
 
 
 def main() raises:

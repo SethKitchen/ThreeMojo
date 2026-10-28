@@ -236,7 +236,7 @@ The planes cut triangles before they are projected, with the same clipper that c
 
 What survives `clip_intersection` is not convex, so it is cut into convex pieces that do not overlap. Piece `i` is in front of plane `i` and behind every plane before it. A line is cut the same way. A point is kept or dropped whole.
 
-A material holds its planes inline, so that it stays a plain value. three.js has no limit on the count.
+A material holds its planes inline, so that it stays a plain value. three.js has no limit on the count. A plane count below zero or above eight is refused when the planes are read.
 
 ## Viewport and scissor
 

@@ -24,7 +24,13 @@ from geometries.convex_object_breaker import (
 from geometries.curves import gosper, hilbert2d, hilbert3d
 from geometries.plane import plane
 from geometries.tube_painter import TubePainter
-from helpers.uvs_debug import UVS_BACKGROUND, UVS_LINE, uvs_debug
+from helpers.uvs_debug import (
+    UVS_BACKGROUND,
+    UVS_LINE,
+    _clip_segment,
+    _wrap,
+    uvs_debug,
+)
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, UV
 from geometries.roller_coaster import (
@@ -39,8 +45,9 @@ from math.space_curve import Point3, SpaceCurve, chord_tangent, point3
 from math.utils import SeededRandom
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from std.math import cos, pi, sin
+from std.math import cos, nan, pi, sin
 from loaders.json import JsonDocument, parse_json
+from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.pathlib import Path
 from std.testing import (
@@ -117,6 +124,14 @@ def test_a_hilbert_curve_refuses_a_bad_order() raises:
         _ = hilbert2d(iterations=-1)
     with assert_raises(contains="negative iteration"):
         _ = hilbert3d(iterations=-1)
+    with assert_raises(contains="larger than this port"):
+        _ = hilbert2d(iterations=12)
+    with assert_raises(contains="larger than this port"):
+        _ = hilbert2d(iterations=Int.MAX)
+    with assert_raises(contains="larger than this port"):
+        _ = hilbert3d(iterations=8)
+    with assert_raises(contains="larger than this port"):
+        _ = hilbert3d(iterations=Int.MAX)
     with assert_raises(contains="every corner"):
         _ = hilbert2d(order=[0, 1, 2])
     with assert_raises(contains="each corner once"):
@@ -306,6 +321,12 @@ def test_a_roller_coaster_track_matches_three_js() raises:
     )
     with assert_raises(contains="one division"):
         _ = roller_coaster_geometry(_Track(), 0)
+    with assert_raises(contains="larger than this port"):
+        _ = roller_coaster_geometry(_Track(), Int.MAX - 1)
+    with assert_raises(contains="larger than this port"):
+        _ = roller_coaster_lifters_geometry(_Track(), 16777217)
+    with assert_raises(contains="larger than this port"):
+        _ = roller_coaster_shadow_geometry(_Track(), Int.MAX)
 
 
 def test_a_sky_and_trees_match_three_js() raises:
@@ -628,6 +649,84 @@ def test_uvs_debug_leaves_what_is_off_the_image() raises:
             if drawn.image.get_pixel(x, y).r == UVS_LINE.r:
                 inked += 1
     assert_true(inked > 0)
+
+
+def test_a_coordinate_that_is_not_a_number_is_left_off_the_image() raises:
+    assert_equal(_wrap(nan[DType.float32]()), 0)
+    assert_equal(_wrap(Float32(1e30)), 0)
+    var a = Vector2(1, 1)
+    for bad in [
+        Vector2(1, nan[DType.float32]()),
+        Vector2(nan[DType.float32](), 1),
+    ]:
+        assert_false(_clip_segment(a, bad, 8, 8)[0])
+        assert_false(_clip_segment(bad, a, 8, 8)[0])
+
+
+def test_an_outline_in_the_last_column_is_drawn() raises:
+    # A pixel is `u * (size - 2) + 0.5` across. Every corner lies in the
+    # last column of a 16-pixel image, from 15.06 to 15.9 pixels across.
+    var geometry = BufferGeometry()
+    geometry.set_attribute(
+        String(UV),
+        BufferAttribute([Float32(1.04), 0.3, 1.06, 0.5, 1.1, 0.7], 2),
+    )
+    var drawn = uvs_debug(geometry, 16)
+    var inked = 0
+    for y in range(16):
+        if drawn.image.get_pixel(15, y).r == UVS_LINE.r:
+            inked += 1
+    assert_true(inked > 0)
+
+
+def test_a_uv_past_an_integer_is_left_off_the_image() raises:
+    var geometry = BufferGeometry()
+    geometry.set_attribute(
+        String(UV),
+        BufferAttribute(
+            [
+                Float32(1e20),
+                0.5,
+                Float32(1e20),
+                0.6,
+                Float32(1e20),
+                0.4,
+            ],
+            2,
+        ),
+    )
+    var drawn = uvs_debug(geometry, 16)
+    var inked = 0
+    for y in range(16):
+        for x in range(16):
+            if drawn.image.get_pixel(x, y).r == UVS_LINE.r:
+                inked += 1
+    assert_equal(inked, 0)
+    var cross = BufferGeometry()
+    cross.set_attribute(
+        String(UV),
+        BufferAttribute(
+            [Float32(0.2), 0.5, Float32(1e20), 0.5, Float32(0.2), 0.8],
+            2,
+        ),
+    )
+    var cut = uvs_debug(cross, 16)
+    var marked = 0
+    for y in range(16):
+        for x in range(16):
+            if cut.image.get_pixel(x, y).r == UVS_LINE.r:
+                marked += 1
+    assert_true(marked > 0)
+    var missing = BufferGeometry()
+    missing.set_attribute(
+        String(UV),
+        BufferAttribute(
+            [nan[DType.float32](), 0.5, 0.2, 0.2, 0.8, 0.8],
+            2,
+        ),
+    )
+    var quiet = uvs_debug(missing, 16)
+    assert_equal(len(quiet.outlines), 1)
 
 
 def test_uvs_debug_draws_a_box_as_three_js_does() raises:

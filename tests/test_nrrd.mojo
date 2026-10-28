@@ -283,6 +283,12 @@ def test_gunzip_reads_the_header_as_fflate_does() raises:
     # A trailer that says one cuts the output.
     file[len(file) - 4] = 1
     assert_equal(len(gunzip(file)), 1)
+    # A limit below the stored block refuses the expansion before the
+    # extra byte is stored. The default limit still cuts to the trailer.
+    with assert_raises(contains="more than was expected"):
+        _ = gunzip(file, 1)
+    with assert_raises(contains="longer than the limit"):
+        _ = gunzip(file, 0)
     with assert_raises(contains="invalid gzip data"):
         _ = gunzip([31, 139, 8, 0, 0])
     with assert_raises(contains="invalid gzip data"):

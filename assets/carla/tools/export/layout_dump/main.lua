@@ -10,7 +10,7 @@
 -- with ".progress" added before it reads it, so a crash names the
 -- component it was reading.
 --
--- `dump_layout.py` installs this as a UE4SS Lua mod and drives it.
+-- `tools/carla_town_layout.mojo` installs this as a UE4SS Lua mod and drives it.
 
 local REQUEST = "layout_dump_request.txt"
 local CLASSES = {

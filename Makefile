@@ -37,6 +37,10 @@ quote = '$(subst ','"'"',$(1))'
 # lists are longer than one argument can be.
 TOOL_MOJO := $(if $(wildcard .venv/bin/mojo),.venv/bin/mojo,mojo)
 TOOL = sh tools/tool.sh $(call quote,$(TOOL_MOJO))
+# Lint progress and a failed command. The value is shell words. The default
+# `TOOL_MOJO` has no spaces, so a recipe can expand this variable unquoted.
+THREEMOJO_SHELL_LOG := sh tools/tool.sh $(TOOL_MOJO) shell_log
+export THREEMOJO_SHELL_LOG
 
 # --- sources ----------------------------------------------------------------
 # Library modules have no main(), so they are checked with `mojo doc`.
@@ -243,18 +247,35 @@ ifeq ($(filter $(COV_PROFILE),raw aot aot-hits),)
 $(error COV_PROFILE must be raw, aot, or aot-hits)
 endif
 ifeq ($(COV_PROFILE),raw)
-COVERAGE_RUN = python3 tools/native_test_support.py run --root $(COV_DIR)
+COVERAGE_RUN = tools/tool.sh $(MOJO) native_test_support run --root $(COV_DIR)
 else
-COVERAGE_RUN = python3 tools/coverage_hit_aot.py --profile $(COV_PROFILE) --root $(COV_DIR)
+COVERAGE_RUN = tools/tool.sh $(MOJO) coverage_hit_aot --profile $(COV_PROFILE) --root $(COV_DIR)
 endif
 
 CACHE_DIR := .cache
+# A value given on the command line wins over these three, but make still
+# expands a `:=` right-hand side that loses. So each is computed only when
+# the command line does not give it: the cache key alone hashes every input
+# file, and a run that passes HASH must not pay for it.
+ifneq ($(origin TOOLCHAIN),command line)
 TOOLCHAIN := $(shell $(MOJO) --version 2>/dev/null || echo "no-mojo")
+endif
 # Native test fixtures are test-only. Their compiler identity also invalidates
 # suite stamps; a missing compiler is a build failure, never a skipped suite.
 export CC
-NATIVE_TOOLCHAIN := $(shell python3 tools/native_test_support.py fingerprint \
+ifneq ($(origin NATIVE_TOOLCHAIN),command line)
+NATIVE_TOOLCHAIN := $(shell $(TOOL) native_test_support fingerprint \
                        --cc $(call quote,$(CC)) 2>/dev/null || echo "no-native-compiler")
+endif
+# A list setting goes to cache_key in pieces of 400 words. One argument
+# past 128 KiB fails exec with "Argument list too long", and the format
+# list alone passed that once the tools moved into Mojo. Each later piece
+# is named NAME+, so a word moved across a piece boundary changes the key.
+list_setting = --setting=$(call quote,$(1):$(wordlist 1,400,$(2))) \
+  $(call list_setting_rest,$(1)+,$(wordlist 401,$(words $(2)),$(2)))
+list_setting_rest = $(if $(strip $(2)),--setting=$(call quote,$(1):$(wordlist 1,400,$(2))) \
+  $(call list_setting_rest,$(1),$(wordlist 401,$(words $(2)),$(2))))
+ifneq ($(origin HASH),command line)
 HASH := $(shell $(TOOL) cache_key \
           --setting=$(call quote,$(MOJO)) \
           --setting=$(call quote,$(MOJOFLAGS)) \
@@ -262,17 +283,18 @@ HASH := $(shell $(TOOL) cache_key \
           --setting=$(call quote,$(TOOLCHAIN)) \
           --setting=$(call quote,native-tests:$(NATIVE_TOOLCHAIN)) \
           --setting=$(call quote,$(AFFECTED) $(AFFECTED_CHANGE)) \
-          --setting=$(call quote,cpu-tests:$(CPU_TESTS)) \
+          $(call list_setting,cpu-tests,$(CPU_TESTS)) \
           --setting=$(call quote,shard:$(SHARD)) \
           --setting=$(call quote,test-timeout:$(TEST_TIMEOUT)) \
-          --setting=$(call quote,cpu-entries:$(CPU_ENTRY_POINTS)) \
-          --setting=$(call quote,cpu-docs:$(CPU_DOC_SOURCES)) \
-          --setting=$(call quote,negative:$(COMPILE_FAIL_RUN)) \
-          --setting=$(call quote,format:$(FORMATTED)) \
+          $(call list_setting,cpu-entries,$(CPU_ENTRY_POINTS)) \
+          $(call list_setting,cpu-docs,$(CPU_DOC_SOURCES)) \
+          $(call list_setting,negative,$(COMPILE_FAIL_RUN)) \
+          $(call list_setting,format,$(FORMATTED)) \
           --setting=$(call quote,coverage-profile:$(COV_PROFILE)) \
           --setting=$(call quote,coverage-loop-proof-schema:constant-loops-v2) \
-          --setting=$(call quote,covered:$(COVERED)) \
-          --setting=$(call quote,gpu:$(GPU_TESTS) $(GPU_HOST_TESTS) $(GPU_ENTRY_POINTS) $(GPU_LIB_SOURCES)))
+          $(call list_setting,covered,$(COVERED)) \
+          $(call list_setting,gpu,$(GPU_TESTS) $(GPU_HOST_TESTS) $(GPU_ENTRY_POINTS) $(GPU_LIB_SOURCES)))
+endif
 ifeq ($(strip $(HASH)),)
 $(error Cannot read build inputs for the cache key)
 endif
@@ -391,6 +413,10 @@ $(TEST_CPU_STAMP):
 	    $(TEST_SUITES) > $(CACHE_DIR)/suites-to-run || exit 1
 	@sh tools/tool.sh $(TOOL_MOJO) --build run_suite
 	@sh tools/tool.sh $(TOOL_MOJO) --build compiler_telemetry
+	@# A suite that drives a tool builds it in main(), inside the time that
+	@# run_suite gives the whole suite. Build those tools first, in parallel.
+	@cut -d ' ' -f 1 $(CACHE_DIR)/suites-to-run | xargs $(TOOL) suite_tools \
+	  | xargs -P $(JOBS) -I {} sh tools/tool.sh $(TOOL_MOJO) --build {}
 	@xargs -n 2 -P $(JOBS) \
 	      sh -c '[ "$$#" -eq 0 ] && exit 0; \
 	             name=$$(basename "$$1" .mojo); bin=$(BIN_DIR)/$$name; \
@@ -399,7 +425,7 @@ $(TEST_CPU_STAMP):
 	               "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$1" "$$2" >&3; }; \
 	             progress "$$1" "build-start: $(MOJO) build $(MOJOFLAGS) --Werror -o $$bin $$1"; \
 	             out=$$(sh tools/tool.sh $(TOOL_MOJO) compiler_telemetry --suite "$$1" --log-fd 3 -- \
-	                    python3 tools/native_test_support.py run --root . \
+	                    sh tools/tool.sh $(TOOL_MOJO) native_test_support run --root . \
 	                      --suite "$$1" --cache $(CACHE_DIR)/native -- \
 	                      $(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
 	                    2>&1; build_rc=$$?; \
@@ -486,7 +512,7 @@ $(LINT_CPU_STAMP):
 	      sh -c 'source=$$1; set -- $(MOJO) build $(MOJOFLAGS) $(LINT_CPU_BUILD_FLAGS) \
 	               --Werror -o /dev/null "$$source"; \
 	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
-	               python3 -c "import datetime, shlex, sys; line = datetime.datetime.now(datetime.timezone.utc).strftime(\"%Y-%m-%dT%H:%M:%SZ\") + \" lint-build-start: \" + shlex.join(sys.argv[1:]); print(line if len(line) <= 4096 else line[:4084] + \" [truncated]\", flush=True)" "$$@"; \
+	               $$THREEMOJO_SHELL_LOG start lint-build-start: "$$@"; \
 	             fi; \
 	             out=$$("$$@" 2>&1); rc=$$?; \
 	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
@@ -494,7 +520,7 @@ $(LINT_CPU_STAMP):
 	             fi; \
 	             if [ $$rc -ne 0 ]; then \
 	               printf "lint-cpu failed: %s (exit %s)\n" "$$source" "$$rc" >&2; \
-	               python3 -c "import shlex, sys; print(\"command: \" + shlex.join(sys.argv[1:]), file=sys.stderr)" "$$@"; \
+	               $$THREEMOJO_SHELL_LOG command "$$@"; \
 	             fi; \
 	             printf "%s" "$$out" | sed "/Crashpad/d"; \
 	             exit $$rc' _ {} \
@@ -504,7 +530,7 @@ $(LINT_CPU_STAMP):
 	      sh -c 'source=$$1; set -- $(MOJO) doc $(MOJOFLAGS) \
 	               --Werror -o /dev/null "$$source"; \
 	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
-	               python3 -c "import datetime, shlex, sys; line = datetime.datetime.now(datetime.timezone.utc).strftime(\"%Y-%m-%dT%H:%M:%SZ\") + \" lint-doc-start: \" + shlex.join(sys.argv[1:]); print(line if len(line) <= 4096 else line[:4084] + \" [truncated]\", flush=True)" "$$@"; \
+	               $$THREEMOJO_SHELL_LOG start lint-doc-start: "$$@"; \
 	             fi; \
 	             out=$$("$$@" 2>&1); rc=$$?; \
 	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
@@ -512,7 +538,7 @@ $(LINT_CPU_STAMP):
 	             fi; \
 	             if [ $$rc -ne 0 ]; then \
 	               printf "lint-cpu failed: %s (exit %s)\n" "$$source" "$$rc" >&2; \
-	               python3 -c "import shlex, sys; print(\"command: \" + shlex.join(sys.argv[1:]), file=sys.stderr)" "$$@"; \
+	               $$THREEMOJO_SHELL_LOG command "$$@"; \
 	             fi; \
 	             printf "%s" "$$out" | sed "/Crashpad/d"; \
 	             exit $$rc' _ {} \
@@ -552,7 +578,7 @@ $(LINT_GPU_STAMP): $(COMPILE_GPU_STAMP)
 # The manifest also lets the copy and diff loops share exactly one selection.
 # Each make process owns its manifest. Keep it outside stamp(fmt)'s fmt-*
 # cleanup so concurrent checks cannot remove or overwrite another selection.
-FMT_RUN_ID := $(shell python3 -c 'import uuid; print(uuid.uuid4().hex)')
+FMT_RUN_ID := $(shell $(TOOL) format_run_id)
 FMT_INPUTS := $(CACHE_DIR)/format-inputs-$(FMT_RUN_ID)
 define write-format-inputs
 $(if $(strip $(1)),@printf '%s\n' $(foreach f,$(wordlist 1,4,$(1)),$(call quote,$(f))) >> $(FMT_INPUTS)
@@ -631,7 +657,7 @@ else
 	@[ "$(words $(COVERED))" -eq "$(words $(sort $(COVERED)))" ] || \
 	  { echo "Coverage requires distinct source identities."; exit 1; }
 	@for f in $(sort $(COVERED)); do mkdir -p "$(COV_DIR)/$$(dirname $$f)"; done
-	@python3 tools/coverage_loop_proofs.py begin --root . --build $(COV_DIR) \
+	@$(TOOL) coverage_loop_begin --root . --build $(COV_DIR) \
 	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
 	  --mojo=$(call quote,$(MOJO)) --sources $(sort $(COVERED))
 	@$(call run,$(MOJO) run $(MOJOFLAGS) coverage/build_cli.mojo \
@@ -654,8 +680,8 @@ else
 	@cp coverage/*.mojo $(COV_DIR)/coverage/
 	@mkdir -p $(COV_DIR)/tests
 	@[ -z "$(strip $(TESTS))" ] || cp $(TESTS) $(COV_DIR)/tests/
-	@python3 tools/native_test_support.py copy --root . --destination $(COV_DIR)
-	@python3 tools/coverage_loop_proofs.py seal --root . --build $(COV_DIR) \
+	@$(TOOL) native_test_support copy --root . --destination $(COV_DIR)
+	@$(TOOL) coverage_loop_seal --root . --build $(COV_DIR) \
 	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
 	  --mojo=$(call quote,$(MOJO)) --capture-cache=$(call quote,$(CACHE_DIR)/native-coverage) \
 	  --suites $(COVERAGE_TESTS)
@@ -669,10 +695,10 @@ ifneq ($(strip $(COVERED)),)
 	@# Exact streams are compressed as they arrive. MC-DC record order stays
 	@# intact, without keeping tens of gigabytes of repeated probes on disk.
 	@printf '%s\n' $(COVERAGE_SUITES) \
-	  | python3 tools/coverage_io.py group --seconds $(COV_BUDGET) -- \
+	  | $(TOOL) coverage_group --seconds $(COV_BUDGET) -- \
 	      xargs -P $(JOBS) -I {} \
 	      sh -c 'name=$$(basename "$$1" .mojo); \
-	             python3 tools/coverage_io.py capture \
+	             $(TOOL) coverage_io capture \
 	               --out "$(COV_DIR)/hits/$$name.out" \
 	               --err "$(COV_DIR)/hits/$$name.txt.gz" \
 	               --loop-proof "$(COV_DIR)/loop-proofs.json" --loop-proof-root . -- \
@@ -708,7 +734,7 @@ ifneq ($(strip $(COVERED)),)
 	  fi; \
 	done; [ $$missing -eq 0 ] || exit 1
 	@# FIFOs feed the original bytes to the reporter one suite at a time.
-	@python3 tools/coverage_io.py report --capture-dir $(COV_DIR)/hits \
+	@$(TOOL) coverage_io report --capture-dir $(COV_DIR)/hits \
 	  --loop-proof-root . --loop-proof-build $(COV_DIR) \
 	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
 	  --mojo=$(call quote,$(MOJO)) --capture-cache=$(call quote,$(CACHE_DIR)/native-coverage) \
@@ -971,11 +997,11 @@ test-tools:
 	@$(MAKE) --no-print-directory test-tools-oracle
 
 test-tools-discovery:
+	@$(TOOL) check_format_arguments
 	@python3 -m unittest discover -s tools -p 'test_*.py'
-	@python3 -m unittest discover -s assets/carla/tools -p 'test_*.py'
 
 test-tools-oracle:
-	@python3 tools/parallel_unittest.py --jobs $(JOBS) $(if $(TOOLS_SHARD),--shard $(TOOLS_SHARD)) tools/carla_lane_oracle
+	@$(TOOL) parallel_unittest --jobs $(JOBS) $(if $(TOOLS_SHARD),--shard $(TOOLS_SHARD)) tools/carla_lane_oracle
 	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,python3 tools/carla_lane_oracle/spiral_moments.py --check)
 	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,$(MAKE) --no-print-directory repository-check)
 
@@ -993,12 +1019,13 @@ repository-check:
 # Native source-to-source regression: compile first, then enforce the normal
 # five-second limit on each executed test. test-tools remains compiler-free.
 test-coverage-tool:
-	@python3 tools/check_coverage_grouping.py --mojo $(MOJO)
-	@python3 tools/check_coverage_protocol.py --mojo $(MOJO)
+	@$(TOOL) check_coverage_grouping --mojo $(MOJO)
+	@$(TOOL) check_coverage_protocol --mojo $(MOJO)
 	@$(TOOL) check_coverage_sources --mojo $(MOJO)
 	@$(TOOL) check_coverage_loops --mojo $(MOJO)
 	@python3 tools/check_coverage_loop_proofs.py --mojo $(MOJO)
-	@python3 tools/check_coverage_hit_profile.py --mojo $(MOJO)
+	@$(TOOL) check_coverage_hit_profile --mojo $(MOJO)
+	@$(TOOL) check_build_tools
 
 # Subprocess-only contracts need native children with different environments.
 # Metal kernels as AIR, emitted for a Metal target without a GPU or Apple's

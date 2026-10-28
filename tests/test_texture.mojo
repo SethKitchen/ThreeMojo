@@ -276,6 +276,14 @@ def test_repeat_tiles_the_image() raises:
     assert_equal(image.sample(1.25, 0.75).r, image.sample(0.25, 0.75).r)
     assert_equal(image.sample(-0.75, 0.75).r, image.sample(0.25, 0.75).r)
     assert_equal(image.sample(0.25, 1.75).r, image.sample(0.25, 0.75).r)
+    # Past an integer the coordinate is reduced before the texel index.
+    assert_equal(image.sample(Float32(1e20), 0.75).r, image.sample(0, 0.75).r)
+    assert_equal(
+        image.sample(nan[DType.float32](), 0.75).r, image.sample(0, 0.75).r
+    )
+    assert_equal(
+        image.sample(0.25, nan[DType.float32]()).r, image.sample(0.25, 0).r
+    )
 
 
 def test_clamp_holds_the_edge_texel() raises:
@@ -285,6 +293,10 @@ def test_clamp_holds_the_edge_texel() raises:
     assert_equal(image.sample(9.0, 0.75).r, Float32(0))
     # Far off to the left stays in the left-hand one.
     assert_equal(image.sample(-9.0, 0.75).r, Float32(1))
+    assert_equal(image.sample(Float32(1e20), 0.75).g, image.sample(1, 0.75).g)
+    assert_equal(
+        image.sample(nan[DType.float32](), 0.75).r, image.sample(0, 0.75).r
+    )
 
 
 def test_negative_coordinates_rely_on_floored_modulo() raises:
@@ -328,6 +340,8 @@ def test_mirror_alternates_direction_every_tile() raises:
     assert_equal(image.sample(1.25, 0.75).r, Float32(0))
     # And the third tile is the right way round again.
     assert_equal(image.sample(2.25, 0.75).r, image.sample(0.25, 0.75).r)
+    assert_equal(image.sample(Float32(1e20), 0.75).r, image.sample(0, 0.75).r)
+    assert_equal(image.sample(Float32(-1e20), 0.75).r, image.sample(0, 0.75).r)
 
 
 def test_the_ends_of_the_range_meet_under_repeat() raises:
@@ -398,6 +412,29 @@ def smooth_quad() raises -> Texture:
         pixels.append(colors[index].b)
         pixels.append(colors[index].a)
     return Texture(2, 2, pixels^, CLAMP, BILINEAR)
+
+
+def test_a_wide_texture_reads_its_center_texel() raises:
+    var count = 16777217
+    var wide = List[UInt8](length=count * 4, fill=0)
+    var slot = 8388608 * 4
+    wide[slot - 4 + 3] = 255
+    wide[slot] = 255
+    wide[slot + 3] = 255
+    var row = Texture(count, 1, wide^, CLAMP, BILINEAR, LINEAR, mipmapped=False)
+    assert_equal(row.sample_at(0.5, 0.5, 0).r, 1)
+    row.mag_filter = NEAREST
+    _ = row.sample_at(0.5, 0.5, 0)
+    var tall_pixels = List[UInt8](length=count * 4, fill=0)
+    tall_pixels[slot - 4 + 3] = 255
+    tall_pixels[slot] = 255
+    tall_pixels[slot + 3] = 255
+    var column = Texture(
+        1, count, tall_pixels^, CLAMP, BILINEAR, LINEAR, mipmapped=False
+    )
+    assert_equal(column.sample_at(0.5, 0.5, 0).r, 1)
+    column.mag_filter = NEAREST
+    _ = column.sample_at(0.5, 0.5, 0)
 
 
 def test_a_bilinear_sample_on_a_texel_center_is_that_texel() raises:

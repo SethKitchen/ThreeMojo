@@ -19,16 +19,19 @@ dressing, placed from the map's lanes:
   and the concrete carry the procedural color, roughness and normal maps
   of `render_textures`.
 - **Crosswalks** are zebra stripes, 0.5 m wide with 0.5 m gaps, cut from
-  each crosswalk outline of `Map.all_crosswalk_zones`.
+  each crosswalk outline of `Map.all_crosswalk_zones`. A crosswalk that
+  needs more than 16777216 stripes is refused.
 - **Buildings** stand on lots beside each road outside a junction, back
   from the outer edge of its outermost lane. A lot that comes near
-  another road or another lot is left empty. Each building has a row of
-  shops on its ground floor, a cornice above it, floors of windows, and
-  a parapet round its roof. A ring of tall buildings far out makes the
-  skyline.
+  another road or another lot is left empty. A road that needs more than
+  16777216 lots is refused. Each building has a row of shops on its
+  ground floor, a cornice above it, floors of windows, and a parapet
+  round its roof. A ring of tall buildings far out makes the skyline.
+  A ring of more than 16777216 buildings is refused.
 - **Street lamps** stand at the outer edge of each road's outermost lanes,
   with an arm over the road and a lamp that is a spot light. They light at
-  night.
+  night. The spacing must be a finite positive distance. A road that needs
+  more than 16777216 lamps is refused.
 - **The ground** is paving near the roads and a lawn out to the horizon.
 
 `set_weather` wets the road, fills its puddles and lights the lamps and
@@ -159,7 +162,7 @@ from render.framebuffer import Color
 from render.srgb import linear_to_srgb
 from render.texture import Texture
 from render.texture_store import NO_TEXTURE, TextureId
-from std.math import atan2, cos, pow, sin, sqrt
+from std.math import atan2, cos, isfinite, pow, sin, sqrt
 from units.si import DEGREE, METER, RADIAN, Angle, Length
 from units.temperature import KELVIN, Temperature
 
@@ -187,6 +190,10 @@ comptime PAINT_LIFT = Float32(0.012)
 # A crosswalk stripe's width and the gap after it.
 comptime STRIPE = Float32(0.5)
 comptime STRIPE_GAP = Float32(0.5)
+# Lots, lamps and stripes. A finer walk does not finish.
+comptime _MAX_TOWN_STEPS = 16777216
+# A lot is at least 10 m wide, then a gap of 1.5 m.
+comptime _MIN_LOT_STEP = 11.5
 # A lamp's color and how bright it is when lit.
 comptime LAMP_KELVIN = Float32(3000)
 comptime LAMP_INTENSITY = Float32(160)
@@ -518,12 +525,15 @@ def building_lots(map: Map, settings: TownSettings) raises -> List[Lot]:
         The lots.
 
     Raises:
-        Error: If a map query fails.
+        Error: If a road needs more lots than this port walks, or a map
+            query fails.
     """
     var lots = List[Lot]()
     for road in map.roads:
         if road.is_junction:
             continue
+        if not (road.length / _MIN_LOT_STEP < Float64(_MAX_TOWN_STEPS)):
+            raise Error("A building lot count is larger than this port walks")
         # A constant count, more than zero.
         for side in range(2):  # pragma: no branch
             var s = Float64(2)
@@ -585,10 +595,12 @@ def skyline_lots(bounds: Box3, count: Int, seed: Int) raises -> List[Lot]:
         The lots.
 
     Raises:
-        Error: If the count is less than one.
+        Error: If the count is less than one, or more than this port builds.
     """
     if count < 1:
         raise Error("A skyline needs at least one building")
+    if count > 16777216:
+        raise Error("A skyline count is larger than this port builds")
     var middle = (bounds.min + bounds.max) * Float32(0.5)
     var corner = Vector3(
         bounds.max.x - middle.x, bounds.max.y - middle.y, 0
@@ -630,15 +642,18 @@ def lamp_posts(map: Map, spacing: Length) raises -> List[LampPost]:
         The lamps.
 
     Raises:
-        Error: If the spacing is not positive, or a map query fails.
+        Error: If the spacing is not a finite positive distance, a road
+            needs more lamps than this port walks, or a map query fails.
     """
-    if not (spacing.to(METER) > 0):
-        raise Error("Street lamps need a positive spacing")
     var step = Float64(spacing.to(METER))
+    if not isfinite(step) or not (step > 0.0):
+        raise Error("Street lamps need a finite positive spacing")
     var posts = List[LampPost]()
     for road in map.roads:
         if road.is_junction:
             continue
+        if not (road.length / step < Float64(_MAX_TOWN_STEPS)):
+            raise Error("A street lamp count is larger than this port walks")
         # A constant count, more than zero.
         for side in range(2):  # pragma: no branch
             var s = step / 2
@@ -670,8 +685,8 @@ def crosswalk_stripes(zones: List[Vector3]) raises -> BufferGeometry:
         group of `CROSSWALK_SURFACE`. Empty for no crosswalk.
 
     Raises:
-        Error: Never for finite corners; the geometry's checks are passed
-            on.
+        Error: If a crosswalk needs more stripes than this port walks, or
+            the geometry's checks fail.
     """
     var positions = List[Float32]()
     var normals = List[Float32]()
@@ -691,6 +706,10 @@ def crosswalk_stripes(zones: List[Vector3]) raises -> BufferGeometry:
                 along = side_two
                 across = side_one
             var length = along.length()
+            if not (length < Float32(_MAX_TOWN_STEPS)):
+                raise Error(
+                    "A crosswalk stripe count is larger than this port walks"
+                )
             var unit = along * (1 / length)
             var t = Float32(0.25)
             while t + STRIPE <= length:

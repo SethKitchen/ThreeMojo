@@ -26,6 +26,7 @@ from math.random import mulberry32_step
 from math.remainder import remainder_float64
 from math.sine import fraction
 from math.smoothstep import smoothstep
+from std.sys import is_gpu
 from std.math import cos, exp, floor, isfinite, sin
 from std.memory import bitcast
 from units.si import Angle, Duration, SECOND
@@ -151,6 +152,88 @@ def clamped_texel(column: Int, row: Int, width: Int, height: Int) -> Int:
 
     """
     return edge_index(row, height) * width + edge_index(column, width)
+
+
+def texel_center(pixel: Int, count: Int) -> Float32:
+    """Return the center of a pixel as a fraction of its side.
+
+    A count above 2^23 is not a side a `Float32` can address by halves, so
+    the last pixel reads as the edge. That center is measured in
+    `Float64`. A smaller count keeps the `Float32` quotient.
+
+    Args:
+        pixel: The column or the row.
+        count: The side, in pixels. It must be positive.
+
+    Returns:
+        The center, from just above zero through just below one.
+    """
+    # Metal has no `Float64`, and no GPU image is 2^23 pixels a side.
+    comptime if not is_gpu():
+        if count > 8388608:
+            return Float32((Float64(pixel) + 0.5) / Float64(count))
+    return (Float32(pixel) + 0.5) / Float32(count)
+
+
+def texel_center_from_end(pixel: Int, count: Int) -> Float32:
+    """Return one minus a pixel's center, as a fraction of its side.
+
+    The subtraction is in `Float64` when the count is above 2^23. Doing
+    it after the `Float32` cast sends the last pixel to zero.
+
+    Args:
+        pixel: The column or the row.
+        count: The side, in pixels. It must be positive.
+
+    Returns:
+        One minus the center.
+    """
+    # Metal has no `Float64`, and no GPU image is 2^23 pixels a side.
+    comptime if not is_gpu():
+        if count > 8388608:
+            return Float32(1 - (Float64(pixel) + 0.5) / Float64(count))
+    return 1 - (Float32(pixel) + 0.5) / Float32(count)
+
+
+def texel_ndc(pixel: Int, count: Int) -> Float32:
+    """Return a pixel's center in normalized device space, from minus one
+    to one.
+
+    The whole quotient is a `Float64` when the count is above 2^23.
+    Scaling a `Float32` fraction sends the last pixel to one.
+
+    Args:
+        pixel: The column or the row.
+        count: The side, in pixels. It must be positive.
+
+    Returns:
+        The center, from just above minus one through just below one.
+    """
+    # Metal has no `Float64`, and no GPU image is 2^23 pixels a side.
+    comptime if not is_gpu():
+        if count > 8388608:
+            return Float32((Float64(pixel) + 0.5) / Float64(count) * 2 - 1)
+    return (Float32(pixel) + 0.5) / Float32(count) * 2 - 1
+
+
+def texel_ndc_up(pixel: Int, count: Int) -> Float32:
+    """Return a pixel's center in normalized device space, y up.
+
+    One is the top of the image. The subtraction is in `Float64` when the
+    count is above 2^23.
+
+    Args:
+        pixel: The row, down from the top.
+        count: The side, in pixels. It must be positive.
+
+    Returns:
+        The center, from just below one through just above minus one.
+    """
+    # Metal has no `Float64`, and no GPU image is 2^23 pixels a side.
+    comptime if not is_gpu():
+        if count > 8388608:
+            return Float32(1 - (Float64(pixel) + 0.5) / Float64(count) * 2)
+    return 1 - (Float32(pixel) + 0.5) / Float32(count) * 2
 
 
 def min3(x: Float32, y: Float32, z: Float32) -> Float32:
@@ -802,6 +885,23 @@ def floor_power_of_two(value: Int) raises -> Int:
     return power
 
 
+def _difference_fits(high: Int, low: Int) -> Bool:
+    """Return whether `high - low` fits in an integer.
+
+    Args:
+        high: The end that is subtracted from.
+        low: The end that is subtracted.
+
+    Returns:
+        Whether the difference fits.
+    """
+    if low > 0:
+        return high >= Int.MIN + low
+    if low < 0:
+        return high <= Int.MAX + low
+    return True
+
+
 struct SeededRandom(Copyable, Movable):
     """The Mulberry32 generator of three.js's `seededRandom`.
 
@@ -877,14 +977,26 @@ struct SeededRandom(Copyable, Movable):
         """Return a whole number in a range, both ends included.
         three.js: `randInt`.
 
+        A width that does not fit in an integer is drawn in `Float64` and
+        held inside the range. Widths that fit keep the integer product.
+
         Args:
             low: The smallest.
             high: The largest.
 
         Returns:
-            The number.
+            The number. It lies in the range when `low` is at most `high`.
         """
-        return low + Int(floor(self.next() * Float64(high - low + 1)))
+        var unit = self.next()
+        if _difference_fits(high, low):
+            var diff = high - low
+            if diff < Int.MAX:
+                return low + Int(floor(unit * Float64(diff + 1)))
+        if high < low:
+            return low
+        var width = Float64(high) - Float64(low)
+        var value = Float64(low) + floor(unit * (width + 1))
+        return Int(value)
 
 
 def generate_uuid(mut generator: SeededRandom) -> String:
@@ -1107,3 +1219,32 @@ def normalize(value: Float64, component: ComponentType) raises -> Float64:
     var scaled = value * scale
     var whole = floor(scaled)
     return whole + 1.0 if scaled - whole >= 0.5 else whole
+
+
+# A side of an image or a view times a `Float32` scale.
+#
+# A scale such as 0.9 is stored as the `Float32` nearest it, a little
+# below 0.9. The `Float32` product of an ordinary side rounds back up to
+# the whole number that JavaScript gets from its `Float64` 0.9: 1000 times
+# 0.9 is 900. The `Float64` product of the same `Float32` scale stays
+# below, at 899.99998. Past 2^24 a `Float32` cannot hold every whole side,
+# so the product is a `Float64` there.
+comptime EXACT_SIDES = 16777216
+"""The largest side whose every whole value a `Float32` holds: 2^24."""
+
+
+def scaled_side(size: Int, scale: Float32) -> Float64:
+    """Return a side times a scale, as the renderers have scaled it.
+
+    Args:
+        size: The side, in pixels.
+        scale: The scale.
+
+    Returns:
+        The `Float32` product, as a `Float64`, for a side of at most 2^24
+        either way. The `Float64` product for a larger side. Either can
+        be infinite, for the caller to refuse.
+    """
+    if size <= EXACT_SIDES and size >= -EXACT_SIDES:
+        return Float64(Float32(size) * scale)
+    return Float64(size) * Float64(scale)

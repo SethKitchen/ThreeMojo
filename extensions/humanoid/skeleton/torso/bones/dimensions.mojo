@@ -690,7 +690,7 @@ def torso_bone_distance(
     return torso_bone_field(dimensions, part, side).distance(point)
 
 
-def rib_path(dimensions: TorsoDimensions, rib: Int) -> List[Vector3]:
+def rib_path(dimensions: TorsoDimensions, rib: Int) raises -> List[Vector3]:
     """Return the centerline of one right rib, head to front end.
 
     Args:
@@ -700,6 +700,9 @@ def rib_path(dimensions: TorsoDimensions, rib: Int) -> List[Vector3]:
     Returns:
         A smooth curve through the head, the tubercle, the angle, the
         side of the chest and the costochondral junction, in meters.
+
+    Raises:
+        Error: If the spline sample count is refused.
     """
     var f = dimensions.frame
     var i = edge_index(rib, RIBS)
@@ -785,7 +788,7 @@ def cartilage_end(dimensions: TorsoDimensions, rib: Int) -> Vector3:
     return ends[clamp(rib, 0, 9)]
 
 
-def _rib(dimensions: TorsoDimensions, rib: Int) -> Sweep:
+def _rib(dimensions: TorsoDimensions, rib: Int) raises -> Sweep:
     """Return one right rib as a tapering tube."""
     var f = dimensions.frame
     var first = f.cm(0.45)
@@ -894,7 +897,7 @@ def upper_arm_point(
     )
 
 
-def clavicle_path(dimensions: TorsoDimensions) -> List[Vector3]:
+def clavicle_path(dimensions: TorsoDimensions) raises -> List[Vector3]:
     """Return the centerline of the right clavicle, medial to lateral.
 
     Its medial two-thirds bow forward and its lateral third bows back,
@@ -906,6 +909,9 @@ def clavicle_path(dimensions: TorsoDimensions) -> List[Vector3]:
     Returns:
         A smooth curve from the sternal end to the acromial end, in
         meters.
+
+    Raises:
+        Error: If the spline sample count is refused.
     """
     var girdle = shoulder_girdle(dimensions)
     var f = dimensions.frame
@@ -919,7 +925,7 @@ def clavicle_path(dimensions: TorsoDimensions) -> List[Vector3]:
     return spline_points(points, 3)
 
 
-def _clavicle(dimensions: TorsoDimensions) -> Sweep:
+def _clavicle(dimensions: TorsoDimensions) raises -> Sweep:
     """Return the right clavicle: a bulbous sternal end, a round shaft
     and a flat acromial end."""
     var f = dimensions.frame
@@ -1163,7 +1169,7 @@ def append_template_tube(
     coords: List[Float32],
     first: Float32,
     last: Float32,
-):
+) raises:
     """Append a tube along a spline through template points.
 
     Args:
@@ -1172,6 +1178,9 @@ def append_template_tube(
         coords: Template points as flat triples.
         first: The radius at the first point, in template cm.
         last: The radius at the last point, in template cm.
+
+    Raises:
+        Error: If the spline sample count is refused.
     """
     var run = template_points(frame, coords)
     sweeps.append(tube(spline_points(run, 3), frame.cm(first), frame.cm(last)))

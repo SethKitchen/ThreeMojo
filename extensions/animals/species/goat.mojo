@@ -74,7 +74,7 @@ from extensions.animals.species.hoofed import (
     dewclaw_balls,
     horn_parameter,
 )
-from extensions.animals.traits import Traits
+from extensions.animals.traits import Traits, trait_repeats
 from math.sine import fraction
 from math.utils import clamp_unit, rec709_luminance
 from extensions.sdf.vector import (
@@ -1840,7 +1840,7 @@ def _mark_sd(
     h: V3,
     p: V3,
     n: V3,
-) -> Float64:
+) raises -> Float64:
     # The breed's second color as a signed distance, inside below zero.
     var face = region == 2 or region == 6
     var head_like = face or region == 5
@@ -1956,7 +1956,7 @@ def _mark_sd(
         var rear_leg = (masks & M_REAR) != 0 and not fr
         if rear_leg:
             d = min(d, -0.01)
-    var count = Int(pal.get("patches").x)
+    var count = trait_repeats(pal.get("patches").x)
     var patched = count > 0 and region != 5
     if patched:
         var wob = (centered_fbm(p, 9.0, 3)) * 0.08
@@ -2030,7 +2030,7 @@ def _lid_distance(t: Traits, p: V3) -> Float64:
 
 def goat_paint(
     pal: Palette, t: Traits, tag: String, bone: String, s: CoatSample
-) -> Paint:
+) raises -> Paint:
     """Paint one vertex of a goat.
 
     The breed's coat with countershading, the Swiss face stripes, dark
@@ -2048,6 +2048,9 @@ def goat_paint(
 
     Returns:
         The paint.
+
+    Raises:
+        Error: If a patch count is not finite or is above 16777216.
     """
     var p = s.p
     var n = s.n

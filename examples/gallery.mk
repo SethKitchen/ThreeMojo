@@ -166,6 +166,9 @@ $(call gallery,meadow,meadow)
 $(call gallery,meadow-wind,meadow_wind)
 # A brick house and a timber barn on the meadow, beside a pond of still water.
 $(call gallery,village,village,assets/pebbles.jpg)
+# A player walks, runs and jumps through the village by a scripted gamepad,
+# among people and animals, seen by a third-person camera.
+$(call gallery,village_walk,village_walk,assets/pebbles.jpg)
 # Every procedural animal, one to a tile, turning.
 $(call gallery,animals,animals)
 # A wolf walks one stride, re-meshed in each pose.
@@ -176,6 +179,8 @@ $(call gallery,game_humanoid,game_humanoid)
 $(call gallery,hairstyles,hairstyles)
 $(call gallery,genomes,genomes)
 $(call gallery,family,family)
+# Three people dressed from the skin out walk: cloth, mail, plate, a cloak and a sword.
+$(call gallery,armory,armory)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.

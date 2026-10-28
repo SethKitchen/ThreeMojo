@@ -9,6 +9,7 @@ import io
 import json
 import os
 import signal
+import shlex
 import shutil
 import subprocess
 import time
@@ -27,6 +28,27 @@ from carla_lane_oracle import _full_audit_test_fixtures as audit_fixtures
 
 
 _HISTORICAL_BOUNDARY_ROOT = None
+# The pinned compiler that runs the Mojo capture tool.
+MOJO = str(native_check.ROOT/'.venv/bin/mojo')
+# A child that ignores SIGTERM, starts a grandchild and writes one record.
+WORKER = '''import os, pathlib, signal, subprocess, sys, time
+root = pathlib.Path(sys.argv[1])
+role, mode = sys.argv[2:4]
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+(root / (role + '.pid')).write_text(str(os.getpid()))
+if role == 'child':
+    (root / 'temporary').write_text(os.environ['THREEMOJO_TEST_TMPDIR'])
+    subprocess.Popen([sys.executable, __file__, str(root), 'grandchild', mode])
+    while not (root / 'grandchild.pid').exists():
+        time.sleep(0.01)
+    if mode == 'malformed':
+        sys.stderr.write('COVBRANCH:m:1.0:T\\n')
+    else:
+        sys.stderr.write('COVLINE:m:1\\n')
+    sys.stderr.flush()
+while True:
+    time.sleep(0.02)
+'''
 
 
 def _clear_historical_boundary_root():
@@ -199,6 +221,12 @@ class ProofBindingTests(unittest.TestCase):
         compiler = self.root / '.venv/bin/mojo'
         compiler.parent.mkdir(parents=True)
         compiler.write_text('compiler-free invocation identity\n')
+        launcher = self.root / 'tools/tool.sh'
+        launcher.write_text(
+            '#!/bin/sh\nprintf "PASS\\n"\n'
+            'printf "COVLINE:module:2:T\\n" >&2\n'
+            'exit "${LOOP_FIXTURE_STATUS:-0}"\n')
+        launcher.chmod(0o755)
         for base in [self.root, self.build]:
             suite = base / 'tests/test_fixture.mojo'
             suite.parent.mkdir(parents=True)
@@ -669,6 +697,23 @@ class ProofBindingTests(unittest.TestCase):
         with gzip.open(capture, 'rb') as stream:
             self.assertEqual(stream.read(), b'COVLINE:module:2:T\n')
 
+    def test_mojo_capture_binds_the_same_reduced_bytes(self):
+        capture, output = self.hits / 'test_fixture.txt.gz', self.hits / 'test_fixture.out'
+        repo = Path(__file__).resolve().parent.parent
+        mojo = repo / '.venv/bin/mojo'
+        if not mojo.is_file():
+            mojo = 'mojo'
+        result = subprocess.run(
+            ['sh', str(repo / 'tools/tool.sh'), str(mojo), 'coverage_io', 'capture',
+             '--out', str(output), '--err', str(capture),
+             '--loop-proof', str(self.receipt), '--loop-proof-root', str(self.root),
+             '--', *self.command()],
+            cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        loops.verify_captures([capture], self.envelope)
+        with gzip.open(capture, 'rb') as stream:
+            self.assertEqual(stream.read(), b'COVLINE:module:2:T\n')
+
     def test_phase_sidecar_cannot_replace_capture_or_success_receipt(self):
         capture, output = self.hits/'test_fixture.txt.gz', self.hits/'test_fixture.out'
         sidecar = self.hits/'test_fixture.phases.jsonl'
@@ -717,7 +762,7 @@ class ProofBindingTests(unittest.TestCase):
         capture, output = self.hits/'test_fixture.txt.gz', self.hits/'test_fixture.out'
         capture.write_bytes(b'capture')
         output.write_text('PASS\n')
-        for name in ('tools/coverage_io.py', 'tools/coverage_hit_aot.py'):
+        for name in ('tools/coverage_io.py', 'tools/coverage_hit_aot.mojo'):
             with self.subTest(helper=name):
                 self.bind(capture, output)
                 old = self.envelope
@@ -748,9 +793,9 @@ class ProofBindingTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == 'posix', 'POSIX capture deadline')
     def test_checker_deadline_removes_bound_stale_receipt_after_probe(self):
-        adapter = self.root/'tools/native_test_support.py'
-        adapter.write_text('import sys, time\nsys.stderr.write("COVLINE:module:2:T\\n")\n'
-                           'sys.stderr.flush()\ntime.sleep(60)\n')
+        adapter = self.root/'tools/tool.sh'
+        adapter.write_text('#!/bin/sh\nprintf "COVLINE:module:2:T\\n" >&2\nexec sleep 60\n')
+        adapter.chmod(0o755)
         self.regenerate()
         self.envelope = loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
         capture, output = self.hits/'test_fixture.txt.gz', self.hits/'test_fixture.out'
@@ -761,7 +806,7 @@ class ProofBindingTests(unittest.TestCase):
         with patch.dict(os.environ):
             os.environ.pop(coverage_io.DEADLINE_ENV, None)
             result = native_check.capture_with_compiler_budget(
-                self.command(), output, capture, loop_proof=self.receipt,
+                self.command(), output, capture, mojo=MOJO, loop_proof=self.receipt,
                 source_root=self.root, success=False, seconds=2)
         self.assertEqual(result.returncode, 124)
         self.assertEqual(gzip.decompress(capture.read_bytes()), b'COVLINE:module:2:T\n')
@@ -1782,10 +1827,10 @@ class NativeCheckerBoundaryTests(unittest.TestCase):
                 patch.object(native_check.time, 'monotonic', return_value=100), \
                 patch.object(coverage_io, 'shared_deadline', return_value=None):
             native_check.capture_with_compiler_budget(command, Path('out'), Path('err.gz'),
-                loop_proof=Path('proof.json'), source_root=Path('source'))
+                mojo='bound-tool-mojo', loop_proof=Path('proof.json'), source_root=Path('source'))
         args, kwargs = run.call_args
-        self.assertEqual(args[0], [sys.executable, str(native_check.ROOT/'tools/coverage_io.py'),
-            'capture', '--out', 'out', '--err', 'err.gz', '--loop-proof', 'proof.json',
+        self.assertEqual(args[0], [*native_check.coverage_io_argv('bound-tool-mojo', 'capture'),
+            '--out', 'out', '--err', 'err.gz', '--loop-proof', 'proof.json',
             '--loop-proof-root', 'source', '--', *command])
         self.assertEqual(float(kwargs['env'][coverage_io.DEADLINE_ENV]), 280)
         self.assertNotIn('timeout', kwargs)
@@ -1796,7 +1841,7 @@ class NativeCheckerBoundaryTests(unittest.TestCase):
             with self.subTest(inherited=inherited), patch.object(native_check, 'run') as run, \
                     patch.object(native_check.time, 'monotonic', return_value=100), \
                     patch.object(coverage_io, 'shared_deadline', return_value=inherited):
-                native_check.capture_with_compiler_budget(['command'], 'out', 'err', success=False)
+                native_check.capture_with_compiler_budget(['command'], 'out', 'err', mojo=MOJO, success=False)
                 self.assertEqual(float(run.call_args.kwargs['env'][coverage_io.DEADLINE_ENV]), expected)
                 self.assertFalse(run.call_args.kwargs['success'])
 
@@ -1804,29 +1849,29 @@ class NativeCheckerBoundaryTests(unittest.TestCase):
         for seconds in (0, -1, 181, float('inf'), float('nan'), True, '5'):
             with self.subTest(seconds=seconds), patch.object(native_check, 'run') as run:
                 with self.assertRaises(RuntimeError):
-                    native_check.capture_with_compiler_budget(['command'], 'out', 'err', seconds=seconds)
+                    native_check.capture_with_compiler_budget(['command'], 'out', 'err', mojo=MOJO, seconds=seconds)
                 run.assert_not_called()
         for arguments in ({'loop_proof': Path('proof')}, {'source_root': Path('root')}):
             with patch.object(native_check, 'run') as run, self.assertRaises(RuntimeError):
-                native_check.capture_with_compiler_budget(['command'], 'out', 'err', **arguments)
+                native_check.capture_with_compiler_budget(['command'], 'out', 'err', mojo=MOJO, **arguments)
             run.assert_not_called()
 
     def test_ignored_or_blocked_alarm_is_refused(self):
         with patch.object(native_check.signal, 'getsignal', return_value=signal.SIG_IGN), \
                 patch.object(native_check, 'run') as run, self.assertRaises(RuntimeError):
-            native_check.capture_with_compiler_budget(['command'], 'out', 'err')
+            native_check.capture_with_compiler_budget(['command'], 'out', 'err', mojo=MOJO)
         run.assert_not_called()
         previous = signal.pthread_sigmask(signal.SIG_BLOCK, [signal.SIGALRM])
         try:
             with patch.object(native_check, 'run') as run, self.assertRaises(RuntimeError):
-                native_check.capture_with_compiler_budget(['command'], 'out', 'err')
+                native_check.capture_with_compiler_budget(['command'], 'out', 'err', mojo=MOJO)
             run.assert_not_called()
         finally:
             signal.pthread_sigmask(signal.SIG_SETMASK, previous)
 
     def test_integration_deadline_reaps_descendants_and_private_environment(self):
         # Exercise the maintained watchdog through this helper's actual CLI.
-        from test_coverage_lifecycle import CoverageLifecycleTests, WORKER
+        from test_coverage_lifecycle import CoverageLifecycleTests
         with tempfile.TemporaryDirectory(prefix='loop checker deadline ') as directory:
             root = Path(directory)
             worker = root/'worker.py'
@@ -1836,7 +1881,7 @@ class NativeCheckerBoundaryTests(unittest.TestCase):
                     os.environ.pop(coverage_io.DEADLINE_ENV, None)
                     result = native_check.capture_with_compiler_budget(
                         [sys.executable, str(worker), str(root), 'child', 'valid'],
-                        root/'out', root/'err.gz', success=False, seconds=2)
+                        root/'out', root/'err.gz', mojo=MOJO, success=False, seconds=2)
                 self.assertEqual(result.returncode, 124)
                 for role in ('child', 'grandchild'):
                     pid = int((root/(role+'.pid')).read_text())
@@ -2524,6 +2569,13 @@ class MapSuccessorLoopTests(unittest.TestCase):
         for folder in ('tools','tools/carla_lane_oracle'):
             for path in (self.repo/folder).glob('*.py'):
                 shutil.copyfile(path, fixture/folder/path.name)
+        # The copied gate checks run tools/tool.sh beside them, with the root's
+        # .venv compiler by default. Both come from the checkout.
+        (fixture/'tools/tool.sh').write_text(
+            'exec sh ' + shlex.quote(str(self.repo/'tools/tool.sh')) + ' "$@"\n')
+        environment = dict(os.environ)
+        if (self.repo/'.venv/bin/mojo').exists():
+            environment.setdefault('MOJO', str(self.repo/'.venv/bin/mojo'))
         if internal_error:
             with (fixture/'tools/carla_lane_oracle/source_contracts.py').open('a') as stream:
                 stream.write('\nraise ModuleNotFoundError("optional-consumer-inner-sentinel")\n')
@@ -2600,7 +2652,8 @@ print('consumer verified',consumer,mode,','.join(sorted(loaded)))
         # every native test budget remains unchanged.
         timeout = _consumer_validation_timeout(
             consumer, internal_error=internal_error, unknown=unknown)
-        result=subprocess.run(command,cwd=cwd,capture_output=True,text=True,timeout=timeout)
+        result=subprocess.run(command,cwd=cwd,capture_output=True,text=True,timeout=timeout,
+                              env=environment)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         return result.stdout
 

@@ -348,6 +348,10 @@ def test_tessellation_refuses_what_it_cannot_cut() raises:
         _ = tessellate(triangles(), Length(inf[DType.float32](), METER))
     with assert_raises():
         _ = tessellate(triangles(), meters(1), -1)
+    with assert_raises(contains="larger than this port"):
+        _ = tessellate(triangles(), meters(0), 21)
+    with assert_raises(contains="larger than this port"):
+        _ = tessellate(triangles(), meters(0), Int.MAX)
     var partial = BufferGeometry()
     partial.set_attribute(
         String(POSITION), BufferAttribute([0, 0, 0, 1, 0, 0], 3)

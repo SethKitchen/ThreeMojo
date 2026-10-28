@@ -47,6 +47,7 @@ from controls.input import (
     button_choice,
     require_named,
     require_input,
+    pixel_center_ndc,
     Key,
     POINTER_DOWN,
     POINTER_MOVE,
@@ -62,6 +63,7 @@ from math.vector3 import Vector3
 from std.math import inf, isfinite, pi, tan
 from units.measure import angle_radians
 from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
+from math.utils import scaled_side
 
 # A change smaller than this, squared, is no change. three.js: `_EPS`.
 comptime EPSILON = Float32(1e-6)
@@ -322,7 +324,8 @@ struct OrbitControls(Copyable, Movable):
             viewport_height: The view's height, in pixels.
 
         Raises:
-            Error: If the height is not positive.
+            Error: If the height is not positive, or the view's width does
+                not fit in an integer.
         """
         self._pan_by(
             delta_x,
@@ -407,7 +410,8 @@ struct OrbitControls(Copyable, Movable):
 
         Raises:
             Error: If the event's kind, button or key is invalid, an
-                action is invalid, or the height is not positive.
+                action is invalid, the height is not positive, or the
+                view's width does not fit in an integer.
         """
         self._handle(
             event, _perspective_view(camera, self.target, viewport_height)
@@ -480,8 +484,8 @@ struct OrbitControls(Copyable, Movable):
         if not self.zoom_to_cursor:
             return
         self._cursor = True
-        self._cursor_x = (Float32(event.x) + 0.5) / Float32(view.width) * 2 - 1
-        self._cursor_y = 1 - (Float32(event.y) + 0.5) / Float32(view.height) * 2
+        self._cursor_x = pixel_center_ndc(event.x, view.width)
+        self._cursor_y = -pixel_center_ndc(event.y, view.height)
         var through = view.inverse.transform_point(
             Vector3(self._cursor_x, self._cursor_y, 0.5)
         )
@@ -954,6 +958,53 @@ struct OrbitControls(Copyable, Movable):
         return [moved_to, target]
 
 
+def _per_pixel(span: Float32, pixels: Int) -> Float32:
+    """Return how far one pixel of pan moves, `span / pixels`.
+
+    The quotient is a `Float64`, as JavaScript's number is, and stored as
+    `Float32`. A `Float32` pixel count drops a side past 2^24.
+
+    Args:
+        span: The distance the whole side covers.
+        pixels: The side, in pixels.
+
+    Returns:
+        The distance one pixel covers.
+    """
+    return Float32(Float64(span) / Float64(pixels))
+
+
+def _view_width(height: Int, aspect: Float32) raises -> Int:
+    """Return `max(round(height * aspect), 1)`, as JavaScript rounds.
+
+    The product is `math.utils.scaled_side`'s: `Float32` to 2^24, as
+    JavaScript gets the whole width of an aspect such as 0.9, and `Float64`
+    past it. The half is added in `Float64`: in `Float32` it rounds an odd
+    height at or above 2^23 to the next even integer.
+
+    Args:
+        height: The view's height, in pixels.
+        aspect: The width divided by the height.
+
+    Returns:
+        The width, at least one.
+
+    Raises:
+        Error: If the rounded width is not finite or does not fit in an
+            integer.
+    """
+    var scaled = scaled_side(height, aspect) + 0.5
+    # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
+    # the width. A float below `-2^63` is not one either.
+    if (
+        not isfinite(scaled)
+        or scaled < -Float64(Int.MAX)
+        or scaled >= Float64(Int.MAX)
+    ):
+        raise Error("A viewport width does not fit in an integer")
+    return max(1, Int(scaled))
+
+
 def _check_height(viewport_height: Int) raises:
     """Refuse a view with no height.
 
@@ -1004,14 +1055,14 @@ def _perspective_view(
         The view.
 
     Raises:
-        Error: If the height is not positive, or the camera's matrices are
-            refused.
+        Error: If the height is not positive, the view's width does not
+            fit in an integer, or the camera's matrices are refused.
     """
     _check_height(viewport_height)
     var offset = camera.position - target
     var covered = offset.length() * tan(camera.fov.to(RADIAN) / 2)
-    var per = 2 * covered / Float32(viewport_height)
-    var width = max(1, Int(Float32(viewport_height) * camera.aspect + 0.5))
+    var per = _per_pixel(2 * covered, viewport_height)
+    var width = _view_width(viewport_height, camera.aspect)
     var inverse = camera.projection_matrix()
     inverse.multiply(camera.view_matrix())
     inverse.invert()
@@ -1063,8 +1114,8 @@ def _orthographic_view(
     return _View(
         camera.position - target,
         camera.up,
-        wide / Float32(viewport_width),
-        tall / Float32(viewport_height),
+        _per_pixel(wide, viewport_width),
+        _per_pixel(tall, viewport_height),
         viewport_width,
         viewport_height,
         camera.position,

@@ -13,10 +13,20 @@ import test_coverage_loop_proofs as fixtures
 import test_conditioned_coverage_loops as pending
 from carla_lane_oracle import full_audit_cleanup_contracts as audit
 from carla_lane_oracle import pr760_arithmetic_stage as stage
+from carla_lane_oracle import pr780_source_successor as successor
 
 ROOT = Path(__file__).resolve().parents[1]
 DENSITY = loops.DENSITY_SOURCE.removesuffix('.mojo')
 STRANDS = 'extensions/humanoid/skeleton/head/hair/strands'
+
+
+def staged_groom(name, text):
+    """Return the PR760 staged predecessor of the live groom.
+
+    PR843 changes groom, so its PR780 edge reaches the PR760 image first.
+    """
+    physical = successor.predecessor_bytes(name, text.encode()).decode()
+    return stage.predecessor_source(name, physical)
 
 
 class Density760ReceiptTests(unittest.TestCase):
@@ -35,7 +45,9 @@ class Density760ReceiptTests(unittest.TestCase):
         self.fixture.build.rename(build)
         self.fixture.build = build
         self.fixture.receipt = build/'loop-proofs.json'
-        for name in (*loops.DENSITY760_INPUTS, STRANDS + '.mojo'):
+        # The PR843 CSS color successor adds the JavaScript number writer to
+        # the density closure.
+        for name in (*loops.DENSITY760_INPUTS, 'loaders/js_number.mojo', STRANDS + '.mojo'):
             target = self.fixture.root/name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((ROOT/name).read_bytes())
@@ -131,7 +143,7 @@ class Density760ReceiptTests(unittest.TestCase):
         groom_name = 'extensions/humanoid/skeleton/head/hair/groom.mojo'
         groom = self.fixture.root/groom_name
         density.write_text(stage.predecessor_source(loops.DENSITY_SOURCE, density.read_text()))
-        groom.write_text(stage.predecessor_source(groom_name, groom.read_text()))
+        groom.write_text(staged_groom(groom_name, groom.read_text()))
         self.assertEqual(set(loops.reviewed_nonempty_loops(self.fixture.root, DENSITY)),
                          {101, 138, 149, 223})
         before = loops.reviewed_density_source(self.fixture.root, successor=False)
@@ -143,7 +155,7 @@ class Density760ReceiptTests(unittest.TestCase):
     def test_mixed_groom_endpoint_and_changed_guard_withhold_density(self):
         groom = 'extensions/humanoid/skeleton/head/hair/groom.mojo'
         for path, convert in (
-            (groom, lambda text: stage.predecessor_source(groom, text)),
+            (groom, lambda text: staged_groom(groom, text)),
             (loops.DENSITY_SOURCE, lambda text: text.replace('return 1\n', 'return 0\n')),
             ('math/finite.mojo', lambda text: text + '\n# changed provider\n')):
             target = self.fixture.root/path

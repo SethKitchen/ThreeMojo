@@ -12,7 +12,7 @@ derivative divided by the anisotropy.
 """
 
 from math.norm import squared_length2
-from std.math import floor, log, sqrt
+from std.math import floor, isfinite, log, sqrt
 
 
 @fieldwise_init
@@ -55,7 +55,20 @@ def anisotropic_step(
 
     Returns:
         The clamped level, the tap count and the major-axis derivative.
+        A derivative that is not finite reads the base level with one tap.
     """
+    if not (
+        isfinite(du_dx)
+        and isfinite(dv_dx)
+        and isfinite(du_dy)
+        and isfinite(dv_dy)
+        and isfinite(width)
+        and isfinite(height)
+        and isfinite(max_aniso)
+        and isfinite(lod_bias)
+        and isfinite(max_lod)
+    ):
+        return FilterStep(0, 1, 0, 0)
     var ax = du_dx * width
     var ay = dv_dx * height
     var bx = du_dy * width
@@ -83,6 +96,9 @@ def anisotropic_step(
         lod = 0.0
     if lod > max_lod:
         lod = max_lod
+    # A ratio past 4096 is not a tap count this port walks.
+    if ratio > 4096:
+        ratio = 4096
     return FilterStep(lod, Int(ratio), du, dv)
 
 
@@ -95,8 +111,17 @@ def lod_blend(lod: Float32, levels: Int) -> Tuple[Int, Int, Float32]:
 
     Returns:
         The finer level, the coarser level held at `levels`, and how far
-        the sample is from the finer level toward the coarser one.
+        the sample is from the finer level toward the coarser one. A
+        level that is not finite, or that does not fit in an integer,
+        reads the coarsest level.
     """
+    if not isfinite(lod) or lod >= Float32(levels + 1):
+        return levels, levels, 0
+    if lod <= 0:
+        var next = 0
+        if levels >= 1:
+            next = 1
+        return 0, next, 0
     var finer = Int(floor(lod))
     var coarser = finer + 1
     if coarser > levels:

@@ -114,7 +114,7 @@ def temporary_path(name: String) raises -> String:
     var root = getenv("THREEMOJO_TEST_TMPDIR", "")
     if root == "":
         raise Error(
-            "Use TestScratch at the suite entry point or tools/run_suite.py"
+            "Use TestScratch at the suite entry point or tools/run_suite.mojo"
         )
     _validate_root(root)
     if (

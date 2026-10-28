@@ -127,9 +127,13 @@ def raymarch_count(steps: Int) -> Int:
         steps: The `steps` of three.js.
 
     Returns:
-        `ceil(sqrt(3) * steps) + 1`.
+        `ceil(sqrt(3) * steps) + 1`. A product that does not fit in an
+        integer is `Int.MAX`.
     """
-    return Int(ceil(Float64(1.7320508075688772) * Float64(steps))) + 1
+    var wide = ceil(Float64(1.7320508075688772) * Float64(steps))
+    if not (wide < Float64(Int.MAX)):
+        return Int.MAX
+    return Int(wide) + 1
 
 
 def RaymarchingBox(

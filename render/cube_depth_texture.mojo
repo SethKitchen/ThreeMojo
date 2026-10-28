@@ -41,12 +41,15 @@ def cube_depth_texture(
         The cube, its faces read nearest and wrapped `CLAMP`.
 
     Raises:
-        Error: If the size is not positive, the buffers do not hold six
-            faces of that size, or the depth mode is none of the three.
+        Error: If the size is not positive, six faces of that size do not
+            fit in an integer, the buffers do not hold six faces, or the
+            depth mode is none of the three.
     """
     require_positive(
         size, "A cube depth texture needs a face of one texel at least"
     )
+    if size > (Int.MAX // FACE_COUNT) // size:
+        raise Error("A cube depth texture is larger than this port builds")
     var face_length = size * size
     if len(depths) != FACE_COUNT * face_length:
         raise Error("A cube depth texture needs six square depth buffers")

@@ -1026,6 +1026,7 @@ The reader raises for:
 - A binary record or property that runs past the file, or children that run past their record. An unknown property type. An array encoding that is not 0 or 1. A zlib array of the wrong length.
 - An ASCII node without `:`, a `{` that is not closed, or a `}` that closes nothing.
 - An ASCII string that is not closed, or a `*count` that does not match its `a`.
+- A number used as a whole integer that does not fit in an integer.
 - Nodes nested deeper than `MAX_FBX_DEPTH`.
 - Binary arrays whose combined decoded values exceed 1 GiB. Each value
   counts as eight bytes, including one-byte source values. This applies
@@ -1040,6 +1041,7 @@ The loader raises for:
 - A position index outside `Vertices`. A last polygon with no negative index. A polygon of four or more corners with no area, or one that crosses itself so that no ear is left.
 - A mesh model with no mesh geometry. Models connected in a loop, or nested deeper than `MAX_MODEL_DEPTH`. A transform that flattens an axis.
 - A camera, a light or a material that its builder refuses.
+- A rotation order, an inherit type, a light type or a camera projection that is not a whole number, or that does not fit.
 - A skin that deforms no geometry. A cluster with no `TransformLink`, a `TransformLink` that is not 16 numbers, or a cluster with not one weight for each index. A cluster with no bone.
 - A blend shape that holds something other than a `BlendShapeChannel`, or a channel with no shape. A shape with not three numbers for each index, or an index outside the positions.
 - An animation curve with no `KeyTime` or `KeyValueFloat`, or not one value for each time. A curve on a curve node that is not read. A curve node that drives nothing. A stack with no layer. A blend shape channel with no model. A rotation curve with no keys.

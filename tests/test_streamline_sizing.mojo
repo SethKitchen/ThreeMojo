@@ -73,6 +73,14 @@ def test_a_4k_output_renders_at_the_known_sizes() raises:
         _ = estimated_render_size(MODE_ULTRA_QUALITY, output)
     assert_equal(estimated_render_size(MODE_DLAA, output), output)
     assert_equal(estimated_render_size(MODE_OFF, output), output)
+    # `Float64` of a side at 2^63 rounds up. Adding a half then cast that
+    # to zero. A scale of one is the side itself.
+    var wide = FrameSize(Int.MAX, 8)
+    assert_equal(estimated_render_size(MODE_DLAA, wide), wide)
+    assert_equal(
+        estimated_render_size(MODE_OFF, FrameSize(1 << 62, 4)),
+        FrameSize(1 << 62, 4),
+    )
 
 
 def test_a_tiny_output_still_renders_one_pixel() raises:
@@ -197,6 +205,12 @@ def test_the_jitter_count_refuses_bad_sizes() raises:
         _ = jitter_phase_count(FrameSize(1280, 0), FrameSize(2560, 1440))
     with assert_raises(contains="wider"):
         _ = jitter_phase_count(FrameSize(2561, 720), FrameSize(2560, 1440))
+    # Eight times the square of 2^29 still fits. The square of 2^30 is 2^63.
+    assert_equal(
+        jitter_phase_count(FrameSize(1, 1), FrameSize(1 << 29, 1)), 1 << 61
+    )
+    with assert_raises(contains="does not fit"):
+        _ = jitter_phase_count(FrameSize(1, 1), FrameSize(1 << 30, 1))
 
 
 def test_the_jitter_is_halton_two_three_less_a_half() raises:

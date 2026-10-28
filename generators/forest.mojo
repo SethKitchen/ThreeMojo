@@ -37,7 +37,7 @@ from generators.utils import (
     generator_random,
     meters,
 )
-from geometries.polyhedron import icosahedron
+from geometries.polyhedron import MAX_POLYHEDRON_DETAIL, icosahedron
 from geometries.utils import merge_vertices
 from math.noise import ImprovedNoise
 from math.smoothstep import clamped_smoothstep
@@ -108,15 +108,25 @@ struct ForestParameters(Copyable, Movable):
         """Refuse parameters that plant nothing sensible.
 
         Raises:
-            Error: If the count or the detail is negative, the cull does
-                not end past where it starts, or a number is not finite.
+            Error: If the count or the detail is negative, the count's
+                fourteen tries do not fit in an integer, the detail is
+                above 256, the cull does not end past where it starts, or
+                a number is not finite.
         """
         require_non_negative(
             self.count, "A forest's tree count must be zero or more"
         )
+        if self.count > Int.MAX // 14:
+            raise Error("A forest's tree count does not fit")
         require_non_negative(
             self.detail, "A forest's blob detail must be zero or more"
         )
+        if self.detail > MAX_POLYHEDRON_DETAIL:
+            raise Error(
+                "A forest's blob detail is larger than this port builds"
+            )
+        check_finite(meters(self.from_distance), "A cull distance")
+        check_finite(meters(self.to_distance), "A cull distance")
         if not meters(self.to_distance) > meters(self.from_distance):
             raise Error("A forest's cull must end past where it starts")
         check_finite(
@@ -175,7 +185,7 @@ def blob_geometry(p: ForestParameters) raises -> BufferGeometry:
         attributes, its base at y equals zero.
 
     Raises:
-        Error: If the detail is negative.
+        Error: If the detail is negative or above 256.
     """
     var ball = icosahedron(Length(1, METER), p.detail)
     ball.delete_attribute("uv")

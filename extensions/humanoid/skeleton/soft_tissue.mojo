@@ -45,6 +45,7 @@ from extensions.anatomy.soft_tissue import (
 )
 from extensions.humanoid.skeleton.occupancy import (
     MIN_STEP,
+    check_mass_box,
     check_mass_step,
     grid_cells,
 )
@@ -142,10 +143,13 @@ def sample_soft_mass[
         Envelope volume and wet-tissue mass.
 
     Raises:
-        Error: If `step` is out of range or `tissue` fails `validate`.
+        Error: If `step` is out of range, `tissue` fails `validate`, a
+            bound is not finite, the box is unordered, or a span's
+            rounded cell count does not fit in `Int`.
     """
     check_mass_step(step, name)
     tissue.validate()
+    check_mass_box(low, high, step, "soft mass")
     var dx = step.value
     var dy = step.value
     var dz = step.value

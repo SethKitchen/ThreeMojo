@@ -1,6 +1,6 @@
 # GPU computation
 
-`render/computation.mojo` steps float images with GLSL fragment shaders. It is three.js's `GPUComputationRenderer` from `examples/jsm/misc/`. A simulation keeps its state in the images, for example the positions and velocities of a flock, and runs one step a frame.
+`render/computation.mojo` steps float images with GLSL fragment shaders. It is three.js's `GPUComputationRenderer` from `examples/jsm/misc/`. A simulation keeps its state in the images, for example the positions and velocities of a flock, and runs one step a frame. An image whose texel buffer does not fit in an integer is refused. A later size that is not positive, or whose texel buffer does not fit, is refused.
 
 ![A ripple field steps across a turning sphere](out/computation.png)
 
@@ -40,6 +40,8 @@ void main() {
 ```
 
 All four numbers are kept as they are. They are not clamped and not premultiplied. A read gets the texel that its coordinate falls in, as three.js's `NearestFilter` does. The variable's `wrap_s` and `wrap_t` say what a coordinate past an edge reads. They are `CLAMP` unless set. A texel that the shader throws away with `discard` keeps its value.
+
+A coordinate past 1048576, or one that is not finite, is reduced before it becomes a texel index.
 
 ## A step
 

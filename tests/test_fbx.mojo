@@ -57,6 +57,7 @@ from loaders.fbx_tree import (
     object_name,
     parse_fbx,
     parse_fbx_text,
+    require_fbx_whole,
     string_property,
 )
 from loaders.gltf import decode_base64
@@ -978,6 +979,9 @@ def test_document() raises:
     # Accessors of the wrong kind or out of range.
     with assert_raises():
         _ = document.integer(top, 1)
+    var huge = parse_fbx_text("; FBX\nFBXVersion: 7400\nNode: 1e20\n")
+    with assert_raises(contains="whole number"):
+        _ = huge.integer(huge.child(huge.root(), "Node"), 0)
     with assert_raises():
         _ = document.number(top, 2)
     with assert_raises():
@@ -1670,6 +1674,60 @@ def test_models() raises:
     assert_equal(scene.lights[3].kind, DIRECTIONAL)
     assert_true(scene.lights[3].cast_shadow)
     # What is refused.
+    var bad_order = Scene()
+    var bad_assets = Assets()
+    with assert_raises(contains="whole number"):
+        _ = load_text(
+            objects(
+                '\tModel: 1, "Model::A", "Null" {\n\t\tProperties70:  {\n'
+                + '\t\t\tP: "RotationOrder", "enum", "", "",1e20\n\t\t}\n\t}\n'
+            ),
+            bad_order,
+            bad_assets,
+        )
+    # A number past the low end of an integer is refused too.
+    with assert_raises(contains="whole number"):
+        require_fbx_whole(-1e20)
+    var fraction = Scene()
+    var fraction_assets = Assets()
+    with assert_raises(contains="whole number"):
+        _ = load_text(
+            objects(
+                '\tModel: 1, "Model::A", "Null" {\n\t\tProperties70:  {\n'
+                + '\t\t\tP: "InheritType", "enum", "", "",1.5\n\t\t}\n\t}\n'
+            ),
+            fraction,
+            fraction_assets,
+        )
+    var bad_light = Scene()
+    var light_assets = Assets()
+    with assert_raises(contains="whole number"):
+        _ = load_text(
+            objects(
+                '\tModel: 1, "Model::Lamp", "Light" {\n\t}\n'
+                + '\tNodeAttribute: 2, "NodeAttribute::L", "Light"'
+                + " {\n\t\tProperties70:  {\n"
+                + '\t\t\tP: "LightType", "enum", "", "",1e20\n\t\t}\n\t}\n',
+                '\tC: "OO",2,1\n',
+            ),
+            bad_light,
+            light_assets,
+        )
+    var bad_camera = Scene()
+    var camera_assets = Assets()
+    with assert_raises(contains="whole number"):
+        _ = load_text(
+            objects(
+                '\tModel: 1, "Model::Cam", "Camera" {\n\t}\n'
+                + '\tNodeAttribute: 2, "NodeAttribute::C", "Camera"'
+                + " {\n\t\tProperties70:  {\n"
+                + '\t\t\tP: "CameraProjectionType", "enum", "", "",1.5\n'
+                + "\t\t}\n\t}\n",
+                '\tC: "OO",2,1\n',
+            ),
+            bad_camera,
+            camera_assets,
+        )
     refused(
         objects(
             (

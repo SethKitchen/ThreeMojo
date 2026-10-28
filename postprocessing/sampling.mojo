@@ -13,7 +13,9 @@ buffers through the same `LightView`; see `render.gpu.GpuComposer`.
 """
 
 from render.framebuffer import FloatColor
-from math.utils import edge_index
+from math.utils import edge_index, texel_center, texel_center_from_end
+from std.sys import is_gpu
+from std.math import floor, isfinite
 
 
 # A view's pointer is not tracked by the compiler: whoever builds one keeps
@@ -187,6 +189,28 @@ struct LightView(ImplicitlyCopyable):
         )
 
 
+def nearest_held_index(unit: Float32, count: Int) -> Int:
+    """Return the nearest pixel of a coordinate, held at the edges.
+
+    A coordinate that is not finite, or one below zero, reads the first
+    pixel. A coordinate at or past one reads the last. A coordinate
+    inside the image is `floor` of the scaled coordinate.
+
+    Args:
+        unit: Across or down, zero at the first edge and one at the far
+            edge.
+        count: How many pixels there are. One or more.
+
+    Returns:
+        The pixel, from zero through `count - 1`.
+    """
+    if not isfinite(unit) or unit <= 0:
+        return 0
+    if unit >= 1:
+        return count - 1
+    return Int(floor(unit * Float32(count)))
+
+
 def sample(
     colors: List[FloatColor], width: Int, height: Int, u: Float32, v: Float32
 ) -> FloatColor:
@@ -223,6 +247,9 @@ def mix(a: FloatColor, b: FloatColor, t: Float32) -> FloatColor:
 def u_of(x: Int, width: Int) -> Float32:
     """Return a column's texture coordinate, at its center.
 
+    A width above 2^23 is measured in `Float64`, so the last column stays
+    inside the image. A smaller width keeps the `Float32` quotient.
+
     Args:
         x: The column.
         width: The frame's width in pixels.
@@ -230,11 +257,14 @@ def u_of(x: Int, width: Int) -> Float32:
     Returns:
         The `u` of the column's center.
     """
-    return (Float32(x) + 0.5) / Float32(width)
+    return texel_center(x, width)
 
 
 def v_of(y: Int, height: Int) -> Float32:
     """Return a row's texture coordinate, at its center, up from the bottom.
+
+    A height above 2^23 subtracts in `Float64`, so the last row stays
+    above zero. A smaller height keeps the `Float32` quotient.
 
     Args:
         y: The row, down from the top.
@@ -243,7 +273,7 @@ def v_of(y: Int, height: Int) -> Float32:
     Returns:
         The `v` of the row's center.
     """
-    return 1 - (Float32(y) + 0.5) / Float32(height)
+    return texel_center_from_end(y, height)
 
 
 def clamped_texel(coordinate: Float32, count: Int) -> Float32:
@@ -253,6 +283,9 @@ def clamped_texel(coordinate: Float32, count: Int) -> Float32:
     and one is the last pixel's center. A position outside the image
     stays on the edge pixel.
 
+    A count past 2^24 is not a whole `Float32`. That count is multiplied
+    in `Float64`, so one still names the last pixel.
+
     Args:
         coordinate: Zero at the first pixel and one at the last.
         count: How many pixels. It is at least one.
@@ -260,4 +293,19 @@ def clamped_texel(coordinate: Float32, count: Int) -> Float32:
     Returns:
         The pixel position, from zero through `count - 1`.
     """
-    return min(max(coordinate * Float32(count) - 0.5, 0), Float32(count - 1))
+    # Every integer through 2^24 is a `Float32`. The bit-exact clamps for
+    # those counts stay in `Float32`.
+    # Metal has no `Float64`, and no GPU image is 2^24 texels a side.
+    comptime if not is_gpu():
+        if count > 16777216:
+            var span = Float64(coordinate) * Float64(count) - 0.5
+            var limit = Float64(count) - 1
+            if span < 0:
+                span = 0
+            if span > limit:
+                span = limit
+            return Float32(span)
+    return min(
+        max(coordinate * Float32(count) - 0.5, Float32(0)),
+        Float32(count - 1),
+    )

@@ -52,6 +52,10 @@ from units.si import (
     Velocity,
 )
 
+# The most substeps one tick walks. `range` of `Int.MAX` never ends, and
+# a larger count is not an exact `Float32` divisor of the step.
+comptime MAX_PHYSICS_SUBSTEPS = 16777216
+
 
 @fieldwise_init
 struct VehicleId(Equatable, ImplicitlyCopyable, Writable):
@@ -421,11 +425,13 @@ struct CarlaPhysics(Movable):
             substeps: How many physics steps it is cut into. One or more.
 
         Raises:
-            Error: If the step is not more than zero, or `substeps` is
-                less than one.
+            Error: If the step is not more than zero, `substeps` is less
+                than one, or `substeps` is above 16777216.
         """
         if substeps < 1:
             raise Error("A tick needs at least one substep")
+        if substeps > MAX_PHYSICS_SUBSTEPS:
+            raise Error("A physics substep count is larger than this port runs")
         if not (dt.value > 0):
             raise Error("A tick must be more than zero")
         var h = Duration(dt.value / Float32(substeps), SECOND)

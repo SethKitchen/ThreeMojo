@@ -277,8 +277,14 @@ struct FirstPersonControls(Copyable, Movable):
         elif event.kind == POINTER_UP:
             self._button(event, False)
         elif event.kind == POINTER_MOVE:
-            self._pointer_x = Float32(event.x) - Float32(viewport_width) / 2
-            self._pointer_y = Float32(event.y) - Float32(viewport_height) / 2
+            # A `Float32` side past 2^24 loses the half pixel at the
+            # middle, so the center pixel reads as the middle.
+            self._pointer_x = Float32(
+                Float64(event.x) - Float64(viewport_width) / 2
+            )
+            self._pointer_y = Float32(
+                Float64(event.y) - Float64(viewport_height) / 2
+            )
 
     def _button(mut self, event: InputEvent, down: Bool):
         """Press or let go of a button: forward or back, with `active_look`.

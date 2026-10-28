@@ -38,6 +38,7 @@ from tools._imports import (
     affected_set,
     closure,
     defines_main,
+    dirname,
     entry_directories,
     imported_names,
     is_documentation,
@@ -131,6 +132,52 @@ def test_imported_names_reads_from_and_plain_imports() raises:
             "v",
             "v.w",
         ],
+    )
+
+
+def test_imported_names_keep_comments_aliases_and_tabs() raises:
+    """A parenthesized import drops comments, and a tab still ends a name."""
+    _same(
+        imported_names(
+            "from math import (\n"
+            "            vector2, # first\n"
+            "            vector3 as vector,\n"
+            "        )\n"
+            "        import core.scene as scene, core.assets # both\n"
+        ),
+        [
+            "math",
+            "math.vector2",
+            "math.vector3",
+            "core.scene",
+            "core.assets",
+        ],
+    )
+    _same(
+        imported_names(
+            "from pkg import bound\tas renamed\nimport core.scene\tas\tscene\n"
+        ),
+        ["pkg", "pkg.bound", "core.scene"],
+    )
+
+
+def test_an_entry_directory_hides_the_root_module() raises:
+    """The compiled file's directory is searched before the repository root."""
+    var known = Set[String]()
+    known.add("math/__init__.mojo")
+    known.add("math/vector3.mojo")
+    known.add("tests/math.mojo")
+    var scene = List[String]()
+    scene.append("core")
+    _same(
+        resolve("math.vector3", known, scene),
+        ["math/__init__.mojo", "math/vector3.mojo"],
+    )
+    var tests = List[String]()
+    tests.append("tests")
+    _same(
+        resolve("math", known, tests),
+        ["tests/math.mojo", "math/__init__.mojo"],
     )
 
 
@@ -475,6 +522,27 @@ def test_conservative_changes_select_everything_with_a_reason() raises:
             "a build input has no narrower dependency rule: coverage/a.mojo",
         ),
         (
+            "coverage/instrument.mojo",
+            False,
+            (
+                "a build input has no narrower dependency rule:"
+                " coverage/instrument.mojo"
+            ),
+        ),
+        (
+            "coverage/scanner.mojo",
+            False,
+            (
+                "a build input has no narrower dependency rule:"
+                " coverage/scanner.mojo"
+            ),
+        ),
+        (
+            "tools/new.py",
+            False,
+            "a build input has no narrower dependency rule: tools/new.py",
+        ),
+        (
             "tests/test_bad.mojo",
             False,
             "a source file could not be read: tests/test_bad.mojo",
@@ -515,6 +583,47 @@ def test_nested_helpers_remain_dependencies() raises:
         "tests/test_other.mojo",
     ]:
         assert_true(path in selected, path)
+    tree.close()
+
+
+def _census(
+    root: String, start: String, known: Set[String]
+) raises -> List[String]:
+    """Return the files `start` reaches, resolving each import from its file."""
+    var found = Set[String]()
+    var pending = List[String]()
+    pending.append(start)
+    while len(pending) > 0:
+        var name = pending.pop()
+        if name in found:
+            continue
+        if not name in known:
+            raise Error("missing maintained dependency: " + name)
+        found.add(name)
+        var entries = List[String]()
+        var directory = dirname(name)
+        if directory.byte_length() > 0:
+            entries.append(directory)
+        var text = Path(root + "/" + name).read_text()
+        for imported in imported_names(text):
+            for path in resolve(imported, known, entries):
+                pending.append(path)
+    return sorted_set(found)
+
+
+def test_a_changed_import_keeps_the_live_dependency_closure() raises:
+    """A maintained module's closure follows the import it has now."""
+    var tree = Tree()
+    var module = "extensions/carla/map.mojo"
+    tree.write(module, "import dependency\n")
+    tree.write("dependency.mojo", "def helper():\n    pass\n")
+    var first = _census(tree.root, module, tree.known())
+    var again = _census(tree.root, module, tree.known())
+    _same(first, ["dependency.mojo", module])
+    _same(again, first)
+    tree.write(module, "import other\n")
+    tree.write("other.mojo", "def other():\n    pass\n")
+    _same(_census(tree.root, module, tree.known()), [module, "other.mojo"])
     tree.close()
 
 

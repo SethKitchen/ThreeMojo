@@ -51,6 +51,7 @@ from geometries.surface import (
     indexed_surface,
     record_kind,
     record_sweep,
+    require_grid_cells,
     require_positive_radius,
     require_three_segments,
 )
@@ -128,10 +129,14 @@ def circle(
 
     Raises:
         Error: If the radius is not positive, there are fewer than three
-            segments, or the sweep is not positive or is more than a turn.
+            segments, there are more than 16777216 segments, or the sweep
+            is not positive or is more than a turn.
     """
     require_positive_radius(radius.value, "circle")
     require_three_segments(segments, "A circle needs at least three segments")
+    require_grid_cells(
+        segments, 1, "A circle's segment count is larger than this port builds"
+    )
     check_sweep(theta_length)
 
     var r = radius.value
@@ -197,8 +202,8 @@ def ring(
     Raises:
         Error: If the inner radius is not finite or is negative, the outer
             radius is not finite or not more than it, either segment count
-            is too small, or the sweep is not positive or is more than a
-            turn.
+            is too small, the grid has more than 16777216 cells, or the
+            sweep is not positive or is more than a turn.
     """
     require_finite(Float64(inner_radius.value), "A ring needs finite radii")
     require_finite(Float64(outer_radius.value), "A ring needs finite radii")
@@ -213,6 +218,11 @@ def ring(
     )
     require_at_least_one(
         phi_segments, "A ring needs at least one segment across"
+    )
+    require_grid_cells(
+        theta_segments,
+        phi_segments,
+        "A ring's segment count is larger than this port builds",
     )
     check_sweep(theta_length)
 

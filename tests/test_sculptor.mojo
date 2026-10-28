@@ -52,6 +52,7 @@ from geometries.sculptor import (
     SculptTool,
     Sculptor,
     SculptorEventKind,
+    _stamp_count,
 )
 from geometries.sculptor_mesh import NO_CELL, OCTREE_MAX_DEPTH, SculptorMesh
 from geometries.sculptor_tools import (
@@ -333,6 +334,16 @@ def _tool_case(tool: SculptTool, negative: Bool, e: Expected) raises:
 
 
 # --- the helpers ---------------------------------------------------------------
+
+
+def test_a_long_pointer_move_stamps_a_bounded_count() raises:
+    assert_equal(_stamp_count(1.0, 0.15), 6)
+    assert_equal(_stamp_count(0.1, 0.15), 0)
+    assert_equal(_stamp_count(Float64(1e18), 0.15), 4096)
+    assert_equal(_stamp_count(Float64(1e20), 0.15), 4096)
+    assert_equal(_stamp_count(nan[DType.float64](), 0.15), 0)
+    assert_equal(_stamp_count(10.0, nan[DType.float64]()), 0)
+    assert_equal(_stamp_count(10.0, 0.0), 0)
 
 
 def test_falloff_is_one_at_the_center_and_zero_at_the_rim() raises:
@@ -2005,6 +2016,21 @@ def test_pointer_events_that_do_not_sculpt() raises:
     sculptor.pointer_up(pointer_id=4)
     assert_false(sculptor.is_sculpting())
     assert_true(sculptor.events[len(sculptor.events) - 1] == SCULPT_END)
+
+
+def test_a_long_move_whose_first_stamp_misses_changes_nothing() raises:
+    var assets = Assets()
+    var scene = _scene(_bumpy(), assets, Object3D())
+    var sculptor = _pointer_sculptor(scene, assets, SCULPT_BRUSH, 30)
+    var camera = _camera()
+    sculptor.pointer_down(camera, scene, 100, 100)
+    assert_true(sculptor.is_sculpting())
+    var events = len(sculptor.events)
+    # A move of 10^9 pixels holds its stamps at 4096 steps, so its first
+    # step is far past the plane and the stroke stamps nothing.
+    sculptor.pointer_move(camera, scene, assets, 1e9, 100)
+    assert_equal(len(sculptor.events), events)
+    assert_true(sculptor.is_sculpting())
 
 
 def test_drag_off_the_view_and_to_no_place() raises:

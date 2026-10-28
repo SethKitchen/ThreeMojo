@@ -92,8 +92,10 @@ The loader refuses these, with a message that names the problem:
 - Some of `x`, `y` and `z` without the others. The same for the three normals.
 - An `rgb` field that is not four bytes.
 - A text row with fewer values than its fields, or a value that is not a number.
-- A coordinate that is not finite as a `Float32`, or a label that is not a whole number.
+- A coordinate that is not finite as a `Float32`, or a label that is not a whole number in range.
+- A text `rgb` value that does not fit in an integer.
 - A file that ends early, and LZF data that is not valid or does not fill its declared size.
+- A width, field, or point product that does not fit in an integer.
 
 three.js reads past most of these problems and gives `NaN`, or throws a `RangeError`.
 
@@ -231,7 +233,7 @@ for path in data.paths:
 | `style` | The `SvgStyle`: fill, fill opacity, fill rule, opacity, stroke, stroke opacity, stroke width, joins, caps, miter limit and visibility. |
 | `node` | The element, as an index into `document`. |
 
-An `SvgCurve` is a line, a quadratic Bezier curve, a cubic Bezier curve or an arc of an ellipse. Its numbers are `Float64`, as in three.js. `SvgSubPath.get_points(divisions)` samples it as three.js's `getPoints` does. `SvgShape.to_shape()` gives a `math.path.Shape` for `shape_geometry`.
+An `SvgCurve` is a line, a quadratic Bezier curve, a cubic Bezier curve or an arc of an ellipse. Its numbers are `Float64`, as in three.js. `SvgSubPath.get_points(divisions)` samples it as three.js's `getPoints` does. `SvgShape.to_shape()` gives a `math.path.Shape` for `shape_geometry`. A run count above 16777216 is refused. A straight line still uses one run.
 
 ### What is read
 
@@ -320,7 +322,7 @@ The loader refuses these, with a message that names the problem:
 - A joint with no name, no `{`, no `OFFSET` or no `CHANNELS`. An end site with a joint under it.
 - An `OFFSET` that does not have three numbers.
 - A `CHANNELS` count that is not the number of names after it, and a channel that is not known.
-- A number of frames or a frame time that is not a number.
+- A number of frames or a frame time that is not a number. A frame count that does not fit in an integer.
 - A frame with too few values, or a value that is not a number.
 - A file that ends early, and joints nested more than 256 deep.
 
@@ -462,7 +464,7 @@ The loader refuses these, with a message that names the problem:
 - An archive with no files, a file that is not XML, and a root that is not `<amf>`.
 - An object or a material with no `id`.
 - A coordinate, a normal or a vertex index that is missing or not a number. An empty value is zero, as in JavaScript.
-- A vertex index that is not a whole number, or that is past the last vertex.
+- A vertex index that is not a whole number, does not fit, or is past the last vertex.
 - A mesh with normals for only some of its vertices.
 
 three.js logs a root that is not `<amf>` and returns nothing. It throws a `TypeError` for a missing `id` or value, and it reads `NaN` for a value that is not a number.
@@ -602,6 +604,8 @@ three.js multiplies each candela value by itself and by the multiplier. Then it 
 
 `ies_values` gives 360 rows of 180 values. There is one row for each whole horizontal degree, and one value for each whole vertical degree. A profile of one quadrant or one half fills only the rows that its angles reach, as in three.js. The other rows are NaN.
 
+A byte texture stores each value times 255, cut toward zero and wrapped modulo 256. A product at or past 2^63 is zero.
+
 ### Differences from three.js
 
 - three.js gives its `DataTexture` a width of 180 and a height of one, but 64800 values. The texture here is 180 wide and 360 high.
@@ -614,7 +618,7 @@ The loader refuses these, with a message that names the problem:
 - A file with no `TILT` line, and a file that ends early.
 - A value that is not a number. three.js reads it as `NaN`. An empty line is zero, as in JavaScript.
 - A line with more numbers than its array needs. three.js reads past it until the file ends, and then throws.
-- A number of angles that is not a whole number.
+- A number of angles that is not a whole number, or that does not fit in an integer.
 
 ### Example
 
@@ -646,7 +650,7 @@ var floats = read_lut_3dl("assets/lut/table.3dl", FLOAT_TYPE)
 
 The first line of only digits and spaces is the grid. Each line of exactly three numbers is an entry. Blue changes fastest, then green, then red. A grid of three values is an entry too, as in three.js.
 
-The loader finds the largest number. It divides each number by the power of two at or above it. `UNSIGNED_BYTE_TYPE` is the default. It stores each value times 255, cut to a whole number. `FLOAT_TYPE` stores the value. Alpha is one.
+The loader finds the largest number. It divides each number by the power of two at or above it. `UNSIGNED_BYTE_TYPE` is the default. It stores each value times 255, cut to a whole number, and a magnitude at or past 2^63 wraps to zero. `FLOAT_TYPE` stores the value. Alpha is one.
 
 Entries past `size` cubed wrap around and write over the first ones, as in three.js. Missing entries are zero.
 
@@ -736,6 +740,7 @@ The other nodes are read but not built, as in three.js. These are the lights, th
 - A `texture` field that holds a `USE` is not read.
 - A texture transform with no `scale` gives a repeat of zero.
 - A `PixelTexture` of one or three components has an alpha of one, not 255.
+- A pixel value at 2^63 is stored as byte zero. That magnitude is a multiple of 2048.
 
 ### Differences from three.js
 
@@ -744,6 +749,8 @@ The other nodes are read but not built, as in three.js. These are the lights, th
 - A texture transform with no `rotation` turns by zero.
 - An `ImageTexture` is decoded at once, when its file is there.
 - A number too big for a double is refused.
+- A pixel image whose byte count does not fit is refused.
+- An elevation grid whose index length does not fit is refused.
 
 ### Example
 
@@ -1043,6 +1050,9 @@ The loader refuses these, with a message that names the problem. three.js throws
 - A value past the end of the file, base64 that is not a multiple of four characters, and zlib data that is not zlib.
 - An XML file with no cells or no points, or a part that three.js reads but the file does not have.
 - A binary line with no end, and a count that is not a number. three.js reads these for ever.
+- A binary count that does not fit in an integer.
+- An index length that wraps in an integer is refused.
+- A zlib block that expands past the size in its header.
 - An index past the points. three.js keeps it and draws from undefined positions.
 - A text or XML file that is not UTF-8.
 
@@ -1064,7 +1074,7 @@ var value = volume.get_data(1, 0, 1)
 | `read_nrrd(path) -> Volume` | Read a file. |
 | `parse_nrrd(bytes) -> Volume` | Read the bytes of one. |
 | `parse_nrrd_header(text) -> NrrdHeader` | Read a header only. |
-| `gunzip(bytes) -> List[UInt8]` | Expand gzip data, as fflate's `gunzipSync` does. |
+| `gunzip(bytes, limit) -> List[UInt8]` | Expand gzip data, as fflate's `gunzipSync` does. `limit` defaults to the longest NRRD data. |
 
 ### Volume
 
@@ -1104,6 +1114,7 @@ The loader refuses these, with a message that names the problem. three.js throws
 ### Differences from three.js
 
 - The port does not have `extractSlice`, `repaintAllSlices` or `VolumeSlice`. They draw on a canvas, which this port does not have.
+- Gzip data that expands past the limit is refused before the extra bytes are stored.
 
 ### Example
 
@@ -1210,6 +1221,7 @@ The loader also refuses these, where the port holds less than three.js:
 - A crate with an LZ4 chunk past the end of its input, or a path tree that does not end.
 - A crate count past what the file can hold.
 - An array attribute that is not an array, points that are not whole vertices, and faces with no corner indices.
+- A face count whose triangle count does not fit in an integer, or whose corner buffer would wrap, is refused.
 - A material value that is not a number, and a color outside zero to one.
 - A texture that reads `st2`. The port has no third set of texture coordinates.
 - References that nest more than 64 deep.
@@ -1295,6 +1307,7 @@ The loader also refuses these, which three.js reads in a way that the port does 
 - Polygons before any points. three.js makes a mesh with no positions.
 - Fewer surface tags than polygons.
 - A polygon or a UV that names a point that the layer does not have.
+- A polygon corner count or index that is not a whole number, or that does not fit.
 - A surface value of the wrong shape, and an attribute with no value.
 - A texture wrap mode that is not 0 to 3. three.js leaves the wrap undefined.
 
