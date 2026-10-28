@@ -321,14 +321,25 @@ def _sums_then_rows(sums, rows):
     return parsed['sums']
 
 
+_GATED_NODE_SUMS = None
+
+
 def _moment_node_sums(payload):
-    """Return the rounded node-sum fractions that match their pin."""
+    """Return the rounded node-sum fractions that match their pin.
+
+    The same nodes and weights are not checked again. A changed word is
+    checked again. A failed check is not kept.
+    """
+    global _GATED_NODE_SUMS
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     text = json.dumps(payload, separators=(',', ':'))
+    cached = _GATED_NODE_SUMS
+    if cached is not None and cached[0] == text:
+        return cached[1]
     with tempfile.TemporaryDirectory(prefix='moment-node-sums-') as directory:
         path = Path(directory) / 'sums.json'
         path.write_text(text)
@@ -341,7 +352,9 @@ def _moment_node_sums(payload):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _GATED_NODE_SUMS = (text, parsed)
+    return parsed
 
 
 _GATED_LEGACY_PROJECTION = None

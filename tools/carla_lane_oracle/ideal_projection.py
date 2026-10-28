@@ -705,8 +705,28 @@ def require_stored_words(words, expected, message):
         raise ValueError(message)
 
 
+_GATED_DERIVED_ROWS = None
+
+
 def derive_rows(nodes, weights, cosine, sine):
-    """Return the 64 derived moment rows for four stored word lists."""
+    """Return the 64 derived moment rows for four stored word lists.
+
+    The same words are not derived again. A changed word is derived again.
+    A failed check is not kept.
+
+    Args:
+        nodes: The stored node words.
+        weights: The stored weight words.
+        cosine: The stored cosine words.
+        sine: The stored sine words.
+
+    Returns:
+        The derived moment rows.
+
+    Raises:
+        ValueError: A moment row cannot be derived.
+    """
+    global _GATED_DERIVED_ROWS
     import os
     import subprocess
     import tempfile
@@ -720,6 +740,9 @@ def derive_rows(nodes, weights, cosine, sine):
         'cosine': [str(word) for word in cosine],
         'sine': [str(word) for word in sine],
     }, separators=(',', ':'))
+    cached = _GATED_DERIVED_ROWS
+    if cached is not None and cached[0] == payload:
+        return cached[1]
     with tempfile.TemporaryDirectory(prefix='moment-rows-') as directory:
         path = Path(directory) / 'words.json'
         path.write_text(payload)
@@ -735,11 +758,31 @@ def derive_rows(nodes, weights, cosine, sine):
         if message.startswith(prefix):
             message = message[len(prefix):]
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _GATED_DERIVED_ROWS = (payload, parsed)
+    return parsed
+
+
+_GATED_NODE_SPELLING = None
 
 
 def rounded_node_sums(nodes, weights):
-    """Return the rounded `1 + node` words for the stored nodes and weights."""
+    """Return the rounded `1 + node` words for the stored nodes and weights.
+
+    The same nodes and weights are not spelled again. A changed word is
+    spelled again. A failed check is not kept.
+
+    Args:
+        nodes: The stored node words.
+        weights: The stored weight words.
+
+    Returns:
+        The rounded `1 + node` words, as integers.
+
+    Raises:
+        ValueError: A stored word or the zeroth moment is rejected.
+    """
+    global _GATED_NODE_SPELLING
     import os
     import subprocess
     import tempfile
@@ -751,6 +794,9 @@ def rounded_node_sums(nodes, weights):
         'nodes': [str(word) for word in nodes],
         'weights': [str(word) for word in weights],
     }, separators=(',', ':'))
+    cached = _GATED_NODE_SPELLING
+    if cached is not None and cached[0] == payload:
+        return cached[1]
     with tempfile.TemporaryDirectory(prefix='node-sums-') as directory:
         path = Path(directory) / 'words.json'
         path.write_text(payload)
@@ -763,7 +809,9 @@ def rounded_node_sums(nodes, weights):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return [int(item) for item in json.loads(result.stdout)]
+    parsed = [int(item) for item in json.loads(result.stdout)]
+    _GATED_NODE_SPELLING = (payload, parsed)
+    return parsed
 
 
 def sha256_texts(texts):

@@ -1735,6 +1735,76 @@ class MomentTableCacheTests(unittest.TestCase):
                 moments.DEPENDENCIES = saved_dependencies
 
 
+class MomentWordCacheTests(unittest.TestCase):
+    def test_the_same_node_words_skip_the_second_check(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import ideal_projection
+        from tools.carla_lane_oracle import spiral_moments as moments
+        saved_sums = moments._GATED_NODE_SUMS
+        saved_rows = ideal_projection._GATED_DERIVED_ROWS
+        saved_spelling = ideal_projection._GATED_NODE_SPELLING
+        saved_failures = ideal_projection._CLI_FAILURES
+        try:
+            moments._GATED_NODE_SUMS = None
+            ideal_projection._GATED_DERIVED_ROWS = None
+            ideal_projection._GATED_NODE_SPELLING = None
+            ideal_projection._CLI_FAILURES = {
+                'derive': 'spiral moment derive: ',
+            }
+            ok = Mock(returncode=0, stdout='["1"]', stderr='')
+            with patch('subprocess.run', return_value=ok) as run:
+                self.assertEqual(
+                    moments._moment_node_sums(
+                        {'nodes': ['1'], 'weights': ['2']}),
+                    ['1'])
+                moments._moment_node_sums(
+                    {'nodes': ['1'], 'weights': ['2']})
+                self.assertEqual(run.call_count, 1)
+                moments._moment_node_sums(
+                    {'nodes': ['3'], 'weights': ['2']})
+                self.assertEqual(run.call_count, 2)
+                self.assertEqual(
+                    ideal_projection.rounded_node_sums([1], [2]), [1])
+                ideal_projection.rounded_node_sums([1], [2])
+                self.assertEqual(run.call_count, 3)
+                ideal_projection.rounded_node_sums([3], [2])
+                self.assertEqual(run.call_count, 4)
+                self.assertEqual(
+                    ideal_projection.derive_rows([1], [2], [3], [4]),
+                    ['1'])
+                ideal_projection.derive_rows([1], [2], [3], [4])
+                self.assertEqual(run.call_count, 5)
+                ideal_projection.derive_rows([9], [2], [3], [4])
+                self.assertEqual(run.call_count, 6)
+            failed = Mock(
+                returncode=1, stdout='', stderr='node sums changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'node sums changed'):
+                    moments._moment_node_sums({'nodes': ['bad']})
+                with self.assertRaisesRegex(ValueError, 'node sums changed'):
+                    moments._moment_node_sums({'nodes': ['bad']})
+                with self.assertRaisesRegex(ValueError, 'node sums changed'):
+                    ideal_projection.rounded_node_sums(['bad'], [2])
+                with self.assertRaisesRegex(ValueError, 'node sums changed'):
+                    ideal_projection.rounded_node_sums(['bad'], [2])
+                with self.assertRaisesRegex(ValueError, 'node sums changed'):
+                    ideal_projection.derive_rows(['bad'], [2], [3], [4])
+                with self.assertRaisesRegex(ValueError, 'node sums changed'):
+                    ideal_projection.derive_rows(['bad'], [2], [3], [4])
+                self.assertEqual(run.call_count, 6)
+            with patch('subprocess.run', return_value=ok) as run:
+                moments._moment_node_sums(
+                    {'nodes': ['3'], 'weights': ['2']})
+                ideal_projection.rounded_node_sums([3], [2])
+                ideal_projection.derive_rows([9], [2], [3], [4])
+                self.assertEqual(run.call_count, 0)
+        finally:
+            moments._GATED_NODE_SUMS = saved_sums
+            ideal_projection._GATED_DERIVED_ROWS = saved_rows
+            ideal_projection._GATED_NODE_SPELLING = saved_spelling
+            ideal_projection._CLI_FAILURES = saved_failures
+
+
 class MomentBatchCacheTests(unittest.TestCase):
     def test_the_same_moment_batches_skip_the_second_check(self):
         from unittest.mock import Mock, patch

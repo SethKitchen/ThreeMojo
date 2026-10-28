@@ -641,6 +641,10 @@ It derives the stored moment rows in exact arithmetic.
 
 It spells those stored words and derives the rows in one check.
 
+It reuses those derived rows when the same words are read again.
+A changed word is checked again.
+A failed check is not kept.
+
 It checks the stored moment table against the derived words.
 
 It packs the derived moment words into big-endian payload bytes.
@@ -738,6 +742,10 @@ A failed check is not kept.
 
 It checks every rounded node sum in one check.
 
+It reuses that node-sum check when the same nodes and weights are read again.
+A changed word is checked again.
+A failed check is not kept.
+
 It derives the moment rows after those rounded node sums in one check.
 
 It reuses that sum-and-row check when the same rows are read again.
@@ -745,6 +753,10 @@ A changed row is checked again.
 A failed check is not kept.
 
 It spells the stored nodes and weights before their rounded sums in one check.
+
+It reuses that spelling when the same nodes and weights are read again.
+A changed word is checked again.
+A failed check is not kept.
 
 It checks the ideal half projection in one call.
 
