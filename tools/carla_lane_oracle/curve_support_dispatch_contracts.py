@@ -207,22 +207,27 @@ def _significant_documents(texts):
     return json.loads(result.stdout)
 
 
-def _gate_graphs(pairs):
+def _significant_graphs(pairs):
+    """Compare every source pair by its significant tokens."""
+    if not pairs:
+        return
     import json
     import os
     import subprocess
     import tempfile
     from pathlib import Path
+    payload = json.dumps([
+        {'label': label, 'actual': actual, 'source': source}
+        for actual, source, label in pairs
+    ], separators=(',', ':'))
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    rows = [{'label': label, 'actual': actual, 'expected': expected}
-            for actual, expected, label in pairs]
-    with tempfile.TemporaryDirectory(prefix='dispatch-graphs-') as directory:
-        folder = Path(directory)
-        (folder / 'labels.json').write_text(json.dumps(rows))
+    with tempfile.TemporaryDirectory(prefix='dispatch-source-graphs-') as directory:
+        path = Path(directory) / 'graphs.json'
+        path.write_text(payload)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_gate',
-             '--graphs', str(folder)],
+             '--source-graphs', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -492,24 +497,14 @@ def verify_premises(root, *, _operation=None):
             text,
             item['after_source'],
             labels['successor_operations'] + path))
-    if prepared:
-        docs = _significant_documents(
-            [text for actual, expected, _ in prepared for text in (actual, expected)])
-        _gate_graphs([
-            (docs[index * 2], docs[index * 2 + 1], label)
-            for index, (_, _, label) in enumerate(prepared)])
+    _significant_graphs(prepared)
     prepared = []
     for path, item in record['premise_modules'].items():
         prepared.append((
             _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation),
             item['source'],
             labels['premise_modules'] + path))
-    if prepared:
-        docs = _significant_documents(
-            [text for actual, expected, _ in prepared for text in (actual, expected)])
-        _gate_graphs([
-            (docs[index * 2], docs[index * 2 + 1], label)
-            for index, (_, _, label) in enumerate(prepared)])
+    _significant_graphs(prepared)
     loaded = []
     for item in record['premise_functions']:
         physical_text = _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation)

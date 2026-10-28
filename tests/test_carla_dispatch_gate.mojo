@@ -17,6 +17,7 @@ from tools.carla_dispatch_gate import (
     dispatch_pin,
     dispatch_pins,
     dispatch_record,
+    dispatch_source_graphs,
     dispatch_tokens,
 )
 
@@ -102,6 +103,32 @@ def test_a_changed_operation_graph_is_refused() raises:
         )
     ):
         dispatch_graphs(directory)
+
+
+def test_a_changed_dispatch_source_is_refused() raises:
+    """A changed operation source fails after both texts are tokenized."""
+    var payload = (
+        '[{"label":"successor operations changed: module.mojo",'
+        + '"actual":"def center():\\n    return 1\\n",'
+        + '"source":"def center():\\n    return 2\\n"}]'
+    )
+    with assert_raises(
+        contains=(
+            "curve support/dispatch contract: successor operations changed:"
+            " module.mojo"
+        )
+    ):
+        dispatch_source_graphs(payload)
+
+
+def test_matching_dispatch_sources_are_accepted() raises:
+    """Identical operation sources pass in one check."""
+    var payload = (
+        '[{"label":"successor operations changed: module.mojo",'
+        + '"actual":"def center():\\n    return 1\\n",'
+        + '"source":"def center():\\n    return 1\\n"}]'
+    )
+    dispatch_source_graphs(payload)
 
 
 def main() raises:

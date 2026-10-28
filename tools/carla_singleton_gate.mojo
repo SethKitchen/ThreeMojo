@@ -8,6 +8,7 @@
     carla_singleton_gate --migration PATH
     carla_singleton_gate --text PATH --decoded PATH
     carla_singleton_gate --graphs DIR
+    carla_singleton_gate --source-graphs PATH
     carla_singleton_gate --selector PATH --wanted PATH
 
 The program checks the bytes it is given. It does not read the repository
@@ -17,7 +18,7 @@ and it does not restore a historical source. The caller does that first.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tests._python_tokens import token_sha256
+from tests._python_tokens import significant_graph_pairs, token_sha256
 from tools._python_json import MISSING, PY_LIST, PyJson, py_equal
 from tools._sha256 import sha256_hex
 
@@ -85,6 +86,22 @@ def singleton_path(actual: String, expected: String) raises:
         _fail("wrong selector predecessor path")
 
 
+def singleton_source_graphs(payload: String) raises:
+    """Compare each rounded LINE source pair by its significant tokens.
+
+    Args:
+        payload: A JSON list. Each item has `label`, `actual`, and `source`.
+
+    Raises:
+        Error: A source cannot be tokenized, or a token list changed.
+    """
+    significant_graph_pairs(
+        payload,
+        "rounded LINE singleton contract: ",
+        "consumer import scope changed",
+    )
+
+
 def singleton_graphs(directory: String) raises:
     """Require each consumer token list to match its record.
 
@@ -113,6 +130,7 @@ def _usage():
         (
             "usage: carla_singleton_gate --migration PATH"
             " | --text PATH --decoded PATH | --graphs DIR"
+            " | --source-graphs PATH"
             " | --selector PATH --wanted PATH"
         ),
         file=stderr,
@@ -130,6 +148,7 @@ def main() raises:
     var text = String("")
     var decoded = String("")
     var graphs = String("")
+    var source_graphs = String("")
     var selector = String("")
     var wanted = String("")
     var arguments = argv()
@@ -141,6 +160,7 @@ def main() raises:
             or word == "--text"
             or word == "--decoded"
             or word == "--graphs"
+            or word == "--source-graphs"
             or word == "--selector"
             or word == "--wanted"
         ):
@@ -155,6 +175,8 @@ def main() raises:
                 decoded = value
             elif word == "--graphs":
                 graphs = value
+            elif word == "--source-graphs":
+                source_graphs = value
             elif word == "--selector":
                 selector = value
             else:
@@ -169,6 +191,8 @@ def main() raises:
         modes += 1
     if graphs.byte_length() > 0:
         modes += 1
+    if source_graphs.byte_length() > 0:
+        modes += 1
     if selector.byte_length() > 0 or wanted.byte_length() > 0:
         modes += 1
     if (
@@ -178,6 +202,9 @@ def main() raises:
     ):
         _usage()
     try:
+        if source_graphs.byte_length() > 0:
+            singleton_source_graphs(Path(source_graphs).read_text())
+            return
         if graphs.byte_length() > 0:
             singleton_graphs(graphs)
             return

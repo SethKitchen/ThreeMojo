@@ -82,6 +82,8 @@ It restores every changed rounded LINE declaration in one check.
 
 It compares every rounded LINE module text in one check.
 
+It checks every rounded LINE consumer graph in one check.
+
 It keeps the consumer import scope before the first definition.
 
 It extracts every consumer import scope in one check.
@@ -137,6 +139,8 @@ It compares the junction token digest in one check.
 `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch record, the predecessor edge, and the operation graphs.
 
 It checks every historical dispatch pin in one check.
+
+It checks every dispatch operation graph in one check.
 
 It keeps the current dispatch source when the token matches.
 

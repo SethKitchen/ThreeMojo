@@ -183,22 +183,27 @@ def _significant_documents(texts):
     return json.loads(result.stdout)
 
 
-def _gate_graphs(pairs):
+def _significant_graphs(pairs):
+    """Compare every source pair by its significant tokens."""
+    if not pairs:
+        return
     import json
     import os
     import subprocess
     import tempfile
     from pathlib import Path
+    payload = json.dumps([
+        {'label': label, 'actual': actual, 'source': source}
+        for actual, source, label in pairs
+    ], separators=(',', ':'))
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    rows = [{'label': label, 'actual': actual, 'expected': expected}
-            for actual, expected, label in pairs]
-    with tempfile.TemporaryDirectory(prefix='singleton-graphs-') as directory:
-        folder = Path(directory)
-        (folder / 'labels.json').write_text(json.dumps(rows))
+    with tempfile.TemporaryDirectory(prefix='singleton-source-graphs-') as directory:
+        path = Path(directory) / 'graphs.json'
+        path.write_text(payload)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_singleton_gate',
-             '--graphs', str(folder)],
+             '--source-graphs', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -470,12 +475,7 @@ def verify_premises(root):
                 text = full_audit.reviewed_text(root, path, text)
                 actual = _import_scope(text)
         prepared.append((actual, expected, labels['import_scope'] + path))
-    if prepared:
-        scope_docs = _significant_documents(
-            [text for actual, expected, _ in prepared for text in (actual, expected)])
-        _gate_graphs([
-            (scope_docs[index * 2], scope_docs[index * 2 + 1], label)
-            for index, (_, _, label) in enumerate(prepared)])
+    _significant_graphs(prepared)
     minimum_items = []
     for item in record['declarations']:
         minimum_items.append((item, tuple(item['owner'])))
@@ -520,12 +520,7 @@ def verify_premises(root):
         actual = restored[index] if index in restored else declared[index]
         prepared.append((actual, item['source'],
                          labels['declaration'] + item['name']))
-    if prepared:
-        declaration_docs = _significant_documents(
-            [text for actual, source, _ in prepared for text in (actual, source)])
-        _gate_graphs([
-            (declaration_docs[index * 2], declaration_docs[index * 2 + 1], label)
-            for index, (_, _, label) in enumerate(prepared)])
+    _significant_graphs(prepared)
     return record
 
 

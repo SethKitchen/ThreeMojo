@@ -13,6 +13,7 @@ from tools.carla_singleton_gate import (
     singleton_graphs,
     singleton_path,
     singleton_record,
+    singleton_source_graphs,
     singleton_views,
 )
 
@@ -66,6 +67,34 @@ def test_a_changed_consumer_graph_is_refused() raises:
         )
     ):
         singleton_graphs(directory)
+
+
+def test_a_changed_consumer_source_is_refused() raises:
+    """A changed consumer source fails after both texts are tokenized."""
+    var payload = (
+        '[{"label":"consumer import scope changed: lane.mojo",'
+        + '"actual":"def center():\\n    return 1\\n",'
+        + '"source":"def center():\\n    return 2\\n"},'
+        + '{"label":"later","actual":"def later():\\n    return 1\\n",'
+        + '"source":"def later():\\n    return 1\\n"}]'
+    )
+    with assert_raises(
+        contains=(
+            "rounded LINE singleton contract: consumer import scope changed:"
+            " lane.mojo"
+        )
+    ):
+        singleton_source_graphs(payload)
+
+
+def test_matching_consumer_sources_are_accepted() raises:
+    """Identical consumer sources pass in one check."""
+    var payload = (
+        '[{"label":"consumer import scope changed: lane.mojo",'
+        + '"actual":"def center():\\n    return 1\\n",'
+        + '"source":"def center():\\n    return 1\\n"}]'
+    )
+    singleton_source_graphs(payload)
 
 
 def main() raises:

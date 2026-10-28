@@ -10,6 +10,7 @@
     carla_dispatch_gate --tokens DIR
     carla_dispatch_gate --edge HEX --expected HEX
     carla_dispatch_gate --graphs DIR
+    carla_dispatch_gate --source-graphs PATH
     carla_dispatch_gate --pins DIR
 
 The program checks the bytes it is given. It does not read the repository
@@ -20,7 +21,7 @@ A pin directory checks every listed file in order.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tests._python_tokens import token_sha256
+from tests._python_tokens import significant_graph_pairs, token_sha256
 from tools._python_json import MISSING, PY_DICT, PY_LIST, PyJson, py_equal
 from tools._sha256 import sha256_hex
 
@@ -177,6 +178,22 @@ def dispatch_edge(recorded: String, expected: String) raises:
         _fail("raw predecessor edge mismatch")
 
 
+def dispatch_source_graphs(payload: String) raises:
+    """Compare each dispatch source pair by its significant tokens.
+
+    Args:
+        payload: A JSON list. Each item has `label`, `actual`, and `source`.
+
+    Raises:
+        Error: A source cannot be tokenized, or a token list changed.
+    """
+    significant_graph_pairs(
+        payload,
+        "curve support/dispatch contract: ",
+        "successor operations changed",
+    )
+
+
 def dispatch_graphs(directory: String) raises:
     """Require each operation graph to match its recorded token list.
 
@@ -252,7 +269,8 @@ def _usage():
         (
             "usage: carla_dispatch_gate --migration PATH"
             " | --bytes PATH --sha HEX --label TEXT | --tokens DIR"
-            " | --edge HEX --expected HEX | --graphs DIR | --pins DIR"
+            " | --edge HEX --expected HEX | --graphs DIR"
+            " | --source-graphs PATH | --pins DIR"
         ),
         file=stderr,
     )
@@ -273,6 +291,7 @@ def main() raises:
     var edge = String("")
     var expected = String("")
     var graphs = String("")
+    var source_graphs = String("")
     var pins = String("")
     var arguments = argv()
     var index = 1
@@ -287,6 +306,7 @@ def main() raises:
             or word == "--edge"
             or word == "--expected"
             or word == "--graphs"
+            or word == "--source-graphs"
             or word == "--pins"
         ):
             if index + 1 >= len(arguments):
@@ -308,6 +328,8 @@ def main() raises:
                 expected = value
             elif word == "--graphs":
                 graphs = value
+            elif word == "--source-graphs":
+                source_graphs = value
             else:
                 pins = value
             index += 2
@@ -324,6 +346,8 @@ def main() raises:
         modes += 1
     if graphs.byte_length() > 0:
         modes += 1
+    if source_graphs.byte_length() > 0:
+        modes += 1
     if pins.byte_length() > 0:
         modes += 1
     if modes != 1:
@@ -335,6 +359,9 @@ def main() raises:
     ):
         _usage()
     try:
+        if source_graphs.byte_length() > 0:
+            dispatch_source_graphs(Path(source_graphs).read_text())
+            return
         if graphs.byte_length() > 0:
             dispatch_graphs(graphs)
             return

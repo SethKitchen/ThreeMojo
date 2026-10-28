@@ -726,6 +726,39 @@ def replace_token_fragment(
     )
 
 
+def significant_graph_pairs(
+    payload: String, prefix: String, invalid: String
+) raises:
+    """Compare each source pair by its significant tokens.
+
+    Args:
+        payload: A JSON list. Each item has `label`, `actual`, and `source`.
+        prefix: The contract prefix, including its trailing space.
+        invalid: The failure text used when `payload` is not a list.
+
+    Raises:
+        Error: A source cannot be tokenized, the list cannot be read, or a token list changed.
+    """
+    var doc = PyJson.parse(payload)
+    if doc.kind(doc.root) != PY_LIST:
+        raise Error(prefix + invalid)
+    var count = doc.length(doc.root)
+    var actuals = List[String]()
+    var sources = List[String]()
+    var index = 0
+    while index < count:
+        var row = doc.item(doc.root, index)
+        actuals.append(significant_json(doc.text(doc.at(row, "actual"))))
+        sources.append(significant_json(doc.text(doc.at(row, "source"))))
+        index += 1
+    index = 0
+    while index < count:
+        if actuals[index] != sources[index]:
+            var row = doc.item(doc.root, index)
+            raise Error(prefix + doc.text(doc.at(row, "label")))
+        index += 1
+
+
 def significant_json(source: String) raises -> String:
     """Return the canonical significant-token JSON.
 
