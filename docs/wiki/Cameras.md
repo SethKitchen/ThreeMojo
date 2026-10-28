@@ -160,7 +160,7 @@ eyes.add(stereo.right, Rect(120, 0, 120, 120))
 | `focus` | `camera.focus` | 10 m | How far ahead the two views cross. Positive. three.js reads the camera's `focus`. This port keeps its own. |
 | `aspect` | `aspect` | `1.0` | What the camera's aspect is multiplied by for each eye. A half for a side-by-side pair. |
 
-`update(camera, scene)` places `left` and `right` from the camera as it stands, placed or riding a node of the scene. The eyes take the camera's field of view, zoom, planes and layers. They do not take its film offset or view offset, as in three.js. The skew is `eye_separation / 2 * near / focus` at the near plane, three.js's own arithmetic, set as each eye's `view_shift`. A point at the focus lands on the same column in both eyes. A nearer point lands further apart, which is the parallax.
+`update(camera, scene)` places `left` and `right` from the camera as it stands, placed or riding a node of the scene. The eyes take the camera's field of view, zoom, planes and layers. They take the vertical part of its view offset and not the horizontal part or the film offset, as in three.js. The skew is `eye_separation / 2 * near / focus` at the near plane, three.js's own arithmetic, set as each eye's `view_shift`. A point at the focus lands on the same column in both eyes. A nearer point lands further apart, which is the parallax.
 
 The three settings are open fields. `validate()` refuses a negative or non-finite separation and a focus or aspect that is not positive and finite. `update` calls it before it places an eye. It builds both eyes before it keeps either, so a refused update leaves the pair as it was.
 
@@ -236,7 +236,9 @@ var eye_node = scene.attach(eye^, pivot)
 camera.attach(eye_node)
 ```
 
-An attached camera looks down its node's -z axis with the node's +y up. Its view is the inverse of the node's world position and rotation. Scale is dropped, as three.js drops it. The node's world axes must stay at right angles. A nonuniform scale above a turn shears them, and the node is refused. A mirrored or flattened node is refused.
+An attached camera looks down its node's -z axis with the node's +y up. Its view is the inverse of the node's world position and rotation.
+
+Scale is dropped. three.js keeps it, so under a scaled node three.js changes the field of view and the near and far planes, and this port does not. The node's world axes must stay at right angles. A nonuniform scale above a turn shears them, and the node is refused. A mirrored or flattened node is refused.
 
 Aim an attached camera with `scene.look_at(eye_node, target, camera=True)`. Turn the pivot to orbit it. `place` lets go of the node.
 

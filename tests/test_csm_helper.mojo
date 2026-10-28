@@ -31,6 +31,7 @@ from std.testing import (
     assert_almost_equal,
     assert_equal,
     assert_false,
+    assert_raises,
     assert_true,
 )
 from units.si import Angle, DEGREE, Length, METER
@@ -199,6 +200,27 @@ def test_the_switches_hide_their_parts() raises:
     helper.display_shadow_bounds = False
     var frame = helper.lines(csm, scene, camera)
     assert_equal(len(frame.attribute_view(String(POSITION)).data), 4 * 72)
+
+
+def test_cascades_the_helper_cannot_draw_are_refused() raises:
+    # The helper indexes a light and a frustum per cascade, so a mapping
+    # that does not hold raises rather than reading past them.
+    var scene = Scene()
+    var camera = _camera()
+    var csm = _cascades(scene, camera)
+    var helper = CSMHelper()
+    var other = Scene()
+    other.update()
+    with assert_raises(contains="lights are not in this scene"):
+        _ = helper.lines(csm, other, camera)
+    csm.cascades = 4
+    with assert_raises(contains="one frustum per cascade"):
+        _ = helper.lines(csm, scene, camera)
+    with assert_raises(contains="one frustum per cascade"):
+        _ = helper.planes(csm, scene, camera)
+    csm.cascades = 0
+    with assert_raises(contains="one frustum per cascade"):
+        _ = helper.lines(csm, scene, camera)
 
 
 def test_the_plane_material_is_three_js() raises:

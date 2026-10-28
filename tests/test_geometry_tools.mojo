@@ -215,6 +215,26 @@ def test_a_camera_frames_a_tilted_rectangle_and_estimates_its_view() raises:
     _check_frame(camera, _reference(), 1)
 
 
+def test_a_wide_estimate_keeps_the_framed_projection() raises:
+    # Close to a tall, narrow camera the estimate passes 180 degrees, as in
+    # three.js, and the override it framed is still the projection.
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE), 0.3, Length(0.1, METER), Length(100.0, METER)
+    )
+    camera.place(Vector3(0, 0, 1), Vector3(0, 0, 0))
+    frame_corners(
+        camera,
+        Vector3(-1, -1, 0),
+        Vector3(1, -1, 0),
+        Vector3(-1, 1, 0),
+        estimate_view_frustum=True,
+    )
+    assert_true(camera.fov.to(DEGREE) > 180)
+    var projection = camera.projection_matrix()
+    assert_almost_equal(projection.elements[0], 1, atol=1e-6)
+    assert_almost_equal(projection.elements[5], 1, atol=1e-6)
+
+
 def test_a_frame_refuses_corners_it_cannot_frame() raises:
     var camera = _camera()
     with assert_raises(contains="not on one line"):

@@ -79,7 +79,7 @@ if len(hits) > 0:
 | `index` | The object's position in that list. |
 | `instance` | Which instance of an instanced or batched mesh, or which level of an LOD. -1 for a plain mesh. three.js's `instanceId` and `batchId`. |
 | `mesh` | The shape struck as a `Mesh`: its node, geometry and material. For a plain mesh, the mesh itself. For a mesh that wears a list, `material` is the material of the group struck. A sprite has no geometry, so its `geometry` is -1. |
-| `triangle` | Which of the geometry's triangles, from zero. For a line or a wide line, which segment. For points, which point. For a sprite, which of its two halves. three.js's `faceIndex` and `index`. |
+| `triangle` | Which of the geometry's triangles, from zero. For a line or a wide line, which segment. For points, which point. For a sprite, which of its two halves. three.js's `faceIndex` and `index`. three.js's `index` of a `SEGMENTS` line hit is the segment's first vertex, twice this number. |
 | `uv`, `uv1` | The texture coordinates at the point, as an `Optional[Vector2]`. None when the geometry has no such attribute. A sprite's `uv` runs from 0 to 1 across it. |
 | `vertex_normal` | The geometry's normals mixed at the point, as an `Optional[Vector3]`. three.js's `normal`. None when the geometry has no normals. |
 | `face` | The triangle struck, as an `Optional[HitFace]`. three.js's `face`. |

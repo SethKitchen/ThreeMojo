@@ -40,8 +40,8 @@ a frame, as `Scene.update` is called; it updates every LOD whose
 
 A level's distance is a `Length`. A bare number does not compile, and a
 compile-fail file proves it. It is measured from the camera's position to
-the node's world origin, in meters, and three.js's `camera.zoom` does not
-divide it, since no camera here has one.
+the node's world origin, in meters, and divided by the camera's zoom that
+`Scene.update_lods` is given, as three.js divides it by `camera.zoom`.
 """
 
 from core.object3d import NodeId

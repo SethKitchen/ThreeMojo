@@ -261,6 +261,14 @@ def test_updating_shows_the_level_the_camera_picks() raises:
     scene.update_lods(Vector3(0, 0, 2.4))
     assert_equal(scene.lods[0].shown, 0)
     assert_true(scene.is_shown(NodeId(1)))
+    # A zoom of two halves the distance, as three.js divides by
+    # `camera.zoom`: eight meters away reads as four, held at level 0.
+    scene.update_lods(Vector3(0, 0, 8), zoom=2)
+    assert_equal(scene.lods[0].shown, 0)
+    scene.update_lods(Vector3(0, 0, 8), zoom=0.5)
+    assert_equal(scene.lods[0].shown, 1)
+    with assert_raises(contains="positive, finite zoom"):
+        scene.update_lods(Vector3(0, 0, 8), zoom=0)
     # A stale scene is refused.
     scene.node(NodeId(0)).set_position(0, 0, 1)
     with assert_raises(contains="has changed since update"):

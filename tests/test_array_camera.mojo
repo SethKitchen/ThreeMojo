@@ -238,6 +238,28 @@ def test_a_stereo_camera_takes_threejs_defaults() raises:
         _ = StereoCamera(aspect=nan[DType.float32]())
 
 
+def test_stereo_eyes_keep_the_vertical_part_of_a_view_offset() raises:
+    # three.js copies the camera's projection and overwrites only its
+    # horizontal entries, so the eyes keep the tile's rows: the top-left
+    # quarter of a 200 x 100 image doubles y and moves it, as in r180.
+    var scene = Scene()
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE), 2.0, Length(0.1, METER), Length(100.0, METER)
+    )
+    var plain = StereoCamera()
+    plain.update(camera, scene)
+    camera.set_view_offset(200, 100, 0, 0, 100, 50)
+    var tiled = StereoCamera()
+    tiled.update(camera, scene)
+    var whole = plain.left.projection_matrix()
+    var tile = tiled.left.projection_matrix()
+    assert_almost_equal(tile.elements[5], 4.2890, atol=1e-3)
+    assert_almost_equal(tile.elements[9], 1.0, atol=1e-5)
+    assert_almost_equal(tile.elements[0], whole.elements[0], atol=1e-6)
+    assert_almost_equal(tile.elements[8], whole.elements[8], atol=1e-6)
+
+
 def test_settings_edited_after_construction_are_refused_by_update() raises:
     # The fields are open. A value the constructor refused is refused
     # again before an eye is placed, and the pair is left as it was.

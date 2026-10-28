@@ -190,6 +190,8 @@ struct OrbitControls(Copyable, Movable):
     var _delta_theta: Float32
     var _delta_phi: Float32
     var _scale: Float32
+    # Whether the last orbit changed the distance, three.js's `zoomChanged`.
+    var _zoomed: Bool
     var _pan: Vector3
     # A zoom toward the cursor waiting for `update`: where the pointer was
     # in normalized device coordinates, and the ray through it.
@@ -248,6 +250,7 @@ struct OrbitControls(Copyable, Movable):
         self._delta_theta = 0
         self._delta_phi = 0
         self._scale = 1
+        self._zoomed = False
         self._pan = Vector3(0, 0, 0)
         self.min_zoom = 0
         self.max_zoom = inf[DType.float32]()
@@ -757,6 +760,7 @@ struct OrbitControls(Copyable, Movable):
             var forward = placed[1] - placed[0]
             forward.normalize()
             var position = placed[0] + self._dolly_direction * (before - after)
+            self._zoomed = before != after
             placed = [
                 position,
                 self._cursor_target(
@@ -767,7 +771,9 @@ struct OrbitControls(Copyable, Movable):
         self._scale = 1
         var changed = self._settle(camera.position, placed[0], placed[1])
         camera.place(placed[0], placed[1])
-        return changed
+        # A dolly smaller than the movement test still counts, as three.js
+        # counts `zoomChanged`.
+        return changed or self._zoomed
 
     def update(
         mut self, mut camera: OrthographicCamera, delta: Duration
@@ -926,11 +932,13 @@ struct OrbitControls(Copyable, Movable):
             self.max_polar_angle.to(RADIAN),
         )
         var factor = self._scale if scale_radius else Float32(1)
+        var unscaled = radius
         radius = clamp(
             radius * factor,
             self.min_distance.to(METER),
             self.max_distance.to(METER),
         )
+        self._zoomed = radius != unscaled
         var target = self.target + self._pan * share
         # three.js keeps the target within its radii of the cursor:
         # `target.sub( cursor ).clampLength( min, max ).add( cursor )`.

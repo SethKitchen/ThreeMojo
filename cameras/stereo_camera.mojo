@@ -195,9 +195,15 @@ def _eye(
         camera.fov, aspect, camera.near, camera.far, view_shift=shift
     )
     # three.js's eye divides its height by the camera's zoom, as the
-    # camera's own projection does, and reads neither its film offset
-    # nor its view offset.
+    # camera's own projection does. It copies the camera's projection and
+    # overwrites only the horizontal entries, so it keeps the vertical part
+    # of a view offset and none of the film offset.
     eye.zoom = camera.zoom
+    if camera._tiled():
+        var view = camera.view.value()
+        view.offset_x = 0
+        view.width = view.full_width
+        eye.view = view
     eye.place(position, position + forward)
     eye.up = up
     eye.layers = camera.layers

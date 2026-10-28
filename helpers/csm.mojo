@@ -82,6 +82,19 @@ def csm_plane_material() raises -> Material:
     return material^
 
 
+def _check_frustums(csm: CSM) raises:
+    """Refuse cascades whose frustums were not split for their count.
+
+    Args:
+        csm: The cascades.
+
+    Raises:
+        Error: If there is not one frustum per cascade.
+    """
+    if csm.cascades < 1 or len(csm.frustums) != csm.cascades:
+        raise Error("A CSM needs one frustum per cascade; update it first")
+
+
 struct CSMHelper(Copyable, Movable):
     """Draws a `CSM`'s frustum, cascades and shadow boxes, three.js's
     `CSMHelper`."""
@@ -116,9 +129,13 @@ struct CSMHelper(Copyable, Movable):
             for each cascade its box's twelve and its shadow box's twelve.
 
         Raises:
-            Error: If a cascade's light or its target is gone from the
-                scene, or the camera's view is refused.
+            Error: If the cascades and their frustums or lights disagree, a
+                cascade's light or its target is gone from the scene, or
+                the camera's view is refused.
         """
+        _check_frustums(csm)
+        if self.display_shadow_bounds:
+            csm._check_lights(scene)
         var segments = Segments()
         var world = _camera_world(camera, scene)
         var white = FloatColor(srgb=CSM_FRUSTUM_COLOR)
@@ -200,11 +217,13 @@ struct CSMHelper(Copyable, Movable):
             both show.
 
         Raises:
-            Error: If the camera's view is refused.
+            Error: If the cascades and their frustums disagree, or the
+                camera's view is refused.
         """
         var shown = List[BufferGeometry]()
         if not (self.display_frustum and self.display_planes):
             return shown^
+        _check_frustums(csm)
         var world = _camera_world(camera, scene)
         # A `CSM` has at least one cascade.
         for index in range(csm.cascades):  # pragma: no branch

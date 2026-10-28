@@ -1582,12 +1582,10 @@ def test_ggx_reflects_nothing_off_a_surface_turned_away() raises:
     assert_equal(from_light.x, Float32(0))
     var from_eye = ggx(UP_Z, -UP_Z, UP_Z, Vector3(1, 1, 1), 1, 0.5)
     assert_equal(from_eye.y, Float32(0))
-    # Edge-on to the light, or to the eye, with a half direction that is
-    # not zero: still nothing, on either cosine alone.
+    # Edge-on to the light, with a half direction that is not zero: still
+    # nothing.
     var edge_light = ggx(Vector3(1, 0, 0), UP_Z, UP_Z, Vector3(1, 1, 1), 1, 0.5)
     assert_equal(edge_light.x, Float32(0))
-    var edge_eye = ggx(UP_Z, Vector3(1, 0, 0), UP_Z, Vector3(1, 1, 1), 1, 0.5)
-    assert_equal(edge_eye.x, Float32(0))
     var opposite = ggx(
         Vector3(1, 0, 0), Vector3(-1, 0, 0), UP_Z, Vector3(1, 1, 1), 1, 0.5
     )
@@ -1598,6 +1596,22 @@ def test_ggx_reflects_nothing_off_a_surface_turned_away() raises:
     var side = ggx(aside, UP_Z, UP_Z, Vector3(1, 1, 1), 1, 0.5)
     assert_true(side.x > 0, "a lit surface reflected nothing")
     assert_true(side.x < 4.0, "the lobe did not fall off")
+
+
+def test_ggx_runs_to_the_silhouette_as_three_js_does() raises:
+    # Edge-on to the eye, three.js's BRDF_GGX is not zero: the visibility
+    # term's denominator is held off zero. Here F is 1, V is 0.5 / alpha
+    # and D is a2 / (0.5 (a2 - 1) + 1)^2, so the lobe is 0.4429.
+    var edge_eye = ggx(UP_Z, Vector3(1, 0, 0), UP_Z, Vector3(1, 1, 1), 1, 0.5)
+    assert_almost_equal(edge_eye.x, 0.442907, atol=1e-5)
+    # Grazing, with the light low on the far side: three.js r180 gives
+    # 7.7357, without its 1/pi.
+    var light = Vector3(-0.9, 0, 0.43)
+    light.normalize()
+    var grazing = ggx(
+        light, Vector3(1, 0, 0), UP_Z, Vector3(0.04, 0.04, 0.04), 1, 0.5
+    )
+    assert_almost_equal(grazing.x, 7.7357, atol=1e-3)
 
 
 def test_the_split_sum_fit_sums_to_at_most_one() raises:

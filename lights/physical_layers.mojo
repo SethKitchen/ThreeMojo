@@ -470,7 +470,7 @@ def anisotropic_ggx(
         toward_eye: Unit vector from the surface toward the camera.
         half: The unit half vector between the two.
         dot_nl: The cosine between the normal and the light, above zero.
-        dot_nv: The cosine between the normal and the eye, above zero.
+        dot_nv: The cosine between the normal and the eye, zero or more.
         dot_nh: The cosine between the normal and the half vector.
         alpha: The roughness squared across the stretch, three.js's
             `alphaB`.
