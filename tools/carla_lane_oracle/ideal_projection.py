@@ -961,6 +961,32 @@ def array_literals(text, name, size):
     return _constant_literals(text, name, 'array', size)
 
 
+def rounded_array_words(text, name, size):
+    """Return the rounded words of one complete constant array."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    body = json.dumps(
+        {'source': text, 'name': name, 'size': size}, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='rounded-array-') as directory:
+        path = Path(directory) / 'array.json'
+        path.write_text(body)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_stored_words',
+             '--rounded-array', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return [int(item) for item in json.loads(result.stdout)]
+
+
 _CONTRACT_PREFIXES = None
 
 

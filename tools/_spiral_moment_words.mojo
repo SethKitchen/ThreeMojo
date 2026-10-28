@@ -9,7 +9,7 @@ The floor and the ceiling use integer arithmetic. No host floating-point
 conversion is used.
 """
 
-from tests._python_tokens import moment_words_json
+from tests._python_tokens import constant_literals_json, moment_words_json
 from tools._bigint import BigInt
 from tools._fraction import Fraction
 from tools._python_json import PyJson
@@ -704,6 +704,35 @@ def decimal_integers_json(payload: String) raises -> String:
         index += 1
     hexed.root = rows
     return hex_integers_json(hexed.dumps())
+
+
+def rounded_array_words(payload: String) raises -> String:
+    """Read one constant array, then round its literals.
+
+    Args:
+        payload: JSON with `source`, `name`, and `size`. `source` is the
+            module text. `name` is the array name. `size` is the array
+            length.
+
+    Returns:
+        A JSON list of unsigned decimal binary64 encodings.
+
+    Raises:
+        Error: The declaration changed, or a literal is not finite. The
+            declaration is read before the literals are rounded. A
+            rounding error starts with `rounded literal: `.
+    """
+    var doc = PyJson.parse(payload)
+    var literals = constant_literals_json(
+        doc.text(doc.at(doc.root, "source")),
+        doc.text(doc.at(doc.root, "name")),
+        "array",
+        Int(doc.text(doc.at(doc.root, "size"))),
+    )
+    try:
+        return decimal_integers_json(literals)
+    except error:
+        raise Error("rounded literal: " + String(error))
 
 
 def hex_words_json(payload: String) raises -> String:

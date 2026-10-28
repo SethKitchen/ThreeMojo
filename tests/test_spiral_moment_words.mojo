@@ -16,6 +16,7 @@ from tools._spiral_moment_words import (
     SIGN,
     bracket,
     decimal_integers_json,
+    rounded_array_words,
     decimal_word,
     fraction_of_word,
     fraction_texts,
@@ -176,6 +177,34 @@ def test_one_table_word_is_read_as_an_integer() raises:
     assert_equal(result.length(result.root), 1)
     assert_equal(
         result.text(result.item(result.root, 0)), "4607182418800017408"
+    )
+
+
+def test_a_missing_array_fails_before_rounding() raises:
+    """A missing array fails before its literals are rounded."""
+    with assert_raises(contains="missing or ambiguous constant array: _NODES"):
+        _ = rounded_array_words(
+            '{"source":"def f():\\n pass\\n","name":"_NODES","size":2}'
+        )
+
+
+def test_one_array_is_read_and_rounded() raises:
+    """`1.0` and `2.0` become their binary64 integers."""
+    var source = (
+        "comptime _NODES: Array[Float64, 2] = [\n    1.0,\n    2.0,\n]\n"
+    )
+    var doc = PyJson()
+    var root = doc.new_dict()
+    doc.set(root, "source", doc.new_str(source))
+    doc.set(root, "name", doc.new_str("_NODES"))
+    doc.set(root, "size", doc.new_int(2))
+    doc.root = root
+    var result = PyJson.parse(rounded_array_words(doc.dumps()))
+    assert_equal(
+        result.text(result.item(result.root, 0)), "4607182418800017408"
+    )
+    assert_equal(
+        result.text(result.item(result.root, 1)), "4611686018427387904"
     )
 
 

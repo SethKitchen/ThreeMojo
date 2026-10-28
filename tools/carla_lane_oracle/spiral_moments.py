@@ -203,10 +203,17 @@ def parse_array(text, name, size):
     # Match the complete top-level logical declaration, never a bracketed
     # prefix inside a conditional, concatenation, string or executable suffix.
     try:
-        literals = ideal_projection.array_literals(text, name, size)
+        return ideal_projection.rounded_array_words(text, name, size)
     except ValueError as error:
+        message = str(error)
+        marker = 'rounded literal: '
+        if message.startswith(marker):
+            message = message[len(marker):]
+            word = _cli_failures()['word']
+            if message.startswith(word):
+                message = message[len(word):]
+            raise CheckError(message) from error
         _constant_error(error, name)
-    return _rounded_words(literals)
 
 
 def _moment_route_batch(mode, payload):

@@ -266,6 +266,8 @@ It replaces one executable token fragment for the cleanup mutation tests.
 
 It reads the decimal literals in one stored array or scalar declaration.
 
+It reads those array literals and rounds them in one check.
+
 It rounds one stored decimal literal to a binary64 word.
 
 It rounds those decimal literals and reads them as integers in one check.
