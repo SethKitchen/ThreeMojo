@@ -292,6 +292,11 @@ It checks every dispatch operation graph in one check.
 
 It checks every dispatch source graph and every premise graph in one check.
 
+It reuses that source-graph check when the same texts are read again.
+The source files are still read.
+A changed text is checked again.
+A failed check is not kept.
+
 It keeps the current dispatch source when the token matches.
 
 It hashes the dispatch source before that choice.
@@ -310,9 +315,19 @@ It checks every dispatch reference declaration token in one check.
 
 It checks those reference tokens before the grouped proof identity in one check.
 
+It reuses that reference-token check when the same texts are read again.
+The reference files are still read.
+A changed text is checked again.
+A failed check is not kept.
+
 It chooses every dispatch premise fallback in one check.
 
 It compares every dispatch premise and chooses its fallback in one check.
+
+It reuses that premise fallback check when the same texts are read again.
+The premise files are still read.
+A changed text is checked again.
+A failed check is not kept.
 
 It checks every Map seed premise in one check.
 

@@ -200,8 +200,16 @@ def _gate_edges(recorded, expected):
         raise ValueError(message)
 
 
+_GATED_GRAPH_GROUPS = None
+
+
 def _significant_graph_groups(groups):
-    """Compare every source group by its significant tokens."""
+    """Compare every source group by its significant tokens.
+
+    The same texts are not compared again. A changed text is compared again.
+    A failed comparison is not kept.
+    """
+    global _GATED_GRAPH_GROUPS
     if not any(groups):
         return
     import json
@@ -216,6 +224,8 @@ def _significant_graph_groups(groups):
         ]
         for pairs in groups
     ], separators=(',', ':'))
+    if _GATED_GRAPH_GROUPS == payload:
+        return
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='dispatch-source-graphs-') as directory:
@@ -230,6 +240,7 @@ def _significant_graph_groups(groups):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+    _GATED_GRAPH_GROUPS = payload
 
 
 _GATED_DISPATCH = None
@@ -482,16 +493,12 @@ def reviewed_source(root, path, expected, *, _operation=None):
     _gate_edge(record['before_token_sha256'], expected)
     return record['before_source']
 
-def _declaration_tokens(items):
-    """Read each declaration and require its recorded token digest."""
-    if not items:
-        return
-    import json
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    payload = json.dumps([
+_GATED_REFERENCE_TOKENS = None
+
+
+def _reference_token_key(items):
+    """Return the stable JSON for one reference-token check."""
+    return json.dumps([
         {
             'source': source,
             'name': name,
@@ -501,6 +508,24 @@ def _declaration_tokens(items):
         }
         for source, name, owner, token, label in items
     ], separators=(',', ':'))
+
+
+def _declaration_tokens(items):
+    """Read each declaration and require its recorded token digest.
+
+    The same texts are not checked again. A changed text is checked again.
+    A failed check is not kept.
+    """
+    global _GATED_REFERENCE_TOKENS
+    if not items:
+        return
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = _reference_token_key(items)
+    if _GATED_REFERENCE_TOKENS == payload:
+        return
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='declaration-tokens-') as directory:
@@ -515,15 +540,25 @@ def _declaration_tokens(items):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+    _GATED_REFERENCE_TOKENS = payload
 
 
 def _tokens_then_identity(items):
-    """Check the declaration tokens, then read the grouped proof identity."""
+    """Check the declaration tokens, then read the grouped proof identity.
+
+    The same texts are not checked again. A changed text is checked again.
+    A failed check is not kept.
+    """
+    global _GATED_REFERENCE_TOKENS
     if __package__:
         from . import grouped_table_contracts as grouped
     else:
         import grouped_table_contracts as grouped
     if not items:
+        grouped._ensure_identity()
+        return
+    key = _reference_token_key(items)
+    if _GATED_REFERENCE_TOKENS == key:
         grouped._ensure_identity()
         return
     if grouped._IDENTITY is not None:
@@ -563,6 +598,7 @@ def _tokens_then_identity(items):
         raise ValueError(message)
     if grouped._IDENTITY is None:
         grouped._IDENTITY = json.loads(result.stdout)
+    _GATED_REFERENCE_TOKENS = key
     grouped._ensure_identity()
 
 
@@ -643,8 +679,16 @@ def _declarations(items):
     return json.loads(result.stdout)
 
 
+_GATED_FALLBACKS = None
+
+
 def _declaration_fallbacks(items):
-    """Compare each premise declaration and choose its fallback."""
+    """Compare each premise declaration and choose its fallback.
+
+    The same texts are not compared again. A changed text is compared again.
+    A failed comparison is not kept.
+    """
+    global _GATED_FALLBACKS
     if not items:
         return [], []
     import json
@@ -662,6 +706,9 @@ def _declaration_fallbacks(items):
         }
         for source, name, owner, expected, path in items
     ], separators=(',', ':'))
+    cached = _GATED_FALLBACKS
+    if cached is not None and cached[0] == payload:
+        return cached[1], cached[2]
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='declaration-fallbacks-') as directory:
@@ -677,7 +724,9 @@ def _declaration_fallbacks(items):
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
     parsed = json.loads(result.stdout)
-    return parsed['flags'], parsed['fallbacks']
+    flags, fallbacks = parsed['flags'], parsed['fallbacks']
+    _GATED_FALLBACKS = (payload, flags, fallbacks)
+    return flags, fallbacks
 
 
 def verify_premises(root, *, _operation=None, _then_grouped_identity=False):

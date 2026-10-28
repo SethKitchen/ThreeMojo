@@ -1649,6 +1649,66 @@ class ProductionScanTests(unittest.TestCase):
         )
 
 
+class DispatchPremiseCacheTests(unittest.TestCase):
+    def test_the_same_dispatch_premises_skip_the_second_check(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import curve_support_dispatch_contracts as dispatch
+        from tools.carla_lane_oracle import grouped_table_contracts as grouped
+        saved_graphs = dispatch._GATED_GRAPH_GROUPS
+        saved_tokens = dispatch._GATED_REFERENCE_TOKENS
+        saved_fallbacks = dispatch._GATED_FALLBACKS
+        saved_identity = grouped._IDENTITY
+        groups = [[('label', 'actual', 'source')]]
+        tokens = [('def f():\n    return 1\n', 'f', [], 'aa', 'label')]
+        fallbacks = [('def f():\n    return 1\n', 'f', [], 'def f():\n    return 1\n', 'path')]
+        try:
+            dispatch._GATED_GRAPH_GROUPS = None
+            dispatch._GATED_REFERENCE_TOKENS = None
+            dispatch._GATED_FALLBACKS = None
+            grouped._IDENTITY = {'module': 'm', 'token': 'aa', 'consumer': 'bb'}
+            ok = Mock(returncode=0, stdout='{"flags":["true"],"fallbacks":["none"]}', stderr='')
+            with patch('subprocess.run', return_value=ok) as run:
+                dispatch._significant_graph_groups(groups)
+                dispatch._significant_graph_groups(groups)
+                self.assertEqual(run.call_count, 1)
+                dispatch._significant_graph_groups([[('label', 'other', 'source')]])
+                self.assertEqual(run.call_count, 2)
+                dispatch._declaration_tokens(tokens)
+                dispatch._declaration_tokens(tokens)
+                dispatch._tokens_then_identity(tokens)
+                self.assertEqual(run.call_count, 3)
+                flags, chosen = dispatch._declaration_fallbacks(fallbacks)
+                self.assertEqual(flags, ['true'])
+                self.assertEqual(chosen, ['none'])
+                dispatch._declaration_fallbacks(fallbacks)
+                self.assertEqual(run.call_count, 4)
+            failed = Mock(returncode=1, stdout='', stderr='dispatch premise changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'dispatch premise changed'):
+                    dispatch._significant_graph_groups([[('bad', 'bad', 'bad')]])
+                with self.assertRaisesRegex(ValueError, 'dispatch premise changed'):
+                    dispatch._significant_graph_groups([[('bad', 'bad', 'bad')]])
+                with self.assertRaisesRegex(ValueError, 'dispatch premise changed'):
+                    dispatch._declaration_tokens([('bad', 'f', [], 'aa', 'label')])
+                with self.assertRaisesRegex(ValueError, 'dispatch premise changed'):
+                    dispatch._declaration_tokens([('bad', 'f', [], 'aa', 'label')])
+                with self.assertRaisesRegex(ValueError, 'dispatch premise changed'):
+                    dispatch._declaration_fallbacks([('bad', 'f', [], 'bad', 'path')])
+                with self.assertRaisesRegex(ValueError, 'dispatch premise changed'):
+                    dispatch._declaration_fallbacks([('bad', 'f', [], 'bad', 'path')])
+                self.assertEqual(run.call_count, 6)
+            with patch('subprocess.run', return_value=ok) as run:
+                dispatch._significant_graph_groups([[('label', 'other', 'source')]])
+                dispatch._declaration_tokens(tokens)
+                dispatch._declaration_fallbacks(fallbacks)
+                self.assertEqual(run.call_count, 0)
+        finally:
+            dispatch._GATED_GRAPH_GROUPS = saved_graphs
+            dispatch._GATED_REFERENCE_TOKENS = saved_tokens
+            dispatch._GATED_FALLBACKS = saved_fallbacks
+            grouped._IDENTITY = saved_identity
+
+
 class SelectionCatalogCacheTests(unittest.TestCase):
     def test_the_same_selection_texts_skip_the_second_check(self):
         from unittest.mock import Mock, patch
