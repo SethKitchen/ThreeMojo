@@ -15,6 +15,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
+from tools._migration_records import migration_records
 from tools._python_json import PY_INT, PyJson
 from tools._sha256 import sha256_hex
 
@@ -138,6 +139,30 @@ def speed_parser_paths() raises -> String:
     doc.set(spec, "tests", tests)
     doc.root = spec
     return doc.dumps()
+
+
+def speed_paths_with_migration() raises -> String:
+    """Read the speed paths, then the migration record.
+
+    Returns:
+        JSON with `paths` and `migration`. `paths` is first.
+
+    Raises:
+        Error: The path list or the migration record cannot be read. The
+            paths are read before the migration record.
+    """
+    var paths = speed_parser_paths()
+    var records = PyJson.parse(migration_records())
+    var speed = records.at(records.root, "speed")
+    return (
+        '{"paths":'
+        + paths
+        + ',"migration":{"path":"'
+        + records.text(records.at(speed, "path"))
+        + '","sha":"'
+        + records.text(records.at(speed, "sha"))
+        + '"}}'
+    )
 
 
 def _usage():

@@ -7,8 +7,12 @@
 
 from std.testing import TestSuite, assert_equal
 
+from tools._migration_records import migration_records
 from tools._python_json import PyJson
-from tools.carla_speed_gate import speed_parser_paths
+from tools.carla_speed_gate import (
+    speed_parser_paths,
+    speed_paths_with_migration,
+)
 
 
 def test_the_module_precedes_the_two_tests() raises:
@@ -25,6 +29,29 @@ def test_the_module_precedes_the_two_tests() raises:
     )
     assert_equal(
         doc.text(doc.item(tests, 1)), "tests/test_carla_speed_xml_lexical.mojo"
+    )
+
+
+def test_the_paths_are_read_before_the_migration_record() raises:
+    """The module paths stay ahead of the speed migration path."""
+    var text = speed_paths_with_migration()
+    var doc = PyJson.parse(text)
+    var paths = PyJson.parse(speed_parser_paths())
+    var records = PyJson.parse(migration_records())
+    var speed = records.at(records.root, "speed")
+    var migration = doc.at(doc.root, "migration")
+    assert_equal(text.find('{"paths":'), 0)
+    assert_equal(
+        doc.text(doc.at(doc.at(doc.root, "paths"), "module")),
+        paths.text(paths.at(paths.root, "module")),
+    )
+    assert_equal(
+        doc.text(doc.at(migration, "path")),
+        records.text(records.at(speed, "path")),
+    )
+    assert_equal(
+        doc.text(doc.at(migration, "sha")),
+        records.text(records.at(speed, "sha")),
     )
 
 

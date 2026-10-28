@@ -6,11 +6,17 @@
 """Print the speed-parser module and tests.
 
     carla_speed_parser_paths
+    carla_speed_parser_paths --with-migration
+
+`--with-migration` reads the module paths before the migration record.
 """
 
 from std.sys import argv, exit, stderr
 
-from tools.carla_speed_gate import speed_parser_paths
+from tools.carla_speed_gate import (
+    speed_parser_paths,
+    speed_paths_with_migration,
+)
 
 
 def _usage():
@@ -25,7 +31,15 @@ def main() raises:
     Raises:
         Error: The command is invalid, or the lists cannot be written.
     """
-    if len(argv()) != 1:
+    var arguments = argv()
+    if len(arguments) == 2 and arguments[1] == "--with-migration":
+        try:
+            print(speed_paths_with_migration(), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) != 1:
         _usage()
     try:
         print(speed_parser_paths(), end="")

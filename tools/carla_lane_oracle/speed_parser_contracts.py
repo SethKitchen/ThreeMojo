@@ -204,12 +204,47 @@ def _record_paths():
     return _RECORD_PATHS
 
 
+def _paths_with_migration():
+    """Return the speed paths and the migration record."""
+    import json
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_speed_parser_paths',
+         '--with-migration'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
+def _ensure_inputs():
+    """Bind the speed paths and the migration path before a source read."""
+    global _PATHS, MIGRATION, MIGRATION_SHA256, MODULE, TESTS
+    if _PATHS is not None and 'MIGRATION' in globals() and MIGRATION is not None:
+        MODULE = _PATHS['module']
+        TESTS = tuple(_PATHS['tests'])
+        return
+    data = _paths_with_migration()
+    if _PATHS is None:
+        _PATHS = data['paths']
+    MODULE = _PATHS['module']
+    TESTS = tuple(_PATHS['tests'])
+    if not ('MIGRATION' in globals() and MIGRATION is not None):
+        MIGRATION = data['migration']['path']
+        MIGRATION_SHA256 = data['migration']['sha']
+
+
 def verify(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
-    _ensure_paths()
+    _ensure_inputs()
     root = Path(root)
-    _ensure_migration()
     raw = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes(), _operation=_operation)
     accepted_path = _record_paths()['accepted']
     accepted = _typed_source.historical_bytes(root, root/accepted_path, (root/accepted_path).read_bytes(), _operation=_operation)

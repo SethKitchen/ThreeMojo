@@ -62,6 +62,8 @@ It compares that grouped-table token digest in one check.
 
 It keeps the speed-limit module and its two correctness tests.
 
+It reads those paths before the migration record in one check.
+
 It keeps the accepted successor record path.
 
 It keeps the speed-parser contract prefix.
