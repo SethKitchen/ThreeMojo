@@ -7,6 +7,7 @@
 
 from std.testing import TestSuite, assert_equal, assert_raises
 
+from tests._python_expr import checked_heading_result
 from tools._heading_result import _dump, heading_result
 from tools._python_json import PyJson
 
@@ -43,6 +44,28 @@ def test_json_text_keeps_false_and_null() raises:
     """False, null, and a list use Python's JSON spellings."""
     var doc = PyJson.parse('{"ok":false,"items":[1,null]}')
     assert_equal(_dump(doc, doc.root), '{"ok":false,"items":[1,null]}')
+
+
+def test_a_heading_graph_fails_before_the_result() raises:
+    """A changed heading graph is reported before the result is built."""
+    var payload = (
+        '{"fresh":"def f():\\n    return 1\\n",'
+        + '"eligibility":"def g():\\n    return 1\\n",'
+        + '"consumers":['
+        + '{"file":"a.mojo","name":"a","text":"def a():\\n    return 1\\n"},'
+        + '{"file":"b.mojo","name":"b","text":"def b():\\n    return 1\\n"},'
+        + '{"file":"c.mojo","name":"c","text":"def c():\\n    return 1\\n"}]}'
+    )
+    with assert_raises(
+        contains="missing or ambiguous function: _spiral_expression"
+    ):
+        _ = checked_heading_result(payload)
+
+
+def test_a_missing_heading_consumer_fails_before_the_result() raises:
+    """The consumer list is required before the result count is written."""
+    with assert_raises(contains="KeyError: 'consumers'"):
+        _ = checked_heading_result('{"fresh":"def f():\\n    return 1\\n"}')
 
 
 def main() raises:

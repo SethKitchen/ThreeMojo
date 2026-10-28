@@ -25,6 +25,7 @@ from tests._python_tokens import (
     python_syntax_json,
     syntax_tree_source,
 )
+from tools._heading_result import heading_result
 from tools._python_float import parse_float
 from tools._sum2_plan import sum2_plan
 from tools._python_json import MISSING, PY_LIST, PY_STR, PyJson, py_equal
@@ -3103,3 +3104,21 @@ def heading_sources(payload: String) raises:
         doc.text(doc.at(third, "file")),
         doc.text(doc.at(root, "eligibility")),
     )
+
+
+def checked_heading_result(payload: String) raises -> String:
+    """Check the heading graph, then return the correspondence result.
+
+    Args:
+        payload: JSON with `fresh`, `consumers`, and `eligibility`.
+
+    Returns:
+        The result JSON in historical field order.
+
+    Raises:
+        Error: A heading graph changed, or a consumer cannot be read.
+    """
+    heading_sources(payload)
+    var doc = PyJson.parse(payload)
+    var count = doc.length(doc.at(doc.root, "consumers"))
+    return heading_result('{"consumers":' + String(count) + "}")

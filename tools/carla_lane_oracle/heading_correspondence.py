@@ -49,60 +49,6 @@ def __getattr__(name):
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
-def _heading_graph(fresh, consumers, eligibility):
-    """Compare the fresh heading graph with each stored consumer."""
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps({
-        'fresh': fresh,
-        'consumers': [
-            {'file': filename, 'name': name, 'text': text}
-            for filename, name, text in consumers
-        ],
-        'eligibility': eligibility,
-    }, separators=(',', ':'))
-    with tempfile.TemporaryDirectory(prefix='heading-graph-') as directory:
-        path = Path(directory) / 'payload.json'
-        path.write_text(payload)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--heading', str(path)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-
-
-def _heading_result(consumers):
-    """Return the heading correspondence result for `consumers` entries."""
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps({'consumers': consumers}, separators=(',', ':'))
-    with tempfile.TemporaryDirectory(prefix='heading-result-') as directory:
-        path = Path(directory) / 'result.json'
-        path.write_text(payload)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_heading_result',
-             str(path)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    return json.loads(result.stdout)
-
-
 _CARLA_PACKAGE = None
 
 
@@ -128,6 +74,37 @@ def _carla_package():
     return _CARLA_PACKAGE
 
 
+def _checked_heading(fresh, consumers, eligibility):
+    """Check the heading graph, then return the correspondence result."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    payload = json.dumps({
+        'fresh': fresh,
+        'consumers': [
+            {'file': filename, 'name': name, 'text': text}
+            for filename, name, text in consumers
+        ],
+        'eligibility': eligibility,
+    }, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='heading-checked-') as directory:
+        path = Path(directory) / 'payload.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_heading_result',
+             '--checked', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def verify(root, *, _operation=None):
     path = root / _carla_package()
     package = _carla_package()
@@ -136,5 +113,4 @@ def verify(root, *, _operation=None):
     for filename, name in _consumers().items():
         consumers.append((filename, name, _typed_source.historical_text(root, path/filename, source._observe_text(root, package + '/' + filename, (path/filename).read_text(), _operation=_operation), _operation=_operation)))
     eligibility = _typed_source.historical_text(root, path/'spiral_moment_proof.mojo', source._observe_text(root, package + '/spiral_moment_proof.mojo', (path/'spiral_moment_proof.mojo').read_text(), _operation=_operation), _operation=_operation)
-    _heading_graph(fresh, consumers, eligibility)
-    return _heading_result(len(_consumers()))
+    return _checked_heading(fresh, consumers, eligibility)

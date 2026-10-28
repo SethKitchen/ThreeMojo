@@ -274,6 +274,8 @@ It reads each top-level helper import in source order.
 
 It compares the fresh heading graph with each stored consumer.
 
+It checks the fresh heading graph and returns the consumer count in one check.
+
 It returns the heading consumer count after that comparison.
 
 It returns the runtime-support result after the heading, optional-runtime, and Sum2 checks.
