@@ -41,6 +41,46 @@ def test_an_unlisted_selection_module_is_refused() raises:
         )
 
 
+def test_a_missing_name_uses_the_roundoff_envelope() raises:
+    """The path chooses the envelope name when the payload omits it."""
+    var before = String("def _try_spiral_roundoff_envelope():\n    return 2\n")
+    var payload = String(
+        '{"path":"extensions/carla/curve_roundoff.mojo","names":["extensions/carla/curve_roundoff.mojo"],'
+        + '"record_names":["extensions/carla/curve_roundoff.mojo"],'
+        + '"message":"unlisted","body_message":"body changed",'
+        + '"text":"def _try_spiral_roundoff_envelope():\\n    return 1\\n",'
+        + '"after":"def _try_spiral_roundoff_envelope():\\n    return 1\\n",'
+        + '"before":"def _try_spiral_roundoff_envelope():\\n    return 2\\n",'
+        + '"token":"'
+        + token_sha256(before)
+        + '"}'
+    )
+    assert_equal(selection_predecessor(payload), before)
+
+
+def test_a_grouped_path_uses_the_grouped_envelope() raises:
+    """A grouped proof path chooses the grouped envelope name."""
+    var before = String(
+        "def _try_spiral_grouped_roundoff_envelope():\n    return 2\n"
+    )
+    var payload = String(
+        '{"path":"extensions/carla/spiral_grouped_roundoff_proof.mojo",'
+        + '"names":["extensions/carla/spiral_grouped_roundoff_proof.mojo"],'
+        + '"record_names":["extensions/carla/spiral_grouped_roundoff_proof.mojo"],'
+        + '"message":"unlisted","body_message":"body changed",'
+        + '"text":"def _try_spiral_grouped_roundoff_envelope():\\n    return'
+        ' 1\\n",'
+        + '"after":"def _try_spiral_grouped_roundoff_envelope():\\n    return'
+        ' 1\\n",'
+        + '"before":"def _try_spiral_grouped_roundoff_envelope():\\n    return'
+        ' 2\\n",'
+        + '"token":"'
+        + token_sha256(before)
+        + '"}'
+    )
+    assert_equal(selection_predecessor(payload), before)
+
+
 def main() raises:
     """Run the selection predecessor tests."""
     TestSuite.discover_tests[__functions_in_module()]().run()

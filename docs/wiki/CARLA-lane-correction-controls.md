@@ -470,6 +470,8 @@ It rebuilds that selection predecessor in one check.
 
 It chooses the grouped roundoff envelope name from the module path.
 
+It chooses that envelope name while rebuilding the selection predecessor.
+
 `tools/carla_ideal_gate.mojo` checks the historical ideal source digest and the projected graph digest.
 
 It keeps the legacy digest and the projected digest.

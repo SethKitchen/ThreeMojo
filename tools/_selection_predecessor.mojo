@@ -16,7 +16,8 @@ from tests._python_tokens import (
     significant_json,
 )
 from tools._moment_guards import require_member, require_name_set
-from tools._python_json import PyJson
+from tools._python_json import MISSING, PyJson
+from tools._roundoff_name import roundoff_envelope_name
 from tools.carla_selection_record_gate import selection_restored
 
 
@@ -109,7 +110,9 @@ def selection_predecessor(payload: String) raises -> String:
 
     Args:
         payload: JSON with `path`, `names`, `record_names`, `message`,
-            `body_message`, `name`, `text`, `after`, `before`, and `token`.
+            `body_message`, `text`, `after`, `before`, and `token`.
+            `name` is optional. When it is absent, the roundoff envelope
+            name is chosen from `path`.
 
     Returns:
         The producer text after the recorded function replaces the live one.
@@ -133,7 +136,10 @@ def selection_predecessor(payload: String) raises -> String:
         )
     )
     var text = doc.text(doc.at(doc.root, "text"))
-    var name = doc.text(doc.at(doc.root, "name"))
+    var name_node = doc.get(doc.root, "name")
+    var name = roundoff_envelope_name(path)
+    if name_node != MISSING:
+        name = doc.text(name_node)
     var owners = List[String]()
     var bounds = PyJson.parse(declaration_bounds_json(text, name, owners))
     var body = bounds.text(bounds.at(bounds.root, "text"))

@@ -335,7 +335,6 @@ def predecessor_text(root, path, *, _operation=None):
     _gate_record(payload)
     record=json.loads(payload,object_pairs_hook=source_contracts.unique_keys)
     item=record['modules'][path]
-    name=_envelope_name(path)
     text=_producer_text(root,path, _operation=_operation)
     return _selection_predecessor({
         'path': path,
@@ -343,7 +342,6 @@ def predecessor_text(root, path, *, _operation=None):
         'record_names': list(record['modules']),
         'message': _selection_labels()['predecessor'],
         'body_message': _selection_labels()['body'],
-        'name': name,
         'text': text,
         'after': item['after_complete_function'],
         'before': item['before_complete_function'],
