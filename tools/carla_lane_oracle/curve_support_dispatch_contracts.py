@@ -480,23 +480,43 @@ def verify_premises(root, *, _operation=None):
     fallbacks = _premise_fallbacks([
         (matched_flags[index] == 'true', item['path'], item['name'], tuple(item['owner']))
         for index, (item, _physical_text, _text) in enumerate(loaded)])
-    for index, (item, physical_text, _text) in enumerate(loaded):
+    seed_matched = {}
+    if any(flag == labels['seed'] for flag in fallbacks):
+        if __package__:
+            from . import seed_count_contracts as seed_count
+        else:
+            import seed_count_contracts as seed_count
+        seed_rows = []
+        for index, (item, physical_text, _text) in enumerate(loaded):
+            if fallbacks[index] != labels['seed']:
+                continue
+            try:
+                predecessor = seed_count.reviewed_text(
+                    root, item['path'], physical_text, **operation_args)
+            except (ValueError, OSError) as error:
+                require(False, labels['seed_message'] + str(error))
+            seed_rows.append((index, item, predecessor))
+        try:
+            declared_seeds = _declarations([{
+                'source': predecessor,
+                'name': item['name'],
+                'owner': [],
+            } for _index, item, predecessor in seed_rows])
+            seed_docs = _significant_documents([
+                text for position, (_index, item, _predecessor) in enumerate(seed_rows)
+                for text in (declared_seeds[position], item['source'])])
+            seed_flags = _match_flags([
+                (seed_docs[position * 2], seed_docs[position * 2 + 1])
+                for position in range(len(seed_rows))])
+        except (ValueError, OSError) as error:
+            require(False, labels['seed_message'] + str(error))
+        for position, (index, _item, _predecessor) in enumerate(seed_rows):
+            seed_matched[index] = seed_flags[position] == 'true'
+    for index, (item, _physical_text, _text) in enumerate(loaded):
         matched = matched_flags[index] == 'true'
         fallback = fallbacks[index]
         if fallback == labels['seed']:
-            try:
-                if __package__:
-                    from . import seed_count_contracts as seed_count
-                else:
-                    import seed_count_contracts as seed_count
-                predecessor = seed_count.reviewed_text(root, item['path'], physical_text, **operation_args)
-                actual = _declaration(predecessor, item['name'], ())
-                current_doc, recorded_doc = _significant_documents([
-                    actual, item['source']])
-                matched = _dispatch_query('--match', {
-                    'actual': current_doc, 'expected': recorded_doc}) == 'true'
-            except (ValueError, OSError) as error:
-                require(False, labels['seed_message'] + str(error))
+            matched = seed_matched[index]
         if fallback == labels['lane']:
             try:
                 if __package__:

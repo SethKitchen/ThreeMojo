@@ -142,6 +142,8 @@ It compares every dispatch premise text in one check.
 
 It chooses every dispatch premise fallback in one check.
 
+It checks every Map seed premise in one check.
+
 It reads every dispatch reference declaration in one check.
 
 It selects the Map seed or the lane predecessor after that comparison.
