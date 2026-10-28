@@ -413,6 +413,10 @@ It reads those declarations and checks the arc layout in one check.
 
 It lists the executable names checked by the optional-runtime contract.
 
+It lists the production Mojo files for the containing-model scan in one check.
+It keeps the reviewed path order.
+Each kept file is still read.
+
 It removes an argument move sigil before that contract parses a function body.
 
 It returns the top-level statements used by the spiral-moment and selection contracts.

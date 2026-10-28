@@ -1374,6 +1374,60 @@ class RestoredScopeTests(unittest.TestCase):
                 )
 
 
+class ProductionScanTests(unittest.TestCase):
+    def test_the_scan_matches_the_sorted_path_walk(self):
+        from unittest.mock import patch
+        from tools.carla_lane_oracle import optional_runtime_contracts as optional
+        roots = {
+            'tests', 'examples', 'bench', 'tools', 'docs', 'assets', 'out',
+            'coverage', 'cache', 'build', 'node_modules',
+        }
+        directory = tempfile.TemporaryDirectory(prefix='production-scan-')
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        files = [
+            'a/b.mojo', 'a.mojo', 'extensions/ok.mojo',
+            'extensions/carla/lane.mojo', 'extensions/note.txt',
+            'tools/skip.mojo', '.hidden/h.mojo', 'extensions/.secret/no.mojo',
+            '.secret.mojo',
+        ]
+        for relative in files:
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('def f():\n    return 1\n')
+        (root / 'extensions' / 'alias').symlink_to(root / 'tools', target_is_directory=True)
+        found = [
+            path.relative_to(root).as_posix()
+            for path in sorted(root.rglob('*.mojo'))
+        ]
+        kept = []
+        for relative in found:
+            parts = relative.split('/')
+            if parts[0] in roots or any(part.startswith('.') for part in parts):
+                continue
+            kept.append(relative)
+        self.assertEqual(optional._production_scan(root), kept)
+        reads = []
+
+        def read_text(self, *args, **kwargs):
+            reads.append(self.as_posix())
+            return 'def f():\n    return 1\n'
+
+        with patch.object(Path, 'read_text', read_text), patch.object(
+            optional, '_mentioned_consumers', lambda items: None
+        ), patch.object(
+            optional._typed_source, 'historical_text',
+            lambda root, path, text, _operation=None: text,
+        ), patch.object(
+            optional.source, '_observe_text',
+            lambda root, path, text, _operation=None: text,
+        ):
+            optional.verify_no_containing_model_consumers(root)
+        self.assertEqual(
+            reads, [(root / relative).as_posix() for relative in kept]
+        )
+
+
 class DistanceGateCacheTests(unittest.TestCase):
     def test_the_same_spiral_domain_texts_skip_the_second_gate(self):
         from unittest.mock import Mock, patch

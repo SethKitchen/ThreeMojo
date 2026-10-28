@@ -7,16 +7,22 @@
 
     carla_production_paths PATH
     carla_production_paths --reviewed PATHS COUNT
+    carla_production_paths --scan ROOT
 
 `PATH` is JSON with `roots` and `paths`. `--reviewed` reads the
 non-production roots first. `PATHS` is a JSON list of relative paths.
 `COUNT` is the number of paths. The program prints one boolean per path.
+`--scan` lists the kept Mojo files under `ROOT` in path-part order.
 """
 
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._production_paths import production_paths, reviewed_production_paths
+from tools._production_paths import (
+    production_paths,
+    production_scan,
+    reviewed_production_paths,
+)
 
 
 def _usage():
@@ -58,6 +64,13 @@ def main() raises:
         Error: The command is invalid, or the payload is missing a field.
     """
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--scan":
+        try:
+            print(production_scan(arguments[2]), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 4 and arguments[1] == "--reviewed":
         try:
             var paths = Path(arguments[2]).read_text()

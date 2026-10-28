@@ -432,16 +432,31 @@ def _model_mentions(texts):
     return json.loads(result.stdout)
 
 
+def _production_scan(root):
+    """Return the kept production Mojo paths in path-part order."""
+    import json
+    import os
+    import subprocess
+    from pathlib import Path
+    repo = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(repo / 'tools' / 'tool.sh'), mojo,
+         'carla_production_paths', '--scan', str(root)],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def verify_no_containing_model_consumers(root, *, _operation=None):
-    found = []
-    for path in sorted(root.rglob('*.mojo')):
-        found.append((path, path.relative_to(root).as_posix()))
-    keep = _production_paths([relative for _, relative in found])
     texts = []
     relatives = []
-    for (path, relative), kept in zip(found, keep):
-        if not kept:
-            continue
+    for relative in _production_scan(root):
+        path = root / relative
         text = _typed_source.historical_text(root, path, source._observe_text(root, (path).relative_to(root).as_posix(), path.read_text(), _operation=_operation), _operation=_operation)
         texts.append(text)
         relatives.append(relative)
