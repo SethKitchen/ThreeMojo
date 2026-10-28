@@ -384,7 +384,7 @@ def test_lint_tools_and_native_gates_have_explicit_conditions() raises:
     var jobs = _jobs()
     for name in ["lint", "lint-macos"]:
         var job = jobs[name]
-        assert_true(_has_line(job, "    timeout-minutes: 120"), name)
+        assert_true(_has_line(job, "    timeout-minutes: 240"), name)
         assert_equal(job.find("test-tools"), -1)
         for pair in [
             ("coverage_tools", "test-coverage-tool"),
