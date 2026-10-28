@@ -60,7 +60,9 @@ def _scalar(text,name):
         raise ValueError(_selection_labels()['scalar']) from error
     return moments.fraction_of_word(moments.decimal_word(literal))
 
-def verify_text(modules, interval, trig):
+def verify_text(modules, interval, trig, *, _then_labels=False):
+    """Check the selection producers, and return the labels when asked."""
+    global _SELECTION_LABELS
     import json
     import os
     import subprocess
@@ -72,19 +74,25 @@ def verify_text(modules, interval, trig):
     }, separators=(',', ':'))
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    mode = '--catalog-labels' if _then_labels else '--catalog'
     with tempfile.TemporaryDirectory(prefix='selection-gate-') as directory:
         path = Path(directory) / 'selection.json'
         path.write_text(payload)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_selection_gate',
-             '--catalog', str(path)],
+             mode, str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    if not _then_labels:
+        return parsed
+    if _SELECTION_LABELS is None:
+        _SELECTION_LABELS = parsed['labels']
+    return parsed['record']
 
 def _producer_text(root, path, *, _operation=None):
     """Admit only the exact current Y successor before a selection view."""
@@ -109,7 +117,7 @@ def _producer_text(root, path, *, _operation=None):
     return text
 
 
-def verify(root, *, _operation=None):
+def verify(root, *, _operation=None, _then_labels=False):
     root=Path(root)
     if _operation is not None:
         if __package__:
@@ -125,7 +133,8 @@ def verify(root, *, _operation=None):
     if _operation is not None:
         trig = _typed_source.historical_text(root, 'extensions/carla/curve_trig.mojo', full_audit._observe_text(
             root, 'extensions/carla/curve_trig.mojo', trig, _operation=_operation), _operation=_operation)
-    return verify_text(modules, interval, trig)
+    return verify_text(
+        modules, interval, trig, _then_labels=_then_labels)
 
 
 def _gate_record(payload):
@@ -319,7 +328,11 @@ def predecessor_text(root, path, *, _operation=None):
 # #333 explicit historical provenance views; current inputs remain operation-owned.
     import json
     root=Path(root)
-    verify(root, _operation=_operation)
+    verify(
+        root,
+        _operation=_operation,
+        _then_labels=_SELECTION_LABELS is None,
+    )
     contract = _selection_labels()['contract']
     payload=_typed_source.historical_bytes(root, root/contract, (root/contract).read_bytes(), _operation=_operation)
     _gate_record(payload)

@@ -8,10 +8,12 @@
     carla_selection_gate --grouped PATH --roundoff PATH --interval PATH --trig PATH
     carla_selection_gate --checked PATH
     carla_selection_gate --catalog PATH
+    carla_selection_gate --catalog-labels PATH
 
 The program checks the texts it is given. It does not roll a successor
 back to a historical source. The caller does that before it starts the
 program. `--catalog` reads the selection labels before the producer paths.
+`--catalog-labels` returns those labels after that producer check.
 """
 
 from std.pathlib import Path
@@ -215,6 +217,26 @@ def selection_catalog_checked(payload: String) raises -> String:
     )
 
 
+def selection_catalog_then_labels(payload: String) raises -> String:
+    """Check the selection producers, then return the selection labels.
+
+    Args:
+        payload: JSON with `modules`, `interval`, and `trig`, as the
+            catalog check reads them.
+
+    Returns:
+        JSON with `record` and `labels`. The producer check runs before
+        the labels are returned.
+
+    Raises:
+        Error: The producer names differ, or a token or phase constant
+            changed. The producer check runs before the labels are
+            returned.
+    """
+    var record = selection_catalog_checked(payload)
+    return '{"record":' + record + ',"labels":' + selection_labels() + "}"
+
+
 def selection_producers() -> String:
     """Return the two selection producer digests in reviewed order.
 
@@ -237,6 +259,7 @@ def _usage():
             "usage: carla_selection_gate --grouped PATH --roundoff PATH"
             " --interval PATH --trig PATH | carla_selection_gate --checked PATH"
             " | carla_selection_gate --catalog PATH"
+            " | carla_selection_gate --catalog-labels PATH"
         ),
         file=stderr,
     )
@@ -261,6 +284,16 @@ def main() raises:
         try:
             print(
                 selection_catalog_checked(Path(arguments[2]).read_text()),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--catalog-labels":
+        try:
+            print(
+                selection_catalog_then_labels(Path(arguments[2]).read_text()),
                 end="",
             )
         except error:

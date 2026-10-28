@@ -36,6 +36,8 @@ It checks the producer names before the selection tokens in one check.
 
 It reads the selection labels before the producer paths in one check.
 
+It returns the selection labels after that producer check in one check.
+
 It restores one selection function inside its line span.
 
 It keeps the selection contract path and the predecessor messages.
