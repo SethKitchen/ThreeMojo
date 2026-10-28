@@ -515,6 +515,37 @@ def rounded_node_sums_payload(payload: String) raises -> String:
     return out.dumps()
 
 
+def rounded_node_sums_from_decimals(payload: String) raises -> String:
+    """Spell the stored nodes and weights, then round the node sums.
+
+    Args:
+        payload: JSON with `nodes` and `weights`. Each value is a list of
+            unsigned decimal binary64 encodings.
+
+    Returns:
+        A JSON list of unsigned decimal encodings for `1 + node`.
+
+    Raises:
+        Error: A decimal word is malformed, a list does not hold five
+            words, or the weights do not keep the zeroth moment. The
+            nodes are spelled before the weights, and both are spelled
+            before the sums are rounded.
+    """
+    var doc = PyJson.parse(payload)
+    var nodes = PyJson.parse(
+        hex_words_json(doc.subtree(doc.at(doc.root, "nodes")).dumps())
+    )
+    var weights = PyJson.parse(
+        hex_words_json(doc.subtree(doc.at(doc.root, "weights")).dumps())
+    )
+    var gate = PyJson()
+    var root = gate.new_dict()
+    gate.set(root, "nodes", gate.adopt(nodes, nodes.root))
+    gate.set(root, "weights", gate.adopt(weights, weights.root))
+    gate.root = root
+    return hex_integers_json(rounded_node_sums_payload(gate.dumps()))
+
+
 def _fraction_text(value: Fraction) -> String:
     """Return `n/d`, or `n` when the denominator is one.
 

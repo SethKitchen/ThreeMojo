@@ -17,6 +17,7 @@ from tools._spiral_moment_words import (
     bracket,
     decimal_integers_json,
     rounded_array_words,
+    rounded_node_sums_from_decimals,
     decimal_word,
     fraction_of_word,
     fraction_texts,
@@ -178,6 +179,55 @@ def test_one_table_word_is_read_as_an_integer() raises:
     assert_equal(
         result.text(result.item(result.root, 0)), "4607182418800017408"
     )
+
+
+def _decimal_sums(
+    node: String, weight: String, node_count: Int, weight_count: Int
+) raises -> String:
+    """Return decimal node and weight lists.
+
+    Args:
+        node: The node word.
+        weight: The weight word.
+        node_count: How many node words to write.
+        weight_count: How many weight words to write.
+
+    Returns:
+        JSON with `nodes` and `weights`.
+
+    Raises:
+        Error: The payload cannot be written.
+    """
+    var doc = PyJson()
+    var root = doc.new_dict()
+    var nodes = doc.new_list()
+    var index = 0
+    while index < node_count:
+        doc.append(nodes, doc.new_str(node))
+        index += 1
+    var weights = doc.new_list()
+    index = 0
+    while index < weight_count:
+        doc.append(weights, doc.new_str(weight))
+        index += 1
+    doc.set(root, "nodes", nodes)
+    doc.set(root, "weights", weights)
+    doc.root = root
+    return doc.dumps()
+
+
+def test_a_bad_weight_word_fails_before_the_sum_shape() raises:
+    """A malformed weight fails before the five-word shape is checked."""
+    with assert_raises(contains="invalid UInt64 word"):
+        _ = rounded_node_sums_from_decimals(_decimal_sums("0", "nope", 5, 1))
+
+
+def test_spelled_words_still_check_the_zeroth_moment() raises:
+    """Five zero nodes and five zero weights still refuse the weight sum."""
+    with assert_raises(
+        contains="stored zeroth moment must not be normalized to one"
+    ):
+        _ = rounded_node_sums_from_decimals(_decimal_sums("0", "0", 5, 5))
 
 
 def test_a_missing_array_fails_before_rounding() raises:

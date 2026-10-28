@@ -649,14 +649,15 @@ def rounded_node_sums(nodes, weights):
 
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps(
-        {'nodes': hex_words(nodes), 'weights': hex_words(weights)},
-        separators=(',', ':'))
+    payload = json.dumps({
+        'nodes': [str(word) for word in nodes],
+        'weights': [str(word) for word in weights],
+    }, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='node-sums-') as directory:
         path = Path(directory) / 'words.json'
         path.write_text(payload)
         result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_gate',
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_stored_words',
              '--node-sums', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
@@ -664,7 +665,7 @@ def rounded_node_sums(nodes, weights):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return hex_integers(json.loads(result.stdout))
+    return [int(item) for item in json.loads(result.stdout)]
 
 
 def sha256_texts(texts):
