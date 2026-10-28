@@ -33,8 +33,7 @@ def verify_text(text, *, root=None, _operation=None):
             checked = full_audit.reviewed_text(actual_root, MODULE, text, _operation=_operation)
         except (ValueError, OSError) as error:
             raise ValueError('Reviewed budget admission, routing or arithmetic changed') from error
-    _gate_token(checked, EXPECTED)
-    _gate_module_span(text)
+    _gate_admission(checked, text, EXPECTED)
     return {'status':'PASS','source_token_sha256':EXPECTED,'intervening_counter_uses':0,'retained_capacity_and_debit':True}
 
 def verify(root, *, _operation=None):
@@ -61,19 +60,23 @@ def _gate(payload):
         raise ValueError(message)
 
 
-def _gate_module_span(text):
-    """Select the capture function, then refuse a counter in its gap."""
+def _gate_admission(checked, source, token):
+    """Check the admission token, then the capture-function gap."""
+    import json
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='envelope-module-span-') as directory:
-        target = Path(directory) / 'module.mojo'
-        target.write_text(text)
+    payload = json.dumps({
+        'checked': checked, 'source': source, 'token': token,
+    }, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='envelope-admission-') as directory:
+        target = Path(directory) / 'admission.json'
+        target.write_text(payload)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_envelope_gate',
-             '--module-span', str(target)],
+             '--admission', str(target)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -98,26 +101,6 @@ def _gate_module_successor(source, expected):
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_envelope_gate',
              '--module-successor', str(target)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-
-
-def _gate_token(text, expected):
-    import os
-    import subprocess
-    import tempfile
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='envelope-token-') as directory:
-        target = Path(directory) / 'source.mojo'
-        target.write_text(text)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_envelope_gate',
-             '--source', str(target), '--token', expected],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()

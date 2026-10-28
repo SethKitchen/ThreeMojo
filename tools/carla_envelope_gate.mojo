@@ -11,6 +11,7 @@
     carla_envelope_gate --module-span PATH
     carla_envelope_gate --successor PATH
     carla_envelope_gate --module-successor PATH
+    carla_envelope_gate --admission PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -19,6 +20,7 @@ the two capacity checks. `--module-span` selects that function from a
 module first. `--successor` reads `actual` and `expected` function text
 and requires the same significant tokens. `--module-successor` selects
 the live function from `source` before that comparison.
+`--admission` checks the admission token, then the capture-function gap.
 """
 
 from std.pathlib import Path
@@ -113,6 +115,27 @@ def envelope_successor(payload: String) raises:
         raise Error("Envelope budget successor function changed")
 
 
+def envelope_admission(payload: String) raises:
+    """Check the admission token, then the capture-function gap.
+
+    Args:
+        payload: JSON with `checked`, the admission source, `source`, the
+            module that declares the capture function, and `token`, the
+            required digest.
+
+    Raises:
+        Error: A field is absent, the token digest changed, the function
+            cannot be read, or a counter name appears in the gap. The token
+            is checked before the gap.
+    """
+    var doc = PyJson.parse(payload)
+    envelope_token(
+        doc.text(doc.at(doc.root, "checked")),
+        doc.text(doc.at(doc.root, "token")),
+    )
+    envelope_module_span(doc.text(doc.at(doc.root, "source")))
+
+
 def _capture_function(source: String) raises -> String:
     """Return `_try_lane_envelope_capture` from one module.
 
@@ -166,7 +189,7 @@ def _usage():
         (
             "usage: carla_envelope_gate --migration PATH"
             " | --source PATH --token HEX | --span PATH | --module-span PATH"
-            " | --successor PATH | --module-successor PATH"
+            " | --successor PATH | --module-successor PATH | --admission PATH"
         ),
         file=stderr,
     )
@@ -186,6 +209,7 @@ def main() raises:
     var successor = String("")
     var module_span = String("")
     var module_successor = String("")
+    var admission = String("")
     var arguments = argv()
     var index = 1
     while index < len(arguments):
@@ -198,6 +222,7 @@ def main() raises:
             or word == "--successor"
             or word == "--module-span"
             or word == "--module-successor"
+            or word == "--admission"
         ):
             if index + 1 >= len(arguments):
                 _usage()
@@ -214,6 +239,8 @@ def main() raises:
                 module_span = value
             elif word == "--module-successor":
                 module_successor = value
+            elif word == "--admission":
+                admission = value
             else:
                 token = value
             index += 2
@@ -232,6 +259,8 @@ def main() raises:
         modes += 1
     if module_successor.byte_length() > 0:
         modes += 1
+    if admission.byte_length() > 0:
+        modes += 1
     if modes != 1:
         _usage()
     if source.byte_length() > 0 and token.byte_length() == 0:
@@ -245,6 +274,8 @@ def main() raises:
     if module_span.byte_length() > 0 and token.byte_length() > 0:
         _usage()
     if module_successor.byte_length() > 0 and token.byte_length() > 0:
+        _usage()
+    if admission.byte_length() > 0 and token.byte_length() > 0:
         _usage()
     try:
         if source.byte_length() > 0:
@@ -261,6 +292,9 @@ def main() raises:
             return
         if module_successor.byte_length() > 0:
             envelope_module_successor(Path(module_successor).read_text())
+            return
+        if admission.byte_length() > 0:
+            envelope_admission(Path(admission).read_text())
             return
         envelope_record(Path(migration).read_bytes())
     except error:

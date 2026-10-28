@@ -7,9 +7,10 @@
 
 from std.testing import TestSuite, assert_raises
 
-from tests._python_tokens import declaration_text
+from tests._python_tokens import declaration_text, token_sha256
 from tools._python_json import PyJson
 from tools.carla_envelope_gate import (
+    envelope_admission,
     envelope_module_span,
     envelope_module_successor,
     envelope_record,
@@ -114,6 +115,51 @@ def test_the_module_selects_the_capture_function() raises:
         + "_try_lane_envelope_capture"
     ):
         envelope_module_span("def other():\n    return None\n")
+
+
+def _admission(checked: String, source: String, token: String) raises -> String:
+    """Return one admission payload.
+
+    Args:
+        checked: The admission source.
+        source: The module that declares the capture function.
+        token: The required digest.
+
+    Returns:
+        JSON with those three fields.
+
+    Raises:
+        Error: The document cannot be built.
+    """
+    var doc = PyJson()
+    var root = doc.new_dict()
+    doc.set(root, "checked", doc.new_str(checked))
+    doc.set(root, "source", doc.new_str(source))
+    doc.set(root, "token", doc.new_str(token))
+    doc.root = root
+    return doc.dumps()
+
+
+def test_the_admission_token_precedes_the_gap() raises:
+    """A token failure is returned before a counter in the gap."""
+    var source = (
+        "def _try_lane_envelope_capture():\n"
+        + "    var at = info_index(x)\n"
+        + "    if optional_work > max_terms - terms:\n"
+        + "        return None\n"
+    )
+    var token = token_sha256(source)
+    envelope_admission(_admission(source, source, token))
+    var marked = source.replace(
+        "    var at = info_index(x)\n",
+        "    var at = info_index(x)\n    terms = -1\n",
+    )
+    with assert_raises(
+        contains="Reviewed budget admission, routing or arithmetic changed"
+    ):
+        envelope_admission(_admission(marked, marked, "00"))
+    with assert_raises(contains="Intervening span can access budget parameters"):
+        envelope_admission(_admission(source, marked, token))
 
 
 def main() raises:
