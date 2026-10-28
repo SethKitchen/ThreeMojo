@@ -75,15 +75,14 @@ from math.bezier import (
 from math.curve import ARC_DIVISIONS, SEGMENT_SAMPLES, arc_samples, u_to_t
 from math.polyline import prefix_lengths, unit_direction
 from math.quaternion import Quaternion
-from math.utils import clamp, clamp_unit
+from math.utils import clamp
 from math.vector3 import Vector3
-from std.math import acos, floor
+from std.math import atan2, floor
 from units.si import Angle, Length, METER, RADIAN
 
-# Below this two tangents are parallel and there is no axis to turn the
-# frame about. three.js compares the cross product against
-# `Number.EPSILON`, a double's last bit; a `Float32` axis this short has no
-# direction worth turning about.
+# Two tangents that point opposite ways with an axis shorter than this
+# between them fold the curve straight back. The axis is then mostly
+# rounding, and no rule decides which way the half turn goes.
 comptime STRAIGHT = Float32(1e-4)
 
 # three.js's guard against repeated points in a centripetal or chordal
@@ -695,6 +694,11 @@ def transport_frames(
     has built up between the first normal and the last is then spread
     evenly back along the run, each frame turned about its own tangent.
 
+    three.js measures each angle with `acos` in doubles. In `Float32`, an
+    `acos` rounds a turn below about 3e-4 radians to nothing, and the
+    normals of a finely cut curve then lean off their tangents. Each angle
+    here is `atan2` of the sine and the cosine, which keeps a small turn.
+
     Args:
         tangents: The unit tangents, at least two.
         closed: True to spread the twist so the last frame meets the first.
@@ -722,24 +726,25 @@ def transport_frames(
         var normal = frames.normals[ring - 1]
         var axis = tangents[ring - 1]
         axis.cross(tangents[ring])
-        if axis.length() > STRAIGHT:
-            axis.normalize()
-            var angle = acos(clamp_unit(tangents[ring - 1].dot(tangents[ring])))
-            normal = _turned(normal, axis, angle)
-        elif tangents[ring - 1].dot(tangents[ring]) < 0:
+        var turn = axis.length()
+        var along = tangents[ring - 1].dot(tangents[ring])
+        if turn <= STRAIGHT and along < 0:
             raise Error("A curve's frames cannot fold straight back")
+        if turn > 0:
+            axis.normalize()
+            normal = _turned(normal, axis, atan2(turn, along))
         var binormal = tangents[ring]
         binormal.cross(normal)
         frames.normals.append(normal)
         frames.binormals.append(binormal)
 
     if closed:
-        var twist = acos(
-            clamp_unit(frames.normals[0].dot(frames.normals[last]))
-        )
-        twist /= Float32(last)
         var handed = frames.normals[0]
         handed.cross(frames.normals[last])
+        var twist = atan2(
+            handed.length(), frames.normals[0].dot(frames.normals[last])
+        )
+        twist /= Float32(last)
         if tangents[0].dot(handed) > 0:
             twist = -twist
         for ring in range(1, count):  # pragma: no branch

@@ -113,6 +113,7 @@ from loaders.curve_json import write_curve3, write_curve_path3
 from geometries.shape import Contours, extract_points, is_clockwise
 from math.curve3 import Curve3, CurvePath3, FrenetFrames
 from math.norm import squared_length2
+from math.rounded_product import rounded_product
 from math.path import Shape
 from math.vector2 import Vector2, append_vector2, vector2_from_float64
 from math.vector3 import Vector3
@@ -216,6 +217,24 @@ comptime _Offset = SIMD[DType.float64, 2]
 comptime _EPSILON = Float64(2.220446049250313e-16)
 
 
+def _cross(ax: Float64, ay: Float64, bx: Float64, by: Float64) -> Float64:
+    """Return `ax * by - ay * bx`, each product rounded as JavaScript
+    rounds it."""
+    return rounded_product(ax, by) - rounded_product(ay, bx)
+
+
+def _length_squared(x: Float64, y: Float64) -> Float64:
+    """Return `x * x + y * y`, each product rounded as JavaScript rounds
+    it."""
+    return rounded_product(x, x) + rounded_product(y, y)
+
+
+def _moved(at: Float32, move: Float64, size: Float64) -> Float64:
+    """Return one coordinate of three.js's `scalePt2`: `at` plus `move`
+    scaled by `size`, the product rounded before the sum."""
+    return Float64(at) + rounded_product(move, size)
+
+
 def _js_sign(value: Float64) -> Int:
     """Return JavaScript's `Math.sign`, with zero for zero."""
     if value > 0:
@@ -248,25 +267,30 @@ def bevel_vector(point: Vector2, before: Vector2, after: Vector2) -> _Offset:
     var prev_y = y - by
     var next_x = ax - x
     var next_y = ay - y
-    var prev_lensq = squared_length2[DType.float64](prev_x, prev_y)
-    var collinear = prev_x * next_y - prev_y * next_x
+    var prev_lensq = _length_squared(prev_x, prev_y)
+    var collinear = _cross(prev_x, prev_y, next_x, next_y)
     var trans_x: Float64
     var trans_y: Float64
     var shrink_by: Float64
     if abs(collinear) > _EPSILON:
         var prev_len = sqrt(prev_lensq)
-        var next_len = sqrt(squared_length2[DType.float64](next_x, next_y))
+        var next_len = sqrt(_length_squared(next_x, next_y))
         var prev_shift_x = bx - prev_y / prev_len
         var prev_shift_y = by + prev_x / prev_len
         var next_shift_x = ax - next_y / next_len
         var next_shift_y = ay + next_x / next_len
         var sf = (
-            (next_shift_x - prev_shift_x) * next_y
-            - (next_shift_y - prev_shift_y) * next_x
-        ) / (prev_x * next_y - prev_y * next_x)
-        trans_x = prev_shift_x + prev_x * sf - x
-        trans_y = prev_shift_y + prev_y * sf - y
-        var trans_lensq = squared_length2[DType.float64](trans_x, trans_y)
+            _cross(
+                next_shift_x - prev_shift_x,
+                next_shift_y - prev_shift_y,
+                next_x,
+                next_y,
+            )
+            / collinear
+        )
+        trans_x = prev_shift_x + rounded_product(prev_x, sf) - x
+        trans_y = prev_shift_y + rounded_product(prev_y, sf) - y
+        var trans_lensq = _length_squared(trans_x, trans_y)
         if trans_lensq <= 2:
             return _Offset(trans_x, trans_y)
         shrink_by = sqrt(trans_lensq / 2)
@@ -390,7 +414,7 @@ def _layers(
         for band in range(bevel_segments):  # pragma: no branch
             var part = Float64(band) / Float64(bevel_segments) * pi / 2
             heights.append(-(thickness * cos(part)))
-            insets.append(size * sin(part) + offset)
+            insets.append(rounded_product(size, sin(part)) + offset)
     heights.append(0)
     insets.append(full)
     for step in range(1, steps + 1):  # pragma: no branch
@@ -399,8 +423,8 @@ def _layers(
     if bevel_enabled:
         for band in range(bevel_segments - 1, -1, -1):  # pragma: no branch
             var part = Float64(band) / Float64(bevel_segments) * pi / 2
-            heights.append(deep + thickness * cos(part))
-            insets.append(size * sin(part) + offset)
+            heights.append(deep + rounded_product(thickness, cos(part)))
+            insets.append(rounded_product(size, sin(part)) + offset)
 
 
 def _place(
@@ -420,8 +444,8 @@ def _place(
         for index in range(len(cut.points)):  # pragma: no branch
             # three.js's `scalePt2`, in doubles.
             ref point = cut.points[index]
-            out.append(Float64(point.x) + moves[index][0] * insets[layer])
-            out.append(Float64(point.y) + moves[index][1] * insets[layer])
+            out.append(_moved(point.x, moves[index][0], insets[layer]))
+            out.append(_moved(point.y, moves[index][1], insets[layer]))
             out.append(heights[layer])
     return out^
 
@@ -997,10 +1021,10 @@ def extrude(
             for i in range(cut.counts[at]):  # pragma: no branch
                 var index = cut.starts[at] + i
                 flat.append(
-                    Float64(cut.points[index].x) + moves[index][0] * offset
+                    _moved(cut.points[index].x, moves[index][0], offset)
                 )
                 flat.append(
-                    Float64(cut.points[index].y) + moves[index][1] * offset
+                    _moved(cut.points[index].y, moves[index][1], offset)
                 )
             if at == 0:
                 contour = flat^

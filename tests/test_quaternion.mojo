@@ -198,6 +198,12 @@ def test_slerp_ends_are_the_ends() raises:
     var b = Quaternion.from_axis_angle(Vector3(0, 0, 1), Angle(90.0, DEGREE))
     assert_same_rotation(a.slerp(b, 0), a)
     assert_same_rotation(a.slerp(b, 1), b)
+    # three.js returns the end itself at one, not its negation, even when
+    # the short way round runs toward the negation.
+    var away = Quaternion(-b.x, -b.y, -b.z, -b.w)
+    var end = a.slerp(away, 1)
+    assert_equal(end.z, away.z)
+    assert_equal(end.w, away.w)
 
 
 def test_slerp_halfway_is_half_the_turn() raises:

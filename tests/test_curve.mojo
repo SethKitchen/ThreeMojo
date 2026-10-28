@@ -217,6 +217,18 @@ def test_a_long_spline_ends_on_its_last_point() raises:
     assert_point(spline(points^).point(1), 1, 0)
 
 
+def test_a_spline_ends_exactly_on_its_last_point() raises:
+    # three.js reads `t` of one as the last point with a weight of zero,
+    # not the end of the segment before it, which rounds.
+    var last = Vector2(3.7, 1.1)
+    var through = spline(
+        [Vector2(0.1, 0.7), Vector2(0.3, 1.9), Vector2(2.2, 0.3), last]
+    )
+    var end = through.point(1)
+    assert_equal(end.x, last.x)
+    assert_equal(end.y, last.y)
+
+
 def test_spline_of_two_points_is_the_run_between_them() raises:
     var through = spline([Vector2(0, 0), Vector2(2, 0)])
     assert_point(through.point(0.5), 1, 0)

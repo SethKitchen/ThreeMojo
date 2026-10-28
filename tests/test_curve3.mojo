@@ -20,7 +20,6 @@ from math.curve3 import (
     CUBIC3,
     LINE3,
     QUADRATIC3,
-    STRAIGHT,
     CatmullRomType,
     Curve3,
     Curve3Kind,
@@ -313,10 +312,32 @@ def test_transport_frames_refuse_what_has_no_frame() raises:
         _ = transport_frames([Vector3(1, 0, 0)], False)
     with assert_raises():
         _ = transport_frames([Vector3(1, 0, 0), Vector3(-1, 0, 0)], False)
+    # Nearly straight back: the axis between the two is mostly rounding.
+    var back = Vector3(-1, 1e-5, 0)
+    back.normalize()
+    with assert_raises(contains="fold straight back"):
+        _ = transport_frames([Vector3(1, 0, 0), back], False)
     # Two tangents the same way carry the frame across unturned.
     var straight = transport_frames([Vector3(1, 0, 0), Vector3(1, 0, 0)], False)
     assert_xyz(straight.normals[1], 0, 0, -1, CLOSE)
-    assert_true(STRAIGHT > 0)
+    # A turn past a right angle turns the normal with the tangent.
+    var sharp = transport_frames(
+        [Vector3(1, 0, 0), Vector3(-0.6, 0, 0.8)], False
+    )
+    assert_xyz(sharp.normals[1], 0.8, 0, 0.6, CLOSE)
+
+
+def test_the_frames_of_a_finely_cut_curve_stay_square() raises:
+    # Each step turns this gentle arc by less than a `Float32` `acos` can
+    # tell from none; the normals must still turn with the tangents.
+    var arc = quadratic_bezier3(
+        Vector3(0, 0, 0), Vector3(500, 30, 30), Vector3(1000, 0, 0)
+    )
+    var frames = arc.frenet_frames(4000, False)
+    for k in range(frames.count()):
+        assert_almost_equal(
+            frames.normals[k].dot(frames.tangents[k]), 0, atol=1e-6
+        )
 
 
 def test_closed_frames_spread_their_twist_either_way() raises:

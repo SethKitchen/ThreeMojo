@@ -424,8 +424,13 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
             t: How far along, zero to one.
 
         Returns:
-            The interpolated unit rotation.
+            The interpolated unit rotation: self itself at `t` of zero and
+            `other` itself at `t` of one, as three.js returns them.
         """
+        if t == 0:
+            return self
+        if t == 1:
+            return other
         # A rotation and its negation are the same rotation. Taking the
         # negation when the two point away from each other is what picks the
         # short arc rather than the long way round.
@@ -441,7 +446,7 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         # So close that the arc is a line: blend straight and renormalize,
         # because the sine we would divide by is nearly zero.
         if sin_half_squared <= SLERP_EPSILON:
-            var blend = self + (target - self) * t
+            var blend = self * (1 - t) + target * t
             blend.normalize()
             return blend
         var sin_half = sqrt(sin_half_squared)
