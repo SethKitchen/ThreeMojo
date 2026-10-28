@@ -304,6 +304,8 @@ It reads each top-level helper import in source order.
 
 It compares the fresh heading graph with each stored consumer.
 
+It reads the package path and the heading consumers in one check.
+
 It checks the fresh heading graph and returns the consumer count in one check.
 
 It returns the heading consumer count after that comparison.

@@ -105,12 +105,39 @@ def _checked_heading(fresh, consumers, eligibility):
     return json.loads(result.stdout)
 
 
+_HEADING_PLAN = None
+
+
+def _heading_plan():
+    """Return the package path and the heading consumers."""
+    global _HEADING_PLAN
+    if _HEADING_PLAN is not None:
+        return _HEADING_PLAN
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_heading_consumers',
+         '--plan'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    _HEADING_PLAN = json.loads(result.stdout)
+    return _HEADING_PLAN
+
+
 def verify(root, *, _operation=None):
-    path = root / _carla_package()
-    package = _carla_package()
+    plan = _heading_plan()
+    path = root / plan['package']
+    package = plan['package']
     fresh = _typed_source.historical_text(root, path/'curve_bounds.mojo', source._observe_text(root, package + '/curve_bounds.mojo', (path/'curve_bounds.mojo').read_text(), _operation=_operation), _operation=_operation)
     consumers = []
-    for filename, name in _consumers().items():
+    for filename, name in plan['consumers'].items():
         consumers.append((filename, name, _typed_source.historical_text(root, path/filename, source._observe_text(root, package + '/' + filename, (path/filename).read_text(), _operation=_operation), _operation=_operation)))
     eligibility = _typed_source.historical_text(root, path/'spiral_moment_proof.mojo', source._observe_text(root, package + '/spiral_moment_proof.mojo', (path/'spiral_moment_proof.mojo').read_text(), _operation=_operation), _operation=_operation)
     return _checked_heading(fresh, consumers, eligibility)
