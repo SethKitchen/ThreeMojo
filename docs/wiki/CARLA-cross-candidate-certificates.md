@@ -453,6 +453,8 @@ It restores the historical envelope helper before that hash.
 
 It checks that refusal before restoring the historical capture in one check.
 
+It prepares the Python syntax after that restored capture in one check.
+
 It checks the Jet and value aliases before the primitive hash.
 
 It slices the stored-half declaration from its marker.

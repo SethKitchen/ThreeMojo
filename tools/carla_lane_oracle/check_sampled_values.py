@@ -368,11 +368,12 @@ def _syntax_prepare(text):
         return None
 
 
-def syntax_tree(text):
+def syntax_tree(text, prepared=None, _prepare=True):
     # Keywords are removed lexically, never from string literals. Native
     # structs map to Python classes only for AST inspection; their generic
     # parameters, traits, fields, types, decorators and statements stay bound.
-    prepared = _syntax_prepare(text)
+    if _prepare:
+        prepared = _syntax_prepare(text)
     if prepared is None:
         return _python_syntax_tree(text)
     source, generics, words = prepared
@@ -461,8 +462,42 @@ def reviewed_reference_tree(text, root=ROOT, *, _operation=None):
         previous = budget.historical_function(text, root=root)
     except ValueError as error:
         raise CheckError(_sampled_closure()['reference_changed'] + _sampled_closure()['reviewed'] + ': ' + str(error)) from error
-    tree = syntax_tree(_restored_after_refusal(text, previous))
+    restored, prepared = _restored_then_syntax(text, previous)
+    tree = syntax_tree(restored, prepared, _prepare=False)
     return tree
+
+
+def _restored_then_syntax(text, replacement):
+    """Restore the historical capture, then prepare its Python syntax."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='restore-syntax-') as directory:
+        folder = Path(directory)
+        source = folder / 'source.mojo'
+        previous = folder / 'replacement.mojo'
+        source.write_text(text)
+        previous.write_text(replacement)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_restore_reference', '--after-refusal-syntax',
+             str(source), str(previous)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    parsed = json.loads(result.stdout)
+    syntax = parsed['syntax']
+    if syntax.get('fallback'):
+        return parsed['restored'], None
+    return (
+        parsed['restored'],
+        (syntax['source'], syntax['generics'], syntax['words']),
+    )
 
 
 def _restored_after_refusal(text, replacement):
