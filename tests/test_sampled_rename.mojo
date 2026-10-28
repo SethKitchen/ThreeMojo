@@ -21,6 +21,7 @@ from tests._python_tokens import (
     stored_half_tail,
     replace_function,
     restore_reference_capture,
+    restored_reference_after_refusal,
     strip_try_only_refusal,
 )
 from tests._python_expr import (
@@ -464,6 +465,43 @@ def test_reference_capture_restore_strips_then_replaces() raises:
         or restored.find("fallback()") < 0
     ):
         raise Error("historical capture or fallback missing")
+
+
+def test_the_refusal_is_checked_before_the_capture_restore() raises:
+    """A changed refusal fails before the historical capture is restored."""
+    with assert_raises(contains="try-only parameter changed"):
+        _ = restored_reference_after_refusal(
+            "def _lane_jet_model_proof():\n    return 1\n", "not a function"
+        )
+    var source = String(
+        "def _lane_jet_model_proof[capture: Bool](\n"
+        + "    ideal_translation: Bool = False,\n"
+        + "    require_reuse: Bool = False,\n"
+        + ") -> Int:\n"
+        + "    if reused:\n"
+        + "        point = reused.value()\n"
+        + "    elif require_reuse:\n"
+        + "        return _unknown_point()\n"
+        + "    else:\n"
+        + "        point = 1\n"
+        + "    return point\n"
+        + "def _try_lane_envelope_capture():\n    return old\n"
+    )
+    var replacement = String(
+        "def _try_lane_envelope_capture():\n    return historical\n"
+    )
+    var restored = restored_reference_after_refusal(source, replacement)
+    if restored.find("require_reuse") >= 0 or restored.find("return old") >= 0:
+        raise Error("old refusal or capture remained")
+    if restored.find("return historical") < 0 or restored.find("point = 1") < 0:
+        raise Error("historical capture or proof branch missing")
+    with assert_raises(contains="missing or ambiguous function"):
+        _ = restored_reference_after_refusal(
+            source.replace(
+                "def _try_lane_envelope_capture():\n    return old\n", ""
+            ),
+            replacement,
+        )
 
 
 def test_one_function_is_replaced_without_moving_its_neighbors() raises:

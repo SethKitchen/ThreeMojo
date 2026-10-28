@@ -2918,6 +2918,26 @@ def restore_reference_capture(
     )
 
 
+def restored_reference_after_refusal(
+    source: String, replacement: String
+) raises -> String:
+    """Check the try-only refusal, then restore the historical capture.
+
+    Args:
+        source: The current reference module.
+        replacement: The historical `_try_lane_envelope_capture` function.
+
+    Returns:
+        The source with that function replaced after the refusal check.
+
+    Raises:
+        Error: The refusal changed, or the capture function is not the
+            reviewed shape.
+    """
+    try_only_refusal(source)
+    return restore_reference_capture(source, replacement)
+
+
 def _name_byte(byte: UInt8) -> Bool:
     """Return whether `byte` can appear inside an identifier.
 
