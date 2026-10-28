@@ -184,6 +184,14 @@ def test_bad_rows_fail_before_the_generated_products() raises:
             '{"report":{"source_sha256":"aa"},"rows":[]}',
             Path("/tmp/moment-product-bytes"),
         )
+    with assert_raises(
+        contains="spiral moment derive: wrong derived table shape"
+    ):
+        _ = write_products_after_report(
+            '{"report":{"source_sha256":"aa"},"rows":[],'
+            + '"destinations":["/src"],"protected":["/src"]}',
+            Path("/tmp/moment-product-bytes"),
+        )
 
 
 def main() raises:

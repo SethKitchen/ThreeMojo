@@ -500,6 +500,8 @@ It indents the coefficient rows after those payload bytes in one check.
 
 It indents the moment report before those generated products in one check.
 
+It checks the output paths after those generated products in one check.
+
 It reads those coefficient words as integers in one check.
 
 It returns one normalized source block between two markers.

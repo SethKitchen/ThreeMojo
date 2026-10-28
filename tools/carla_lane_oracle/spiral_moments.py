@@ -971,13 +971,17 @@ def _moment_payload(rows):
     return json.loads(result.stdout)
 
 
-def _report_then_products(report, rows):
-    """Indent the moment report, then write the generated products."""
+def _report_then_products(report, rows, destinations, protected):
+    """Indent the moment report, write the products, then check the paths."""
     import os
     import subprocess
     import tempfile
-    payload = json.dumps(
-        {'report': report, 'rows': rows}, separators=(',', ':'))
+    payload = json.dumps({
+        'report': report,
+        'rows': rows,
+        'destinations': destinations,
+        'protected': protected,
+    }, separators=(',', ':'))
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='report-products-') as directory:
@@ -1326,19 +1330,25 @@ def main(argv=None):
                          for group in report_plan['pin_groups']
                          for record in pins[group].values()]
             if args.generate:
+                names = [
+                    report_plan['report_name'],
+                    _table().name,
+                    report_plan['words_name'],
+                    report_plan['coefficients_name'],
+                ]
                 report_bytes, source, payload, coefficients = (
-                    _report_then_products(report, rows))
+                    _report_then_products(
+                        report,
+                        rows,
+                        [str((output / name).resolve()) for name in names],
+                        [str(path.resolve()) for path in protected],
+                    ))
                 products = {
                     report_plan['report_name']: report_bytes,
                     _table().name: source,
                     report_plan['words_name']: payload,
                     report_plan['coefficients_name']: coefficients,
                 }
-                _moment_guard('--output', {
-                    'destinations': [
-                        str((output / name).resolve()) for name in products],
-                    'protected': [str(path.resolve()) for path in protected],
-                })
             else:
                 name = report_plan['report_name']
                 products = {

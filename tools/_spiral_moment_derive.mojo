@@ -16,6 +16,7 @@ from tools._carla_assets import dumps_indent
 from tools._cli_failures import derive_prefix
 from tools._fraction import Fraction
 from tools._moment_check_plan import moment_check_plan
+from tools._moment_guards import require_separate_output
 from tools._payload_bytes import from_hex
 from tools._python_json import PyJson
 from tests._python_tokens import (
@@ -1069,8 +1070,9 @@ def write_products_after_report(payload: String, output: Path) raises -> String:
     """Indent the moment report, then write the generated products.
 
     Args:
-        payload: JSON with `report` and `rows`. `report` is the report
-            object. `rows` is the derived row list.
+        payload: JSON with `report`, `rows`, `destinations`, and
+            `protected`. `report` is the report object. `rows` is the
+            derived row list. The path lists are resolved strings.
         output: The file that receives the payload bytes.
 
     Returns:
@@ -1078,15 +1080,29 @@ def write_products_after_report(payload: String, output: Path) raises -> String:
         indented report, including the final newline.
 
     Raises:
-        Error: The report is missing, the rows changed, or the payload
-            hex is not bytes. The report is indented before the products
-            are written.
+        Error: The report is missing, the rows changed, the payload hex
+            is not bytes, or one destination is a protected path. The
+            products are written before the output paths are checked.
     """
     var doc = PyJson.parse(payload)
     var report = doc.at(doc.root, "report")
     var indented = dumps_indent(doc, report, 2) + "\n"
     var rows = doc.subtree(doc.at(doc.root, "rows")).dumps()
     var products = PyJson.parse(write_moment_products(rows, output))
+    var guard = PyJson()
+    var guard_root = guard.new_dict()
+    guard.set(
+        guard_root,
+        "destinations",
+        guard.adopt(doc, doc.at(doc.root, "destinations")),
+    )
+    guard.set(
+        guard_root,
+        "protected",
+        guard.adopt(doc, doc.at(doc.root, "protected")),
+    )
+    guard.root = guard_root
+    require_separate_output(guard.dumps())
     var out = PyJson()
     var body = out.new_dict()
     out.set(body, "report", out.new_str(indented))
