@@ -12,6 +12,7 @@
     carla_dispatch_gate --edge HEX --expected HEX
     carla_dispatch_gate --graphs DIR
     carla_dispatch_gate --source-graphs PATH
+    carla_dispatch_gate --source-graph-groups PATH
     carla_dispatch_gate --pins DIR
 
 The program checks the bytes it is given. It does not read the repository
@@ -208,6 +209,30 @@ def dispatch_source_graphs(payload: String) raises:
     )
 
 
+def dispatch_source_graph_groups(payload: String) raises:
+    """Compare each dispatch source group, in order.
+
+    Args:
+        payload: A JSON list of groups. Each group is a list of items with
+            `label`, `actual`, and `source`.
+
+    Raises:
+        Error: A group is not a list, a source cannot be tokenized, or a token list changed.
+    """
+    var doc = PyJson.parse(payload)
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("successor operations changed")
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        significant_graph_pairs(
+            doc.subtree(doc.item(doc.root, index)).dumps(),
+            "curve support/dispatch contract: ",
+            "successor operations changed",
+        )
+        index += 1
+
+
 def dispatch_graphs(directory: String) raises:
     """Require each operation graph to match its recorded token list.
 
@@ -285,7 +310,8 @@ def _usage():
             " | --bytes PATH --sha HEX --label TEXT | --tokens DIR"
             " | --declaration-tokens PATH"
             " | --edge HEX --expected HEX | --graphs DIR"
-            " | --source-graphs PATH | --pins DIR"
+            " | --source-graphs PATH | --source-graph-groups PATH"
+            " | --pins DIR"
         ),
         file=stderr,
     )
@@ -308,6 +334,7 @@ def main() raises:
     var expected = String("")
     var graphs = String("")
     var source_graphs = String("")
+    var source_graph_groups = String("")
     var pins = String("")
     var arguments = argv()
     var index = 1
@@ -324,6 +351,7 @@ def main() raises:
             or word == "--expected"
             or word == "--graphs"
             or word == "--source-graphs"
+            or word == "--source-graph-groups"
             or word == "--pins"
         ):
             if index + 1 >= len(arguments):
@@ -349,6 +377,8 @@ def main() raises:
                 graphs = value
             elif word == "--source-graphs":
                 source_graphs = value
+            elif word == "--source-graph-groups":
+                source_graph_groups = value
             else:
                 pins = value
             index += 2
@@ -369,6 +399,8 @@ def main() raises:
         modes += 1
     if source_graphs.byte_length() > 0:
         modes += 1
+    if source_graph_groups.byte_length() > 0:
+        modes += 1
     if pins.byte_length() > 0:
         modes += 1
     if modes != 1:
@@ -382,6 +414,9 @@ def main() raises:
     try:
         if source_graphs.byte_length() > 0:
             dispatch_source_graphs(Path(source_graphs).read_text())
+            return
+        if source_graph_groups.byte_length() > 0:
+            dispatch_source_graph_groups(Path(source_graph_groups).read_text())
             return
         if graphs.byte_length() > 0:
             dispatch_graphs(graphs)

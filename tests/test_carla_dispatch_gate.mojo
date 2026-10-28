@@ -19,6 +19,7 @@ from tools.carla_dispatch_gate import (
     dispatch_pin,
     dispatch_pins,
     dispatch_record,
+    dispatch_source_graph_groups,
     dispatch_source_graphs,
     dispatch_tokens,
 )
@@ -131,6 +132,35 @@ def test_matching_dispatch_sources_are_accepted() raises:
         + '"source":"def center():\\n    return 1\\n"}]'
     )
     dispatch_source_graphs(payload)
+
+
+def test_a_later_dispatch_group_is_checked_after_the_first() raises:
+    """A changed first group is reported before a later group is tokenized."""
+    var payload = (
+        '[[{"label":"successor operations changed: first.mojo",'
+        + '"actual":"def center():\\n    return 1\\n",'
+        + '"source":"def center():\\n    return 2\\n"}],'
+        + '[{"label":"later","actual":"not mojo","source":"def later():\\n'
+        + '    return 1\\n"}]]'
+    )
+    with assert_raises(
+        contains=(
+            "curve support/dispatch contract: successor operations changed:"
+            " first.mojo"
+        )
+    ):
+        dispatch_source_graph_groups(payload)
+
+
+def test_matching_dispatch_groups_are_accepted() raises:
+    """A later group is accepted after the first group matches."""
+    var payload = (
+        '[[{"label":"first","actual":"def center():\\n    return 1\\n",'
+        + '"source":"def center():\\n    return 1\\n"}],'
+        + '[{"label":"second","actual":"def later():\\n    return 2\\n",'
+        + '"source":"def later():\\n    return 2\\n"}]]'
+    )
+    dispatch_source_graph_groups(payload)
 
 
 def _declaration_payload(token: String) -> String:

@@ -148,6 +148,8 @@ It checks every historical dispatch pin in one check.
 
 It checks every dispatch operation graph in one check.
 
+It checks every dispatch source graph and every premise graph in one check.
+
 It keeps the current dispatch source when the token matches.
 
 It hashes the dispatch source before that choice.

@@ -180,9 +180,9 @@ def _gate_edge(recorded, expected):
         raise ValueError(message)
 
 
-def _significant_graphs(pairs):
-    """Compare every source pair by its significant tokens."""
-    if not pairs:
+def _significant_graph_groups(groups):
+    """Compare every source group by its significant tokens."""
+    if not any(groups):
         return
     import json
     import os
@@ -190,8 +190,11 @@ def _significant_graphs(pairs):
     import tempfile
     from pathlib import Path
     payload = json.dumps([
-        {'label': label, 'actual': actual, 'source': source}
-        for actual, source, label in pairs
+        [
+            {'label': label, 'actual': actual, 'source': source}
+            for actual, source, label in pairs
+        ]
+        for pairs in groups
     ], separators=(',', ':'))
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
@@ -200,7 +203,7 @@ def _significant_graphs(pairs):
         path.write_text(payload)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_dispatch_gate',
-             '--source-graphs', str(path)],
+             '--source-graph-groups', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -557,24 +560,23 @@ def verify_premises(root, *, _operation=None):
     record = read_record(root)
     labels = _dispatch_labels()
     operation_args = {} if _operation is None else {'_operation': _operation}
-    prepared = []
+    source_pairs = []
     source_items = list(record['sources'].items())
     chosen = reviewed_sources(root, [
         (path, item['after_token_sha256']) for path, item in source_items
     ], **operation_args)
     for (path, item), text in zip(source_items, chosen):
-        prepared.append((
+        source_pairs.append((
             text,
             item['after_source'],
             labels['successor_operations'] + path))
-    _significant_graphs(prepared)
-    prepared = []
+    premise_pairs = []
     for path, item in record['premise_modules'].items():
-        prepared.append((
+        premise_pairs.append((
             _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation),
             item['source'],
             labels['premise_modules'] + path))
-    _significant_graphs(prepared)
+    _significant_graph_groups([source_pairs, premise_pairs])
     loaded = []
     for item in record['premise_functions']:
         physical_text = _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation)
