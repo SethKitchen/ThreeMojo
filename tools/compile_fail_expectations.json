@@ -4385,6 +4385,20 @@
       "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[1]' to 'PropKind'"
     ]
   },
+  "tests/compile_fail/a_villager_home_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 28,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'home' cannot be converted from 'IntLiteral[2]' to 'HouseId'"
+    ]
+  },
   "tests/compile_fail/a_viseme_is_not_a_bare_int.mojo": {
     "errors": [
       {

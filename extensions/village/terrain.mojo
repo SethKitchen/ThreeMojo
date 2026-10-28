@@ -295,6 +295,31 @@ struct Terrain(Copyable, Movable):
             return OPEN_SKY
         return self.floors[floor].ceiling
 
+    def view_ceiling(
+        self, focus: Vector3, eye: Vector3, foot: Float32
+    ) -> Float32:
+        """Return how high a camera's eye may stand.
+
+        The eye stays under the ceiling over its focus. When the focus is
+        under a ceiling, the eye stays under the ceiling over itself too,
+        so it does not rise through a room's ceiling. When the focus is
+        under the open sky, a ceiling over the eye is a house's that the
+        eye looks down on from over its walls, so it does not hold the
+        eye.
+
+        Args:
+            focus: The point the camera looks at.
+            eye: Where the camera would stand.
+            foot: The height of the feet of the one it follows, in meters.
+
+        Returns:
+            The highest the eye may stand, in meters, or `OPEN_SKY`.
+        """
+        var ceiling = self.ceiling_over(focus.x, focus.z, foot)
+        if ceiling < OPEN_SKY:
+            ceiling = min(ceiling, self.ceiling_over(eye.x, eye.z, foot))
+        return ceiling
+
     def view_reach(
         self, focus: Vector3, eye: Vector3, margin: Float32
     ) -> Float32:

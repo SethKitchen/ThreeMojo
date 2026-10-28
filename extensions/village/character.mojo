@@ -399,6 +399,7 @@ struct Character(Copyable, Movable):
         delta: Duration,
         terrain: Terrain,
         obstacles: List[Obstacle],
+        skip: Int = -1,
     ) raises:
         """Move the character by one frame.
 
@@ -409,6 +410,8 @@ struct Character(Copyable, Movable):
             terrain: The ground, the floors, the walls and the solid
                 buildings.
             obstacles: The round things in the way.
+            skip: The index of an obstacle to pass over, such as the
+                character's own, or -1 for none.
 
         Raises:
             Error: If the time is negative or above a billion seconds, the
@@ -425,7 +428,7 @@ struct Character(Copyable, Movable):
         var pressed = input.jump and not self.jump_held
         self.jump_held = input.jump
         for _ in range(count):  # pragma: no branch
-            self._substep(input, yaw, h, pressed, terrain, obstacles)
+            self._substep(input, yaw, h, pressed, terrain, obstacles, skip)
             pressed = False
         self._settle()
 
@@ -437,8 +440,10 @@ struct Character(Copyable, Movable):
         jump: Bool,
         terrain: Terrain,
         obstacles: List[Obstacle],
+        skip: Int,
     ):
-        """Move the character by one substep of `h` seconds."""
+        """Move the character by one substep of `h` seconds, passing over
+        the obstacle at `skip`."""
         ref p = self.parameters
         var wish = ground_direction(
             yaw, clamp(input.forward, -1, 1), clamp(input.right, -1, 1)
@@ -477,6 +482,7 @@ struct Character(Copyable, Movable):
             start.y,
             terrain,
             obstacles,
+            skip,
         )
         if not self._walkable(goal.x, goal.z, start.y, terrain):
             # Slide along the edge, one axis at a time.
@@ -486,6 +492,7 @@ struct Character(Copyable, Movable):
                 start.y,
                 terrain,
                 obstacles,
+                skip,
             )
             if not self._walkable(goal.x, goal.z, start.y, terrain):
                 goal = self._clear(
@@ -494,6 +501,7 @@ struct Character(Copyable, Movable):
                     start.y,
                     terrain,
                     obstacles,
+                    skip,
                 )
             if not self._walkable(goal.x, goal.z, start.y, terrain):
                 goal = Vector3(start.x, 0, start.z)
@@ -529,10 +537,11 @@ struct Character(Copyable, Movable):
         foot: Float32,
         terrain: Terrain,
         obstacles: List[Obstacle],
+        skip: Int,
     ) -> Vector3:
         """Return a point pushed out of every solid lot, every wall that
-        stands in the way of feet at `foot`, and every obstacle, and back
-        within the bounds."""
+        stands in the way of feet at `foot`, and every obstacle but the one
+        at `skip`, and back within the bounds."""
         var radius = self.parameters.radius.to(METER)
         var at = Vector3(x, 0, z)
         for index in range(len(terrain.lots)):
@@ -542,7 +551,8 @@ struct Character(Copyable, Movable):
             if span.blocks(foot, foot + HEADROOM):
                 at = wall_push(span, at.x, at.z, radius)
         for index in range(len(obstacles)):
-            at = obstacle_push(obstacles[index], at.x, at.z, radius)
+            if index != skip:
+                at = obstacle_push(obstacles[index], at.x, at.z, radius)
         var bound = self.parameters.bounds.to(METER)
         var reach = sqrt(at.x * at.x + at.z * at.z)
         if reach > bound:

@@ -44,7 +44,9 @@ from extensions.village.residents import (
     Flipbook,
     GIVE_UP,
     Herd,
+    HouseId,
     JUMP_PLAY,
+    NO_HOUSE,
     Residents,
     ResidentsParameters,
     Route,
@@ -255,7 +257,7 @@ def test_residents_that_cannot_be_built_are_refused() raises:
                 1,
                 False,
                 Outfit(),
-                -1,
+                NO_HOUSE,
             )
         )
     with assert_raises(contains="villagers"):
@@ -270,7 +272,7 @@ def test_residents_that_cannot_be_built_are_refused() raises:
             1,
             False,
             Outfit(),
-            -1,
+            NO_HOUSE,
         )
     )
     with assert_raises(contains="wander"):
@@ -285,7 +287,7 @@ def test_residents_that_cannot_be_built_are_refused() raises:
             1,
             False,
             Outfit(),
-            -2,
+            HouseId(-2),
         )
     )
     with assert_raises(contains="home"):
@@ -308,7 +310,7 @@ def test_residents_that_cannot_be_built_are_refused() raises:
     with assert_raises(contains="pasture"):
         p.check()
     p = _small()
-    p.herds.append(Herd(RABBIT, 1, 0, 0, 1, 1, flee=-1))
+    p.herds.append(Herd(RABBIT, 1, 0, 0, 1, 1, flee=Length(-1.0, METER)))
     with assert_raises(contains="flee"):
         p.check()
     p = _small()
@@ -413,7 +415,7 @@ def test_residents_wander_and_stand_in_the_players_way() raises:
             4,
             True,
             dyed_outfit(2, True),
-            0,
+            HouseId(0),
         )
     )
     p.herds.append(Herd(RABBIT, 2, 5, 5, 2, 8))
@@ -461,7 +463,7 @@ def test_a_shy_animal_runs_from_the_player_and_a_tame_one_does_not() raises:
     var p = _small()
     p.rest = Duration(30.0, SECOND)
     # A shy rabbit and a tame one, each grazing at one point.
-    p.herds.append(Herd(RABBIT, 1, 0, 0, 0, 8, flee=6))
+    p.herds.append(Herd(RABBIT, 1, 0, 0, 0, 8, flee=Length(6.0, METER)))
     p.herds.append(Herd(RABBIT, 1, 0, 3, 0, 9))
     var lots = List[Lot]()
     var residents = Residents(scene, assets, p, ground, lots, _homes())
@@ -510,7 +512,7 @@ def test_a_villager_visits_their_home_through_its_door() raises:
             4,
             False,
             Outfit(),
-            1,
+            HouseId(1),
         )
     )
     with assert_raises(contains="home"):

@@ -65,6 +65,8 @@ from extensions.village.character import (
 from extensions.village.residents import (
     Body,
     Herd,
+    HouseId,
+    NO_HOUSE,
     Residents,
     ResidentsParameters,
     Villager,
@@ -155,7 +157,7 @@ def default_residents() raises -> ResidentsParameters:
             41,
             False,
             village_outfit(NETTLE, WELD, GRAY_WOOL, True),
-            0,
+            HouseId(0),
         ),
         Villager(
             HumanoidSpec(Length(70.0, INCH), MALE, TONED, random_genome(8)),
@@ -165,7 +167,7 @@ def default_residents() raises -> ResidentsParameters:
             42,
             False,
             village_outfit(WOAD, CREAM_WOOL, WALNUT, False),
-            2,
+            HouseId(2),
         ),
         Villager(
             HumanoidSpec(
@@ -177,7 +179,7 @@ def default_residents() raises -> ResidentsParameters:
             43,
             True,
             village_outfit(WELD, MADDER, WALNUT, False),
-            -1,
+            NO_HOUSE,
         ),
         Villager(
             HumanoidSpec(Length(67.0, INCH), MALE, UNTONED, random_genome(21)),
@@ -187,7 +189,7 @@ def default_residents() raises -> ResidentsParameters:
             44,
             False,
             village_outfit(GRAY_WOOL, WALNUT, CREAM_WOOL, True),
-            4,
+            HouseId(4),
         ),
         Villager(
             HumanoidSpec(Length(64.0, INCH), FEMALE, TONED, random_genome(34)),
@@ -197,18 +199,18 @@ def default_residents() raises -> ResidentsParameters:
             45,
             False,
             village_outfit(MADDER, CREAM_WOOL, WOAD, False),
-            3,
+            HouseId(3),
         ),
     ]
     residents.herds = [
-        Herd(SHEEP, 4, 15, 4, 7, 51, flee=3),
-        Herd(GOAT, 1, 20, -6, 5, 52, flee=2),
+        Herd(SHEEP, 4, 15, 4, 7, 51, flee=Length(3.0, METER)),
+        Herd(GOAT, 1, 20, -6, 5, 52, flee=Length(2.0, METER)),
         Herd(COW, 2, -18, 6, 8, 53),
         Herd(HORSE, 1, -14, -16, 7, 54),
         Herd(PIG, 1, -12, -48, 4, 55),
         Herd(DOG, 1, 4, 22, 4, 56),
-        Herd(RABBIT, 2, -6, 14, 3, 57, flee=6),
-        Herd(DEER, 2, 30, -40, 10, 58, flee=12),
+        Herd(RABBIT, 2, -6, 14, 3, 57, flee=Length(6.0, METER)),
+        Herd(DEER, 2, 30, -40, 10, 58, flee=Length(12.0, METER)),
     ]
     return residents^
 
@@ -256,14 +258,18 @@ struct PlayParameters(Copyable, Movable):
         self.field_of_view = Angle(55.0, DEGREE)
 
 
-def tree_obstacles(parameters: VillageParameters) -> List[Obstacle]:
+def tree_obstacles(
+    parameters: VillageParameters, scanned: Optional[Lot] = None
+) -> List[Obstacle]:
     """Return a trunk for each planting that grows in a village's meadow.
 
-    A planting on a house's lot or its apron, or in the pond, does not
-    grow: the meadow leaves it out, and so does this.
+    A planting on a house's lot, on the scanned building's lot, on the
+    apron of either, or in the pond, does not grow: the meadow leaves it
+    out, and so does this.
 
     Args:
         parameters: The village.
+        scanned: The scanned building's lot, or None for none.
 
     Returns:
         One obstacle a planting that grows, `TRUNK` times its size
@@ -273,6 +279,8 @@ def tree_obstacles(parameters: VillageParameters) -> List[Obstacle]:
     for index in range(len(parameters.houses)):
         ref placed = parameters.houses[index]
         lots.append(house_lot(placed.house, placed.x, placed.z, placed.turn))
+    if scanned:
+        lots.append(scanned.value())
     var out = List[Obstacle]()
     ref plantings = parameters.meadow.plantings
     for index in range(len(plantings)):
@@ -414,7 +422,7 @@ struct VillageGame(Movable):
                 METER,
             ),
         )
-        self.trees = tree_obstacles(parameters.village)
+        self.trees = tree_obstacles(parameters.village, self.village.scanned)
         self.clock = 0
         self.village.meadow.register_shadings(self.fast, assets)
         self.fast.set_shadows(self.quality.shadows, self.quality.shadow_size)
@@ -498,16 +506,12 @@ struct VillageGame(Movable):
             self.reach += (clear - self.reach) * ease
         var eye = focus + (self.view.eye() - focus) * self.reach
         # The floors and ceilings that the player's feet reach: the eye
-        # stays over the floor under it, and under the ceiling over it and
-        # over the focus.
-        var ceiling = min(
-            self.terrain.ceiling_over(focus.x, focus.z, feet.y),
-            self.terrain.ceiling_over(eye.x, eye.z, feet.y),
-        )
+        # stays over the floor under it, and under the ceilings that
+        # `Terrain.view_ceiling` holds it under.
         self.view.place_within(
             self.camera,
             Length(self.terrain.height_at(eye.x, eye.z, feet.y), METER),
-            Length(ceiling, METER),
+            Length(self.terrain.view_ceiling(focus, eye, feet.y), METER),
             self.reach,
         )
         scene.update()

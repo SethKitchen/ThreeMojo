@@ -103,8 +103,12 @@ The village game sets it, so the houses show their brick, plaster, wood and tile
 
 1. **The levels.** The first time a map is drawn, the renderer reads it into linear floats. Each level halves the one before it, by the mean of each 2 by 2 block of texels. The chain stops at one texel or 16 levels.
 2. **The level of a triangle.** The setup compares a triangle's area on the screen with its area in texels. A triangle reads the level at which one texel covers about one pixel.
-3. **The texel.** The resolve mixes each pixel's texture coordinates from its three corners, with perspective. It mixes the four texels round them, bilinear. A map that repeats wraps round; any other map holds its edge.
+3. **The texel.** The resolve mixes each pixel's texture coordinates from its three corners, with perspective. It mixes the four texels round them, bilinear. Each side wraps by its own mode, as `Texture.sample` wraps it. A repeated side wraps round. A mirrored side folds back on every other tile. A clamped side holds its edge.
 4. **The light.** The texel tints the pixel's light, the sun's and the sky's. The fog veils the tinted light after, at the pixel, so a far textured roof keeps its haze.
+
+The texel scales all the light of the vertices. A material that shines or glows, a phong material or one with an emissive color, would have its highlight or its glow tinted too. So such a material reads its map at each vertex, where the map tints only its albedo.
+
+The renderer keeps each map by its texture id. After a texture's texels or wraps change, or before it draws a scene of another `Assets`, call `forget_maps`. Each map is then read again when it is next drawn.
 
 A map read at each pixel ignores the texture's offset, repeat and rotation.
 

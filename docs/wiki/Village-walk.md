@@ -137,12 +137,14 @@ The feet follow `Terrain.height_at`: the highest floor under them that they can 
 | Look speed | 150 degrees a second of yaw, and 90 of pitch, at a full lean of the look stick. |
 | Trail speed | 60 degrees a second at the running speed, and less at a slower speed. |
 | Follow rate | 10 a second. Each second, the focus closes all but `exp(-10)` of its gap to the player. |
-| Clearance | 0.3 meters above the ground under the eye, and below the ceilings over the focus and over the eye. |
+| Clearance | 0.3 meters above the ground under the eye. Below the ceiling over the focus, and indoors below the ceiling over the eye too. |
 | Arm | The eye stops 0.3 meters before the first wall between it and the focus. It goes back out at a rate of 3 a second. |
 
 The yaw is the way the camera looks, about +y. Yaw 0 looks toward -z. `ground_direction` turns a yaw and the two leans of a stick into a direction on the ground.
 
-`Terrain.view_reach` finds how much of the way from the focus to the eye is clear of the walls. `place_within` then stands the camera that share of the way out, below the ceilings over the focus and over the eye. Each is the ceiling over the floor that the player's feet reach there. So in a room, the camera stays in the room. Four points along the camera's last sight hold a door open, so the camera can look through it.
+`Terrain.view_reach` finds how much of the way from the focus to the eye is clear of the walls. `place_within` then stands the camera that share of the way out, below the ceilings that `Terrain.view_ceiling` gives. Each is the ceiling over the floor that the player's feet reach there. Under a ceiling, the eye stays below that ceiling and below the one over itself. So in a room, the camera stays in the room.
+
+Under the open sky, a house's ceiling under the eye does not hold it. A sight line that clears the walls passes over their tops, so the eye looks down on the roof. Four points along the camera's last sight hold a door open, so the camera can look through it.
 
 ## The residents
 
@@ -164,7 +166,7 @@ The yaw is the way the camera looks, about +y. Yaw 0 looks toward -z. `ground_di
 
 Each resident walks a `Route`. It walks to a point, rests there for 3 seconds, and walks on to the next point. `wander_route` scatters the points round a middle. It does not put a point on or near a lot, or under the water. A resident that stays slower than 0.1 meters a second for 2.5 seconds gives up on its point, and rests as if it had arrived.
 
-A villager with a home visits it. `visit` adds five points to the end of the route. They stand 3.2 meters before the home's front door, 1 meter before it, and 1.8 meters inside it, and then back out the same way. The door opens as the villager comes near.
+A villager with a home visits it. `Villager.home` is a `HouseId`, the house's place among the village's houses, or `NO_HOUSE`. `visit` adds five points to the end of the route. They stand 3.2 meters before the home's front door, 1 meter before it, and 1.8 meters inside it, and then back out the same way. The door opens as the villager comes near.
 
 Each resident bumps into the trees, the player and every other resident. A resident that moved this frame is an obstacle where it stands now.
 
@@ -172,7 +174,7 @@ Each resident bumps into the trees, the player and every other resident. A resid
 
 **An animal** is a flipbook: its mesh in six poses of its walk, and one mesh standing. The mesh shows the pose of how far the animal has walked, so one stride covers one stride of ground. An animal walks at its stride times its stride frequency at a Froude number of 0.25. An animal that does not walk on four legs keeps its standing mesh.
 
-**A shy animal** runs from the player. `Herd.flee` is how near the player can come before the herd runs, in meters. Zero, the default, is tame. An animal nearer than that runs straight away from the player, at three times its walk, and its flipbook plays faster. It walks back to its route once the player is further away. The deer run from 12 meters, the rabbits from 6, the sheep from 3 and the goat from 2.
+**A shy animal** runs from the player. `Herd.flee` is how near the player can come before the herd runs, a `Length`. Zero, the default, is tame. An animal nearer than that runs straight away from the player, at three times its walk, and its flipbook plays faster. It walks back to its route once the player is further away. The deer run from 12 meters, the rabbits from 6, the sheep from 3 and the goat from 2.
 
 ## Clothes
 

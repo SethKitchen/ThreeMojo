@@ -14,7 +14,7 @@ from extensions.building.material import brick
 from extensions.humanoid.sex import FEMALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.field import LodBand
-from extensions.vegetation.ground import Ground, Pond
+from extensions.vegetation.ground import Ground, Lot, Pond
 from extensions.vegetation.meadow import Planting
 from controls.third_person_controls import yaw_of
 from extensions.village.character import (
@@ -33,7 +33,12 @@ from extensions.village.play import (
     tree_obstacles,
 )
 from extensions.village.quality import LOW, ULTRA, game_quality
-from extensions.village.residents import Herd, ResidentsParameters, Villager
+from extensions.village.residents import (
+    Herd,
+    NO_HOUSE,
+    ResidentsParameters,
+    Villager,
+)
 from extensions.village.village import HousePlacement, VillageParameters
 from extensions.water.pebbles import pebble_bed
 from extensions.water.resolution import SpectrumResolution
@@ -155,6 +160,8 @@ def test_the_game_village_is_planted_at_its_quality_and_lived_in() raises:
     crowded.meadow.plantings.append(Planting(0, 5, -6, 0.5))
     crowded.meadow.plantings.append(Planting(0, 0, 4, 0.5))
     assert_equal(len(tree_obstacles(crowded)), 1)
+    # Nor does one on the scanned building's lot.
+    assert_equal(len(tree_obstacles(_village(), Lot(6, 6, 1, 1, 0))), 0)
     var bare = _village()
     bare.meadow.plantings = []
     assert_equal(len(tree_obstacles(bare)), 0)
@@ -307,7 +314,7 @@ def test_a_villager_moves_and_a_frame_one_row_short_is_stretched() raises:
             1,
             False,
             Outfit(),
-            -1,
+            NO_HOUSE,
         )
     ]
     # Nineteen twentieths of 10 by 20 rounds to 10 by 19: as wide as the

@@ -37,7 +37,12 @@ two differ: see the wiki page Game renderer.
 `BASIC`, `LAMBERT`, `PHONG`, `STANDARD` and `PHYSICAL` materials, vertex
 colors, a color and an emissive color. A standard or physical material is
 lit as a Lambert one. A map is read at each vertex, or, with `pixel_maps`
-set, at each pixel: see `_PixelMaps`. A node program is
+set, at each pixel: see `_PixelMaps`. A map read at each pixel scales all
+the light of its vertices, so a material that glows or shines, an emissive
+or a phong one, keeps reading its map at each vertex, where the map scales
+only its albedo. The renderer keeps each map it reads at each pixel by its
+texture id: after a texture changes, or with another `Assets`, call
+`forget_maps`. A node program is
 drawn only as a `GameShading` registered for it says. Lights: ambient,
 hemisphere and directional, the cascades of one sun counted once. Fog:
 exponential squared or none. The background: a color or a cube.
@@ -87,7 +92,7 @@ from render.game_math import (
 )
 from render.tasks import TaskGroup
 from render.tonemap import aces_tone
-from render.texture import REPEAT, Texture
+from render.texture import MIRROR, REPEAT, Texture
 from render.texture_store import TextureId
 from std.math import ceil, exp2, floor, inf, log2, max, min, sin, sqrt
 from std.memory import unsafe_memcpy
@@ -136,11 +141,12 @@ struct _PixelMaps(Movable):
     var widths: List[Int32]
     var heights: List[Int32]
     # For each map: where its levels start in the lists above, how many
-    # levels it has, and 1 if it repeats or 0 if it is clamped at its
-    # edges.
+    # levels it has, and how it wraps along u and along v: the value of
+    # its `Wrap`.
     var firsts: List[Int32]
     var levels: List[Int32]
-    var repeats: List[Int32]
+    var wraps_s: List[Int32]
+    var wraps_t: List[Int32]
     # The slot of each texture id read so far.
     var slot_of: Dict[Int, Int]
 
@@ -151,7 +157,8 @@ struct _PixelMaps(Movable):
         self.heights = List[Int32]()
         self.firsts = List[Int32]()
         self.levels = List[Int32]()
-        self.repeats = List[Int32]()
+        self.wraps_s = List[Int32]()
+        self.wraps_t = List[Int32]()
         self.slot_of = Dict[Int, Int]()
 
     def slot(mut self, texture: Texture, id: Int) raises -> Int:
@@ -203,7 +210,8 @@ struct _PixelMaps(Movable):
             w = w2
             h = h2
         self.levels.append(Int32(count))
-        self.repeats.append(Int32(1) if texture.wrap_s == REPEAT else 0)
+        self.wraps_s.append(Int32(texture.wrap_s.value))
+        self.wraps_t.append(Int32(texture.wrap_t.value))
         self.slot_of[id] = slot
         return slot
 
@@ -882,6 +890,14 @@ struct GameRenderer(Movable):
         """
         self._shadings[program] = shading^
 
+    def forget_maps(mut self):
+        """Forget every map read at each pixel so far, so each is read
+        again from its texture when it is next drawn. Call it after a
+        texture's texels or wraps change, or before drawing a scene of
+        another `Assets`: the renderer keeps each map by its texture id.
+        """
+        self._pixel = _PixelMaps()
+
     def render(
         mut self,
         scene: Scene,
@@ -1376,7 +1392,11 @@ struct GameRenderer(Movable):
             var count = len(self._shapes[shape].value().parts[p].vertices)
             var pixel = -1
             var texels = Float32(1)
-            if self.pixel_maps and look.has_map:
+            # A map read at each pixel scales all the light of the
+            # vertices, so only a material whose light is all its albedo's
+            # reads it there.
+            var glows = look.phong or look.emissive.reduce_max() > 0
+            if self.pixel_maps and look.has_map and not glows:
                 ref texture = assets.textures.get(TextureId(looked[1]))
                 pixel = self._pixel.slot(texture, looked[1])
                 texels = sqrt(
@@ -2725,7 +2745,8 @@ def _pixel_texel(
     var slots = slot.cast[DType.int64]()
     var firsts = maps.firsts.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
     var counts = maps.levels.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
-    var wraps = maps.repeats.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
+    var wraps_s = maps.wraps_s.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
+    var wraps_t = maps.wraps_t.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
     var widths = maps.widths.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
     var heights = maps.heights.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
     var starts = maps.starts.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
@@ -2734,7 +2755,8 @@ def _pixel_texel(
     var w = _pick(widths, entry, 0, one)
     var h = _pick(heights, entry, 0, one)
     var start = _pick(starts, entry, 0, one)
-    var repeat = _pick(wraps, slots, 0, one).eq(1)
+    var wrap_s = _pick(wraps_s, slots, 0, one)
+    var wrap_t = _pick(wraps_t, slots, 0, one)
     var wf = w.cast[DType.float32]()
     var hf = h.cast[DType.float32]()
     # `v` counts up from the bottom row, as `Texture.sample` reads it.
@@ -2744,10 +2766,10 @@ def _pixel_texel(
     var y0f = floor(ty)
     var fx = tx - x0f
     var fy = ty - y0f
-    var xs = _wrap_texel(x0f, wf, repeat)
-    var xs1 = _wrap_texel(x0f + 1, wf, repeat)
-    var ys = _wrap_texel(y0f, hf, repeat)
-    var ys1 = _wrap_texel(y0f + 1, hf, repeat)
+    var xs = _wrap_texel(x0f, wf, wrap_s)
+    var xs1 = _wrap_texel(x0f + 1, wf, wrap_s)
+    var ys = _wrap_texel(y0f, hf, wrap_t)
+    var ys1 = _wrap_texel(y0f + 1, hf, wrap_t)
     var row0 = ys * w
     var row1 = ys1 * w
     # `start` counts floats, and a texel is three.
@@ -2785,13 +2807,19 @@ def _bilinear(
 
 
 @always_inline
-def _wrap_texel(x: F, size: F, repeat: SIMD[DType.bool, GAME_LANES]) -> I:
-    """Return each lane's texel index along one side of `size` texels:
-    wrapped round for a repeating map, and held at the edge for one that
-    is clamped."""
+def _wrap_texel(x: F, size: F, mode: I) -> I:
+    """Return each lane's texel index along one side of `size` texels, as
+    `render.texture.wrap_index` returns it for the lane's `Wrap` value:
+    wrapped round for a repeating map, folded back on every other tile for
+    a mirrored one, and held at the edge for a clamped one."""
     var wrapped = x - size * floor(x / size)
+    var folded = x - 2 * size * floor(x / (2 * size))
+    var mirrored = folded.ge(size).select(2 * size - 1 - folded, folded)
     var held = min(max(x, F(0)), size - 1)
-    return repeat.select(wrapped, held).cast[DType.int32]()
+    var index = mode.eq(Int32(REPEAT.value)).select(
+        wrapped, mode.eq(Int32(MIRROR.value)).select(mirrored, held)
+    )
+    return index.cast[DType.int32]()
 
 
 __async def _resolve_task(

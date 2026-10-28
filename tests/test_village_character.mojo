@@ -213,6 +213,22 @@ def test_houses_trees_and_bounds_stop_a_character() raises:
     var trunks: List[Obstacle] = [Obstacle(0, -3, 0.5)]
     _run(tree, _ahead(), 4, ground, List[Lot](), trunks)
     assert_true(tree.position.z > -3)
+    # A character passes over the obstacle it is told to skip, such as
+    # its own, and is stopped by the others.
+    var crowd: List[Obstacle] = [Obstacle(0, -3, 0.5), Obstacle(0, -6, 0.5)]
+    var bare = Terrain(ground)
+    var skipping = _walker(ground)
+    for _ in range(120):
+        skipping.step(
+            _ahead(),
+            Angle(0.0, RADIAN),
+            Duration(1.0 / 30.0, SECOND),
+            bare,
+            crowd,
+            0,
+        )
+    assert_true(skipping.position.z < -4)
+    assert_true(skipping.position.z > -6)
     var far = _walker(ground)
     far.parameters.bounds = Length(2.0, METER)
     _run(far, _ahead(), 4, ground)

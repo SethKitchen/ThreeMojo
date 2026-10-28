@@ -137,6 +137,35 @@ def test_floors_carry_and_ceilings_cover() raises:
     assert_equal(terrain.floor_under(0, 1.5, 3.19 - CLIMB), 0)
 
 
+def test_a_camera_stays_under_a_room_and_over_a_roof() raises:
+    """Indoors, the eye stays under the ceilings over the focus and over
+    itself; outdoors, a house's ceiling under an eye that looks down over
+    its walls does not hold it."""
+    var floors: List[Floor] = [
+        Floor(Lot(0, 0, 2, 2, 0), 0.3, 2.8),
+        Floor(Lot(10, 0, 2, 2, 0), 0.3, 2.5),
+    ]
+    var terrain = Terrain(_flat(), List[Lot](), List[WallSpan](), floors^)
+    # In the room, the eye stays under its ceiling.
+    var inside = Vector3(0, 1.7, 0)
+    assert_almost_equal(
+        terrain.view_ceiling(inside, Vector3(1, 2, 1), 0.3), 2.8
+    )
+    # Looking out of the room, the room's ceiling still holds the eye.
+    assert_almost_equal(
+        terrain.view_ceiling(inside, Vector3(5, 3, 0), 0.3), 2.8
+    )
+    # In one room, looking into a lower one, the lower ceiling holds it.
+    assert_almost_equal(
+        terrain.view_ceiling(inside, Vector3(10, 2, 0), 0.3), 2.5
+    )
+    # Outside, over the house's floor, the open sky.
+    var outside = Vector3(-3.5, 1.45, 0)
+    assert_equal(
+        terrain.view_ceiling(outside, Vector3(-1, 4.5, 0), 0), OPEN_SKY
+    )
+
+
 def test_bare_ground_is_a_terrain() raises:
     var ground = _flat()
     var terrain: Terrain = ground

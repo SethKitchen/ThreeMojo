@@ -467,16 +467,24 @@ def _clear_of(x: Float32, z: Float32, ground: Ground, lots: List[Lot]) -> Bool:
     return True
 
 
-def _others(
-    obstacles: List[Obstacle], residents: List[Obstacle], skip: Int
-) -> List[Obstacle]:
-    """Return the obstacles, and every resident but one."""
-    var out = obstacles.copy()
-    # It is called for one of the residents, so there is at least one.
-    for index in range(len(residents)):  # pragma: no branch
-        if index != skip:
-            out.append(residents[index])
-    return out^
+@fieldwise_init
+struct HouseId(Equatable, ImplicitlyCopyable, Writable):
+    """Which of the village's houses, by its place among them, as a type
+    rather than a bare int. `NO_HOUSE` is none."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names a house's place, or no house.
+
+        Returns:
+            Whether the value is a place, or `NO_HOUSE`.
+        """
+        return self.value >= -1
+
+
+comptime NO_HOUSE = HouseId(-1)
+"""No house: a villager with no home to visit."""
 
 
 @fieldwise_init
@@ -494,9 +502,8 @@ struct Villager(Copyable, Movable):
     var runs: Bool
     # What they wear.
     var outfit: Outfit
-    # The house they visit, by its place among the village's houses, or
-    # -1 for none.
-    var home: Int
+    # The house they visit, or `NO_HOUSE`.
+    var home: HouseId
 
 
 struct Herd(Copyable, Movable):
@@ -510,9 +517,8 @@ struct Herd(Copyable, Movable):
     var reach: Float32
     # Which individual, and which points they graze between.
     var seed: Int
-    # How near the player may come before they run, in meters. Zero is
-    # tame.
-    var flee: Float32
+    # How near the player may come before they run. Zero is tame.
+    var flee: Length
 
     def __init__(
         out self,
@@ -522,7 +528,7 @@ struct Herd(Copyable, Movable):
         z: Float32,
         reach: Float32,
         seed: Int,
-        flee: Float32 = 0,
+        flee: Length = Length(0.0, METER),
     ):
         """Create a herd.
 
@@ -533,8 +539,8 @@ struct Herd(Copyable, Movable):
             z: The pasture's middle along z, in meters.
             reach: How far round the middle they graze, in meters.
             seed: Which individual, and which points they graze between.
-            flee: How near the player may come before they run away, in
-                meters. Zero is tame.
+            flee: How near the player may come before they run away. Zero
+                is tame.
         """
         self.species = species
         self.count = count
@@ -579,7 +585,7 @@ struct ResidentsParameters(Copyable, Movable):
 
         Raises:
             Error: If there are not from 0 to 64 villagers or herds; a
-                villager's home is below -1; a herd has not from 1 to 64
+                villager's home is not valid; a herd has not from 1 to 64
                 animals, or its species is not one, or it flees from
                 further than 100 meters or from a negative distance;
                 a pasture or a wander reaches further than 1 kilometer;
@@ -604,8 +610,8 @@ struct ResidentsParameters(Copyable, Movable):
                 1000,
                 "A villager must wander from 0 to 1 kilometer",
             )
-            if self.villagers[index].home < -1:
-                raise Error("A villager's home must be a house, or -1")
+            if not self.villagers[index].home.is_valid():
+                raise Error("A villager's home must be a house, or NO_HOUSE")
         for index in range(len(self.herds)):
             ref herd = self.herds[index]
             require_species(herd.species)
@@ -619,7 +625,7 @@ struct ResidentsParameters(Copyable, Movable):
                 "A pasture must reach from 0 to 1 kilometer",
             )
             require_between(
-                herd.flee,
+                herd.flee.to(METER),
                 0,
                 100,
                 "A herd must flee from 0 to 100 meters",
@@ -768,10 +774,11 @@ struct Residents(Movable):
             )
             route.run = villager.runs
             var start = route.points[len(route.points) - 1]
-            if villager.home >= 0:
-                if villager.home >= len(homes):
+            var home = villager.home.value
+            if home >= 0:
+                if home >= len(homes):
                     raise Error("A villager's home must be a house")
-                visit(route, homes[villager.home])
+                visit(route, homes[home])
             self.people.append(
                 Character(
                     CharacterParameters(),
@@ -863,7 +870,14 @@ struct Residents(Movable):
                 )
                 route.next = (member + 1) % len(route.points)
                 self.beasts.append(
-                    Beast(character^, route^, node, mesh, book, herd.flee)
+                    Beast(
+                        character^,
+                        route^,
+                        node,
+                        mesh,
+                        book,
+                        herd.flee.to(METER),
+                    )
                 )
 
     def update(
@@ -893,20 +907,20 @@ struct Residents(Movable):
         Raises:
             Error: If the time is negative, or a clip cannot be played.
         """
-        var residents = self.obstacles()
+        # One list holds the obstacles and then the residents; each one
+        # steps passing over its own entry.
+        var crowd = obstacles.copy()
+        var first = len(crowd)
+        crowd.extend(self.obstacles())
         var people = len(self.people)
         for index in range(people):
             var steer = self.walks[index].steer(self.people[index], delta)
             self.people[index].step(
-                steer[0],
-                steer[1],
-                delta,
-                terrain,
-                _others(obstacles, residents, index),
+                steer[0], steer[1], delta, terrain, crowd, first + index
             )
             ref feet = self.people[index].position
-            residents[index].x = feet.x
-            residents[index].z = feet.z
+            crowd[first + index].x = feet.x
+            crowd[first + index].z = feet.z
             self.bodies[index].pose(scene, self.people[index], delta)
         for index in range(len(self.beasts)):
             ref beast = self.beasts[index]
@@ -921,15 +935,10 @@ struct Residents(Movable):
                     run.forward = 1
                     run.run = True
                     steer = (run, yaw_of(away))
-            beast.character.step(
-                steer[0],
-                steer[1],
-                delta,
-                terrain,
-                _others(obstacles, residents, people + index),
-            )
-            residents[people + index].x = beast.character.position.x
-            residents[people + index].z = beast.character.position.z
+            var own = first + people + index
+            beast.character.step(steer[0], steer[1], delta, terrain, crowd, own)
+            crowd[own].x = beast.character.position.x
+            crowd[own].z = beast.character.position.z
             var at = beast.character.position
             ref node = scene.node(beast.node)
             node.set_position(at.x, at.y, at.z)

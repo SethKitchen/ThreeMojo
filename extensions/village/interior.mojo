@@ -311,7 +311,7 @@ def _doorways(
         )
 
 
-def _steps(mut interior: HouseInterior, ground: Ground, turn: Float32) raises:
+def _steps(mut interior: HouseInterior, ground: Ground) raises:
     """Add steps before each outside door that stands above the ground."""
     for index in range(len(interior.doorways)):
         var door = interior.doorways[index]
@@ -589,7 +589,7 @@ def house_interior(
         )
     )
     _doorways(interior, placer, building)
-    _steps(interior, ground, lot.turn)
+    _steps(interior, ground)
     var stair = house_stair(building)
     if stair:
         ref upper = building.storeys[1]
