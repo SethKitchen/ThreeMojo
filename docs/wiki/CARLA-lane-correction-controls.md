@@ -116,6 +116,10 @@ A failed speed check is not kept.
 
 `tools/carla_raw_cut_gate.mojo` checks the raw-cut inverse record, the fixture token, the successor binding, and the operation graph.
 
+It reads the predecessor token before it checks that binding.
+
+It refuses a repeated predecessor key before that token is read.
+
 `tools/carla_runtime_view_gate.mojo` checks the runtime-view record and its bound tests.
 
 `tools/carla_followup_gate.mojo` checks the coverage-followup record, the pin digests, the ordered pin pair, and the pin placements.

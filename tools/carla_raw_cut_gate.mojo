@@ -19,6 +19,8 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
+from tools._duplicate_pin_keys import reject_duplicate_pin_keys
+from tools._python_json import loads
 from tools._python_json import PY_BOOL, PY_INT, PyJson
 from tools._sha256 import sha256_hex
 
@@ -135,6 +137,29 @@ def raw_cut_binding(successor: String, recorded: String) raises:
         _fail("successor is not bound to accepted predecessor")
 
 
+def raw_cut_bound(text: String, recorded: String) raises:
+    """Read the predecessor token, then check the binding.
+
+    Args:
+        text: The predecessor migration text.
+        recorded: The raw-cut record's before token.
+
+    Raises:
+        Error: A key is repeated, the predecessor token cannot be read, or
+            the tokens differ. A repeated key is refused before the token
+            is read.
+    """
+    reject_duplicate_pin_keys(text.as_bytes())
+    var doc = loads(text.as_bytes())
+    var sources = doc.at(doc.root, "sources")
+    var item = doc.at(
+        sources, "extensions/carla/curve_sample_dispatch.mojo"
+    )
+    raw_cut_binding(
+        doc.text(doc.at(item, "after_token_sha256")), recorded
+    )
+
+
 def raw_cut_graph(actual: String, wanted: String, part: String) raises:
     """Require two significant token lists to match.
 
@@ -172,9 +197,19 @@ def _usage():
 def main() raises:
     """Check the raw-cut record and print nothing on success.
 
+    `--bound` reads the predecessor text, then checks its token.
+
     Raises:
         Error: The command is invalid.
     """
+    var arguments = argv()
+    if len(arguments) == 4 and arguments[1] == "--bound":
+        try:
+            raw_cut_bound(Path(arguments[2]).read_text(), String(arguments[3]))
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var migration = String("")
     var module = String("")
     var predecessor = String("")
@@ -186,7 +221,6 @@ def main() raises:
     var actual = String("")
     var wanted = String("")
     var part = String("")
-    var arguments = argv()
     var index = 1
     while index < len(arguments):
         var word = arguments[index]

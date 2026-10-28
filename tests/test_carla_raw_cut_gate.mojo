@@ -9,6 +9,7 @@ from std.testing import TestSuite, assert_raises
 
 from tools.carla_raw_cut_gate import (
     raw_cut_binding,
+    raw_cut_bound,
     raw_cut_graph,
     raw_cut_digest,
     raw_cut_fixture,
@@ -63,6 +64,25 @@ def test_a_changed_operation_graph_is_refused() raises:
         contains="raw cut inverse contract: raw inverse operation graph changed"
     ):
         raw_cut_graph("[]", '[[1,"def"]]', "graph")
+
+
+def test_a_bound_predecessor_reads_its_token() raises:
+    """The predecessor token is read after a repeated key would fail."""
+    var text = (
+        '{"sources":{"extensions/carla/curve_sample_dispatch.mojo":'
+        + '{"after_token_sha256":"aa"}}}'
+    )
+    raw_cut_bound(text, "aa")
+    with assert_raises(
+        contains="raw cut inverse contract: successor is not bound to accepted predecessor"
+    ):
+        raw_cut_bound(text, "bb")
+
+
+def test_a_repeated_predecessor_key_fails_before_the_binding() raises:
+    """A repeated key is refused before the token is compared."""
+    with assert_raises(contains="duplicate runtime source pin key: a"):
+        raw_cut_bound('{"a":1,"a":2}', "aa")
 
 
 def main() raises:

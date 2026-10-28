@@ -162,6 +162,28 @@ def _gate_predecessor(payload, expected):
         raise ValueError(message)
 
 
+def _gate_bound(text, recorded):
+    """Read the predecessor token, then check the binding."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='raw-cut-bound-') as directory:
+        target = Path(directory) / 'predecessor.json'
+        target.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_raw_cut_gate',
+             '--bound', str(target), recorded],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
 def read_record(root):
     payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     _gate(payload)
@@ -223,10 +245,7 @@ def verify_premises(root, *, _operation=None):
     if _operation is not None:
         predecessor_text = full_audit._observe_text(root, 'tools/carla_lane_oracle/curve-support-dispatch-migration.json', predecessor_text, _operation=_operation, _checked_raw=predecessor_payload)
     predecessor_text = _typed_source.historical_text(root, 'tools/carla_lane_oracle/curve-support-dispatch-migration.json', predecessor_text, _operation=_operation)
-    predecessor = json.loads(predecessor_text,
-                             object_pairs_hook=source.unique_keys)
-    _gate_binding(predecessor['sources'][SOURCE_PATH]['after_token_sha256'],
-                  record['before_token_sha256'])
+    _gate_bound(predecessor_text, record['before_token_sha256'])
     fixture = (root/'tests/test_carla_raw_cut_successor.mojo').read_text()
     if _operation is not None:
         fixture = full_audit._observe_text(root, 'tests/test_carla_raw_cut_successor.mojo', fixture, _operation=_operation)
