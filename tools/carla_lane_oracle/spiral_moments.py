@@ -239,6 +239,38 @@ def _moment_route_batch(mode, payload):
     return result.stdout
 
 
+_DERIVED_ROWS = None
+
+
+def _sums_then_rows(sums, rows):
+    """Check the rounded node sums, then derive the moment rows."""
+    global _DERIVED_ROWS
+    import os
+    import subprocess
+    import tempfile
+    payload = dict(sums)
+    payload['cosine'] = [str(word) for word in rows['cosine']]
+    payload['sine'] = [str(word) for word in rows['sine']]
+    text = json.dumps(payload, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='moment-sums-rows-') as directory:
+        path = Path(directory) / 'sums.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_gate',
+             '--sums-then-rows', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    _DERIVED_ROWS = parsed['rows']
+    return parsed['sums']
+
+
 def _moment_node_sums(payload):
     """Return the rounded node-sum fractions that match their pin."""
     import os
@@ -706,7 +738,7 @@ def _require_moment_pins(pins):
         raise CheckError(message)
 
 
-def verify_inputs(root):
+def verify_inputs(root, *, _then_rows=False):
     _plan_with_files()
     messages = _moment_plan()['messages']
     arrays = _moment_plan()['arrays']
@@ -864,14 +896,26 @@ def verify_inputs(root):
     except ValueError as error:
         raise CheckError(messages['closure'] + str(error)) from error
     try:
-        node_sums = _moment_node_sums({
+        sums_payload = {
             'nodes': [str(word) for word in stored_words[_moment_plan()['nodes']]],
             'weights': [str(word) for word in stored_words[_moment_plan()['weights']]],
             'expected': pins['rounded_node_sums'],
             'message': messages['node_sums'],
-        })
+        }
+        if _then_rows:
+            names = _moment_plan()['arrays']
+            node_sums = _sums_then_rows(sums_payload, {
+                'cosine': stored_words[names[2]],
+                'sine': stored_words[names[3]],
+            })
+        else:
+            node_sums = _moment_node_sums(sums_payload)
     except ValueError as error:
-        raise CheckError(str(error)) from error
+        message = str(error)
+        derive = _cli_failures()['derive']
+        if message.startswith(derive):
+            message = message[len(derive):]
+        raise CheckError(message) from error
     constants[_moment_plan()['sums_name']] = [F(text) for text in node_sums]
     return constants, pins
 
@@ -882,6 +926,11 @@ def derive_coefficients(constants):
     S[k,n] = sum(p<n,i) w[i]*(p+q[i]/2)**(2*k).
     M[k,n] = S[k,n]/(2*n**(2*k+1)). This is algebraic common work only.
     """
+    global _DERIVED_ROWS
+    if _DERIVED_ROWS is not None:
+        rows = _DERIVED_ROWS
+        _DERIVED_ROWS = None
+        return rows
     plan = _moment_plan()
     stored = constants[plan['stored_words']]
     names = plan['arrays']
@@ -1314,7 +1363,7 @@ def main(argv=None):
         parser.error(plan['error_output'])
     root = args.repo_root.resolve()
     try:
-        constants, pins = verify_inputs(root)
+        constants, pins = verify_inputs(root, _then_rows=True)
         rows = derive_coefficients(constants)
         meta = None
         if not args.generate:

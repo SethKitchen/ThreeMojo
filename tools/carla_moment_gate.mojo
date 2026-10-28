@@ -16,6 +16,7 @@
     carla_moment_gate --products-after-report PATH OUTPUT
     carla_moment_gate --integer-rows PATH
     carla_moment_gate --node-sums PATH
+    carla_moment_gate --sums-then-rows PATH
     carla_moment_gate --fractions PATH
 
 The program checks the texts it is given. It does not roll a successor
@@ -28,6 +29,7 @@ from std.sys import argv, exit, stderr
 
 from tests._python_tokens import token_sha256
 from tools._fraction import Fraction
+from tools._moment_node_sums import moment_node_sums
 from tools._spiral_moment_derive import (
     coefficient_integers_from_rows,
     coefficient_rows_from_decimals,
@@ -161,6 +163,26 @@ def moment_sources() -> String:
     )
 
 
+def moment_sums_then_rows(payload: String) raises -> String:
+    """Check the rounded node sums, then derive the moment rows.
+
+    Args:
+        payload: JSON with `nodes`, `weights`, `expected`, `message`,
+            `cosine`, and `sine`.
+
+    Returns:
+        JSON with `sums` and `rows`. The sums are checked before the
+        rows are derived.
+
+    Raises:
+        Error: A node sum changed, or a moment row cannot be derived.
+            The sums are checked before the rows are derived.
+    """
+    var sums = moment_node_sums(payload)
+    var rows = coefficient_rows_from_decimals(payload)
+    return '{"sums":' + sums + ',"rows":' + rows + "}"
+
+
 def moment_files() -> String:
     """Return the pin file, the stored table, and the word count.
 
@@ -183,8 +205,7 @@ def _usage():
             " --coefficient-words PATH | --verified-table PATH | --payload-rows"
             " PATH | --source-rows PATH | --products ROWS OUTPUT |"
             " --products-after-report PATH OUTPUT | --integer-rows PATH"
-            " | --node-sums"
-            " PATH | --fractions PATH"
+            " | --node-sums PATH | --sums-then-rows PATH | --fractions PATH"
         ),
         file=stderr,
     )
@@ -211,6 +232,16 @@ def main() raises:
     var node_sums = String("")
     var fractions = String("")
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--sums-then-rows":
+        try:
+            print(
+                moment_sums_then_rows(Path(arguments[2]).read_text()),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 4 and arguments[1] == "--products-after-report":
         try:
             print(

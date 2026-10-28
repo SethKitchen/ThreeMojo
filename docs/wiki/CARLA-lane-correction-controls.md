@@ -500,6 +500,8 @@ It reads every stored array, its fractions, and its name set in one check.
 
 It checks every rounded node sum in one check.
 
+It derives the moment rows after those rounded node sums in one check.
+
 It spells the stored nodes and weights before their rounded sums in one check.
 
 It checks the ideal half projection in one call.
