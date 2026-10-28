@@ -78,7 +78,7 @@ comptime SNAPSHOT_DIGEST = (
 )
 """The digest of the synthetic snapshot."""
 comptime HELD_DIGEST = (
-    "49b031c0ddd0de8d1eced7b2fb7e24e60ccee9d92ede692783a13eafce8d9410"
+    "1504528f5828ac7c722359c67ed6575ac7386955da80f1c09da4063510d0e365"
 )
 """The digest of the snapshot that holds the committed evidence. It
 changes whenever the evidence is regenerated."""
