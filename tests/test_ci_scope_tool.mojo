@@ -382,24 +382,12 @@ def test_removed_humanoid_snapshot_python_is_not_exempt() raises:
         "tools/humanoid_fidelity.mojo.extra",
     ]:
         assert_true(_plan(_change([path])).full, path)
-    # A Python tool test still routes to the tool checks by its name.
-    var value = _plan(_change(["tools/test_humanoid_fidelity.py"]))
-    assert_false(value.full)
-    assert_equal(_on(value), "lint tools")
-    assert_true(_no_files(value))
+    # Python tool tests are gone; one is an unknown input.
+    assert_true(_plan(_change(["tools/test_humanoid_fidelity.py"])).full)
 
 
-def test_tool_tests_and_the_workflow_only_run_tools() raises:
-    var value = _plan(
-        _change(
-            [
-                "tools/test_sampled_values.py",
-                "tools/test_coverage_lifecycle.py",
-                "tools/test_parallel_unittest.py",
-                ".github/workflows/ci.yml",
-            ]
-        )
-    )
+def test_the_workflow_only_runs_tools() raises:
+    var value = _plan(_change([".github/workflows/ci.yml"]))
     assert_false(value.full)
     assert_equal(_on(value), "lint tools")
     assert_true(_no_files(value))
@@ -519,14 +507,11 @@ def test_carla_generated_fixtures_keep_native_consumers() raises:
         assert_equal(_files(mixed, "cpu_tests"), " ".join(expected))
 
 
-def test_coverage_transport_and_proofs_run_the_coverage_tools() raises:
+def test_coverage_transport_runs_the_coverage_tools() raises:
     for path in [
         "tools/coverage_hit_cache.c",
         "tools/fixtures/coverage_hit_transport_faults.c",
         "tools/coverage_hit_faults.mojo",
-        "tools/check_coverage_loop_proofs.py",
-        "tools/coverage_loop_proofs.py",
-        "tools/carla_lane_oracle/source_contracts.py",
     ]:
         var value = _plan(_change([path]))
         assert_true(value.flag("coverage_tools"), path)
@@ -794,7 +779,6 @@ def test_docs_and_empty_changes_skip_all_native_work() raises:
         "",
         "README.md",
         "coverage/README.md",
-        "tools/carla_lane_oracle/README.md",
         "assets/gpu/README.md",
     ]:
         var changed = Dict[String, Bool]()
@@ -819,6 +803,7 @@ def test_unknown_inputs_select_the_full_audit() raises:
         "unknown.cfg",
         "tools/new_runtime.py",
         "tools/cache_key.py",
+        "tools/test_sampled_values.py",
         ".github/workflows/other.yml",
         "new_package/module.mojo",
         "untracked.mojo",
@@ -1076,10 +1061,10 @@ def _needs(
     return text + "}"
 
 
-def test_dedicated_discovery_jobs_use_the_tools_selection_flag() raises:
+def test_each_tools_job_uses_the_tools_selection_flag() raises:
     var found = Set[String]()
     for job in materialize[JOBS]():
-        if job[0] == "tools-discovery" or job[0] == "tools-discovery-macos":
+        if job[0] == "tools" or job[0] == "tools-macos":
             assert_equal(job[1], "tools")
             found.add(job[0])
     assert_equal(len(found), 2)
@@ -1087,7 +1072,7 @@ def test_dedicated_discovery_jobs_use_the_tools_selection_flag() raises:
 
 def test_aggregate_requires_success_only_for_applicable_jobs() raises:
     for value in [
-        _plan(_change(["tools/test_sampled_values.py"])),
+        _plan(_change([".github/workflows/ci.yml"])),
         _full(),
         _plan(Dict[String, Bool]()),
     ]:
@@ -1203,11 +1188,9 @@ def test_make_reads_the_scoped_lists_before_the_hash_and_in_recursion() raises:
 
 
 def test_tool_targets_get_no_list_overrides() raises:
-    var value = _plan(_change(["tools/test_sampled_values.py"]))
+    var value = _plan(_change([".github/workflows/ci.yml"]))
     for target in [
         "test-tools",
-        "test-tools-discovery",
-        "test-tools-oracle",
         "test-coverage-tool",
         "test-portability",
         "docs-check",

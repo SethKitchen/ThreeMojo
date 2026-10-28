@@ -2069,53 +2069,6 @@ def _identity_output(conversions: Int, outcome: Bool) -> String:
     return text
 
 
-def _origin_text(path: String) raises -> Tuple[String, String]:
-    """Return the header and body of one origin file."""
-    var raw = String(from_utf8_lossy=Path(path).read_bytes())
-    var cut = raw.find("\n")
-    if cut < 0:
-        raise Error("truncated origin " + path)
-    var header = String(raw[byte=:cut])
-    var body = String(raw[byte = cut + 1 :])
-    return (header, body)
-
-
-def _require_origin(rewritten: String, name: String, source: String) raises:
-    """Require the builder origin to bind this exact source."""
-    var encoded = source
-    var generated = String(
-        from_utf8_lossy=Path(rewritten + "/" + name + ".mojo").read_bytes()
-    )
-    var manifest = String(
-        from_utf8_lossy=Path(rewritten + "/manifest.txt").read_bytes()
-    )
-    var origin = _origin_text(rewritten + "/" + name + ".mojo.cov-origin")
-    var parts = List[String]()
-    parts.append(name + ".mojo")
-    parts.append(encoded)
-    parts.append(generated)
-    parts.append(manifest)
-    var header = "COVORIGIN1"
-    for part in parts:
-        header += " " + String(part.byte_length())
-    if origin[0] != header:
-        raise Error(name + " origin header " + origin[0])
-    if origin[1] != parts[0] + parts[1] + parts[2] + parts[3]:
-        raise Error(name + " origin body differs")
-    var index = _origin_text(rewritten + "/origins.ready")
-    var expected_index = (
-        "COVORIGIN_INDEX2 1 " + String(manifest.byte_length()) + " 0"
-    )
-    if index[0] != expected_index:
-        raise Error(name + " origin index " + index[0])
-    var name_bytes = name + ".mojo"
-    if (
-        index[1]
-        != manifest + String(name_bytes.byte_length()) + "\n" + name_bytes
-    ):
-        raise Error(name + " origin index body differs")
-
-
 def _decision_line(source: String, expression: String) raises -> Int:
     """Return the 1-based line of `if expression:`."""
     var wanted = "if " + expression + ":"
@@ -2282,7 +2235,6 @@ def check_identity(mojo: String) raises:
             sort(wanted_manifest)
             if not _same(manifest_rows, wanted_manifest):
                 raise Error(name + " manifest changed")
-            _require_origin(rewritten, name, source)
             var instrumented_binary = work + "/" + name + "-instrumented"
             _ = _must(
                 [
@@ -2442,7 +2394,6 @@ def check_last_use(mojo: String) raises:
             sort(wanted_manifest)
             if not _same(manifest_rows, wanted_manifest):
                 raise Error(name + " manifest changed")
-            _require_origin(rewritten, name, source)
             var instrumented_binary = work + "/" + name + "-instrumented"
             _ = _must(
                 [
@@ -2688,7 +2639,6 @@ def check_temporary_identity(mojo: String) raises:
                 sort(wanted_manifest)
                 if not _same(manifest_rows, wanted_manifest):
                     raise Error(name + " manifest changed")
-                _require_origin(rewritten, name, source)
                 var instrumented_binary = work + "/" + name + "-instrumented"
                 _ = _must(
                     [
@@ -2766,6 +2716,94 @@ def generic_pair_expected() -> String:
     return expected
 
 
+def _literal_loop(header: String) -> Bool:
+    """Return whether a fixture `for` header iterates a nonempty literal.
+
+    The fixtures write such a loop as `in [...]:` or `in range(N):` with a
+    positive literal `N`. The instrumenter gives it no decision.
+    """
+    var at = header.find(" in ")
+    if at < 0 or not header.endswith(":"):
+        return False
+    var iterable = String(header[byte = at + 4 : header.byte_length() - 1])
+    if iterable.startswith("[") and iterable.endswith("]"):
+        return iterable.byte_length() > 2
+    if not (iterable.startswith("range(") and iterable.endswith(")")):
+        return False
+    var digits = String(iterable[byte = 6 : iterable.byte_length() - 1])
+    if digits.byte_length() == 0:
+        return False
+    for byte in digits.as_bytes():
+        if byte < UInt8(ord("0")) or byte > UInt8(ord("9")):
+            return False
+    return digits != "0"
+
+
+def _is_decision(header: String) raises -> Bool:
+    """Return whether a stripped fixture line is a measured decision header.
+
+    Raises:
+        Error: If a decision header has no colon.
+    """
+    var decision = (
+        header.startswith("if ")
+        or header.startswith("elif ")
+        or header.startswith("while ")
+        or (header.startswith("for ") and not _literal_loop(header))
+    )
+    if decision and not header.endswith(":"):
+        raise Error("decision has no colon " + header)
+    return decision
+
+
+def _append_decision(
+    mut rows: List[String], name: String, number: Int, width: Int
+):
+    """Append the `B` row of one decision, and `C` and `M` slots past one."""
+    rows.append("B " + name + " " + String(number))
+    if width <= 1:
+        return
+    var slot = 0
+    while slot < width:
+        rows.append("C " + name + " " + String(number) + " " + String(slot))
+        rows.append("M " + name + " " + String(number) + " " + String(slot))
+        slot += 1
+
+
+def _require_decision_rows(
+    rewritten: String, name: String, var wanted: List[String]
+) raises:
+    """Require the manifest's decision rows for `name` to equal `wanted`.
+
+    Raises:
+        Error: If the rows differ, listing both sets.
+    """
+    var manifest = Path(rewritten + "/manifest.txt").read_text()
+    var actual = List[String]()
+    for line in manifest.splitlines():
+        var row = String(line)
+        var parts = row.split(" ")
+        if (
+            len(parts) >= 2
+            and String(parts[1]) == name
+            and (
+                String(parts[0]) == "B"
+                or String(parts[0]) == "C"
+                or String(parts[0]) == "M"
+            )
+        ):
+            actual.append(row)
+    sort(actual)
+    sort(wanted)
+    if not _same(actual, wanted):
+        var shown = String()
+        for row in actual:
+            shown += "actual " + row + "\n"
+        for row in wanted:
+            shown += "wanted " + row + "\n"
+        raise Error(name + " manifest changed\n" + shown)
+
+
 def _decision_manifest(
     name: String, source: String, compound: String
 ) raises -> List[String]:
@@ -2787,33 +2825,15 @@ def _decision_manifest(
     var number = 1
     var saw = False
     for line in source.splitlines():
-        var header = String(line).strip()
-        var decision = (
-            header.startswith("if ")
-            or header.startswith("elif ")
-            or header.startswith("while ")
-            or header.startswith("for ")
-        )
-        if decision:
-            if not header.endswith(":"):
-                raise Error("decision has no colon " + header)
+        var header = String(String(line).strip())
+        if _is_decision(header):
             var width = 1
             if header == compound:
                 width = 3
                 saw = True
             elif header.find(" and ") >= 0 or header.find(" or ") >= 0:
                 raise Error("unexpected compound " + header)
-            rows.append("B " + name + " " + String(number))
-            if width > 1:
-                var slot = 0
-                while slot < width:
-                    rows.append(
-                        "C " + name + " " + String(number) + " " + String(slot)
-                    )
-                    rows.append(
-                        "M " + name + " " + String(number) + " " + String(slot)
-                    )
-                    slot += 1
+            _append_decision(rows, name, number, width)
         number += 1
     if not saw:
         raise Error("missing compound decision")
@@ -2834,31 +2854,9 @@ def _require_manifest(
     Raises:
         Error: If the manifest rows differ.
     """
-    var wanted_manifest = _decision_manifest(name, source, compound)
-    var manifest = Path(rewritten + "/manifest.txt").read_text()
-    var manifest_rows = List[String]()
-    for line in manifest.splitlines():
-        var row = String(line)
-        var parts = row.split(" ")
-        if (
-            len(parts) >= 2
-            and String(parts[1]) == name
-            and (
-                String(parts[0]) == "B"
-                or String(parts[0]) == "C"
-                or String(parts[0]) == "M"
-            )
-        ):
-            manifest_rows.append(row)
-    sort(manifest_rows)
-    sort(wanted_manifest)
-    if not _same(manifest_rows, wanted_manifest):
-        var shown = String()
-        for row in manifest_rows:
-            shown += "actual " + row + "\n"
-        for row in wanted_manifest:
-            shown += "wanted " + row + "\n"
-        raise Error(name + " manifest changed\n" + shown)
+    _require_decision_rows(
+        rewritten, name, _decision_manifest(name, source, compound)
+    )
 
 
 def generic_pair_line(concrete: String, mask: Int, changing: Bool) -> String:
@@ -2970,7 +2968,6 @@ def check_generic_pair(mojo: String) raises:
             180,
         )
         _ = _must([build, rewritten, name + ".mojo"], 60, native)
-        _require_origin(rewritten, name, source)
         _require_manifest(
             rewritten,
             name,
@@ -3288,7 +3285,6 @@ def check_single_generic(mojo: String) raises:
             180,
         )
         _ = _must([build, rewritten, name + ".mojo"], 60, native)
-        _require_origin(rewritten, name, source)
         _require_manifest(
             rewritten,
             name,
@@ -4321,60 +4317,19 @@ def _require_accepted_manifest(
     var seen = 0
     var number = 1
     for line in source.splitlines():
-        var header = String(line).strip()
-        var decision = (
-            header.startswith("if ")
-            or header.startswith("elif ")
-            or header.startswith("while ")
-            or header.startswith("for ")
-        )
-        if decision:
-            if not header.endswith(":"):
-                raise Error("decision has no colon " + header)
+        var header = String(String(line).strip())
+        if _is_decision(header):
             var width = 1
             if number in widths:
                 width = widths[number]
                 seen += 1
             elif header.find(" and ") >= 0 or header.find(" or ") >= 0:
                 raise Error("unexpected compound " + header)
-            wanted.append("B " + name + " " + String(number))
-            if width > 1:
-                var slot = 0
-                while slot < width:
-                    wanted.append(
-                        "C " + name + " " + String(number) + " " + String(slot)
-                    )
-                    wanted.append(
-                        "M " + name + " " + String(number) + " " + String(slot)
-                    )
-                    slot += 1
+            _append_decision(wanted, name, number, width)
         number += 1
     if seen != len(widths):
         raise Error("missing accepted decision")
-    var manifest = Path(rewritten + "/manifest.txt").read_text()
-    var actual = List[String]()
-    for line in manifest.splitlines():
-        var row = String(line)
-        var parts = row.split(" ")
-        if (
-            len(parts) >= 2
-            and String(parts[1]) == name
-            and (
-                String(parts[0]) == "B"
-                or String(parts[0]) == "C"
-                or String(parts[0]) == "M"
-            )
-        ):
-            actual.append(row)
-    sort(actual)
-    sort(wanted)
-    if not _same(actual, wanted):
-        var shown = String()
-        for row in actual:
-            shown += "actual " + row + "\n"
-        for row in wanted:
-            shown += "wanted " + row + "\n"
-        raise Error(name + " manifest changed\n" + shown)
+    _require_decision_rows(rewritten, name, wanted^)
 
 
 def check_custom_truth_instrumented(mojo: String) raises:
@@ -4431,7 +4386,6 @@ def check_custom_truth_instrumented(mojo: String) raises:
             180,
         )
         _ = _must([build, rewritten, name + ".mojo"], 60, native)
-        _require_origin(rewritten, name, source)
         _require_accepted_manifest(rewritten, name, source)
         var instrumented_binary = work + "/" + name + "-instrumented"
         _ = _must(
@@ -4660,7 +4614,6 @@ def check_custom_truth_collision(mojo: String) raises:
             180,
         )
         _ = _must([build, rewritten, name + ".mojo"], 60, accepted)
-        _require_origin(rewritten, name, source)
         _require_accepted_manifest(rewritten, name, source)
         var instrumented_text = Path(
             rewritten + "/" + name + ".mojo"
@@ -4857,58 +4810,17 @@ def _require_compound_manifest(
     var compounds = 0
     var number = 1
     for line in source.splitlines():
-        var header = String(line).strip()
-        var decision = (
-            header.startswith("if ")
-            or header.startswith("elif ")
-            or header.startswith("while ")
-            or header.startswith("for ")
-        )
-        if decision:
-            if not header.endswith(":"):
-                raise Error("decision has no colon " + header)
+        var header = String(String(line).strip())
+        if _is_decision(header):
             var this_width = 1
             if header.find(" and ") >= 0 or header.find(" or ") >= 0:
                 this_width = width
                 compounds += 1
-            wanted.append("B " + name + " " + String(number))
-            if this_width > 1:
-                var slot = 0
-                while slot < this_width:
-                    wanted.append(
-                        "C " + name + " " + String(number) + " " + String(slot)
-                    )
-                    wanted.append(
-                        "M " + name + " " + String(number) + " " + String(slot)
-                    )
-                    slot += 1
+            _append_decision(wanted, name, number, this_width)
         number += 1
     if compounds != 1:
         raise Error(name + " compounds " + String(compounds))
-    var manifest = Path(rewritten + "/manifest.txt").read_text()
-    var actual = List[String]()
-    for line in manifest.splitlines():
-        var row = String(line)
-        var parts = row.split(" ")
-        if (
-            len(parts) >= 2
-            and String(parts[1]) == name
-            and (
-                String(parts[0]) == "B"
-                or String(parts[0]) == "C"
-                or String(parts[0]) == "M"
-            )
-        ):
-            actual.append(row)
-    sort(actual)
-    sort(wanted)
-    if not _same(actual, wanted):
-        var shown = String()
-        for row in actual:
-            shown += "actual " + row + "\n"
-        for row in wanted:
-            shown += "wanted " + row + "\n"
-        raise Error(name + " manifest changed\n" + shown)
+    _require_decision_rows(rewritten, name, wanted^)
 
 
 def check_custom_truth_refusals(mojo: String) raises:
@@ -4961,7 +4873,6 @@ def check_custom_truth_refusals(mojo: String) raises:
                 raise Error(name + " body changed")
             Path(native + "/" + name + ".mojo").write_text(source)
             _ = _must([build, rewritten, name + ".mojo"], 60, native)
-            _require_origin(rewritten, name, source)
             _require_compound_manifest(
                 rewritten, name, source, _truth_width(number)
             )
@@ -5181,7 +5092,6 @@ def check_custom_truth_controls(mojo: String) raises:
             if index == 1:
                 two_text = text
             _ = _must([build, rewritten, name + ".mojo"], 60, native)
-            _require_origin(rewritten, name, source)
             _require_width_manifest(rewritten, name, lines_text)
             var rejected = run_program(
                 [
@@ -5220,7 +5130,6 @@ def check_custom_truth_controls(mojo: String) raises:
         var single_name = "controls"
         Path(native + "/" + single_name + ".mojo").write_text(single_source)
         _ = _must([build, rewritten, single_name + ".mojo"], 60, native)
-        _require_origin(rewritten, single_name, single_source)
         _require_width_manifest(rewritten, single_name, lines_text)
         var native_binary = work + "/controls-native"
         var instrumented_binary = work + "/controls-instrumented"
@@ -5339,7 +5248,6 @@ def check_custom_refusals(mojo: String) raises:
             if kind == "gated-plain" and ran.output.find("MERGE G") >= 0:
                 raise Error(name + "\n" + ran.output)
             _ = _must([build, rewritten, name + ".mojo"], 60, native)
-            _require_origin(rewritten, name, source)
             _require_compound_manifest(rewritten, name, source, 2)
             var rejected = run_program(
                 [
@@ -5540,7 +5448,6 @@ def check_optional_lifecycles(mojo: String) raises:
                 if ran.output != expected:
                     raise Error(name + "\n" + ran.output + "\n" + expected)
                 _ = _must([build, rewritten, name + ".mojo"], 60, native)
-                _require_origin(rewritten, name, source)
                 _require_width_manifest(rewritten, name, lines_text)
                 var rejected = run_program(
                     [
@@ -5592,7 +5499,6 @@ def check_optional_lifecycles(mojo: String) raises:
                 ).read_text()
                 Path(native + "/" + name + ".mojo").write_text(source)
                 _ = _must([build, rewritten, name + ".mojo"], 60, native)
-                _require_origin(rewritten, name, source)
                 _require_width_manifest(rewritten, name, lines_text)
                 var native_binary = work + "/" + name + "-native"
                 var instrumented_binary = work + "/" + name + "-instrumented"

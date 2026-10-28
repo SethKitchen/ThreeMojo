@@ -5,9 +5,8 @@
 
 """Compiler-free controls for the loop coverage check.
 
-The fixture digests are those of the sources and manifests that the Python
-tool wrote. A shell script stands in for the compiler, so no test builds
-Mojo.
+The manifest digests pin each fixture's line and decision bookkeeping. A
+shell script stands in for the compiler, so no test builds Mojo.
 """
 
 from std.testing import (
@@ -31,19 +30,6 @@ from tools.check_coverage_loops import (
     fixture,
 )
 from tools.check_coverage_sources import manifest
-
-comptime SOURCES = [
-    "2575d6c73f442566d8eb67caef263393369bafbe246891d5b82b782a22e381a7",
-    "596b060dce7fadc614a097cec3db6fd31fee6b50402568824699093feb31f3a2",
-    "219ba1accb69c97a1ff97009c622fc1f3ae669d847ad6daeadefc96764fd6763",
-    "e8f32bb2e33e5a39de99aa65e613ed948af9117e455c66b0c301aa448c0e9866",
-    "8d220849db2b918997911d8c1c31c5e564f192a03e940af36a8da39d375267c5",
-    "1ce9d6d895493410b82be6a85a5e4d1a5ed840146c566dfdd8f0ee83f4ec737d",
-    "1ce219eb059a4cf36799c16a2891d2a95ac03ae332c07e7f036f73399a97b194",
-    "a706e136c71478a3e0489da0cd4422387cf3b0c597dbd81e6fba97280f9753f5",
-    "063edc7e790e839cc20d921065410ec0953b5bf1c98880fdce5941bea58ebeff",
-]
-"""The SHA-256 of each case's native source, in case order."""
 
 comptime MANIFESTS = [
     "a46e684e1da4f4dd6d2f72e0890c19a78baf3bd4cba23ff51851ac5e3a3b8882",
@@ -72,17 +58,13 @@ def _module(number: Int) -> String:
     )
 
 
-def test_fixtures_and_manifests_match_the_python_tool() raises:
+def test_fixture_manifests_keep_their_digests() raises:
     var all = cases()
     assert_equal(len(all), 9)
-    var sources = materialize[SOURCES]()
     var manifests = materialize[MANIFESTS]()
     for number in range(len(all)):
         var made = fixture(
             all[number][0], all[number][1], all[number][2], all[number][3]
-        )
-        assert_equal(
-            sha256_hex(made[0].as_bytes()), sources[number], String(number)
         )
         var text = manifest(_module(number), made[1].lines, made[1].decisions)
         assert_equal(

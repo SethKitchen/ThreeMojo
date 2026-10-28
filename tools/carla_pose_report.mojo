@@ -80,7 +80,7 @@ def repository_root(start: String) raises -> String:
     """
     var directory = start
     while True:
-        if exists(directory + "/tools/carla_lane_oracle/constants.json"):
+        if exists(directory + "/tools/fixtures/carla_lane_constants.json"):
             return directory
         var slash = directory.rfind("/")
         if slash <= 0:
@@ -1009,7 +1009,7 @@ def reports(root: String) raises -> String:
     var arc = _coefficients(trig, "_ATAN_COEFFICIENTS")
     var tree = JsonTree()
     var document = tree.parse(
-        Path(root + "/tools/carla_lane_oracle/constants.json").read_text()
+        Path(root + "/tools/fixtures/carla_lane_constants.json").read_text()
     )
     var nodes = List[Fraction]()
     var weights = List[Fraction]()

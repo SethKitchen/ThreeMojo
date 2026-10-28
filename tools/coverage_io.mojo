@@ -9,9 +9,8 @@
 
 The command runs in its own session. Its standard error is reduced: each
 `COVLINE` payload, each branch, and each complete `COVEVAL2` record is kept
-once. A passed group deadline, SIGINT, SIGTERM, or SIGHUP stops the session. When `--loop-proof` is
-set, this program checks and binds that receipt. It prints the start, the
-first probe, a running line every 60 seconds, and completion. A failed
+once. A passed group deadline, SIGINT, SIGTERM, or SIGHUP stops the session.
+It prints the start, the first probe, a running line every 60 seconds, and completion. A failed
 capture prints the last 30 lines of standard output and the last 30
 standard-error lines that do not start with `COV`. A compiled capture
 writes a phase file and reports a missing finish record.
@@ -27,7 +26,7 @@ from std.collections import Dict
 from std.ffi import c_int, external_call
 from std.memory import OpaquePointer
 from std.os import getenv, listdir, remove, setenv, unsetenv
-from std.os.path import exists, isdir, isfile, islink, realpath
+from std.os.path import exists, realpath
 from std.pathlib import Path
 from std.sys import CompilationTarget, argv, exit, stderr
 from std.tempfile import mkdtemp
@@ -43,22 +42,6 @@ from tools._carla_files import (
     read_some,
     remove_file,
     replace_file,
-)
-from tools.cache_key import input_paths
-from tools.coverage_loop_begin import (
-    _command,
-    _command_words,
-    _executable,
-    _hash_file,
-    _inside,
-    _invalid_source,
-    _join,
-    _parent,
-    _python_version,
-    _relative,
-    _resolve,
-    _symbolic,
-    _which,
 )
 from tools._owned_process import (
     EPERM,
@@ -89,16 +72,7 @@ from tools._owned_process import (
 from tools._json_tools import quote_ascii
 from tools._process import run_program, shell_quote
 from tools._python_float import parse_float
-from tools._python_json import (
-    MISSING,
-    PY_BOOL,
-    PY_DICT,
-    PY_LIST,
-    PY_STR,
-    PyJson,
-    dumps_canonical,
-    py_repr,
-)
+from tools._python_json import MISSING, PY_BOOL, PY_STR, PyJson
 from tools._sha256 import sha256_hex
 
 comptime _LINE = "COVLINE:"
@@ -110,16 +84,12 @@ comptime _WINDOW = 1024
 comptime _BYPASS = 16384
 comptime _DEADLINE = "THREEMOJO_COVERAGE_DEADLINE"
 comptime _PHASE = "THREEMOJO_COVERAGE_PHASES"
-# The loop-proof seal rederives the receipt over the whole repository,
-# which takes minutes, and `finish-report` rederives it twice.
-comptime _SEAL_SECONDS = 3600.0
 
 
 def _usage() -> String:
     """Return the usage line."""
     return (
         "usage: coverage_io capture --out FILE --err FILE"
-        + " [--loop-proof FILE] [--loop-proof-root DIR]"
         + " [--progress-seconds N] -- COMMAND..."
     )
 
@@ -450,825 +420,13 @@ def _gzip(text: String, destination: String) raises:
         raise Error("gzip failed: " + ran.output)
 
 
-def _skip_json(data: Span[UInt8, _], mut cursor: List[Int]):
-    """Move past ASCII whitespace in a JSON text.
-
-    Args:
-        data: The JSON bytes.
-        cursor: The current offset, in a one-element list.
-    """
-    while cursor[0] < len(data):
-        var byte = data[cursor[0]]
-        if byte != 32 and byte != 9 and byte != 10 and byte != 13:
-            break
-        cursor[0] += 1
-
-
-def _json_string(data: Span[UInt8, _], mut cursor: List[Int]) raises -> String:
-    """Read one JSON string and return its text.
-
-    Args:
-        data: The JSON bytes.
-        cursor: The offset of the opening quote.
-
-    Returns:
-        The decoded text.
-
-    Raises:
-        Error: If the string does not end.
-    """
-    cursor[0] += 1
-    var raw = List[UInt8]()
-    while cursor[0] < len(data):
-        var byte = data[cursor[0]]
-        cursor[0] += 1
-        if byte == 34:
-            return String(from_utf8_lossy=raw)
-        if byte != 92:
-            raw.append(byte)
-            continue
-        if cursor[0] >= len(data):
-            break
-        var escaped = data[cursor[0]]
-        cursor[0] += 1
-        if escaped == 117:
-            var point = 0
-            for _ in range(4):
-                if cursor[0] >= len(data):
-                    raise Error("Duplicate receipt key: ")
-                var hex = Int(data[cursor[0]])
-                cursor[0] += 1
-                var digit = 0
-                if hex >= 48 and hex <= 57:
-                    digit = hex - 48
-                elif hex >= 97 and hex <= 102:
-                    digit = hex - 87
-                elif hex >= 65 and hex <= 70:
-                    digit = hex - 55
-                point = point * 16 + digit
-            if point < 128:
-                raw.append(UInt8(point))
-            else:
-                raw.append(UInt8(point))
-            continue
-        if escaped == 110:
-            raw.append(10)
-        elif escaped == 114:
-            raw.append(13)
-        elif escaped == 116:
-            raw.append(9)
-        else:
-            raw.append(escaped)
-    raise Error("Malformed loop-proof receipt")
-
-
-def _json_value(data: Span[UInt8, _], mut cursor: List[Int]) raises:
-    """Walk one JSON value, rejecting a repeated object key.
-
-    Args:
-        data: The JSON bytes.
-        cursor: The current offset.
-
-    Raises:
-        Error: When an object repeats a key, or the text is not JSON.
-    """
-    _skip_json(data, cursor)
-    if cursor[0] >= len(data):
-        raise Error("Malformed loop-proof receipt")
-    var byte = data[cursor[0]]
-    if byte == 123:
-        cursor[0] += 1
-        var keys = List[String]()
-        _skip_json(data, cursor)
-        if cursor[0] < len(data) and data[cursor[0]] == 125:
-            cursor[0] += 1
-            return
-        while True:
-            _skip_json(data, cursor)
-            var key = _json_string(data, cursor)
-            for have in keys:
-                if have == key:
-                    raise Error("Duplicate receipt key: " + key)
-            keys.append(key)
-            _skip_json(data, cursor)
-            if cursor[0] >= len(data) or data[cursor[0]] != 58:
-                raise Error("Malformed loop-proof receipt")
-            cursor[0] += 1
-            _json_value(data, cursor)
-            _skip_json(data, cursor)
-            if cursor[0] < len(data) and data[cursor[0]] == 125:
-                cursor[0] += 1
-                return
-            if cursor[0] >= len(data) or data[cursor[0]] != 44:
-                raise Error("Malformed loop-proof receipt")
-            cursor[0] += 1
-    if byte == 91:
-        cursor[0] += 1
-        _skip_json(data, cursor)
-        if cursor[0] < len(data) and data[cursor[0]] == 93:
-            cursor[0] += 1
-            return
-        while True:
-            _json_value(data, cursor)
-            _skip_json(data, cursor)
-            if cursor[0] < len(data) and data[cursor[0]] == 93:
-                cursor[0] += 1
-                return
-            if cursor[0] >= len(data) or data[cursor[0]] != 44:
-                raise Error("Malformed loop-proof receipt")
-            cursor[0] += 1
-    if byte == 34:
-        _ = _json_string(data, cursor)
-        return
-    if byte == 116:
-        cursor[0] += 4
-        return
-    if byte == 102:
-        cursor[0] += 5
-        return
-    if byte == 110:
-        cursor[0] += 4
-        return
-    while cursor[0] < len(data):
-        var mark = data[cursor[0]]
-        if mark == 44 or mark == 125 or mark == 93 or mark == 32 or mark == 10:
-            return
-        cursor[0] += 1
-
-
-def _reject_duplicate_keys(text: String) raises:
-    """Reject a receipt that repeats a key, as `read_receipt` does.
-
-    Args:
-        text: The receipt text.
-
-    Raises:
-        Error: When a key is repeated or the text is not JSON.
-    """
-    var cursor = List[Int]()
-    cursor.append(0)
-    _json_value(text.as_bytes(), cursor)
-
-
-def _base_name(path: String) -> String:
-    """Return the last component of `path`.
-
-    Args:
-        path: A path.
-
-    Returns:
-        The file name.
-    """
-    var slash = path.rfind("/")
-    if slash < 0:
-        return path
-    return String(path[byte = slash + 1 :])
-
-
-def _stem_name(path: String) -> String:
-    """Return the file stem, as `Path.stem` does.
-
-    Args:
-        path: A path.
-
-    Returns:
-        The last component without its last suffix.
-    """
-    var base = _base_name(path)
-    var dot = base.rfind(".")
-    if dot <= 0:
-        return base
-    return String(base[byte=:dot])
-
-
-def _expand_token(value: String, root: String, build: String) -> String:
-    """Replace a `@ROOT@` or `@BUILD@` prefix.
-
-    Args:
-        value: A sealed path.
-        root: The resolved repository root.
-        build: The resolved build directory.
-
-    Returns:
-        The path on this machine.
-    """
-    if value == "@ROOT@":
-        return root
-    if value == "@BUILD@":
-        return build
-    if value.startswith("@ROOT@/"):
-        return _join(root, String(value[byte=7:]))
-    if value.startswith("@BUILD@/"):
-        return _join(build, String(value[byte=8:]))
-    return value
-
-
-def _sorted_copy(names: List[String]) -> List[String]:
-    """Return `names` in byte order.
-
-    Args:
-        names: The strings.
-
-    Returns:
-        A sorted copy.
-    """
-    var copy = List[String]()
-    for name in names:
-        copy.append(name)
-    var index = 1
-    while index < len(copy):
-        var item = copy[index]
-        var place = index
-        while place > 0 and copy[place - 1] > item:
-            copy[place] = copy[place - 1]
-            place -= 1
-        copy[place] = item
-        index += 1
-    return copy^
-
-
-def _hash_inputs(
-    mut doc: PyJson, root: String, build: String, staged: Bool
-) raises -> Int:
-    """Return the maintained-input hashes under `root`.
-
-    Args:
-        doc: The document that holds the dict.
-        root: The directory to walk.
-        build: The build directory to leave out, or empty.
-        staged: True when `root` is the instrumented tree.
-
-    Returns:
-        A dict node.
-
-    Raises:
-        Error: If a walked file is not a source or cannot be read.
-    """
-    var node = doc.new_dict()
-    var root_real = _resolve(root)
-    var build_real = String()
-    if build.byte_length() > 0:
-        build_real = _resolve(build)
-    for relative in input_paths(root_real):
-        if _invalid_source(relative):
-            raise Error(
-                "Invalid coverage source identity: " + py_repr(relative)
-            )
-        if staged and (
-            relative == "hits"
-            or relative.startswith("hits/")
-            or relative == "loop-proofs.json"
-            or relative == "generation-inputs.json"
-        ):
-            continue
-        var full = _join(root_real, relative)
-        if not isfile(full) or not _inside(_resolve(full), root_real):
-            raise Error("Missing or escaped coverage source: " + relative)
-        if (
-            build_real.byte_length() > 0
-            and not staged
-            and _inside(_resolve(full), build_real)
-        ):
-            continue
-        doc.set(node, relative, doc.new_str(_hash_file(full)))
-    return node
-
-
-def _origin_files(
-    directory: String,
-    base: String,
-    mut names: List[String],
-    mut ancestors: List[String],
-) raises:
-    """Collect `.cov-origin` files under `directory`.
-
-    Args:
-        directory: The directory to read.
-        base: The build directory.
-        names: The relative paths found so far.
-        ancestors: Real paths of the directories above this one.
-
-    Raises:
-        Error: If a directory cannot be resolved.
-    """
-    var real = realpath(directory)
-    for seen in ancestors:
-        if seen == real:
-            return
-    ancestors.append(real)
-    var listed: List[String]
-    try:
-        listed = listdir(directory)
-    except:
-        _ = ancestors.pop()
-        return
-    for name in listed:
-        var full = directory + "/" + name
-        if isdir(full):
-            _origin_files(full, base, names, ancestors)
-        elif isfile(full) and name.endswith(".cov-origin"):
-            if full.startswith(base + "/"):
-                names.append(_relative(full, base))
-    _ = ancestors.pop()
-
-
-def _same_json(
-    left: PyJson, left_node: Int, right: PyJson, right_node: Int
-) raises -> Bool:
-    """Return whether two values have the same canonical JSON.
-
-    Args:
-        left: The first document.
-        left_node: The first value.
-        right: The second document.
-        right_node: The second value.
-
-    Returns:
-        True when the canonical texts are equal.
-
-    Raises:
-        Error: If either value cannot be written.
-    """
-    return dumps_canonical(left, left_node) == dumps_canonical(
-        right, right_node
-    )
-
-
-def _list_has(doc: PyJson, node: Int, text: String) raises -> Bool:
-    """Return whether a string list contains `text`.
-
-    Args:
-        doc: The document.
-        node: A list.
-        text: The string.
-
-    Returns:
-        True when an item equals `text`.
-
-    Raises:
-        Error: If an item position is past the end.
-    """
-    for index in range(doc.length(node)):
-        var item = doc.item(node, index)
-        if doc.kind(item) == PY_STR and doc.text(item) == text:
-            return True
-    return False
-
-
-def _expected_command(
-    doc: PyJson, execution: Int, suite: String, profile: String
-) raises -> List[String]:
-    """Return the sealed capture command for one suite.
-
-    Args:
-        doc: The receipt document.
-        execution: The execution contract.
-        suite: The staged suite path.
-        profile: `raw`, `aot`, or `aot-hits`.
-
-    Returns:
-        The symbolic command.
-
-    Raises:
-        Error: When the suite or profile is outside the contract.
-    """
-    if not _list_has(doc, doc.at(execution, "suites"), suite) or not _list_has(
-        doc, doc.at(execution, "profiles"), profile
-    ):
-        raise Error(
-            "Capture suite/profile is outside the sealed execution contract"
-        )
-    var words = List[String]()
-    var compiler = doc.at(execution, "compiler")
-    for index in range(doc.length(compiler)):
-        var item = doc.item(compiler, index)
-        var path = doc.find(item, "path")
-        if path >= 0:
-            words.append(doc.text(path))
-        else:
-            words.append(doc.text(doc.at(item, "literal")))
-    var command = List[String]()
-    command.append("@ROOT@/tools/tool.sh")
-    for word in words:
-        command.append(word)
-    if profile == "raw":
-        command.append("native_test_support")
-        command.append("run")
-    else:
-        command.append("coverage_hit_aot")
-        command.append("--profile")
-        command.append(profile)
-    command.append("--root")
-    command.append("@BUILD@")
-    command.append("--suite")
-    command.append("@BUILD@/" + suite)
-    command.append("--cache")
-    command.append(doc.text(doc.at(execution, "cache")))
-    command.append("--")
-    for word in words:
-        command.append(word)
-    command.append("run")
-    command.append("-I")
-    command.append("@BUILD@")
-    command.append("@BUILD@/" + suite)
-    return command^
-
-
-def _execution_contract(
-    root: String,
-    build: String,
-    inputs: PyJson,
-    input_node: Int,
-    words: List[String],
-    cache: String,
-    suites: List[String],
-) raises -> String:
-    """Return the canonical execution contract.
-
-    Args:
-        root: The resolved repository root.
-        build: The resolved build directory.
-        inputs: The document that holds the staged inputs.
-        input_node: The staged-input dict.
-        words: The compiler command.
-        cache: The cache directory.
-        suites: The capture suites.
-
-    Returns:
-        The canonical JSON text.
-
-    Raises:
-        Error: When the suite list is not staged, or a compiler is missing.
-    """
-    var selected = _sorted_copy(suites)
-    for index in range(len(selected)):
-        for other in range(index + 1, len(selected)):
-            if selected[index] == selected[other]:
-                raise Error("Capture suite inventory is invalid or not staged")
-        if inputs.find(input_node, selected[index]) < 0:
-            raise Error("Capture suite inventory is invalid or not staged")
-    var doc = PyJson()
-    var node = doc.new_dict()
-    doc.root = node
-    doc.set(node, "schema", doc.new_str("coverage-execution-v1"))
-    var python = _which("python3")
-    if python.byte_length() == 0:
-        raise Error("Missing capture executable: python3")
-    var resolved = _resolve(python)
-    var interpreter = doc.new_dict()
-    doc.set(interpreter, "path", doc.new_str(_symbolic(resolved, root, build)))
-    doc.set(interpreter, "sha256", doc.new_str(_hash_file(resolved)))
-    doc.set(node, "python", interpreter)
-    doc.set(node, "compiler", _command_words(doc, words, root, build))
-    doc.set(node, "cache", doc.new_str(_symbolic(_resolve(cache), root, build)))
-    var suite_list = doc.new_list()
-    for suite in selected:
-        doc.append(suite_list, doc.new_str(suite))
-    doc.set(node, "suites", suite_list)
-    var cc = getenv("CC", "cc")
-    doc.set(node, "cc", doc.new_str(cc))
-    doc.set(node, "native_compiler", _command(doc, cc, root, build))
-    var profiles = doc.new_list()
-    doc.append(profiles, doc.new_str("raw"))
-    doc.append(profiles, doc.new_str("aot"))
-    doc.append(profiles, doc.new_str("aot-hits"))
-    doc.set(node, "profiles", profiles)
-    var flags = doc.new_list()
-    doc.append(flags, doc.new_str("run"))
-    doc.append(flags, doc.new_str("-I"))
-    doc.append(flags, doc.new_str("@BUILD@"))
-    doc.append(flags, doc.new_str("@SUITE@"))
-    doc.set(node, "capture_flags", flags)
-    return doc.dumps()
-
-
-def _check_inputs(
-    doc: PyJson, receipt: Int, root: String, build: String
-) raises:
-    """Check a sealed receipt against the current tree.
-
-    Args:
-        doc: The receipt document.
-        receipt: The receipt object.
-        root: The resolved repository root.
-        build: The resolved build directory.
-
-    Raises:
-        Error: With Python's text when a sealed byte has changed.
-    """
-    var fresh = PyJson()
-    var hashed = _hash_inputs(fresh, root, build, False)
-    if not _same_json(fresh, hashed, doc, doc.at(receipt, "root_inputs")):
-        raise Error("Stale or modified capture input binding")
-    var staged_doc = PyJson()
-    var staged = _hash_inputs(staged_doc, build, String(), True)
-    var recorded = PyJson()
-    var recorded_node = recorded.new_dict()
-    var inputs = doc.at(receipt, "inputs")
-    for index in range(doc.length(inputs)):
-        var name = doc.key(inputs, index)
-        var item = doc.value(inputs, index)
-        recorded.set(
-            recorded_node,
-            name,
-            recorded.new_str(doc.text(doc.at(item, "instrumented"))),
-        )
-    if not _same_json(staged_doc, staged, recorded, recorded_node):
-        raise Error("Stale or modified capture input binding")
-    var generation = doc.at(receipt, "generation")
-    if (
-        _hash_file(_join(build, "manifest.txt"))
-        != doc.text(doc.at(receipt, "manifest_sha256"))
-        or _hash_file(_join(build, "origins.ready"))
-        != doc.text(doc.at(generation, "index_sha256"))
-        or _hash_file(_join(build, "generation-inputs.json"))
-        != doc.text(doc.at(generation, "checkpoint_sha256"))
-    ):
-        raise Error("Stale or modified capture input binding")
-    var found = List[String]()
-    var ancestors = List[String]()
-    _origin_files(build, build, found, ancestors)
-    var actual = PyJson()
-    var actual_node = actual.new_dict()
-    for name in found:
-        actual.set(
-            actual_node, name, actual.new_str(_hash_file(_join(build, name)))
-        )
-    var expected = PyJson()
-    var expected_node = expected.new_dict()
-    var modules = doc.at(generation, "modules")
-    for index in range(doc.length(modules)):
-        var name = doc.key(modules, index)
-        var item = doc.value(modules, index)
-        expected.set(
-            expected_node,
-            name + ".cov-origin",
-            expected.new_str(doc.text(doc.at(item, "origin_sha256"))),
-        )
-    if not _same_json(actual, actual_node, expected, expected_node):
-        raise Error("Stale or modified capture generation origins")
-    var tools = doc.at(receipt, "root_inputs")
-    for name in [
-        "tools/coverage_loop_proofs.py",
-        "tools/cache_key.py",
-        "tools/coverage_toolchain_identity.py",
-    ]:
-        if doc.text(doc.at(tools, name)) != _hash_file(_join(root, name)):
-            raise Error("Stale or modified executing capture verifier")
-    var execution = doc.at(receipt, "execution")
-    var words = List[String]()
-    var compiler = doc.at(execution, "compiler")
-    for index in range(doc.length(compiler)):
-        var item = doc.item(compiler, index)
-        var path = doc.find(item, "path")
-        if path >= 0:
-            words.append(_expand_token(doc.text(path), root, build))
-        else:
-            words.append(doc.text(doc.at(item, "literal")))
-    var suites = List[String]()
-    var suite_node = doc.at(execution, "suites")
-    for index in range(doc.length(suite_node)):
-        suites.append(doc.text(doc.item(suite_node, index)))
-    var cache = _expand_token(doc.text(doc.at(execution, "cache")), root, build)
-    var current = _execution_contract(
-        root, build, doc, inputs, words, cache, suites
-    )
-    if (
-        current != dumps_canonical(doc, execution)
-        or doc.text(doc.at(receipt, "python")) != _python_version()
-    ):
-        raise Error("Stale or modified capture compiler/execution identity")
-
-
-def _read_receipt(path: String) raises -> PyJson:
-    """Read a loop-proof receipt and check its digest.
-
-    Args:
-        path: The receipt file.
-
-    Returns:
-        The document. Its root is the envelope.
-
-    Raises:
-        Error: With Python's text when the receipt is malformed.
-    """
-    var text = Path(path).read_text()
-    _reject_duplicate_keys(text)
-    var doc = PyJson.parse(text)
-    var root = doc.root
-    if (
-        doc.kind(root) != PY_DICT
-        or doc.length(root) != 2
-        or doc.find(root, "receipt") < 0
-        or doc.find(root, "sha256") < 0
-    ):
-        raise Error("Malformed loop-proof receipt")
-    var receipt = doc.at(root, "receipt")
-    if (
-        doc.kind(receipt) != PY_DICT
-        or doc.text(doc.at(receipt, "schema")) != "constant-loops-v2"
-    ):
-        raise Error("Unsupported loop-proof schema")
-    var body = dumps_canonical(doc, receipt)
-    if doc.text(doc.at(root, "sha256")) != sha256_hex(body.as_bytes()):
-        raise Error("Loop-proof receipt digest mismatch")
-    return doc^
-
-
-def _consumer(doc: PyJson, receipt: Int, root: String) raises:
-    """Check that the receipt names this capture wrapper.
-
-    Args:
-        doc: The receipt document.
-        receipt: The receipt object.
-        root: The resolved repository root.
-
-    Raises:
-        Error: When `tools/coverage_io.py` is not the sealed wrapper.
-    """
-    var inputs = doc.at(receipt, "root_inputs")
-    var recorded = doc.find(inputs, "tools/coverage_io.py")
-    var actual = _hash_file(_join(root, "tools/coverage_io.py"))
-    if recorded < 0 or doc.text(recorded) != actual:
-        raise Error("Stale or modified executing capture/report wrapper")
-
-
-def _checked_command(
-    doc: PyJson,
-    receipt: Int,
-    root: String,
-    build: String,
-    command: List[String],
-    capture: String,
-    output: String,
-) raises -> List[String]:
-    """Return the sealed command when `command` matches it.
-
-    Args:
-        doc: The receipt document.
-        receipt: The receipt object.
-        root: The resolved repository root.
-        build: The resolved build directory.
-        command: The command about to run.
-        capture: The capture path.
-        output: The standard-output path.
-
-    Returns:
-        The symbolic command, then the suite, then the profile. The suite
-        is the second-to-last item and the profile is the last item.
-
-    Raises:
-        Error: With Python's text when the command is not the sealed one.
-    """
-    if len(command) == 0:
-        raise Error("Coverage capture command identity is required")
-    var suite_at = -1
-    for index in range(len(command)):
-        if command[index] == "--suite":
-            suite_at = index
-    if suite_at < 0 or suite_at + 1 >= len(command):
-        raise Error("Capture command does not identify a staged suite")
-    var full = _resolve(_join(root, command[suite_at + 1]))
-    if not _inside(full, build):
-        raise Error("Capture command does not identify a staged suite")
-    var suite = "." if full == build else _relative(full, build)
-    var profile = String("raw")
-    for index in range(len(command)):
-        if command[index] == "--profile":
-            if index + 1 >= len(command):
-                raise Error("Missing capture execution profile")
-            profile = command[index + 1]
-    var execution = doc.at(receipt, "execution")
-    var expected = _expected_command(doc, execution, suite, profile)
-    if len(command) != len(expected):
-        raise Error(
-            "Capture command differs from its sealed execution contract"
-        )
-    for index in range(len(command)):
-        var wanted = expected[index]
-        var normalized = command[index]
-        var is_path = (
-            wanted.startswith("@ROOT@")
-            or wanted.startswith("@BUILD@")
-            or wanted.startswith("/")
-        )
-        if index == 0:
-            normalized = _symbolic(
-                _executable(command[index], root), root, build
-            )
-        elif is_path:
-            normalized = _symbolic(_join(root, command[index]), root, build)
-        if normalized != wanted:
-            raise Error(
-                "Capture command differs from its sealed execution contract"
-            )
-    if getenv("CC", "cc") != doc.text(doc.at(execution, "cc")):
-        raise Error(
-            "Capture native-compiler setting differs from its sealed contract"
-        )
-    var stem = _stem_name(suite)
-    if _base_name(capture) != stem + ".txt.gz":
-        raise Error("Capture filename does not identify its sealed suite")
-    if _base_name(output) != stem + ".out":
-        raise Error(
-            "Capture stdout filename does not identify its sealed suite"
-        )
-    expected.append(suite)
-    expected.append(profile)
-    return expected^
-
-
-def _bind_receipt(
-    proof_sha: String,
-    err_path: String,
-    out_path: String,
-    checked: List[String],
-) raises:
-    """Write the capture binding next to the reduced capture.
-
-    Args:
-        proof_sha: The receipt digest.
-        err_path: The reduced capture.
-        out_path: The standard-output file.
-        checked: The symbolic command, the suite, and the profile.
-
-    Raises:
-        Error: If a capture file cannot be read.
-    """
-    var profile = checked[len(checked) - 1]
-    var suite = checked[len(checked) - 2]
-    var doc = PyJson()
-    var node = doc.new_dict()
-    doc.root = node
-    doc.set(node, "schema", doc.new_str("constant-loops-v2"))
-    doc.set(node, "proof_sha256", doc.new_str(proof_sha))
-    doc.set(node, "capture", doc.new_str(_base_name(err_path)))
-    doc.set(node, "capture_sha256", doc.new_str(_hash_file(err_path)))
-    doc.set(node, "output", doc.new_str(_base_name(out_path)))
-    doc.set(node, "output_sha256", doc.new_str(_hash_file(out_path)))
-    doc.set(node, "suite", doc.new_str(suite))
-    doc.set(node, "profile", doc.new_str(profile))
-    var command = doc.new_list()
-    for index in range(len(checked) - 2):
-        doc.append(command, doc.new_str(checked[index]))
-    doc.set(node, "command", command)
-    Path(err_path + ".proof.json").write_text(doc.dumps() + "\n")
-
-
-def _proof(
-    mode: String,
-    out_path: String,
-    err_path: String,
-    proof: String,
-    root: String,
-    command: List[String],
-) raises:
-    """Check or bind the loop proof for one capture.
-
-    Args:
-        mode: `preflight` or `bind`.
-        out_path: The standard-output file.
-        err_path: The reduced capture.
-        proof: The loop-proof receipt.
-        root: The source root.
-        command: The captured command.
-
-    Raises:
-        Error: If the proof check fails.
-    """
-    var side = err_path + ".proof.json"
-    if mode == "preflight" and (islink(side) or exists(side)):
-        remove(side)
-    var proof_root = _resolve(root)
-    var proof_build = _resolve(_parent(_resolve(proof)))
-    var doc = _read_receipt(proof)
-    var receipt = doc.at(doc.root, "receipt")
-    _consumer(doc, receipt, proof_root)
-    if mode == "bind":
-        var again = _read_receipt(proof)
-        if not _same_json(doc, doc.root, again, again.root):
-            raise Error("Loop-proof binding changed during capture")
-    _check_inputs(doc, receipt, proof_root, proof_build)
-    var checked = _checked_command(
-        doc, receipt, proof_root, proof_build, command, err_path, out_path
-    )
-    if mode == "bind":
-        _bind_receipt(
-            doc.text(doc.at(doc.root, "sha256")), err_path, out_path, checked
-        )
-
-
 def _compiled(command: List[String]) -> Bool:
     """Return whether `command` is an `aot` or `aot-hits` profile."""
     var profile = String()
     var named = False
     var index = 0
     while index < len(command):
-        if (
-            command[index] == "coverage_hit_aot"
-            or command[index].endswith("/coverage_hit_aot.py")
-            or command[index].endswith("coverage_hit_aot.py")
-        ):
+        if command[index] == "coverage_hit_aot":
             named = True
         if command[index] == "--profile" and index + 1 < len(command):
             profile = command[index + 1]
@@ -1356,22 +514,16 @@ def _exception_name(error: Error) -> String:
     return "OSError"
 
 
-def _header_json(
-    suite: String, proof_sha: String, command: List[String]
-) -> String:
+def _header_json(suite: String, command: List[String]) -> String:
     """Return one phase header line, as `json.dumps` writes it.
 
     Args:
         suite: `Path(out_path).stem`.
-        proof_sha: The receipt digest, or empty for JSON null.
         command: The captured command.
 
     Returns:
         The header object and its trailing newline.
     """
-    var proof_text = "null"
-    if proof_sha.byte_length() > 0:
-        proof_text = quote_ascii(proof_sha)
     var words = String("[")
     var index = 0
     for word in command:
@@ -1384,9 +536,7 @@ def _header_json(
     return (
         '{"schema": "coverage-exec-phases-v1", "suite": '
         + quote_ascii(suite)
-        + ', "phase": "capture_header", "proof_sha256": '
-        + proof_text
-        + ', "command_sha256": "'
+        + ', "phase": "capture_header", "command_sha256": "'
         + digest
         + '", "semantics": "launch requests only; missing finish means'
         ' incomplete"}\n'
@@ -1519,19 +669,15 @@ struct PhaseWatch(ImplicitlyCopyable, Movable):
         self.active = False
 
 
-def _phase_header(
-    command: List[String], out_path: String, proof: String
-) -> PhaseWatch:
+def _phase_header(command: List[String], out_path: String) -> PhaseWatch:
     """Replace the phase file when this capture is compiled.
 
-    A raw capture still removes an old phase file. The published
-    `proof_sha256` is the receipt digest. A write failure prints
+    A raw capture still removes an old phase file. A write failure prints
     `phase diagnostics unavailable` and leaves the capture running.
 
     Args:
         command: The captured command.
         out_path: The standard-output file.
-        proof: The loop-proof path, or empty.
 
     Returns:
         The watch. It is inactive when this capture keeps no phases.
@@ -1545,19 +691,13 @@ def _phase_header(
         _unlink_name(path)
         if not _compiled(command):
             return PhaseWatch()
-        var proof_sha = String()
-        if proof.byte_length() > 0:
-            var doc = _read_receipt(proof)
-            proof_sha = doc.text(doc.at(doc.root, "sha256"))
         var slash = path.rfind("/")
         var directory = "." if slash < 0 else String(path[byte=:slash])
         if directory.byte_length() == 0:
             directory = "/"
         var name = path if slash < 0 else String(path[byte = slash + 1 :])
         temporary = make_temporary(directory, name + ".", "")
-        Path(temporary).write_text(
-            _header_json(_file_stem(out_path), proof_sha, command)
-        )
+        Path(temporary).write_text(_header_json(_file_stem(out_path), command))
         var info = lstat_id(temporary)
         replace_file(temporary, path)
         _ = setenv(_PHASE, path, True)
@@ -2174,13 +1314,11 @@ def _capture(arguments: List[String], hold: SignalHold) raises -> Int:
         The captured command's status.
 
     Raises:
-        Error: If the command line, the proof, a probe record, or the
-            private directory is wrong.
+        Error: If the command line, a probe record, or the private
+            directory is wrong.
     """
     var out_path = String()
     var err_path = String()
-    var proof = String()
-    var root = "."
     var interval = 60.0
     var command = List[String]()
     var index = 0
@@ -2192,23 +1330,13 @@ def _capture(arguments: List[String], hold: SignalHold) raises -> Int:
                 command.append(arguments[index])
                 index += 1
             break
-        if (
-            word == "--out"
-            or word == "--err"
-            or word == "--loop-proof"
-            or word == "--loop-proof-root"
-        ):
+        if word == "--out" or word == "--err":
             if index + 1 >= len(arguments):
                 raise Error(word + " needs a value")
-            var value = arguments[index + 1]
             if word == "--out":
-                out_path = value
-            elif word == "--err":
-                err_path = value
-            elif word == "--loop-proof":
-                proof = value
+                out_path = arguments[index + 1]
             else:
-                root = value
+                err_path = arguments[index + 1]
             index += 2
             continue
         if word == "--progress-seconds":
@@ -2232,8 +1360,6 @@ def _capture(arguments: List[String], hold: SignalHold) raises -> Int:
         raise Error(_usage())
     if not (interval == interval) or interval <= 0 or interval > 1e300:
         raise Error("progress interval must be positive")
-    if proof.byte_length() > 0:
-        _proof("preflight", out_path, err_path, proof, root, command)
     var deadline = Float64(-1)
     var text = getenv(_DEADLINE, "")
     if text.byte_length() > 0:
@@ -2268,7 +1394,7 @@ def _capture(arguments: List[String], hold: SignalHold) raises -> Int:
     var records = 0
     var saw_probe = False
     var reduced = String()
-    var watch = _phase_header(command, out_path, proof)
+    var watch = _phase_header(command, out_path)
     var status = 124
     try:
         if deadline >= 0 and _now() >= deadline:
@@ -2302,8 +1428,6 @@ def _capture(arguments: List[String], hold: SignalHold) raises -> Int:
         )
         if status != 0:
             _failure_tail(command, out_path, reduced)
-        elif proof.byte_length() > 0:
-            _proof("bind", out_path, err_path, proof, root, command)
     except error:
         _progress(suite, "aborted", started, records, saw_probe)
         _finish_phases(watch)
@@ -2484,18 +1608,10 @@ def _report(arguments: List[String]) raises -> Int:
         The reporter's status.
 
     Raises:
-        Error: If the command line or the proof check is wrong.
+        Error: If the command line is wrong.
     """
     var directory = String()
-    var proof_root = String()
-    var proof_build = String()
-    var compiler = String()
-    var flags = String()
-    var mojo = String()
-    var cache = String()
-    var suites = List[String]()
     var command = List[String]()
-    var taking_suites = False
     var index = 0
     while index < len(arguments):
         var word = arguments[index]
@@ -2505,214 +1621,16 @@ def _report(arguments: List[String]) raises -> Int:
                 command.append(arguments[index])
                 index += 1
             break
-        if taking_suites and not word.startswith("--"):
-            suites.append(word)
-            index += 1
-            continue
-        taking_suites = False
-        if word.startswith("--compiler="):
-            compiler = String(word[byte=11:])
-        elif word.startswith("--flags="):
-            flags = String(word[byte=8:])
-        elif word.startswith("--mojo="):
-            mojo = String(word[byte=7:])
-        elif word.startswith("--capture-cache="):
-            cache = String(word[byte=16:])
-        elif word == "--capture-dir":
+        if word == "--capture-dir" and index + 1 < len(arguments):
             directory = arguments[index + 1]
-            index += 1
-        elif word == "--loop-proof-root":
-            proof_root = arguments[index + 1]
-            index += 1
-        elif word == "--loop-proof-build":
-            proof_build = arguments[index + 1]
-            index += 1
-        elif word == "--compiler":
-            compiler = arguments[index + 1]
-            index += 1
-        elif word == "--flags":
-            flags = arguments[index + 1]
-            index += 1
-        elif word == "--mojo":
-            mojo = arguments[index + 1]
-            index += 1
-        elif word == "--capture-cache":
-            cache = arguments[index + 1]
-            index += 1
-        elif word == "--suites":
-            taking_suites = True
-        elif word == "--help" or word == "-h":
-            raise Error(
-                "usage: coverage_io report --capture-dir DIR -- COMMAND..."
-            )
-        else:
-            raise Error("unknown argument " + word)
-        index += 1
+            index += 2
+            continue
+        if word == "--help" or word == "-h":
+            break
+        raise Error("unknown argument " + word)
     if directory.byte_length() == 0 or len(command) == 0:
         raise Error("usage: coverage_io report --capture-dir DIR -- COMMAND...")
-    var captures = _captures(directory)
-    var manifest = String()
-    if proof_root.byte_length() > 0 or proof_build.byte_length() > 0:
-        if proof_root.byte_length() == 0 or proof_build.byte_length() == 0:
-            raise Error("both loop-proof root and build are required")
-        var folder = mkdtemp(prefix="threemojo-loop-report-")
-        manifest = folder + "/manifest.txt"
-        var prepare = List[String]()
-        prepare.append("sh")
-        prepare.append("tools/tool.sh")
-        if mojo.byte_length() > 0:
-            prepare.append(mojo)
-        else:
-            prepare.append(".venv/bin/mojo")
-        prepare.append("coverage_loop_seal")
-        prepare.append("prepare-report")
-        prepare.append("--capture-dir")
-        prepare.append(directory)
-        prepare.append("--loop-proof-root")
-        prepare.append(proof_root)
-        prepare.append("--loop-proof-build")
-        prepare.append(proof_build)
-        prepare.append("--manifest")
-        prepare.append(manifest)
-        prepare.append("--compiler=" + compiler)
-        prepare.append("--flags=" + flags)
-        if mojo.byte_length() > 0:
-            prepare.append("--mojo")
-            prepare.append(mojo)
-        if cache.byte_length() > 0:
-            prepare.append("--capture-cache")
-            prepare.append(cache)
-        if len(suites) > 0:
-            prepare.append("--suites")
-            for suite in suites:
-                prepare.append(suite)
-        prepare.append("--")
-        for word in command:
-            prepare.append(word)
-        var ready = run_program(prepare, _SEAL_SECONDS, merge_errors=False)
-        if ready.output.byte_length() > 0:
-            print(ready.output, end="")
-        if ready.status != 0:
-            _ = run_program(["rm", "-rf", folder], 30.0)
-            raise Error(ready.errors)
-    var reporter = List[String]()
-    var last = len(command) - 1
-    var cursor = 0
-    while cursor < len(command):
-        if cursor == last and manifest.byte_length() > 0:
-            reporter.append(manifest)
-        else:
-            reporter.append(command[cursor])
-        cursor += 1
-    var status = _replay(reporter, captures)
-    if manifest.byte_length() > 0:
-        var finish = List[String]()
-        finish.append("sh")
-        finish.append("tools/tool.sh")
-        if mojo.byte_length() > 0:
-            finish.append(mojo)
-        else:
-            finish.append(".venv/bin/mojo")
-        finish.append("coverage_loop_seal")
-        finish.append("finish-report")
-        finish.append("--capture-dir")
-        finish.append(directory)
-        finish.append("--loop-proof-root")
-        finish.append(proof_root)
-        finish.append("--loop-proof-build")
-        finish.append(proof_build)
-        finish.append("--compiler=" + compiler)
-        finish.append("--flags=" + flags)
-        if mojo.byte_length() > 0:
-            finish.append("--mojo")
-            finish.append(mojo)
-        if cache.byte_length() > 0:
-            finish.append("--capture-cache")
-            finish.append(cache)
-        if len(suites) > 0:
-            finish.append("--suites")
-            for suite in suites:
-                finish.append(suite)
-        var checked = run_program(finish, _SEAL_SECONDS, merge_errors=False)
-        var slash = manifest.rfind("/")
-        if slash > 0:
-            _ = run_program(["rm", "-rf", String(manifest[byte=:slash])], 30.0)
-        if checked.status != 0:
-            raise Error(checked.errors)
-    return status
-
-
-def _proof_flag(arguments: List[String], name: String) raises -> String:
-    """Return the value of one proof flag.
-
-    Args:
-        arguments: The arguments after the mode.
-        name: The flag.
-
-    Returns:
-        The value.
-
-    Raises:
-        Error: When the flag is absent.
-    """
-    var index = 0
-    while index < len(arguments):
-        if arguments[index] == "--":
-            break
-        if arguments[index] == name and index + 1 < len(arguments):
-            return arguments[index + 1]
-        index += 1
-    raise Error(name + " needs a value")
-
-
-def _proof_root(arguments: List[String]) -> String:
-    """Return the proof root, or `.` when the flag is absent.
-
-    Args:
-        arguments: The arguments after the mode.
-
-    Returns:
-        The root.
-    """
-    var index = 0
-    while index < len(arguments):
-        if arguments[index] == "--":
-            break
-        if arguments[index] == "--loop-proof-root" and index + 1 < len(
-            arguments
-        ):
-            return arguments[index + 1]
-        index += 1
-    return "."
-
-
-def _proof_command(arguments: List[String]) raises -> List[String]:
-    """Return the command after `--`.
-
-    Args:
-        arguments: The arguments after the mode.
-
-    Returns:
-        The command words.
-
-    Raises:
-        Error: When `--` is absent.
-    """
-    var command = List[String]()
-    var index = 0
-    var seen = False
-    while index < len(arguments):
-        if arguments[index] == "--":
-            seen = True
-            index += 1
-            while index < len(arguments):
-                command.append(arguments[index])
-                index += 1
-            break
-        index += 1
-    if not seen:
-        raise Error("Coverage capture command identity is required")
-    return command^
+    return _replay(command, _captures(directory))
 
 
 def main() raises:
@@ -2736,16 +1654,6 @@ def main() raises:
             exit(_capture(rest, hold))
         if arguments[0] == "report":
             exit(_report(rest))
-        if arguments[0] == "preflight" or arguments[0] == "bind":
-            _proof(
-                arguments[0],
-                _proof_flag(rest, "--out"),
-                _proof_flag(rest, "--err"),
-                _proof_flag(rest, "--loop-proof"),
-                _proof_root(rest),
-                _proof_command(rest),
-            )
-            exit(0)
         raise Error(_usage())
     except error:
         print("coverage_io: " + String(error), file=stderr)

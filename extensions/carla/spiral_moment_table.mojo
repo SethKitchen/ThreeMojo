@@ -12,10 +12,9 @@ It needs its own native, coverage, and performance gates. No helper here is a
 canonical scalar evaluator. The standalone expansion keeps its infinite-error
 contract; a None result requires the original generic evaluator.
 
-Coefficient derivation, source pins, and the portable standard-library checker
-are documented in tools/carla_lane_oracle/spiral-moments.md. That checker proves
-fixed-count ideal coefficients and endpoint rounding only; it does not certify
-these runtime guards or any actual rounded geometry/error graph.
+`tools/spiral_moments.mojo` derives the table with exact rationals. It proves
+the fixed-count ideal coefficients and their endpoint rounding only. It does
+not certify these runtime guards or any rounded geometry or error graph.
 """
 
 from extensions.carla.curve_sum2 import _sum2_supported_environment

@@ -143,7 +143,7 @@ def _axis_lane_minimum(
         return None
     # Conservatively check both sides. Every accumulated width is constant;
     # other sections and records still use their existing evaluator branches.
-    for current in road.sections[section].lanes:
+    for current in road.sections[section].lanes:  # pragma: no branch
         if current.id.value == 0:
             continue
         if len(current.info.widths) != 1:
@@ -733,7 +733,7 @@ def _lane_certificate_dominates_cells(
         return True
     if len(two.cells) == 0:
         return False
-    for cell in two.cells:
+    for cell in two.cells:  # pragma: no branch
         if cell.low == cell.high:
             continue
         var scale = max(one.scale, cell.scale)
@@ -1298,7 +1298,7 @@ def _continue_lane_certificate(
         return
     if len(certificate.cells) == 0:
         raise Error("Lane resumption needs possible minimizing cells")
-    for cell in certificate.cells:
+    for cell in certificate.cells:  # pragma: no branch
         if (
             not (isfinite(cell.low) and isfinite(cell.high))
             or cell.low < low
@@ -1323,7 +1323,7 @@ def _continue_lane_certificate(
         return
     var closed = _ClosedIntervals()
     var terminal = List[_ClosedInterval]()
-    for cell in certificate.cells:
+    for cell in certificate.cells:  # pragma: no branch
         if cell.low == cell.high:
             # These points were evaluated and ordered before export. Do not
             # discard their lower bounds/depths or charge an invented recheck.

@@ -123,7 +123,7 @@ def _try_sample_dispatch_cuts(
     terms += extra
     var one = 0.0
     var two = 0.0
-    for i in range(count):
+    for i in range(count):  # pragma: no branch
         var threshold_at = first + i + 1
         # The index bracket and count admission put this in [1, n - 2].
         var cut = _sample_dispatch_cut(

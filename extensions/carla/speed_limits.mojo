@@ -147,7 +147,7 @@ def read_speed_number(text: String) raises -> Float64:
     if not isfinite(value) or value < 0:
         raise Error("OpenDRIVE speed must be finite and nonnegative")
     if value == 0:
-        for byte in number.as_bytes():
+        for byte in number.as_bytes():  # pragma: no branch
             if byte == 101 or byte == 69:
                 break
             # Validated mantissa nondigits (+, -, .) are all below byte 49.

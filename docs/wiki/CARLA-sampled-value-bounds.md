@@ -29,23 +29,6 @@ same value intersection. Only the unused derivative intersections disappear.
 Lane record, width, offset and elevation traversal and final center expressions
 retain their original operation grouping.
 
-`tools/carla_lane_oracle/check_sampled_values.py` checks all eight copied
-helpers, four value dispatch helpers, fourteen shared generic/full-Jet dispatch
-helpers, actual unique aliases/decorators, exact imports and the reviewed primitive
-graph. The complete normalized AST of all three reference modules is conservatively
-bound, including imports, aliases, union setup and skipped dispatch regions.
-
-Any dependency edit requires renewed source review. It rejects derivative
-field/flag reads, square roots, missing/extra helpers and
-source divergence. It uses explicit failures under optimized Python. It does
-not execute Mojo or regenerate production source. Twenty-five compiler-free controls
-in `tools/test_sampled_values.py` run through `make test-tools`, including stale
-full-Jet changes, arithmetic/guard/type mutations and optimized-Python refusal.
-
-Run the source check explicitly with:
-
-    python3 -B tools/carla_lane_oracle/check_sampled_values.py
-
 The native equivalence test checks all value/error/rounded-bound words on
 1,940 Town quarter domains and all 24 interval endpoint words in each of 485
 covers. It also covers scales, signed-zero/atan branches, budgets and optional

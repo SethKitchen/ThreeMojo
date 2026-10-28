@@ -117,10 +117,8 @@ comptime BUILD_TOOLS = [
 change to one, or to any file it imports, changes the selection itself."""
 
 comptime GLOBAL_TOOLS = [
-    "tools/cache_key.py",
     "tools/suite_key.mojo",
     "tools/run_suite.mojo",
-    "tools/native_test_support.py",
     "tools/native_test_support.mojo",
     "tools/fixture_runtime.mojo",
     "tools/compiler_telemetry.mojo",
@@ -176,12 +174,10 @@ comptime FLAGS = [
 comptime JOBS = [
     ("lint", "lint"),
     ("tools", "tools"),
-    ("tools-discovery", "tools"),
     ("cpu", "cpu"),
     ("cpu-macos", "cpu"),
     ("lint-macos", "lint"),
     ("tools-macos", "tools"),
-    ("tools-discovery-macos", "tools"),
     ("coverage-capture", "coverage"),
     ("coverage", "coverage"),
     ("gpu-host", "gpu"),
@@ -271,9 +267,7 @@ def kind(path: String) -> String:
         return "native"
     if is_documentation(path):
         return "docs"
-    if _contains(materialize[ROUTING](), path) or (
-        path.startswith("tools/test_") and path.endswith(".py")
-    ):
+    if _contains(materialize[ROUTING](), path):
         return "tools"
     # `make repository-check` checks the gallery table with
     # tools/example_inputs.mojo; CI does not render the gallery.
@@ -284,7 +278,6 @@ def kind(path: String) -> String:
         "tools/coverage_",
         "tools/check_coverage_",
         "tools/fixtures/coverage_",
-        "tools/carla_lane_oracle/",
     ]:
         if path.startswith(prefix):
             return "coverage_tools"

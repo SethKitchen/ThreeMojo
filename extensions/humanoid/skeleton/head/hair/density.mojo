@@ -128,7 +128,7 @@ struct HairDensity(Movable):
         if len(self.coefficients) != count:
             self.coefficients = List[Float32](length=count, fill=0)
         else:
-            for index in range(count):
+            for index in range(count):  # pragma: no branch
                 self.coefficients[index] = 0
         self.populated = False
         if len(groom.starts) == 0 or groom.starts[0] != 0:
@@ -164,7 +164,7 @@ struct HairDensity(Movable):
         # Diameter is at most cell, which is at least Float32(1e-5).
         # Thus diameter / volume stays finite even for tiny diameters.
         var deposit = self.diameter.to(METER) / volume
-        for strand in range(len(groom)):
+        for strand in range(len(groom)):  # pragma: no branch
             for index in range(
                 groom.starts[strand], groom.starts[strand + 1] - 1
             ):
@@ -175,7 +175,7 @@ struct HairDensity(Movable):
                 # Every accepted count is positive, without an artificial cap.
                 var samples = _checked_density_samples(length / (cell * 0.5))
                 var added = length * deposit / Float32(samples)
-                for sample in range(samples):
+                for sample in range(samples):  # pragma: no branch
                     var p = start + delta * (
                         (Float32(sample) + 0.5) / Float32(samples)
                     )
@@ -242,7 +242,7 @@ struct HairDensity(Movable):
         var step = direction * (self.cell * 0.5 / length)
         var p = point + step * 2.5
         var total = Float32(0)
-        for _ in range(self.resolution * 4):
+        for _ in range(self.resolution * 4):  # pragma: no branch
             var slot = self._slot(p)
             if slot < 0:
                 break

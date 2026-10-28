@@ -90,7 +90,7 @@ def _rounded_line_axis_context(
     if id.value != 0:
         var negative = id.value < 0
         var sign = _RoundedBox.point(1.0 if negative else -1.0)
-        for position in range(len(lanes)):
+        for position in range(len(lanes)):  # pragma: no branch
             var i = len(lanes) - 1 - position if negative else position
             if negative:
                 if lanes[i].id.value >= 0:

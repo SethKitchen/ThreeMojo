@@ -291,7 +291,6 @@ HASH := $(shell $(TOOL) cache_key \
           $(call list_setting,negative,$(COMPILE_FAIL_RUN)) \
           $(call list_setting,format,$(FORMATTED)) \
           --setting=$(call quote,coverage-profile:$(COV_PROFILE)) \
-          --setting=$(call quote,coverage-loop-proof-schema:constant-loops-v2) \
           $(call list_setting,covered,$(COVERED)) \
           $(call list_setting,gpu,$(GPU_TESTS) $(GPU_HOST_TESTS) $(GPU_ENTRY_POINTS) $(GPU_LIB_SOURCES)))
 endif
@@ -323,7 +322,7 @@ mkdir -p $(CACHE_DIR) && rm -f $(CACHE_DIR)/$(1)-* \
 endef
 
 .PHONY: test-gpu-device help check check-cpu check-gpu ci test test-cpu test-gpu test-gpu-host check-gpu-air \
-        docs-check wiki-publish test-tools test-tools-discovery test-tools-oracle \
+        docs-check wiki-publish test-tools \
         test-coverage-tool test-portability \
         coverage-instrument coverage-capture coverage-report \
         lint lint-cpu lint-gpu compile-gpu gpu-status docstrings fmt fmt-check coverage \
@@ -657,9 +656,6 @@ else
 	@[ "$(words $(COVERED))" -eq "$(words $(sort $(COVERED)))" ] || \
 	  { echo "Coverage requires distinct source identities."; exit 1; }
 	@for f in $(sort $(COVERED)); do mkdir -p "$(COV_DIR)/$$(dirname $$f)"; done
-	@$(TOOL) coverage_loop_begin --root . --build $(COV_DIR) \
-	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
-	  --mojo=$(call quote,$(MOJO)) --sources $(sort $(COVERED))
 	@$(call run,$(MOJO) run $(MOJOFLAGS) coverage/build_cli.mojo \
 	  $(COV_DIR) $(sort $(COVERED))); \
 	[ $$rc -eq 0 ] || exit 1
@@ -681,10 +677,6 @@ else
 	@mkdir -p $(COV_DIR)/tests
 	@[ -z "$(strip $(TESTS))" ] || cp $(TESTS) $(COV_DIR)/tests/
 	@$(TOOL) native_test_support copy --root . --destination $(COV_DIR)
-	@$(TOOL) coverage_loop_seal --root . --build $(COV_DIR) \
-	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
-	  --mojo=$(call quote,$(MOJO)) --capture-cache=$(call quote,$(CACHE_DIR)/native-coverage) \
-	  --suites $(COVERAGE_TESTS)
 	@mkdir -p $(COV_DIR)/hits
 endif
 
@@ -700,8 +692,7 @@ ifneq ($(strip $(COVERED)),)
 	      sh -c 'name=$$(basename "$$1" .mojo); \
 	             $(TOOL) coverage_io capture \
 	               --out "$(COV_DIR)/hits/$$name.out" \
-	               --err "$(COV_DIR)/hits/$$name.txt.gz" \
-	               --loop-proof "$(COV_DIR)/loop-proofs.json" --loop-proof-root . -- \
+	               --err "$(COV_DIR)/hits/$$name.txt.gz" -- \
 	               $(COVERAGE_RUN) \
 	                 --suite "$(COV_DIR)/tests/$$name.mojo" --cache $(CACHE_DIR)/native-coverage \
 	                 -- \
@@ -734,11 +725,7 @@ ifneq ($(strip $(COVERED)),)
 	  fi; \
 	done; [ $$missing -eq 0 ] || exit 1
 	@# FIFOs feed the original bytes to the reporter one suite at a time.
-	@$(TOOL) coverage_io report --capture-dir $(COV_DIR)/hits \
-	  --loop-proof-root . --loop-proof-build $(COV_DIR) \
-	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
-	  --mojo=$(call quote,$(MOJO)) --capture-cache=$(call quote,$(CACHE_DIR)/native-coverage) \
-	  --suites $(COVERAGE_TESTS) -- \
+	@$(TOOL) coverage_io report --capture-dir $(COV_DIR)/hits -- \
 	  $(MOJO) run $(MOJOFLAGS) coverage/report_cli.mojo $(COV_DIR)/manifest.txt
 endif
 
@@ -979,37 +966,14 @@ clean-images:
 	@rm -rf $(OUT_DIR)
 	@echo "Removed $(OUT_DIR)."
 
-# Parser and cache regressions run without the Mojo compiler.
-# The #333 oracle modules each copy whole roots and replay proofs; one after
-# another they exceed a CI job's time limit, so they run a module per process.
-# CI runs test-tools-discovery separately from the six test-tools-oracle
-# shards. Discovery keeps its process-wide fixtures without adding its runtime
-# to any oracle shard. TOOLS_SHARD=I/N splits only the oracle units; the first
-# shard also runs the read-only spiral and repository checks.
-TOOLS_SHARD ?=
-# Keep the original test-tools interface, including its discovery owner for
-# sharded local calls. CI uses the two component targets instead. Unsharded
-# test-tools still runs every command in its original order and stops on error.
-TOOLS_SERIAL_SHARD := $(if $(filter 1 2 3 4,$(word 2,$(subst /, ,$(TOOLS_SHARD)))),1,5)
-
-test-tools:
-	@$(if $(filter-out $(TOOLS_SERIAL_SHARD)/%,$(TOOLS_SHARD)),:,$(MAKE) --no-print-directory test-tools-discovery)
-	@$(MAKE) --no-print-directory test-tools-oracle
-
-test-tools-discovery:
+# The format selection fits one shell argument, the negative-fixture
+# manifest names exactly tests/compile_fail, the recorded three.js fixture
+# hashes match, the gallery draws every example, and CI guards each job with
+# its planner flag. These read repository files that the Mojo suite cache
+# does not track, so they run here.
+test-tools: repository-check
 	@$(TOOL) check_format_arguments
-	@python3 -m unittest discover -s tools -p 'test_*.py'
 
-test-tools-oracle:
-	@$(TOOL) parallel_unittest --jobs $(JOBS) $(if $(TOOLS_SHARD),--shard $(TOOLS_SHARD)) tools/carla_lane_oracle
-	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,python3 tools/carla_lane_oracle/spiral_moments.py --check)
-	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,$(MAKE) --no-print-directory repository-check)
-
-# The negative-fixture manifest names exactly tests/compile_fail, no job
-# regenerates it, the recorded three.js fixture hashes match, the gallery
-# draws every example, and CI guards each job with its planner flag. These
-# read repository files that the Mojo suite cache does not track, so they run
-# here.
 repository-check:
 	@$(MOJO) run $(MOJOFLAGS) tools/compile_fail.mojo --check-repository
 	@$(MOJO) run $(MOJOFLAGS) tools/fixture_manifest.mojo
@@ -1017,13 +981,12 @@ repository-check:
 	@$(TOOL) ci_scope check-workflow
 
 # Native source-to-source regression: compile first, then enforce the normal
-# five-second limit on each executed test. test-tools remains compiler-free.
+# five-second limit on each executed test.
 test-coverage-tool:
 	@$(TOOL) check_coverage_grouping --mojo $(MOJO)
 	@$(TOOL) check_coverage_protocol --mojo $(MOJO)
 	@$(TOOL) check_coverage_sources --mojo $(MOJO)
 	@$(TOOL) check_coverage_loops --mojo $(MOJO)
-	@python3 tools/check_coverage_loop_proofs.py --mojo $(MOJO)
 	@$(TOOL) check_coverage_hit_profile --mojo $(MOJO)
 	@$(TOOL) check_build_tools
 

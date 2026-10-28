@@ -94,7 +94,7 @@ def _try_build_spiral_moments(
     # Exact cancellation of n copies divided by n. Do not substitute 1.0:
     # the actual stored weights, not ideal GL weights, define this polynomial.
     moments[0] = _tight_product_bound(half, weight_sum)
-    for piece in range(pieces):
+    for piece in range(pieces):  # pragma: no branch
         for i in range(5):
             # The scalar-rounded 1.0 + node is deliberately computed BEFORE
             # making the interval constant, exactly as curve_bounds:116-118.

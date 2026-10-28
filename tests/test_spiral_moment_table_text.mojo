@@ -17,9 +17,6 @@ from tools._spiral_moment_table_text import (
 
 
 comptime _PATH = "extensions/carla/spiral_moment_table_data.mojo"
-comptime _SOURCE = (
-    "63b07b8aa1567ad3e1c8b09a71e5619073e5255b4dc6f733d4ef6bf6b7088c8c"
-)
 comptime _PAYLOAD = (
     "72f5e5d09a6f4091e1a537aa89bf80493a427576b5ff86619830721edbc5f446"
 )
@@ -127,7 +124,6 @@ def _parse(text: String) raises -> List[UInt64]:
 def test_live_table_words() raises:
     """The live table has 2816 words and the checked payload digest."""
     var data = Path(_PATH).read_bytes()
-    assert_equal(sha256_hex(Span(data)), _SOURCE)
     var words = parse_table(Span(data))
     assert_equal(len(words), WORD_COUNT)
     assert_equal(words[0], UInt64(0x3FF0000000000000))

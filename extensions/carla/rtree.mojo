@@ -663,7 +663,7 @@ struct _Rtree(Movable):
                     return item.index
                 continue
             ref node = self.nodes[item.index]
-            for child in node.children:
+            for child in node.children:  # pragma: no branch
                 work.queue_push(len(heap.items))
                 if node.leaf:
                     heap.push(

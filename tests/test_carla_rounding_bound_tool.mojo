@@ -266,7 +266,9 @@ def test_constants_polynomials_and_endpoint_squares() raises:
     with assert_raises(contains="refused"):
         _require(False, "refused")
     var root = repository_root(realpath("."))
-    assert_true(Path(root + "/tools/carla_lane_oracle/constants.json").exists())
+    assert_true(
+        Path(root + "/tools/fixtures/carla_lane_constants.json").exists()
+    )
     with assert_raises(contains="cannot find"):
         _ = repository_root("/tmp")
     with assert_raises(contains="cannot find"):

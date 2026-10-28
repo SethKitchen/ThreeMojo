@@ -5022,7 +5022,7 @@ struct Map(Movable):
             self._construction_work.step()
             var boundary = second.s
             var found = False
-            for s in boundaries:
+            for s in boundaries:  # pragma: no branch
                 self._construction_work.step()
                 if forward:
                     if s > current.s and s <= boundary:

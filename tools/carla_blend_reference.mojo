@@ -9,15 +9,13 @@ The ledger matches the former `blend_fixture_reference.py` report. The
 arithmetic uses exact fractions and binary64 rounding. It does not read
 production Mojo code.
 
-    mojo run -I . tools/carla_blend_reference.mojo
+    mojo run -I . tools/carla_blend_reference.mojo [--ledger]
 
-The ledger is `tools/carla_lane_oracle/blend-row-ledger.json`.
+`--ledger` prints the JSON ledger instead of the row summary.
 """
 
-from std.ffi import c_int, external_call
+from std.ffi import external_call
 from std.memory import bitcast
-from std.os.path import realpath
-from std.pathlib import Path
 from std.sys import argv
 
 from tools._bigint import BigInt
@@ -713,35 +711,16 @@ def summary_text() raises -> String:
     return text
 
 
-def repository() raises -> String:
-    """Return the repository root.
-
-    Returns:
-        The absolute repository root.
-    """
-    var directory = realpath(".")
-    for _ in range(8):
-        if Path(directory + "/assets/carla/town.xodr").exists():
-            return directory
-        var slash = directory.rfind("/")
-        if slash <= 0:
-            break
-        var parent = String(directory[byte=:slash])
-        directory = parent
-    return realpath(".")
-
-
 def main() raises:
-    """Write the blend ledger and print each row.
+    """Print each row, or the JSON ledger with `--ledger`.
 
     Raises:
-        Error: If the derivation fails or the command line is not empty.
+        Error: If the derivation fails or the command line is not valid.
     """
-    if len(argv()) != 1:
-        raise Error("usage: carla_blend_reference")
-    var root = repository()
-    var ledger = ledger_text()
-    Path(root + "/tools/carla_lane_oracle/blend-row-ledger.json").write_text(
-        ledger
-    )
+    var args = argv()
+    if len(args) == 2 and args[1] == "--ledger":
+        print(ledger_text(), end="")
+        return
+    if len(args) != 1:
+        raise Error("usage: carla_blend_reference [--ledger]")
     print(summary_text(), end="")

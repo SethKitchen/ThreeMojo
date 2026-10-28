@@ -31,7 +31,9 @@ def test_report_matches_the_python_bytes() raises:
     assert_equal(written, text)
     assert_equal(output_directory(root, ""), root + "/out/carla-lane-oracle")
     assert_equal(output_directory(root, "/tmp/out"), "/tmp/out")
-    assert_true(Path(root + "/tools/carla_lane_oracle/constants.json").exists())
+    assert_true(
+        Path(root + "/tools/fixtures/carla_lane_constants.json").exists()
+    )
     with assert_raises(contains="cannot find"):
         _ = repository_root("/tmp")
     with assert_raises(contains="cannot find"):

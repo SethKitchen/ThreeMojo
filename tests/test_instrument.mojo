@@ -565,7 +565,7 @@ def test_loop_entry_uses_actual_body_width_after_comments() raises:
         var source = (
             "def f():\n"
             + parent
-            + "for index in range(2):  # header\n"
+            + "for index in range(count):  # header\n"
             + "\n# left comment\n"
             + "                    # right comment\n"
             + body
@@ -582,14 +582,14 @@ def test_loop_entry_uses_actual_body_width_after_comments() raises:
 
 def test_multiline_loop_uses_body_not_header_continuation_indent() raises:
     var source = String(
-        "def f():\n  for index in range(\n              2\n  ):\n"
+        "def f():\n  for index in range(\n              count\n  ):\n"
         "\n# note\n       print(index)\n"
     )
     var result = instrument(source, "m")
     assert_equal(result.lines, [2, 7])
     assert_equal(result.branches, [2])
     assert_true(
-        "for index in range( 2 ):\n       _cov_loop_2 += 1\n" in result.text
+        "for index in range( count ):\n       _cov_loop_2 += 1\n" in result.text
     )
 
 
@@ -631,7 +631,7 @@ def test_loop_else_accepts_space_before_colon_without_a_line_probe() raises:
 
 def test_physical_lines_preserve_tabs_and_crlf_source_identities() raises:
     var source = String(
-        "def f():\r\n  for index in range(2):\r\n"
+        "def f():\r\n  for index in range(count):\r\n"
         '    print("left\tright", index)\r\n'
         "  else\t: # header\r\n    return 1\r\n"
     )
@@ -692,8 +692,8 @@ def test_comments_stop_at_each_supported_physical_line_ending() raises:
 def test_outer_loop_else_closes_inner_loop_before_its_header() raises:
     var result = instrument(
         String(
-            "def f():\n  for outer in range(2):\n"
-            "    for inner in range(2):\n      print(inner)\n"
+            "def f():\n  for outer in range(count):\n"
+            "    for inner in range(count):\n      print(inner)\n"
             "  else:\n    return 1\n"
         ),
         "m",
@@ -709,7 +709,7 @@ def test_outer_loop_else_closes_inner_loop_before_its_header() raises:
 def test_if_else_inside_loop_does_not_take_its_final_probe() raises:
     var result = instrument(
         String(
-            "def f():\n  for index in range(2):\n"
+            "def f():\n  for index in range(count):\n"
             "    if index == 0:\n      continue\n"
             "    else:\n      print(index)\n"
         ),
@@ -724,14 +724,17 @@ def test_if_else_inside_loop_does_not_take_its_final_probe() raises:
 
 def test_inline_loop_and_loop_else_bodies_fail_explicitly() raises:
     for source in [
-        String("def f():\n  for index in range(2): print(index)\n"),
-        String("def f():\n  for index in range(\n      2\n  ): print(index)\n"),
+        String("def f():\n  for index in range(count): print(index)\n"),
         String(
-            "def f():\n  for index in range(2): print(index) # pragma: no"
+            "def f():\n  for index in range(\n      count\n  ): print(index)\n"
+        ),
+        String(
+            "def f():\n  for index in range(count): print(index) # pragma: no"
             " branch\n"
         ),
         String(
-            "def f():\n  for index in range(2):\n    pass\n  else: return 1\n"
+            "def f():\n  for index in range(count):\n    pass\n  else:"
+            " return 1\n"
         ),
     ]:
         var raised = False
@@ -744,9 +747,11 @@ def test_inline_loop_and_loop_else_bodies_fail_explicitly() raises:
 
 def test_loop_with_no_indented_body_fails_explicitly() raises:
     for source in [
-        String("def f():\n  for index in range(2):\n"),
-        String("def f():\n  for index in range(2):\n# comment\n\n  return 1\n"),
-        String("def f():\n  for index in range(2):\n    pass\n  else:\n"),
+        String("def f():\n  for index in range(count):\n"),
+        String(
+            "def f():\n  for index in range(count):\n# comment\n\n  return 1\n"
+        ),
+        String("def f():\n  for index in range(count):\n    pass\n  else:\n"),
     ]:
         var raised = False
         try:
@@ -764,6 +769,71 @@ def test_pragma_excludes_a_loop_from_branch_measurement() raises:
     var result = instrument(source, String("m"))
     assert_equal(len(result.branches), 0)
     assert_true("_cov_loop" not in result.text)
+
+
+def test_literal_nonempty_loop_needs_no_branch() raises:
+    for header in [
+        String("range(3):"),
+        String("range(1, 22):"),
+        String("range( 0 , 1 ):"),
+        String("[a, b]:"),
+        String('["a", "b"]:  # comment'),
+    ]:
+        var result = instrument(
+            "def f(a: Int, b: Int):\n    for i in "
+            + header
+            + "\n        g(i)\n",
+            String("m"),
+        )
+        assert_equal(len(result.branches), 0)
+        assert_equal(result.lines, [2, 3])
+        assert_true("_cov_loop" not in result.text)
+
+
+def test_multiline_literal_loop_needs_no_branch() raises:
+    var result = instrument(
+        String(
+            "def f():\n    for i in range(\n        3\n    ):\n        g(i)\n"
+        ),
+        String("m"),
+    )
+    assert_equal(len(result.branches), 0)
+    assert_true("_cov_loop" not in result.text)
+
+
+def test_possibly_empty_loop_keeps_its_branch() raises:
+    for iterable in [
+        String("range(0)"),
+        String("range(3, 3)"),
+        String("range(4, 2)"),
+        String("range(n)"),
+        String("range(0, n)"),
+        String("range(1, 9, 2)"),
+        String("range(1_000)"),
+        String("[]"),
+        String("[ ]"),
+        String("[x for x in y]"),
+        String("[*rest]"),
+        String("[a, *rest]"),
+        String("names"),
+    ]:
+        var result = instrument(
+            "def f(n: Int):\n    for i in " + iterable + ":\n        g(i)\n",
+            String("m"),
+        )
+        assert_equal(result.branches, [2])
+
+
+def test_a_rebound_range_keeps_the_branch() raises:
+    for binding in [
+        String("def range(n: Int) -> List[Int]:\n    return []\n"),
+        String("from m import f as range\n"),
+    ]:
+        var result = instrument(
+            binding + "def f():\n    for i in range(3):\n        g(i)\n",
+            String("m"),
+        )
+        assert_equal(len(result.branches), 1)
 
 
 def test_pragma_excludes_a_decision_from_branch_measurement() raises:
@@ -1276,7 +1346,7 @@ def test_all_generated_names_avoid_the_entire_source() raises:
         "    var _cov_loop_7 = 40\n"
         "    var _cov_loop__7 = 50\n"
         "    var _cov_eval_buffer = 60\n"
-        "    for index in range(2):\n"
+        "    for index in range(_cov_hit):\n"
         "        if index > 0:\n            print(_cov_hit)\n"
         "    def inner(_cov_eval_state0: Int):\n"
         "        if _cov_branch > 0 and _cov_branch_ > 0:\n"

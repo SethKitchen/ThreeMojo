@@ -130,7 +130,7 @@ def legacy_collision() -> Int:
     var _cov_branch_ = 4
     var _cov_loop_LOOP = 40
     var _cov_loop__LOOP = 50
-    for index in range(2):  # COLLIDING_LOOP
+    for index in range(_cov_hit_):  # COLLIDING_LOOP
         if index > 0:
             _cov_hit += 1
     for index in range(0):

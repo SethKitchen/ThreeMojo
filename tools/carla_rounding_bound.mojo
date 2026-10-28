@@ -151,11 +151,11 @@ def repository_root(start: String) raises -> String:
         The repository root.
 
     Raises:
-        Error: If the walk does not find `tools/carla_lane_oracle/constants.json`.
+        Error: If the walk does not find `tools/fixtures/carla_lane_constants.json`.
     """
     var directory = start
     while True:
-        if exists(directory + "/tools/carla_lane_oracle/constants.json"):
+        if exists(directory + "/tools/fixtures/carla_lane_constants.json"):
             return directory
         var slash = directory.rfind("/")
         if slash <= 0:
@@ -801,7 +801,7 @@ def load_cache(root: String) raises -> Cache:
     """
     var tree = JsonTree()
     var document = tree.parse(
-        Path(root + "/tools/carla_lane_oracle/constants.json").read_text()
+        Path(root + "/tools/fixtures/carla_lane_constants.json").read_text()
     )
     var trig = Path(root + "/extensions/carla/curve_trig.mojo").read_text()
     var sine_values = _coefficients(trig, "_SIN_COEFFICIENTS")
