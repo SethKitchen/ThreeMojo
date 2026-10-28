@@ -1374,6 +1374,45 @@ class RestoredScopeTests(unittest.TestCase):
                 )
 
 
+class CleanupTokenCacheTests(unittest.TestCase):
+    def test_the_same_cleanup_tokens_skip_the_second_check(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import reviewed_cleanup_contracts as cleanup
+        saved = cleanup._TOKEN_RESTORE
+        row = {'text': 'def f():\n    return 1\n', 'token': 'aa', 'label': 'ok'}
+        changed = {'text': 'def f():\n    return 2\n', 'token': 'aa', 'label': 'ok'}
+        try:
+            cleanup._TOKEN_RESTORE = None
+            ok = Mock(returncode=0, stdout='{"restore":false}', stderr='')
+            with patch('subprocess.run', return_value=ok) as run:
+                first = cleanup._tokens_or_restore([row])
+                second = cleanup._tokens_or_restore([dict(row)])
+                self.assertEqual(first, {'restore': False})
+                self.assertEqual(second, first)
+                self.assertEqual(run.call_count, 1)
+                row['text'] = 'mutated'
+                cleanup._tokens_or_restore([row])
+                self.assertEqual(run.call_count, 2)
+                cleanup._tokens_or_restore([changed])
+                self.assertEqual(run.call_count, 3)
+            failed = Mock(
+                returncode=1, stdout='', stderr='cleanup token changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                bad = [{'text': 'bad', 'token': 'bb', 'label': 'bad'}]
+                with self.assertRaisesRegex(ValueError, 'cleanup token changed'):
+                    cleanup._tokens_or_restore(bad)
+                self.assertEqual(run.call_count, 1)
+                with self.assertRaisesRegex(ValueError, 'cleanup token changed'):
+                    cleanup._tokens_or_restore(bad)
+                self.assertEqual(run.call_count, 2)
+            with patch('subprocess.run', return_value=ok) as run:
+                cleanup._tokens_or_restore([changed])
+                self.assertEqual(run.call_count, 0)
+            self.assertEqual(cleanup._tokens_or_restore([]), {'restore': False})
+        finally:
+            cleanup._TOKEN_RESTORE = saved
+
+
 class ProductionScanTests(unittest.TestCase):
     def test_the_scan_matches_the_sorted_path_walk(self):
         from unittest.mock import patch

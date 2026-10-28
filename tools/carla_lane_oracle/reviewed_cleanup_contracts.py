@@ -341,17 +341,28 @@ def _gate(migration, previous=None):
         raise ValueError(message)
 
 
+_TOKEN_RESTORE = None
+
+
 def _tokens_or_restore(rows):
-    """Check the junction digest, then every successor token when it matches."""
+    """Check the junction digest, then every successor token when it matches.
+
+    The same rows are not checked again. A changed row is checked again.
+    A failed check is not kept.
+    """
+    global _TOKEN_RESTORE
     if not rows:
         return {'restore': False}
+    text = json.dumps(rows, separators=(',', ':'))
+    cached = _TOKEN_RESTORE
+    if cached is not None and cached[0] == text:
+        return cached[1]
     import os
     import subprocess
     import tempfile
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    text = json.dumps(rows, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='cleanup-token-restore-') as directory:
         path = Path(directory) / 'tokens.json'
         path.write_text(text)
@@ -364,7 +375,9 @@ def _tokens_or_restore(rows):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _TOKEN_RESTORE = (text, parsed)
+    return parsed
 
 
 def _gate_tokens(pairs):

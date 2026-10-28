@@ -258,6 +258,11 @@ It compares the junction token digest in one check.
 
 It checks that junction digest before the other successor tokens in one check.
 
+It reuses that token check when the same texts are read again.
+The source files are still read.
+A changed text is checked again.
+A failed check is not kept.
+
 `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch record, the predecessor edge, and the operation graphs.
 
 It checks every historical dispatch pin in one check.
