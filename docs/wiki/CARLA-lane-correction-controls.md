@@ -396,6 +396,8 @@ It keeps the lane-control migration path.
 
 It checks every render-actor file digest in one check.
 
+It reads the render-actor ledger once for every edge.
+
 It puts the module path on the render-actor edge.
 
 It puts every render-actor path on its edge in one check.
@@ -409,6 +411,8 @@ It keeps the render-actor contract prefix.
 `tools/carla_runtime_boundary_gate.mojo` checks the runtime-boundary record, its bound tests, and the view-step edges.
 
 It checks every runtime-boundary file digest in one check.
+
+It reads the runtime-boundary ledger once for every edge.
 
 It extends an edge when a reviewed view step starts at that edge.
 

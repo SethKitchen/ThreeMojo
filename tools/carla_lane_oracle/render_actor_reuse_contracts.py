@@ -264,6 +264,28 @@ def _render_messages():
     return _RENDER_MESSAGES
 
 
+def _live_endpoints(root, pairs, *, _operation=None):
+    """Return each live endpoint from one ledger verification."""
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    try:
+        full_audit._operation_check(_operation, root)
+        chains = ledger.verify(root, _operation=_operation)
+        results = []
+        for path, edge in pairs:
+            if path in chains:
+                results.append(ledger._join(edge, chains[path]))
+            else:
+                results.append(edge)
+        return results
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError) as error:
+        if _operation is not None:
+            full_audit._operation_fail(_operation, error)
+        raise
+
+
 def verify(root, *, _operation=None):
     """Verify live ledger endpoints; return the original historical edges.
 
@@ -276,11 +298,11 @@ def verify(root, *, _operation=None):
                          _operation=_operation), _operation=_operation)
     _gate_record(raw)
     record = json.loads(raw, object_pairs_hook=source.unique_keys)
+    module_rows = [(path, record['edges'][path]) for path in _actor_modules()]
+    currents = _live_endpoints(root, module_rows, _operation=_operation)
     edges = {}
     checked = []
-    for path in _actor_modules():
-        edge = record['edges'][path]
-        current = ledger.endpoint(root, path, edge, _operation=_operation)
+    for (path, edge), current in zip(module_rows, currents):
         actual = _typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
                                 _operation=_operation), _operation=_operation)
         checked.append((
