@@ -40,7 +40,7 @@ from std.testing import (
 )
 from tests.test_carla_cross_candidate_certificates import _sampled_road
 from tests._spiral_domain_controls import _bits
-from tools._sha256 import sha256_hex
+from tests._lane_digest import certificate_digest
 
 
 def _query(location: Vector3) -> Array[Float64, 3]:
@@ -329,45 +329,6 @@ def test_zero_distance_yield_stays_nonexact_until_ordinary_resume() raises:
     assert_true(certificate.exact_witness)
 
 
-def _word(value: Float64) -> String:
-    return hex(bitcast[DType.uint64](value))
-
-
-def _certificate_digest(certificate: _LaneCertificate) -> String:
-    """Return the SHA-256 of every field of `certificate`, bit for bit."""
-    var text = String(
-        _word(certificate.s),
-        " ",
-        _word(certificate.scale),
-        " ",
-        _word(certificate.lower),
-        " ",
-        _word(certificate.upper),
-        " ",
-        certificate.nodes,
-        " ",
-        certificate.terms,
-        " ",
-        certificate.exact_witness,
-    )
-    for axis in range(3):
-        text += " " + _word(certificate.point[axis])
-    for cell in certificate.cells:
-        text += String(
-            " ",
-            _word(cell.low),
-            ",",
-            _word(cell.high),
-            ",",
-            _word(cell.lower),
-            ",",
-            _word(cell.scale),
-            ",",
-            cell.depth,
-        )
-    return sha256_hex(text.as_bytes())
-
-
 def test_no_external_path_matches_the_published_solver() raises:
     # Digests of the certificates the solver published before external
     # goals existed. The no-goal path and a goal-led resume must keep them.
@@ -393,7 +354,7 @@ def test_no_external_path_matches_the_published_solver() raises:
             var actual = _refine_lane_certificate(
                 road, 0, 0, 0.0, 1.0, location, 0.1, 0.0
             )
-            assert_equal(_certificate_digest(actual), published[index])
+            assert_equal(certificate_digest(actual), published[index])
             index += 1
     var road = _sampled_road(1.0)
     var location = Vector3(0, 0, 0)
@@ -404,7 +365,7 @@ def test_no_external_path_matches_the_published_solver() raises:
         road, 0, 0, 0.0, 1.0, location, actual, None, actual.scale, goal=goal
     )
     assert_equal(
-        _certificate_digest(actual),
+        certificate_digest(actual),
         "413610baa2871453e13686883b1beafd6e79b616c89226522d4dc9927cb8605e",
     )
 
