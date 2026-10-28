@@ -222,6 +222,8 @@ It keeps the dispatch contract prefix.
 
 It reads the companion record paths after that cleanup record check in one check.
 
+It reads the companion record paths before that protected tail in one check.
+
 It admits trig and geometry word changes only for their reviewed token.
 
 It hashes a premise dependency before choosing its word check.

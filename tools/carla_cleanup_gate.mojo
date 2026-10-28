@@ -5,6 +5,7 @@
 
 """Check the reviewed cleanup migration record.
 
+    carla_cleanup_gate --records-tail
     carla_cleanup_gate --migration PATH [--previous PATH]
     carla_cleanup_gate --bytes PATH --sha HEX
     carla_cleanup_gate --sha-of PATH
@@ -714,6 +715,26 @@ def cleanup_protected_tail() raises -> String:
     return doc.dumps()
 
 
+def cleanup_records_then_tail() raises -> String:
+    """Read the companion record paths, then the protected tail.
+
+    Returns:
+        JSON with `records` and `tail`. `records` keeps the companion
+        key order. `tail` is the protected list.
+
+    Raises:
+        Error: The tail cannot be written. The record paths are read
+            before the tail.
+    """
+    return (
+        '{"records":'
+        + record_paths()
+        + ',"tail":'
+        + cleanup_protected_tail()
+        + "}"
+    )
+
+
 def classified_syntax_json(source: String) raises -> String:
     """Classify a syntax failure, or return the Python syntax JSON.
 
@@ -853,6 +874,13 @@ def main() raises:
     var literals = String("")
     var literal_size = String("")
     var arguments = argv()
+    if len(arguments) == 2 and arguments[1] == "--records-tail":
+        try:
+            print(cleanup_records_then_tail(), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 3 and arguments[1] == "--record-paths":
         try:
             print(
