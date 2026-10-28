@@ -384,6 +384,8 @@ It keeps every stored-moment scalar word in one check.
 
 It groups every stored-moment fraction text by array.
 
+It reads every stored array, its fractions, and its name set in one check.
+
 It checks every rounded node sum in one check.
 
 It checks the ideal half projection in one call.

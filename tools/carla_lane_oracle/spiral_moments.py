@@ -286,6 +286,29 @@ def _moment_projection(payload):
     return json.loads(result.stdout)
 
 
+def _moment_array_fractions(payload):
+    """Return the stored words and fractions when the array names match."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-array-fractions-') as directory:
+        path = Path(directory) / 'arrays.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_arrays',
+             '--fractions', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _moment_arrays(items):
     """Return the stored array words that match their pins."""
     import os
@@ -558,13 +581,18 @@ def verify_inputs(root):
     for name, record in pins['arrays'].items():
         loaded_arrays.append((name, record, _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))))
     try:
-        stored = _moment_arrays([{
-            'name': name,
-            'source': text,
-            'size': len(record['words']),
-            'expected': record['words'],
-            'message': messages['stored_words'] + name,
-        } for name, record, text in loaded_arrays])
+        checked = _moment_array_fractions({
+            'arrays': [{
+                'name': name,
+                'source': text,
+                'size': len(record['words']),
+                'expected': record['words'],
+                'message': messages['stored_words'] + name,
+            } for name, record, text in loaded_arrays],
+            'invalid': messages['invalid_word'],
+            'names': list(arrays),
+            'message': messages['array_set'],
+        })
     except ValueError as error:
         message = str(error)
         word = _cli_failures()['word']
@@ -575,30 +603,13 @@ def verify_inputs(root):
             name, rest = message[len(marker):].split('\n', 1)
             _constant_error(ValueError(rest), name)
         raise CheckError(message) from error
+    stored = checked['words']
+    grouped = checked['fractions']
     for name, words in stored.items():
-        values = [int(word) for word in words]
-        stored_words[name] = values
+        stored_words[name] = [int(word) for word in words]
         flat_names.append(name)
-    try:
-        grouped = _moment_fraction_groups({
-            'groups': [{
-                'name': name,
-                'words': [str(word) for word in stored_words[name]],
-            } for name in flat_names],
-            'invalid': messages['invalid_word'],
-        })
-    except ValueError as error:
-        message = str(error)
-        word = _cli_failures()['word']
-        if message.startswith(word):
-            message = message[len(word):]
-        raise CheckError(message) from error
     for name in flat_names:
         constants[name] = [F(text) for text in grouped[name]]
-    _moment_guard('--names', {
-        'names': list(constants),
-        'expected': list(arrays),
-        'message': messages['array_set']})
     constants[_moment_plan()['stored_words']] = stored_words
     loaded_scalars = []
     for name, record in pins['scalars'].items():
