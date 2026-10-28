@@ -7,6 +7,7 @@
 
     carla_grouped_gate --module PATH --geometry PATH
     carla_grouped_gate --checked PATH
+    carla_grouped_gate --checked-paths PATH
 
 The program checks the texts it is given. It does not roll a successor
 back to a historical source. The caller does that before it starts the
@@ -21,6 +22,7 @@ from tests._python_tokens import token_sha256
 from tools._fraction import Fraction
 from tools._spiral_moment_derive import stored_coefficient_words
 from tools._python_json import PyJson
+from tools._record_paths import record_paths
 from tools._spiral_moment_words import fraction_of_word
 
 
@@ -143,6 +145,35 @@ def grouped_checked(
     return '{"restore":false,"record":' + grouped_table(module, geometry) + "}"
 
 
+def grouped_checked_then_paths(payload: String) raises -> String:
+    """Check the grouped table, then read the lane-control record paths.
+
+    Args:
+        payload: JSON with `module`, `geometry`, and `digest`.
+
+    Returns:
+        The grouped check. When `restore` is false, `paths` is the
+        companion record paths.
+
+    Raises:
+        Error: The digest matches and a stored bound changed. The table
+            is checked before the paths are read. A digest mismatch
+            skips the paths.
+    """
+    var doc = PyJson.parse(payload)
+    var checked = grouped_checked(
+        doc.text(doc.at(doc.root, "module")),
+        doc.text(doc.at(doc.root, "geometry")),
+        doc.text(doc.at(doc.root, "digest")),
+    )
+    var parsed = PyJson.parse(checked)
+    if parsed.flag(parsed.at(parsed.root, "restore")):
+        return checked
+    var end = checked.byte_length() - 1
+    var prefix = checked[byte=0:end]
+    return String(prefix) + ',"paths":' + record_paths() + "}"
+
+
 def grouped_table_identity() -> String:
     """Return the grouped proof module and its token digest.
 
@@ -165,7 +196,8 @@ def _usage():
     print(
         (
             "usage: carla_grouped_gate --module PATH --geometry PATH"
-            " | carla_grouped_gate --checked PATH"
+            " | carla_grouped_gate --checked PATH |"
+            " carla_grouped_gate --checked-paths PATH"
         ),
         file=stderr,
     )
@@ -179,6 +211,16 @@ def main() raises:
         Error: The command is invalid, or a grouped-table check fails.
     """
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--checked-paths":
+        try:
+            print(
+                grouped_checked_then_paths(Path(arguments[2]).read_text()),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 3 and arguments[1] == "--checked":
         try:
             var doc = PyJson.parse(Path(arguments[2]).read_text())

@@ -56,6 +56,8 @@ It compares that grouped-table token digest before the predecessor fallback.
 
 It checks that digest and the stored bounds in one check when the digest matches.
 
+It checks those stored bounds before the lane-control record paths in one check.
+
 It compares that grouped-table token digest in one check.
 
 `tools/carla_y_gate.mojo` checks the five Y-finiteness token digests, the successor record digests, and the module token identity.

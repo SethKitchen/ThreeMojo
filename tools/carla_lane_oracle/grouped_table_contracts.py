@@ -107,7 +107,43 @@ def verify_text(module, geometry):
         raise ValueError(message)
     return json.loads(result.stdout)
 
-def verify(root, *, _operation=None):
+def _grouped_then_lane(module, geometry, digest):
+    """Check the grouped table, then read the lane-control record paths."""
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    if __package__:
+        from . import lane_control_contracts as lane
+    else:
+        import lane_control_contracts as lane
+    payload = json.dumps({
+        'module': module,
+        'geometry': geometry,
+        'digest': digest,
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='grouped-lane-') as directory:
+        path = Path(directory) / 'grouped.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_grouped_gate',
+             '--checked-paths', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    if not parsed['restore'] and lane._RECORD_PATHS is None and 'paths' in parsed:
+        lane._RECORD_PATHS = parsed['paths']
+    return parsed
+
+
+def verify(root, *, _operation=None, _then_lane_paths=False):
     _ensure_identity()
     root=Path(root)
     text=(root/MODULE).read_text()
@@ -121,7 +157,10 @@ def verify(root, *, _operation=None):
     if _operation is not None:
         geometry = full_audit._observe_text(
             root, 'extensions/carla/geometry.mojo', geometry, _operation=_operation)
-    checked = _grouped_checked(text, geometry, TOKEN_SHA256)
+    if _then_lane_paths:
+        checked = _grouped_then_lane(text, geometry, TOKEN_SHA256)
+    else:
+        checked = _grouped_checked(text, geometry, TOKEN_SHA256)
     if checked['restore']:
         if __package__:
             from . import selection_finiteness_contracts as selection
