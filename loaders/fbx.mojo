@@ -120,7 +120,7 @@ from loaders.fbx_animation import (
     _connections,
     read_fbx_animations,
 )
-from loaders.gltf import decode_base64
+from loaders.bytes import decode_base64
 from loaders.model_nodes import (
     authored_color,
     compose,

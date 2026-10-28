@@ -78,7 +78,7 @@ from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from core.search import first_match
 from loaders.bytes import bytes_match, hex_digit_value
-from loaders.gltf import decode_image
+from loaders.image_file import decode_image
 from loaders.js_number import js_parse_float
 from loaders.js_text import split_fields
 from loaders.utf8 import byte_slice

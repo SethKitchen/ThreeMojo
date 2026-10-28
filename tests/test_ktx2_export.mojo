@@ -15,7 +15,7 @@ four, two and one channels. Texel `t`, channel `c` holds
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from exporters.ktx2 import export_ktx2, export_ktx2_volume
-from loaders.gltf import decode_base64
+from loaders.bytes import decode_base64
 from loaders.json import parse_json
 from render.ktx2 import read
 from render.srgb import LINEAR, SRGB

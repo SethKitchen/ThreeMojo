@@ -49,7 +49,7 @@ clamps the texture where three.js takes its `wrap` option anyway; `-clamp
 off` takes the `wrap` option, a repeat by default.
 Any other option is refused, where three.js would take it for part of the
 file name and fail to load it. The image is decoded as a PNG, a JPEG or a
-TGA, told by its first bytes; see `loaders.gltf.decode_image`. One image
+TGA, told by its first bytes; see `loaders.image_file.decode_image`. One image
 read the same way twice is one texture.
 
 The defaults are three.js's `MeshPhongMaterial` defaults: a white color, a
@@ -81,7 +81,7 @@ from core.assets import Assets
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from loaders.file_path import path_directory
-from loaders.gltf import decode_image
+from loaders.image_file import decode_image
 from core.buffer_geometry import COLOR
 from loaders.obj import ObjModel, read_obj
 from materials.material import FRONT_SIDE, Material, MaterialId, PHONG, Side

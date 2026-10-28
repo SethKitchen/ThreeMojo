@@ -74,7 +74,7 @@ from core.buffer_geometry import (
 )
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
-from loaders.gltf import decode_image
+from loaders.image_file import decode_image
 from loaders.lwo_iff import LwoTree, LwoValue, parse_lwo_tree
 from loaders.utf8 import byte_slice
 from materials.material import (

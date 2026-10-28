@@ -333,7 +333,7 @@ def encode_base64(bytes: List[UInt8]) -> String:
         bytes: The bytes.
 
     Returns:
-        The text, which `loaders.gltf.decode_base64` reads back.
+        The text, which `decode_base64` reads back.
     """
     var alphabet = String(_BASE64).as_bytes()
     var out = List[UInt8]()
@@ -357,6 +357,48 @@ def encode_base64(bytes: List[UInt8]) -> String:
         out.append(alphabet[(word >> 6) & 63] if left == 2 else UInt8(61))
         out.append(61)
     return String(unsafe_from_utf8=out)
+
+
+def decode_base64(text: String) raises -> List[UInt8]:
+    """Return the bytes a base64 text encodes.
+
+    Args:
+        text: The text, in the standard alphabet, padded with `=` or
+            not.
+
+    Returns:
+        The bytes.
+
+    Raises:
+        Error: If a character is outside the alphabet or the padding is
+            misplaced.
+    """
+    var out = List[UInt8]()
+    var held = 0
+    var bits = 0
+    var ended = False
+    for byte in text.as_bytes():
+        var value = Int(byte)
+        var digit = base64_digit(value)
+        if digit < 0:
+            if value == 43:
+                digit = 62
+            elif value == 47:
+                digit = 63
+            elif value == 61:
+                ended = True
+                continue
+            else:
+                raise Error("base64: a character outside the alphabet")
+        if ended:
+            raise Error("base64: a digit after the padding")
+        held = (held << 6) | digit
+        bits += 6
+        if bits >= 8:
+            bits -= 8
+            out.append(UInt8((held >> bits) & 0xFF))
+            held &= (1 << bits) - 1
+    return out^
 
 
 def hex_digit_value(byte: Int) -> Int:

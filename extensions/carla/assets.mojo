@@ -55,7 +55,8 @@ from extensions.carla.mesh_factory import (
     YELLOW_MARK_SURFACE,
 )
 from extensions.carla.render_textures import SurfaceMaps
-from loaders.gltf import decode_image, read_gltf
+from loaders.gltf import read_gltf
+from loaders.image_file import decode_image
 from loaders.image_batch import TextureDecodeSource, decode_textures
 from loaders.json import (
     ARRAY,

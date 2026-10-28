@@ -163,7 +163,7 @@ The descriptor byte gives the origin. The reader reads all four corners: bottom 
 - The reader applies the color map's first entry index. three.js ignores it.
 - The reader refuses an index past the color map, a packet past the image and a file that ends early. three.js reads these as whatever its array holds.
 
-`decode_image` in `loaders/gltf.mojo` reads a TGA when the bytes are neither PNG nor JPEG. A TGA has no signature, so the header check alone tells a TGA from other bytes. glTF names only PNG and JPEG, so this fallback is an addition of this port.
+`decode_image` in `loaders/image_file.mojo` reads a TGA when the bytes are neither PNG nor JPEG. A TGA has no signature, so the header check alone tells a TGA from other bytes. glTF names only PNG and JPEG, so this fallback is an addition of this port.
 
 ## Read a TIFF
 

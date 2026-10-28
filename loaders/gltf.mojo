@@ -232,7 +232,8 @@ from loaders.draco import (
     DracoGeometry,
     _decode_draco_owned,
 )
-from loaders.bytes import base64_digit
+from loaders.bytes import decode_base64
+from loaders.image_file import decode_image
 from loaders.file_path import path_directory
 from loaders.draco_attributes import DracoDataType
 from loaders.meshopt import (
@@ -284,11 +285,7 @@ from objects.mesh import Mesh
 from objects.line import LOOP, SEGMENTS, STRIP, Line, LineMode
 from objects.points import Points
 from render.framebuffer import Color, FloatColor
-from render.jpeg import decode as decode_jpeg
-from render.png import DecodedImage, decode as decode_png
 from render.srgb import LINEAR, SRGB, ColorSpace
-from render.tga import decode as decode_tga
-from render.webp import decode as decode_webp, is_webp
 from render import ktx2
 from render.texture import (
     Alpha,
@@ -1132,48 +1129,6 @@ def _check_asset(document: JsonDocument, root: Int) raises:
     )
     if not document.string(version).startswith("2."):
         raise Error("glTF: only version 2 is read")
-
-
-def decode_base64(text: String) raises -> List[UInt8]:
-    """Return the bytes a base64 text encodes.
-
-    Args:
-        text: The text, in the standard alphabet, padded with `=` or
-            not.
-
-    Returns:
-        The bytes.
-
-    Raises:
-        Error: If a character is outside the alphabet or the padding is
-            misplaced.
-    """
-    var out = List[UInt8]()
-    var held = 0
-    var bits = 0
-    var ended = False
-    for byte in text.as_bytes():
-        var value = Int(byte)
-        var digit = base64_digit(value)
-        if digit < 0:
-            if value == 43:
-                digit = 62
-            elif value == 47:
-                digit = 63
-            elif value == 61:
-                ended = True
-                continue
-            else:
-                raise Error("base64: a character outside the alphabet")
-        if ended:
-            raise Error("base64: a digit after the padding")
-        held = (held << 6) | digit
-        bits += 6
-        if bits >= 8:
-            bits -= 8
-            out.append(UInt8((held >> bits) & 0xFF))
-            held &= (1 << bits) - 1
-    return out^
 
 
 def _data_uri_bytes(uri: String) raises -> List[UInt8]:
@@ -3952,40 +3907,6 @@ def ktx2_texture(
         chain,
         alpha,
     )
-
-
-def decode_image(bytes: List[UInt8]) raises -> DecodedImage:
-    """Return an image decoded by what its first bytes say it is.
-
-    A PNG, a JPEG and a WebP file each begin with a signature. A TGA has
-    none, so bytes that begin as none of those are read as a TGA, whose
-    header check refuses most other files. glTF names PNG and JPEG, and
-    `EXT_texture_webp` WebP; the TGA fallback is this port's, for a model
-    that points at a TGA texture.
-
-    Args:
-        bytes: A PNG, a JPEG, a WebP or a TGA file.
-
-    Returns:
-        The image.
-
-    Raises:
-        Error: If the bytes begin as none of PNG, JPEG and WebP and are not
-            a TGA either, or the decoder refuses them.
-    """
-    if len(bytes) >= 8 and bytes[0] == 0x89 and bytes[1] == 0x50:
-        return decode_png(bytes)
-    if len(bytes) >= 2 and bytes[0] == 0xFF and bytes[1] == 0xD8:
-        return decode_jpeg(bytes)
-    if is_webp(bytes):
-        return decode_webp(bytes)
-    try:
-        return decode_tga(bytes)
-    except error:
-        raise Error(
-            "glTF: an image that is neither PNG nor JPEG, and not a TGA: "
-            + String(error)
-        )
 
 
 # The error when a glTF node matrix has an axis of length zero.

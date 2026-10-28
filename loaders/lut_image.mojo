@@ -24,7 +24,7 @@ refuses it.
 
 from core.extent import require_positive_extent, require_texel_count
 from core.ordinal import require_positive
-from loaders.gltf import decode_image
+from loaders.image_file import decode_image
 from render.png import DecodedImage
 from render.srgb import LINEAR
 from render.texture import BILINEAR, CLAMP

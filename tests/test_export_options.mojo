@@ -41,7 +41,8 @@ from loaders.js_number import js_linear_to_srgb
 from exporters.ply import export_ply, write_ply
 from exporters.stl import STL_BINARY, export_stl
 from exporters.usdz import usdz_files
-from loaders.gltf import decode_base64, load_gltf
+from loaders.bytes import decode_base64
+from loaders.gltf import load_gltf
 from loaders.json import JsonDocument, NO_NODE, parse_json
 from loaders.ply import (
     PLY_BINARY_BIG_ENDIAN,

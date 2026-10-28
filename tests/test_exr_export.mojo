@@ -17,7 +17,7 @@ from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from std.utils.numerics import inf, nan
 
 from exporters.exr import export_exr, export_exr_half, export_exr_image
-from loaders.gltf import decode_base64
+from loaders.bytes import decode_base64
 from loaders.json import parse_json
 from render.exr import (
     FLOAT_SAMPLES,

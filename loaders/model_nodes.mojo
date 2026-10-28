@@ -30,7 +30,7 @@ from math.finite import unit_finite
 from core.assets import Assets
 from core.object3d import Object3D
 from materials.material import Material, MaterialId
-from loaders.gltf import decode_image
+from loaders.image_file import decode_image
 from math.matrix4 import Matrix4
 from math.vector3 import vector3_from_float64
 from render.framebuffer import Color, FloatColor
