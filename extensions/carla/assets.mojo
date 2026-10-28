@@ -9,7 +9,7 @@
 texture set, an HDRI sky or a glTF model. Each entry has an id, a kind, a
 license (CC0 or CC BY 4.0), an author, a source page, a note on where it
 came from, and its files, each with a role, a URL, a SHA-256 sum and a
-path in the cache. `assets/carla/tools/carla_assets.py` downloads the files into
+path in the cache. `tools/carla_assets.mojo` downloads the files into
 `.cache/carla-assets/` and checks each sum before it keeps a file.
 
 **Bindings.** The manifest's `bindings` table maps a key to an entry id,

@@ -19,7 +19,7 @@ alone beside the page, as `_clear_noon`, `_wet_sunset`, `_rain` and
 `_night`.
 
 The town wears the assets in `.cache/carla-assets/` that
-`assets/carla/tools/carla_assets.py fetch` downloads: photoscanned roads,
+`tools/carla_assets.mojo fetch` downloads: photoscanned roads,
 sidewalks and grass, an HDRI sky, and CARLA's own vehicle models. An asset
 the cache lacks is procedural, so the example runs without a download.
 """

@@ -9,8 +9,8 @@ a car.
     mojo run -I . examples/carla_towns.mojo [path.png] [Town10HD]
 
 The page is CARLA rendering. The town is CARLA's own: its package and its
-OpenDRIVE map, from the cache that `assets/carla/tools/carla_assets.py
-fetch` fills. Cars wait in a lane of the town's longest road, and a
+OpenDRIVE map, from the cache that `tools/carla_assets.mojo fetch`
+fills. Cars wait in a lane of the town's longest road, and a
 `sensor.camera.rgb` rides behind the first. `CarlaRenderer` draws what the
 camera sees under four of CARLA's weathers: clear noon, a wet sunset, hard
 rain with fog, and a clear night with the street lamps lit. Each image is
@@ -149,8 +149,8 @@ def main() raises:
         raise Error(
             "The town "
             + town
-            + " is not in the cache: run"
-            + " assets/carla/tools/carla_assets.py fetch carla.town."
+            + " is not in the cache: run sh tools/tool.sh .venv/bin/mojo"
+            + " carla_assets fetch carla.town."
             + town.lower()
         )
     var camera = ActorId(0)
