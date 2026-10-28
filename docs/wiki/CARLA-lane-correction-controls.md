@@ -139,6 +139,11 @@ It reads every rounded LINE declaration and compares each selected one in one ch
 
 It checks every declaration graph when every selected declaration matches in one check.
 
+It reuses that declaration-graph check when the same texts are read again.
+The declaration files are still read.
+A changed text is checked again.
+A failed check is not kept.
+
 It restores every changed rounded LINE declaration and checks every graph in one check.
 
 It compares every rounded LINE module text in one check.
@@ -150,6 +155,11 @@ A word failure is returned before a token result.
 The same pairs are not compared again after that check.
 A changed module is compared again.
 A token error is still reported after the modules are read again.
+
+It reuses that word-and-token check when the same texts are read again.
+The module files are still read.
+A changed text is checked again.
+A failed check is not kept.
 
 It reuses a matching rounded LINE module when that module is read again.
 A changed module is compared again.
@@ -165,6 +175,11 @@ It extracts every consumer import scope in one check.
 It checks every consumer import scope when the lane scope matches in one check.
 
 It checks those import scopes before the lane minima in one check.
+
+It reuses that import-scope check when the same texts are read again.
+The scope files are still read.
+A changed text is checked again.
+A failed check is not kept.
 
 It checks those restored graphs before the lane minima in one check.
 

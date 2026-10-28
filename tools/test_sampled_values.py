@@ -1649,6 +1649,104 @@ class ProductionScanTests(unittest.TestCase):
         )
 
 
+class RoundedLineReuseCacheTests(unittest.TestCase):
+    def test_the_same_rounded_line_texts_skip_the_second_check(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import rounded_line_singleton_contracts as singleton
+        saved_words = singleton._GATED_WORDS_MATCHES
+        saved_scopes = singleton._GATED_SCOPES
+        saved_graphs = singleton._GATED_DECLARATION_GRAPHS
+        saved_pairs = dict(singleton._MATCHED_PAIRS)
+        words = ([('path', 'text', 'aa')], [('text', 'source')])
+        scopes = ([('path', 'text', 'expected')], None, 'import ', [('path', 'name', ())])
+        rows = [{
+            'source': 'def f():\n    return 1\n',
+            'name': 'f',
+            'owner': [],
+            'graph': 'g',
+            'label': 'label',
+        }]
+        try:
+            singleton._GATED_WORDS_MATCHES = None
+            singleton._GATED_SCOPES = None
+            singleton._GATED_DECLARATION_GRAPHS = None
+            singleton._MATCHED_PAIRS.clear()
+            ok = Mock(
+                returncode=0,
+                stdout='{"flags":["true"],"restore":false,"minima":["true"],"declared":["d"]}',
+                stderr='',
+            )
+            with patch('subprocess.run', return_value=ok) as run:
+                self.assertEqual(
+                    singleton._words_then_matches(*words), [True])
+                singleton._words_then_matches(*words)
+                self.assertEqual(run.call_count, 1)
+                singleton._words_then_matches(
+                    [('path', 'other', 'aa')], [('other', 'source')])
+                self.assertEqual(run.call_count, 2)
+                checked = singleton._scopes_then_minima(*scopes)
+                self.assertEqual(checked['minima'], ['true'])
+                singleton._scopes_then_minima(*scopes)
+                self.assertEqual(run.call_count, 3)
+                singleton._scopes_then_minima(
+                    [('path', 'other', 'expected')], None, 'import ',
+                    [('path', 'name', ())])
+                self.assertEqual(run.call_count, 4)
+                graphs = singleton._checked_declaration_graphs(rows)
+                self.assertFalse(graphs['restore'])
+                singleton._checked_declaration_graphs(rows)
+                self.assertEqual(run.call_count, 5)
+                singleton._checked_declaration_graphs([{
+                    'source': 'other', 'name': 'f', 'owner': [],
+                    'graph': 'g', 'label': 'label',
+                }])
+                self.assertEqual(run.call_count, 6)
+            failed = Mock(returncode=1, stdout='', stderr='rounded line changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'rounded line changed'):
+                    singleton._words_then_matches(
+                        [('bad', 'bad', 'aa')], [('bad', 'bad')])
+                with self.assertRaisesRegex(ValueError, 'rounded line changed'):
+                    singleton._words_then_matches(
+                        [('bad', 'bad', 'aa')], [('bad', 'bad')])
+                with self.assertRaisesRegex(ValueError, 'rounded line changed'):
+                    singleton._scopes_then_minima(
+                        [('bad', 'bad', 'bad')], None, 'import ',
+                        [('bad', 'name', ())])
+                with self.assertRaisesRegex(ValueError, 'rounded line changed'):
+                    singleton._scopes_then_minima(
+                        [('bad', 'bad', 'bad')], None, 'import ',
+                        [('bad', 'name', ())])
+                with self.assertRaisesRegex(ValueError, 'rounded line changed'):
+                    singleton._checked_declaration_graphs([{
+                        'source': 'bad', 'name': 'f', 'owner': [],
+                        'graph': 'g', 'label': 'label',
+                    }])
+                with self.assertRaisesRegex(ValueError, 'rounded line changed'):
+                    singleton._checked_declaration_graphs([{
+                        'source': 'bad', 'name': 'f', 'owner': [],
+                        'graph': 'g', 'label': 'label',
+                    }])
+                self.assertEqual(run.call_count, 6)
+            with patch('subprocess.run', return_value=ok) as run:
+                singleton._words_then_matches(
+                    [('path', 'other', 'aa')], [('other', 'source')])
+                singleton._scopes_then_minima(
+                    [('path', 'other', 'expected')], None, 'import ',
+                    [('path', 'name', ())])
+                singleton._checked_declaration_graphs([{
+                    'source': 'other', 'name': 'f', 'owner': [],
+                    'graph': 'g', 'label': 'label',
+                }])
+                self.assertEqual(run.call_count, 0)
+        finally:
+            singleton._GATED_WORDS_MATCHES = saved_words
+            singleton._GATED_SCOPES = saved_scopes
+            singleton._GATED_DECLARATION_GRAPHS = saved_graphs
+            singleton._MATCHED_PAIRS.clear()
+            singleton._MATCHED_PAIRS.update(saved_pairs)
+
+
 class RepeatedProducerCacheTests(unittest.TestCase):
     def test_the_same_producer_texts_skip_the_second_check(self):
         from unittest.mock import Mock, patch

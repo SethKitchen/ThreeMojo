@@ -422,13 +422,18 @@ def _verify_dependencies(items):
     words.verify_dependencies(items)
 
 
+_GATED_WORDS_MATCHES = None
+
+
 def _words_then_matches(items, pairs):
     """Check the dependency words, then compare the source pairs.
 
     A word failure is returned before a token result. A token error is
     left for the later comparison, after the modules are read again.
-    Matching pairs are not compared again.
+    The same texts are not checked again. A changed text is checked again.
+    A failed check is not kept.
     """
+    global _GATED_WORDS_MATCHES
     if not items and not pairs:
         return []
     import json
@@ -446,6 +451,9 @@ def _words_then_matches(items, pairs):
             for actual, source in pairs
         ],
     }, separators=(',', ':'))
+    cached = _GATED_WORDS_MATCHES
+    if cached is not None and cached[0] == payload:
+        return cached[1]
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     with tempfile.TemporaryDirectory(prefix='words-matches-') as directory:
@@ -462,11 +470,13 @@ def _words_then_matches(items, pairs):
         raise ValueError(message)
     parsed = json.loads(result.stdout)
     if 'defer' in parsed:
+        _GATED_WORDS_MATCHES = (payload, None)
         return None
     flags = [flag == 'true' for flag in parsed['flags']]
     for pair, flag in zip(pairs, flags):
         if flag:
             _MATCHED_PAIRS[pair] = True
+    _GATED_WORDS_MATCHES = (payload, flags)
     return flags
 
 
@@ -504,8 +514,16 @@ def _checked_import_scopes(items, lane_index, label_prefix):
     return json.loads(result.stdout)
 
 
+_GATED_SCOPES = None
+
+
 def _scopes_then_minima(items, lane_index, label_prefix, minima):
-    """Check the import scopes, then the lane minima when they match."""
+    """Check the import scopes, then the lane minima when they match.
+
+    The same texts are not checked again. A changed text is checked again.
+    A failed check is not kept.
+    """
+    global _GATED_SCOPES
     if not items and not minima:
         return {'restore': False, 'minima': []}
     import json
@@ -526,9 +544,12 @@ def _scopes_then_minima(items, lane_index, label_prefix, minima):
     }
     if lane_index is not None:
         payload['scopes']['lane'] = lane_index
+    text = json.dumps(payload, separators=(',', ':'))
+    cached = _GATED_SCOPES
+    if cached is not None and cached[0] == text:
+        return cached[1]
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    text = json.dumps(payload, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='scopes-minima-') as directory:
         path = Path(directory) / 'scopes.json'
         path.write_text(text)
@@ -541,7 +562,9 @@ def _scopes_then_minima(items, lane_index, label_prefix, minima):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _GATED_SCOPES = (text, parsed)
+    return parsed
 
 
 def _import_scope(text):
@@ -664,8 +687,16 @@ def _declaration(text, name, owner):
     return result.stdout
 
 
+_GATED_DECLARATION_GRAPHS = None
+
+
 def _checked_declaration_graphs(rows):
-    """Read every declaration, then check every graph when each selected one matches."""
+    """Read every declaration, then check every graph when each selected one matches.
+
+    The same texts are not checked again. A changed text is checked again.
+    A failed check is not kept.
+    """
+    global _GATED_DECLARATION_GRAPHS
     if not rows:
         return {'restore': False, 'declared': [], 'flags': []}
     import json
@@ -673,9 +704,12 @@ def _checked_declaration_graphs(rows):
     import subprocess
     import tempfile
     from pathlib import Path
+    text = json.dumps(rows, separators=(',', ':'))
+    cached = _GATED_DECLARATION_GRAPHS
+    if cached is not None and cached[0] == text:
+        return cached[1]
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    text = json.dumps(rows, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='declaration-graphs-') as directory:
         path = Path(directory) / 'declarations.json'
         path.write_text(text)
@@ -688,7 +722,9 @@ def _checked_declaration_graphs(rows):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _GATED_DECLARATION_GRAPHS = (text, parsed)
+    return parsed
 
 
 def _restored_graphs(restores, graphs):
