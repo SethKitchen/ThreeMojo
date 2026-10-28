@@ -10,6 +10,7 @@ geometry tokens may differ and still keep their stored words.
 """
 
 from tests._python_tokens import token_sha256
+from tools._cleanup_dependency_pins import cleanup_dependency_pins
 from tools.carla_cleanup_gate import cleanup_words
 from tools._python_json import MISSING, PyJson
 
@@ -121,3 +122,55 @@ def checked_dependency_words(payload: String) raises:
                 doc.text(doc.at(item, "path")),
             )
         index += 1
+
+
+def pinned_dependency_words(payload: String) raises:
+    """Read the dependency pins, then check the selected words.
+
+    Args:
+        payload: A JSON list. Each item has `text`, `expected`, and
+            `path`. The trig and geometry pins are read here.
+
+    Raises:
+        Error: A dependency is unreviewed, a stored declaration cannot
+            be read, or a word list changed. The pins are read before
+            the word checks.
+    """
+    var pins = PyJson.parse(cleanup_dependency_pins())
+    var doc = PyJson.parse(payload)
+    var count = doc.length(doc.root)
+    var out = PyJson()
+    var rows = out.new_list()
+    var index = 0
+    while index < count:
+        var item = doc.item(doc.root, index)
+        var row = out.new_dict()
+        out.set(row, "text", out.new_str(doc.text(doc.at(item, "text"))))
+        out.set(
+            row, "expected", out.new_str(doc.text(doc.at(item, "expected")))
+        )
+        out.set(row, "path", out.new_str(doc.text(doc.at(item, "path"))))
+        out.set(
+            row,
+            "trig_path",
+            out.new_str(pins.text(pins.at(pins.root, "trig_path"))),
+        )
+        out.set(
+            row,
+            "trig_token",
+            out.new_str(pins.text(pins.at(pins.root, "trig_token"))),
+        )
+        out.set(
+            row,
+            "geometry_path",
+            out.new_str(pins.text(pins.at(pins.root, "geometry_path"))),
+        )
+        out.set(
+            row,
+            "geometry_token",
+            out.new_str(pins.text(pins.at(pins.root, "geometry_token"))),
+        )
+        out.append(rows, row)
+        index += 1
+    out.root = rows
+    checked_dependency_words(out.dumps())

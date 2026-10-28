@@ -570,22 +570,49 @@ def _dependency_fields(path, text, expected, pins):
     }
 
 
-def verify_dependencies(items):
-    """Choose every dependency word check, then run the selected checks."""
+def _pinned_dependency_words(items):
+    """Read the dependency pins, then check the selected words."""
     if not items:
         return
-    pins = _dependency_pins()
-    _checked_dependency_words([
-        _dependency_fields(path, text, expected, pins)
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps([
+        {'text': item['text'], 'expected': item['expected'], 'path': item['path']}
+        for item in items
+    ], separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='pinned-dependency-words-') as directory:
+        record = Path(directory) / 'choice.json'
+        record.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+             'carla_dependency_words', '--pinned', str(record)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+
+
+def verify_dependencies(items):
+    """Read the dependency pins, then run the selected word checks."""
+    if not items:
+        return
+    _pinned_dependency_words([
+        {'text': text, 'expected': expected, 'path': path}
         for path, text, expected in items])
 
 
 def verify_dependency(path, text, expected):
     # A fixed whole-module fingerprint admits only equivalent stored words.
     # Historical pins remain unchanged; other dependencies retain exact tokens.
-    pins = _dependency_pins()
-    _checked_dependency_words([
-        _dependency_fields(path, text, expected, pins)])
+    _pinned_dependency_words([
+        {'text': text, 'expected': expected, 'path': path}])
 
 
 def verify(root, *, _operation=None):

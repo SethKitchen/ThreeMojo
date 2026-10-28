@@ -12,6 +12,7 @@ from tools._dependency_words import (
     checked_dependency_words,
     dependency_word_choice,
     dependency_word_choices,
+    pinned_dependency_words,
 )
 from tools._python_json import PyJson
 
@@ -255,6 +256,65 @@ def test_a_changed_geometry_word_list_is_refused() raises:
         )
     ):
         checked_dependency_words(doc.dumps())
+
+
+def _pinned_payload(
+    text: String, expected: String, path: String
+) raises -> String:
+    """Return one pin-free dependency list.
+
+    Args:
+        text: The module text.
+        expected: The recorded token digest.
+        path: The dependency path.
+
+    Returns:
+        A JSON list with one item.
+
+    Raises:
+        Error: The payload cannot be written.
+    """
+    var doc = PyJson()
+    var rows = doc.new_list()
+    var row = doc.new_dict()
+    doc.set(row, "text", doc.new_str(text))
+    doc.set(row, "expected", doc.new_str(expected))
+    doc.set(row, "path", doc.new_str(path))
+    doc.append(rows, row)
+    doc.root = rows
+    return doc.dumps()
+
+
+def test_a_matching_token_reads_the_pins_before_the_words() raises:
+    """An unchanged token is accepted after the pins are read."""
+    var source = "def f():\n    return 1\n"
+    pinned_dependency_words(
+        _pinned_payload(source, token_sha256(source), "other.mojo")
+    )
+
+
+def test_an_unreviewed_path_fails_after_the_pins() raises:
+    """A changed token outside the reviewed pairs fails after the pins."""
+    with assert_raises(contains="changed: other.mojo"):
+        pinned_dependency_words(
+            _pinned_payload("def f():\n    return 1\n", "nope", "other.mojo")
+        )
+
+
+def test_the_reviewed_trig_pin_selects_the_word_check() raises:
+    """The stored trig pin selects the word check before that declaration."""
+    with assert_raises(
+        contains=(
+            "missing or ambiguous stored-word declaration: _COS_COEFFICIENTS"
+        )
+    ):
+        pinned_dependency_words(
+            _pinned_payload(
+                "nope",
+                "523d5700201b957152eaa79ae6cce9ca8cb9a2a0098d5b105584667360a6de7f",
+                "extensions/carla/curve_trig.mojo",
+            )
+        )
 
 
 def main() raises:
