@@ -22,6 +22,7 @@ from tests._python_tokens import (
 from tools._python_json import PyJson
 from tools._sampled_declarations import sampled_declarations
 from tools._sampled_projection import (
+    copied_names_match,
     project_after_imports,
     project_after_top_level,
     project_reviewed_helpers,
@@ -132,6 +133,25 @@ def test_copied_helpers_keep_the_reviewed_projection() raises:
     assert_true(record.text(record.at(constant, "pair")).byte_length() > 0)
     assert_true(record.text(record.at(lane, "refusal")).byte_length() > 0)
     assert_true(record.text(record.at(lane, "capture")).byte_length() > 0)
+
+
+def test_a_missing_copied_name_fails_before_the_next_copy() raises:
+    """The first absent rename fails before a later copy is accepted."""
+    with assert_raises(contains="sampled projection step changed"):
+        copied_names_match(
+            '{"copies":["_atan_branch","_atan_jet"],'
+            + '"names":{"_atan_branch":"_missing","_atan_jet":"_atan_value"},'
+            + '"helpers":{"_atan_value":"kept"}}'
+        )
+
+
+def test_present_copied_names_match() raises:
+    """Each renamed copy is present in the helper object."""
+    copied_names_match(
+        '{"copies":["_atan_branch"],'
+        + '"names":{"_atan_branch":"_atan_value"},'
+        + '"helpers":{"_atan_value":"kept"}}'
+    )
 
 
 def main() raises:

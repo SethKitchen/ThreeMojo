@@ -24,7 +24,7 @@ from tests._python_tokens import (
     project_union_value,
     sampled_top_level,
 )
-from tools._python_json import PyJson
+from tools._python_json import MISSING, PyJson
 from tools._sampled_closure import sampled_closure
 from tools._sampled_copies import sampled_copies
 from tools._sampled_declarations import sampled_declarations
@@ -422,6 +422,52 @@ def _sort_names(mut names: List[String]):
         index += 1
 
 
+def _require_copied_names(
+    doc: PyJson, copies: Int, names: Int, helpers: Int
+) raises:
+    """Require each copied helper's new name to be present.
+
+    Args:
+        doc: The document that stores the plan and the helpers.
+        copies: The copy-name list.
+        names: The rename map.
+        helpers: The sampled helper object.
+
+    Raises:
+        Error: A renamed copy is absent. The text is `sampled projection
+            step changed`. The copies are checked in order.
+    """
+    var closure = PyJson.parse(sampled_closure())
+    var message = closure.text(closure.at(closure.root, "step"))
+    var count = doc.length(copies)
+    var index = 0
+    while index < count:
+        var name = doc.text(doc.item(copies, index))
+        var renamed = doc.text(doc.at(names, name))
+        if doc.get(helpers, renamed) == MISSING:
+            raise Error(message)
+        index += 1
+
+
+def copied_names_match(payload: String) raises:
+    """Require each copied helper's new name to be present.
+
+    Args:
+        payload: JSON with `copies`, `names`, and `helpers`.
+
+    Raises:
+        Error: A renamed copy is absent. The text is `sampled projection
+            step changed`. The copies are checked in order.
+    """
+    var doc = PyJson.parse(payload)
+    _require_copied_names(
+        doc,
+        doc.at(doc.root, "copies"),
+        doc.at(doc.root, "names"),
+        doc.at(doc.root, "helpers"),
+    )
+
+
 def project_after_top_level(payload: String) raises -> String:
     """Project the copied helpers, then check the top-level names.
 
@@ -434,10 +480,11 @@ def project_after_top_level(payload: String) raises -> String:
         `project_after_imports` returns them.
 
     Raises:
-        Error: An import changed, a helper projection changed, or a
-            top-level name differs. The imports and the projection run
-            before the top-level names. A top-level error starts with
-            `sampled top-level: `.
+        Error: An import changed, a helper projection changed, a
+            top-level name differs, or a copied name is absent. The
+            imports and the projection run before the top-level names.
+            The copied names are checked after those top-level names.
+            A top-level error starts with `sampled top-level: `.
     """
     var doc = PyJson.parse(payload)
     var projected = project_after_imports(payload)
@@ -461,4 +508,11 @@ def project_after_top_level(payload: String) raises -> String:
         sampled_top_level(doc.text(doc.at(doc.root, "target")), joined)
     except error:
         raise Error("sampled top-level: " + String(error))
+    var plan = parsed.at(parsed.root, "plan")
+    _require_copied_names(
+        parsed,
+        parsed.at(plan, "copies"),
+        parsed.at(plan, "names"),
+        helpers,
+    )
     return projected

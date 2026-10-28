@@ -882,14 +882,9 @@ def _recipe_and_batch(bounds, trig, target):
 def _project_sampled(bounds, trig, texts, target):
     """Project the reviewed helpers, using Python only for the syntax texts."""
     checked = _recipe_and_batch(bounds, trig, target)
-    plan = checked['plan']
-    names = plan['names']
-    copies = plan['copies']
     recipe = checked['recipe']
     record = checked['record']
     expected = record['helpers']
-    for name in copies:
-        require(names[name] in expected, _sampled_closure()['step'])
     # Project complete parsed declarations, never raw prefix/tail slices.
     # Remove precisely the three complete non-sampled branches of the reference
     # capture. The new leading guard rejects those kinds; the independent broad

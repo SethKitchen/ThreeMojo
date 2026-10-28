@@ -129,6 +129,8 @@ It checks the sampled value imports before that copy plan in one check.
 
 It checks those helper names after that projection in one check.
 
+It checks each copied name after those top-level names in one check.
+
 It keeps the sampled reference names and the closure groups.
 
 It keeps the sampled refusal messages.
