@@ -48,6 +48,7 @@ from tests._python_tokens import (
 )
 from tools._carla_assets import dumps_indent
 from tools._cleanup_declarations import cleanup_declarations_after_digest
+from tools._duplicate_pin_keys import reject_duplicate_pin_keys
 from tools._frozen_pin_labels import frozen_pin_labels
 from tools._json_tools import quote_ascii
 from tools._invariant_labels import invariant_labels_with_migration
@@ -414,12 +415,15 @@ def frozen_runtime_predecessor(
         The predecessor as `json.dumps` writes it with `indent=2`, plus a newline.
 
     Raises:
-        Error: The digest, the placements, or a pin transition changed.
+        Error: The digest, a repeated key, the placements, or a pin
+            transition changed. The digest is checked before a repeated
+            key. A repeated key is refused before the pin is placed.
     """
     var spec = PyJson.parse(request)
     var after = spec.text(spec.at(spec.root, "after"))
     if sha256_hex(payload) != after:
         _fail("unreviewed runtime pin successor")
+    reject_duplicate_pin_keys(payload)
     var pins = loads(payload)
     var groups_key = spec.text(spec.at(spec.root, "groups"))
     var transitions = spec.at(spec.root, "transitions")
@@ -447,8 +451,10 @@ def frozen_predecessor_with_labels(
         newline.
 
     Raises:
-        Error: The digest, the placements, or a pin transition changed.
-            The labels are read before the predecessor is rebuilt.
+        Error: The digest, a repeated key, the placements, or a pin
+            transition changed. The labels are read before the
+            predecessor is rebuilt. The digest is checked before a
+            repeated key.
     """
     var labels = PyJson.parse(frozen_pin_labels())
     var groups = labels.text(labels.at(labels.root, "groups"))

@@ -226,6 +226,10 @@ It writes that restored pin with two-space indentation.
 
 It rebuilds one frozen runtime pin predecessor in one check.
 
+It checks the pin digest before it checks a repeated key.
+
+It refuses a repeated key before the pin is placed.
+
 It reads the frozen pin labels before that runtime predecessor in one check.
 
 It reads the frozen-arc paths after that runtime predecessor in one check.

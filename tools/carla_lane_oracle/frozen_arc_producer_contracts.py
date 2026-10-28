@@ -296,13 +296,24 @@ def _gate_prior(actual, expected):
 
 
 def _predecessor_request(payload, record, prior_digest):
-    """Check the pin digest and refuse a repeated key before the predecessor."""
-    import hashlib
-    if hashlib.sha256(payload).hexdigest() != record['runtime_pins_after_sha256']:
-        raise ValueError(
-            'frozen ARC producer contract: unreviewed runtime pin successor')
-    # A repeated key is refused before placement. The digest check stays first.
-    json.loads(payload, object_pairs_hook=source.unique_keys)
+    """Build the predecessor request.
+
+    The predecessor rebuild checks the pin digest, then a repeated key.
+    This request does not hash the pin and does not parse it.
+
+    Args:
+        payload: The active runtime pin bytes. The rebuild reads these
+            bytes. This function does not.
+        record: The frozen producer record.
+        prior_digest: The required predecessor digest.
+
+    Returns:
+        The request JSON.
+
+    Raises:
+        TypeError: The request cannot be written.
+    """
+    del payload
     return json.dumps({
         'after': record['runtime_pins_after_sha256'],
         'before': prior_digest,
@@ -318,7 +329,7 @@ def _runtime_predecessor(payload, record, prior_digest, *, _then_paths=False):
 
     When `_then_paths` is set, the frozen-arc paths are read after that
     predecessor and kept when the path cache is empty. The same pins are
-    not rebuilt. The digest check still runs before that reuse.
+    not rebuilt. The rebuild checks the pin digest before a repeated key.
     """
     import ast
     import os

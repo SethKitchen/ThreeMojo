@@ -232,6 +232,46 @@ def test_a_changed_runtime_pin_digest_is_refused_before_parse() raises:
         _ = frozen_runtime_predecessor("{".as_bytes(), _request("new", "00"))
 
 
+def test_a_wrong_digest_fails_before_a_repeated_key() raises:
+    """A repeated key is not reported when the pin digest is wrong."""
+    var payload = String('{"a":1,"a":2}')
+    with assert_raises(
+        contains=(
+            "frozen ARC producer contract: unreviewed runtime pin successor"
+        )
+    ):
+        _ = frozen_runtime_predecessor(payload.as_bytes(), _request("new", "00"))
+
+
+def test_a_repeated_runtime_pin_key_is_refused_before_placement() raises:
+    """A repeated key fails after the digest and before placement."""
+    var payload = String('{"a":1,"a":2}')
+    var request = (
+        '{"after":"'
+        + sha256_hex(payload.as_bytes())
+        + '","before":"00","groups":"groups","transitions":[]}'
+    )
+    with assert_raises(contains="duplicate runtime source pin key: a"):
+        _ = frozen_runtime_predecessor(payload.as_bytes(), request)
+
+
+def test_invalid_pin_json_uses_the_parser_text() raises:
+    """Invalid pin JSON keeps the parser text after the digest matches."""
+    var payload = String("{")
+    var request = (
+        '{"after":"'
+        + sha256_hex(payload.as_bytes())
+        + '","before":"00","groups":"groups","transitions":[]}'
+    )
+    with assert_raises(
+        contains=(
+            "Expecting property name enclosed in double quotes: line 1"
+            " column 2 (char 1)"
+        )
+    ):
+        _ = frozen_runtime_predecessor(payload.as_bytes(), request)
+
+
 def test_a_runtime_pin_with_the_wrong_placement_is_refused() raises:
     """A transition outside the reviewed set fails closed."""
     var request = (

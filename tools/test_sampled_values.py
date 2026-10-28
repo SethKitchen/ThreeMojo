@@ -1275,12 +1275,21 @@ class FrozenPredecessorReuseTests(unittest.TestCase):
                         other, other_record, prior, _then_paths=True),
                     b'next')
                 self.assertEqual(run.call_count, 1)
-            with patch('subprocess.run', return_value=ok) as run:
+            failed = Mock(
+                returncode=1,
+                stdout='',
+                stderr=(
+                    'frozen ARC producer contract: unreviewed runtime pin'
+                    ' successor\n'
+                ),
+            )
+            with patch('subprocess.run', return_value=failed) as run:
                 with self.assertRaisesRegex(
                         ValueError, 'unreviewed runtime pin successor'):
                     frozen._runtime_predecessor(
                         b'{', record, prior, _then_paths=True)
-                self.assertEqual(run.call_count, 0)
+                self.assertEqual(run.call_count, 1)
+            with patch('subprocess.run', return_value=ok) as run:
                 self.assertEqual(
                     frozen._runtime_predecessor(
                         payload, record, prior, _then_paths=True),
