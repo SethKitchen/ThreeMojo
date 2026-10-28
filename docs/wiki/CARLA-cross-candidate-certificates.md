@@ -133,6 +133,8 @@ It keeps the sampled refusal messages.
 
 It keeps the sampled syntax keywords and generic messages.
 
+It classifies a syntax failure with those messages in one check.
+
 It keeps the sampled primitive class name.
 
 It keeps the CARLA package path.

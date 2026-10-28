@@ -328,20 +328,22 @@ def _syntax_prepare(text):
         path.write_text(text)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
-             '--syntax', str(path)],
+             '--classified-syntax', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
-        words = _syntax_words()
-        if message in (words['unclosed'], words['ambiguous']):
-            raise CheckError(message)
-        return None
+        raise CheckError(message)
     try:
         data = json.loads(result.stdout)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if data.get('fallback'):
+        return None
+    try:
         return data['source'], data['generics']
-    except (json.JSONDecodeError, KeyError, TypeError):
+    except (KeyError, TypeError):
         return None
 
 

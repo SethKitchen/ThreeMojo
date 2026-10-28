@@ -39,6 +39,7 @@
     carla_cleanup_gate --splice DIR
     carla_cleanup_gate --replace-first DIR
     carla_cleanup_gate --syntax PATH
+    carla_cleanup_gate --classified-syntax PATH
     carla_cleanup_gate --slice PATH --name NAME
     carla_cleanup_gate --fragment DIR
     carla_cleanup_gate --normalize PATH
@@ -115,6 +116,7 @@ from tools._python_json import (
     PY_STR,
     PyJson,
 )
+from tools._sampled_syntax_words import sampled_syntax_words
 from tools._sha256 import sha256_hex
 from tools._spiral_moment_words import decimal_word
 
@@ -711,6 +713,32 @@ def cleanup_protected_tail() raises -> String:
     return doc.dumps()
 
 
+def classified_syntax_json(source: String) raises -> String:
+    """Classify a syntax failure, or return the Python syntax JSON.
+
+    Args:
+        source: Mojo source to inspect as a Python AST.
+
+    Returns:
+        The syntax JSON, or `{"fallback":true}` when the failure is not a
+        generic-declaration message.
+
+    Raises:
+        Error: The failure is an unclosed or ambiguous generic declaration.
+            The syntax check runs before those messages are read.
+    """
+    try:
+        return python_syntax_json(source)
+    except error:
+        var message = String(error)
+        var words = PyJson.parse(sampled_syntax_words())
+        if message == words.text(
+            words.at(words.root, "unclosed")
+        ) or message == words.text(words.at(words.root, "ambiguous")):
+            raise Error(message)
+        return '{"fallback":true}'
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
@@ -801,6 +829,15 @@ def main() raises:
     var literals = String("")
     var literal_size = String("")
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--classified-syntax":
+        try:
+            print(
+                classified_syntax_json(Path(arguments[2]).read_text()), end=""
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var index = 1
     while index < len(arguments):
         var word = arguments[index]
