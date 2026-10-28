@@ -563,15 +563,17 @@ def derive_rows(nodes, weights, cosine, sine):
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     payload = json.dumps({
-        'nodes': hex_words(nodes), 'weights': hex_words(weights),
-        'cosine': hex_words(cosine), 'sine': hex_words(sine),
+        'nodes': [str(word) for word in nodes],
+        'weights': [str(word) for word in weights],
+        'cosine': [str(word) for word in cosine],
+        'sine': [str(word) for word in sine],
     }, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='moment-rows-') as directory:
         path = Path(directory) / 'words.json'
         path.write_text(payload)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_gate',
-             '--rows', str(path)],
+             '--decimal-rows', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()

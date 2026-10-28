@@ -338,6 +338,8 @@ It refuses a runtime fragment that has no moved declaration.
 
 It derives the stored moment rows in exact arithmetic.
 
+It spells those stored words and derives the rows in one check.
+
 It checks the stored moment table against the derived words.
 
 It packs the derived moment words into big-endian payload bytes.

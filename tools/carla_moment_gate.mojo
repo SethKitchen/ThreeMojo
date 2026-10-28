@@ -7,6 +7,7 @@
 
     carla_moment_gate --module PATH --interval PATH --geometry PATH --trig PATH
     carla_moment_gate --rows PATH
+    carla_moment_gate --decimal-rows PATH
     carla_moment_gate --coefficient-words PATH
     carla_moment_gate --node-sums PATH
     carla_moment_gate --fractions PATH
@@ -22,6 +23,7 @@ from std.sys import argv, exit, stderr
 from tests._python_tokens import token_sha256
 from tools._fraction import Fraction
 from tools._spiral_moment_derive import (
+    coefficient_rows_from_decimals,
     coefficient_rows_payload,
     coefficient_words_json,
     stored_coefficient_words,
@@ -165,7 +167,8 @@ def _usage():
     print(
         (
             "usage: carla_moment_gate --module PATH --interval PATH"
-            " --geometry PATH --trig PATH | --rows PATH | --coefficient-words"
+            " --geometry PATH --trig PATH | --rows PATH | --decimal-rows PATH |"
+            " --coefficient-words"
             " PATH | --node-sums PATH | --fractions PATH"
         ),
         file=stderr,
@@ -184,6 +187,7 @@ def main() raises:
     var geometry = String("")
     var trig = String("")
     var rows = String("")
+    var decimal_rows = String("")
     var coefficient_words = String("")
     var node_sums = String("")
     var fractions = String("")
@@ -197,6 +201,7 @@ def main() raises:
             or word == "--geometry"
             or word == "--trig"
             or word == "--rows"
+            or word == "--decimal-rows"
             or word == "--coefficient-words"
             or word == "--node-sums"
             or word == "--fractions"
@@ -212,6 +217,8 @@ def main() raises:
                 geometry = value
             elif word == "--rows":
                 rows = value
+            elif word == "--decimal-rows":
+                decimal_rows = value
             elif word == "--coefficient-words":
                 coefficient_words = value
             elif word == "--node-sums":
@@ -225,6 +232,8 @@ def main() raises:
         _usage()
     var single = 0
     if rows.byte_length() > 0:
+        single += 1
+    if decimal_rows.byte_length() > 0:
         single += 1
     if coefficient_words.byte_length() > 0:
         single += 1
@@ -255,6 +264,13 @@ def main() raises:
             elif coefficient_words.byte_length() > 0:
                 print(
                     coefficient_words_json(Path(coefficient_words).read_text()),
+                    end="",
+                )
+            elif decimal_rows.byte_length() > 0:
+                print(
+                    coefficient_rows_from_decimals(
+                        Path(decimal_rows).read_text()
+                    ),
                     end="",
                 )
             else:

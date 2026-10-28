@@ -10,6 +10,7 @@ from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tools._python_json import PyJson
 from tools._spiral_moment_derive import (
+    coefficient_rows_from_decimals,
     coefficient_rows_json,
     coefficient_words_json,
     derive_endpoints,
@@ -378,6 +379,51 @@ def test_a_changed_scalar_word_is_refused() raises:
     var second = trig + "\ncomptime _PHASE_LIMIT = Float64(1.0)\n"
     with assert_raises(contains="ambiguous scalar"):
         _ = stored_scalar_word(second, "_PHASE_LIMIT")
+
+
+def _decimal_rows(nodes: String, sine: String) raises -> String:
+    """Return four decimal word lists.
+
+    Args:
+        nodes: The first node word.
+        sine: The first sine word.
+
+    Returns:
+        JSON for one short derivation.
+
+    Raises:
+        Error: The payload cannot be written.
+    """
+    var doc = PyJson()
+    var root = doc.new_dict()
+    var node_rows = doc.new_list()
+    doc.append(node_rows, doc.new_str(nodes))
+    doc.set(root, "nodes", node_rows)
+    var weight_rows = doc.new_list()
+    doc.append(weight_rows, doc.new_str("0"))
+    doc.set(root, "weights", weight_rows)
+    var cosine_rows = doc.new_list()
+    doc.append(cosine_rows, doc.new_str("0"))
+    doc.set(root, "cosine", cosine_rows)
+    var sine_rows = doc.new_list()
+    doc.append(sine_rows, doc.new_str(sine))
+    doc.set(root, "sine", sine_rows)
+    doc.root = root
+    return doc.dumps()
+
+
+def test_a_bad_decimal_word_fails_before_the_rows() raises:
+    """A malformed node word fails before the row shape is checked."""
+    with assert_raises(contains="invalid UInt64 word"):
+        _ = coefficient_rows_from_decimals(_decimal_rows("nope", "0"))
+
+
+def test_spelled_words_still_check_the_row_shape() raises:
+    """Valid short lists still refuse the wrong row shape."""
+    with assert_raises(
+        contains="spiral moment derive: wrong constant-array shape"
+    ):
+        _ = coefficient_rows_from_decimals(_decimal_rows("0", "0"))
 
 
 def main() raises:

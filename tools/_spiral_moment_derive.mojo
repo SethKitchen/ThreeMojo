@@ -17,6 +17,7 @@ from tools._spiral_moment_words import (
     bracket,
     decimal_word,
     fraction_of_word,
+    hex_words_json,
     nearest_even,
 )
 
@@ -949,3 +950,46 @@ def coefficient_rows_payload(payload: String) raises -> String:
         _word_list(doc, "cosine"),
         _word_list(doc, "sine"),
     )
+
+
+def coefficient_rows_from_decimals(payload: String) raises -> String:
+    """Spell four stored word lists, then derive the moment rows.
+
+    Args:
+        payload: JSON with `nodes`, `weights`, `cosine`, and `sine`.
+            Each value is a list of unsigned decimal words.
+
+    Returns:
+        The 64 count rows. Each coefficient has its exact value and two words.
+
+    Raises:
+        Error: A decimal word is malformed, or the derivation changed.
+            The lists are spelled in that order before the rows are derived.
+    """
+    var doc = PyJson.parse(payload)
+    var names = List[String]()
+    names.append("nodes")
+    names.append("weights")
+    names.append("cosine")
+    names.append("sine")
+    var hexed = PyJson()
+    var root = hexed.new_dict()
+    var index = 0
+    while index < len(names):
+        var name = names[index]
+        var spelled = PyJson.parse(
+            hex_words_json(doc.subtree(doc.at(doc.root, name)).dumps())
+        )
+        var rows = hexed.new_list()
+        var count = spelled.length(spelled.root)
+        var cursor = 0
+        while cursor < count:
+            hexed.append(
+                rows,
+                hexed.new_str(spelled.text(spelled.item(spelled.root, cursor))),
+            )
+            cursor += 1
+        hexed.set(root, name, rows)
+        index += 1
+    hexed.root = root
+    return coefficient_rows_payload(hexed.dumps())
