@@ -1071,5 +1071,30 @@ class RepeatedByteGateTests(unittest.TestCase):
             ) = saved
 
 
+class LaneTokenPredecessorTests(unittest.TestCase):
+    def test_declaration_tokens_and_predecessors_are_one_call(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import lane_control_contracts as lane
+        pairs = [('left', 'right', 'lane token changed')]
+        declarations = [{'path': 'p', 'name': 'n', 'before': 'b'}]
+        items = [('p', 'n', (), 'expected')]
+        ok = Mock(returncode=0, stdout='["true"]', stderr='')
+        with patch('subprocess.run', return_value=ok) as run:
+            flags = lane._tokens_then_predecessors(pairs, declarations, items)
+            self.assertEqual(flags, [True])
+            self.assertEqual(run.call_count, 1)
+            command = ' '.join(str(part) for part in run.call_args[0][0])
+            self.assertIn('--tokens-then-predecessors', command)
+            self.assertNotIn('carla_lane_predecessor', command)
+        failed = Mock(returncode=1, stdout='', stderr='lane token changed\n')
+        with patch('subprocess.run', return_value=failed):
+            with self.assertRaises(RuntimeError):
+                lane._tokens_then_predecessors(pairs, declarations, items)
+        other = Mock(returncode=1, stdout='', stderr='missing predecessor field\n')
+        with patch('subprocess.run', return_value=other):
+            with self.assertRaises(ValueError):
+                lane._tokens_then_predecessors(pairs, declarations, items)
+
+
 if __name__ == '__main__':
     unittest.main()

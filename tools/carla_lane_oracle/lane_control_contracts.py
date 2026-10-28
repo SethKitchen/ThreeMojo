@@ -201,29 +201,63 @@ def _gate(payload):
 
 
 def _gate_tokens(pairs):
+    _token_directory(pairs, None)
+
+
+def _predecessor_payload(declarations, items):
+    """Return the predecessor request for one declaration list."""
+    return json.dumps({
+        'declarations': [
+            {'path': item['path'], 'name': item['name'], 'before': item['before']}
+            for item in declarations
+        ],
+        'items': [
+            {'owner': list(owner), 'path': path, 'name': name, 'expected': expected}
+            for path, name, owner, expected in items
+        ],
+    }, separators=(',', ':'))
+
+
+def _token_directory(pairs, predecessors):
+    """Check the token pairs, and the predecessors when they are present."""
     import json
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    labels = []
     with tempfile.TemporaryDirectory(prefix='lane-control-tokens-') as directory:
         folder = Path(directory)
-        labels = []
         for index, (left, right, label) in enumerate(pairs):
             (folder / f'{index}.left').write_text(left)
             (folder / f'{index}.right').write_text(right)
             labels.append(label)
         (folder / 'labels.json').write_text(json.dumps(labels))
+        mode = '--tokens'
+        if predecessors is not None:
+            (folder / 'predecessor.json').write_text(predecessors)
+            mode = '--tokens-then-predecessors'
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_control_gate',
-             '--tokens', str(folder)],
+             mode, str(folder)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
+        if predecessors is not None and message not in labels and (
+                message != 'lane-control successor module changed'):
+            raise ValueError(message)
         raise RuntimeError(message)
+    if predecessors is None:
+        return None
+    return [flag == 'true' for flag in json.loads(result.stdout)]
+
+
+def _tokens_then_predecessors(pairs, declarations, items):
+    """Check the declaration tokens, then the lane predecessors."""
+    return _token_directory(pairs, _predecessor_payload(declarations, items))
 
 
 _LANE_LABELS = None
@@ -273,7 +307,7 @@ def _record_paths():
     return _RECORD_PATHS
 
 
-def verify(root, *, _operation=None):
+def verify(root, *, _operation=None, _predecessors=None):
     if _operation is not None:
         _check_operation(root, _operation)
     root = Path(root)
@@ -331,8 +365,11 @@ def verify(root, *, _operation=None):
     for rel, expected in record['producer_modules'].items():
         pairs.append((_typed_source.historical_text(root, rel, _observe_text(root, rel, (root / rel).read_text(), _operation=_operation), _operation=_operation), expected,
                       labels['producer'] + rel))
-    _gate_tokens(pairs)
-    return record
+    if _predecessors is None:
+        _gate_tokens(pairs)
+        return record
+    return record, _tokens_then_predecessors(
+        pairs, record['declarations'], _predecessors)
 
 
 def accepts_predecessors(root, items, *, _operation=None):
@@ -341,36 +378,12 @@ def accepts_predecessors(root, items, *, _operation=None):
         return []
     if _operation is not None:
         _check_operation(root, _operation)
-    record = verify(root, **({} if _operation is None else {'_operation': _operation}))
-    import json
-    import os
-    import subprocess
-    import tempfile
-    payload = json.dumps({
-        'declarations': [
-            {'path': item['path'], 'name': item['name'], 'before': item['before']}
-            for item in record['declarations']
-        ],
-        'items': [
-            {'owner': list(owner), 'path': path, 'name': name, 'expected': expected}
-            for path, name, owner, expected in items
-        ],
-    }, separators=(',', ':'))
-    root_path = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root_path / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='lane-predecessor-') as directory:
-        record_path = Path(directory) / 'predecessor.json'
-        record_path.write_text(payload)
-        result = subprocess.run(
-            ['sh', str(root_path / 'tools' / 'tool.sh'), mojo,
-             'carla_lane_predecessor', str(record_path)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    return [flag == 'true' for flag in json.loads(result.stdout)]
+    _record, flags = verify(
+        root,
+        _predecessors=items,
+        **({} if _operation is None else {'_operation': _operation}),
+    )
+    return flags
 
 
 def accepts_predecessor(root, path, name, owner, expected_source, *, _operation=None):

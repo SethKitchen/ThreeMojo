@@ -7,6 +7,7 @@
 
     carla_lane_control_gate --migration PATH
     carla_lane_control_gate --tokens DIR
+    carla_lane_control_gate --tokens-then-predecessors DIR
     carla_lane_control_gate --prepare PATH
     carla_lane_control_gate --prepare-labeled PATH
 
@@ -22,6 +23,7 @@ from tools._lane_declarations import (
     lane_control_prepare,
     lane_control_prepare_with_labels,
 )
+from tools._lane_predecessor import accept_lane_predecessors
 from tools._python_json import MISSING, PY_LIST, PY_STR, PyJson
 from tools._sha256 import sha256_hex
 
@@ -117,12 +119,32 @@ def lane_control_tokens(directory: String) raises:
         index += 1
 
 
+def lane_control_tokens_then_predecessors(directory: String) raises -> String:
+    """Check the declaration tokens, then the lane predecessors.
+
+    Args:
+        directory: Token pairs in `N.left` and `N.right`, plus `labels.json`
+            and `predecessor.json`.
+
+    Returns:
+        A JSON list of `true` or `false`, in predecessor order.
+
+    Raises:
+        Error: A token pair differs before a predecessor is accepted.
+    """
+    lane_control_tokens(directory)
+    return accept_lane_predecessors(
+        Path(directory + "/predecessor.json").read_text()
+    )
+
+
 def _usage():
     """Print the command usage and stop."""
     print(
         (
             "usage: carla_lane_control_gate --migration PATH | --tokens DIR |"
-            " --prepare PATH | --prepare-labeled PATH"
+            " --tokens-then-predecessors DIR | --prepare PATH |"
+            " --prepare-labeled PATH"
         ),
         file=stderr,
     )
@@ -137,6 +159,7 @@ def main() raises:
     """
     var migration = String("")
     var tokens = String("")
+    var tokens_then_predecessors = String("")
     var prepare = String("")
     var prepare_labeled = String("")
     var arguments = argv()
@@ -146,6 +169,7 @@ def main() raises:
         if (
             word == "--migration"
             or word == "--tokens"
+            or word == "--tokens-then-predecessors"
             or word == "--prepare"
             or word == "--prepare-labeled"
         ):
@@ -156,6 +180,8 @@ def main() raises:
                 migration = value
             elif word == "--tokens":
                 tokens = value
+            elif word == "--tokens-then-predecessors":
+                tokens_then_predecessors = value
             elif word == "--prepare-labeled":
                 prepare_labeled = value
             else:
@@ -167,6 +193,8 @@ def main() raises:
     if migration.byte_length() > 0:
         modes += 1
     if tokens.byte_length() > 0:
+        modes += 1
+    if tokens_then_predecessors.byte_length() > 0:
         modes += 1
     if prepare.byte_length() > 0:
         modes += 1
@@ -185,6 +213,12 @@ def main() raises:
             return
         if prepare.byte_length() > 0:
             print(lane_control_prepare(Path(prepare).read_text()), end="")
+            return
+        if tokens_then_predecessors.byte_length() > 0:
+            print(
+                lane_control_tokens_then_predecessors(tokens_then_predecessors),
+                end="",
+            )
             return
         if tokens.byte_length() > 0:
             lane_control_tokens(tokens)

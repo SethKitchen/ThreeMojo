@@ -621,6 +621,10 @@ It returns the kept-token digest and declaration text for the lane-control and S
 
 It compares the two lane-control token digests in one check.
 
+It checks those declaration tokens before the lane predecessors in one check.
+
+A token mismatch still fails before a predecessor is accepted.
+
 It reads every lane-control declaration in one check.
 
 The cleanup, dispatch, selection, grouped-table, and lane-control checks use that digest.
