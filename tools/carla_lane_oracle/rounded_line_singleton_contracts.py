@@ -319,6 +319,40 @@ def _verify_dependencies(items):
     words.verify_dependencies(items)
 
 
+def _checked_import_scopes(items, lane_index, label_prefix):
+    """Extract every import scope, then check the graphs when the lane matches."""
+    if not items:
+        return {'restore': False}
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = {
+        'texts': [text for _path, text, _expected in items],
+        'expected': [expected for _path, _text, expected in items],
+        'labels': [label_prefix + path for path, _text, _expected in items],
+    }
+    if lane_index is not None:
+        payload['lane'] = lane_index
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='import-scopes-') as directory:
+        path = Path(directory) / 'scopes.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_singleton_gate',
+             '--import-scopes', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _import_scope(text):
     """Return the consumer prefix before the first definition."""
     return _import_scopes([text])[0]
@@ -494,19 +528,24 @@ def verify_premises(root):
     _verify_dependencies(pending)
     labels = _singleton_paths()
     scope_items = []
+    lane_index = None
     for path, expected in record['import_scopes'].items():
         text = _lane_text(root) if path == labels['lane'] else _typed_source.historical_text(root, root/path, (root/path).read_text())
-        scope_items.append((path, text, expected))
-    prefixes = _import_scopes([text for _path, text, _expected in scope_items])
-    prepared = []
-    for (path, text, expected), actual in zip(scope_items, prefixes):
         if path == labels['lane']:
-            if not _significant_matches([(actual, expected)])[0]:
-                # Only a changed consumed scope requests complete current admission.
-                text = full_audit.reviewed_text(root, path, text)
-                actual = _import_scope(text)
-        prepared.append((actual, expected, labels['import_scope'] + path))
-    _significant_graphs(prepared)
+            lane_index = len(scope_items)
+        scope_items.append((path, text, expected))
+    checked = _checked_import_scopes(
+        scope_items, lane_index, labels['import_scope'])
+    if checked['restore']:
+        prefixes = checked['prefixes']
+        path, text, expected = scope_items[lane_index]
+        text = full_audit.reviewed_text(root, path, text)
+        prefixes[lane_index] = _import_scope(text)
+        prepared = []
+        for index, (path, _text, expected) in enumerate(scope_items):
+            prepared.append((prefixes[index], expected,
+                             labels['import_scope'] + path))
+        _significant_graphs(prepared)
     minimum_items = []
     for item in record['declarations']:
         minimum_items.append((item, tuple(item['owner'])))

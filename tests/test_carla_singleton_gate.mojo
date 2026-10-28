@@ -12,6 +12,7 @@ from std.pathlib import Path
 from tests._python_tokens import declaration_text
 from tools._python_json import PyJson
 from tools.carla_singleton_gate import (
+    checked_import_scopes,
     singleton_graphs,
     singleton_path,
     singleton_record,
@@ -287,6 +288,39 @@ def test_restores_are_read_before_a_bad_graph_list() raises:
         )
     ):
         singleton_restored_graphs(doc.dumps())
+
+
+def test_a_changed_lane_scope_requests_a_restore() raises:
+    """A different lane prefix is returned before the other graphs are checked.
+    """
+    var payload = (
+        '{"texts":["import a\\ndef f():\\n    pass\\n","import b\\n'
+        + 'def g():\\n    pass\\n"],"expected":["import b","import b"],'
+        + '"labels":["lane","other"],"lane":0}'
+    )
+    var parsed = PyJson.parse(checked_import_scopes(payload))
+    assert_true(parsed.flag(parsed.at(parsed.root, "restore")))
+
+
+def test_a_matching_lane_scope_checks_the_other_graph() raises:
+    """The other graph fails after the lane scope matches."""
+    var payload = (
+        '{"texts":["import a\\ndef f():\\n    pass\\n","import b\\n'
+        + 'def g():\\n    pass\\n"],"expected":["import a","import c"],'
+        + '"labels":["lane","other"],"lane":0}'
+    )
+    with assert_raises(contains="rounded LINE singleton contract: other"):
+        _ = checked_import_scopes(payload)
+
+
+def test_matching_import_scopes_need_no_restore() raises:
+    """Matching scopes pass in one check."""
+    var payload = (
+        '{"texts":["import a\\ndef f():\\n    pass\\n"],'
+        + '"expected":["import a"],"labels":["lane"],"lane":0}'
+    )
+    var parsed = PyJson.parse(checked_import_scopes(payload))
+    assert_true(not parsed.flag(parsed.at(parsed.root, "restore")))
 
 
 def main() raises:

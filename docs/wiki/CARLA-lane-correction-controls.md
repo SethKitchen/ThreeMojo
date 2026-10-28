@@ -94,6 +94,8 @@ It keeps the consumer import scope before the first definition.
 
 It extracts every consumer import scope in one check.
 
+It checks every consumer import scope when the lane scope matches in one check.
+
 It keeps the lane path, the rounded-line path, and the consumer messages.
 
 It keeps the rounded-line contract prefix.

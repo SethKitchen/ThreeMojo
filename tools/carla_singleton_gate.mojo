@@ -9,6 +9,7 @@
     carla_singleton_gate --text PATH --decoded PATH
     carla_singleton_gate --graphs DIR
     carla_singleton_gate --source-graphs PATH
+    carla_singleton_gate --import-scopes PATH
     carla_singleton_gate --restored-graphs PATH
     carla_singleton_gate --selector PATH --wanted PATH
 
@@ -19,7 +20,12 @@ and it does not restore a historical source. The caller does that first.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tests._python_tokens import significant_graph_pairs, token_sha256
+from tests._python_tokens import (
+    import_scope_prefixes,
+    significant_graph_pairs,
+    significant_match_flags,
+    token_sha256,
+)
 from tools._lane_declarations import restored_declaration_graphs
 from tools._python_json import MISSING, PY_LIST, PyJson, py_equal
 from tools._sha256 import sha256_hex
@@ -104,6 +110,80 @@ def singleton_source_graphs(payload: String) raises:
     )
 
 
+def checked_import_scopes(payload: String) raises -> String:
+    """Extract every import scope, then check it when the lane scope matches.
+
+    Args:
+        payload: JSON with `texts`, `expected`, and `labels`. `lane` is the
+            optional index whose scope can request a restore.
+
+    Returns:
+        `restore` is false when every graph matches. It is true, with the
+        extracted `prefixes`, when the lane scope differs.
+
+    Raises:
+        Error: A scope cannot be read, or a non-lane graph changed.
+    """
+    var doc = PyJson.parse(payload)
+    var prefixes_text = import_scope_prefixes(
+        doc.subtree(doc.at(doc.root, "texts")).dumps()
+    )
+    var prefixes = PyJson.parse(prefixes_text)
+    var lane = doc.get(doc.root, "lane")
+    if lane != MISSING:
+        var at = Int(doc.text(lane))
+        var match_doc = PyJson()
+        var match_rows = match_doc.new_list()
+        var pair = match_doc.new_dict()
+        match_doc.set(
+            pair,
+            "actual",
+            match_doc.new_str(prefixes.text(prefixes.item(prefixes.root, at))),
+        )
+        match_doc.set(
+            pair,
+            "source",
+            match_doc.new_str(
+                doc.text(doc.item(doc.at(doc.root, "expected"), at))
+            ),
+        )
+        match_doc.append(match_rows, pair)
+        match_doc.root = match_rows
+        var flags = PyJson.parse(significant_match_flags(match_doc.dumps()))
+        if flags.text(flags.item(flags.root, 0)) != "true":
+            return '{"restore":true,"prefixes":' + prefixes_text + "}"
+    var graphs = PyJson()
+    var rows = graphs.new_list()
+    var expected = doc.at(doc.root, "expected")
+    var labels = doc.at(doc.root, "labels")
+    var count = prefixes.length(prefixes.root)
+    var index = 0
+    while index < count:
+        var row = graphs.new_dict()
+        graphs.set(
+            row, "label", graphs.new_str(doc.text(doc.item(labels, index)))
+        )
+        graphs.set(
+            row,
+            "actual",
+            graphs.new_str(prefixes.text(prefixes.item(prefixes.root, index))),
+        )
+        graphs.set(
+            row,
+            "source",
+            graphs.new_str(doc.text(doc.item(expected, index))),
+        )
+        graphs.append(rows, row)
+        index += 1
+    graphs.root = rows
+    significant_graph_pairs(
+        graphs.dumps(),
+        "rounded LINE singleton contract: ",
+        "consumer import scope changed",
+    )
+    return '{"restore":false}'
+
+
 def singleton_restored_graphs(payload: String) raises:
     """Read each restored declaration, then compare every source graph.
 
@@ -151,6 +231,7 @@ def _usage():
             "usage: carla_singleton_gate --migration PATH"
             " | --text PATH --decoded PATH | --graphs DIR"
             " | --source-graphs PATH"
+            " | --import-scopes PATH"
             " | --restored-graphs PATH"
             " | --selector PATH --wanted PATH"
         ),
@@ -170,6 +251,7 @@ def main() raises:
     var decoded = String("")
     var graphs = String("")
     var source_graphs = String("")
+    var import_scopes = String("")
     var restored_graphs = String("")
     var selector = String("")
     var wanted = String("")
@@ -183,6 +265,7 @@ def main() raises:
             or word == "--decoded"
             or word == "--graphs"
             or word == "--source-graphs"
+            or word == "--import-scopes"
             or word == "--restored-graphs"
             or word == "--selector"
             or word == "--wanted"
@@ -200,6 +283,8 @@ def main() raises:
                 graphs = value
             elif word == "--source-graphs":
                 source_graphs = value
+            elif word == "--import-scopes":
+                import_scopes = value
             elif word == "--restored-graphs":
                 restored_graphs = value
             elif word == "--selector":
@@ -218,6 +303,8 @@ def main() raises:
         modes += 1
     if source_graphs.byte_length() > 0:
         modes += 1
+    if import_scopes.byte_length() > 0:
+        modes += 1
     if restored_graphs.byte_length() > 0:
         modes += 1
     if selector.byte_length() > 0 or wanted.byte_length() > 0:
@@ -231,6 +318,11 @@ def main() raises:
     try:
         if source_graphs.byte_length() > 0:
             singleton_source_graphs(Path(source_graphs).read_text())
+            return
+        if import_scopes.byte_length() > 0:
+            print(
+                checked_import_scopes(Path(import_scopes).read_text()), end=""
+            )
             return
         if restored_graphs.byte_length() > 0:
             singleton_restored_graphs(Path(restored_graphs).read_text())
