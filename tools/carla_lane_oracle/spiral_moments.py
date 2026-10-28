@@ -377,6 +377,29 @@ def _moment_fraction_groups(payload):
     return json.loads(result.stdout)
 
 
+def _moment_blocks_and_digests(payload):
+    """Return the normalized blocks when every route digest matches."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='moment-blocks-digests-') as directory:
+        path = Path(directory) / 'blocks.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_blocks',
+             '--digests', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
+
+
 def _moment_blocks(items):
     """Return the normalized operation blocks that match their pins."""
     import os
@@ -641,23 +664,22 @@ def verify_inputs(root):
     loaded_blocks = []
     for name, record in block_items:
         loaded_blocks.append((name, record, _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))))
-    try:
-        blocks = _moment_blocks([{
-            'name': name, 'source': text, 'begin': record['begin'],
-            'end': record['end'], 'expected': record['normalized_source'],
-            'digest': record['sha256'],
-        } for name, record, text in loaded_blocks])
-    except ValueError as error:
-        raise CheckError(str(error)) from error
     routing_items = []
     for name, record in pins['routing'].items():
         routing_items.append((name, record))
     try:
-        _moment_route_batch('--digests', [{
-            'text': record['normalized_tokens'],
-            'digest': record['sha256'],
-            'message': messages['routing_pin'] + name,
-        } for name, record in routing_items])
+        blocks = _moment_blocks_and_digests({
+            'blocks': [{
+                'name': name, 'source': text, 'begin': record['begin'],
+                'end': record['end'], 'expected': record['normalized_source'],
+                'digest': record['sha256'],
+            } for name, record, text in loaded_blocks],
+            'digests': [{
+                'text': record['normalized_tokens'],
+                'digest': record['sha256'],
+                'message': messages['routing_pin'] + name,
+            } for name, record in routing_items],
+        })
     except ValueError as error:
         raise CheckError(str(error)) from error
     loaded_routes = []

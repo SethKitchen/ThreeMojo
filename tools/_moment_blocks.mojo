@@ -6,10 +6,12 @@
 """Check every stored-moment operation block.
 
 The caller supplies each block's source and pin. This check returns the
-normalized block text in the same order.
+normalized block text in the same order. A combined check reads those
+blocks before the route digests.
 """
 
 from tests._python_tokens import require_operation_block
+from tools._moment_routes import moment_route_digests
 from tools._python_json import PyJson
 
 
@@ -53,3 +55,25 @@ def moment_blocks(payload: String) raises -> String:
         index += 1
     out.root = result
     return out.dumps()
+
+
+def moment_blocks_and_digests(payload: String) raises -> String:
+    """Check every operation block, then every route digest.
+
+    Args:
+        payload: JSON with `blocks` and `digests`. `blocks` is the
+            operation-block list. `digests` is the route-digest list.
+
+    Returns:
+        The normalized blocks. Each key is a block name.
+
+    Raises:
+        Error: A block pin changed, or a route digest disagrees. A block
+            error is raised before any digest is checked.
+    """
+    var doc = PyJson.parse(payload)
+    var blocks_text = moment_blocks(
+        doc.subtree(doc.at(doc.root, "blocks")).dumps()
+    )
+    moment_route_digests(doc.subtree(doc.at(doc.root, "digests")).dumps())
+    return blocks_text
