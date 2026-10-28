@@ -11,6 +11,7 @@
     carla_cleanup_gate --sha-texts PATH
     carla_cleanup_gate --token-sha PATH
     carla_cleanup_gate --tokens DIR
+    carla_cleanup_gate --tokens-or-restore PATH
     carla_cleanup_gate --words PATH --kind trig|geometry --label PATH
     carla_cleanup_gate --premises DIR
     carla_cleanup_gate --declaration PATH --name NAME [--owner NAME]
@@ -105,7 +106,15 @@ from tests._python_tokens import (
     token_words,
     without_move_sigils,
 )
-from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PY_STR, PyJson
+from tools._python_json import (
+    MISSING,
+    PY_BOOL,
+    PY_DICT,
+    PY_INT,
+    PY_LIST,
+    PY_STR,
+    PyJson,
+)
 from tools._sha256 import sha256_hex
 from tools._spiral_moment_words import decimal_word
 
@@ -531,6 +540,49 @@ def cleanup_tokens(directory: String) raises:
         index += 1
 
 
+def cleanup_tokens_or_restore(payload: String) raises -> String:
+    """Check a junction digest, then every successor token when it matches.
+
+    Args:
+        payload: A JSON list. Each item has `text`, `token`, and `label`.
+            `restore` marks the junction digest.
+
+    Returns:
+        `restore` is false when every token matches. It is true, with
+        `index`, when a marked digest differs.
+
+    Raises:
+        Error: The junction digest matches and another token changed.
+    """
+    var doc = PyJson.parse(payload)
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("unreviewed complete successor")
+    var count = doc.length(doc.root)
+    var index = 0
+    while index < count:
+        var row = doc.item(doc.root, index)
+        var restore = doc.get(row, "restore")
+        if (
+            restore != MISSING
+            and doc.kind(restore) == PY_BOOL
+            and doc.flag(restore)
+        ):
+            if token_sha256(doc.text(doc.at(row, "text"))) != doc.text(
+                doc.at(row, "token")
+            ):
+                return '{"restore":true,"index":' + String(index) + "}"
+        index += 1
+    index = 0
+    while index < count:
+        var row = doc.item(doc.root, index)
+        if token_sha256(doc.text(doc.at(row, "text"))) != doc.text(
+            doc.at(row, "token")
+        ):
+            _fail(doc.text(doc.at(row, "label")))
+        index += 1
+    return '{"restore":false}'
+
+
 def _u64_hex(word: UInt64) -> String:
     """Return one binary64 word as `0x` and sixteen uppercase hex digits.
 
@@ -665,23 +717,22 @@ def _usage():
         (
             "usage: carla_cleanup_gate --migration PATH [--previous PATH] |"
             " --bytes PATH --sha HEX | --sha-of PATH | --sha-texts PATH |"
-            " --token-sha PATH | --tokens DIR | --words PATH --kind"
-            " trig|geometry --label PATH | --premises DIR | --declaration PATH"
-            " --name NAME [--owner NAME] | --bounds PATH --name NAME [--owner"
-            " NAME] | --significant-json DIR | --names DIR | --moves PATH |"
-            " --statements PATH | --starts PATH | --routing PATH --constants"
-            " PATH | --ideal PATH --name NAME | --stored-half PATH |"
-            " --project-sum2 PATH | --commute-legacy PATH | --binding PATH |"
-            " --imports PATH | --heading PATH | --function-dump PATH |"
+            " --token-sha PATH | --tokens DIR | --tokens-or-restore PATH |"
+            " --words PATH --kind trig|geometry --label PATH | --premises DIR |"
+            " --declaration PATH --name NAME [--owner NAME] | --bounds PATH"
+            " --name NAME [--owner NAME] | --significant-json DIR | --names DIR"
+            " | --moves PATH | --statements PATH | --starts PATH | --routing"
+            " PATH --constants PATH | --ideal PATH --name NAME | --stored-half"
+            " PATH | --project-sum2 PATH | --commute-legacy PATH | --binding"
+            " PATH | --imports PATH | --heading PATH | --function-dump PATH |"
             " --plain-dump PATH | --sum2-dump PATH | --statement-dump PATH |"
             " --fragment-count PATH | --try-only PATH | --import-scope PATH |"
-            " --splice DIR | --replace-first DIR |"
-            " --syntax PATH |"
-            " --slice PATH --name NAME | --fragment DIR | --normalize PATH |"
-            " --table PATH --count N | --moment-source PATH | --moment-payload"
-            " PATH | --verify-table DIR | --block DIR | --strip-try PATH |"
-            " --pin-rows PATH | --decimal PATH | --literals PATH --name NAME"
-            " --kind array --size N | --literals PATH --name NAME --kind scalar"
+            " --splice DIR | --replace-first DIR | --syntax PATH | --slice PATH"
+            " --name NAME | --fragment DIR | --normalize PATH | --table PATH"
+            " --count N | --moment-source PATH | --moment-payload PATH |"
+            " --verify-table DIR | --block DIR | --strip-try PATH | --pin-rows"
+            " PATH | --decimal PATH | --literals PATH --name NAME --kind array"
+            " --size N | --literals PATH --name NAME --kind scalar"
         ),
         file=stderr,
     )
@@ -702,6 +753,7 @@ def main() raises:
     var sha_texts = String("")
     var token_sha = String("")
     var tokens = String("")
+    var token_restore = String("")
     var words = String("")
     var kind = String("")
     var label = String("")
@@ -761,6 +813,7 @@ def main() raises:
             or word == "--sha-texts"
             or word == "--token-sha"
             or word == "--tokens"
+            or word == "--tokens-or-restore"
             or word == "--words"
             or word == "--kind"
             or word == "--label"
@@ -827,6 +880,8 @@ def main() raises:
                 token_sha = value
             elif word == "--tokens":
                 tokens = value
+            elif word == "--tokens-or-restore":
+                token_restore = value
             elif word == "--words":
                 words = value
             elif word == "--kind":
@@ -936,6 +991,8 @@ def main() raises:
     if token_sha.byte_length() > 0:
         modes += 1
     if tokens.byte_length() > 0:
+        modes += 1
+    if token_restore.byte_length() > 0:
         modes += 1
     if (
         words.byte_length() > 0
@@ -1326,6 +1383,12 @@ def main() raises:
             return
         if tokens.byte_length() > 0:
             cleanup_tokens(tokens)
+            return
+        if token_restore.byte_length() > 0:
+            print(
+                cleanup_tokens_or_restore(Path(token_restore).read_text()),
+                end="",
+            )
             return
         if token_sha.byte_length() > 0:
             print(token_sha256(Path(token_sha).read_text()), end="")

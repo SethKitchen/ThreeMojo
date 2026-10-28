@@ -5,7 +5,7 @@
 
 """A changed reviewed cleanup record fails the gate."""
 
-from std.testing import TestSuite, assert_equal, assert_raises
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from std.os import makedirs
 from std.pathlib import Path
@@ -69,6 +69,7 @@ from tools.carla_cleanup_gate import (
     sha256_texts_json,
     cleanup_premises,
     cleanup_tokens,
+    cleanup_tokens_or_restore,
     cleanup_words,
     cleanup_words_all,
 )
@@ -1102,6 +1103,34 @@ def test_the_stored_word_digest_matches_sha256() raises:
         != "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     ):
         raise Error(digest)
+
+
+def test_a_junction_digest_fails_before_the_other_tokens() raises:
+    """A marked digest returns before a later successor token is checked."""
+    var parsed = PyJson.parse(
+        cleanup_tokens_or_restore(
+            '[{"text":"def f():\\n    return'
+            ' 1\\n","token":"00","label":"junction",'
+            + '"restore":true},{"text":"def g():\\n    return'
+            ' 1\\n","token":"11",'
+            + '"label":"later"}]'
+        )
+    )
+    assert_true(parsed.flag(parsed.at(parsed.root, "restore")))
+    assert_equal(parsed.text(parsed.at(parsed.root, "index")), "0")
+
+
+def test_a_matching_junction_digest_checks_the_other_token() raises:
+    """A later token fails after the marked digest matches."""
+    var source = "def f():\n    return 1\n"
+    var payload = (
+        '[{"text":"def f():\\n    return 1\\n","token":"'
+        + token_sha256(source)
+        + '","label":"junction","restore":true},'
+        + '{"text":"def g():\\n    return 1\\n","token":"11","label":"later"}]'
+    )
+    with assert_raises(contains="reviewed cleanup source contract: later"):
+        _ = cleanup_tokens_or_restore(payload)
 
 
 def main() raises:

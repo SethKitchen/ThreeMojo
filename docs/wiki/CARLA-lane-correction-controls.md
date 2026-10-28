@@ -148,6 +148,8 @@ It compares each successor token digest before the predecessor fallback.
 
 It compares the junction token digest in one check.
 
+It checks that junction digest before the other successor tokens in one check.
+
 `tools/carla_dispatch_gate.mojo` checks the curve support and dispatch record, the predecessor edge, and the operation graphs.
 
 It checks every historical dispatch pin in one check.

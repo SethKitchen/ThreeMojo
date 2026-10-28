@@ -30,10 +30,8 @@ else:
 
 if __package__:
     from . import accepted_successor_contracts as accepted
-    from . import ideal_projection
 else:
     import accepted_successor_contracts as accepted
-    import ideal_projection
 
 
 _MIGRATION_RECORDS = None
@@ -227,6 +225,32 @@ def _gate(migration, previous=None):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+
+
+def _tokens_or_restore(rows):
+    """Check the junction digest, then every successor token when it matches."""
+    if not rows:
+        return {'restore': False}
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(rows, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='cleanup-token-restore-') as directory:
+        path = Path(directory) / 'tokens.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+             '--tokens-or-restore', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return json.loads(result.stdout)
 
 
 def _gate_tokens(pairs):
@@ -573,23 +597,35 @@ def verify(root, *, _operation=None):
     _gate_digest(guard_payload, record['guard_pins_after_sha256'])
     labels = _cleanup_declarations()
     pairs = []
+    paths = []
     for path, transition in record['sources'].items():
         text = accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
-        if (path == labels['junction']
-                and not ideal_projection.token_digest_equals(
-                    text, transition['after_token_sha256'])):
+        row = {
+            'text': text,
+            'token': transition['after_token_sha256'],
+            'label': labels['unreviewed'] + path,
+        }
+        if path == labels['junction']:
+            row['restore'] = True
+        pairs.append(row)
+        paths.append(path)
+    if pairs:
+        checked = _tokens_or_restore(pairs)
+        if checked['restore']:
+            index = checked['index']
+            path = paths[index]
             try:
                 if __package__:
                     from . import full_audit_cleanup_contracts as full_audit
                 else:
                     import full_audit_cleanup_contracts as full_audit
-                text = full_audit.reviewed_text(root, path, text, **operation_args)
+                pairs[index]['text'] = full_audit.reviewed_text(
+                    root, path, pairs[index]['text'], **operation_args)
             except (ValueError, OSError) as error:
-                raise ValueError(_contract_prefixes()['cleanup'] + labels['unreviewed'] + path) from error
-        pairs.append((text, transition['after_token_sha256'],
-                      labels['unreviewed'] + path))
-    if pairs:
-        _gate_tokens(pairs)
+                raise ValueError(
+                    _contract_prefixes()['cleanup'] + pairs[index]['label']) from error
+            _gate_tokens([
+                (item['text'], item['token'], item['label']) for item in pairs])
     dependencies = []
     for path, expected in record['premise_dependencies'].items():
         dependencies.append((path, _typed_source.historical_text(root, path, _observe_text(
