@@ -2544,21 +2544,51 @@ def begin_generation(root, build, compiler, flags, *, mojo=None, sources):
 
 
 def execution_contract(root, build, inputs, *, mojo=None, capture_cache=None, suites=None):
-    """Bind the maintained capture wrappers, compiler and exact run flags."""
-    selected = (sorted(name for name in inputs if name.startswith('tests/test_')
-                       and name.endswith('.mojo')) if suites is None else sorted(suites))
-    if len(set(selected)) != len(selected) or any(name not in inputs for name in selected):
-        raise ValueError('Capture suite inventory is invalid or not staged')
-    cache = root / '.cache/native-coverage' if capture_cache is None else root / capture_cache
-    return {'schema': 'coverage-execution-v1',
-            'python': {'path': _symbolic_path(Path(sys.executable), root, build),
-                       'sha256': file_sha256(Path(sys.executable).resolve())},
-            'compiler': _command_identity(mojo or ['.venv/bin/mojo'], root, build),
-            'cache': _symbolic_path(cache, root, build), 'suites': selected,
-            'cc': os.environ.get('CC', 'cc'),
-            'native_compiler': _command_identity(os.environ.get('CC', 'cc'), root, build),
-            'profiles': ['raw', 'aot', 'aot-hits'],
-            'capture_flags': ['run', '-I', '@BUILD@', '@SUITE@']}
+    """Bind the maintained capture wrappers, compiler and exact run flags.
+
+    Args:
+        root: The repository root.
+        build: The build directory.
+        inputs: The staged input names.
+        mojo: The producer command. None selects `.venv/bin/mojo`.
+        capture_cache: The cache directory inside `root`, or none.
+        suites: The capture suites. None selects the staged test modules.
+
+    Returns:
+        The execution contract.
+
+    Raises:
+        ValueError: A suite is not staged, or a compiler is missing.
+    """
+    import subprocess
+    import tempfile
+    repo = Path(__file__).resolve().parents[1]
+    program = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
+    request = {
+        'inputs': list(inputs),
+        'mojo': _mojo_command(mojo),
+        'python': sys.executable,
+    }
+    if suites is not None:
+        request['suites'] = list(suites)
+    if capture_cache is not None:
+        request['cache'] = str(capture_cache)
+    with tempfile.TemporaryDirectory(prefix='coverage-execution-') as directory:
+        path = Path(directory) / 'request.json'
+        path.write_text(json.dumps(request), encoding='utf-8')
+        result = subprocess.run(
+            ['sh', str(repo / 'tools' / 'tool.sh'), program, 'coverage_execution',
+             '--root', str(root), '--build', str(build), '--request', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        errors = [line.strip() for line in result.stderr.splitlines()
+                  if line.strip() and 'Crashpad' not in line]
+        message = errors[-1] if errors else result.stdout.strip()
+        prefix = 'coverage_execution: '
+        if message.startswith(prefix):
+            message = message[len(prefix):]
+        raise ValueError(message)
+    return json.loads(result.stdout)
 
 
 def expected_capture_command(contract, suite, profile):

@@ -10,7 +10,7 @@ never replaces a production observation or grants a source admission.
 import hashlib
 import json
 
-EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'c05d2c085cf1bad714a93c4641b1c0837fc6a5ce391785677e7697147a38b92d',
+EDGES = {'coverage_loop_proofs.py': {'after_sha256': '913b3a502380542d42efb7f50aff6dea8e5e802b753f876a5be83e575cbc2aa5',
                              'before_sha256': '21e3a9637a69c6abbf27e9c8dd193a1addf7ed8537dd8f2734c35ff1a468304d',
                              'edits': ((45,
                                         49,
@@ -920,8 +920,78 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'c05d2c085cf1bad714a93c4641
   '    return _run_coverage_begin(root, build, compiler, flags, mojo, sources)\n',
   '\n',
  )),
-                                       (2566,
-                                        2566,
+(2545,
+ 2592,
+ (
+  'def execution_contract(root, build, inputs, *, mojo=None, capture_cache=None, suites=None):\n',
+  '    """Bind the maintained capture wrappers, compiler and exact run flags."""\n',
+  "    selected = (sorted(name for name in inputs if name.startswith('tests/test_')\n",
+  "                       and name.endswith('.mojo')) if suites is None else sorted(suites))\n",
+  '    if len(set(selected)) != len(selected) or any(name not in inputs for name in selected):\n',
+  "        raise ValueError('Capture suite inventory is invalid or not staged')\n",
+  "    cache = root / '.cache/native-coverage' if capture_cache is None else root / capture_cache\n",
+  "    return {'schema': 'coverage-execution-v1',\n",
+  "            'python': {'path': _symbolic_path(Path(sys.executable), root, build),\n",
+  "                       'sha256': file_sha256(Path(sys.executable).resolve())},\n",
+  "            'compiler': _command_identity(mojo or ['.venv/bin/mojo'], root, build),\n",
+  "            'cache': _symbolic_path(cache, root, build), 'suites': selected,\n",
+  "            'cc': os.environ.get('CC', 'cc'),\n",
+  "            'native_compiler': _command_identity(os.environ.get('CC', 'cc'), root, build),\n",
+  "            'profiles': ['raw', 'aot', 'aot-hits'],\n",
+  "            'capture_flags': ['run', '-I', '@BUILD@', '@SUITE@']}\n",
+  '\n',
+ ),
+ (
+  'def execution_contract(root, build, inputs, *, mojo=None, capture_cache=None, suites=None):\n',
+  '    """Bind the maintained capture wrappers, compiler and exact run flags.\n',
+  '\n',
+  '    Args:\n',
+  '        root: The repository root.\n',
+  '        build: The build directory.\n',
+  '        inputs: The staged input names.\n',
+  '        mojo: The producer command. None selects `.venv/bin/mojo`.\n',
+  '        capture_cache: The cache directory inside `root`, or none.\n',
+  '        suites: The capture suites. None selects the staged test modules.\n',
+  '\n',
+  '    Returns:\n',
+  '        The execution contract.\n',
+  '\n',
+  '    Raises:\n',
+  '        ValueError: A suite is not staged, or a compiler is missing.\n',
+  '    """\n',
+  '    import subprocess\n',
+  '    import tempfile\n',
+  '    repo = Path(__file__).resolve().parents[1]\n',
+  "    program = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))\n",
+  '    request = {\n',
+  "        'inputs': list(inputs),\n",
+  "        'mojo': _mojo_command(mojo),\n",
+  "        'python': sys.executable,\n",
+  '    }\n',
+  '    if suites is not None:\n',
+  "        request['suites'] = list(suites)\n",
+  '    if capture_cache is not None:\n',
+  "        request['cache'] = str(capture_cache)\n",
+  "    with tempfile.TemporaryDirectory(prefix='coverage-execution-') as directory:\n",
+  "        path = Path(directory) / 'request.json'\n",
+  "        path.write_text(json.dumps(request), encoding='utf-8')\n",
+  '        result = subprocess.run(\n',
+  "            ['sh', str(repo / 'tools' / 'tool.sh'), program, 'coverage_execution',\n",
+  "             '--root', str(root), '--build', str(build), '--request', str(path)],\n",
+  '            capture_output=True, text=True)\n',
+  '    if result.returncode != 0:\n',
+  '        errors = [line.strip() for line in result.stderr.splitlines()\n',
+  "                  if line.strip() and 'Crashpad' not in line]\n",
+  '        message = errors[-1] if errors else result.stdout.strip()\n',
+  "        prefix = 'coverage_execution: '\n",
+  '        if message.startswith(prefix):\n',
+  '            message = message[len(prefix):]\n',
+  '        raise ValueError(message)\n',
+  '    return json.loads(result.stdout)\n',
+  '\n',
+ )),
+                                       (2596,
+                                        2596,
                                         ('    runner = '
                                          "(['@ROOT@/tools/native_test_support.py', "
                                          "'run'] if profile == 'raw'\n",
@@ -929,8 +999,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'c05d2c085cf1bad714a93c4641
                                          "['@ROOT@/tools/coverage_hit_aot.py', "
                                          "'--profile', profile])\n"),
                                         ()),
-                                       (2567,
-                                        2577,
+                                       (2597,
+                                        2607,
                                         ('    return '
                                          "[contract['python']['path'], "
                                          "*runner, '--root', '@BUILD@',\n",),
@@ -956,8 +1026,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'c05d2c085cf1bad714a93c4641
                                          "*compiler, 'coverage_hit_aot',\n",
                                          "            '--profile', profile, "
                                          "'--root', '@BUILD@',\n")),
-                                       (2693,
-                                        2710,
+                                       (2723,
+                                        2740,
                                         ("        'execution': "
                                          'execution_contract(root, build, '
                                          'inputs, mojo=mojo,\n',
@@ -1042,8 +1112,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'c05d2c085cf1bad714a93c4641
                                          '    _plain_seed = '
                                          'canonical(_receipt_seed) if cleanup '
                                          'is None else None\n')),
-(2777,
- 2820,
+(2807,
+ 2850,
  (
   'def _load_json(path):\n',
   '    def pairs(items):\n',
@@ -1102,8 +1172,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'c05d2c085cf1bad714a93c4641
   '\n',
   '\n',
  )),
-(2848,
- 2894,
+(2878,
+ 2924,
  (
   'def masked_manifest(raw, envelope):\n',
   '    """Preserve all original entries except the explicit outcome masks."""\n',
@@ -1175,8 +1245,8 @@ EDGES = {'coverage_loop_proofs.py': {'after_sha256': 'c05d2c085cf1bad714a93c4641
   '    return result.stdout\n',
   '\n',
  )),
-(2910,
- 2945,
+(2940,
+ 2975,
  (
   'def verify_captures(captures, envelope):\n',
   '    for capture in captures:\n',
@@ -2481,7 +2551,7 @@ def predecessor(name, raw):
     """Compose exact current checkers into the retained 5e91dad comparison."""
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
-    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '9652fef432396f5827ebad9bad224f2443a7535ad68101c96b4c432322f1fc25':
+    if hashlib.sha256(json.dumps(EDGES, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != '25bf409d5c284bf857a2aaf7ad751a2ff3ac797157b51fe652d23b038fd3e322':
         raise AssertionError('PR780 checker inverse data changed')
     digest = hashlib.sha256(raw).hexdigest()
     edge = EDGES.get(name)
