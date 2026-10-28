@@ -95,7 +95,9 @@ def test_each_setting_is_checked() raises:
     q.water_refresh_every = 0
     _refused(q, "surface")
     # The size of a frame is found only for a quality `check` passes.
-    var big = GameQuality(2, ALL_PLANTS, 1, 1, 1, 1, 1, FULL_SHADOWS, 4096)
+    var big = GameQuality(
+        2, ALL_PLANTS, 1, 1, 1, 1, 1, FULL_SHADOWS, 4096, True
+    )
     with assert_raises(contains="render scale"):
         _ = big.frame_size(10, 10)
 

@@ -79,6 +79,7 @@
 - [Vegetation](Vegetation)
   - [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters)
 - [Village](Village)
+  - [Village houses](Village-houses)
   - [Village walk](Village-walk)
   - [Game renderer](Game-renderer)
 - [Streamline](Streamline)

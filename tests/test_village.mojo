@@ -3,8 +3,9 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The village: houses on plinths, scanned buildings cut out of their
-ground, and the meadow with its pond and its water."""
+"""The village: scanned buildings cut out of their ground, and the meadow
+with its houses, its pond and its water. The houses have suites of their
+own: see `test_village_house.mojo` and `test_village_house_view.mojo`."""
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -19,14 +20,7 @@ from extensions.scan.frame import supersplat_frame
 from extensions.vegetation.field import LodBand
 from extensions.vegetation.ground import Ground, Lot, Pond
 from extensions.vegetation.meadow import Planting
-from extensions.village.house import (
-    EAVES,
-    HouseParameters,
-    gable_roof,
-    house_lot,
-    house_model,
-    stand_house,
-)
+from extensions.village.house import BARN, DWELLING, HouseParameters
 from extensions.scan.occupancy import ScanRegion
 from extensions.village.scanned import (
     MAX_VOXELS,
@@ -37,10 +31,12 @@ from extensions.village.scanned import (
     scan_lot,
     stand_scan,
 )
+from extensions.village.props import CRATE, FENCE, WELL, Prop
 from extensions.village.village import (
     HousePlacement,
     Village,
     VillageParameters,
+    default_props,
 )
 from extensions.water.pebbles import pebble_bed
 from extensions.water.resolution import SpectrumResolution
@@ -128,106 +124,6 @@ def _scan(building: Bool) -> GaussianSplatGeometry:
         return create_gaussian_splat_geometry(centers^, covariances^, colors^)
     except:
         return GaussianSplatGeometry()
-
-
-def test_house_parameters_are_checked() raises:
-    """A house in range passes; each field out of range is refused."""
-    _house(2).check()
-    var house = _house(2)
-    house.width = Length(2.0, METER)
-    with assert_raises(contains="wide"):
-        house.check()
-    house = _house(2)
-    house.depth = Length(70.0, METER)
-    with assert_raises(contains="deep"):
-        house.check()
-    with assert_raises(contains="storeys"):
-        _house(0).check()
-    house = _house(2)
-    house.storey_height = Length(7.0, METER)
-    with assert_raises(contains="storey must"):
-        house.check()
-    house = _house(2)
-    house.pitch = Angle(70.0, DEGREE)
-    with assert_raises(contains="pitch"):
-        house.check()
-    house = _house(2)
-    house.gable = Vector3(2, 0, 0)
-    with assert_raises(contains="color"):
-        house.check()
-    house = _house(2)
-    house.gable = Vector3(0, -1, 0)
-    with assert_raises(contains="color"):
-        house.check()
-    house = _house(2)
-    house.gable = Vector3(0, 0, 3)
-    with assert_raises(contains="color"):
-        house.check()
-
-
-def test_a_house_model_has_its_storeys_windows_and_doors() raises:
-    """A model has as many storeys as asked, and openings: windows in its
-    outside walls and doors. A house that is refused builds no model."""
-    var model = house_model(_house(2))
-    assert_equal(len(model.storeys), 2)
-    assert_true(len(model.openings) > 4)
-    with assert_raises(contains="storeys"):
-        _ = house_model(_house(0))
-
-
-def test_a_gable_roof_spans_the_house() raises:
-    """A gable roof is two slopes and two gables. Its ridge rises over the
-    middle of the house's depth by the pitch, and its eaves reach past the
-    walls."""
-    var house = _house(1)
-    var roof = gable_roof(house)
-    assert_equal(roof.vertex_count(), 4 + 4 + 3 + 3)
-    assert_equal(len(roof.index), 6 * 3)
-    ref p = roof.attribute_view(String(POSITION))
-    var top = Float32(-1.0e30)
-    var widest = Float32(0)
-    for v in range(p.count()):
-        top = max(top, p.vector3(v).y)
-        widest = max(widest, abs(p.vector3(v).x))
-    var rise = tan(Angle(40.0, DEGREE).to(RADIAN)) * 2
-    assert_almost_equal(top, 2.8 + rise, atol=1e-4)
-    assert_almost_equal(widest, 2.5 + EAVES, atol=1e-5)
-
-
-def test_a_house_stands_on_its_lot() raises:
-    """A house's lot is as large as its plan. It stands at the highest
-    ground under its corners, turned by its lot, on a plinth, under its
-    roof. A flat-roofed house has no roof mesh."""
-    var house = _house(1)
-    var lot = house_lot(house, 4, -4, Angle(0.3, RADIAN))
-    assert_almost_equal(lot.half_width, 2.5)
-    assert_almost_equal(lot.half_depth, 2)
-    assert_almost_equal(lot.turn, 0.3, atol=1e-6)
-    var ground = Ground()
-    var assets = Assets()
-    var scene = Scene()
-    var drawn = stand_house(
-        scene, assets, house, house_model(house), lot, ground
-    )
-    var y = scene.get(drawn.root).position.y
-    var highest = Float32(-1.0e30)
-    for k in range(4):
-        var u = Float32(-2.5) if k % 2 == 0 else Float32(2.5)
-        var v = Float32(-2) if k < 2 else Float32(2)
-        highest = max(
-            highest,
-            ground.height_at(
-                4 + u * cos(Float32(0.3)) + v * sin(Float32(0.3)),
-                -4 - u * sin(Float32(0.3)) + v * cos(Float32(0.3)),
-            ),
-        )
-    assert_almost_equal(y, highest, atol=1e-5)
-    assert_true(drawn.triangles > 0)
-    var flat = _house(1)
-    flat.pitch = Angle(0.0, DEGREE)
-    var plain = Scene()
-    var level = stand_house(plain, assets, flat, house_model(flat), lot, ground)
-    assert_equal(level.meshes, drawn.meshes - 1)
 
 
 def test_a_building_is_cut_out_of_its_scan() raises:
@@ -346,6 +242,10 @@ def _parameters() raises -> VillageParameters:
     p.meadow.litter = 1000
     p.meadow.litter_reach = Length(8.0, METER)
     p.houses = [HousePlacement(_house(1), 5, -4, Angle(10.0, DEGREE))]
+    p.props = [
+        Prop(WELL, -6, -1, Angle(0.0, DEGREE), 0.8),
+        Prop(FENCE, 3, 5, Angle(0.0, DEGREE), 4),
+    ]
     p.scan_x = -5
     p.scan_z = -4
     p.ocean = SpectrumResolution(16)
@@ -367,12 +267,16 @@ def _refused(p: VillageParameters, text: String) raises:
 
 
 def test_village_parameters_are_checked() raises:
-    """The default village passes, with a pond and two houses; each field
-    out of range is refused, and so is a meadow or a house its own check
-    refuses."""
+    """The default village passes, with a pond and five houses, the second
+    of them a barn; each field out of range is refused, and so is a meadow
+    or a house its own check refuses."""
     var village = VillageParameters()
     village.check()
-    assert_equal(len(village.houses), 2)
+    assert_equal(len(village.houses), 5)
+    for k in range(5):
+        var use = BARN if k == 1 else DWELLING
+        assert_true(village.houses[k].house.use == use)
+    assert_equal(len(village.props), len(default_props()))
     assert_true(village.meadow.ground.pond.radius.to(METER) > 0)
     var p = VillageParameters()
     p.meadow.rocks = 2000
@@ -384,6 +288,13 @@ def test_village_parameters_are_checked() raises:
     p = VillageParameters()
     p.houses[0].house.width = Length(1.0, METER)
     _refused(p, "wide")
+    p = VillageParameters()
+    for _ in range(1000):
+        p.props.append(Prop(CRATE, 0, 0, Angle(0.0, DEGREE), 1))
+    _refused(p, "props")
+    p = VillageParameters()
+    p.props[0].length = 100
+    _refused(p, "long")
     p = VillageParameters()
     p.houses[0].x = 2.0e4
     _refused(p, "A house must stand")
@@ -421,6 +332,26 @@ def test_a_village_stands_its_buildings_and_draws_its_pond() raises:
     assert_equal(len(village.houses), 1)
     assert_true(Bool(village.scanned))
     assert_equal(len(village.meadow.field.lots), 2)
+    # The house's front door opens: its doorway and its hinge are the
+    # village's door.
+    assert_equal(len(village.doors.ways), 1)
+    assert_true(village.doors.ways[0].outside)
+    # The terrain holds the house's walls, its floor and its furniture,
+    # and the scanned building as a solid lot.
+    var terrain = village.terrain()
+    ref inside = village.houses[0].interior
+    # The house's walls and furniture and the fence; the well and the
+    # scanned building.
+    assert_equal(
+        len(terrain.walls), len(inside.walls) + len(inside.furniture) + 1
+    )
+    assert_equal(len(terrain.floors), len(inside.floors))
+    assert_equal(len(terrain.lots), 2)
+    assert_almost_equal(
+        terrain.height_at(5, -4, inside.floor_height),
+        inside.floor_height,
+        atol=1e-6,
+    )
     assert_almost_equal(village.meadow.field.cover_at(5, -4), 0)
     assert_almost_equal(village.meadow.field.cover_at(-5, -4), 0)
     var camera = PerspectiveCamera(
@@ -445,10 +376,14 @@ def test_a_village_stands_its_buildings_and_draws_its_pond() raises:
     var bare = Scene()
     var empty = _parameters()
     empty.houses = []
+    empty.props = []
     var plain = Village(bare, assets, renderer, empty, pebble_bed(_bed()), None)
     assert_false(Bool(plain.scanned))
     assert_equal(len(plain.houses), 0)
     assert_equal(len(plain.meadow.field.lots), 0)
+    assert_equal(len(plain.doors.ways), 0)
+    var open = plain.terrain()
+    assert_equal(len(open.walls) + len(open.floors) + len(open.lots), 0)
 
 
 def main() raises:

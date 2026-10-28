@@ -1185,6 +1185,20 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_facade_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 32,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'facade' cannot be converted from 'IntLiteral[2]' to 'Facade'"
+    ]
+  },
   "tests/compile_fail/a_facade_style_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -4341,6 +4355,20 @@
     ],
     "notes": [
       "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_village_prop_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 20,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[1]' to 'PropKind'"
     ]
   },
   "tests/compile_fail/a_viseme_is_not_a_bare_int.mojo": {

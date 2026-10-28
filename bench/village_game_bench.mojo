@@ -17,8 +17,9 @@ does. After ten warm-up frames each frame is timed by stage:
   and the water's clock.
 - `draw`: `GameRenderer.render` at the preset's smaller size.
 - `water`: the pond's water composed into the frame.
+- `smooth`: the frame's edges smoothed.
 - `upscale`: the frame stretched to the window.
-- `frame`: all four.
+- `frame`: all five.
 
 It prints, as JSON, the median, the 95th percentile and the slowest of
 each stage in milliseconds, and the frames a second of the median frame.
@@ -126,6 +127,7 @@ def main() raises:
     var ticks = List[Int]()
     var draws = List[Int]()
     var waters = List[Int]()
+    var smooths = List[Int]()
     var upscales = List[Int]()
     var totals = List[Int]()
     var step = Duration(Float32(1) / Float32(FPS), SECOND)
@@ -141,6 +143,7 @@ def main() raises:
         ticks.append(Int(ticked - began))
         draws.append(Int(game.render_ms * 1.0e6))
         waters.append(Int(game.water_ms * 1.0e6))
+        smooths.append(Int(game.smooth_ms * 1.0e6))
         upscales.append(Int(game.upscale_ms * 1.0e6))
         totals.append(Int(done - began))
     var median = _percentile(_sorted(totals.copy()), 0.5)
@@ -163,6 +166,8 @@ def main() raises:
         _summary("draw", draws^),
         ", ",
         _summary("water", waters^),
+        ", ",
+        _summary("smooth", smooths^),
         ", ",
         _summary("upscale", upscales^),
         ", ",

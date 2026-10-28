@@ -48,9 +48,9 @@ from extensions.vegetation.checks import (
     require_between,
     require_count_between,
 )
-from extensions.vegetation.noise import layered_noise, value_noise
+from extensions.vegetation.noise import hash01, layered_noise, value_noise
 from math.vector3 import Vector3
-from std.math import abs, cos, pi, pow, sin, sqrt
+from std.math import abs, cos, floor, pi, pow, sin, sqrt
 from units.si import METER, Length
 
 # The linear color of grass seen from far away.
@@ -101,11 +101,25 @@ comptime APRON_EDGE = Float32(1.6)
 comptime STONE = Vector3(0.036, 0.044, 0.056)
 # How wide the step at each rim of a canyon is, in meters.
 comptime RIM = Float32(6)
-# The linear colors of a cliff: its rock, its dark bands, and the moss
-# along its top.
-comptime ROCK = Vector3(0.095, 0.092, 0.088)
-comptime ROCK_DARK = Vector3(0.036, 0.036, 0.038)
+# The linear colors of a cliff: its pale beds, its dark beds, the warm
+# stain that water leaves, the moss along its lip, and the woods over it,
+# in their shade and where the sky lights them.
+comptime ROCK = Vector3(0.200, 0.185, 0.160)
+comptime ROCK_DARK = Vector3(0.085, 0.080, 0.075)
+comptime OCHRE = Vector3(0.220, 0.150, 0.085)
 comptime MOSS = Vector3(0.070, 0.100, 0.030)
+comptime WOODS = Vector3(0.022, 0.040, 0.014)
+comptime WOODS_LIT = Vector3(0.055, 0.085, 0.026)
+# How much higher than its plateau a cliff's rock rises at most, and how
+# tall each bed of the rock is, in meters.
+comptime CREST = Float32(14)
+comptime BED = Float32(9)
+# How wide the cell of each crown of the woods along a cliff's crest is,
+# and how high the tallest crowns stand over the rock, in meters.
+comptime CROWN = Float32(9)
+comptime CANOPY = Float32(13)
+# The share of a cliff's rows that the foot hidden by the near rim takes.
+comptime FOOT_ROWS = Float32(0.25)
 # The linear color of snow on the highest peaks, and the rows across the
 # ring of mountains.
 comptime SNOW = Vector3(0.30, 0.32, 0.36)
@@ -959,15 +973,42 @@ def ridge_ring(
     return geometry^
 
 
+def _canopy(x: Float32, seed: Int) -> Float32:
+    """Return how high the woods along a cliff's crest stand over its rock
+    at `x`, in meters: crowns of many sizes over a low thicket, one crown
+    to each cell `CROWN` wide. Most crowns are round, some are the spires
+    of firs, and each is lumpy with clumps of leaves."""
+    var cell = Int(floor(x / CROWN))
+    var top = Float32(0)
+    for k in range(cell - 1, cell + 2):  # pragma: no branch
+        var middle = (Float32(k) + hash01(k, 0, seed)) * CROWN
+        var radius = CROWN * (0.35 + 0.65 * hash01(k, 1, seed))
+        var offset = min(Float32(1), abs(x - middle) / radius)
+        var lift = 0.35 + 0.65 * hash01(k, 2, seed)
+        var round = sqrt(1 - offset * offset)
+        var spire = 1.25 * (1 - offset)
+        var fir = _ramp(Float32(0.7), Float32(0.75), hash01(k, 3, seed))
+        top = max(top, lift * (round + (spire - round) * fir))
+    var clumps = 0.85 + 0.3 * value_noise(x / 1.7, 0.5, seed + 1)
+    return CANOPY * (0.3 + 0.7 * top) * clumps
+
+
 def cliff_wall(
     ground: Ground, width: Length, columns: Int, rows: Int, seed: Int
 ) raises -> BufferGeometry:
     """Return the far wall of a ground's canyon: a cliff face toward +z.
 
     The face stands just in front of the far rim, so it hides the ground's
-    own coarse step there. It runs from the canyon's floor to a little
-    above the far plateau. It leans back as it rises, juts in ledges, and
-    is banded by its strata. Moss grows along its top.
+    own coarse step there. It runs from the canyon's floor to a crest up
+    to `CREST` above the far plateau. It leans back as it rises, juts in
+    buttresses, and is cut by flutes. Its rock lies in beds about `BED`
+    tall, pale or dark, stained and streaked. Each bed stands out a little
+    from the seam over it, and moss grows on its top and along the lip.
+    Woods stand on the crest, set back from the lip: round crowns up to
+    `CANOPY` over the rock, so the wall's top is ragged as a wood's edge.
+
+    The near rim hides the foot of the wall from the field. So a quarter of
+    the rows reach up to just under the near side, and the rest show.
 
     Args:
         ground: The ground; its canyon and its hills are read.
@@ -998,11 +1039,14 @@ def cliff_wall(
         rows, 2, 1024, "A cliff must have from 2 to 1024 rows"
     )
     ref canyon = ground.canyon
-    var tall = canyon.depth.to(METER) + canyon.rise.to(METER)
+    var depth = canyon.depth.to(METER)
+    var tall = depth + canyon.rise.to(METER)
     if tall <= 0:
         raise Error("A canyon of no depth and no rise has no wall")
     var face = -canyon.far.to(METER) + RIM + 1
     var half = width.to(METER) * 0.5
+    # How much of the wall the hidden rows cover.
+    var hidden = max(depth - 4, 0.25 * tall)
     var positions = List[Float32]()
     var colors = List[Float32]()
     var side = columns + 1
@@ -1012,32 +1056,80 @@ def cliff_wall(
         var v = Float32(row) / Float32(rows)
         for col in range(side):  # pragma: no branch
             var x = -half + 2 * half * Float32(col) / Float32(columns)
-            var bottom = ground.hills_at(x, face) - canyon.depth.to(METER)
-            var crest = 1.5 * value_noise(x / 14, 3.5, seed + 3)
-            var top = (
+            var bottom = ground.hills_at(x, face) - depth
+            # The crest rises and falls in long swells, in buttresses and in
+            # broken blocks.
+            var crest = CREST * (
+                0.7 * value_noise(x / 160, 3.5, seed + 3)
+                + 0.22 * value_noise(x / 37, 1.5, seed + 6)
+                + 0.08 * value_noise(x / 8, 0.5, seed + 7)
+            )
+            var rock = (
                 ground.hills_at(x, face - RIM) + canyon.rise.to(METER) + crest
             )
-            var y = bottom + (top + 0.6 - bottom) * v
-            # Weathering cuts a cliff into vertical flutes and buttresses,
-            # with a few ledges across them.
+            var top = rock + _canopy(x, seed + 11)
+            var y = bottom + hidden * v / FOOT_ROWS
+            if v > FOOT_ROWS:
+                y = (
+                    bottom
+                    + hidden
+                    + (top - bottom - hidden)
+                    * (v - FOOT_ROWS)
+                    / (1 - FOOT_ROWS)
+                )
+            # How far up the rock the point is, from zero to one.
+            var h = min(Float32(1), (y - bottom) / (rock - bottom))
+            # Weathering cuts a cliff into vertical flutes and buttresses.
             var buttress = value_noise(x / 14, y / 45, seed)
             var flute = value_noise(x / 2.2, y / 18, seed + 1)
-            var ledge = value_noise(x / 6, y / 2.5, seed + 4)
+            # The beds dip, wander and thin along the wall. Each one stands
+            # out at its foot, and its top steps back to the seam over it.
+            var bed = y / BED + 0.8 * value_noise(x / 70, y / 30, seed + 8)
+            var within = bed - floor(bed)
+            var shelf = _ramp(Float32(0.8), Float32(1), within)
             var jut = tall * (
-                (1 - v) * 0.12 + 0.09 * buttress + 0.022 * flute + 0.008 * ledge
-            )
+                (1 - h) * 0.12 + 0.09 * buttress + 0.022 * flute
+            ) + 0.5 * (1 - shelf)
+            # The woods stand back from the lip.
+            var woods = _ramp(rock, rock + 2, y)
+            jut = jut * (1 - woods)
             positions.append(x)
             positions.append(y)
             positions.append(face + jut)
             var band = value_noise(x / 60, y / 3, seed + 2)
             var streak = value_noise(x / 2.4, y / 25, seed + 5)
+            var stain = value_noise(x / 110, y / 14, seed + 9)
             var c = ROCK + (ROCK_DARK - ROCK) * min(
                 Float32(1), max(Float32(0), (band - 0.45) * 3)
             )
-            c = c * (
-                0.5 + 0.4 * v + 0.35 * (flute - 0.5) + 0.4 * (streak - 0.5)
+            c = c + (OCHRE - c) * 0.6 * _ramp(
+                Float32(0.45), Float32(0.75), stain
             )
-            c = c + (MOSS - c) * _ramp(Float32(0.9), Float32(1), v)
+            # The buttresses stand in the light, and the gullies between
+            # them in shadow.
+            c = c * (
+                0.3
+                + 0.3 * h
+                + 0.7 * buttress
+                + 0.35 * (flute - 0.5)
+                + 0.4 * (streak - 0.5)
+            )
+            # The seam under each bed lies in shadow, and moss takes hold
+            # on the ledges and along the lip.
+            c = c * (1 - 0.2 * _ramp(Float32(0.1), Float32(0), within))
+            var tuft = value_noise(x / 9, y / 4, seed + 10)
+            c = c + (MOSS - c) * 0.8 * shelf * _ramp(
+                Float32(0.5), Float32(0.8), tuft
+            )
+            # Scrub clings to the face in patches.
+            var scrub = layered_noise(x / 22, y / 10, seed + 13)
+            c = c + (WOODS - c) * 0.9 * _ramp(Float32(0.6), Float32(0.7), scrub)
+            c = c + (MOSS - c) * _ramp(rock - 2.5, rock, y)
+            # The crowns are darker in their shade, low down.
+            var leaf = value_noise(x / 3, y / 3, seed + 12)
+            var lit = _ramp(rock, top, y) * (0.6 + 0.8 * leaf)
+            var crown = WOODS + (WOODS_LIT - WOODS) * min(Float32(1), lit)
+            c = c + (crown - c) * woods
             colors.append(c.x)
             colors.append(c.y)
             colors.append(c.z)

@@ -128,6 +128,38 @@ def test_the_eye_stands_behind_and_above_the_focus() raises:
         view.place(camera, Length(Float32.MAX * 2, METER))
 
 
+def test_a_camera_comes_in_before_a_wall_and_stays_under_a_ceiling() raises:
+    var view = ThirdPersonControls(
+        Angle(0.0, RADIAN), Angle(-30.0, DEGREE), Length(4.0, METER)
+    )
+    view.follow_target(Vector3(0, 1, 0), Duration(0.0, SECOND))
+    var camera = _camera()
+    var sky = Length(1.0e30, METER)
+    # The whole way, under the open sky: as `place` stands it.
+    view.place_within(camera, Length(0.0, METER), sky, 1)
+    assert_almost_equal(camera.position.y, 3, atol=1e-4)
+    assert_almost_equal(camera.position.z, 4 * 0.8660254, atol=1e-4)
+    # Half the way, before a wall.
+    view.place_within(camera, Length(0.0, METER), sky, 0.5)
+    assert_almost_equal(camera.position.y, 2, atol=1e-4)
+    assert_almost_equal(camera.position.z, 2 * 0.8660254, atol=1e-4)
+    # Under a ceiling at 2.5 meters, the eye stays a clearance below it.
+    view.place_within(camera, Length(0.0, METER), Length(2.5, METER), 1)
+    assert_almost_equal(camera.position.y, 2.2, atol=1e-4)
+    # Over a floor at 2.9 meters, the floor wins.
+    view.place_within(camera, Length(2.9, METER), Length(2.5, METER), 0.5)
+    assert_almost_equal(camera.position.y, 3.2, atol=1e-4)
+    with assert_raises(contains="floor"):
+        view.place_within(camera, Length(Float32.MAX * 2, METER), sky, 1)
+    var nan = Float32(0) / Float32(0)
+    with assert_raises(contains="ceiling"):
+        view.place_within(camera, Length(0.0, METER), Length(nan, METER), 1)
+    with assert_raises(contains="reach"):
+        view.place_within(camera, Length(0.0, METER), sky, -0.1)
+    with assert_raises(contains="reach"):
+        view.place_within(camera, Length(0.0, METER), sky, 1.5)
+
+
 def test_a_camera_that_cannot_follow_is_refused() raises:
     var view = ThirdPersonControls()
     view.check()
