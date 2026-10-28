@@ -560,7 +560,7 @@ def read_record(root):
     try:
         raw = (Path(root) / MIGRATION).read_bytes()
         require(sha(raw) == MIGRATION_SHA256, 'immutable successor record changed')
-        record = json.loads(raw, object_pairs_hook=source.unique_keys)
+        record = _load_unique_json(raw)
         require(type(record['schema']) is int and record['schema'] == 3, 'wrong new recovery schema')
         require(set(record['sources']) == set(SOURCE_PATHS), 'wrong source endpoint set')
         for group, expected in FROZEN_GROUP_SHA256.items():
@@ -1348,7 +1348,7 @@ def _helper_render_context(root, *, _inputs=None, _operation=None):
     raw = _observe_bytes(root, MIGRATION, _regular(root, MIGRATION).read_bytes(),
                          _operation=_operation)
     require(sha(raw) == MIGRATION_SHA256, 'render entry authority changed')
-    expected = json.loads(raw, object_pairs_hook=source.unique_keys)['entry_directories']
+    expected = _load_unique_json(raw)['entry_directories']
     entries, image = _helper_entry_census(root, _operation=_operation)
     require(list(entries) == expected, 'render compiled entry directories changed')
     if _operation is not None:
@@ -1595,7 +1595,7 @@ class _CacheInputs:
                     'unreviewed complete live endpoint: ' + path)
         self.checkpoint(owner, root)
         try:
-            record = json.loads(self._record_raw, object_pairs_hook=source.unique_keys)
+            record = _load_unique_json(self._record_raw)
             return {path: {'path': path, **{field: item[field] for field in
                     ('before_sha256', 'after_sha256', 'before_token_sha256', 'after_token_sha256')}}
                     for path, item in record['sources'].items()}
@@ -2516,7 +2516,7 @@ class _InvariantInputs(_CacheInputs):
         for location, expected in self._receipt_production.items():
             require(self._receipt_production_paths(location) == expected,
                 'generated producer production census changed')
-        seed = json.loads(self._receipt_seed, object_pairs_hook=source.unique_keys)
+        seed = _load_unique_json(self._receipt_seed)
         self._owner_frame.f_globals['check_capture_inputs'](
             {'receipt': seed}, Path(self._root), Path(self._include_roots[0]))
 
@@ -2666,7 +2666,7 @@ class _InvariantInputs(_CacheInputs):
             location, stage_image, stage_args = include_images[0]
             require(_absolute_root_text(location) == self._include_roots[0],
                     'captured generated root changed')
-            seed = json.loads(self._receipt_seed, object_pairs_hook=source.unique_keys)
+            seed = _load_unique_json(self._receipt_seed)
             require(all(seed['root_inputs'][path] == sha(raw) for path, raw in image.items()
                         if path in seed['root_inputs']),
                     'source differs from pre-admission producer observation')
@@ -2817,7 +2817,7 @@ class _InvariantInputs(_CacheInputs):
                     require(sha(raw) == AFTER_SHA256[path] or (typed_boundary.is_current(path, raw)
                             and typed_boundary.edge(path)['before_sha256'] == AFTER_SHA256[path]),
                             'unreviewed exact operation endpoint: ' + path)
-            return json.loads(self._record_raw, object_pairs_hook=source.unique_keys)
+            return _load_unique_json(self._record_raw)
         except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
             _operation_fail(self, error)
 
@@ -3490,7 +3490,7 @@ def _runtime_view_bindings(root, *, _snapshots=None, _operation=None):
         _regular(root, runtime_view.MIGRATION).read_bytes(), _operation=_operation)
     require(sha(raw) == runtime_view.MIGRATION_SHA256,
             'runtime view record changed during admission')
-    record = json.loads(raw, object_pairs_hook=source.unique_keys)
+    record = _load_unique_json(raw)
     runtime_view.checked_steps(record)
     leaf = 'tools/carla_lane_oracle/runtime_view_contracts.py'
     expected_inputs = {runtime_view.MIGRATION: runtime_view.MIGRATION_SHA256,
@@ -5716,6 +5716,49 @@ def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
                 'full-audit cleanup successor: malformed or unreadable PR760 candidate: ' + str(error)))
         except ContractError as failure:
             raise failure from error
+
+_GATED_JSON_KEYS = set()
+
+
+def _load_unique_json(payload):
+    """Parse JSON after a repeated key is refused.
+
+    The same bytes are not checked again. A failed key check is not kept.
+
+    Args:
+        payload: The JSON bytes.
+
+    Returns:
+        The parsed value.
+
+    Raises:
+        ValueError: A key is repeated, or the bytes are not JSON.
+    """
+    digest = sha(payload)
+    if digest in _GATED_JSON_KEYS:
+        return json.loads(payload)
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='audit-json-keys-') as directory:
+        path = Path(directory) / 'record.json'
+        path.write_bytes(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_pins',
+             '--keys', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines_out = [line.strip() for line in result.stderr.splitlines()
+                     if line.strip() and 'Crashpad' not in line]
+        message = lines_out[-1] if lines_out else result.stdout.strip()
+        if message.startswith('duplicate runtime source pin key:'):
+            raise ValueError(message)
+        return json.loads(payload)
+    parsed = json.loads(payload)
+    _GATED_JSON_KEYS.add(digest)
+    return parsed
+
 
 
 if __name__ == '__main__':

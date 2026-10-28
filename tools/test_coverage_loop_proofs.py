@@ -3312,6 +3312,16 @@ class FullAuditCleanupLoopTests(unittest.TestCase):
         self.assertIsNone(loops._cleanup_loop_row(root, module, 999, expression))
 
 
+class FullAuditKeyTests(unittest.TestCase):
+    def test_a_repeated_successor_key_is_refused(self):
+        with self.assertRaisesRegex(
+                ValueError, 'duplicate runtime source pin key: a'):
+            full_audit._load_unique_json(b'{"a": 1, "a": 2}')
+        self.assertEqual(full_audit._load_unique_json(b'{"a": 1}'), {'a': 1})
+        with self.assertRaises(json.JSONDecodeError):
+            full_audit._load_unique_json(b'{')
+
+
 class ReceiptKeyTests(unittest.TestCase):
     def test_a_repeated_receipt_key_is_refused(self):
         with tempfile.TemporaryDirectory() as directory:
