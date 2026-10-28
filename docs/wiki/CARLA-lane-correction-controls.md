@@ -43,9 +43,19 @@ It reads the selection labels before the producer paths in one check.
 
 It returns the selection labels after that producer check in one check.
 
+It reuses that producer check when the same texts are read again.
+The producer files, the interval file, and the trig file are still read.
+A changed text is checked again.
+A failed check is not kept.
+
 It restores one selection function inside its line span.
 
 It keeps the selection contract path and the predecessor messages.
+
+It reuses that selection record gate when the same bytes are read again.
+The migration file is still read.
+A changed byte is checked again.
+A failed check is not kept.
 
 It keeps the interval token digest.
 

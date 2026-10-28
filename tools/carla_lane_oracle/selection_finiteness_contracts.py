@@ -60,9 +60,16 @@ def _scalar(text,name):
         raise ValueError(_selection_labels()['scalar']) from error
     return moments.fraction_of_word(moments.decimal_word(literal))
 
+_GATED_SELECTION = None
+
+
 def verify_text(modules, interval, trig, *, _then_labels=False):
-    """Check the selection producers, and return the labels when asked."""
-    global _SELECTION_LABELS
+    """Check the selection producers, and return the labels when asked.
+
+    The same texts are not checked again. A changed text is checked again.
+    A failed check is not kept.
+    """
+    global _SELECTION_LABELS, _GATED_SELECTION
     import json
     import os
     import subprocess
@@ -72,6 +79,11 @@ def verify_text(modules, interval, trig, *, _then_labels=False):
         'interval': interval,
         'trig': trig,
     }, separators=(',', ':'))
+    cached = _GATED_SELECTION
+    if cached is not None and cached[0] == payload:
+        if _then_labels and _SELECTION_LABELS is None:
+            _selection_labels()
+        return cached[1]
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     mode = '--catalog-labels' if _then_labels else '--catalog'
@@ -89,9 +101,11 @@ def verify_text(modules, interval, trig, *, _then_labels=False):
         raise ValueError(message)
     parsed = json.loads(result.stdout)
     if not _then_labels:
+        _GATED_SELECTION = (payload, parsed)
         return parsed
     if _SELECTION_LABELS is None:
         _SELECTION_LABELS = parsed['labels']
+    _GATED_SELECTION = (payload, parsed['record'])
     return parsed['record']
 
 def _producer_text(root, path, *, _operation=None):
@@ -137,7 +151,17 @@ def verify(root, *, _operation=None, _then_labels=False):
         modules, interval, trig, _then_labels=_then_labels)
 
 
+_GATED_SELECTION_RECORD = None
+
+
 def _gate_record(payload):
+    """Check one selection record once for the same bytes.
+
+    A changed byte is checked again. A failed check is not kept.
+    """
+    global _GATED_SELECTION_RECORD
+    if _GATED_SELECTION_RECORD == payload:
+        return
     import os
     import subprocess
     import tempfile
@@ -155,6 +179,7 @@ def _gate_record(payload):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+    _GATED_SELECTION_RECORD = payload
 
 
 def _gate_restored(text, expected):

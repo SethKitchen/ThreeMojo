@@ -1649,6 +1649,100 @@ class ProductionScanTests(unittest.TestCase):
         )
 
 
+class SelectionCatalogCacheTests(unittest.TestCase):
+    def test_the_same_selection_texts_skip_the_second_check(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import selection_finiteness_contracts as selection
+        saved_gate = selection._GATED_SELECTION
+        saved_record = selection._GATED_SELECTION_RECORD
+        saved_labels = selection._SELECTION_LABELS
+        saved_expected = selection._EXPECTED
+        modules = {
+            'extensions/carla/spiral_grouped_roundoff_proof.mojo': 'grouped',
+            'extensions/carla/spiral_roundoff_proof.mojo': 'roundoff',
+        }
+        reads = []
+
+        def read_text(self, *args, **kwargs):
+            reads.append(self.name)
+            return 'text-' + self.name
+
+        def run(args, **kwargs):
+            if '--catalog-labels' in args:
+                return Mock(
+                    returncode=0,
+                    stdout='{"record":{"status":"PASS"},"labels":{"contract":"c"}}',
+                    stderr='',
+                )
+            return Mock(returncode=0, stdout='{"status":"PASS"}', stderr='')
+
+        try:
+            selection._GATED_SELECTION = None
+            selection._GATED_SELECTION_RECORD = None
+            selection._SELECTION_LABELS = None
+            selection._EXPECTED = modules
+            with patch('subprocess.run', side_effect=run) as catalog:
+                labeled = selection.verify_text(
+                    modules, 'interval', 'trig', _then_labels=True)
+                plain = selection.verify_text(modules, 'interval', 'trig')
+                self.assertEqual(labeled, {'status': 'PASS'})
+                self.assertEqual(plain, labeled)
+                self.assertEqual(selection._SELECTION_LABELS, {'contract': 'c'})
+                self.assertEqual(catalog.call_count, 1)
+                selection.verify_text(modules, 'interval', 'other')
+                self.assertEqual(catalog.call_count, 2)
+            failed = Mock(
+                returncode=1, stdout='', stderr='selection producers changed\n')
+            with patch('subprocess.run', return_value=failed) as catalog:
+                with self.assertRaisesRegex(ValueError, 'selection producers changed'):
+                    selection.verify_text({'a': 'b'}, 'bad', 'bad')
+                with self.assertRaisesRegex(ValueError, 'selection producers changed'):
+                    selection.verify_text({'a': 'b'}, 'bad', 'bad')
+                self.assertEqual(catalog.call_count, 2)
+            with patch('subprocess.run', side_effect=run) as catalog:
+                selection.verify_text(modules, 'interval', 'other')
+                self.assertEqual(catalog.call_count, 0)
+            from tools.carla_lane_oracle import ideal_projection
+            with patch.object(
+                ideal_projection, 'token_digest_equals',
+                lambda text, digest: True,
+            ), patch.object(Path, 'read_text', read_text), patch(
+                'subprocess.run', side_effect=run
+            ) as catalog:
+                selection.verify(Path('selection-root'))
+                selection.verify(Path('selection-root'))
+                self.assertEqual(catalog.call_count, 1)
+                self.assertEqual(
+                    reads,
+                    [
+                        'spiral_grouped_roundoff_proof.mojo',
+                        'spiral_roundoff_proof.mojo',
+                        'curve_interval.mojo',
+                        'curve_trig.mojo',
+                    ] * 2,
+                )
+            with patch('subprocess.run', return_value=Mock(
+                returncode=0, stdout='', stderr=''
+            )) as record:
+                selection._gate_record(b'{"modules":{}}')
+                selection._gate_record(b'{"modules":{}}')
+                self.assertEqual(record.call_count, 1)
+                selection._gate_record(b'{"modules":{"a":1}}')
+                self.assertEqual(record.call_count, 2)
+            failed = Mock(returncode=1, stdout='', stderr='selection record changed\n')
+            with patch('subprocess.run', return_value=failed) as record:
+                with self.assertRaisesRegex(ValueError, 'selection record changed'):
+                    selection._gate_record(b'bad')
+                with self.assertRaisesRegex(ValueError, 'selection record changed'):
+                    selection._gate_record(b'bad')
+                self.assertEqual(record.call_count, 2)
+        finally:
+            selection._GATED_SELECTION = saved_gate
+            selection._GATED_SELECTION_RECORD = saved_record
+            selection._SELECTION_LABELS = saved_labels
+            selection._EXPECTED = saved_expected
+
+
 class GroupedTableCacheTests(unittest.TestCase):
     def test_the_same_grouped_texts_skip_the_second_check(self):
         from unittest.mock import Mock, patch
