@@ -9,6 +9,7 @@ Bounds, trig, and the interval come first. The lane value module is last.
 """
 
 from tools._carla_package import carla_package
+from tools._sampled_graph_pins import sampled_graphs_and_names
 
 
 def sampled_input_modules() -> String:
@@ -31,3 +32,22 @@ def sampled_input_plan() -> String:
     """
     var modules = sampled_input_modules()
     return '{"modules":' + modules + ',"package":"' + carla_package() + '"}'
+
+
+def sampled_plan_then_graphs() raises -> String:
+    """Read the input plan, then the graph pins and reference names.
+
+    Returns:
+        JSON with `modules`, `package`, `graphs`, and `closure`. The
+        input plan is read before the graph pins.
+
+    Raises:
+        Error: The reference names differ from the digest keys. The
+            input plan is read before that name check.
+    """
+    var plan = sampled_input_plan()
+    var checked = sampled_graphs_and_names()
+    var end = plan.byte_length() - 1
+    var prefix = plan[byte=0:end]
+    var rest = checked[byte=1:]
+    return String(prefix) + "," + String(rest)

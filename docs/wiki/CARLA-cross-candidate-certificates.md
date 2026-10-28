@@ -117,6 +117,8 @@ It keeps the four sampled input modules.
 
 It reads those sampled input modules before the package path in one check.
 
+It reads the graph pins and the reference names after that package path in one check.
+
 It keeps the sampled projection steps and their comparison texts.
 
 It reads those projection steps and the copied helpers in one check.

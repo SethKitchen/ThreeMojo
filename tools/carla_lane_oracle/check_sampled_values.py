@@ -124,6 +124,31 @@ def _input_modules():
     return json.loads(result.stdout)
 
 
+def _inputs_then_graphs():
+    """Read the input plan, then the graph pins and reference names."""
+    global _SAMPLED_CLOSURE, _CARLA_PACKAGE
+    import json
+    import os
+    import subprocess
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo,
+         'carla_sampled_input_modules', '--plan-graphs'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
+    parsed = json.loads(result.stdout)
+    if _CARLA_PACKAGE is None:
+        _CARLA_PACKAGE = parsed['package']
+    if _SAMPLED_CLOSURE is None:
+        _SAMPLED_CLOSURE = parsed['closure']
+    return parsed
+
+
 def _sampled_inputs():
     """Return the input modules, then the package path."""
     import json
@@ -766,7 +791,7 @@ def verify(root):
         import full_audit_cleanup_contracts as audit
     _operation, owns = audit._operation_enter(root, 'sampled')
     try:
-        inputs = _sampled_inputs()
+        inputs = _inputs_then_graphs()
         global _CARLA_PACKAGE
         if _CARLA_PACKAGE is None:
             _CARLA_PACKAGE = inputs['package']
@@ -777,7 +802,7 @@ def verify(root):
         # Deliberately conservative closure: imports, aliases, all helper setup,
         # branch dispatch and every shared operation in all three reference
         # modules are bound. Any dependency change needs renewed source review.
-        graphs, closure = _graphs_and_names()
+        graphs = inputs['graphs']
         reference_graphs = graphs['reference']
         closure = _sampled_closure()
         for filename, expected_hash in reference_graphs.items():
