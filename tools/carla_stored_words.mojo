@@ -8,11 +8,13 @@
     carla_stored_words --hex PATH
     carla_stored_words --integers PATH
     carla_stored_words --require PATH
+    carla_stored_words --table PATH
 
 `--hex` reads a JSON list of unsigned decimals and prints `0x` words.
 `--integers` reads a JSON list of `0x` words and prints decimal text.
 `--require` reads `words`, `expected`, and `message`, and prints nothing
-when the spellings match.
+when the spellings match. `--table` reads `source` and `count`, then
+prints the table words as decimals.
 """
 
 from std.pathlib import Path
@@ -21,6 +23,7 @@ from std.sys import argv, exit, stderr
 from tools._spiral_moment_words import (
     hex_integers_json,
     hex_words_json,
+    parsed_table_integers,
     require_stored_words,
 )
 
@@ -30,7 +33,7 @@ def _usage():
     print(
         (
             "usage: carla_stored_words --hex PATH | --integers PATH | --require"
-            " PATH"
+            " PATH | --table PATH"
         ),
         file=stderr,
     )
@@ -47,7 +50,12 @@ def main() raises:
     if len(arguments) != 3:
         _usage()
     var mode = arguments[1]
-    if mode != "--hex" and mode != "--integers" and mode != "--require":
+    if (
+        mode != "--hex"
+        and mode != "--integers"
+        and mode != "--require"
+        and mode != "--table"
+    ):
         _usage()
     try:
         var text = Path(arguments[2]).read_text()
@@ -56,6 +64,9 @@ def main() raises:
             return
         if mode == "--integers":
             print(hex_integers_json(text), end="")
+            return
+        if mode == "--table":
+            print(parsed_table_integers(text), end="")
             return
         require_stored_words(text)
     except error:

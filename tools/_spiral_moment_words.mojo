@@ -9,6 +9,7 @@ The floor and the ceiling use integer arithmetic. No host floating-point
 conversion is used.
 """
 
+from tests._python_tokens import moment_words_json
 from tools._bigint import BigInt
 from tools._fraction import Fraction
 from tools._python_json import PyJson
@@ -651,6 +652,30 @@ def hex_integers_json(payload: String) raises -> String:
         index += 1
     out.root = rows
     return out.dumps()
+
+
+def parsed_table_integers(payload: String) raises -> String:
+    """Read a stored table, then its words as integers.
+
+    Args:
+        payload: JSON with `source` and `count`. `source` is the table
+            text. `count` is the required word count.
+
+    Returns:
+        A JSON list of unsigned decimal words, in source order.
+
+    Raises:
+        Error: The declaration is malformed, or a word is not
+            hexadecimal. The declaration is checked before the words are
+            read as integers.
+    """
+    var doc = PyJson.parse(payload)
+    return hex_integers_json(
+        moment_words_json(
+            doc.text(doc.at(doc.root, "source")),
+            Int(doc.text(doc.at(doc.root, "count"))),
+        )
+    )
 
 
 def hex_words_json(payload: String) raises -> String:

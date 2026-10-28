@@ -927,16 +927,38 @@ def generate_source(rows):
     return result.stdout.encode('utf-8')
 
 
+def _parsed_table(payload):
+    """Return the table words as integers when the declaration matches."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='parsed-table-') as directory:
+        path = Path(directory) / 'table.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_stored_words',
+             '--table', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return [int(item) for item in json.loads(result.stdout)]
+
+
 def parse_table(data):
     try:
         text = data.decode('utf-8')
     except UnicodeDecodeError as error:
         raise CheckError(_moment_plan()['messages']['utf8']) from error
     try:
-        words = ideal_projection.moment_words(text, _word_count())
+        return _parsed_table({'source': text, 'count': _word_count()})
     except ValueError as error:
         raise CheckError(str(error)) from error
-    return ideal_projection.hex_integers(words)
 
 
 def _verified_table(payload):

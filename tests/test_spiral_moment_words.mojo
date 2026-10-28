@@ -9,6 +9,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._bigint import BigInt
 from tools._fraction import Fraction
+from tools._python_json import PyJson
 from tools._spiral_moment_words import (
     INFINITY,
     MAX_FINITE,
@@ -18,6 +19,7 @@ from tools._spiral_moment_words import (
     fraction_of_word,
     fraction_texts,
     nearest_even,
+    parsed_table_integers,
     verify_bracket,
 )
 
@@ -133,6 +135,47 @@ def test_a_wide_endpoint_is_refused() raises:
         verify_bracket(
             Fraction(1), UInt64(0x3FEFFFFFFFFFFFFF), UInt64(0x3FF0000000000001)
         )
+
+
+def _table_payload(source: String, count: Int) raises -> String:
+    """Return one stored-table integer check.
+
+    Args:
+        source: The table text.
+        count: The required word count.
+
+    Returns:
+        JSON with `source` and `count`.
+
+    Raises:
+        Error: The payload cannot be written.
+    """
+    var doc = PyJson()
+    var root = doc.new_dict()
+    doc.set(root, "source", doc.new_str(source))
+    doc.set(root, "count", doc.new_int(count))
+    doc.root = root
+    return doc.dumps()
+
+
+def test_a_missing_table_fails_before_the_integers() raises:
+    """A missing declaration fails before the words are read as integers."""
+    with assert_raises(contains="missing or malformed table declaration"):
+        _ = parsed_table_integers(_table_payload("nope", 1))
+
+
+def test_one_table_word_is_read_as_an_integer() raises:
+    """`1.0` in a one-word table becomes its binary64 integer."""
+    var source = (
+        "comptime _SPIRAL_MOMENT_WORDS: Array[UInt64, 1] = [\n"
+        + "UInt64(0x3FF0000000000000),\n"
+        + "]\n"
+    )
+    var result = PyJson.parse(parsed_table_integers(_table_payload(source, 1)))
+    assert_equal(result.length(result.root), 1)
+    assert_equal(
+        result.text(result.item(result.root, 0)), "4607182418800017408"
+    )
 
 
 def main() raises:

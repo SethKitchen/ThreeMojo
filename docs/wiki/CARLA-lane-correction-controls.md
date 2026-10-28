@@ -368,6 +368,8 @@ It spells each stored word as `0x` and 16 uppercase digits.
 
 It reads each stored hexadecimal word as an integer.
 
+It reads a stored table and its words as integers in one check.
+
 It checks the moment pin sets, paths, dependency closure, legacy digest, and result pins.
 
 It keeps the moment array paths, scalar names, block boundaries, and routing paths.
