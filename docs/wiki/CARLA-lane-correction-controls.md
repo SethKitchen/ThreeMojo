@@ -18,6 +18,11 @@ constant bits. Their README lists the four commands and report directory.
 
 It keeps the spiral-domain proof path.
 
+It reuses that spiral-domain check when the same texts are read again.
+The proof file and the interval file are still read.
+A changed text is checked again.
+A failed check is not kept.
+
 It keeps the moment proof path and the interval path.
 
 It keeps the moment pin file, the stored table, and the word count.

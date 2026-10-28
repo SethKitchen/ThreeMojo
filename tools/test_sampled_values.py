@@ -1374,6 +1374,63 @@ class RestoredScopeTests(unittest.TestCase):
                 )
 
 
+class DistanceGateCacheTests(unittest.TestCase):
+    def test_the_same_spiral_domain_texts_skip_the_second_gate(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import distance_validation_contracts as distance
+        saved_gate = distance._GATED_DISTANCE
+        saved_path = distance._MODULE_PATH
+        saved_module = distance.__dict__.get('MODULE')
+        reads = []
+
+        def read_text(self, *args, **kwargs):
+            reads.append(self.name)
+            return 'text-' + self.name
+
+        try:
+            distance._GATED_DISTANCE = None
+            distance._MODULE_PATH = 'extensions/carla/curve_distance.mojo'
+            ok = Mock(returncode=0, stdout='{"status":"PASS"}', stderr='')
+            with patch('subprocess.run', return_value=ok) as run:
+                first = distance.verify_text('module', 'interval')
+                second = distance.verify_text('module', 'interval')
+                self.assertEqual(first, {'status': 'PASS'})
+                self.assertEqual(second, first)
+                self.assertEqual(run.call_count, 1)
+                distance.verify_text('module', 'other')
+                self.assertEqual(run.call_count, 2)
+            failed = Mock(
+                returncode=1, stdout='', stderr='distance token changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'distance token changed'):
+                    distance.verify_text('bad', 'bad')
+                self.assertEqual(run.call_count, 1)
+                with self.assertRaisesRegex(ValueError, 'distance token changed'):
+                    distance.verify_text('bad', 'bad')
+                self.assertEqual(run.call_count, 2)
+            with patch('subprocess.run', return_value=ok) as run:
+                distance.verify_text('module', 'other')
+                self.assertEqual(run.call_count, 0)
+            with patch.object(Path, 'read_text', read_text), patch.object(
+                distance._typed_source, 'historical_text',
+                lambda root, path, text, _operation=None: text,
+            ), patch('subprocess.run', return_value=ok) as run:
+                distance.verify(Path('distance-root'))
+                distance.verify(Path('distance-root'))
+                self.assertEqual(run.call_count, 1)
+                self.assertEqual(
+                    reads,
+                    ['curve_distance.mojo', 'curve_interval.mojo'] * 2,
+                )
+        finally:
+            distance._GATED_DISTANCE = saved_gate
+            distance._MODULE_PATH = saved_path
+            if saved_module is None:
+                distance.__dict__.pop('MODULE', None)
+            else:
+                distance.MODULE = saved_module
+
+
 class InvariantRecordGateTests(unittest.TestCase):
     def test_the_same_record_bytes_skip_the_second_gate(self):
         import json

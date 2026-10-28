@@ -41,7 +41,27 @@ def __getattr__(name):
         return _module_path()
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
+_GATED_DISTANCE = None
+
+
 def verify_text(module, interval):
+    """Check one spiral-domain pair once for the same texts.
+
+    Args:
+        module: The spiral-domain proof source.
+        interval: The interval source.
+
+    Returns:
+        The parsed pass record.
+
+    Raises:
+        ValueError: The token digest changed.
+    """
+    global _GATED_DISTANCE
+    key = (module, interval)
+    cached = _GATED_DISTANCE
+    if cached is not None and cached[0] == key:
+        return cached[1]
     import json
     import os
     import subprocess
@@ -63,7 +83,9 @@ def verify_text(module, interval):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _GATED_DISTANCE = (key, parsed)
+    return parsed
 
 def verify(root, *, _operation=None):
     _ensure_module()
