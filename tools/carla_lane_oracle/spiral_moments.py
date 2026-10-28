@@ -1097,11 +1097,66 @@ def _moment_meta_from_rows(rows, root, projection, dependencies, routing, blocks
     return json.loads(result.stdout)
 
 
-def make_report(root, rows, pins):
-    projection = pins['ideal_projection']
-    meta = _moment_meta_from_rows(
-        rows, str(root.resolve()), projection, _dependencies(),
-        pins['routing'], pins['blocks'])
+def _raise_table_meta(message):
+    """Raise a table failure, or a meta failure, with the historical type."""
+    import ast
+    derive = _cli_failures()['derive']
+    if message.startswith(derive):
+        raise CheckError(message[len(derive):])
+    prefix = _cli_failures()['key']
+    if message.startswith(prefix):
+        key = ast.literal_eval(message[len(prefix):])
+        if key in (
+            'payload', 'root', 'projection', 'dependencies', 'routing',
+            'blocks', 'byte_count', 'source_sha256', 'be64_sha256',
+            'helper_projections', 'rate_half_commutations',
+            'projected_ast_sha256', 'sha256',
+        ):
+            raise KeyError(key) from None
+        raise CheckError(message)
+    raise CheckError(message)
+
+
+def _table_then_meta(data, rows, root, pins):
+    """Check the stored table, then build the report meta."""
+    try:
+        text = data.decode('utf-8')
+    except UnicodeDecodeError as error:
+        raise CheckError(_moment_plan()['messages']['utf8']) from error
+    import os
+    import subprocess
+    import tempfile
+    payload = json.dumps({
+        'rows': rows,
+        'source': text,
+        'root': str(root.resolve()),
+        'projection': pins['ideal_projection'],
+        'dependencies': _dependencies(),
+        'routing': pins['routing'],
+        'blocks': pins['blocks'],
+    }, separators=(',', ':'))
+    repo = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(repo / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='table-meta-') as directory:
+        path = Path(directory) / 'meta.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(repo / 'tools' / 'tool.sh'), mojo, 'carla_moment_meta',
+             '--verified-rows', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        _raise_table_meta(message)
+    return json.loads(result.stdout)
+
+
+def make_report(root, rows, pins, meta=None):
+    if meta is None:
+        meta = _moment_meta_from_rows(
+            rows, str(root.resolve()), pins['ideal_projection'], _dependencies(),
+            pins['routing'], pins['blocks'])
     blobs = [
         _typed_source.historical_bytes(root, root / _pins(), (root / _pins()).read_bytes()),
         _typed_source.historical_bytes(
@@ -1161,9 +1216,10 @@ def main(argv=None):
     try:
         constants, pins = verify_inputs(root)
         rows = derive_coefficients(constants)
+        meta = None
         if not args.generate:
-            verify_table((root / _table()).read_bytes(), rows)
-        report = make_report(root, rows, pins)
+            meta = _table_then_meta((root / _table()).read_bytes(), rows, root, pins)
+        report = make_report(root, rows, pins, meta)
         report_plan = plan
         if args.generate or args.report:
             output = args.output or Path(os.environ.get(report_plan['output_env'],

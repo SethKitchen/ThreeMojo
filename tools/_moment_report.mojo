@@ -12,7 +12,10 @@ returned. Each pin file is hashed as raw bytes.
 from tools._json_tools import quote_ascii
 from tools._python_json import PY_DICT, PY_LIST, PY_STR, PyJson, py_equal
 from tools._sha256 import sha256_hex
-from tools._spiral_moment_derive import moment_payload_from_rows
+from tools._spiral_moment_derive import (
+    moment_payload_from_rows,
+    verified_table_integers,
+)
 
 
 comptime _COUNTS = 64
@@ -274,3 +277,23 @@ def moment_meta_from_rows(payload: String) raises -> String:
     doc.set(body, "routing", doc.copy_node(doc.at(doc.root, "routing")))
     doc.set(body, "blocks", doc.copy_node(doc.at(doc.root, "blocks")))
     return moment_meta(_dump(doc, body))
+
+
+def verified_table_then_meta(payload: String) raises -> String:
+    """Check the stored table, then build the report meta.
+
+    Args:
+        payload: JSON with `rows`, `source`, `root`, `projection`,
+            `dependencies`, `routing`, and `blocks`. `rows` is the derived
+            row list. `source` is the table text.
+
+    Returns:
+        Compact JSON for the report meta, in historical field order.
+
+    Raises:
+        Error: The rows changed, the table does not match them, or a
+            required field is missing. The table is checked before the
+            meta fields.
+    """
+    _ = verified_table_integers(payload)
+    return moment_meta_from_rows(payload)

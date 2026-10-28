@@ -7,7 +7,11 @@
 
 from std.testing import TestSuite, assert_equal, assert_raises
 
-from tools._moment_report import moment_meta_from_rows, moment_report
+from tools._moment_report import (
+    moment_meta_from_rows,
+    moment_report,
+    verified_table_then_meta,
+)
 from tools._sha256 import sha256_hex
 
 
@@ -113,6 +117,44 @@ def test_bad_rows_fail_before_the_report_meta() raises:
         contains="spiral moment derive: wrong derived table shape"
     ):
         _ = moment_meta_from_rows('{"rows":[]}')
+
+
+def _coefficient_rows() -> String:
+    """Return 64 derived rows of zero endpoint words.
+
+    Returns:
+        A JSON list with eleven cosine pairs and eleven sine pairs.
+    """
+    var coeff = String('{"words":["0","0"]}')
+    var side = String("[")
+    var index = 0
+    while index < 11:
+        if index > 0:
+            side += ","
+        side += coeff
+        index += 1
+    side += "]"
+    var row = '{"cosine":' + side + ',"sine":' + side + "}"
+    var rows = String("[")
+    var row_index = 0
+    while row_index < 64:
+        if row_index > 0:
+            rows += ","
+        rows += row
+        row_index += 1
+    rows += "]"
+    return rows
+
+
+def test_the_table_is_checked_before_the_report_meta() raises:
+    """A bad table fails before a missing meta field is checked."""
+    with assert_raises(
+        contains="spiral moment derive: wrong derived table shape"
+    ):
+        _ = verified_table_then_meta('{"rows":[],"source":"nope"}')
+    var payload = '{"rows":' + _coefficient_rows() + ',"source":"nope"}'
+    with assert_raises(contains="missing or malformed table declaration"):
+        _ = verified_table_then_meta(payload)
 
 
 def main() raises:
