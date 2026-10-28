@@ -110,6 +110,8 @@ It relabels one runtime pin failure when the cause is the reviewed contract erro
 
 It compares every coverage-invariant successor digest in one check.
 
+It checks every coverage-invariant predecessor in one check.
+
 It keeps the four coverage-invariant source paths.
 
 It keeps the six extra coverage-invariant inputs.

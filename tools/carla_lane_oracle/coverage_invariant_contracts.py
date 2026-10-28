@@ -402,13 +402,25 @@ def verify(root, *, _operation=None):
                     item['after_token_sha256']))
             matched_flags = ideal_projection.texts_match_all([
                 (digest, expected) for _path, digest, expected in loaded])
+            pending = [
+                (path, expected) for (path, _digest, expected), matched in zip(loaded, matched_flags)
+                if not matched]
+            accepted = {}
+            if pending:
+                if __package__:
+                    from . import coverage_followup_contracts as followup
+                else:
+                    import coverage_followup_contracts as followup
+                if _operation is not None:
+                    followup._check_operation(root, _operation)
+                followup_record = followup.verify(root, **operation_args)
+                for path, expected in pending:
+                    accepted[path] = (
+                        path in followup_record['sources']
+                        and followup_record['sources'][path]['before_token_sha256'] == expected)
             for (path, _digest, expected), matched in zip(loaded, matched_flags):
                 if not matched:
-                    if __package__:
-                        from . import coverage_followup_contracts as followup
-                    else:
-                        import coverage_followup_contracts as followup
-                    matched = followup.accepts_predecessor_source(root,path,expected, **operation_args)
+                    matched = accepted[path]
                 require(matched, _invariant_labels()['successor'] + path)
             curve.verify(root, **operation_args)
             grouped.verify(root, **operation_args)
