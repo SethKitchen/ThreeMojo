@@ -1374,6 +1374,58 @@ class RestoredScopeTests(unittest.TestCase):
                 )
 
 
+class FrozenReviewCacheTests(unittest.TestCase):
+    def test_the_same_producer_review_skips_the_second_check(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import coverage_invariant_contracts as invariant
+        from tools.carla_lane_oracle import frozen_arc_producer_contracts as frozen
+        saved_review = frozen._REVIEW_LABELS
+        saved_labels = invariant._INVARIANT_LABELS
+        saved_migration = invariant.__dict__.get('MIGRATION')
+        saved_sha = invariant.__dict__.get('MIGRATION_SHA256')
+        item = {'name': 'f', 'owner': [], 'source': 'def f():\n    return 1\n'}
+        pairs = [(item, 'module')]
+        try:
+            frozen._REVIEW_LABELS = None
+            invariant._INVARIANT_LABELS = None
+            invariant.MIGRATION = None
+            ok = Mock(
+                returncode=0,
+                stdout='{"labels":{"prior":"p"},"migration":{"path":"inv.json","sha":"abc"}}',
+                stderr='',
+            )
+            with patch('subprocess.run', return_value=ok) as run:
+                frozen._review_then_labels(pairs, 'arc', 'stored')
+                self.assertEqual(invariant._INVARIANT_LABELS, {'prior': 'p'})
+                self.assertEqual(invariant.MIGRATION, 'inv.json')
+                invariant._INVARIANT_LABELS = None
+                invariant.MIGRATION = None
+                frozen._review_then_labels(pairs, 'arc', 'stored')
+                self.assertEqual(run.call_count, 1)
+                self.assertEqual(invariant.MIGRATION, 'inv.json')
+                frozen._review_then_labels(pairs, 'other', 'stored')
+                self.assertEqual(run.call_count, 2)
+            failed = Mock(returncode=1, stdout='', stderr='producer review changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'producer review changed'):
+                    frozen._review_then_labels(pairs, 'bad', 'stored')
+                self.assertEqual(run.call_count, 1)
+                with self.assertRaisesRegex(ValueError, 'producer review changed'):
+                    frozen._review_then_labels(pairs, 'bad', 'stored')
+                self.assertEqual(run.call_count, 2)
+        finally:
+            frozen._REVIEW_LABELS = saved_review
+            invariant._INVARIANT_LABELS = saved_labels
+            if saved_migration is None:
+                invariant.__dict__.pop('MIGRATION', None)
+            else:
+                invariant.MIGRATION = saved_migration
+            if saved_sha is None:
+                invariant.__dict__.pop('MIGRATION_SHA256', None)
+            else:
+                invariant.MIGRATION_SHA256 = saved_sha
+
+
 class FrozenDigestTokenCacheTests(unittest.TestCase):
     def test_the_same_guard_digest_and_token_skip_the_second_check(self):
         from unittest.mock import Mock, patch

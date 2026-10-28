@@ -429,6 +429,11 @@ It checks every frozen ARC producer function and the arc layout in one check.
 
 It checks that producer review before the invariant labels in one check.
 
+It reuses that producer review when the same texts are read again.
+The producer files and the arc file are still read.
+A changed text is checked again.
+A failed check is not kept.
+
 It reads those declarations and checks the arc layout in one check.
 
 It lists the executable names checked by the optional-runtime contract.

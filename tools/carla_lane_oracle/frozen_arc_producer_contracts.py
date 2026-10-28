@@ -442,12 +442,16 @@ def _producer_review(pairs, arc, stored):
         raise ValueError(message)
 
 
+_REVIEW_LABELS = None
+
+
 def _review_then_labels(pairs, arc, stored):
-    """Check the producer review, then read the invariant labels."""
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
+    """Check the producer review, then read the invariant labels.
+
+    The same texts are not checked again. A changed text is checked again.
+    A failed check is not kept.
+    """
+    global _REVIEW_LABELS
     if __package__:
         from . import coverage_invariant_contracts as invariant
     else:
@@ -464,21 +468,30 @@ def _review_then_labels(pairs, arc, stored):
         ],
         'layout': {'source': arc, 'stored': stored},
     }, separators=(',', ':'))
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    with tempfile.TemporaryDirectory(prefix='review-labels-') as directory:
-        path = Path(directory) / 'review.json'
-        path.write_text(payload)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
-             '--review-labels', str(path)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-    parsed = json.loads(result.stdout)
+    cached = _REVIEW_LABELS
+    if cached is not None and cached[0] == payload:
+        parsed = cached[1]
+    else:
+        import os
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[2]
+        mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+        with tempfile.TemporaryDirectory(prefix='review-labels-') as directory:
+            path = Path(directory) / 'review.json'
+            path.write_text(payload)
+            result = subprocess.run(
+                ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
+                 '--review-labels', str(path)],
+                capture_output=True, text=True)
+        if result.returncode != 0:
+            lines = [line.strip() for line in result.stderr.splitlines()
+                     if line.strip() and 'Crashpad' not in line]
+            message = lines[-1] if lines else result.stdout.strip()
+            raise ValueError(message)
+        parsed = json.loads(result.stdout)
+        _REVIEW_LABELS = (payload, parsed)
     if invariant._INVARIANT_LABELS is None:
         invariant._INVARIANT_LABELS = parsed['labels']
     if 'MIGRATION' not in invariant.__dict__ or invariant.MIGRATION is None:
