@@ -370,6 +370,50 @@ def _producer_review(pairs, arc, stored):
         raise ValueError(message)
 
 
+def _review_then_labels(pairs, arc, stored):
+    """Check the producer review, then read the invariant labels."""
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    if __package__:
+        from . import coverage_invariant_contracts as invariant
+    else:
+        import coverage_invariant_contracts as invariant
+    payload = json.dumps({
+        'functions': [
+            {
+                'name': item['name'],
+                'module': text,
+                'owner': list(item['owner']),
+                'source': item['source'],
+            }
+            for item, text in pairs
+        ],
+        'layout': {'source': arc, 'stored': stored},
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='review-labels-') as directory:
+        path = Path(directory) / 'review.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_frozen_arc_gate',
+             '--review-labels', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    if invariant._INVARIANT_LABELS is None:
+        invariant._INVARIANT_LABELS = parsed['labels']
+    if 'MIGRATION' not in invariant.__dict__ or invariant.MIGRATION is None:
+        invariant.MIGRATION = parsed['migration']['path']
+        invariant.MIGRATION_SHA256 = parsed['migration']['sha']
+
+
 _RECORD_PATHS = None
 
 
@@ -495,7 +539,7 @@ def _declarations(items):
     return json.loads(result.stdout)
 
 
-def verify_premises(root, *, _operation=None):
+def verify_premises(root, *, _operation=None, _then_invariant_labels=False):
     if _operation is not None:
         _check_operation(root, _operation)
     # This scoped check deliberately does not inspect the complete-file hash.
@@ -509,7 +553,10 @@ def verify_premises(root, *, _operation=None):
     arc = _typed_source.historical_text(root, 'extensions/carla/curve_rounded_arc.mojo', _observe_text(root, 'extensions/carla/curve_rounded_arc.mojo',
                         (root/'extensions/carla/curve_rounded_arc.mojo').read_text(),
                         _operation=_operation), _operation=_operation)
-    _producer_review(loaded, arc, record['rounded_arc_routing'])
+    if _then_invariant_labels:
+        _review_then_labels(loaded, arc, record['rounded_arc_routing'])
+    else:
+        _producer_review(loaded, arc, record['rounded_arc_routing'])
     return len(record['function_sources'])
 
 
@@ -594,7 +641,7 @@ def _relabel_runtime_pin(error, operation_present):
     return _runtime_pin_decision(payload) == labels['decision_relabel']
 
 
-def verify(root, *, _operation=None):
+def verify(root, *, _operation=None, _then_invariant_labels=False):
     if _operation is not None:
         _check_operation(root, _operation)
     operation_args = {} if _operation is None else {'_operation': _operation}
@@ -624,7 +671,11 @@ def verify(root, *, _operation=None):
             root, path, (root/path).read_text(), _operation=_operation), _operation=_operation),
             expected['token_sha256']))
     cleanup.verify_dependencies(dependencies)
-    verify_premises(root, **operation_args)
+    verify_premises(
+        root,
+        _then_invariant_labels=_then_invariant_labels,
+        **operation_args,
+    )
     return record
 
 

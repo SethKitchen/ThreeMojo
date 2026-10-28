@@ -296,6 +296,8 @@ It reads every frozen ARC producer declaration in one check.
 
 It checks every frozen ARC producer function and the arc layout in one check.
 
+It checks that producer review before the invariant labels in one check.
+
 It reads those declarations and checks the arc layout in one check.
 
 It lists the executable names checked by the optional-runtime contract.

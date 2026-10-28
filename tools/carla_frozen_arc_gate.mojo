@@ -18,6 +18,7 @@
     carla_frozen_arc_gate --routing PATH
     carla_frozen_arc_gate --predecessor DIR
     carla_frozen_arc_gate --review PATH
+    carla_frozen_arc_gate --review-labels PATH
 
 The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
@@ -37,6 +38,7 @@ from tests._python_tokens import (
 )
 from tools._carla_assets import dumps_indent
 from tools._frozen_pin_labels import frozen_pin_labels
+from tools._invariant_labels import invariant_labels_with_migration
 from tools._migration_records import migration_records
 from tools._record_paths import record_paths
 from tools._python_json import (
@@ -500,6 +502,25 @@ def frozen_producer_review(payload: String) raises:
     )
 
 
+def producer_review_then_labels(payload: String) raises -> String:
+    """Check the producer review, then read the invariant labels.
+
+    Args:
+        payload: JSON with `functions` and `layout`, as the producer
+            review reads them.
+
+    Returns:
+        JSON with `labels` and `migration`. The review runs before the
+        labels.
+
+    Raises:
+        Error: A producer function or the arc layout changed. The review
+            runs before the labels are read.
+    """
+    frozen_producer_review(payload)
+    return invariant_labels_with_migration()
+
+
 def frozen_arc_layout(actual: String, stored: String) raises:
     """Require the RoundedArc declaration routing to match the record.
 
@@ -652,6 +673,16 @@ def main() raises:
         try:
             print(
                 frozen_record_paths(Path(arguments[2]).read_bytes()),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--review-labels":
+        try:
+            print(
+                producer_review_then_labels(Path(arguments[2]).read_text()),
                 end="",
             )
         except error:

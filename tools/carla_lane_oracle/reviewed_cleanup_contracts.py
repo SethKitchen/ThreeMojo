@@ -943,7 +943,11 @@ def verify(root, *, _operation=None):
     else:
         verify_dependencies(dependencies)
     verify_premises(root, **operation_args)
-    frozen.verify(root, **operation_args)
+    frozen.verify(
+        root,
+        _then_invariant_labels=_operation is None,
+        **operation_args,
+    )
     if _operation is None:
         invariant.verify(root)
     else:
