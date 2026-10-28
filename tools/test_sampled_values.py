@@ -740,5 +740,23 @@ class PinPairCacheTests(unittest.TestCase):
             invariant._GATED_PAIR = original
 
 
+class ComponentGateTests(unittest.TestCase):
+    def test_component_names_join_the_record_gate(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import coverage_invariant_contracts as invariant
+        calls = []
+
+        def run(args, **kwargs):
+            calls.append(list(args))
+            return Mock(returncode=0, stdout='', stderr='')
+
+        with patch('subprocess.run', side_effect=run):
+            invariant._gate(b'{}', b'prior', [('a/b', b'abc'), ('ok.json', b'def')])
+        self.assertEqual(len(calls), 1)
+        joined = ' '.join(str(part) for part in calls[0])
+        self.assertIn('carla_invariant_gate', joined)
+        self.assertNotIn('carla_component_path', joined)
+
+
 if __name__ == '__main__':
     unittest.main()

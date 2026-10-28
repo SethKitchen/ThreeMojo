@@ -193,6 +193,10 @@ It keeps the coverage-invariant contract prefix.
 
 It keeps a component name inside its directory.
 
+It checks those component names before the record digests in one check.
+
+An escaping name still fails before a digest is accepted.
+
 It uses the last path part as the pin file name.
 
 It writes each historical pin with two-space indentation.

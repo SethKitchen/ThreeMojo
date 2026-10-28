@@ -16,6 +16,8 @@ The program checks the bytes it is given. It does not read the repository
 and it does not restore a historical source. The caller does that first.
 An absent prior skips the frozen digest and the component digests.
 A prior without a component directory checks only that frozen digest.
+The component directory holds `names.json` and the payloads `0`, `1`, and
+so on. An escaping name fails before the record digests.
 `DIR` holds `payload` and `request.json`. The program prints the
 predecessor.
 """
@@ -36,6 +38,7 @@ from tools._python_json import (
     PyJson,
     loads,
 )
+from tools._posix_path import component_confined
 from tools._sha256 import sha256_hex
 
 
@@ -143,16 +146,63 @@ def _require_prior(doc: PyJson, prior: Span[UInt8, _]) raises:
         _fail("historical frozen record changed")
 
 
+def _read_component_names(component_dir: String) raises -> List[String]:
+    """Return the component names listed beside the indexed payloads.
+
+    Args:
+        component_dir: The directory whose `names.json` lists the names.
+
+    Returns:
+        The names in listed order.
+
+    Raises:
+        Error: The name list is missing or is not a list of strings.
+    """
+    var doc = PyJson.parse(Path(component_dir + "/names.json").read_text())
+    if doc.kind(doc.root) != PY_LIST:
+        _fail("component record changed: ")
+    var names = List[String]()
+    var index = 0
+    var count = doc.length(doc.root)
+    while index < count:
+        var item = doc.item(doc.root, index)
+        if doc.kind(item) != PY_STR:
+            _fail("component record changed: ")
+        names.append(doc.text(item))
+        index += 1
+    return names^
+
+
+def _confine_component_names(component_dir: String) raises:
+    """Require every listed component name to stay inside the directory.
+
+    Args:
+        component_dir: The directory whose `names.json` lists the names.
+
+    Raises:
+        Error: A name escapes the directory. The record digests are not
+            checked.
+    """
+    var names = _read_component_names(component_dir)
+    var index = 0
+    while index < len(names):
+        var name = names[index]
+        if not component_confined(component_dir, name):
+            _fail("component record changed: " + name)
+        index += 1
+
+
 def _require_components(doc: PyJson, component_dir: String) raises:
     """Require each component migration digest.
 
     Args:
         doc: The migration record.
-        component_dir: The directory that holds one file per component name.
+        component_dir: The directory that holds `names.json` and `0`, `1`, ...
 
     Raises:
         Error: A component digest changed, or a component file cannot be read.
     """
+    var names = _read_component_names(component_dir)
     var node = doc.get(doc.root, "components")
     if node == MISSING or doc.kind(node) != PY_DICT:
         _fail("component record changed: ")
@@ -165,9 +215,11 @@ def _require_components(doc: PyJson, component_dir: String) raises:
             doc.kind(digest) != PY_STR
             or name.byte_length() == 0
             or name.find("/") >= 0
+            or index >= len(names)
+            or names[index] != name
         ):
             _fail("component record changed: " + name)
-        var payload = Path(component_dir + "/" + name).read_bytes()
+        var payload = Path(component_dir + "/" + String(index)).read_bytes()
         if sha256_hex(payload) != doc.text(digest):
             _fail("component record changed: " + name)
         index += 1
@@ -188,8 +240,11 @@ def invariant_record(
         check_prior: Whether to check the frozen digest.
 
     Raises:
-        Error: The record, the frozen digest, or a component digest changed.
+        Error: An escaping component name fails before a changed record,
+            frozen digest, or component digest.
     """
+    if component_dir.byte_length() > 0:
+        _confine_component_names(component_dir)
     if sha256_hex(migration) != _MIGRATION_SHA256:
         _fail("unreviewed migration record")
     var doc = PyJson.parse(String(from_utf8_lossy=migration))

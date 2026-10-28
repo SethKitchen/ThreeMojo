@@ -207,10 +207,10 @@ def _gate(migration, prior=None, components=None):
             if components is not None:
                 component_dir = folder / 'components'
                 component_dir.mkdir()
-                _require_component_names(
-                    component_dir, [name for name, _payload in components])
-                for name, payload in components:
-                    (component_dir / name).write_bytes(payload)
+                names = [name for name, _payload in components]
+                (component_dir / 'names.json').write_text(json.dumps(names))
+                for index, (_name, payload) in enumerate(components):
+                    (component_dir / str(index)).write_bytes(payload)
                 arguments.extend(['--components', str(component_dir)])
         result = subprocess.run(arguments, capture_output=True, text=True)
     if result.returncode != 0:

@@ -200,6 +200,80 @@ def test_a_changed_invariant_predecessor_digest_is_refused() raises:
         )
 
 
+def test_an_escaping_component_name_fails_before_the_record() raises:
+    """A name outside the directory fails before the migration digest."""
+    var directory = "/tmp/invariant-component-escape"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/names.json").write_text('["ok.json","a/b"]')
+    Path(directory + "/0").write_bytes(String("x").as_bytes())
+    Path(directory + "/1").write_bytes(String("y").as_bytes())
+    with assert_raises(
+        contains="coverage invariant successor: component record changed: a/b"
+    ):
+        invariant_record(
+            String("not-the-record").as_bytes(),
+            String("prior").as_bytes(),
+            directory,
+            True,
+        )
+
+
+def test_a_confined_component_name_checks_the_record_next() raises:
+    """A direct file name reaches the migration digest."""
+    var directory = "/tmp/invariant-component-confined"
+    makedirs(directory, exist_ok=True)
+    Path(directory + "/names.json").write_text('["ok.json"]')
+    Path(directory + "/0").write_bytes(String("x").as_bytes())
+    with assert_raises(
+        contains="coverage invariant successor: unreviewed migration record"
+    ):
+        invariant_record(
+            String("not-the-record").as_bytes(),
+            String("prior").as_bytes(),
+            directory,
+            True,
+        )
+
+
+def test_indexed_component_bytes_keep_the_reviewed_digests() raises:
+    """The reviewed components match when each payload is stored by index."""
+    var directory = "/tmp/invariant-component-index"
+    makedirs(directory, exist_ok=True)
+    var folder = "tools/carla_lane_oracle/"
+    Path(directory + "/names.json").write_text(
+        '["curve-support-dispatch-migration.json",'
+        + '"grouped-table-contract.json","lane-control-migration.json"]'
+    )
+    Path(directory + "/0").write_bytes(
+        Path(folder + "curve-support-dispatch-migration.json").read_bytes()
+    )
+    Path(directory + "/1").write_bytes(
+        Path(folder + "grouped-table-contract.json").read_bytes()
+    )
+    Path(directory + "/2").write_bytes(
+        Path(folder + "lane-control-migration.json").read_bytes()
+    )
+    invariant_record(
+        Path(folder + "coverage-invariant-migration.json").read_bytes(),
+        Path(folder + "frozen-arc-producer-migration.json").read_bytes(),
+        directory,
+        True,
+    )
+    Path(directory + "/0").write_bytes(String("changed").as_bytes())
+    with assert_raises(
+        contains=(
+            "coverage invariant successor: component record changed: "
+            "curve-support-dispatch-migration.json"
+        )
+    ):
+        invariant_record(
+            Path(folder + "coverage-invariant-migration.json").read_bytes(),
+            Path(folder + "frozen-arc-producer-migration.json").read_bytes(),
+            directory,
+            True,
+        )
+
+
 def main() raises:
     """Run the coverage-invariant gate tests."""
     TestSuite.discover_tests[__functions_in_module()]().run()
