@@ -226,6 +226,8 @@ A missing edge or a moved guard is refused.
 It builds the grouped, model, support, and dispatch checks in that order.
 It returns the optional-runtime result after those edge checks.
 
+It reads the module names before that result in one check.
+
 It keeps the five optional-runtime module names.
 
 It keeps the lane-search function name.

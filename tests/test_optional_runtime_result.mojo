@@ -7,7 +7,12 @@
 
 from std.testing import TestSuite, assert_equal, assert_raises
 
-from tools._optional_runtime_result import _dump, optional_runtime_result
+from tools._optional_runtime_modules import optional_runtime_modules
+from tools._optional_runtime_result import (
+    _dump,
+    optional_runtime_result,
+    optional_runtime_result_from_modules,
+)
 from tools._python_json import PyJson
 
 
@@ -40,6 +45,21 @@ def test_the_optional_runtime_result_keeps_module_order() raises:
         + '"qualification":"source preconditions and dependency integrity'
         ' only",'
         + '"native_execution_qualified":false}',
+    )
+
+
+def test_the_result_reads_the_module_names_first() raises:
+    """The reviewed module names are copied before the scope sentences."""
+    var modules = optional_runtime_modules()
+    assert_equal(
+        optional_runtime_result_from_modules(),
+        optional_runtime_result('{"new_modules":' + modules + "}"),
+    )
+    assert_equal(
+        modules,
+        '["curve_minimizer_support","curve_objective_model",'
+        + '"curve_sample_dispatch","spiral_grouped_lane",'
+        + '"spiral_grouped_roundoff_proof"]',
     )
 
 

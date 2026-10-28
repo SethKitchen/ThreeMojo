@@ -10,6 +10,7 @@ copied from the tuple that was just checked.
 """
 
 from tools._json_tools import quote_ascii
+from tools._optional_runtime_modules import optional_runtime_modules
 from tools._python_json import (
     PY_BOOL,
     PY_DICT,
@@ -113,3 +114,16 @@ def optional_runtime_result(payload: String) raises -> String:
     )
     doc.set(result, "native_execution_qualified", doc.new_bool(False))
     return _dump(doc, result)
+
+
+def optional_runtime_result_from_modules() raises -> String:
+    """Read the module names, then build the optional-runtime result.
+
+    Returns:
+        The result JSON. The module names are the reviewed list.
+
+    Raises:
+        Error: The module list cannot be read, or it is not a list.
+    """
+    var modules = optional_runtime_modules()
+    return optional_runtime_result('{"new_modules":' + modules + "}")
