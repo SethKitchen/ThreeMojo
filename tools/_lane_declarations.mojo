@@ -15,7 +15,7 @@ from tests._python_tokens import (
     significant_json,
     token_sha256,
 )
-from tools._python_json import PyJson
+from tools._python_json import MISSING, PyJson
 
 
 def lane_declarations(payload: String) raises -> String:
@@ -97,6 +97,51 @@ def declaration_match_flags(payload: String) raises -> String:
         index += 1
     out.root = rows
     return out.dumps()
+
+
+def declaration_texts_and_flags(payload: String) raises -> String:
+    """Read every declaration, then compare the ones that have `expected`.
+
+    Args:
+        payload: A JSON list. Each item has `source`, `name`, and `owner`.
+            `expected` is optional.
+
+    Returns:
+        JSON with `declared` and `flags`. `flags` follows the items that
+        include `expected`.
+
+    Raises:
+        Error: A function cannot be read, or a source cannot be tokenized.
+    """
+    var declared_json = lane_declarations(payload)
+    var declared = PyJson.parse(declared_json)
+    var doc = PyJson.parse(payload)
+    var count = declared.length(declared.root)
+    var actuals = List[String]()
+    var sources = List[String]()
+    var index = 0
+    while index < count:
+        var item = doc.item(doc.root, index)
+        var expected = doc.get(item, "expected")
+        if expected != MISSING:
+            actuals.append(
+                significant_json(
+                    declared.text(declared.item(declared.root, index))
+                )
+            )
+            sources.append(significant_json(doc.text(expected)))
+        index += 1
+    var out = PyJson()
+    var flags = out.new_list()
+    index = 0
+    while index < len(actuals):
+        var flag = String("false")
+        if actuals[index] == sources[index]:
+            flag = "true"
+        out.append(flags, out.new_str(flag))
+        index += 1
+    out.root = flags
+    return '{"declared":' + declared_json + ',"flags":' + out.dumps() + "}"
 
 
 def declaration_token_checks(payload: String, prefix: String) raises:

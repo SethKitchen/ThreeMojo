@@ -78,6 +78,8 @@ It reads every rounded LINE declaration in one check.
 
 It compares every selected rounded LINE declaration in one check.
 
+It reads every rounded LINE declaration and compares each selected one in one check.
+
 It restores every changed rounded LINE declaration in one check.
 
 It compares every rounded LINE module text in one check.

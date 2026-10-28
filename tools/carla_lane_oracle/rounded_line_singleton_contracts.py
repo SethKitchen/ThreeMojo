@@ -407,6 +407,40 @@ def _declaration(text, name, owner):
     return result.stdout
 
 
+def _declared_matches(items):
+    """Return every declaration text and the selected token comparisons."""
+    if not items:
+        return [], []
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    rows = []
+    for source, name, owner, expected in items:
+        row = {'source': source, 'name': name, 'owner': list(owner)}
+        if expected is not None:
+            row['expected'] = expected
+        rows.append(row)
+    payload = json.dumps(rows, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='declared-matches-') as directory:
+        path = Path(directory) / 'declarations.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_lane_declarations',
+             '--texts', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    return parsed['declared'], [flag == 'true' for flag in parsed['flags']]
+
+
 def _declarations(items):
     """Return the declaration texts in the requested order."""
     import os
@@ -471,19 +505,16 @@ def verify_premises(root):
     for (item, _owner), selected in zip(minimum_items, selected_flags):
         text = _lane_text(root) if selected else _typed_source.historical_text(root, root/item['path'], (root/item['path']).read_text())
         loaded.append((item, selected, text))
-    declared = _declarations([{
-        'source': text,
-        'name': item['name'],
-        'owner': list(item['owner']),
-    } for item, _selected, text in loaded])
-    selected_pairs = []
-    for index, (item, selected, _text) in enumerate(loaded):
-        if selected:
-            selected_pairs.append((index, declared[index], item['source']))
-    selected_flags = _significant_matches([
-        (actual, source) for _index, actual, source in selected_pairs])
-    selected_match = {
-        index: flag for (index, _actual, _source), flag in zip(selected_pairs, selected_flags)}
+    declared, selected_flags = _declared_matches([
+        (text, item['name'], item['owner'], item['source'] if selected else None)
+        for item, selected, text in loaded])
+    selected_match = {}
+    flag_index = 0
+    for index, (_item, selected, _text) in enumerate(loaded):
+        if not selected:
+            continue
+        selected_match[index] = selected_flags[flag_index]
+        flag_index += 1
     restores = []
     for index, (item, _selected, text) in enumerate(loaded):
         if index in selected_match and not selected_match[index]:

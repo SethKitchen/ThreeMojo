@@ -10,6 +10,7 @@ from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from tests._python_tokens import replace_firsts
 from tools._lane_declarations import (
     declaration_match_flags,
+    declaration_texts_and_flags,
     lane_control_prepare,
     lane_declarations,
 )
@@ -140,6 +141,25 @@ def test_a_declaration_match_reports_a_missing_function_first() raises:
         contains="missing or ambiguous actual guard declaration: absent"
     ):
         _ = declaration_match_flags(payload)
+
+
+def test_texts_and_flags_compare_only_the_selected_items() raises:
+    """Items without `expected` stay in the declaration list and add no flag."""
+    var payload = (
+        '[{"source":"def f():\\n    return 1\\n","name":"f","owner":[],'
+        + '"expected":"def f():\\n    # note\\n    return 1\\n"},'
+        + '{"source":"def g():\\n    return 2\\n","name":"g","owner":[]},'
+        + '{"source":"def f():\\n    return 1\\n","name":"f","owner":[],'
+        + '"expected":"def f():\\n    return 2\\n"}]'
+    )
+    var parsed = PyJson.parse(declaration_texts_and_flags(payload))
+    var declared = parsed.at(parsed.root, "declared")
+    var flags = parsed.at(parsed.root, "flags")
+    assert_equal(parsed.length(declared), 3)
+    assert_equal(parsed.length(flags), 2)
+    assert_equal(parsed.text(parsed.item(flags, 0)), "true")
+    assert_equal(parsed.text(parsed.item(flags, 1)), "false")
+    assert_true(parsed.text(parsed.item(declared, 1)).find("return 2") >= 0)
 
 
 def main() raises:
