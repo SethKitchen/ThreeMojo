@@ -216,14 +216,26 @@ def parse_array(text, name, size):
         _constant_error(error, name)
 
 
+_GATED_MOMENT_ROUTES = None
+
+
 def _moment_route_batch(mode, payload):
-    """Run one stored-moment route batch and return its stdout."""
+    """Run one stored-moment route batch and return its stdout.
+
+    The same batch is not run again. A changed batch is run again.
+    A failed batch is not kept.
+    """
+    global _GATED_MOMENT_ROUTES
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     text = json.dumps(payload, separators=(',', ':'))
+    key = (mode, text)
+    cached = _GATED_MOMENT_ROUTES
+    if cached is not None and cached[0] == key:
+        return cached[1]
     with tempfile.TemporaryDirectory(prefix='moment-routes-') as directory:
         path = Path(directory) / 'routes.json'
         path.write_text(text)
@@ -236,6 +248,7 @@ def _moment_route_batch(mode, payload):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+    _GATED_MOMENT_ROUTES = (key, result.stdout)
     return result.stdout
 
 
@@ -378,14 +391,25 @@ def _moment_projection(payload):
     return json.loads(result.stdout)
 
 
+_GATED_ARRAY_FRACTIONS = None
+
+
 def _moment_array_fractions(payload):
-    """Return the stored words and fractions when the array names match."""
+    """Return the stored words and fractions when the array names match.
+
+    The same arrays are not checked again. A changed array is checked again.
+    A failed check is not kept.
+    """
+    global _GATED_ARRAY_FRACTIONS
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     text = json.dumps(payload, separators=(',', ':'))
+    cached = _GATED_ARRAY_FRACTIONS
+    if cached is not None and cached[0] == text:
+        return cached[1]
     with tempfile.TemporaryDirectory(prefix='moment-array-fractions-') as directory:
         path = Path(directory) / 'arrays.json'
         path.write_text(text)
@@ -398,7 +422,9 @@ def _moment_array_fractions(payload):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _GATED_ARRAY_FRACTIONS = (text, parsed)
+    return parsed
 
 
 def _moment_arrays(items):
@@ -469,14 +495,25 @@ def _moment_fraction_groups(payload):
     return json.loads(result.stdout)
 
 
+_GATED_SCALARS_BLOCKS = None
+
+
 def _moment_scalars_and_blocks(payload):
-    """Return the normalized blocks when the scalars and digests match."""
+    """Return the normalized blocks when the scalars and digests match.
+
+    The same texts are not checked again. A changed text is checked again.
+    A failed check is not kept.
+    """
+    global _GATED_SCALARS_BLOCKS
     import os
     import subprocess
     import tempfile
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
     text = json.dumps(payload, separators=(',', ':'))
+    cached = _GATED_SCALARS_BLOCKS
+    if cached is not None and cached[0] == text:
+        return cached[1]
     with tempfile.TemporaryDirectory(prefix='moment-scalars-blocks-') as directory:
         path = Path(directory) / 'blocks.json'
         path.write_text(text)
@@ -489,7 +526,9 @@ def _moment_scalars_and_blocks(payload):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
-    return json.loads(result.stdout)
+    parsed = json.loads(result.stdout)
+    _GATED_SCALARS_BLOCKS = (text, parsed)
+    return parsed
 
 
 def _moment_blocks_and_digests(payload):

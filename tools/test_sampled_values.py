@@ -1649,6 +1649,66 @@ class ProductionScanTests(unittest.TestCase):
         )
 
 
+class MomentBatchCacheTests(unittest.TestCase):
+    def test_the_same_moment_batches_skip_the_second_check(self):
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import spiral_moments as moments
+        saved_routes = moments._GATED_MOMENT_ROUTES
+        saved_arrays = moments._GATED_ARRAY_FRACTIONS
+        saved_blocks = moments._GATED_SCALARS_BLOCKS
+        try:
+            moments._GATED_MOMENT_ROUTES = None
+            moments._GATED_ARRAY_FRACTIONS = None
+            moments._GATED_SCALARS_BLOCKS = None
+            ok = Mock(returncode=0, stdout='{"status":"PASS"}', stderr='')
+            with patch('subprocess.run', return_value=ok) as run:
+                self.assertEqual(
+                    moments._moment_route_batch('--currents', [{'name': 'a'}]),
+                    '{"status":"PASS"}')
+                moments._moment_route_batch('--currents', [{'name': 'a'}])
+                self.assertEqual(run.call_count, 1)
+                moments._moment_route_batch('--checked', [{'name': 'a'}])
+                self.assertEqual(run.call_count, 2)
+                self.assertEqual(
+                    moments._moment_array_fractions({'names': ['a']}),
+                    {'status': 'PASS'})
+                moments._moment_array_fractions({'names': ['a']})
+                self.assertEqual(run.call_count, 3)
+                moments._moment_array_fractions({'names': ['b']})
+                self.assertEqual(run.call_count, 4)
+                self.assertEqual(
+                    moments._moment_scalars_and_blocks({'scalars': []}),
+                    {'status': 'PASS'})
+                moments._moment_scalars_and_blocks({'scalars': []})
+                self.assertEqual(run.call_count, 5)
+                moments._moment_scalars_and_blocks({'scalars': ['b']})
+                self.assertEqual(run.call_count, 6)
+            failed = Mock(returncode=1, stdout='', stderr='moment batch changed\n')
+            with patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'moment batch changed'):
+                    moments._moment_route_batch('--currents', [{'name': 'bad'}])
+                with self.assertRaisesRegex(ValueError, 'moment batch changed'):
+                    moments._moment_route_batch('--currents', [{'name': 'bad'}])
+                with self.assertRaisesRegex(ValueError, 'moment batch changed'):
+                    moments._moment_array_fractions({'names': ['bad']})
+                with self.assertRaisesRegex(ValueError, 'moment batch changed'):
+                    moments._moment_array_fractions({'names': ['bad']})
+                with self.assertRaisesRegex(ValueError, 'moment batch changed'):
+                    moments._moment_scalars_and_blocks({'scalars': ['bad']})
+                with self.assertRaisesRegex(ValueError, 'moment batch changed'):
+                    moments._moment_scalars_and_blocks({'scalars': ['bad']})
+                self.assertEqual(run.call_count, 6)
+            with patch('subprocess.run', return_value=ok) as run:
+                moments._moment_route_batch('--checked', [{'name': 'a'}])
+                moments._moment_array_fractions({'names': ['b']})
+                moments._moment_scalars_and_blocks({'scalars': ['b']})
+                self.assertEqual(run.call_count, 0)
+        finally:
+            moments._GATED_MOMENT_ROUTES = saved_routes
+            moments._GATED_ARRAY_FRACTIONS = saved_arrays
+            moments._GATED_SCALARS_BLOCKS = saved_blocks
+
+
 class RuntimeMomentCacheTests(unittest.TestCase):
     def test_the_same_runtime_and_moment_inputs_skip_the_second_check(self):
         import sys

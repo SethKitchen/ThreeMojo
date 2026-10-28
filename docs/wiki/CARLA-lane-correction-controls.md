@@ -696,6 +696,11 @@ It checks every stored-moment route digest before the source read.
 
 It compares every stored-moment route after that read.
 
+It reuses that route batch when the same texts are read again.
+The route files are still read.
+A changed text is checked again.
+A failed check is not kept.
+
 It reads the sampled closure after those live routing documents in one check.
 
 It checks the try-only refusal before the route pins in one check.
@@ -710,11 +715,21 @@ It keeps every stored-moment scalar word in one check.
 
 It checks every scalar word before the blocks and route digests in one check.
 
+It reuses that scalar and block check when the same texts are read again.
+The scalar files and the block files are still read.
+A changed text is checked again.
+A failed check is not kept.
+
 It groups every stored-moment fraction text by array.
 
 It spells each stored word before its fraction text in one check.
 
 It reads every stored array, its fractions, and its name set in one check.
+
+It reuses that array-fraction check when the same texts are read again.
+The array files are still read.
+A changed text is checked again.
+A failed check is not kept.
 
 It checks every rounded node sum in one check.
 
