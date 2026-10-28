@@ -426,6 +426,8 @@ It reads a stored table and its words as integers in one check.
 
 It checks the moment pin sets, paths, dependency closure, legacy digest, and result pins.
 
+It builds the moment pin specification before that pin check in one check.
+
 It keeps the moment array paths, scalar names, block boundaries, and routing paths.
 
 It keeps the moment routing constants and the route comparison.

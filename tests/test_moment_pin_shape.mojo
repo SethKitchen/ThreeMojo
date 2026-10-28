@@ -7,11 +7,14 @@
 
 from std.testing import TestSuite, assert_raises
 
+from tools._python_json import PyJson
 from tools._moment_pin_shape import (
+    moment_pins_after_spec,
     require_legacy_digest,
     require_moment_pin_shape,
     require_projection_result,
 )
+from tools._moment_pin_spec import moment_pin_spec
 
 
 def _pins() -> String:
@@ -200,6 +203,147 @@ def test_a_changed_projection_result_pin_is_refused() raises:
         require_projection_result(
             '{"projection":{"helper_projections":5},"result":{"helper_projections":5,"extra":1}}'
         )
+
+
+def _matching_pins(spec_text: String) raises -> String:
+    """Return pin JSON that matches one specification.
+
+    Args:
+        spec_text: The specification JSON.
+
+    Returns:
+        A pin document whose sets, paths, and sizes match `spec_text`.
+    """
+    var spec = PyJson.parse(spec_text)
+    var doc = PyJson()
+    var pins = doc.new_dict()
+    doc.set(pins, "schema", doc.new_int(3))
+    doc.set(pins, "scope", doc.new_str("stored"))
+    var arrays = doc.new_dict()
+    var array_spec = spec.at(spec.root, "arrays")
+    var count = spec.length(array_spec)
+    var index = 0
+    while index < count:
+        var name = spec.key(array_spec, index)
+        var wanted = spec.value(array_spec, index)
+        var record = doc.new_dict()
+        doc.set(record, "path", doc.new_str(spec.text(spec.at(wanted, "path"))))
+        var words = doc.new_list()
+        var size = Int(spec.text(spec.at(wanted, "size")))
+        var word = 0
+        while word < size:
+            doc.append(words, doc.new_str("0x0"))
+            word += 1
+        doc.set(record, "words", words)
+        doc.set(arrays, name, record)
+        index += 1
+    doc.set(pins, "arrays", arrays)
+    var scalars = doc.new_dict()
+    var scalar_spec = spec.at(spec.root, "scalars")
+    var scalar_path = spec.text(spec.at(spec.root, "scalar_path"))
+    count = spec.length(scalar_spec)
+    index = 0
+    while index < count:
+        var scalar_name = spec.key(scalar_spec, index)
+        var scalar_record = doc.new_dict()
+        doc.set(scalar_record, "path", doc.new_str(scalar_path))
+        doc.set(scalar_record, "word", doc.new_str("0x0"))
+        doc.set(scalars, scalar_name, scalar_record)
+        index += 1
+    doc.set(pins, "scalars", scalars)
+    var blocks = doc.new_dict()
+    var block_paths = spec.at(spec.root, "block_paths")
+    var boundaries = spec.at(spec.root, "boundaries")
+    count = spec.length(block_paths)
+    index = 0
+    while index < count:
+        var block_name = spec.key(block_paths, index)
+        var boundary = spec.at(boundaries, block_name)
+        var block_record = doc.new_dict()
+        doc.set(
+            block_record,
+            "path",
+            doc.new_str(spec.text(spec.value(block_paths, index))),
+        )
+        doc.set(
+            block_record,
+            "begin",
+            doc.new_str(spec.text(spec.at(boundary, "begin"))),
+        )
+        doc.set(
+            block_record,
+            "end",
+            doc.new_str(spec.text(spec.at(boundary, "end"))),
+        )
+        doc.set(block_record, "normalized_source", doc.new_str("def"))
+        doc.set(block_record, "sha256", doc.new_str("aa"))
+        doc.set(blocks, block_name, block_record)
+        index += 1
+    doc.set(pins, "blocks", blocks)
+    var sums = doc.new_list()
+    doc.append(sums, doc.new_str("0x0"))
+    doc.set(pins, "rounded_node_sums", sums)
+    var projection = doc.new_dict()
+    doc.set(projection, "legacy_normalized_source", doc.new_str("def"))
+    doc.set(projection, "legacy_sha256", doc.new_str("aa"))
+    doc.set(projection, "helper_projections", doc.new_int(5))
+    doc.set(projection, "rate_half_commutations", doc.new_int(2))
+    doc.set(projection, "projected_ast_sha256", doc.new_str("bb"))
+    doc.set(projection, "sum2_auxiliary_declarations", doc.new_int(4))
+    doc.set(projection, "sum2_term_definitions", doc.new_int(2))
+    doc.set(projection, "sum2_auxiliary_updates", doc.new_int(4))
+    doc.set(projection, "sum2_error_writes", doc.new_int(2))
+    doc.set(projection, "sum2_environment_guards", doc.new_int(1))
+    doc.set(pins, "ideal_projection", projection)
+    var routing = doc.new_dict()
+    var routing_paths = spec.at(spec.root, "routing_paths")
+    count = spec.length(routing_paths)
+    index = 0
+    while index < count:
+        var route_name = spec.key(routing_paths, index)
+        var route_record = doc.new_dict()
+        doc.set(
+            route_record,
+            "path",
+            doc.new_str(spec.text(spec.value(routing_paths, index))),
+        )
+        doc.set(route_record, "normalized_tokens", doc.new_str("[]"))
+        doc.set(route_record, "sha256", doc.new_str("cc"))
+        doc.set(routing, route_name, route_record)
+        index += 1
+    doc.set(pins, "routing", routing)
+    doc.root = pins
+    var body = doc.dumps()
+    var end = body.byte_length() - 1
+    var prefix = body[byte=0:end]
+    var dependencies = spec.subtree(spec.at(spec.root, "dependencies")).dumps()
+    return String(prefix) + ',"dependencies":' + dependencies + "}"
+
+
+def test_a_bad_dependency_record_fails_before_the_pins() raises:
+    """A bad dependency record fails before the pin document is checked."""
+    with assert_raises(contains="KeyError: 'dependencies'"):
+        moment_pins_after_spec('{"pins":{}}')
+    with assert_raises(contains="moment pin dependencies changed"):
+        moment_pins_after_spec('{"dependencies":[],"pins":{}}')
+
+
+def test_a_bad_pin_shape_fails_after_the_specification() raises:
+    """A bad pin document fails after the specification is built."""
+    with assert_raises(contains="wrong top-level pin set"):
+        moment_pins_after_spec(
+            '{"dependencies":{"group":"stored_arithmetic"},"pins":{}}'
+        )
+
+
+def test_a_matching_specification_accepts_the_pins() raises:
+    """Pins that match the built specification are accepted."""
+    var dependencies = '{"group":"stored_arithmetic"}'
+    var spec = moment_pin_spec('{"dependencies":' + dependencies + "}")
+    var pins = _matching_pins(spec)
+    moment_pins_after_spec(
+        '{"dependencies":' + dependencies + ',"pins":' + pins + "}"
+    )
 
 
 def main() raises:

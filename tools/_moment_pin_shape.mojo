@@ -10,6 +10,7 @@ only compares the pin document with that specification. The legacy digest
 and the projection result pins use the same comparison.
 """
 
+from tools._moment_pin_spec import moment_pin_spec
 from tools._python_json import PY_INT, PY_LIST, PyJson, py_equal
 
 
@@ -239,6 +240,30 @@ def require_moment_pin_shape(payload: String) raises:
         ),
     ):
         _fail("wrong ideal-projection pin set")
+
+
+def moment_pins_after_spec(payload: String) raises:
+    """Build the pin specification, then check the pin document.
+
+    Args:
+        payload: JSON with `dependencies` and `pins`.
+
+    Raises:
+        Error: The dependency record changed, or the pin shape changed.
+    """
+    var doc = PyJson.parse(payload)
+    var spec = moment_pin_spec(
+        '{"dependencies":'
+        + doc.subtree(doc.at(doc.root, "dependencies")).dumps()
+        + "}"
+    )
+    require_moment_pin_shape(
+        '{"pins":'
+        + doc.subtree(doc.at(doc.root, "pins")).dumps()
+        + ',"spec":'
+        + spec
+        + "}"
+    )
 
 
 def require_legacy_digest(payload: String) raises:

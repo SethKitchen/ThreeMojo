@@ -654,11 +654,28 @@ def __getattr__(name):
 
 
 def _require_moment_pins(pins):
-    spec = _moment_pin_spec(_dependencies())
-    try:
-        ideal_projection.require_moment_pins(pins, spec)
-    except ValueError as error:
-        raise CheckError(str(error)) from error
+    """Build the pin specification, then check the pin document."""
+    import os
+    import subprocess
+    import tempfile
+    payload = json.dumps({
+        'dependencies': _dependencies(),
+        'pins': pins,
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='moment-pins-') as directory:
+        path = Path(directory) / 'pins.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_pins',
+             '--after-spec', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise CheckError(message)
 
 
 def verify_inputs(root):

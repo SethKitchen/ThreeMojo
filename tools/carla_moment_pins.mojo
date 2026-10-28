@@ -6,6 +6,7 @@
 """Check the stored-moment pin shape.
 
     carla_moment_pins PATH
+    carla_moment_pins --after-spec PATH
     carla_moment_pins --legacy PATH
     carla_moment_pins --result PATH
 
@@ -18,6 +19,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._moment_pin_shape import (
+    moment_pins_after_spec,
     require_legacy_digest,
     require_moment_pin_shape,
     require_projection_result,
@@ -27,7 +29,10 @@ from tools._moment_pin_shape import (
 def _usage():
     """Print the command usage and stop."""
     print(
-        "usage: carla_moment_pins PATH | --legacy PATH | --result PATH",
+        (
+            "usage: carla_moment_pins PATH | --after-spec PATH | --legacy PATH"
+            " | --result PATH"
+        ),
         file=stderr,
     )
     exit(2)
@@ -40,6 +45,13 @@ def main() raises:
         Error: The command is invalid, or a pin check failed.
     """
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--after-spec":
+        try:
+            moment_pins_after_spec(Path(arguments[2]).read_text())
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     var mode = String("shape")
     var path = String("")
     if len(arguments) == 2 and not arguments[1].startswith("--"):
