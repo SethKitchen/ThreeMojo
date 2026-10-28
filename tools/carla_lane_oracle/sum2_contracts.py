@@ -108,44 +108,25 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def _import_batch(texts, interval):
-    """Check the helper imports, the stored-half function, and the half import."""
+def _graphs_and_imports(texts, checkpoints, interval):
+    """Compare every caller graph, then check the helper imports."""
     import os
     import subprocess
     import tempfile
+    payload = {
+        'texts': texts,
+        'checkpoints': checkpoints,
+        'interval': interval,
+    }
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps(
-        {'texts': texts, 'interval': interval}, separators=(',', ':'))
-    with tempfile.TemporaryDirectory(prefix='sum2-imports-') as directory:
-        path = Path(directory) / 'payload.json'
-        path.write_text(payload)
-        result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo,
-             'carla_sum2_import_batch', str(path)],
-            capture_output=True, text=True)
-    if result.returncode != 0:
-        lines = [line.strip() for line in result.stderr.splitlines()
-                 if line.strip() and 'Crashpad' not in line]
-        message = lines[-1] if lines else result.stdout.strip()
-        raise ValueError(message)
-
-
-def _graph_batch(texts, checkpoints):
-    """Compare every reviewed Sum2 caller graph."""
-    import os
-    import subprocess
-    import tempfile
-    root = Path(__file__).resolve().parents[2]
-    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps(
-        {'texts': texts, 'checkpoints': checkpoints}, separators=(',', ':'))
+    text = json.dumps(payload, separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='sum2-graphs-') as directory:
         path = Path(directory) / 'payload.json'
-        path.write_text(payload)
+        path.write_text(text)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_sum2_graphs',
-             str(path)],
+             '--with-imports', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
@@ -233,12 +214,11 @@ def verify(root, *, _operation=None):
     # The complete lexical contract above retains all keyword-subscripts and
     # decorators. Separately relate the unchanged arithmetic leaf/recurrence
     # to the initial station-reviewed declarations using actual token spans.
-    _graph_batch(texts, _checkpoints())
     # Require the exact direct import inventory and reject all shadow forms.
     pins = json.loads(_typed_source.historical_text(root, root / 'tools/carla_lane_oracle/spiral-moment-pins.json', source._observe_text(root, (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').relative_to(root).as_posix(), (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').read_text(), _operation=_operation), _operation=_operation))
     interval = _typed_source.historical_text(root, root / 'extensions/carla/curve_interval.mojo', source._observe_text(root, (root / 'extensions/carla/curve_interval.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_interval.mojo').read_text(), _operation=_operation), _operation=_operation)
     try:
-        _import_batch(texts, interval)
+        _graphs_and_imports(texts, _checkpoints(), interval)
     except ValueError as error:
         if str(error).startswith('missing or ambiguous function: '):
             raise c.CheckError(str(error)) from error

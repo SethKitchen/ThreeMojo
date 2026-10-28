@@ -9,6 +9,7 @@ from std.pathlib import Path
 from std.testing import TestSuite, assert_raises
 
 from tests._python_expr import sum2_graph_batch
+from tools.carla_sum2_graphs import sum2_graphs_and_imports
 from tools._python_json import PyJson
 from tools._sum2_checkpoints import sum2_checkpoints
 
@@ -80,6 +81,13 @@ def test_a_missing_sum2_module_is_refused() raises:
     """The batch reads the first module before it compares a graph."""
     with assert_raises():
         sum2_graph_batch('{"texts":{},"checkpoints":{}}')
+
+
+def test_a_missing_module_fails_before_the_import_check() raises:
+    """A missing caller module is reported before the interval import is read.
+    """
+    with assert_raises(contains="KeyError:"):
+        sum2_graphs_and_imports('{"texts":{},"checkpoints":{}}')
 
 
 def main() raises:
