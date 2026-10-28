@@ -103,6 +103,12 @@ class RoundingTests(unittest.TestCase):
             m._refuse_repeated_pin_keys('{"a": 1, "a": 2}')
         m._refuse_repeated_pin_keys('{"a": 1}')
 
+    def test_the_sum2_reader_accepts_the_moment_pin_document(self):
+        import sum2_contracts as sum2
+        text = (m.ROOT / 'tools/carla_lane_oracle/spiral-moment-pins.json').read_text()
+        pins = sum2._load_moment_pins(text)
+        self.assertIn('arrays', pins)
+
     def test_decimal_sign_and_exact_rounding(self):
         self.assertEqual(m.decimal_word('-0.0'), m.SIGN)
         self.assertEqual(m.decimal_word('0.0'), 0)

@@ -242,6 +242,26 @@ def _sum2_projected_result(payload, guard):
     return json.loads(result.stdout)
 
 
+def _load_moment_pins(pin_text):
+    """Refuse a repeated key, then parse the moment pin document.
+
+    Args:
+        pin_text: The pin document text.
+
+    Returns:
+        The parsed pin document.
+
+    Raises:
+        ValueError: A key is repeated.
+    """
+    if __package__:
+        from .spiral_moments import _refuse_repeated_pin_keys
+    else:
+        from spiral_moments import _refuse_repeated_pin_keys
+    _refuse_repeated_pin_keys(pin_text)
+    return json.loads(pin_text)
+
+
 def verify(root, *, _operation=None):
     # Lazy import avoids a checker-module cycle; no source is executed.
     if __package__:
@@ -268,7 +288,7 @@ def verify(root, *, _operation=None):
     # decorators. Separately relate the unchanged arithmetic leaf/recurrence
     # to the initial station-reviewed declarations using actual token spans.
     # Require the exact direct import inventory and reject all shadow forms.
-    pins = json.loads(_typed_source.historical_text(root, root / 'tools/carla_lane_oracle/spiral-moment-pins.json', source._observe_text(root, (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').relative_to(root).as_posix(), (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').read_text(), _operation=_operation), _operation=_operation))
+    pins = _load_moment_pins(_typed_source.historical_text(root, root / 'tools/carla_lane_oracle/spiral-moment-pins.json', source._observe_text(root, (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').relative_to(root).as_posix(), (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').read_text(), _operation=_operation), _operation=_operation))
     interval = _typed_source.historical_text(root, root / 'extensions/carla/curve_interval.mojo', source._observe_text(root, (root / 'extensions/carla/curve_interval.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_interval.mojo').read_text(), _operation=_operation), _operation=_operation)
     try:
         return _graphs_then_result({

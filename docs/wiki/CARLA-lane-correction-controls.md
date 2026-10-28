@@ -646,6 +646,8 @@ It checks the lane proof refusal before routing.
 
 It compares the Sum2 recurrence, leaf, and caller graphs.
 
+It refuses a repeated key in the moment pin document before that document is parsed.
+
 It checks those caller graphs before the helper imports in one check.
 
 It checks those graphs before the Sum2 projection in one check.
