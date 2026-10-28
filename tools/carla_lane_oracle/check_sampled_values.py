@@ -578,15 +578,19 @@ def _recipe_and_batch(bounds, trig, target):
         path.write_text(payload)
         result = subprocess.run(
             ['sh', str(root / 'tools' / 'tool.sh'), mojo,
-             'carla_sampled_projection', '--after-imports', str(path)],
+             'carla_sampled_projection', '--after-top-level', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:
         lines = [line.strip() for line in result.stderr.splitlines()
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         marker = 'sampled imports: '
-        if message.startswith(marker):
-            message = message[len(marker):]
+        top = 'sampled top-level: '
+        if message.startswith(marker) or message.startswith(top):
+            if message.startswith(marker):
+                message = message[len(marker):]
+            else:
+                message = message[len(top):]
             closure = _sampled_closure()
             for prefix in (closure['value_gate'], closure['jet_gate']):
                 if message.startswith(prefix):
@@ -715,7 +719,6 @@ def verify(root):
         except ValueError as error:
             raise CheckError(str(error)) from error
         expected = _project_sampled(bounds, trig, texts, target)
-        _sampled_text('--top-level', target, ','.join(sorted(expected)))
         for name, source in expected.items():
             # Decorators stay on the copied text. The syntax tree is the
             # independent comparison with the sampled module.

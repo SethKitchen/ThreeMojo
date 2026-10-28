@@ -22,6 +22,7 @@ from tests._python_tokens import (
     project_lane_value,
     project_reference_value,
     project_union_value,
+    sampled_top_level,
 )
 from tools._python_json import PyJson
 from tools._sampled_closure import sampled_closure
@@ -402,3 +403,62 @@ def project_after_imports(payload: String) raises -> String:
     except error:
         raise Error("sampled imports: " + String(error))
     return project_with_recipe(payload)
+
+
+def _sort_names(mut names: List[String]):
+    """Sort helper names in code-point order.
+
+    Args:
+        names: The helper names, replaced by the sorted list.
+    """
+    var index = 1
+    while index < len(names):
+        var value = names[index]
+        var cursor = index
+        while cursor > 0 and names[cursor - 1] > value:
+            names[cursor] = names[cursor - 1]
+            cursor -= 1
+        names[cursor] = value
+        index += 1
+
+
+def project_after_top_level(payload: String) raises -> String:
+    """Project the copied helpers, then check the top-level names.
+
+    Args:
+        payload: JSON with `target`, `bounds`, and `trig`. `target` is
+            the lane-value module.
+
+    Returns:
+        JSON with `plan`, `recipe`, and `record`, as
+        `project_after_imports` returns them.
+
+    Raises:
+        Error: An import changed, a helper projection changed, or a
+            top-level name differs. The imports and the projection run
+            before the top-level names. A top-level error starts with
+            `sampled top-level: `.
+    """
+    var doc = PyJson.parse(payload)
+    var projected = project_after_imports(payload)
+    var parsed = PyJson.parse(projected)
+    var helpers = parsed.at(parsed.at(parsed.root, "record"), "helpers")
+    var names = List[String]()
+    var count = parsed.length(helpers)
+    var index = 0
+    while index < count:
+        names.append(parsed.key(helpers, index))
+        index += 1
+    _sort_names(names)
+    var joined = String("")
+    index = 0
+    while index < len(names):
+        if index > 0:
+            joined += ","
+        joined += names[index]
+        index += 1
+    try:
+        sampled_top_level(doc.text(doc.at(doc.root, "target")), joined)
+    except error:
+        raise Error("sampled top-level: " + String(error))
+    return projected

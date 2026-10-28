@@ -8,11 +8,13 @@
     carla_sampled_projection PATH
     carla_sampled_projection --with-recipe PATH
     carla_sampled_projection --after-imports PATH
+    carla_sampled_projection --after-top-level PATH
 
 PATH is JSON with `bounds` and `trig` source texts. The command prints
 the projected helpers and the constant and lane statement dumps.
 `--with-recipe` also prints the copy plan and the projection steps.
 `--after-imports` checks the lane-value imports before that projection.
+`--after-top-level` checks the helper names after that projection.
 """
 
 from std.pathlib import Path
@@ -21,6 +23,7 @@ from std.sys import argv, exit, stderr
 from tools._python_json import PyJson
 from tools._sampled_projection import (
     project_after_imports,
+    project_after_top_level,
     project_reviewed_helpers,
     project_with_recipe,
 )
@@ -31,7 +34,7 @@ def _usage():
     print(
         (
             "usage: carla_sampled_projection PATH | --with-recipe PATH |"
-            " --after-imports PATH"
+            " --after-imports PATH | --after-top-level PATH"
         ),
         file=stderr,
     )
@@ -45,6 +48,16 @@ def main() raises:
         Error: The command is invalid, or a helper projection fails.
     """
     var arguments = argv()
+    if len(arguments) == 3 and arguments[1] == "--after-top-level":
+        try:
+            print(
+                project_after_top_level(Path(arguments[2]).read_text()),
+                end="",
+            )
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 3 and arguments[1] == "--after-imports":
         try:
             print(project_after_imports(Path(arguments[2]).read_text()), end="")

@@ -23,6 +23,7 @@ from tools._python_json import PyJson
 from tools._sampled_declarations import sampled_declarations
 from tools._sampled_projection import (
     project_after_imports,
+    project_after_top_level,
     project_reviewed_helpers,
     project_with_recipe,
 )
@@ -62,6 +63,12 @@ def test_decorator_prefix_map_matches_one_lookup() raises:
     assert_equal(
         doc.text(doc.at(doc.root, "other")), decorator_prefix(source, "other")
     )
+
+
+def test_bad_imports_fail_before_the_top_level_names() raises:
+    """A bad lane-value module fails before the helper names are checked."""
+    with assert_raises(contains="sampled imports:"):
+        _ = project_after_top_level('{"target":"nope"}')
 
 
 def test_bad_imports_fail_before_the_copy_plan() raises:
