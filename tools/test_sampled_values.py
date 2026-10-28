@@ -1374,5 +1374,102 @@ class RestoredScopeTests(unittest.TestCase):
                 )
 
 
+class InvariantRecordGateTests(unittest.TestCase):
+    def test_the_same_record_bytes_skip_the_second_gate(self):
+        import json
+        from unittest.mock import Mock, patch
+        from tools.carla_lane_oracle import coverage_invariant_contracts as invariant
+        saved_gates = invariant._GATED_INVARIANT
+        saved_labels = invariant._INVARIANT_LABELS
+        saved_migration = invariant.__dict__.get('MIGRATION')
+        saved_pair = invariant._GATED_PAIR
+        payload = json.dumps({
+            'components': {'a.json': 'abc'},
+            'pin_files': {
+                'runtime-source-pins.json': {},
+                'sum2-guard-pins.json': {},
+            },
+        }).encode()
+        duplicate = b'{"a": 1, "a": 2}'
+        reads = []
+
+        def read_bytes(self):
+            reads.append(self.name)
+            if self.name == 'migration.json':
+                return read_bytes.payload
+            return b'bytes'
+
+        read_bytes.payload = payload
+
+        def historical_bytes(_root, _path, raw, _operation=None):
+            return raw
+
+        try:
+            invariant._GATED_INVARIANT = set()
+            invariant._INVARIANT_LABELS = {
+                'prior': 'prior.json',
+                'oracle': 'oracle',
+            }
+            invariant.MIGRATION = 'migration.json'
+            invariant._GATED_PAIR = None
+            ok = Mock(returncode=0, stdout='', stderr='')
+            with patch.object(Path, 'read_bytes', read_bytes), patch.object(
+                invariant._typed_source, 'historical_bytes', historical_bytes
+            ), patch('subprocess.run', return_value=ok) as run:
+                invariant._gate(b'migration')
+                invariant._gate(b'migration')
+                invariant._gate(b'migration', b'prior')
+                invariant._gate(b'migration', b'prior', [('a.json', b'abc')])
+                invariant._gate(
+                    b'migration', b'prior', [('a.json', b'abc')], _then_pair=True)
+                self.assertEqual(run.call_count, 4)
+                invariant._gate(b'migration')
+                invariant._gate(b'migration', b'prior')
+                invariant._gate(b'migration', b'prior', [('a.json', b'abc')])
+                invariant._gate(
+                    b'migration', b'prior', [('a.json', b'abc')], _then_pair=True)
+                self.assertEqual(run.call_count, 4)
+                invariant._gate(b'other')
+                self.assertEqual(run.call_count, 5)
+                first = invariant.read_record(Path('invariant-gate'), _then_pair=True)
+                second = invariant.read_record(Path('invariant-gate'), _then_pair=True)
+                self.assertEqual(first['components'], second['components'])
+                self.assertEqual(run.call_count, 8)
+                self.assertEqual(
+                    reads,
+                    ['migration.json', 'prior.json', 'a.json'] * 2,
+                )
+                read_bytes.payload = duplicate
+                with self.assertRaisesRegex(
+                        ValueError, 'duplicate runtime source pin key: a'):
+                    invariant.read_record(Path('invariant-gate'))
+                with self.assertRaisesRegex(
+                        ValueError, 'duplicate runtime source pin key: a'):
+                    invariant.read_record(Path('invariant-gate'))
+                self.assertEqual(run.call_count, 9)
+                self.assertEqual(
+                    reads[-2:], ['migration.json', 'migration.json'])
+            failed = Mock(returncode=1, stdout='', stderr='bad migration\n')
+            reads.clear()
+            read_bytes.payload = b'{}'
+            with patch.object(Path, 'read_bytes', read_bytes), patch.object(
+                invariant._typed_source, 'historical_bytes', historical_bytes
+            ), patch('subprocess.run', return_value=failed) as run:
+                with self.assertRaisesRegex(ValueError, 'bad migration'):
+                    invariant.read_record(Path('invariant-gate'))
+                with self.assertRaisesRegex(ValueError, 'bad migration'):
+                    invariant.read_record(Path('invariant-gate'))
+                self.assertEqual(run.call_count, 2)
+                self.assertEqual(reads, ['migration.json', 'migration.json'])
+        finally:
+            invariant._GATED_INVARIANT = saved_gates
+            invariant._INVARIANT_LABELS = saved_labels
+            if saved_migration is None:
+                invariant.__dict__.pop('MIGRATION', None)
+            else:
+                invariant.MIGRATION = saved_migration
+            invariant._GATED_PAIR = saved_pair
+
+
 if __name__ == '__main__':
     unittest.main()

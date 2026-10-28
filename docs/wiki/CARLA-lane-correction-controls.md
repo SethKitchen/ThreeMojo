@@ -190,6 +190,11 @@ It relabels one runtime pin failure when the cause is the reviewed contract erro
 
 `tools/carla_invariant_gate.mojo` checks the coverage-invariant record, the pin digests, the ordered pin pair, and the pin placements.
 
+It reuses one coverage-invariant record gate when the same bytes are read again.
+The migration file, the prior record, and each component are still read.
+A changed byte is checked again.
+A failed check is not kept.
+
 It compares every coverage-invariant successor digest in one check.
 
 It compares those successor digests before the dispatch migration record in one check.

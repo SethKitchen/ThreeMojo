@@ -168,7 +168,27 @@ def require(condition, message):
     if not condition:
         raise ValueError(_contract_prefixes()['invariant'] + message)
 
+
+_GATED_INVARIANT = set()
+
+
 def _gate(migration, prior=None, components=None, *, _then_pair=False):
+    """Check one invariant record gate once for the same bytes."""
+    if type(migration) is not bytes:
+        migration = bytes(migration)
+    if prior is not None and type(prior) is not bytes:
+        prior = bytes(prior)
+    component_key = None
+    if components is not None:
+        frozen = []
+        for name, payload in components:
+            if type(payload) is not bytes:
+                payload = bytes(payload)
+            frozen.append((name, payload))
+        component_key = tuple(frozen)
+    key = (migration, prior, component_key, _then_pair)
+    if key in _GATED_INVARIANT:
+        return
     import os
     import subprocess
     import tempfile
@@ -185,12 +205,12 @@ def _gate(migration, prior=None, components=None, *, _then_pair=False):
             prior_path = folder / 'prior.json'
             prior_path.write_bytes(prior)
             arguments.extend(['--prior', str(prior_path)])
-            if components is not None:
+            if component_key is not None:
                 component_dir = folder / 'components'
                 component_dir.mkdir()
-                names = [name for name, _payload in components]
+                names = [name for name, _payload in component_key]
                 (component_dir / 'names.json').write_text(json.dumps(names))
-                for index, (_name, payload) in enumerate(components):
+                for index, (_name, payload) in enumerate(component_key):
                     (component_dir / str(index)).write_bytes(payload)
                 arguments.extend(['--components', str(component_dir)])
                 if _then_pair:
@@ -201,6 +221,7 @@ def _gate(migration, prior=None, components=None, *, _then_pair=False):
                  if line.strip() and 'Crashpad' not in line]
         message = lines[-1] if lines else result.stdout.strip()
         raise ValueError(message)
+    _GATED_INVARIANT.add(key)
 
 
 def _gate_digest(payload, expected, kind, label):
