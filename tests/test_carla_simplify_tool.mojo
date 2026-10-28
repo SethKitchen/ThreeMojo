@@ -17,63 +17,67 @@ from tools._process import run_program
 from tools.carla_simplify import simplify_text
 
 
-def _python(script: String) raises -> String:
-    """Return the standard output of a Python script."""
-    var result = run_program(["python3", "-c", script], 30, merge_errors=False)
-    if result.status != 0:
-        raise Error(result.errors)
-    return result.output
+# Each pair below is a request and the answer fast-simplification 0.1.11
+# gave it, with NumPy 2.3.5 on Linux x86-64: grids, some lifted, and meshes
+# from a seeded random generator. The Python that printed them is in
+# `git show 37ecbc5:tests/test_carla_simplify_tool.mojo`. They are recorded
+# rather than run: the package's macOS arm64 build rounds the first point of
+# a lifted grid differently in its last bits, and the port follows the Linux
+# build on every platform.
 
 
-def test_collapses_match_the_installed_simplifier() raises:
-    var lines = _python(
-        "import json, numpy\n"
-        + "import fast_simplification\n"
-        + "rng = numpy.random.default_rng(761)\n"
-        + "def grid(n, lift):\n"
-        + "    pts = [[float(x), float(y), float(lift)*x*y] for y in range(n)"
-        " for x in range(n)]\n"
-        + "    faces = []\n"
-        + "    for y in range(n-1):\n"
-        + "        for x in range(n-1):\n"
-        + "            i = y*n+x\n"
-        + "            faces.append([i, i+1, i+n])\n"
-        + "            faces.append([i+1, i+n+1, i+n])\n"
-        + "    return numpy.array(pts), numpy.array(faces, numpy.int32)\n"
-        + "cases = []\n"
-        + "for n, lift, target in ((3, 0.0, 2), (4, 0.15, 4), (5, -0.05, 6)):\n"
-        + "    pts, faces = grid(n, lift)\n"
-        + "    out, tri, collapses = fast_simplification.simplify(pts, faces,"
-        " target_count=target, return_collapses=True)\n"
-        + "    cases.append((pts, faces, target, False, out, tri, collapses))\n"
-        + "pts = rng.normal(size=(12, 3))\n"
-        + "faces ="
-        " numpy.array([[0,1,2],[0,2,3],[0,3,4],[0,4,1],[5,6,7],[5,7,8],[5,8,6]],"
-        " numpy.int32)\n"
-        + "out, tri, collapses = fast_simplification.simplify(pts[:9], faces,"
-        " target_count=3, return_collapses=True)\n"
-        + "cases.append((pts[:9], faces, 3, False, out, tri, collapses))\n"
-        + "for pts, faces, target, border, out, tri, collapses in cases:\n"
-        + "    req = {'points': pts.tolist(), 'triangles': faces.tolist(),"
-        " 'target': int(target), 'border': border}\n"
-        + "    got = {'points': out.tolist(), 'triangles': tri.tolist(),"
-        " 'collapses': collapses.tolist()}\n"
-        + "    print(json.dumps(req, separators=(',', ':')))\n"
-        + "    print(json.dumps(got, separators=(',', ':')))\n"
-    )
-    var pending = String("")
-    var count = 0
-    for line in lines.splitlines():
-        var text = String(line)
-        if text.byte_length() == 0:
-            continue
-        if pending.byte_length() == 0:
-            pending = text
-            continue
-        assert_equal(simplify_text(pending), text)
-        pending = ""
-        count += 1
-    assert_equal(count, 4)
+def _simplified() -> List[String]:
+    """Requests to simplify, each followed by the answer."""
+    return [
+        '{"points":[[0.0,0.0,0.0],[1.0,0.0,0.0],[2.0,0.0,0.0],[0.0,1.0,0.0],[1.0,1.0,0.0],[2.0,1.0,0.0],[0.0,2.0,0.0],[1.0,2.0,0.0],[2.0,2.0,0.0]],"triangles":[[0,1,3],[1,4,3],[1,2,4],[2,5,4],[3,4,6],[4,7,6],[4,5,7],[5,8,7]],"target":2,"border":false}',
+        '{"points":[[2.0,0.5,0.0],[1.0,1.0,0.0],[0.25,0.75,0.0],[1.5,2.0,0.0]],"triangles":[[2,0,1],[1,3,2],[1,0,3]],"collapses":[[0,1],[2,5],[6,3],[6,0],[8,7]]}',
+        '{"points":[[0.0,0.0,0.0],[1.0,0.0,0.0],[2.0,0.0,0.0],[3.0,0.0,0.0],[0.0,1.0,0.0],[1.0,1.0,0.15],[2.0,1.0,0.3],[3.0,1.0,0.44999999999999996],[0.0,2.0,0.0],[1.0,2.0,0.3],[2.0,2.0,0.6],[3.0,2.0,0.8999999999999999],[0.0,3.0,0.0],[1.0,3.0,0.44999999999999996],[2.0,3.0,0.8999999999999999],[3.0,3.0,1.3499999999999999]],"triangles":[[0,1,4],[1,5,4],[1,2,5],[2,6,5],[2,3,6],[3,7,6],[4,5,8],[5,9,8],[5,6,9],[6,10,9],[6,7,10],[7,11,10],[8,9,12],[9,13,12],[9,10,13],[10,14,13],[10,11,14],[11,15,14]],"target":4,"border":false}',
+        '{"points":[[1.476892039091882,1.476892039091891,0.3271023697287018],[3.0,1.5,0.6749999999999999],[0.5,0.75,0.0],[1.25,3.0,0.5625]],"triangles":[[2,1,0],[2,0,3],[0,1,3]],"collapses":[[0,1],[11,15],[2,3],[8,4],[7,11],[13,12],[6,10],[5,9],[8,0],[14,13],[8,2],[5,6]]}',
+        '{"points":[[0.0,0.0,-0.0],[1.0,0.0,-0.0],[2.0,0.0,-0.0],[3.0,0.0,-0.0],[4.0,0.0,-0.0],[0.0,1.0,-0.0],[1.0,1.0,-0.05],[2.0,1.0,-0.1],[3.0,1.0,-0.15000000000000002],[4.0,1.0,-0.2],[0.0,2.0,-0.0],[1.0,2.0,-0.1],[2.0,2.0,-0.2],[3.0,2.0,-0.30000000000000004],[4.0,2.0,-0.4],[0.0,3.0,-0.0],[1.0,3.0,-0.15000000000000002],[2.0,3.0,-0.30000000000000004],[3.0,3.0,-0.45000000000000007],[4.0,3.0,-0.6000000000000001],[0.0,4.0,-0.0],[1.0,4.0,-0.2],[2.0,4.0,-0.4],[3.0,4.0,-0.6000000000000001],[4.0,4.0,-0.8]],"triangles":[[0,1,5],[1,6,5],[1,2,6],[2,7,6],[2,3,7],[3,8,7],[3,4,8],[4,9,8],[5,6,10],[6,11,10],[6,7,11],[7,12,11],[7,8,12],[8,13,12],[8,9,13],[9,14,13],[10,11,15],[11,16,15],[11,12,16],[12,17,16],[12,13,17],[13,18,17],[13,14,18],[14,19,18],[15,16,20],[16,21,20],[16,17,21],[17,22,21],[17,18,22],[18,23,22],[18,19,23],[19,24,23]],"target":6,"border":false}',
+        '{"points":[[3.75,0.75,-0.15000000000000002],[0.5,0.5,-0.0],[2.2572471486171675,1.2895379719349063,-0.1398865411431389],[1.5376850390342647,2.8136973326950114,-0.20766880761362935],[2.5,3.75,-0.45000000000000007],[0.0,2.75,-0.0]],"triangles":[[1,0,2],[1,2,5],[2,3,5],[2,0,3],[0,4,3],[3,4,5]],"collapses":[[0,1],[19,24],[3,4],[20,15],[5,0],[9,14],[22,21],[19,23],[7,6],[8,13],[11,16],[17,18],[5,2],[7,12],[20,10],[3,9],[19,22],[8,7],[11,17]]}',
+        '{"points":[[-1.8167916542509113,0.2010709920200582,-0.1531385375760071],[1.3217832269304126,-0.3969646441578891,-1.1164677116898287],[0.9401790039199582,0.0014586051126254838,0.004024119814822519],[-1.510654030602139,-0.8795052056405234,0.6398213196797129],[0.08526975339121232,-0.07358444828611191,-0.9640169848265028],[-1.5538468544730901,1.0657540746861118,0.11940735001640816],[-1.4004921591886825,-1.948861821383624,0.17755471962507713],[0.22038415020934624,0.30486345298304435,1.2438589640187045],[0.9113524502389169,1.710461195123962,-0.9677753615354252]],"triangles":[[0,1,2],[0,2,3],[0,3,4],[0,4,1],[5,6,7],[5,7,8],[5,8,6]],"target":3,"border":false}',
+        '{"points":[[-1.5538468544730901,1.0657540746861118,0.11940735001640816],[-0.5900540044896682,-0.8219991842002898,0.7107068418218908],[0.9113524502389169,1.710461195123962,-0.9677753615354252]],"triangles":[[0,1,2],[0,2,1]],"collapses":[[1,2],[6,7],[4,1],[4,3]]}',
+    ]
+
+
+def _replayed() -> List[String]:
+    """Requests to replay collapses, each followed by the answer."""
+    return [
+        '{"mode":"replay","points":[],"triangles":[],"collapses":[]}',
+        '{"points":[],"triangles":[],"mapping":[]}',
+        '{"mode":"replay","points":[[0.0,0.0,0.0],[1.0,0.0,0.0],[0.0,1.0,0.0]],"triangles":[[0,1,2]],"collapses":[]}',
+        '{"points":[[0.0,0.0,0.0],[1.0,0.0,0.0],[0.0,1.0,0.0]],"triangles":[[0,1,2]],"mapping":[0,1,2]}',
+        '{"mode":"replay","points":[[0.0,0.0,0.0],[1.0,0.0,0.0],[0.0,1.0,0.0],[2.0,2.0,2.0]],"triangles":[[0,1,2]],"collapses":[[0,3]]}',
+        '{"points":[[0.0,0.0,0.0],[1.0,0.0,0.0],[0.0,1.0,0.0]],"triangles":[[0,1,2]],"mapping":[0,1,2,0]}',
+        '{"mode":"replay","points":[[0.0,0.0,0.0],[1.0,0.0,0.0],[0.0,1.0,0.0]],"triangles":[[0,1,2]],"collapses":[[0,1]]}',
+        '{"points":[],"triangles":[],"mapping":[-1,-1,-1]}',
+        '{"mode":"replay","points":[[0.0,0.0,0.0],[1.0,0.0,0.0],[0.0,1.0,0.0],[1.0,1.0,0.4]],"triangles":[[0,1,2],[1,3,2]],"collapses":[[1,3]]}',
+        '{"points":[[0.0,0.0,0.0],[1.0,0.0,0.0],[0.0,1.0,0.0]],"triangles":[[0,1,2]],"mapping":[0,1,2,1]}',
+        '{"mode":"replay","points":[[0.0,0.0,0.0],[1.0,0.0,0.0],[0.2,1.0,0.3],[1.0,1.0,0.4]],"triangles":[[0,1,2],[1,3,2]],"collapses":[[0,1],[2,0]]}',
+        '{"points":[],"triangles":[],"mapping":[-1,-1,-1,-1]}',
+        '{"mode":"replay","points":[[0.0,0.0,0.0],[0.0,1.0,0.0],[1.0,0.2,0.0],[1.3,0.2,0.0],[0.2,-0.4,0.0],[0.2,-0.8,0.0],[1.6,0.5,0.0],[2.0,2.0,0.0],[2.2,2.0,0.0],[1.8,0.7,0.0]],"triangles":[[0,1,2],[0,2,4],[2,3,3],[4,5,5],[2,6,6],[2,9,9],[7,8,8]],"collapses":[]}',
+        '{"points":[[0.0,0.0,0.0],[0.0,1.0,0.0],[1.0,0.20000000298023224,0.0],[0.20000000298023224,-0.4000000059604645,0.0]],"triangles":[[0,1,2],[0,2,3]],"mapping":[0,1,2,2,3,3,2,3,3,2]}',
+        '{"mode":"replay","points":[[0.0,0.0,0.0],[1.0,0.0,0.0],[2.0,0.0,0.0],[0.0,1.0,0.0],[1.0,1.0,0.0],[2.0,1.0,0.0],[0.0,2.0,0.0],[1.0,2.0,0.0],[2.0,2.0,0.0]],"triangles":[[0,1,3],[1,4,3],[1,2,4],[2,5,4],[3,4,6],[4,7,6],[4,5,7],[5,8,7]],"collapses":[[0,1],[2,5],[6,3],[6,0],[8,7]]}',
+        '{"points":[[2.0,0.5,0.0],[1.0,1.0,0.0],[0.25,0.75,0.0],[1.5,2.0,0.0]],"triangles":[[2,0,1],[1,3,2],[1,0,3]],"mapping":[2,2,0,2,1,0,2,3,3]}',
+        '{"mode":"replay","points":[[0.0,0.0,0.0],[1.0,0.0,0.0],[2.0,0.0,0.0],[3.0,0.0,0.0],[0.0,1.0,0.0],[1.0,1.0,0.15],[2.0,1.0,0.3],[3.0,1.0,0.44999999999999996],[0.0,2.0,0.0],[1.0,2.0,0.3],[2.0,2.0,0.6],[3.0,2.0,0.8999999999999999],[0.0,3.0,0.0],[1.0,3.0,0.44999999999999996],[2.0,3.0,0.8999999999999999],[3.0,3.0,1.3499999999999999]],"triangles":[[0,1,4],[1,5,4],[1,2,5],[2,6,5],[2,3,6],[3,7,6],[4,5,8],[5,9,8],[5,6,9],[6,10,9],[6,7,10],[7,11,10],[8,9,12],[9,13,12],[9,10,13],[10,14,13],[10,11,14],[11,15,14]],"collapses":[[0,1],[11,15],[2,3],[8,4],[7,11],[13,12],[6,10],[5,9],[8,0],[14,13],[8,2],[5,6]]}',
+        '{"points":[[1.4768919944763184,1.4768919944763184,0.3271023631095886],[3.0,1.5,0.6749999523162842],[0.5,0.75,0.0],[1.25,3.0,0.5625]],"triangles":[[2,1,0],[2,0,3],[0,1,3]],"mapping":[2,2,2,2,2,0,0,1,2,0,0,1,3,3,3,1]}',
+        '{"mode":"replay","points":[[-1.8167916542509113,0.2010709920200582,-0.1531385375760071],[1.3217832269304126,-0.3969646441578891,-1.1164677116898287],[0.9401790039199582,0.0014586051126254838,0.004024119814822519],[-1.510654030602139,-0.8795052056405234,0.6398213196797129],[0.08526975339121232,-0.07358444828611191,-0.9640169848265028],[-1.5538468544730901,1.0657540746861118,0.11940735001640816],[-1.4004921591886825,-1.948861821383624,0.17755471962507713],[0.22038415020934624,0.30486345298304435,1.2438589640187045],[0.9113524502389169,1.710461195123962,-0.9677753615354252]],"triangles":[[0,1,2],[0,2,3],[0,3,4],[0,4,1],[5,6,7],[5,7,8],[5,8,6]],"collapses":[[1,2],[6,7],[4,1],[4,3]]}',
+        '{"points":[[-1.553846836090088,1.0657540559768677,0.11940734833478928],[-0.5900540351867676,-0.821999192237854,0.7107068300247192],[0.9113524556159973,1.710461139678955,-0.9677753448486328]],"triangles":[[0,1,2],[0,2,1]],"mapping":[-1,-1,-1,-1,-1,0,1,1,2]}',
+        '{"mode":"replay","points":[[0.4948712857321937,-0.7169860309299583,-0.15146057235230878],[-1.9198338711461338,-0.4962037461663875,-1.0031553336392007],[0.5627143823357614,-0.23868820616357989,1.7125820546874746],[-0.5890510256578817,-0.3580441854326012,-0.28488741997607525],[-0.6271935673187753,-2.468790437912569,1.8145154287971594],[0.07764737694154933,1.23300824976937,0.24542914227450896]],"triangles":[[0,1,2],[1,3,2],[2,3,4],[3,5,4]],"collapses":[[1,2]]}',
+        '{"points":[[0.5627143979072571,-0.23868820071220398,1.7125821113586426],[-0.5890510082244873,-0.35804417729377747,-0.284887433052063],[-0.6271935701370239,-2.4687905311584473,1.814515471458435],[0.0776473805308342,1.2330082654953003,0.2454291433095932]],"triangles":[[0,1,2],[1,3,2]],"mapping":[0,0,0,1,2,3]}',
+    ]
+
+
+def _answers_match(pairs: List[String]) raises:
+    """Assert the tool answers each request as the package did."""
+    for k in range(0, len(pairs), 2):
+        assert_equal(simplify_text(pairs[k]), pairs[k + 1])
+
+
+def test_collapses_match_the_recorded_simplifier() raises:
+    var pairs = _simplified()
+    assert_equal(len(pairs), 8)
+    _answers_match(pairs)
     assert_equal(
         simplify_text(
             '{"points":[[0.0,0.0,0.0],[1.0,0.0,0.0],[2.0,0.0,0.0],[0.0,1.0,0.0],'
@@ -94,84 +98,10 @@ def test_collapses_match_the_installed_simplifier() raises:
         _ = simplify_text("[]")
 
 
-def test_replay_matches_the_installed_package() raises:
-    var lines = _python(
-        "import json, numpy\n"
-        + "import fast_simplification\n"
-        + "def emit(pts, faces, collapses):\n"
-        + "    pts = numpy.asarray(pts, float).reshape(-1, 3)\n"
-        + "    faces = numpy.asarray(faces, numpy.int32).reshape(-1, 3)\n"
-        + "    collapses = numpy.asarray(collapses, numpy.int32).reshape(-1,"
-        " 2)\n"
-        + "    req = {'mode': 'replay', 'points': pts.tolist(), 'triangles':"
-        " faces.tolist(), 'collapses': collapses.tolist()}\n"
-        + "    out, tri, mapping = fast_simplification.replay_simplification(\n"
-        + "        numpy.ascontiguousarray(pts, numpy.float32),\n"
-        + "        numpy.ascontiguousarray(faces),\n"
-        + "        numpy.ascontiguousarray(collapses))\n"
-        + "    got = {'points': numpy.asarray(out, float).tolist(),"
-        " 'triangles':\n"
-        + "        numpy.asarray(tri, numpy.int64).tolist(), 'mapping':\n"
-        + "        numpy.asarray(mapping, numpy.int64).tolist()}\n"
-        + "    print(json.dumps(req, separators=(',', ':')))\n"
-        + "    print(json.dumps(got, separators=(',', ':')))\n"
-        + "emit([], numpy.zeros((0, 3), numpy.int32), numpy.zeros((0, 2),"
-        " numpy.int32))\n"
-        + "emit([[0, 0, 0], [1, 0, 0], [0, 1, 0]], [[0, 1, 2]], [])\n"
-        + "emit([[0, 0, 0], [1, 0, 0], [0, 1, 0], [2, 2, 2]], [[0, 1, 2]],"
-        " [[0, 3]])\n"
-        + "emit([[0, 0, 0], [1, 0, 0], [0, 1, 0]], [[0, 1, 2]], [[0, 1]])\n"
-        + "emit([[0.0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0.4]], [[0, 1, 2],"
-        " [1, 3, 2]], [[1, 3]])\n"
-        + "emit([[0.0, 0, 0], [1, 0, 0], [0.2, 1, 0.3], [1, 1, 0.4]], [[0,"
-        " 1, 2],"
-        " [1, 3, 2]], [[0, 1], [2, 0]])\n"
-        + "emit([(0, 0, 0), (0, 1, 0), (1, 0.2, 0), (1.3, 0.2, 0), (0.2, -0.4,"
-        " 0), (0.2, -0.8, 0), (1.6, 0.5, 0), (2, 2, 0), (2.2, 2, 0), (1.8,"
-        " 0.7, 0)], [[0, 1, 2], [0, 2, 4], [2, 3, 3], [4, 5, 5], [2, 6, 6],"
-        " [2, 9, 9], [7, 8, 8]], numpy.zeros((0, 2), numpy.int32))\n"
-        + "def grid(n, lift):\n"
-        + "    pts = [[float(x), float(y), float(lift)*x*y] for y in range(n)"
-        " for x in range(n)]\n"
-        + "    faces = []\n"
-        + "    for y in range(n-1):\n"
-        + "        for x in range(n-1):\n"
-        + "            i = y*n+x\n"
-        + "            faces.append([i, i+1, i+n])\n"
-        + "            faces.append([i+1, i+n+1, i+n])\n"
-        + "    return numpy.array(pts), numpy.array(faces, numpy.int32)\n"
-        + "for n, lift, target in ((3, 0.0, 1), (4, 0.15, 4)):\n"
-        + "    pts, faces = grid(n, lift)\n"
-        + "    _, _, collapses = fast_simplification.simplify(pts, faces,"
-        " target_count=target, return_collapses=True)\n"
-        + "    emit(pts, faces, collapses)\n"
-        + "rng = numpy.random.default_rng(761)\n"
-        + "pts = rng.normal(size=(9, 3))\n"
-        + "faces = numpy.array([[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 1],"
-        " [5, 6, 7], [5, 7, 8], [5, 8, 6]], numpy.int32)\n"
-        + "_, _, collapses = fast_simplification.simplify(pts, faces,"
-        " target_count=3, return_collapses=True)\n"
-        + "emit(pts, faces, collapses)\n"
-        + "pts = rng.normal(size=(6, 3))\n"
-        + "faces = numpy.array([[0, 1, 2], [1, 3, 2], [2, 3, 4], [3, 5, 4]],"
-        " numpy.int32)\n"
-        + "_, _, collapses = fast_simplification.simplify(pts, faces,"
-        " target_count=2, return_collapses=True)\n"
-        + "emit(pts, faces, collapses)\n"
-    )
-    var pending = String("")
-    var count = 0
-    for line in lines.splitlines():
-        var text = String(line)
-        if text.byte_length() == 0:
-            continue
-        if pending.byte_length() == 0:
-            pending = text
-            continue
-        assert_equal(simplify_text(pending), text)
-        pending = ""
-        count += 1
-    assert_equal(count, 11)
+def test_replay_matches_the_recorded_package() raises:
+    var pairs = _replayed()
+    assert_equal(len(pairs), 22)
+    _answers_match(pairs)
     with assert_raises(contains="mode is not replay"):
         _ = simplify_text('{"mode":"nope"}')
     with assert_raises(contains="collapse index is out of range"):
