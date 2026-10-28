@@ -114,6 +114,8 @@ It checks every consumer import scope when the lane scope matches in one check.
 
 It checks those import scopes before the lane minima in one check.
 
+It checks those restored graphs before the lane minima in one check.
+
 It keeps the lane path, the rounded-line path, and the consumer messages.
 
 It compares each module path with that rounded-line path in one check.

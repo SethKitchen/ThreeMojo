@@ -8,7 +8,7 @@
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._python_json import PyJson
-from tools.carla_singleton_gate import scopes_then_minima
+from tools.carla_singleton_gate import graphs_then_minima, scopes_then_minima
 
 
 def test_missing_scope_texts_fail_before_the_minima() raises:
@@ -33,6 +33,27 @@ def test_empty_scopes_select_the_lane_minimum() raises:
     var flags = doc.at(doc.root, "minima")
     assert_equal(doc.text(doc.item(flags, 0)), "true")
     assert_equal(doc.text(doc.item(flags, 1)), "false")
+
+
+def test_a_graph_field_fails_before_the_minima() raises:
+    """A graph without a source fails before a minimum field is read."""
+    with assert_raises(contains="KeyError: 'graphs'"):
+        _ = graphs_then_minima('{"minima":[{"path":1}]}')
+    with assert_raises(contains="KeyError: 'actual'"):
+        _ = graphs_then_minima('{"graphs":[{}],"minima":[{"path":1}]}')
+
+
+def test_matching_graphs_select_the_lane_minimum() raises:
+    """Equal graph text leaves the lane minimum flag."""
+    var doc = PyJson.parse(
+        graphs_then_minima(
+            '{"graphs":[{"label":"ok","actual":"x","source":"x"}],"minima":['
+            + '{"path":"extensions/carla/lane_refinement.mojo",'
+            + '"name":"_rounded_axis_lane_minimum","owner":[]}]}'
+        )
+    )
+    assert_equal(doc.length(doc.root), 1)
+    assert_equal(doc.text(doc.item(doc.root, 0)), "true")
 
 
 def main() raises:

@@ -12,6 +12,7 @@
     carla_singleton_gate --source-graphs PATH
     carla_singleton_gate --import-scopes PATH
     carla_singleton_gate --scopes-then-minima PATH
+    carla_singleton_gate --graphs-then-minima PATH
     carla_singleton_gate --declaration-graphs PATH
     carla_singleton_gate --restored-graphs PATH
     carla_singleton_gate --selector PATH --wanted PATH
@@ -234,6 +235,27 @@ def scopes_then_minima(payload: String) raises -> String:
     return '{"restore":false,"minima":' + selected_lane_minima(minima) + "}"
 
 
+def graphs_then_minima(payload: String) raises -> String:
+    """Check the restored graphs, then the lane minima.
+
+    Args:
+        payload: JSON with `graphs` and `minima`. Each graph has `label`,
+            `actual`, and `source`. `minima` is the lane-minimum list.
+
+    Returns:
+        A JSON list of `true` or `false`, in minima order.
+
+    Raises:
+        Error: A graph changed, or a minimum field is absent. The graphs
+            are checked before the minima.
+    """
+    var doc = PyJson.parse(payload)
+    var graphs = doc.at(doc.root, "graphs")
+    if doc.length(graphs) > 0:
+        singleton_source_graphs(doc.subtree(graphs).dumps())
+    return selected_lane_minima(doc.subtree(doc.at(doc.root, "minima")).dumps())
+
+
 def singleton_checked_declarations(payload: String) raises -> String:
     """Read every declaration, then check every graph when each selected one matches.
 
@@ -343,6 +365,13 @@ def main() raises:
     if len(arguments) == 3 and arguments[1] == "--scopes-then-minima":
         try:
             print(scopes_then_minima(Path(arguments[2]).read_text()), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
+    if len(arguments) == 3 and arguments[1] == "--graphs-then-minima":
+        try:
+            print(graphs_then_minima(Path(arguments[2]).read_text()), end="")
         except error:
             print(String(error), file=stderr)
             exit(1)

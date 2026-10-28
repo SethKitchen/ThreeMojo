@@ -156,6 +156,42 @@ def _gate_selector(actual, expected):
         raise ValueError(message)
 
 
+def _graphs_then_minima(pairs, minima):
+    """Check the restored graphs, then the lane minima."""
+    if not pairs and not minima:
+        return []
+    import json
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    payload = json.dumps({
+        'graphs': [
+            {'label': label, 'actual': actual, 'source': source}
+            for actual, source, label in pairs
+        ],
+        'minima': [
+            {'path': path, 'name': name, 'owner': list(owner)}
+            for path, name, owner in minima
+        ],
+    }, separators=(',', ':'))
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    with tempfile.TemporaryDirectory(prefix='graphs-minima-') as directory:
+        path = Path(directory) / 'graphs.json'
+        path.write_text(payload)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_singleton_gate',
+             '--graphs-then-minima', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return [flag == 'true' for flag in json.loads(result.stdout)]
+
+
 def _significant_graphs(pairs):
     """Compare every source pair by its significant tokens."""
     if not pairs:
@@ -638,10 +674,7 @@ def verify_premises(root):
         for index, (path, _text, expected) in enumerate(scope_items):
             prepared.append((prefixes[index], expected,
                              labels['import_scope'] + path))
-        _significant_graphs(prepared)
-        selected_flags = _selected_minima([
-            (item['path'], item['name'], owner)
-            for item, owner in minimum_items])
+        selected_flags = _graphs_then_minima(prepared, minimum_items)
     else:
         selected_flags = [flag == 'true' for flag in checked['minima']]
     loaded = []
