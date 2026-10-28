@@ -12,6 +12,7 @@
     carla_stored_words --decimal PATH
     carla_stored_words --rounded-array PATH
     carla_stored_words --node-sums PATH
+    carla_stored_words --fractions PATH
 
 `--hex` reads a JSON list of unsigned decimals and prints `0x` words.
 `--integers` reads a JSON list of `0x` words and prints decimal text.
@@ -20,7 +21,8 @@ when the spellings match. `--table` reads `source` and `count`, then
 prints the table words as decimals. `--decimal` rounds each literal and
 prints those encodings as decimals. `--rounded-array` reads one
 constant array before that rounding. `--node-sums` spells the stored
-nodes and weights before it rounds the node sums.
+nodes and weights before it rounds the node sums. `--fractions` spells
+each stored word before its fraction text.
 """
 
 from std.pathlib import Path
@@ -28,6 +30,7 @@ from std.sys import argv, exit, stderr
 
 from tools._spiral_moment_words import (
     decimal_integers_json,
+    fraction_texts_from_decimals,
     rounded_array_words,
     rounded_node_sums_from_decimals,
     hex_integers_json,
@@ -43,7 +46,7 @@ def _usage():
         (
             "usage: carla_stored_words --hex PATH | --integers PATH | --require"
             " PATH | --table PATH | --decimal PATH | --rounded-array PATH |"
-            " --node-sums PATH"
+            " --node-sums PATH | --fractions PATH"
         ),
         file=stderr,
     )
@@ -68,6 +71,7 @@ def main() raises:
         and mode != "--decimal"
         and mode != "--rounded-array"
         and mode != "--node-sums"
+        and mode != "--fractions"
     ):
         _usage()
     try:
@@ -89,6 +93,9 @@ def main() raises:
             return
         if mode == "--node-sums":
             print(rounded_node_sums_from_decimals(text), end="")
+            return
+        if mode == "--fractions":
+            print(fraction_texts_from_decimals(text), end="")
             return
         require_stored_words(text)
     except error:

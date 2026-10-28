@@ -21,6 +21,7 @@ from tools._spiral_moment_words import (
     decimal_word,
     fraction_of_word,
     fraction_texts,
+    fraction_texts_from_decimals,
     nearest_even,
     parsed_table_integers,
     verify_bracket,
@@ -262,6 +263,27 @@ def test_a_bad_literal_fails_before_the_integer_read() raises:
     """A malformed literal fails before the rounded words are read."""
     with assert_raises(contains="unsupported decimal word"):
         _ = decimal_integers_json('["nope"]')
+
+
+def test_a_bad_decimal_fails_before_the_fraction_text() raises:
+    """A malformed decimal fails before the fraction spelling."""
+    with assert_raises(contains="invalid UInt64 word"):
+        _ = fraction_texts_from_decimals('["nope"]')
+
+
+def test_a_nonfinite_word_fails_after_it_is_spelled() raises:
+    """Infinity is spelled, then refused as a nonfinite word."""
+    with assert_raises(contains="nonfinite"):
+        _ = fraction_texts_from_decimals('["9218868437227405312"]')
+
+
+def test_one_spelled_word_is_a_fraction() raises:
+    """`1.0` spells as the fraction `1`, and zero spells as `0`."""
+    var result = PyJson.parse(
+        fraction_texts_from_decimals('["4607182418800017408","0"]')
+    )
+    assert_equal(result.text(result.item(result.root, 0)), "1")
+    assert_equal(result.text(result.item(result.root, 1)), "0")
 
 
 def test_one_decimal_literal_is_read_as_an_integer() raises:

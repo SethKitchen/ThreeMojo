@@ -700,12 +700,12 @@ def fraction_texts(words):
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
     mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
-    payload = json.dumps(hex_words(words), separators=(',', ':'))
+    payload = json.dumps([str(word) for word in words], separators=(',', ':'))
     with tempfile.TemporaryDirectory(prefix='fraction-texts-') as directory:
         path = Path(directory) / 'words.json'
         path.write_text(payload)
         result = subprocess.run(
-            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_gate',
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_stored_words',
              '--fractions', str(path)],
             capture_output=True, text=True)
     if result.returncode != 0:

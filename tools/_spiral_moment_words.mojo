@@ -608,6 +608,23 @@ def fraction_texts_payload(payload: String) raises -> String:
     return out.dumps()
 
 
+def fraction_texts_from_decimals(payload: String) raises -> String:
+    """Spell each stored word, then return its fraction text.
+
+    Args:
+        payload: A JSON list of unsigned decimal binary64 encodings.
+
+    Returns:
+        A JSON list of `n` or `n/d` spellings.
+
+    Raises:
+        Error: A decimal word is malformed, or a spelled word is not
+            finite. Each word is spelled before its fraction text is
+            written.
+    """
+    return fraction_texts_payload(hex_words_json(payload))
+
+
 def _u64_decimal(text: String) raises -> UInt64:
     """Return the value of an unsigned decimal integer.
 
