@@ -5,9 +5,13 @@
 
 """The stored-moment report keeps its shape and pin digests."""
 
+from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises
 
-from tools._spiral_moment_derive import moment_products_from_rows
+from tools._spiral_moment_derive import (
+    moment_products_from_rows,
+    write_moment_products,
+)
 from tools._moment_report import (
     moment_meta_from_rows,
     moment_report,
@@ -159,11 +163,15 @@ def test_the_table_is_checked_before_the_report_meta() raises:
 
 
 def test_bad_rows_fail_before_the_generated_products() raises:
-    """A short row list fails before the table source or the payload."""
+    """A short row list fails before the table source or the payload bytes."""
     with assert_raises(
         contains="spiral moment derive: wrong derived table shape"
     ):
         _ = moment_products_from_rows("[]")
+    with assert_raises(
+        contains="spiral moment derive: wrong derived table shape"
+    ):
+        _ = write_moment_products("[]", Path("/tmp/moment-product-bytes"))
 
 
 def main() raises:

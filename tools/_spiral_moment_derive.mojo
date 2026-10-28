@@ -9,9 +9,12 @@ The nodes, weights, and trig coefficients are the stored binary64 words.
 The moments share one unscaled prefix sum across the counts 1 through 64.
 """
 
+from std.pathlib import Path
+
 from tools._bigint import BigInt
 from tools._cli_failures import derive_prefix
 from tools._fraction import Fraction
+from tools._payload_bytes import from_hex
 from tools._python_json import PyJson
 from tests._python_tokens import (
     moment_payload_json,
@@ -1018,6 +1021,27 @@ def moment_products_from_rows(rows: String) raises -> String:
     )
     doc.root = root
     return doc.dumps()
+
+
+def write_moment_products(rows: String, output: Path) raises -> String:
+    """Write the table source, then the payload bytes.
+
+    Args:
+        rows: The JSON rows from the moment derivation.
+        output: The file that receives the payload bytes.
+
+    Returns:
+        The generated table source.
+
+    Raises:
+        Error: The rows changed, a coefficient word is malformed, or the
+            payload hex is not bytes. The source is written before the
+            bytes are read.
+    """
+    var doc = PyJson.parse(moment_products_from_rows(rows))
+    var payload = from_hex(doc.text(doc.at(doc.root, "be64")))
+    output.write_bytes(Span(payload))
+    return doc.text(doc.at(doc.root, "source"))
 
 
 def coefficient_integers_from_rows(rows: String) raises -> String:

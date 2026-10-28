@@ -492,6 +492,8 @@ It writes that table source after those coefficient words in one check.
 
 It writes that table source before the moment payload in one check.
 
+It reads those payload bytes after that table source in one check.
+
 It reads those coefficient words as integers in one check.
 
 It returns one normalized source block between two markers.
