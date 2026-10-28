@@ -882,15 +882,42 @@ def parse_table(data):
     return ideal_projection.hex_integers(words)
 
 
+def _verified_table(payload):
+    """Return the table words when the derived rows match that table."""
+    import os
+    import subprocess
+    import tempfile
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    text = json.dumps(payload, separators=(',', ':'))
+    with tempfile.TemporaryDirectory(prefix='verified-table-') as directory:
+        path = Path(directory) / 'table.json'
+        path.write_text(text)
+        result = subprocess.run(
+            ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_moment_gate',
+             '--verified-table', str(path)],
+            capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    return [int(item) for item in json.loads(result.stdout)]
+
+
 def verify_table(data, rows):
     try:
         text = data.decode('utf-8')
     except UnicodeDecodeError as error:
         raise CheckError(_moment_plan()['messages']['utf8']) from error
     try:
-        return ideal_projection.verify_moment_table(text, _coefficient_words(rows))
+        return _verified_table({'rows': rows, 'source': text})
     except ValueError as error:
-        raise CheckError(str(error)) from error
+        message = str(error)
+        prefix = _cli_failures()['derive']
+        if message.startswith(prefix):
+            raise CheckError(message[len(prefix):])
+        raise CheckError(message) from error
 
 
 def make_report(root, rows, pins):

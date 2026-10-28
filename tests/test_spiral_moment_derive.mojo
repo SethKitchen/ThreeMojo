@@ -16,6 +16,7 @@ from tools._spiral_moment_derive import (
     derive_endpoints,
     stored_coefficient_words,
     stored_scalar_word,
+    verified_table_integers,
 )
 from tools._spiral_moment_table_text import canonical_table, parse_table
 from tools._bigint import BigInt
@@ -424,6 +425,64 @@ def test_spelled_words_still_check_the_row_shape() raises:
         contains="spiral moment derive: wrong constant-array shape"
     ):
         _ = coefficient_rows_from_decimals(_decimal_rows("0", "0"))
+
+
+def _table_payload(row_count: Int, source: String) raises -> String:
+    """Return one table check for `row_count` zero rows.
+
+    Args:
+        row_count: The number of derived rows.
+        source: The table text.
+
+    Returns:
+        JSON with `rows` and `source`.
+
+    Raises:
+        Error: The payload cannot be written.
+    """
+    var doc = PyJson()
+    var root = doc.new_dict()
+    var rows = doc.new_list()
+    var index = 0
+    while index < row_count:
+        var row = doc.new_dict()
+        var side_index = 0
+        while side_index < 2:
+            var side = doc.new_list()
+            var cursor = 0
+            while cursor < 11:
+                var item = doc.new_dict()
+                var words = doc.new_list()
+                doc.append(words, doc.new_str("0x0000000000000000"))
+                doc.append(words, doc.new_str("0x0000000000000000"))
+                doc.set(item, "words", words)
+                doc.append(side, item)
+                cursor += 1
+            if side_index == 0:
+                doc.set(row, "cosine", side)
+            else:
+                doc.set(row, "sine", side)
+            side_index += 1
+        doc.append(rows, row)
+        index += 1
+    doc.set(root, "rows", rows)
+    doc.set(root, "source", doc.new_str(source))
+    doc.root = root
+    return doc.dumps()
+
+
+def test_bad_rows_fail_before_the_stored_table() raises:
+    """A short row list fails before a missing table declaration."""
+    with assert_raises(
+        contains="spiral moment derive: wrong derived table shape"
+    ):
+        _ = verified_table_integers(_table_payload(0, "nope"))
+
+
+def test_matching_rows_still_check_the_stored_table() raises:
+    """Sixty-four zero rows still refuse a missing table declaration."""
+    with assert_raises(contains="missing or malformed table declaration"):
+        _ = verified_table_integers(_table_payload(64, "nope"))
 
 
 def main() raises:

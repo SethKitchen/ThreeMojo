@@ -416,6 +416,8 @@ It keeps the moment derive prefix.
 
 It keeps the derived coefficient words in cosine, then sine, order.
 
+It checks those coefficient words before the stored table in one check.
+
 It writes the canonical stored-moment table source.
 
 It returns one normalized source block between two markers.

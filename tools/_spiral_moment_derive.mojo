@@ -13,10 +13,12 @@ from tools._bigint import BigInt
 from tools._cli_failures import derive_prefix
 from tools._fraction import Fraction
 from tools._python_json import PyJson
+from tests._python_tokens import verify_moment_table
 from tools._spiral_moment_words import (
     bracket,
     decimal_word,
     fraction_of_word,
+    hex_integers_json,
     hex_words_json,
     nearest_even,
 )
@@ -928,6 +930,29 @@ def coefficient_words_json(payload: String) raises -> String:
         _fail("wrong derived table shape")
     out.root = flat
     return out.dumps()
+
+
+def verified_table_integers(payload: String) raises -> String:
+    """Check the derived coefficient words, then the stored table.
+
+    Args:
+        payload: JSON with `rows` and `source`. `rows` is the derived row
+            list. `source` is the table text.
+
+    Returns:
+        A JSON list of unsigned decimal words read from the table.
+
+    Raises:
+        Error: The rows changed, or the table does not match them. The
+            rows are checked before the table.
+    """
+    var doc = PyJson.parse(payload)
+    var words = coefficient_words_json(
+        doc.subtree(doc.at(doc.root, "rows")).dumps()
+    )
+    return hex_integers_json(
+        verify_moment_table(doc.text(doc.at(doc.root, "source")), words)
+    )
 
 
 def coefficient_rows_payload(payload: String) raises -> String:
