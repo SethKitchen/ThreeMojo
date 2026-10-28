@@ -153,11 +153,47 @@ def _records_then_tail():
         _PROTECTED_TAIL = tuple(parsed['tail'])
 
 
+def _protected_bundle():
+    """Read the cleanup paths and the migration record, then the tail."""
+    global _CLEANUP_PATHS, MIGRATION, MIGRATION_SHA256
+    global SOURCE_PATHS, PREMISE_PATHS, _RECORD_PATHS, _PROTECTED_TAIL
+    if (_CLEANUP_PATHS is not None
+            and 'MIGRATION' in globals() and MIGRATION is not None
+            and _RECORD_PATHS is not None and _PROTECTED_TAIL is not None):
+        SOURCE_PATHS = tuple(_CLEANUP_PATHS['sources'])
+        PREMISE_PATHS = tuple(_CLEANUP_PATHS['premises'])
+        return
+    import os
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    mojo = os.environ.get('MOJO', str(root / '.venv' / 'bin' / 'mojo'))
+    result = subprocess.run(
+        ['sh', str(root / 'tools' / 'tool.sh'), mojo, 'carla_cleanup_gate',
+         '--protected-bundle'],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        lines = [line.strip() for line in result.stderr.splitlines()
+                 if line.strip() and 'Crashpad' not in line]
+        message = lines[-1] if lines else result.stdout.strip()
+        raise ValueError(message)
+    parsed = json.loads(result.stdout)
+    if _CLEANUP_PATHS is None:
+        _CLEANUP_PATHS = parsed['paths']
+    SOURCE_PATHS = tuple(_CLEANUP_PATHS['sources'])
+    PREMISE_PATHS = tuple(_CLEANUP_PATHS['premises'])
+    if 'MIGRATION' not in globals() or MIGRATION is None:
+        MIGRATION = parsed['migration']['path']
+        MIGRATION_SHA256 = parsed['migration']['sha']
+    if _RECORD_PATHS is None:
+        _RECORD_PATHS = parsed['records']
+    if _PROTECTED_TAIL is None:
+        _PROTECTED_TAIL = tuple(parsed['tail'])
+
+
 def _protected_inputs():
     """Return the protected inputs, including the Mojo path tables."""
-    _ensure_paths()
-    _ensure_migration()
-    _records_then_tail()
+    _protected_bundle()
     return (*cache_key.PROTECTED_INPUTS, *accepted.PROTECTED_INPUTS, MIGRATION, _RECORD_PATHS['runtime_pins'],
             *SOURCE_PATHS, *PREMISE_PATHS, *frozen.PROTECTED_INPUTS,
             *invariant.PROTECTED_INPUTS, *_PROTECTED_TAIL)

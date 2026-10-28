@@ -10,6 +10,7 @@ from std.testing import TestSuite, assert_equal
 from tools._python_json import PyJson
 from tools._record_paths import record_paths
 from tools.carla_cleanup_gate import (
+    cleanup_protected_bundle,
     cleanup_protected_tail,
     cleanup_records_then_tail,
 )
@@ -43,6 +44,28 @@ def test_the_record_paths_are_read_before_the_tail() raises:
     assert_equal(
         doc.text(doc.at(records, "runtime_pins")),
         companions.text(companions.at(companions.root, "runtime_pins")),
+    )
+    var tail = doc.at(doc.root, "tail")
+    assert_equal(doc.length(tail), 14)
+    assert_equal(
+        doc.text(doc.item(tail, 0)),
+        "tools/carla_lane_oracle/coverage-followup-migration.json",
+    )
+
+
+def test_the_paths_and_migration_are_read_before_the_tail() raises:
+    """The cleanup paths stay ahead of the migration record and the tail."""
+    var doc = PyJson.parse(cleanup_protected_bundle())
+    assert_equal(doc.key(doc.root, 0), "paths")
+    assert_equal(doc.key(doc.root, 1), "migration")
+    assert_equal(doc.key(doc.root, 2), "records")
+    assert_equal(doc.key(doc.root, 3), "tail")
+    var sources = doc.at(doc.at(doc.root, "paths"), "sources")
+    assert_equal(doc.length(sources), 3)
+    var migration = doc.at(doc.root, "migration")
+    assert_equal(
+        doc.text(doc.at(migration, "path")),
+        "tools/carla_lane_oracle/reviewed-cleanup-migration.json",
     )
     var tail = doc.at(doc.root, "tail")
     assert_equal(doc.length(tail), 14)

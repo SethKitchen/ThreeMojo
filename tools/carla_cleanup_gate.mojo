@@ -5,6 +5,7 @@
 
 """Check the reviewed cleanup migration record.
 
+    carla_cleanup_gate --protected-bundle
     carla_cleanup_gate --records-tail
     carla_cleanup_gate --migration PATH [--previous PATH]
     carla_cleanup_gate --bytes PATH --sha HEX
@@ -108,6 +109,7 @@ from tests._python_tokens import (
     token_words,
     without_move_sigils,
 )
+from tools._migration_records import migration_records
 from tools._record_paths import record_paths
 from tools._python_json import (
     MISSING,
@@ -735,6 +737,38 @@ def cleanup_records_then_tail() raises -> String:
     )
 
 
+def cleanup_protected_bundle() raises -> String:
+    """Read the cleanup paths and the migration record before the tail.
+
+    Returns:
+        JSON with `paths`, `migration`, `records`, and `tail`. The
+        paths are read before the migration record. The companion
+        records are read before the tail.
+
+    Raises:
+        Error: The paths cannot be written. The paths are read before
+            the migration record and the tail.
+    """
+    var paths = cleanup_paths()
+    var migration_doc = PyJson.parse(migration_records())
+    var migration = migration_doc.subtree(
+        migration_doc.at(migration_doc.root, "cleanup")
+    ).dumps()
+    var companions = record_paths()
+    var tail = cleanup_protected_tail()
+    return (
+        '{"paths":'
+        + paths
+        + ',"migration":'
+        + migration
+        + ',"records":'
+        + companions
+        + ',"tail":'
+        + tail
+        + "}"
+    )
+
+
 def classified_syntax_json(source: String) raises -> String:
     """Classify a syntax failure, or return the Python syntax JSON.
 
@@ -874,6 +908,13 @@ def main() raises:
     var literals = String("")
     var literal_size = String("")
     var arguments = argv()
+    if len(arguments) == 2 and arguments[1] == "--protected-bundle":
+        try:
+            print(cleanup_protected_bundle(), end="")
+        except error:
+            print(String(error), file=stderr)
+            exit(1)
+        return
     if len(arguments) == 2 and arguments[1] == "--records-tail":
         try:
             print(cleanup_records_then_tail(), end="")
