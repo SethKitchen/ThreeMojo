@@ -173,12 +173,8 @@ def _utf8_size(data: List[UInt8], index: Int) -> Int:
 def _lines(text: String) -> List[String]:
     """Return stripped lines."""
     var out = List[String]()
-    var raw = text.as_bytes()
-    var start = 0
-    for index in range(len(raw) + 1):
-        if index == len(raw) or raw[index] == 10:
-            out.append(_strip(String(text[byte=start:index])))
-            start = index + 1
+    for line in text.split("\n"):
+        out.append(_strip(String(line)))
     return out^
 
 
@@ -430,14 +426,7 @@ def _starts_at(text: String, index: Int, prefix: String) -> Bool:
 
 def _strip(text: String) -> String:
     """Strip ASCII whitespace from both ends."""
-    var raw = text.as_bytes()
-    var start = 0
-    var end = len(raw)
-    while start < end and _space_byte(raw[start]):
-        start += 1
-    while end > start and _space_byte(raw[end - 1]):
-        end -= 1
-    return String(text[byte=start:end])
+    return String(text.strip(" \t\n\r\x0b\x0c"))
 
 
 def _space_byte(byte: UInt8) -> Bool:
