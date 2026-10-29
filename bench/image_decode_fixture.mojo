@@ -24,7 +24,7 @@ from std.pathlib import Path, cwd
 from std.reflection import source_location
 from std.sys import CompilationTarget, argv, exit, stderr
 
-from tools._json_value import JsonTree
+from tools._json_tree import JsonTree
 from tools._sha256 import sha256_hex
 from tools._zlib import compress, crc32
 
@@ -188,7 +188,7 @@ def mip_shape(size: Int) -> List[Int]:
         level = max(1, level // 2)
 
 
-def write_json(tree: JsonTree, node: Int, path: String) raises:
+def write_json(mut tree: JsonTree, node: Int, path: String) raises:
     """Write a node as `json.dumps(value, indent=2)` and a newline.
 
     Args:
@@ -199,7 +199,7 @@ def write_json(tree: JsonTree, node: Int, path: String) raises:
     Raises:
         Error: If the file cannot be written.
     """
-    Path(path).write_text(tree.dumps(node, 2, False, ",", ": ") + "\n")
+    Path(path).write_text(tree.dumps(node) + "\n")
 
 
 def resolve_path(path: String) raises -> String:
@@ -521,7 +521,7 @@ def generate_one(
     tree.set(expected, "base_bytes", tree.integer(base_bytes))
     tree.set(expected, "payload_bytes", tree.integer(payload_bytes))
     tree.set(expected, "mip_levels", tree.integer(levels))
-    tree.set(expected, "base_fnv64", tree.unsigned(base_hash))
+    tree.set(expected, "base_fnv64", tree.integer_text(String(base_hash)))
     var result = tree.object()
     tree.set(result, "name", tree.string(dataset))
     tree.set(result, "path", tree.string(dataset))
@@ -706,13 +706,13 @@ def main() raises:
     var summary = tree.object()
     tree.set(summary, "fixtures", tree.string(resolve_path(destination)))
     var records = tree.array()
-    var all = tree.get(manifest, "datasets")
+    var all = tree.item(manifest, "datasets")
     for index in range(tree.length(all)):
         var data = tree.at(all, index)
         var copy = tree.object()
-        for key in tree.keys(data):
+        for key in tree.names(data):
             if key != "files":
-                tree.set(copy, key, tree.get(data, key))
+                tree.set(copy, key, tree.item(data, key))
         tree.append(records, copy)
     tree.set(summary, "datasets", records)
-    print(tree.dumps(summary, 2, False, ",", ": "))
+    print(tree.dumps(summary))

@@ -48,7 +48,7 @@ from bench.image_decode_fixture import (
     rgba,
 )
 from render.png import decode
-from tools._json_value import JsonTree
+from tools._json_tree import JsonTree
 from tools._process import run_program
 from tools._zlib import crc32
 
@@ -146,12 +146,12 @@ def _expected(fixtures: String) raises -> List[String]:
     """Return the first dataset's oracle as `key value` pairs."""
     var tree = JsonTree()
     var manifest = read_json(tree, fixtures + "/fixtures.json")
-    var expected = tree.get(
-        tree.at(tree.get(manifest, "datasets"), 0), "expected"
+    var expected = tree.item(
+        tree.at(tree.item(manifest, "datasets"), 0), "expected"
     )
     var pairs = List[String]()
-    for key in tree.keys(expected):
-        pairs.append(key + " " + tree.text(tree.get(expected, key)))
+    for key in tree.names(expected):
+        pairs.append(key + " " + tree.dumps(tree.item(expected, key), False))
     return pairs^
 
 
@@ -247,7 +247,7 @@ def _measured_row(
     tree.set(row, "stdout", tree.string(line + "\n"))
     tree.set(row, "stderr", tree.string(""))
     tree.set(row, "peak_rss_bytes", tree.integer(100))
-    return tree.dumps(row)
+    return tree.dumps(row, False)
 
 
 def _marker(fields: String) -> String:
@@ -333,31 +333,31 @@ def test_gltf_and_manifest() raises:
     var root = mkdtemp()
     var result = generate(root, 3, 4, [String("uniform_tiny")])
     ref tree = result.tree
-    var data = tree.at(tree.get(result.manifest, "datasets"), 0)
+    var data = tree.at(tree.item(result.manifest, "datasets"), 0)
     var documents = JsonTree()
     var gltf = read_json(documents, root + "/uniform_tiny/scene.gltf")
     var manifest = read_json(documents, root + "/uniform_tiny/manifest.json")
-    assert_equal(documents.length(documents.get(gltf, "images")), 3)
-    var mesh = documents.at(documents.get(gltf, "meshes"), 0)
-    assert_equal(documents.length(documents.get(mesh, "primitives")), 3)
-    assert_equal(documents.length(documents.get(manifest, "bindings")), 3)
-    var expected = tree.get(data, "expected")
+    assert_equal(documents.length(documents.item(gltf, "images")), 3)
+    var mesh = documents.at(documents.item(gltf, "meshes"), 0)
+    assert_equal(documents.length(documents.item(mesh, "primitives")), 3)
+    assert_equal(documents.length(documents.item(manifest, "bindings")), 3)
+    var expected = tree.item(data, "expected")
     assert_equal(
-        tree.int_value(tree.get(expected, "base_bytes")), 3 * 16 * 16 * 4
+        tree.int_value(tree.item(expected, "base_bytes")), 3 * 16 * 16 * 4
     )
     assert_equal(
-        tree.int_value(tree.get(expected, "payload_bytes")),
+        tree.int_value(tree.item(expected, "payload_bytes")),
         3 * (256 + 64 + 16 + 4 + 1) * 4,
     )
-    var files = tree.get(data, "files")
+    var files = tree.item(data, "files")
     for index in range(tree.length(files)):
         var item = tree.at(files, index)
-        var path = root + "/uniform_tiny/" + tree.text(tree.get(item, "path"))
+        var path = root + "/uniform_tiny/" + tree.text(tree.item(item, "path"))
         assert_equal(
             len(Path(path).read_bytes()),
-            tree.int_value(tree.get(item, "bytes")),
+            tree.int_value(tree.item(item, "bytes")),
         )
-        assert_equal(sha(path), tree.text(tree.get(item, "sha256")))
+        assert_equal(sha(path), tree.text(tree.item(item, "sha256")))
 
 
 # --- measurement ---------------------------------------------------------------
@@ -418,8 +418,8 @@ def test_protocol_runner_with_stub() raises:
     run(options, measurer)
     var tree = JsonTree()
     var metadata = read_json(tree, options.destination + "/metadata.json")
-    assert_equal(tree.text(tree.get(metadata, "status")), "complete")
-    assert_equal(tree.int_value(tree.get(metadata, "completed_rows")), 4)
+    assert_equal(tree.text(tree.item(metadata, "status")), "complete")
+    assert_equal(tree.int_value(tree.item(metadata, "completed_rows")), 4)
     assert_equal(_lines(options.destination + "/raw.jsonl"), 4)
     assert_equal(_lines(options.destination + "/validated.jsonl"), 4)
 
@@ -434,9 +434,9 @@ def test_rusage_marker_parser() raises:
     )
     var tree = JsonTree()
     var parsed = parse_rusage(tree, "native diagnostic\n" + marker)
-    assert_equal(tree.int_value(tree.get(parsed.record, "maxrss_raw")), 7)
+    assert_equal(tree.int_value(tree.item(parsed.record, "maxrss_raw")), 7)
     assert_equal(
-        tree.int_value(tree.get(parsed.record, "peak_rss_bytes")), 7 * m
+        tree.int_value(tree.item(parsed.record, "peak_rss_bytes")), 7 * m
     )
     assert_equal(parsed.native_stderr, "native diagnostic\n")
     var twice = marker.copy()
@@ -469,16 +469,16 @@ def test_true_rss_independent_of_runner_heap() raises:
     var most_before = 0
     var most_after = 0
     for row in before:
-        assert_equal(tree.int_value(tree.get(row, "exit_code")), 0)
-        assert_equal(tree.text(tree.get(row, "measurement_error")), "null")
+        assert_equal(tree.int_value(tree.item(row, "exit_code")), 0)
+        assert_true(tree.is_null(tree.item(row, "measurement_error")))
         most_before = max(
-            most_before, tree.int_value(tree.get(row, "peak_rss_bytes"))
+            most_before, tree.int_value(tree.item(row, "peak_rss_bytes"))
         )
     for row in after:
-        assert_equal(tree.int_value(tree.get(row, "exit_code")), 0)
-        assert_equal(tree.text(tree.get(row, "measurement_error")), "null")
+        assert_equal(tree.int_value(tree.item(row, "exit_code")), 0)
+        assert_true(tree.is_null(tree.item(row, "measurement_error")))
         most_after = max(
-            most_after, tree.int_value(tree.get(row, "peak_rss_bytes"))
+            most_after, tree.int_value(tree.item(row, "peak_rss_bytes"))
         )
     assert_true(most_after < most_before + 16 * 1024 * 1024)
     assert_true(most_after < 64 * 1024 * 1024)
@@ -490,11 +490,11 @@ def test_native_errors_propagate() raises:
         return
     var tree = JsonTree()
     var row = measure(tree, _sh("exit 23"), 10, ".", helper)
-    assert_equal(tree.int_value(tree.get(row, "exit_code")), 23)
-    assert_equal(tree.int_value(tree.get(row, "native_exit_code")), 23)
+    assert_equal(tree.int_value(tree.item(row, "exit_code")), 23)
+    assert_equal(tree.int_value(tree.item(row, "native_exit_code")), 23)
     row = measure(tree, _sh("kill -TERM $$"), 10, ".", helper)
-    assert_equal(tree.int_value(tree.get(row, "exit_code")), -15)
-    assert_equal(tree.int_value(tree.get(row, "native_exit_code")), -15)
+    assert_equal(tree.int_value(tree.item(row, "exit_code")), -15)
+    assert_equal(tree.int_value(tree.item(row, "native_exit_code")), -15)
     row = measure(
         tree,
         [String("/path/that/does/not/exist/image_decode")],
@@ -502,9 +502,9 @@ def test_native_errors_propagate() raises:
         ".",
         helper,
     )
-    assert_equal(tree.int_value(tree.get(row, "exit_code")), 127)
-    assert_true(tree.text(tree.get(row, "measurement_error")) != "null")
-    var errno = tree.get(tree.get(row, "rusage"), "exec_errno")
+    assert_equal(tree.int_value(tree.item(row, "exit_code")), 127)
+    assert_false(tree.is_null(tree.item(row, "measurement_error")))
+    var errno = tree.item(tree.item(row, "rusage"), "exec_errno")
     assert_true(tree.int_value(errno) != 0)
 
 
@@ -512,7 +512,8 @@ def test_parser() raises:
     var tree = JsonTree()
     var parsed = parse_output(tree, "result api gltf workers 4 load_ns 123\n")
     assert_equal(
-        tree.dumps(parsed), '{"api": "gltf", "workers": 4, "load_ns": 123}'
+        tree.dumps(parsed, False),
+        '{"api": "gltf", "workers": 4, "load_ns": 123}',
     )
     var failed = False
     try:
@@ -543,11 +544,11 @@ def test_per_child_rss() raises:
         ".",
         helper,
     )
-    assert_equal(tree.int_value(tree.get(big, "exit_code")), 0)
-    assert_equal(tree.int_value(tree.get(small, "exit_code")), 0)
+    assert_equal(tree.int_value(tree.item(big, "exit_code")), 0)
+    assert_equal(tree.int_value(tree.item(small, "exit_code")), 0)
     assert_true(
-        tree.int_value(tree.get(big, "peak_rss_bytes"))
-        > tree.int_value(tree.get(small, "peak_rss_bytes")) + 24 * 1024 * 1024
+        tree.int_value(tree.item(big, "peak_rss_bytes"))
+        > tree.int_value(tree.item(small, "peak_rss_bytes")) + 24 * 1024 * 1024
     )
 
 
@@ -579,9 +580,9 @@ def test_timeout_terminates_native_and_descendant() raises:
     )
     var tree = JsonTree()
     var row = measure(tree, _sh(script), 1.0, root, helper)
-    assert_true(tree.text(tree.get(row, "timed_out")) == "true")
-    assert_true(tree.int_value(tree.get(row, "exit_code")) != 0)
-    assert_equal(tree.text(tree.get(row, "peak_rss_bytes")), "null")
+    assert_true(tree.flag(tree.item(row, "timed_out")))
+    assert_true(tree.int_value(tree.item(row, "exit_code")) != 0)
+    assert_true(tree.is_null(tree.item(row, "peak_rss_bytes")))
     var pids = List[String]()
     for name in ["native.pid", "descendant.pid"]:
         assert_true(exists(root + "/" + name))
@@ -618,12 +619,12 @@ def test_summary_pairs() raises:
     var out = JsonTree()
     var summary = summarize(tree, rows, "baseline", out)
     var dynamic = out.at(summary, 1)
-    assert_equal(out.text(out.get(dynamic, "variant")), "dynamic")
-    var speedup = out.get(dynamic, "paired_speedup_vs_baseline")
-    assert_equal(out.text(out.get(speedup, "median")), "2.0")
-    var rate = out.get(dynamic, "base_megapixels_per_second")
-    assert_equal(out.text(out.get(rate, "median")), "2000.0")
-    assert_equal(out.int_value(out.get(out.get(dynamic, "load_ns"), "n")), 3)
+    assert_equal(out.text(out.item(dynamic, "variant")), "dynamic")
+    var speedup = out.item(dynamic, "paired_speedup_vs_baseline")
+    assert_equal(out.dumps(out.item(speedup, "median"), False), "2.0")
+    var rate = out.item(dynamic, "base_megapixels_per_second")
+    assert_equal(out.dumps(out.item(rate, "median"), False), "2000.0")
+    assert_equal(out.int_value(out.item(out.item(dynamic, "load_ns"), "n")), 3)
 
 
 # --- rejected evidence ---------------------------------------------------------
@@ -693,8 +694,8 @@ def test_incorrect_base_hash_rejected_by_fixture_oracle() raises:
     assert_true(rejected)
     var tree = JsonTree()
     var metadata = read_json(tree, options.destination + "/metadata.json")
-    assert_equal(tree.text(tree.get(metadata, "status")), "failed")
-    assert_equal(tree.int_value(tree.get(metadata, "completed_rows")), 0)
+    assert_equal(tree.text(tree.item(metadata, "status")), "failed")
+    assert_equal(tree.int_value(tree.item(metadata, "completed_rows")), 0)
     assert_equal(_lines(options.destination + "/raw.jsonl"), 1)
 
 
@@ -718,8 +719,8 @@ def test_incorrect_all_mip_or_shape_hash_rejected() raises:
         assert_true(rejected, field)
         var tree = JsonTree()
         var metadata = read_json(tree, options.destination + "/metadata.json")
-        assert_equal(tree.text(tree.get(metadata, "status")), "failed")
-        assert_equal(tree.int_value(tree.get(metadata, "completed_rows")), 1)
+        assert_equal(tree.text(tree.item(metadata, "status")), "failed")
+        assert_equal(tree.int_value(tree.item(metadata, "completed_rows")), 1)
         assert_equal(_lines(options.destination + "/raw.jsonl"), 2)
         assert_equal(_lines(options.destination + "/validated.jsonl"), 1)
 
@@ -758,9 +759,10 @@ def test_native_supervisor_status_disagreement_rejected() raises:
             _usage(case_[0], case_[1]),
         )
         assert_true(
-            "did not propagate" in tree.text(tree.get(row, "measurement_error"))
+            "did not propagate"
+            in tree.text(tree.item(row, "measurement_error"))
         )
-        assert_equal(tree.int_value(tree.get(row, "exit_code")), 0)
+        assert_equal(tree.int_value(tree.item(row, "exit_code")), 0)
 
 
 def main() raises:

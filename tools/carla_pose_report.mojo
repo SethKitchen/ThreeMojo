@@ -22,7 +22,7 @@ from std.pathlib import Path
 from tools._bigint import BigInt
 from tools._fraction import Fraction
 from tools._json_tools import JsonWriter
-from tools._json_value import JsonTree
+from tools._json_tree import JsonTree
 from tools._lane_reports import repository_root, output_directory, nstr, isqrt
 from tools._python_float import parse_float
 
@@ -292,10 +292,8 @@ def _coefficients(text: String, name: String) raises -> List[Fix]:
 
 def _rational(tree: JsonTree, node: Int, name: String) raises -> Fraction:
     """Read one exact rational constant."""
-    var member = tree.get(node, name)
-    return _parse_rational(
-        tree.string_value(tree.get(member, "exact_rational"))
-    )
+    var member = tree.item(node, name)
+    return _parse_rational(tree.text(tree.item(member, "exact_rational")))
 
 
 def _poly(coefficients: List[Fix], x: Fix) raises -> Fix:
