@@ -354,7 +354,7 @@ Pass `workers` to `read_gltf` or `load_gltf` to decode core material maps
 with the [bounded image queue](Image-decode-queue). One worker keeps lazy
 serial decoding. Extension-only maps remain lazy.
 
-A `.glb` is told by its magic. Anything else is read as JSON. A buffer or an image named by a relative URI is read from the file's own directory. A `data:` URI must be base64.
+A `.glb` is told by its magic. Anything else is read as JSON. The JSON of either can start with one UTF-8 byte order mark, which the loader drops, as three.js's `TextDecoder` drops it. A `.glb` chunk of a type that is neither JSON nor binary is skipped, as the glTF specification and three.js skip it. A buffer or an image named by a relative URI is read from the file's own directory. A `data:` URI must be base64.
 
 Accessor offsets and strides must stay inside their buffer views and meet alignment rules. Matrix columns include their required padding. The final column can omit trailing padding. Integer attributes, indices, and sparse indices keep their exact values; they do not pass through Float32 storage.
 

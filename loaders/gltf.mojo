@@ -803,7 +803,8 @@ def read_gltf(
 ) raises -> GltfModel:
     """Read a `.gltf` or a `.glb` file into a scene and its assets.
 
-    A `.glb` is told by its magic; anything else is read as JSON. A
+    A `.glb` is told by its magic; anything else is read as JSON, less
+    one leading byte order mark, as three.js's `TextDecoder` drops it. A
     buffer or an image named by a relative URI is read from the file's
     own directory.
 
@@ -826,7 +827,7 @@ def read_gltf(
         var parts = split_glb(bytes)
         return load_gltf(parts[0], parts[1], directory, scene, assets, workers)
     return load_gltf(
-        String(from_utf8=Span(bytes)),
+        _without_bom(String(from_utf8=Span(bytes))),
         List[UInt8](),
         directory,
         scene,
@@ -838,6 +839,11 @@ def read_gltf(
 def split_glb(bytes: List[UInt8]) raises -> Tuple[String, List[UInt8]]:
     """Return a `.glb` container's JSON text and its binary chunk.
 
+    The JSON loses one leading byte order mark, as three.js's
+    `TextDecoder` drops it. A chunk of a type that is neither JSON nor
+    binary is skipped, as the specification says a reader must skip it
+    and three.js's `GLTFBinaryExtension` skips it.
+
     Args:
         bytes: The whole file.
 
@@ -846,8 +852,8 @@ def split_glb(bytes: List[UInt8]) raises -> Tuple[String, List[UInt8]]:
 
     Raises:
         Error: If the magic, the version or the length is wrong, the first
-            chunk is not JSON, a chunk runs past the file, or a chunk is
-            of a type that is neither JSON nor binary.
+            chunk is not JSON, a chunk runs past the file, or there are two
+            JSON chunks or two binary chunks.
     """
     if (
         len(bytes) < GLB_HEADER_BYTES
@@ -875,15 +881,15 @@ def split_glb(bytes: List[UInt8]) raises -> Tuple[String, List[UInt8]]:
             if seen_json:
                 raise Error("glTF: two JSON chunks")
             seen_json = True
-            json = String(from_utf8=Span(chunk))
+            json = _without_bom(String(from_utf8=Span(chunk)))
         elif kind == GLB_BIN_CHUNK:
             if not seen_json:
                 raise Error("glTF: the first chunk must be JSON")
             if len(bin) > 0:
                 raise Error("glTF: two binary chunks")
             bin = chunk^
-        else:
-            raise Error("glTF: a chunk of an unknown type")
+        # A chunk of any other type is skipped: glTF 2.0 says a reader
+        # must ignore it, and three.js's `GLTFBinaryExtension` does.
         at = start + length
     if not seen_json:
         raise Error("glTF: the container holds no JSON chunk")
@@ -1061,6 +1067,14 @@ def is_supported_extension(name: String) -> Bool:
         or name == TEXTURE_WEBP
         or name == DRACO_MESH_COMPRESSION
     )
+
+
+def _without_bom(text: String) -> String:
+    """Return a text less one leading byte order mark, as three.js's
+    `TextDecoder` drops it before `JSON.parse` reads the text."""
+    if text.startswith(chr(0xFEFF)):
+        return String(text[byte=3:])
+    return text
 
 
 def _check_asset(document: JsonDocument, root: Int) raises:

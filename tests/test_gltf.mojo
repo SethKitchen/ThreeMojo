@@ -25,6 +25,7 @@ from lights.light import directional_light
 from loaders.json import parse_json
 from loaders.gltf import (
     _Loader,
+    _without_bom,
     GltfModel,
     _integer_component,
     decode_base64,
@@ -281,6 +282,47 @@ def test_a_glb_reads_the_same_cube_from_its_chunks() raises:
     assert_true(len(parts[1]) > 840)
 
 
+def test_a_chunk_of_an_unknown_type_is_skipped() raises:
+    # glTF 2.0 says a reader must skip a chunk of a type it does not know,
+    # and three.js's `GLTFBinaryExtension` skips it, before the binary
+    # chunk or after it.
+    var bin = List[UInt8]("abcd".as_bytes())
+    var good = glb_of('{"asset":{"version":"2.0"}}', bin)
+    var unknown = good.copy()
+    unknown[52] = 0x58
+    var parts = split_glb(unknown)
+    assert_equal(parts[0], '{"asset":{"version":"2.0"}} ')
+    assert_equal(len(parts[1]), 0)
+    var after = good.copy()
+    append_little_endian_u32(after, 4)
+    append_little_endian_u32(after, 0x12345678)
+    after += List[UInt8]("wxyz".as_bytes())
+    after[8] = UInt8(len(after))
+    var kept = split_glb(after)
+    assert_equal(len(kept[1]), 4)
+    assert_equal(kept[1][0], UInt8(ord("a")))
+
+
+def test_a_leading_byte_order_mark_is_dropped() raises:
+    # three.js decodes a file with `TextDecoder`, which drops one leading
+    # byte order mark, before `JSON.parse` reads it: in a `.gltf` and in
+    # a `.glb`'s JSON chunk. A mark that does not lead stays.
+    var mark = chr(0xFEFF)
+    assert_equal(_without_bom(mark + "{}"), "{}")
+    assert_equal(_without_bom("{}" + mark), "{}" + mark)
+    var text = Path(HERE + "embedded.gltf").read_text()
+    var path = temporary_path("marked.gltf")
+    Path(path).write_text(mark + text)
+    var scene = Scene()
+    var assets = Assets()
+    var model = read_gltf(path, scene, assets)
+    check_cube(model, scene, assets, 0)
+    var parts = split_glb(
+        glb_of(mark + '{"asset":{"version":"2.0"}}', List[UInt8]())
+    )
+    assert_true(parts[0].startswith('{"asset"'))
+
+
 def test_a_file_that_is_not_there_or_not_gltf_is_refused() raises:
     var scene = Scene()
     var assets = Assets()
@@ -421,8 +463,7 @@ def test_a_container_is_checked_chunk_by_chunk() raises:
     append_little_endian_u32(overrun, 0x4E4F534A)
     with assert_raises():
         _ = split_glb(overrun)
-    # A binary chunk before the JSON, two of either, an unknown type,
-    # and no JSON at all.
+    # A binary chunk before the JSON, two of either, and no JSON at all.
     var bin_first = good.copy()
     bin_first[16] = 0x42
     bin_first[17] = 0x49
@@ -437,10 +478,6 @@ def test_a_container_is_checked_chunk_by_chunk() raises:
     two_json[55] = 0x4E
     with assert_raises():
         _ = split_glb(two_json)
-    var unknown = good.copy()
-    unknown[52] = 0x58
-    with assert_raises():
-        _ = split_glb(unknown)
     var twice_bin = good.copy()
     append_little_endian_u32(twice_bin, 4)
     append_little_endian_u32(twice_bin, 0x004E4942)
