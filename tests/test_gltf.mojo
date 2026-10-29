@@ -159,9 +159,7 @@ def test_node_names_are_sanitized_and_unique_as_in_three_js() raises:
     assert_equal(scene.get(model.nodes[3]).name, "Cube001_2")
     assert_equal(scene.get(model.nodes[4]).name, "")
     assert_equal(model.node_names[1], "Cube.001")
-    assert_equal(
-        scene.get(model.nodes[1]).user_data.string("name"), "Cube.001"
-    )
+    assert_equal(scene.get(model.nodes[1]).user_data.string("name"), "Cube.001")
 
 
 def check_cube(
