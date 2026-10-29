@@ -201,7 +201,8 @@ def _opaque_then_blended(
 
     Args:
         blends: Whether each index blends. One entry per index.
-        depths: Each index's camera-space depth. Larger is further.
+        depths: Each index's camera-space z. The camera looks down -z, so
+            larger is nearer.
         orders: Each index's render order.
 
     Returns:

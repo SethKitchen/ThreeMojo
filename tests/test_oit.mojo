@@ -31,7 +31,7 @@ from postprocessing.oit import (
 )
 from core.background import texture_background
 from render.framebuffer import Color, FloatColor
-from render.rasterizer import RasterVertex
+from render.rasterizer import Corner, RasterVertex, corner_of
 from render.texture import data_texture
 from render.target import FLOAT_TARGET, RenderTarget
 from renderers.draw_filter import (
@@ -248,20 +248,15 @@ def test_the_snap_rounds_to_whole_pixels_from_the_center() raises:
     var scene = a_scene(assets)
     var renderer = Renderer(10, 6)
     var frame = renderer.prepare_frame(scene, assets, a_camera())
-    # The frame's own slim corners, and the same corners whole.
     var corners = frame.corners.copy()
     snap_to_pixels(corners, 10, 6)
-    var whole = frame.whole_corners()
-    snap_to_pixels(whole, 10, 6)
     for at in range(len(corners)):
         var x = corners[at].x - 5
         var y = corners[at].y - 3
         assert_equal(x, Float32(Int(x)))
         assert_equal(y, Float32(Int(y)))
         assert_true(abs(corners[at].x - frame.corners[at].x) <= 0.5)
-        assert_equal(whole[at].x, corners[at].x)
-        assert_equal(whole[at].y, corners[at].y)
-    var none = List[RasterVertex]()
+    var none = List[Corner]()
     snap_to_pixels(none, 10, 6)
     assert_equal(len(none), 0)
     # A renderer that snaps draws the same scene.
@@ -271,9 +266,10 @@ def test_the_snap_rounds_to_whole_pixels_from_the_center() raises:
 
 
 def test_a_wide_frame_snaps_from_its_real_center() raises:
-    var corners = List[RasterVertex]()
-    corners.append(RasterVertex(0, 1, 0, 1, FloatColor(0, 0, 0, 1)))
-    corners.append(RasterVertex(1.5, 1, 0, 1, FloatColor(0, 0, 0, 1)))
+    var corners = List[Corner]()
+    for x in [Float32(0), 1.5]:
+        var vertex = RasterVertex(x, 1, 0, 1, FloatColor(0, 0, 0, 1))
+        corners.append(corner_of(vertex, 0))
     snap_to_pixels(corners, 16777217, 4)
     assert_equal(corners[0].x, 0.5)
     assert_equal(corners[1].x, 1.5)
