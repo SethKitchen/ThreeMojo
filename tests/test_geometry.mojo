@@ -2170,6 +2170,36 @@ def test_a_polyhedron_can_be_measured_in_feet() raises:
     )
 
 
+def test_the_solids_have_three_js_s_numbers() raises:
+    """A polyhedron is cut and pushed out in doubles, as three.js does it,
+    with three.js's golden ratio in doubles. In Float32 a vertex of a
+    detail two icosahedron had a z of 1.97e-8 where three.js has
+    -3.67e-17. The expected values are three.js r180's."""
+    var gem = tetrahedron(Length(1, METER), 2)
+    assert_js_number(
+        gem.attribute_view(String(POSITION)).component(4, 1),
+        0.5773502588272095,
+    )
+    var ball = icosahedron(Length(1, METER), 2)
+    assert_js_number(
+        ball.attribute_view(String(POSITION)).component(112, 2),
+        -3.672532034608448e-17,
+    )
+    assert_js_number(
+        ball.attribute_view(String(NORMAL)).component(112, 2),
+        -3.672532034608448e-17,
+    )
+    var die = dodecahedron(Length(1, METER), 1)
+    assert_js_number(
+        die.attribute_view(String(UV)).component(383, 0),
+        0.023057708516716957,
+    )
+    var finer = dodecahedron(Length(1, METER), 2)
+    assert_js_number(
+        finer.attribute_view(String(POSITION)).component(193, 1), 0.0
+    )
+
+
 def test_a_polyhedron_needs_a_radius_a_detail_and_whole_faces() raises:
     var one = Length(1.0, METER)
     var vertices: List[Float32] = [1, 0, 0, 0, 1, 0, 0, 0, 1]

@@ -316,6 +316,8 @@ The geometry is not indexed. Each triangle owns its three vertices. At a detail 
 
 Texture coordinates are longitude and latitude, with the seam repaired per face as three.js repairs it. `v` is one at the top pole and zero at the bottom, as on the sphere. A coordinate can exceed one on a face that straddles the seam.
 
+The arithmetic is three.js's, in doubles, and each number is rounded to `Float32` once when it is stored. The icosahedron and the dodecahedron use three.js's golden ratio in doubles. At a detail of one or more, each normal is the stored position made unit length, as three.js's `normalizeNormals` makes it.
+
 ## Capsule
 
 ```mojo
