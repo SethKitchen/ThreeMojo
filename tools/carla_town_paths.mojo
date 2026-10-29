@@ -116,7 +116,8 @@ def _read(
     mut meshes: List[String], mut materials: List[String], path: String
 ) raises:
     """Add the packages named in one layout file."""
-    var lines = _lines(_newlines(Path(path).read_text()))
+    var text = Path(path).read_text()
+    var lines = _lines(text.replace("\r\n", "\n").replace("\r", "\n"))
     for index in range(len(lines)):
         var doc = PyJson.parse(lines[index])
         if doc.kind(doc.root) != PY_DICT:
@@ -179,26 +180,6 @@ def _lines(text: String) -> List[String]:
     if start < len(raw):
         out.append(String(text[byte=start:]))
     return out^
-
-
-def _newlines(text: String) -> String:
-    """Return `text` with CR, LF and CRLF written as LF."""
-    var out = String()
-    var skip_lf = False
-    for codepoint in text.codepoints():
-        var code = Int(codepoint.to_u32())
-        if skip_lf:
-            skip_lf = False
-            if code == 10:
-                continue
-        if code == 13:
-            out += "\n"
-            skip_lf = True
-        elif code == 10:
-            out += "\n"
-        else:
-            out += chr(code)
-    return out
 
 
 def export_path(root: String, game_path: String, suffix: String) -> String:
