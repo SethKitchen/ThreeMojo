@@ -39,7 +39,7 @@ from tools._json_tree import NOTHING, JsonTree, equal, type_name
 from tools._python_float import parse_float, python_repr
 from tools._python_json import py_repr
 from tools._python_stats import format_fixed
-from tools._text import split_lines
+from tools._text import ascii_lower, split_lines
 from tools._host import (
     c_string,
     environ_address,
@@ -229,17 +229,6 @@ def _read_text(path: String) raises -> String:
             + py_repr(path)
         )
     return _universal(String(from_utf8_lossy=Path(path).read_bytes()))
-
-
-def _ascii_lower(text: String) -> String:
-    """Return text with ASCII capitals made small."""
-    var out = List[UInt8]()
-    for byte in text.as_bytes():
-        if byte >= 65 and byte <= 90:
-            out.append(byte + 32)
-        else:
-            out.append(byte)
-    return String(unsafe_from_utf8=out)
 
 
 def _join(base: String, name: String) -> String:
@@ -2002,7 +1991,7 @@ def cpu_name[M: Machine](mut machine: M) raises -> String:
     if isfile("/proc/cpuinfo"):
         var text = _read_text("/proc/cpuinfo")
         for line in split_lines(text):
-            if _ascii_lower(line).startswith("model name"):
+            if ascii_lower(line).startswith("model name"):
                 var cut = line.find(":")
                 if cut < 0:
                     raise Error("IndexError: list index out of range")
@@ -2669,7 +2658,7 @@ def same_measurement_host(
         var value = tree.get(old, key)
         if tree.kind(value) != STRING:
             return False
-        var cleaned = _ascii_lower(py_strip(tree.text(value)))
+        var cleaned = ascii_lower(py_strip(tree.text(value)))
         for blank in materialize[_BLANK_HOSTS]():
             if cleaned == blank:
                 return False

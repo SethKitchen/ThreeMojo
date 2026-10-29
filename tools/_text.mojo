@@ -6,8 +6,28 @@
 """Text helpers with the rules of the Python tools they replace.
 
 `String.splitlines` in Mojo 1.1 also splits at a tab, so a tool that reads
-source lines must use `split_lines`.
+source lines must use `split_lines`. `String.lower` also changes letters
+that are not ASCII, so a tool that changes only `A` to `Z` must use
+`ascii_lower`.
 """
+
+
+def ascii_lower(text: String) -> String:
+    """Return text with the ASCII capitals `A` to `Z` in lowercase.
+
+    Args:
+        text: The text.
+
+    Returns:
+        The text. All other bytes do not change.
+    """
+    var out = List[UInt8](capacity=text.byte_length())
+    for byte in text.as_bytes():
+        if byte >= 65 and byte <= 90:
+            out.append(byte + 32)
+        else:
+            out.append(byte)
+    return String(unsafe_from_utf8=out)
 
 
 def split_lines(text: String) -> List[String]:
