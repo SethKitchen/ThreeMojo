@@ -26,7 +26,7 @@ mojo run -I . examples/village_walk.mojo --play 1920 1080 low
 | `render_scale` | A third | A half | Two thirds | One |
 | `plants` | `FEWEST_PLANTS` | `FEWER_PLANTS` | `MANY_PLANTS` | `ALL_PLANTS` |
 | `grass_wind_every` | 4 frames | 2 frames | 1 frame | 1 frame |
-| `sky_step` | 8 pixels | 4 pixels | 2 pixels | 1 pixel |
+| `sky_step` | 3 pixels | 2 pixels | 2 pixels | 1 pixel |
 | `water_step` | 8 pixels | 2 pixels | 2 pixels | 1 pixel |
 | `water_refresh_every` | 4 frames | 2 frames | 1 frame | 1 frame |
 | `animal_coarseness` | 3 | 2 | 1.5 | 1 |
@@ -48,7 +48,7 @@ quality.check()
 - **`render_scale`** is the share of the window's width and height that the frame is drawn at, from a quarter to one. `upscale_into` stretches the frame to the window, bilinear.
 - **`plants`** sets how many leaves and blades grow near the camera. `planted` also draws the ground, the mountains and the canyon's wall more coarsely. `ALL_PLANTS` keeps the still picture's meadow.
 - **`grass_wind_every`** sets how often a cluster of grass grows again for the wind. A cluster grows again when its level changes, too. Zero keeps the grass still.
-- **`sky_step`** is the step between two samples of the sky, from 1 to 32 pixels.
+- **`sky_step`** is the step between two samples of the sky, from 1 to 32 pixels. The samples between are mixed bilinearly. A cloud of the sky cube is smaller than 8 pixels across its edge, so a coarser step draws it as boxes. Each task finds the samples of one band of rows. A sample's direction is mixed from the directions through three corners of the window.
 - **`water_step`** is the step between two shaded samples of the pond's water, from 1 to 64 pixels. The pixels between are mixed from the four samples round them.
 - **`water_refresh_every`** sets how many frames share one ocean surface and its caustics. From two frames, one frame finds the next surface and the next frame finds its caustics.
 - **`animal_coarseness`** multiplies the cell of each animal's mesh, from 1 to 8. A coarser animal has fewer triangles.

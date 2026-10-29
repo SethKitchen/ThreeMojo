@@ -14,7 +14,7 @@ each can be turned up or down alone:
 | `render_scale` | A third of the window, stretched to it | The window itself |
 | `plants` | `FEWEST_PLANTS` | `ALL_PLANTS` |
 | `grass_wind_every` | 0: still grass | 1: every blade every frame |
-| `sky_step` | One sky sample every 8 pixels | Every pixel |
+| `sky_step` | One sky sample every 3 pixels | Every pixel |
 | `water_step` | One water sample every 8 pixels | Every pixel |
 | `water_refresh_every` | The waves found every fourth frame | Every frame |
 | `animal_coarseness` | Animals three times coarser | Each tier's own mesh |
@@ -228,7 +228,7 @@ def game_quality(preset: QualityPreset) raises -> GameQuality:
             Float32(1) / 3,
             FEWEST_PLANTS,
             4,
-            8,
+            3,
             8,
             4,
             3,
@@ -238,7 +238,7 @@ def game_quality(preset: QualityPreset) raises -> GameQuality:
         )
     if preset == MEDIUM:
         return GameQuality(
-            0.5, FEWER_PLANTS, 2, 4, 2, 2, 2, CACHED_SHADOWS, 2048, True
+            0.5, FEWER_PLANTS, 2, 2, 2, 2, 2, CACHED_SHADOWS, 2048, True
         )
     if preset == HIGH:
         return GameQuality(

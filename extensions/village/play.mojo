@@ -580,14 +580,14 @@ struct VillageGame(Movable):
         """Draw the frame that `tick` prepared into `window`.
 
         The frame is drawn at the quality's smaller size, and the pond's
-        water is composed into it. Its edges are smoothed if the quality's
-        `smooth_edges` asks, and it is stretched over `window`. The window's
-        frame is kept from frame to frame, so it is not allocated again.
-        The weather's clouds and fog cover the frame's sky before the
-        stretch, and its rain falls over the window's frame after it,
-        unless the camera's eye is under a roof. If
-        `hud` is set, the satchel, the prompt and the last note are
-        written over the window's frame.
+        water is composed into it if the camera sees the pond. Its edges
+        are smoothed if the quality's `smooth_edges` asks, and it is
+        stretched over `window`. The window's frame is kept from frame to
+        frame, so it is not allocated again. The weather's clouds and fog
+        cover the frame's sky before the stretch, and its rain falls over
+        the window's frame after it, unless the camera's eye is under a
+        roof. If `hud` is set, the satchel, the prompt and the last note
+        are written over the window's frame.
 
         Args:
             scene: The scene the game is in.
@@ -601,9 +601,12 @@ struct VillageGame(Movable):
             scene, assets, self.camera, Duration(self.clock, SECOND)
         )
         var drawn = perf_counter_ns()
-        _ = self.village.water.compose(
-            image, scene, self.camera, self.village.level, self.village.bed
-        )
+        # Water that the camera cannot see is not composed: its surface
+        # and caustics cost most of the composition.
+        if self.village.pond_seen(self.camera):
+            _ = self.village.water.compose(
+                image, scene, self.camera, self.village.level, self.village.bed
+            )
         var watered = perf_counter_ns()
         self.weather.cover(image, self.camera)
         var covered = perf_counter_ns()

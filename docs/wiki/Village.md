@@ -99,6 +99,19 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 
 The houses' textures are 128 texels on a side.
 
+### Oaks
+
+The village's open and round trees grow as oaks. `oak` gives a tree an oak's wood and keeps its crown and its leaves:
+
+| Part | The meadow's tree | An oak |
+|---|---|---|
+| Twig tips, and so by the pipe model the trunk and the limbs | As thick as the crown says | Twice as thick |
+| The thinnest wood drawn | As the crown says | Twice as thick, so the same branches are drawn |
+| Flare at the trunk's foot | As the crown says | Twice as much, at most 3 |
+| Bark | Pale with dark patches | Gray-brown, with dark furrows four times as close |
+
+The meadow's own scene keeps its pale trees. See [Vegetation](Vegetation).
+
 The water's ocean spectrum is 256 texels on a side, and its glare is 128 texels. Its caustic grid is 64, as in the still, and its caustic texture is 256 texels on a side. The water's clock starts at 5 seconds, as the Clearwater page's does.
 
 ## Props

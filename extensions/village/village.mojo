@@ -95,7 +95,20 @@ from render.framebuffer import Framebuffer
 from renderers.renderer import Renderer
 from math.vector3 import Vector3
 from std.math import atan2, cos, sin
-from units.si import DEGREE, METER, RADIAN, SECOND, Angle, Duration, Length
+from extensions.vegetation.crown import CrownParameters
+from math.bounds import Sphere
+from math.frustum import Frustum
+from units.si import (
+    DEGREE,
+    METER,
+    PER_METER,
+    RADIAN,
+    SECOND,
+    Angle,
+    Duration,
+    InverseLength,
+    Length,
+)
 
 # The water's clock at the start, in seconds: the Clearwater page's.
 comptime WATER_START = Float32(5)
@@ -152,6 +165,35 @@ def door_path(door: Doorway, ground: Ground) -> List[Lot]:
     return legs^
 
 
+def oak(var crown: CrownParameters) -> CrownParameters:
+    """Return a broadleaf tree with an oak's trunk, as a village's old
+    trees have.
+
+    The meadow's open trees have pale, thin trunks, as a eucalyptus has.
+    An oak's twig tips are twice as thick, so by the pipe model its
+    trunk and limbs are twice as thick too, and so is the thinnest wood
+    drawn. Its trunk flares twice as much at its foot, into roots. Its bark is gray-brown, furrowed by
+    dark marks four times as close.
+
+    Args:
+        crown: The tree. Its shape and its leaves are kept.
+
+    Returns:
+        The tree with an oak's wood.
+    """
+    crown.limbs.tip_radius = Length(crown.limbs.tip_radius.to(METER) * 2, METER)
+    # The thinnest wood drawn grows as much, so the same branches are
+    # drawn, and no more triangles.
+    crown.wood_radius = Length(crown.wood_radius.to(METER) * 2, METER)
+    crown.limbs.flare = min(Float32(3), crown.limbs.flare * 2)
+    crown.bark = Vector3(0.165, 0.140, 0.110)
+    crown.bark_dark = Vector3(0.045, 0.038, 0.030)
+    crown.bark_marks = InverseLength(
+        crown.bark_marks.to(PER_METER) * 4, PER_METER
+    )
+    return crown^
+
+
 @fieldwise_init
 struct HousePlacement(Copyable, Movable):
     """A house and where it stands."""
@@ -194,12 +236,16 @@ struct VillageParameters(Copyable, Movable):
         away, and a framed cottage and a framed house stand on each side
         of it, about 60 meters away. A brick house stands on the left,
         about 75 meters away, and a timber barn about 90 meters away. A
-        scanned building stands on the right, about 110 meters away.
+        scanned building stands on the right, about 110 meters away. The
+        meadow's open and round trees grow as oaks: see `oak`.
 
         Raises:
             Error: Never; the defaults are in range.
         """
         self.meadow = MeadowParameters()
+        # The open and the round trees grow as oaks.
+        for index in [0, 1, 5, 10, 11]:
+            self.meadow.crowns[index] = oak(self.meadow.crowns[index].copy())
         self.meadow.ground.pond = Pond(
             Length(8.0, METER),
             Length(19.0, METER),
@@ -551,6 +597,43 @@ struct Village(Movable):
             walls.extend(inside.furniture.copy())
             floors.extend(inside.floors.copy())
         return Terrain(self.meadow.field.ground, lots^, walls^, floors^)
+
+    def pond_seen(self, camera: PerspectiveCamera) raises -> Bool:
+        """Return whether a camera can see any of the pond.
+
+        The water is an endless plane, but it shows only in the pond's
+        basin. A sphere round the basin, at the water's height, stands in
+        for it: a camera whose view misses the sphere sees no water, and
+        the water need not be composed.
+
+        Args:
+            camera: The camera, placed.
+
+        Returns:
+            False if the village has no pond, or the sphere lies outside
+            the camera's view.
+
+        Raises:
+            Error: If the camera's matrices are invalid.
+        """
+        ref pond = self.meadow.field.ground.pond
+        var radius = pond.radius.to(METER)
+        if radius <= 0:
+            return False
+        var view = camera.view_matrix()
+        var clip = camera.projection_matrix()
+        clip.multiply(view)
+        var frustum = Frustum.from_camera(
+            clip, view, camera.near_distance(), camera.far_distance()
+        )
+        return frustum.intersects_sphere(
+            Sphere(
+                Vector3(
+                    pond.x.to(METER), self.level.to(METER), pond.z.to(METER)
+                ),
+                radius + 1,
+            )
+        )
 
     def update(
         mut self,

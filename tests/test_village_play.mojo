@@ -320,6 +320,22 @@ def test_a_player_gathers_and_the_display_says_so() raises:
     # The note ages with the frames.
     _ = game.tick(scene, assets, no_input(), step)
     assert_almost_equal(game.note_age, 0.1, atol=1e-5)
+    # Facing away from the pond, the camera does not see it, and its water
+    # is not composed. Facing it, the camera sees it.
+    var x = Float32(-6)
+    var z = Float32(-6)
+    var ground = game.terrain.ground.height_at(x, z)
+    game.player.position = Vector3(x, ground, z)
+    game.view.yaw = Angle(0.0, DEGREE)
+    for _ in range(3):
+        _ = game.tick(scene, assets, no_input(), step)
+    assert_false(game.village.pond_seen(game.camera))
+    game.render(scene, assets)
+    game.view.yaw = Angle(180.0, DEGREE)
+    for _ in range(3):
+        _ = game.tick(scene, assets, no_input(), step)
+    assert_true(game.village.pond_seen(game.camera))
+    game.render(scene, assets)
 
 
 def test_a_full_size_frame_is_not_stretched() raises:
