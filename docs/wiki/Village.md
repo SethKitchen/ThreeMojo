@@ -75,6 +75,9 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 | `doors.mojo` | `Doors`. |
 | `props.mojo` | `PropKind`, `Prop`, `StandingProps` and `stand_props`. |
 | `sheet.mojo` | `Sheet`. |
+| `dressing.mojo` | `Glow`, `warm`, `warmth`, `prism`, `rug`, `patchwork`, `table_setting`, `jars`, `books`, `lantern` and `herbs`. |
+| `gathering.mojo` | `GatherKind`, `Spot`, `GatherParameters`, `Satchel` and `Gathering`. See [Village gathering](Village-gathering). |
+| `hud.mojo` | `draw_hud`, `draw_text` and the prompts. See [Village gathering](Village-gathering#the-heads-up-display). |
 | `surfaces.mojo` | The textures, `HouseLooks` and `house_looks`. |
 | `scanned.mojo` | `CutBuilding`, `cut_building`, `grid_voxel`, `linear_splats`, `scan_lot` and `stand_scan`. |
 | `village.mojo` | `HousePlacement`, `VillageParameters` and `Village`. |

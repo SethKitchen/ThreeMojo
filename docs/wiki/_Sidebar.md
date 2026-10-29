@@ -81,6 +81,7 @@
 - [Village](Village)
   - [Village houses](Village-houses)
   - [Village walk](Village-walk)
+  - [Village gathering](Village-gathering)
   - [Game renderer](Game-renderer)
 - [Streamline](Streamline)
 - [Animals](Animals)

@@ -76,6 +76,24 @@ from extensions.building.kinds import (
 from extensions.building.model import Building, WallFrame
 from extensions.vegetation.ground import Ground, Lot
 from extensions.vegetation.noise import hash01
+from extensions.village.dressing import (
+    CANDLE,
+    FILL,
+    Glow,
+    HEARTH,
+    LANTERN,
+    books,
+    dye,
+    glaze,
+    herbs,
+    jars,
+    lantern,
+    patchwork,
+    prism,
+    rug,
+    table_setting,
+    warm,
+)
 from extensions.village.house import (
     BARN,
     BOARDED,
@@ -102,6 +120,7 @@ from extensions.village.surfaces import (
     ASHLAR_TILE,
     BOARDS_TILE,
     BRICK_TILE,
+    CLOTH_TILE,
     FIELDSTONE_TILE,
     HouseLooks,
     PLANK_TILE,
@@ -167,6 +186,10 @@ comptime FIREBOX_HALF = Float32(0.45)
 comptime DOUBLE_DOOR = Float32(2)
 """The narrowest door that hangs two leaves, one at each jamb, in
 meters."""
+comptime DADO = Float32(0.95)
+"""How high the oak paneling reaches up a room's walls, in meters."""
+comptime PANELING = Vector3(0.95, 1.0, 1.05)
+"""The vertex color of the paneling over the wood texture: honey oak."""
 comptime BRACED_LEAF = Float32(1.2)
 """The narrowest door leaf that has diagonal braces between its ledges,
 in meters."""
@@ -268,6 +291,7 @@ struct _Sheets(Movable):
     var planks: Sheet
     var glass: Sheet
     var daylight: Sheet
+    var cloth: Sheet
 
     def __init__(out self, facade: Facade):
         var tile = BRICK_TILE
@@ -285,6 +309,7 @@ struct _Sheets(Movable):
         self.planks = Sheet(PLANK_TILE)
         self.glass = Sheet(1)
         self.daylight = Sheet(1)
+        self.cloth = Sheet(CLOTH_TILE)
 
 
 def _local(p: Vec3d) -> Vector3:
@@ -439,6 +464,8 @@ def _wall_faces(
     for mark in [0.3, 0.7]:  # pragma: no branch
         marks_v.append(mark)
         marks_v.append(Float64(face.height) - mark)
+    if not boards:
+        marks_v.append(Float64(DADO))
     var us = _breaks(-Float64(half), Float64(face.length + half), marks_u)
     var vs = _breaks(0, Float64(face.height), marks_v)
     # Each list of cuts holds its start and its end.
@@ -481,7 +508,35 @@ def _wall_faces(
                 var k1 = INDOORS * inside_shade(u1, v0, length, height)
                 var k2 = INDOORS * inside_shade(u1, v1, length, height)
                 var k3 = INDOORS * inside_shade(u0, v1, length, height)
-                if boards:
+                if not boards and v1 <= DADO + 1.0e-4:
+                    # Oak paneling to the dado, and a rail along its top.
+                    var oak = PANELING
+                    _inside_face(
+                        sheets.wood,
+                        a,
+                        b,
+                        c,
+                        d,
+                        oak * (k0.y / INDOORS.y),
+                        oak * (k1.y / INDOORS.y),
+                        oak * (k2.y / INDOORS.y),
+                        oak * (k3.y / INDOORS.y),
+                        u0,
+                        u1,
+                        v0,
+                        v1,
+                        sign,
+                    )
+                    if v1 >= DADO - 1.0e-4:
+                        var outward = Vector3(-face.along.z, 0, face.along.x)
+                        sheets.wood.box(
+                            face.at((u0 + u1) / 2, v1, sign * (half + 0.015)),
+                            face.along * ((u1 - u0) / 2),
+                            Vector3(0, 0.035, 0),
+                            outward * 0.015,
+                            PANELING * 0.8,
+                        )
+                elif boards:
                     _inside_face(
                         sheets.facade,
                         a,
@@ -1342,7 +1397,9 @@ def _rooms(
                 r.x1,
                 -r.z0,
             )
-        var ceiling = INDOORS * 0.8
+        # The sky's green bounce off the meadow tints a ceiling: a warmer
+        # plaster keeps it white.
+        var ceiling = Vector3(1.4, 1.02, 0.8)
         for r in ceilings:  # pragma: no branch
             if barn:
                 _ceiling(sheets.planks, r, high, ceiling * 0.8)
@@ -1383,6 +1440,80 @@ def _rooms(
             )
         if under:
             _trimmers(sheets, hole, high, low + Float32(storey.height.value))
+
+
+def _dress_rooms(
+    mut sheets: _Sheets,
+    building: Building,
+    stair: Optional[Stair],
+    seed: Int,
+    mut glows: List[Glow],
+):
+    """Dress each room of a dwelling: a rug on its floor and a lantern over
+    it, and in the hall a pole of drying herbs by its front wall. A rug
+    keeps 75 centimeters off the walls, and off a stair and its well. A
+    room with less than a meter of rug each way has no rug and no
+    lantern. Add the glow of each lantern."""
+    var slab = Float32(0.2)
+    var inset = Float32(0.75)
+    var hole = _Rect(0, 0, 0, 0)
+    if stair:
+        hole = _well(stair.value())
+    for s in range(len(building.spaces)):
+        ref space = building.spaces[s]
+        ref storey = building.storeys[space.storey.value]
+        var low = Float32(storey.elevation.value)
+        var high = low + Float32(storey.height.value) - slab
+        var x0 = Float32(1.0e9)
+        var x1 = Float32(-1.0e9)
+        var y0 = Float32(1.0e9)
+        var y1 = Float32(-1.0e9)
+        for p in space.outline:  # pragma: no branch
+            x0 = min(x0, Float32(p.x))
+            x1 = max(x1, Float32(p.x))
+            y0 = min(y0, Float32(p.y))
+            y1 = max(y1, Float32(p.y))
+        # The scene's z is the model's -y.
+        var room = _Rect(x0, x1, -y1, -y0)
+        if s == 0:
+            # Herbs hang near the hall's front wall, toward its west end.
+            # A hall is 3 meters wide or more, so the pole is 0.6 meters
+            # long or more.
+            var z = room.z1 - 0.45
+            var reach = min(Float32(1.4), (room.x1 - room.x0) / 2 - 0.9)
+            herbs(
+                sheets.wood,
+                Vector3(room.x0 + 0.35, high - 0.3, z),
+                Vector3(room.x0 + 0.35 + reach, high - 0.3, z),
+                seed,
+            )
+        var r = _Rect(
+            room.x0 + inset, room.x1 - inset, room.z0 + inset, room.z1 - inset
+        )
+        # Over the stair's band, the rug keeps to the larger side of it.
+        # A rug clear of the band in z keeps its size: the clamps hold it
+        # within the room.
+        var across = min(r.x1, hole.x1) - max(r.x0, hole.x0)
+        if Bool(stair) and across > 0:
+            var front = r.z1 - max(r.z0, hole.z1 + 0.3)
+            var back = min(r.z1, hole.z0 - 0.3) - r.z0
+            # One for the front side, zero for the back.
+            var keep = Float32(Int(front >= back))
+            var z0 = r.z0 + keep * (max(r.z0, hole.z1 + 0.3) - r.z0)
+            r.z1 += (1 - keep) * (min(r.z1, hole.z0 - 0.3) - r.z1)
+            r.z0 = z0
+        # A rug is at most 2.6 meters long and 1.8 wide.
+        var mx = (r.x0 + r.x1) / 2
+        var mz = (r.z0 + r.z1) / 2
+        var hx = min(Float32(1.3), (r.x1 - r.x0) / 2)
+        var hz = min(Float32(0.9), (r.z1 - r.z0) / 2)
+        if min(hx, hz) < 0.5:
+            continue
+        rug(sheets.cloth, mx - hx, mx + hx, mz - hz, mz + hz, low, seed + s)
+        var flame = lantern(
+            sheets.wood, sheets.daylight, Vector3(mx, high, mz), 0.75
+        )
+        glows.append(LANTERN.placed(flame, low, high + slab))
 
 
 def _trimmers(mut sheets: _Sheets, hole: _Rect, low: Float32, high: Float32):
@@ -1549,7 +1680,12 @@ def _cube(
     )
 
 
-def _breast_view(mut sheets: _Sheets, building: Building, breast: Breast):
+def _breast_view(
+    mut sheets: _Sheets,
+    building: Building,
+    breast: Breast,
+    mut glows: List[Glow],
+):
     """Add a chimney breast up through every storey, and on the ground
     storey its fireplace: a stone surround, an oak mantel, a sooty back, a
     stone hearth, logs and glowing embers."""
@@ -1647,6 +1783,9 @@ def _breast_view(mut sheets: _Sheets, building: Building, breast: Breast):
                 mid + 0.28,
                 OAK * 0.5,
             )
+        glows.append(
+            HEARTH.placed(Vector3(back + 0.5, low + 0.2, mid), low, high)
+        )
         # The glow is brightest over the embers and fades up the back.
         var bright = EMBERS * 0.7
         var dim = EMBERS * 0.05
@@ -1969,9 +2108,11 @@ def _piece(
     depth: Float32,
     height: Float32,
     seed: Int,
-):
+) -> Optional[Vector3]:
     """Add one piece of furniture: `side` runs along its width and
-    `front` toward the side it is used from, both of length one."""
+    `front` toward the side it is used from, both of length one. Dress
+    it too: lay a table, make a bed, and fill a shelf. Return where the
+    flame of a candle on it burns, if it has one."""
     var hw = width / 2
     var hd = depth / 2
     var wood = OAK * (1.1 + 0.2 * Float32(seed % 3))
@@ -1979,6 +2120,7 @@ def _piece(
     var up = Vector3(0, 1, 0)
     if kind == TABLE or kind == COFFEE_TABLE or kind == DESK:
         var top = Float32(0.05)
+        var board = center + up * height
         _legs(
             sheets.wood,
             center,
@@ -2001,7 +2143,32 @@ def _piece(
             hd,
             wood,
         )
-        return
+        if kind == TABLE:
+            return table_setting(
+                sheets.ashlar,
+                sheets.daylight,
+                board,
+                side,
+                front,
+                hw,
+                hd,
+                seed,
+            )
+        if kind == DESK:
+            return books(sheets.wood, sheets.daylight, board, side, front, seed)
+        # A jug and two cups on a low table.
+        prism(sheets.ashlar, board, 0.06, 0.04, 0.2, 10, glaze(seed))
+        for sx in [Float32(1), Float32(-1)]:  # pragma: no branch
+            prism(
+                sheets.ashlar,
+                board + side * (sx * hw * 0.5),
+                0.035,
+                0.04,
+                0.08,
+                8,
+                glaze(seed + 2),
+            )
+        return None
     if kind == CHAIR:
         var seat = Float32(0.45)
         _legs(sheets.wood, center, side, front, hw, hd, 0.06, seat, 0.02, wood)
@@ -2026,12 +2193,12 @@ def _piece(
             0.02,
             wood,
         )
-        return
+        return None
     if kind == BED:
         _legs(sheets.wood, center, side, front, hw, hd, 0.06, 0.25, 0.04, wood)
         _block(sheets.wood, center + up * 0.28, side, front, hw, 0.05, hd, wood)
         _block(
-            sheets.plaster,
+            sheets.cloth,
             center + up * 0.4,
             side,
             front,
@@ -2040,20 +2207,30 @@ def _piece(
             hd - 0.04,
             cloth,
         )
-        # The blanket over the foot of the bed, a pillow at its head, and
-        # the headboard.
+        # A quilt over the foot of the bed, its sides hanging down, a
+        # pillow at its head, and the headboard.
+        var quilt = center + front * (hd * 0.25) + up * 0.49
         _block(
-            sheets.wood,
-            center + front * (hd * 0.25) + up * 0.49,
+            sheets.cloth,
+            quilt - up * 0.06,
+            side,
+            front,
+            hw + 0.01,
+            0.08,
+            hd * 0.72,
+            dye(seed) * 0.6,
+        )
+        patchwork(
+            sheets.cloth,
+            quilt + up * 0.021,
             side,
             front,
             hw - 0.02,
-            0.02,
-            hd * 0.72,
-            painted(Vector3(0.25, 0.04, 0.03)) * 0.9,
+            hd * 0.7,
+            seed,
         )
         _block(
-            sheets.plaster,
+            sheets.cloth,
             center - front * (hd - 0.25) + up * 0.52,
             side,
             front,
@@ -2072,7 +2249,7 @@ def _piece(
             0.03,
             wood,
         )
-        return
+        return None
     if kind == SOFA:
         # A settle: a bench with a high back, arms and a cushion.
         _block(sheets.wood, center + up * 0.22, side, front, hw, 0.22, hd, wood)
@@ -2098,16 +2275,16 @@ def _piece(
                 wood,
             )
         _block(
-            sheets.plaster,
+            sheets.cloth,
             center + front * 0.05 + up * 0.47,
             side,
             front,
             hw - 0.1,
             0.03,
             hd - 0.15,
-            painted(Vector3(0.08, 0.12, 0.2)),
+            dye(seed + 1) * 0.8,
         )
-        return
+        return None
     if kind == SHELF:
         _block(
             sheets.wood,
@@ -2137,17 +2314,15 @@ def _piece(
             )
             if k < 4:
                 # Jars and pots on the shelf.
-                _block(
+                jars(
                     sheets.ashlar,
-                    center + side * (hw * 0.4) + up * (y + 0.1),
+                    center + up * (y + 0.015),
                     side,
-                    front,
-                    hw * 0.35,
-                    0.08,
-                    hd * 0.6,
-                    Vector3(0.7, 0.55, 0.45),
+                    hw,
+                    depth,
+                    seed + k,
                 )
-        return
+        return None
     # A cabinet, a wardrobe, a nightstand, a counter, a sink or a toilet:
     # a carcass with a top and two doors.
     _block(
@@ -2165,6 +2340,38 @@ def _piece(
         _block(
             sheets.ashlar, lid, side, front, hw + 0.02, 0.02, hd + 0.02, STONE
         )
+        if kind == COUNTER:
+            # A board with a loaf on it, and a crock.
+            var board = lid + up * 0.02
+            _block(
+                sheets.wood,
+                board + side * (hw * 0.3) + up * 0.01,
+                side,
+                front,
+                0.18,
+                0.01,
+                0.12,
+                wood * 1.2,
+            )
+            _block(
+                sheets.wood,
+                board + side * (hw * 0.3) + up * 0.06,
+                side,
+                front,
+                0.1,
+                0.04,
+                0.06,
+                painted(Vector3(0.45, 0.26, 0.1)),
+            )
+            prism(
+                sheets.ashlar,
+                board - side * (hw * 0.4),
+                0.1,
+                0.08,
+                0.22,
+                10,
+                glaze(seed),
+            )
     else:
         _block(sheets.wood, lid, side, front, hw + 0.02, 0.02, hd + 0.02, wood)
     for sx in [Float32(1), Float32(-1)]:  # pragma: no branch
@@ -2181,6 +2388,7 @@ def _piece(
             0.01,
             wood * 1.1,
         )
+    return None
 
 
 def _hay(
@@ -2410,9 +2618,14 @@ def _loft(mut sheets: _Sheets, parameters: HouseParameters, half_t: Float32):
     )
 
 
-def _furniture(mut sheets: _Sheets, building: Building, barn: Bool):
+def _furniture(
+    mut sheets: _Sheets,
+    building: Building,
+    barn: Bool,
+    mut glows: List[Glow],
+):
     """Add each furnishing of the model. In a barn, a shelf is a stack of
-    hay, and any other piece is a manger."""
+    hay, and any other piece is a manger. Add the glow of each candle."""
     for index in range(len(building.furnishings)):
         ref piece = building.furnishings[index]
         ref storey = building.storeys[
@@ -2431,7 +2644,7 @@ def _furniture(mut sheets: _Sheets, building: Building, barn: Bool):
         var depth = Float32(piece.depth.value)
         var height = Float32(piece.height.value)
         if not barn:
-            _piece(
+            var flame = _piece(
                 sheets,
                 piece.kind,
                 center,
@@ -2442,6 +2655,13 @@ def _furniture(mut sheets: _Sheets, building: Building, barn: Bool):
                 height,
                 index,
             )
+            if flame:
+                var low = Float32(storey.elevation.value)
+                glows.append(
+                    CANDLE.placed(
+                        flame.value(), low, low + Float32(storey.height.value)
+                    )
+                )
         elif piece.kind == SHELF:
             _hay(sheets, center, side, front, width, depth, height, index)
         else:
@@ -2573,11 +2793,14 @@ def stand_house(
     var stair = house_stair(building)
     var barn = parameters.use == BARN
     _rooms(sheets, building, stair, barn)
+    var glows = List[Glow]()
+    if not barn:
+        _dress_rooms(sheets, building, stair, parameters.seed, glows)
     if stair:
         _stair_view(sheets, stair.value())
     var breast = house_breast(building)
     if breast:
-        _breast_view(sheets, building, breast.value())
+        _breast_view(sheets, building, breast.value(), glows)
     var half_t = Float32(building.constructions[0].thickness().value) / 2
     if parameters.pitch.to(RADIAN) > 0:
         _roof(sheets, parameters, half_t, breast)
@@ -2588,9 +2811,17 @@ def stand_house(
         _quoins(sheets, half_x + half_t, half_z + half_t, top)
     if parameters.facade == BRICK_FACADE:
         _string_courses(sheets, half_x + half_t, half_z + half_t, parameters)
-    _furniture(sheets, building, barn)
+    _furniture(sheets, building, barn, glows)
     if barn and parameters.pitch.to(RADIAN) > 0:
         _loft(sheets, parameters, half_t)
+    # Light bounces round a dwelling's rooms, and the fire, the candles
+    # and the lanterns warm what faces them. A barn's rooms stay dim.
+    var fill = Vector3(1, 1, 1) if barn else FILL
+    warm(sheets.plaster, glows, half_x, half_z, fill)
+    warm(sheets.wood, glows, half_x, half_z, fill)
+    warm(sheets.ashlar, glows, half_x, half_z, fill)
+    warm(sheets.planks, glows, half_x, half_z, fill)
+    warm(sheets.cloth, glows, half_x, half_z, fill)
     var roof = (
         looks.slates if parameters.facade == STONE_FACADE else looks.tiles
     )
@@ -2613,6 +2844,7 @@ def stand_house(
     triangles += _add(
         scene, assets, sheets.daylight, looks.daylight, root, False
     )
+    triangles += _add(scene, assets, sheets.cloth, looks.cloth, root, False)
     # A leaf on a hinge for each door of the ground storey, two for a
     # wide one, in the order of the interior's doorways.
     var hinges = List[Hinge]()

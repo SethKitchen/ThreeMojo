@@ -26,6 +26,7 @@ cores.
 | Look | Right stick | The arrows |
 | Run | Hold the right trigger, the east button or the left stick | Hold Shift, or `R` |
 | Jump | The south button | Space |
+| Use | The west button | `E` |
 | Quit | The start button | Escape or `q` |
 
 The game moves by the time each frame takes, so a slow frame moves the

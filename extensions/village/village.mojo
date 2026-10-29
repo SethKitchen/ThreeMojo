@@ -85,7 +85,7 @@ from extensions.village.props import (
     WOODPILE_DEPTH,
     stand_props,
 )
-from extensions.village.surfaces import house_looks
+from extensions.village.surfaces import HouseLooks, house_looks
 from extensions.village.terrain import Floor, Terrain, WallSpan
 from extensions.village.scanned import CutBuilding, scan_lot, stand_scan
 from extensions.water.frame import WaterScene
@@ -441,6 +441,8 @@ struct Village(Movable):
     var props: StandingProps
     # The lot of the scanned building, if the village has one.
     var scanned: Optional[Lot]
+    # The houses' materials, which the props wear too.
+    var looks: HouseLooks
 
     def __init__(
         out self,
@@ -495,6 +497,7 @@ struct Village(Movable):
         self.houses = List[StandingHouse]()
         self.doors = Doors()
         var looks = house_looks(assets, SURFACE_TEXELS, 17)
+        self.looks = looks
         for index in range(len(parameters.houses)):
             ref house = parameters.houses[index].house
             var standing = stand_house(

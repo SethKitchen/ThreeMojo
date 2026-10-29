@@ -75,7 +75,7 @@ The front door is 1 meter wide and 2.1 meters tall. A barn is different: see [Th
 5. **The roof.** Two slopes of tiles or slates, 16 centimeters thick, reach 35 centimeters past the long walls. Boards line the underside of the eaves. A fascia, barge boards and a ridge close the edges. A chimney stack rises over the chimney breast. Each gable is cut into cells no more than 1 meter across, as a wall is. A zinc gutter runs along each eave. A downpipe runs from each end of each gutter down the wall to the ground.
 6. **The plinth and the steps.** A stone plinth reaches 40 centimeters below the lowest ground under the house. Stone steps lead up to the front door.
 
-The house hangs from one node at its lot's middle, at the floor's height. Each material is one mesh. So a house is eight meshes, and one more for each door leaf.
+The house hangs from one node at its lot's middle, at the floor's height. Each material is one mesh. So a house is nine meshes, and one more for each door leaf. A barn has no cloth, so it is eight.
 
 ## Surfaces
 
@@ -92,6 +92,7 @@ The house hangs from one node at its lot's middle, at the floor's height. Each m
 | `tile_texture` | 1 m | Five courses of clay tiles |
 | `slate_texture` | 0.9 m | Six courses of slates |
 | `plank_texture` | 1.2 m | Floor planks of 15 centimeters |
+| `cloth_texture` | 0.25 m | Undyed wool in a two-over-two twill, for rugs, quilts and cushions |
 
 A `Sheet` holds the triangles of one material, with a normal, a color and texture coordinates at each vertex. Its texture coordinates are meters divided by its texture's size. The game renderer reads these maps at each pixel. See [Game renderer](Game-renderer#maps-at-each-pixel).
 
@@ -159,10 +160,45 @@ A brick or stone house has a chimney breast against its west gable wall. `house_
 
 `house_interior` gives a `WallSpan` along the breast's face, as high as the storey. So a character walks round the breast and does not walk into the fire.
 
+## Furnishings and light
+
+A dwelling's rooms are dressed. A barn's are not. `extensions/village/dressing.mojo` draws the small things, and `stand_house` places them:
+
+| Where | What |
+|---|---|
+| Each wall of each room | Oak paneling to `DADO`, 95 centimeters up, with a rail along its top. |
+| Each room's floor | A woven rug of 16 by 10 cells: a border, a cream line, a field and a medallion. It keeps 75 centimeters off the walls and 30 centimeters off the stair's band. It is at most 2.6 by 1.8 meters. A room with less than a meter of rug each way has no rug. |
+| Over each rug | A lantern of iron and glowing glass, on a chain 75 centimeters long. |
+| The hall | A pole of drying herbs under the ceiling, by the front wall. |
+| A table | A plate and a mug at each place on both long sides, a bowl, and a candle. |
+| A desk | A stack of four books, and a candle. |
+| A low table | A jug and two cups. |
+| A counter | A board with a loaf on it, and a crock. |
+| A shelf | Three jars and pots of glazed earthenware on each board. |
+| A bed | A mattress, a quilt of 4 by 5 patches and a pillow, in wool. |
+| A settle | A wool cushion. |
+
+The rugs, the quilts and the cushions wear `cloth_texture`. Each dye is one of `dye`: madder, woad, weld, nettle and walnut. Each glaze is one of `glaze`. A flame is drawn on the unlit material, so it shows in a dark room.
+
+### Light inside a house
+
+The game renderer has no lamps. So `warm` bakes the light inside a dwelling into the vertex colors of its plaster, wood, stone, planks and cloth:
+
+1. **The fill.** Each color inside the walls is multiplied by `FILL`. This is the warm light that bounces round a room off its floor and its walls.
+2. **The flames.** Each `Glow` adds `FIRELIGHT` times `warmth`. `warmth` starts at the glow's strength. It is multiplied by the cosine between the surface's normal and the way to the flame. It is also multiplied by the square of the share of its reach that is left.
+
+| Glow | Strength | Reach |
+|---|---|---|
+| `HEARTH`, at the embers | 1.6 | 5 meters |
+| `LANTERN`, at its flame | 0.9 | 4 meters |
+| `CANDLE`, at its flame | 0.6 | 2.5 meters |
+
+A glow warms only its own storey. A vertex outside the middle of the walls is not warmed, so a flame does not light the outside face of a wall.
+
 ## Limits
 
 - Only the first storey above the ground has a stair. A character does not reach a higher storey.
 - A door leaf does not stop a character or a camera.
-- A house has no lamp. The inside is lit by the sky and by the sun through its windows. The fire glows, but it does not light the room.
+- A flame does not light the room as a lamp does. Its light is baked into the vertex colors when the house is built, so a character does not catch it, and it casts no shadow.
 - A house of timber framing or boards has no hearth.
 - A house is a box of storeys under one gable roof. It has no porch and no wing.

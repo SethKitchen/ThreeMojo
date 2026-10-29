@@ -20,16 +20,19 @@ and its animals, seen by a third-person camera.
    stance's clip.
 5. Each resident steps along its route and is posed: see `Residents`.
 6. Each door swings open while someone stands near it, and shut after.
-7. The camera follows the player. Where a wall stands between the
+7. A new press of the use button uses the spot of `Gathering` in reach:
+   see `extensions.village.gathering`.
+8. The camera follows the player. Where a wall stands between the
    player and the eye, the eye comes in to stand before the wall, and it
    goes back out slowly when the wall is passed. Under a ceiling, the
    eye stays below it. It stays above the ground or the floor.
-8. The village prepares the frame: the grass for the camera, and the
+9. The village prepares the frame: the grass for the camera, and the
    water's clock.
 
 `VillageGame.render` then draws the frame with `GameRenderer` at the
 quality's size, composes the pond's water into it, and stretches it to the
-window. `GameQuality` says how finely each part of the frame is drawn: see
+window, and writes the heads-up display over it: see
+`extensions.village.hud`. `GameQuality` says how finely each part of the frame is drawn: see
 `extensions.village.quality`.
 """
 
@@ -62,6 +65,8 @@ from extensions.village.character import (
     MoveInput,
     Obstacle,
 )
+from extensions.village.gathering import GatherParameters, Gathering
+from extensions.village.hud import draw_hud, note_text, use_prompt
 from extensions.village.residents import (
     Body,
     Herd,
@@ -230,13 +235,19 @@ struct PlayParameters(Copyable, Movable):
     var heading: Angle
     # The camera's field of view.
     var field_of_view: Angle
+    # What the player can gather about the village.
+    var gathering: GatherParameters
+    # Whether `VillageGame.render` writes the satchel, the prompt and the
+    # last note over the frame: see `extensions.village.hud`.
+    var hud: Bool
 
     def __init__(out self, quality: GameQuality) raises:
         """Create the default game at a quality: the village with the
         quality's plants, its residents, and a man of six feet on the
         trail who looks toward the houses. He wears a madder-red tunic
         trimmed in weld yellow over a linen shirt, walnut hose and
-        leather boots.
+        leather boots. The village has its default spots to gather, and
+        the heads-up display is on.
 
         Args:
             quality: How finely each part of a frame is drawn.
@@ -255,6 +266,8 @@ struct PlayParameters(Copyable, Movable):
         self.start_z = 26
         self.heading = Angle(0.0, RADIAN)
         self.field_of_view = Angle(55.0, DEGREE)
+        self.gathering = GatherParameters()
+        self.hud = True
 
 
 def tree_obstacles(
@@ -319,6 +332,13 @@ struct VillageGame(Movable):
     var upscale_ms: Float64
     # The last frame, the window's size: `render` draws into it.
     var window: Framebuffer
+    # What the player can gather, and what the player has.
+    var gathering: Gathering
+    # Whether `render` writes the heads-up display; the last note, and how
+    # long ago it was given, in seconds.
+    var hud: Bool
+    var note: String
+    var note_age: Float32
 
     def __init__(
         out self,
@@ -419,6 +439,20 @@ struct VillageGame(Movable):
         self.trees = tree_obstacles(
             parameters.village, self.village.meadow.field.lots
         )
+        # The spots keep off the lots and the props, as the residents do,
+        # and a solid spot stops a character as a trunk does.
+        self.gathering = Gathering(
+            scene,
+            assets,
+            self.village.looks,
+            parameters.gathering,
+            self.village.meadow.field.ground,
+            keep_off,
+        )
+        self.trees.extend(self.gathering.obstacles())
+        self.hud = parameters.hud
+        self.note = String()
+        self.note_age = 0
         self.clock = 0
         self.village.meadow.register_shadings(self.fast, assets)
         self.fast.set_shadows(self.quality.shadows, self.quality.shadow_size)
@@ -488,6 +522,12 @@ struct VillageGame(Movable):
                 )
             )
         self.village.doors.update(scene, people, delta)
+        self.note_age += delta.to(SECOND)
+        var gathered = self.gathering.update(scene, feet, input.use, delta)
+        if gathered:
+            var kind = gathered.value()
+            self.note = note_text(kind, self.gathering.satchel.last)
+            self.note_age = 0
         self.view.follow_target(
             Vector3(feet.x, feet.y + FOCUS_HEIGHT, feet.z), delta
         )
@@ -523,6 +563,8 @@ struct VillageGame(Movable):
         water is composed into it. Its edges are smoothed if the quality's
         `smooth_edges` asks, and it is stretched over `window`. The window's
         frame is kept from frame to frame, so it is not allocated again.
+        If `hud` is set, the satchel, the prompt and the last note are
+        written over the window's frame.
 
         Args:
             scene: The scene the game is in.
@@ -549,7 +591,28 @@ struct VillageGame(Movable):
         self.upscale_ms = 0
         if image.width == self.width and image.height == self.height:
             self.window = image^
-            return
-        var smoothed = perf_counter_ns()
-        upscale_into(image, self.window, available_workers())
-        self.upscale_ms = Float64(perf_counter_ns() - smoothed) / 1.0e6
+        else:
+            var smoothed = perf_counter_ns()
+            upscale_into(image, self.window, available_workers())
+            self.upscale_ms = Float64(perf_counter_ns() - smoothed) / 1.0e6
+        if self.hud:
+            draw_hud(
+                self.window,
+                self.gathering.satchel,
+                self.prompt(),
+                self.note,
+                self.note_age,
+            )
+
+    def prompt(self) -> String:
+        """Return what the use button does now, for the heads-up display.
+
+        Returns:
+            The prompt for the spot the player can use, or an empty
+            string if there is none.
+        """
+        var focus = self.gathering.focus
+        if focus < 0:
+            return String()
+        ref g = self.gathering.spots[focus]
+        return use_prompt(g.spot.kind, g.strikes)

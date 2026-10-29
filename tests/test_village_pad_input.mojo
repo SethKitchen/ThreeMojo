@@ -12,6 +12,7 @@ from controls.input import KEY_A, KEY_D, KEY_R, KEY_S, KEY_W
 from extensions.gamepad.web import WebGamepadState, WebHub
 from extensions.village.character import MoveInput, no_input
 from extensions.village.pad_input import (
+    KEY_E,
     KEY_SPACE,
     combined,
     gamepad_input,
@@ -70,6 +71,7 @@ def test_the_left_stick_moves_and_the_right_stick_looks() raises:
     assert_almost_equal(input.look_up, -0.7071, atol=1e-3)
     assert_false(input.run)
     assert_false(input.jump)
+    assert_false(input.use)
 
 
 def test_the_buttons_jump_run_and_steer() raises:
@@ -89,6 +91,12 @@ def test_the_buttons_jump_run_and_steer() raises:
     click.digital_buttons[10] = True
     click.analog_buttons[10] = 1
     assert_true(_pad(click).run)
+    # The west button uses.
+    var west = _state()
+    west.digital_buttons[2] = True
+    west.analog_buttons[2] = 1
+    assert_true(_pad(west).use)
+    assert_false(input.use)
     var up = _state()
     up.digital_buttons[12] = True
     up.digital_buttons[15] = True
@@ -106,7 +114,7 @@ def test_the_buttons_jump_run_and_steer() raises:
 def test_the_keyboard_moves_looks_runs_and_jumps() raises:
     var keys = HeldKeys()
     assert_equal(keyboard_input(keys, False).forward, 0)
-    for key in [KEY_W, KEY_D, ARROW_RIGHT, ARROW_UP, KEY_SPACE]:
+    for key in [KEY_W, KEY_D, ARROW_RIGHT, ARROW_UP, KEY_SPACE, KEY_E]:
         keys.press(key)
     var input = keyboard_input(keys, True)
     assert_equal(input.forward, 1)
@@ -115,6 +123,7 @@ def test_the_keyboard_moves_looks_runs_and_jumps() raises:
     assert_equal(input.look_up, 1)
     assert_true(input.run)
     assert_true(input.jump)
+    assert_true(input.use)
     var back = HeldKeys()
     for key in [KEY_S, KEY_A, ARROW_LEFT, ARROW_DOWN, KEY_R]:
         back.press(key)
@@ -125,10 +134,11 @@ def test_the_keyboard_moves_looks_runs_and_jumps() raises:
     assert_equal(other.look_up, -1)
     assert_true(other.run)
     assert_false(other.jump)
+    assert_false(other.use)
 
 
 def test_two_inputs_add() raises:
-    var a = MoveInput(0.8, -0.5, 0.2, 0, True, False)
+    var a = MoveInput(0.8, -0.5, 0.2, 0, True, False, True)
     var b = MoveInput(0.8, 0.2, -0.9, 0.3, False, True)
     var both = combined(a, b)
     assert_equal(both.forward, 1)
@@ -137,8 +147,13 @@ def test_two_inputs_add() raises:
     assert_almost_equal(both.look_up, 0.3, atol=1e-6)
     assert_true(both.run)
     assert_true(both.jump)
+    assert_true(both.use)
     var none = combined(no_input(), no_input())
     assert_false(none.run)
+    assert_false(none.use)
+    var second = no_input()
+    second.use = True
+    assert_true(combined(no_input(), second).use)
 
 
 def main() raises:
