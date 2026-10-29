@@ -16,6 +16,7 @@ from math.octree import (
 )
 from math.triangle import Line3, Triangle
 from math.vector3 import Vector3
+from std.benchmark import black_box
 from std.math import inf, isfinite, nan, sqrt
 from std.testing import (
     TestSuite,
@@ -212,6 +213,26 @@ def test_thin_edges_and_collinear_triangles_keep_their_contracts() raises:
         with assert_raises(contains="degenerate"):
             _ = triangle.barycoord(Vector3(0, 0, 0))
         assert_false(_contains_point(triangle, Vector3(0, 0, 0)))
+
+
+def test_a_collinear_triangle_has_a_zero_normal_and_edge_contacts() raises:
+    # Corners 0, v and 2 v. Each product is rounded, as three.js rounds it,
+    # so the normal is exactly zero and no plane test rejects a sphere or a
+    # capsule that touches the edge. `black_box` keeps the arithmetic at
+    # run time, where the compiler would fuse the products.
+    var v = Vector3(0.64410096, 0.79458356, 0.66250294) * black_box(Float32(1))
+    var triangle = Triangle(Vector3(0, 0, 0), v, v * 2)
+    near_vector(triangle.raw_normal(), Vector3(0, 0, 0), 0)
+    var side = Vector3(v.y, -v.x, 0)
+    side.normalize()
+    var center = v + side * 0.3
+    var contact = triangle_sphere_intersect(Sphere(center, 0.5), triangle)
+    assert_true(Bool(contact))
+    near(Float64(contact.value().depth), 0.2, 1e-6)
+    var capsule = Capsule(
+        center - Vector3(0.01, 0, 0), center + Vector3(0.01, 0, 0), 0.5
+    )
+    assert_true(Bool(triangle_capsule_intersect(capsule, triangle)))
 
 
 def ground() -> Triangle:

@@ -34,6 +34,7 @@ from math.utils import (
 )
 from math.vector2 import Vector2
 from math.vector3 import Vector3
+from std.benchmark import black_box
 from std.math import nan, pi, sqrt
 from std.testing import (
     TestSuite,
@@ -201,6 +202,25 @@ def test_spherical_coordinates() raises:
     assert_true(pole.phi.to(RADIAN) > 0)
     var round_trip = Spherical.from_vector3(Vector3(1, 2, 3)).to_vector3()
     _near(round_trip, Vector3(1, 2, 3))
+    # 2e-4 radians off the pole: three.js's `acos(y / r)` rounds to zero in
+    # Float32.
+    var near_pole = Vector3(black_box(Float32(2e-4)), 1, 0)
+    assert_almost_equal(
+        Spherical.from_vector3(near_pole).phi.to(RADIAN),
+        Float32(2e-4),
+        rtol=1e-3,
+    )
+
+
+def test_parallel_plane_vectors_cross_to_exactly_zero() raises:
+    # Each product is rounded, as three.js rounds it. `black_box` keeps the
+    # arithmetic at run time, where the compiler would fuse the products.
+    var v = Vector2(0.64410096, 0.79458356) * black_box(Float32(1))
+    assert_equal(v.cross(v * 2), Float32(0))
+    var tilted = Vector2(1, black_box(Float32(2e-4)))
+    assert_almost_equal(
+        Vector2(1, 0).angle_to(tilted).to(RADIAN), Float32(2e-4), rtol=1e-3
+    )
 
 
 def test_cylindrical_coordinates() raises:

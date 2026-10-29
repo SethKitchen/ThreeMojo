@@ -372,6 +372,13 @@ def test_line_closest_points() raises:
     assert_vector(on_x, 1, 0, 0)
     assert_vector(on_other, 1, 0, 1)
     assert_equal(x.distance_sq(), Float32(4))
+    # Parallel: three.js's `distanceSqToLine3` starts from this one's start.
+    squared = x.closest_points_to_line(
+        Line3(Vector3(0, 1, 0), Vector3(1, 1, 0)), on_x, on_other
+    )
+    assert_almost_equal(Float64(squared), 1, atol=TOLERANCE)
+    assert_vector(on_x, 0, 0, 0)
+    assert_vector(on_other, 0, 1, 0)
 
 
 def test_line_equals() raises:

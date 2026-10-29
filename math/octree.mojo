@@ -214,7 +214,9 @@ def line_to_line_closest_points(
     """
     if start2 == end2:
         return None
-    return _segment_closest_points(start1, end1, start2, end2, 0)
+    return _segment_closest_points(
+        start1, end1, start2, end2, 0, octree_ties=True
+    )
 
 
 @fieldwise_init

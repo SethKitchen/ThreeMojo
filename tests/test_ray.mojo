@@ -17,6 +17,7 @@ from math.matrix4 import Matrix4, rotation_z, scaling, translation
 from math.projection import perspective
 from math.ray import Ray, SegmentApproach
 from math.vector3 import Vector3
+from std.benchmark import black_box
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -323,6 +324,27 @@ def test_a_ray_in_the_triangles_plane_misses_it() raises:
     assert_miss(
         along(0, 0, 1, 0, 0, -1).intersect_triangle(
             corner_a(), corner_a(), corner_a(), False
+        )
+    )
+
+
+def test_exactly_parallel_runtime_values_miss() raises:
+    # three.js rounds each product, so these tests see an exact zero. The
+    # compiler fuses products at run time, and `black_box` keeps them there.
+    var unit = black_box(Float32(1))
+    var plane = Plane(Vector3(0.9150449, 0.40335205, 0) * unit, -1)
+    var normal = plane.normal
+    var along_plane = Ray(Vector3(0, 0, 0), Vector3(normal.y, -normal.x, 0))
+    assert_false(Bool(along_plane.distance_to_plane(plane)))
+    assert_miss(along_plane.intersect_plane(plane))
+    assert_false(along_plane.intersects_plane(Plane(normal, 1)))
+    # A triangle on one line, its corners 0, v and 2 v, has no normal.
+    var v = Vector3(0.64410096, 0.79458356, 0.66250294) * unit
+    var middle = v * 0.5
+    var origin = middle + Vector3(0.3, -0.2, 0.5)
+    assert_miss(
+        Ray(origin, middle - origin).intersect_triangle(
+            Vector3(0, 0, 0), v, v * 2, False
         )
     )
 

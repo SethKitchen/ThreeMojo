@@ -13,10 +13,10 @@ the radius and the height are bare `Float32` meters, as `Vector3`'s
 components are.
 """
 
-from math.utils import clamp, clamp_unit
+from math.utils import clamp
 from math.vector3 import Vector3
-from math.norm import length2, _ordinary_squared
-from std.math import acos, atan2, cos, pi, sin, sqrt
+from math.norm import length2
+from std.math import atan2, cos, pi, sin
 from units.si import Angle, RADIAN
 
 # How close to a pole `make_safe` lets `phi` go. three.js: `EPS`.
@@ -45,15 +45,11 @@ struct Spherical(ImplicitlyCopyable):
         var radius = vector.length()
         if radius == 0:
             return Spherical(0, Angle(0.0, RADIAN), Angle(0.0, RADIAN))
-        var ratio = vector.y / radius
-        if not _ordinary_squared(vector.dot(vector)):
-            var direction = vector
-            direction.normalize()
-            ratio = direction.y
-        ratio = clamp_unit(ratio)
+        # three.js takes `acos(y / r)`. In Float32 that is zero for every
+        # angle below about 5e-4 radians from a pole; atan2 keeps them.
         return Spherical(
             radius,
-            Angle(acos(ratio), RADIAN),
+            Angle(atan2(length2(vector.x, vector.z), vector.y), RADIAN),
             Angle(atan2(vector.x, vector.z), RADIAN),
         )
 

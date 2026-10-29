@@ -38,6 +38,7 @@ from math.norm import (
     length3,
     normalized3,
     reciprocal_normalized3,
+    rounded_difference,
     _ordinary_squared,
 )
 from std.math import ceil, cos, floor, pi, sin, sqrt, trunc
@@ -97,11 +98,13 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
         """Set `self` to the cross product of `self` and `other`."""
         # One statement, so every output is calculated from the original
         # components, and so a coverage run writes one record per call and
-        # not six: this runs per tap of a PMREM blur.
+        # not six: this runs per tap of a PMREM blur. Each product is
+        # rounded on its own, as in JavaScript, so parallel vectors give an
+        # exact zero.
         self = Vector3(
-            self.y * other.z - self.z * other.y,
-            self.z * other.x - self.x * other.z,
-            self.x * other.y - self.y * other.x,
+            rounded_difference(self.y, other.z, self.z, other.y),
+            rounded_difference(self.z, other.x, self.x, other.z),
+            rounded_difference(self.x, other.y, self.y, other.x),
         )
 
     def normalize(mut self):

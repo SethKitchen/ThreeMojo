@@ -47,10 +47,24 @@ from math.bounds import Box3, Plane, Sphere
 from math.matrix4 import Matrix4, require_affine
 from math.matrix_determinant import _sum_products
 from math.vector3 import Vector3, vector3_from_float64
-from math.norm import normalized3, _ordinary_squared, squared_length3
+from math.norm import (
+    normalized3,
+    _ordinary_squared,
+    rounded_dot3,
+    squared_length3,
+)
 from std.math import copysign, inf, max, min, nan, sqrt
 from std.memory import bitcast
 from std.sys.intrinsics import unlikely
+
+
+def _rounded_dot(a: Vector3, b: Vector3) -> Float32:
+    """Return `a.dot(b)` with each product rounded as JavaScript rounds it.
+
+    A test for an exact zero needs it: a ray exactly along a plane then
+    gives zero, where the contracted `dot` leaves a rounding residual.
+    """
+    return rounded_dot3(a.x, a.y, a.z, b.x, b.y, b.z)
 
 
 @fieldwise_init
@@ -894,7 +908,7 @@ struct Ray(ImplicitlyCopyable):
             The distance from the origin to the plane along the ray, or
             None.
         """
-        var toward = plane.normal.dot(self.direction)
+        var toward = _rounded_dot(plane.normal, self.direction)
         if toward == 0:
             if plane.distance_to_point(self.origin) == 0:
                 return Float32(0)
@@ -934,7 +948,7 @@ struct Ray(ImplicitlyCopyable):
         var height = plane.distance_to_point(self.origin)
         if height == 0:
             return True
-        return plane.normal.dot(self.direction) * height < 0
+        return _rounded_dot(plane.normal, self.direction) * height < 0
 
     def _query_products(self) -> _RayProducts:
         """Prepare a snapshot of ray-only products for one traversal."""
@@ -1210,7 +1224,7 @@ struct Ray(ImplicitlyCopyable):
         var edge2 = c - a
         var normal = edge1
         normal.cross(edge2)
-        var d_dot_n = self.direction.dot(normal)
+        var d_dot_n = _rounded_dot(self.direction, normal)
         var sign = Float32(1)
         if d_dot_n > 0:
             if cull_back:
@@ -1223,17 +1237,17 @@ struct Ray(ImplicitlyCopyable):
         var diff = self.origin - a
         var diff_x_edge2 = diff
         diff_x_edge2.cross(edge2)
-        var d_dot_qxe2 = sign * self.direction.dot(diff_x_edge2)
+        var d_dot_qxe2 = sign * _rounded_dot(self.direction, diff_x_edge2)
         if d_dot_qxe2 < 0:
             return None
         var edge1_x_diff = edge1
         edge1_x_diff.cross(diff)
-        var d_dot_e1xq = sign * self.direction.dot(edge1_x_diff)
+        var d_dot_e1xq = sign * _rounded_dot(self.direction, edge1_x_diff)
         if d_dot_e1xq < 0:
             return None
         if d_dot_qxe2 + d_dot_e1xq > d_dot_n:
             return None
-        var q_dot_n = -sign * diff.dot(normal)
+        var q_dot_n = -sign * _rounded_dot(diff, normal)
         if q_dot_n < 0:
             return None
         return self.at(q_dot_n / d_dot_n)
