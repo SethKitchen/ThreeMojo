@@ -197,6 +197,37 @@ def test_a_clump_blends_toward_the_crown() raises:
     )
 
 
+def test_a_clump_has_three_js_s_lobes() raises:
+    """The clump's hash turns a difference in the last place of a vertex
+    into another lobe, so the clump must be built in doubles, as three.js
+    builds it. With its radius rounded to Float32 and a Float32 flattening,
+    vertex 22 of the largest clump was at x 1.962 where three.js has 1.567.
+    The expected values are three.js r186's `leafClump( 2.15, 0, 3.9, 0.1 )`,
+    run in node."""
+    var clump = leaf_clump(2.15, 0, 3.9, 0.1)
+    ref p = clump.attribute_view(String(POSITION))
+    var expected: List[Float64] = [
+        -1.6326316595077515,
+        4.727397918701172,
+        0.7236098051071167,
+        1.567134141921997,
+        4.694204807281494,
+        0.6985920071601868,
+        -0.601722776889801,
+        2.608228921890259,
+        -0.8736079335212708,
+        1.913467288017273,
+        4.86972188949585,
+        -0.6308794021606445,
+    ]
+    var vertices: List[Int] = [0, 22, 49, 56]
+    for at in range(4):
+        var got = p.vector3(vertices[at])
+        assert_almost_equal(got.x, Float32(expected[at * 3]), atol=1e-6)
+        assert_almost_equal(got.y, Float32(expected[at * 3 + 1]), atol=1e-6)
+        assert_almost_equal(got.z, Float32(expected[at * 3 + 2]), atol=1e-6)
+
+
 def test_turning_one_unit_vector_onto_another() raises:
     """The turn from one direction to another, and to its opposite."""
     var up = Vec3d(0, 1, 0)

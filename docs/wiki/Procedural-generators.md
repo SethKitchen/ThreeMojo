@@ -116,6 +116,8 @@ Each piece is one merged geometry with a `partId`. `build(placements)` returns i
 | `StreetTreeGenerator` | the trunk, the leaves, the grate |
 | `SidewalkGenerator` | a slab and a curb, two sets of instances |
 
+The street tree jitters its leaf clumps by a hash of the `Float32` positions. The hash turns a difference of one bit into another lobe. So each clump is built in doubles, as three.js builds it. The icosahedron takes its radius as a double, and the flattening and the move are in doubles. The lobes are then three.js's. The normals come from `compute_vertex_normals` and can differ by a few `Float32` steps.
+
 `CarGenerator().build(cars)` deals each car a body: `SEDAN`, `SUV` or `TAXI`. The taxi's yellow takes the taxi. It returns one set of instances a body, with the linear paint of each car in `values`.
 
 `PersonGenerator().build(placements)` deals each figure a pose, `WALK` or `STAND`, and its proportions. It returns the walking figures, then the standing figures. `values` holds each figure's seed. A person's height must be positive and finite.
@@ -144,4 +146,3 @@ Each piece is one merged geometry with a `partId`. `build(placements)` returns i
 - The shader sway of the street trees, and the distance fade of the forest's detail.
 - The fluent `set<Param>` methods of `TreeGenerator`. Set the parameter fields.
 - The lifecycle of three.js's meshes: `dispose`, and the reuse of a mesh when a city is built again. Each build returns new values.
-- The street tree jitters its leaf clumps by a hash of the `Float32` positions. The hash turns a difference of one bit into a different jitter. So the lobes of the canopy can differ from three.js's where a primitive rounds a vertex differently.

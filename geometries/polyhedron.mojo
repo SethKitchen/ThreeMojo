@@ -42,9 +42,9 @@ limits, and explicit zero and nonfinite rules.
 from core.ordinal import require_index_in_count, require_non_negative
 from geometries.surface import (
     record_kind,
-    require_positive_radius,
     textured_surface,
 )
+from math.finite import require_finite
 from math.norm import rounded_dot3, rounded_product
 from core.buffer_geometry import (
     BufferGeometry,
@@ -227,13 +227,13 @@ def polyhedron(
     var wide = List[Float64](capacity=len(vertices))
     for value in vertices:
         wide.append(Float64(value))
-    return _polyhedron(wide, indices, radius, detail)
+    return _polyhedron(wide, indices, Float64(radius.value), detail)
 
 
 def _polyhedron(
     vertices: List[Float64],
     indices: List[Int],
-    radius: Length,
+    radius: Float64,
     detail: Int,
 ) raises -> BufferGeometry:
     """Return a polyhedron from vertices in doubles, three.js's
@@ -247,7 +247,10 @@ def _polyhedron(
     Raises:
         Error: As `polyhedron` raises.
     """
-    require_positive_radius(radius.value, "polyhedron")
+    require_finite(radius, "A polyhedron needs a finite radius")
+    # `not (radius > 0)`, not `radius <= 0`: NaN compares false both ways.
+    if not (radius > 0):
+        raise Error("A polyhedron needs a positive radius")
     require_non_negative(detail, "A polyhedron's detail cannot be negative")
     if detail > MAX_POLYHEDRON_DETAIL:
         raise Error("A polyhedron's detail is larger than this port builds")
@@ -275,7 +278,7 @@ def _polyhedron(
 
     # Every point out onto the sphere, three.js's `applyRadius`.
     var count = len(points)
-    var scale = Float64(radius.value)
+    var scale = radius
     for vertex in range(count):  # pragma: no branch
         points[vertex] = _normalized(points[vertex]) * scale
 
@@ -324,7 +327,7 @@ def _polyhedron(
     record_kind(geometry, POLYHEDRON_GEOMETRY)
     geometry.parameters.set_json("vertices", _numbers_json(vertices))
     geometry.parameters.set_json("indices", _integers_json(indices))
-    geometry.parameters.set_meters("radius", radius)
+    geometry.parameters.set_number("radius", radius)
     geometry.parameters.set_number("detail", Float64(detail))
     return geometry^
 
@@ -339,7 +342,7 @@ def _vertex(vertices: List[Float64], index: Int) -> _Point:
 def _regular_solid(
     vertices: List[Float64],
     indices: List[Int],
-    radius: Length,
+    radius: Float64,
     detail: Int,
     kind: GeometryType,
 ) raises -> BufferGeometry:
@@ -350,7 +353,7 @@ def _regular_solid(
     """
     var geometry = _polyhedron(vertices, indices, radius, detail)
     record_kind(geometry, kind)
-    geometry.parameters.set_meters("radius", radius)
+    geometry.parameters.set_number("radius", radius)
     geometry.parameters.set_number("detail", Float64(detail))
     return geometry^
 
@@ -372,7 +375,7 @@ def tetrahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
     var vertices: List[Float64] = [1, 1, 1, -1, -1, 1, -1, 1, -1, 1, -1, -1]
     var indices: List[Int] = [2, 1, 0, 0, 3, 2, 1, 3, 0, 2, 3, 1]
     return _regular_solid(
-        vertices, indices, radius, detail, TETRAHEDRON_GEOMETRY
+        vertices, indices, Float64(radius.value), detail, TETRAHEDRON_GEOMETRY
     )
 
 
@@ -437,7 +440,7 @@ def octahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         2,
     ]
     return _regular_solid(
-        vertices, indices, radius, detail, OCTAHEDRON_GEOMETRY
+        vertices, indices, Float64(radius.value), detail, OCTAHEDRON_GEOMETRY
     )
 
 
@@ -456,6 +459,18 @@ def icosahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
     Raises:
         Error: If the radius is not positive, or the detail is negative
             or above 256.
+    """
+    return _icosahedron(Float64(radius.value), detail)
+
+
+def _icosahedron(radius: Float64, detail: Int) raises -> BufferGeometry:
+    """Return an icosahedron of a radius in meters given in doubles, as
+    three.js's `IcosahedronGeometry` takes a JavaScript number. A generator
+    that computes in doubles calls this, so its radius is not rounded to
+    `Float32` first.
+
+    Raises:
+        Error: As `icosahedron` raises.
     """
     var t = GOLDEN
     var vertices: List[Float64] = [
@@ -753,5 +768,5 @@ def dodecahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         9,
     ]
     return _regular_solid(
-        vertices, indices, radius, detail, DODECAHEDRON_GEOMETRY
+        vertices, indices, Float64(radius.value), detail, DODECAHEDRON_GEOMETRY
     )
