@@ -1506,6 +1506,51 @@ def test_a_cone_needs_a_radius_and_a_height() raises:
         _ = cone(Length(1.0, METER), Length(1.0, METER), 2)
 
 
+def test_a_cylinder_and_a_cone_have_three_js_s_numbers() raises:
+    """A cylinder is computed in doubles, as three.js computes it, and each
+    number is rounded once when it is stored. In Float32, a frustum's
+    texture coordinate near the seam was off by 2e-4 of itself. The
+    expected values are three.js r180's, given the same Float32 angles."""
+    var can = cylinder(
+        Length(1, METER), Length(1, METER), Length(1, METER), 32, 1
+    )
+    assert_js_number(
+        can.attribute_view(String(POSITION)).component(24, 2),
+        1.3113417196564114e-07,
+    )
+    var frustum = cylinder(
+        Length(0.5, METER),
+        Length(1.5, METER),
+        Length(2, METER),
+        7,
+        3,
+        False,
+        Angle(0.3, RADIAN),
+        Angle(4.0, RADIAN),
+    )
+    assert_js_number(
+        frustum.attribute_view(String(POSITION)).component(10, 2),
+        0.10632535815238953,
+    )
+    assert_js_number(
+        frustum.attribute_view(String(NORMAL)).component(2, 2),
+        0.11412034928798676,
+    )
+    assert_js_number(
+        frustum.attribute_view(String(UV)).component(44, 0),
+        6.045108239050023e-05,
+    )
+    var spike = cone(Length(1, METER), Length(2, METER), 9, 2)
+    assert_js_number(
+        spike.attribute_view(String(POSITION)).component(17, 2),
+        0.08682415634393692,
+    )
+    assert_js_number(
+        spike.attribute_view(String(NORMAL)).component(7, 2),
+        0.15531577169895172,
+    )
+
+
 # --- torus ------------------------------------------------------------------
 
 

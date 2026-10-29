@@ -265,6 +265,8 @@ The side's triangles come column by column, in three.js's order. The caps are th
 
 Side normals lean with the side, so a frustum shades smoothly. Cap normals point along the axis. `u` runs once around the side. `v` runs from one at the top to zero at the bottom. Each cap maps the square around it onto the image.
 
+The arithmetic is three.js's, in doubles, and each number is rounded to `Float32` once when it is stored. The same `Float32` angles give three.js's numbers. No slope of `Float32` radii and height overflows a double, so a very flat cone keeps unit normals.
+
 The sweep starts at +z and runs toward +x, as in three.js. The circle starts at +x instead. A shorter sweep makes a section with open sides.
 
 ## Cone
@@ -341,7 +343,7 @@ The normals come from the profile's segments, as in three.js. A corner faces the
 
 The last point faces the way its own segment does, and its normal is as long as that segment. three.js does not make it unit length, and this keeps that. The builder refuses a final segment normal whose components cannot fit in `Float32`.
 
-Cylinder and lathe unit normals use a scaled calculation when a direct norm overflows or underflows. Lathe corner normals use the outer endpoint difference when rounded segment differences lose the direction. Ordinary profiles keep their existing arithmetic and order.
+Lathe unit normals use a scaled calculation when a direct norm overflows or underflows. Lathe corner normals use the outer endpoint difference when rounded segment differences lose the direction. Ordinary profiles keep their existing arithmetic and order.
 
 A point on the axis is a pole. The half of each cell against it has no area, and three.js keeps it, as this does. `u` runs around and `v` up the profile, one point per equal step. The sweep starts at +z, as the cylinder's does.
 

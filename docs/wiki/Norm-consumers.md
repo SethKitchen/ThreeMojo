@@ -74,7 +74,7 @@ blind replacements of every square root.
 |---|---|
 | `geometries.edge_split`, `geometries.surface_sampler` area, `geometries.capsule`, `geometries.extrude` edge lengths | Finite stored Float32 coordinates are widened before subtraction and multiplication. Their two- and four-factor products fit in Float64, including the smallest Float32 subnormals. |
 | `geometries.rounded_box`, `geometries.teapot` | Norms operate on the bounded unit-box construction or fixed control-patch derivatives, before the physical size is applied. |
-| `geometries.cylinder` | Its existing fallback already forms a safe direction from widened height and radius difference before an overflowing slope is used. |
+| `geometries.cylinder` | The slope and its normal are formed in Float64 from widened Float32 radii and height. The slope and its square fit in Float64, including the smallest Float32 height. |
 | `loaders.lwo._normalize`, final USD stored-normal normalization | Operands are widened Float32 components. The range-sensitive pre-storage area accumulators are corrected separately. |
 | `objects.gaussian_splat` bounds and column lengths | The existing widened Float32 products and outward-rounding proof remain intact. Ellipsoid intersection roots are discriminants, not vector normalizers. |
 | `objects.marching_cubes`, `render.flakes_texture`, `postprocessing.gtao` noise | Directions and lengths come from a bounded grid or bounded random construction. |

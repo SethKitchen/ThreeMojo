@@ -15,6 +15,9 @@ a column at each angle, two triangles per cell. Each cap is a fan like
 rather than one for the whole cap, and so does this, so the two ports have
 the same vertex count.
 
+The arithmetic is three.js's, in doubles, and each number is rounded to
+`Float32` once, when it is stored.
+
 The side's normals lean with the side. On a cylinder they are horizontal; on
 a cone they tilt up by the slope of the side, the same tilt in every row, so
 the apex has one normal per column and light falls across it the way it
@@ -60,8 +63,8 @@ from geometries.surface import (
 )
 from geometries.circle import FULL_TURN, check_sweep
 from math.curve_checks import require_at_least_one
-from math.norm import normalized2
-from std.math import cos, isfinite, sin, sqrt
+from math.norm import rounded_dot3, rounded_product
+from std.math import cos, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
 
 
@@ -70,11 +73,11 @@ def _append_cap(
     mut normals: List[Float32],
     mut uvs: List[Float32],
     mut index: List[Int],
-    radius: Float32,
-    half_height: Float32,
+    radius: Float64,
+    half_height: Float64,
     radial_segments: Int,
-    theta_start: Float32,
-    theta_length: Float32,
+    theta_start: Float64,
+    theta_length: Float64,
     top: Bool,
 ):
     """Append one cap: a fan facing up from the top or down from the bottom.
@@ -83,38 +86,37 @@ def _append_cap(
     the rim, one vertex longer than the segment count so the seam has a
     vertex on each side. Each rim vertex maps to where it lies in the square
     around the cap, seen from outside: the bottom is seen from below, so its
-    v runs the other way.
+    v runs the other way. The numbers are three.js's doubles, rounded to
+    `Float32` once each.
     """
-    var sign = Float32(1)
+    var sign = Float64(1)
     if not top:
         sign = -1
-    var y = half_height * sign
+    var y = Float32(half_height * sign)
     var center_start = len(data) // 3
     for _ in range(radial_segments):  # pragma: no branch
         data.append(Float32(0))
         data.append(y)
         data.append(Float32(0))
         normals.append(Float32(0))
-        normals.append(sign)
+        normals.append(Float32(sign))
         normals.append(Float32(0))
         uvs.append(Float32(0.5))
         uvs.append(Float32(0.5))
     var rim_start = len(data) // 3
     for column in range(radial_segments + 1):  # pragma: no branch
-        var theta = (
-            theta_start
-            + Float32(column) / Float32(radial_segments) * theta_length
-        )
+        var u = Float64(column) / Float64(radial_segments)
+        var theta = rounded_product(u, theta_length) + theta_start
         var cos_theta = cos(theta)
         var sin_theta = sin(theta)
-        data.append(radius * sin_theta)
+        data.append(Float32(radius * sin_theta))
         data.append(y)
-        data.append(radius * cos_theta)
+        data.append(Float32(radius * cos_theta))
         normals.append(Float32(0))
-        normals.append(sign)
+        normals.append(Float32(sign))
         normals.append(Float32(0))
-        uvs.append(cos_theta * 0.5 + 0.5)
-        uvs.append(sin_theta * 0.5 * sign + 0.5)
+        uvs.append(Float32(cos_theta * 0.5 + 0.5))
+        uvs.append(Float32(sin_theta * 0.5 * sign + 0.5))
     for column in range(radial_segments):  # pragma: no branch
         var center = center_start + column
         var rim = rim_start + column
@@ -211,48 +213,47 @@ def cylinder(
     )
     check_sweep(theta_length)
 
-    var top = radius_top.value
-    var bottom = radius_bottom.value
-    var tall = height.value
+    # three.js's arithmetic, in doubles, each product rounded on its own.
+    # A number is rounded to `Float32` once, when it is stored.
+    var top = Float64(radius_top.value)
+    var bottom = Float64(radius_bottom.value)
+    var tall = Float64(height.value)
     var half_height = tall / 2
+    var start = Float64(theta_start.value)
+    var sweep = Float64(theta_length.value)
     var data = List[Float32]()
     var normals = List[Float32]()
     var uvs = List[Float32]()
 
     # The side: rows from the top down, each one vertex longer than there
-    # are cells around so the seam has a vertex on each side. A normal leans
-    # by the side's slope, the same in every row, and is unit length by
-    # construction. The segment counts were checked above, so every loop
-    # runs.
+    # are cells around so the seam has a vertex on each side. A normal is
+    # three.js's `( sin, slope, cos )` made unit length, so it leans by the
+    # side's slope, the same in every row. No slope of `Float32` inputs
+    # overflows a double. The segment counts were checked above, so every
+    # loop runs.
     var slope = (bottom - top) / tall
-    var lean = sqrt(1 + slope * slope)
-    var radial_normal = Float32(1)
-    if not isfinite(lean):
-        # Height and radius difference give the same direction without a
-        # slope that can overflow before it reaches normalization.
-        var direction = normalized2(
-            Float64(tall), Float64(bottom) - Float64(top)
-        )
-        radial_normal = Float32(direction[0])
-        slope = Float32(direction[1])
-        lean = 1
     for row in range(height_segments + 1):  # pragma: no branch
-        var v = Float32(row) / Float32(height_segments)
-        var radius = v * (bottom - top) + top
-        var y = half_height - v * tall
+        var v = Float64(row) / Float64(height_segments)
+        var radius = rounded_product(v, bottom - top) + top
+        var y = Float32(rounded_product(-v, tall) + half_height)
         for column in range(radial_segments + 1):  # pragma: no branch
-            var u = Float32(column) / Float32(radial_segments)
-            var theta = theta_start.value + u * theta_length.value
+            var u = Float64(column) / Float64(radial_segments)
+            var theta = rounded_product(u, sweep) + start
             var sin_theta = sin(theta)
             var cos_theta = cos(theta)
-            data.append(radius * sin_theta)
+            data.append(Float32(radius * sin_theta))
             data.append(y)
-            data.append(radius * cos_theta)
-            normals.append(sin_theta * radial_normal / lean)
-            normals.append(slope / lean)
-            normals.append(cos_theta * radial_normal / lean)
-            uvs.append(u)
-            uvs.append(1 - v)
+            data.append(Float32(radius * cos_theta))
+            var scale = 1 / sqrt(
+                rounded_dot3(
+                    sin_theta, slope, cos_theta, sin_theta, slope, cos_theta
+                )
+            )
+            normals.append(Float32(sin_theta * scale))
+            normals.append(Float32(slope * scale))
+            normals.append(Float32(cos_theta * scale))
+            uvs.append(Float32(u))
+            uvs.append(Float32(1 - v))
 
     var stride = radial_segments + 1
     var index = List[Int]()
@@ -292,8 +293,8 @@ def cylinder(
                 top,
                 half_height,
                 radial_segments,
-                theta_start.value,
-                theta_length.value,
+                start,
+                sweep,
                 True,
             )
             runs.append(len(index))
@@ -307,8 +308,8 @@ def cylinder(
                 bottom,
                 half_height,
                 radial_segments,
-                theta_start.value,
-                theta_length.value,
+                start,
+                sweep,
                 False,
             )
             runs.append(len(index))
