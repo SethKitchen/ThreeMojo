@@ -12,34 +12,7 @@ same text: each source line becomes one quoted C string that ends in `\\n`.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-
-def _split_lines(text: String) -> List[String]:
-    """Split as Python's `str.splitlines` does for CR and LF.
-
-    Args:
-        text: The source.
-
-    Returns:
-        The lines without terminators.
-    """
-    var lines = List[String]()
-    var current = List[UInt8]()
-    var bytes = text.as_bytes()
-    var index = 0
-    while index < len(bytes):
-        var byte = bytes[index]
-        if byte == 13 or byte == 10:
-            lines.append(String(from_utf8_lossy=current))
-            current = List[UInt8]()
-            index += 1
-            if byte == 13 and index < len(bytes) and bytes[index] == 10:
-                index += 1
-            continue
-        current.append(byte)
-        index += 1
-    if len(current) > 0:
-        lines.append(String(from_utf8_lossy=current))
-    return lines^
+from tools._text import split_lines
 
 
 def _c_escape(line: String) -> String:
@@ -66,7 +39,7 @@ def metal_header(source: String) -> String:
     var lines = List[String]()
     lines.append("/* Made by build.sh from splat.metal. */")
     lines.append("static const char SPLAT_MSL[] =")
-    for line in _split_lines(source):
+    for line in split_lines(source):
         lines.append('    "' + _c_escape(line) + '\\n"')
     lines.append(";")
     return "\n".join(lines) + "\n"
