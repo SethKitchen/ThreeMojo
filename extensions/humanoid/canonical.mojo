@@ -1351,7 +1351,8 @@ def canonical_body(
     _sample_cells(
         envelope, skeleton, kept, grid, skin, bones, labels, held, fills
     )
-    for block in kept:
+    # The grid holds the body, so the coarse pass keeps a block of it.
+    for block in kept:  # pragma: no branch
         var bx = block % cx
         var by = (block // cx) % cy
         var bz = block // (cx * cy)

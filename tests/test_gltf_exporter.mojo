@@ -576,6 +576,7 @@ def test_a_buffer_name_is_written_as_a_uri() raises:
     # raw `%` was a malformed escape, and `%41` named another file.
     assert_equal(percent_encoded("Plain-Name_1.~bin"), "Plain-Name_1.~bin")
     assert_equal(percent_encoded("100% a/é.bin"), "100%25%20a%2F%C3%A9.bin")
+    assert_equal(percent_encoded(""), "")
     var built = Built()
     for name in [String("100%"), String("x%41")]:
         var path = "out/export_" + name + ".gltf"

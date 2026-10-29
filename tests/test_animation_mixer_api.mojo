@@ -812,6 +812,20 @@ def test_a_group_reaches_skinned_meshes_and_cameras_at_its_members() raises:
     )
     assert_equal(len(plans), 1)
     assert_equal(plans[0].slot, 1)
+    # A material track reaches a skinned mesh's material only at a member:
+    # the plain node beside the rig has none.
+    var beside = AnimationObjectGroup()
+    beside.add(NodeId(2))
+    assert_equal(
+        len(
+            resolve_targets(
+                scene,
+                material_target(MaterialId(9), MATERIAL_WIREFRAME),
+                beside,
+            )
+        ),
+        0,
+    )
     # A scene with no skinned meshes reaches none.
     var bare = AnimationObjectGroup()
     bare.add(NodeId(0))
