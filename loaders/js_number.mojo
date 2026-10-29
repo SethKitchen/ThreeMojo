@@ -398,6 +398,35 @@ def _special(value: Float64) -> String:
     return "Infinity" if value > 0 else "-Infinity"
 
 
+def _reads_back(number: _Decimal, value: Float64, float32: Bool) raises -> Bool:
+    """Return whether digits read back to `value`, or to its `Float32`
+    when `float32` is set."""
+    var back = Float64(_format(number, False))
+    if float32:
+        return Float32(back) == Float32(value)
+    return back == value
+
+
+def _round_trip(value: Float64, float32: Bool) raises -> _Decimal:
+    """Return the fewest digits that read back to a finite magnitude.
+
+    Mojo's text of a float has the fewest digits for nearly every value.
+    For the few where it does not read back, the exact value is rounded
+    to one digit more at a time until it does: the shortest such digits
+    are the nearest, as JavaScript's are.
+    """
+    var number = _shortest(String(Float32(value)) if float32 else String(value))
+    if _reads_back(number, value, float32):
+        return number^
+    var exact = _exact(value)
+    var keep = 1
+    var rounded = _round(exact, keep)
+    while not _reads_back(rounded, value, float32):
+        keep += 1
+        rounded = _round(exact, keep)
+    return rounded^
+
+
 def js_number_text(value: Float64) raises -> String:
     """Return JavaScript's `String(value)` for a number.
 
@@ -414,7 +443,7 @@ def js_number_text(value: Float64) raises -> String:
     """
     if not isfinite(value):
         return _special(value)
-    return _format(_shortest(String(abs(value))), value < 0)
+    return _format(_round_trip(abs(value), False), value < 0)
 
 
 def js_float32_text(value: Float32) raises -> String:
@@ -434,7 +463,7 @@ def js_float32_text(value: Float32) raises -> String:
     """
     if not isfinite(value):
         return _special(Float64(value))
-    return _format(_shortest(String(abs(value))), value < 0)
+    return _format(_round_trip(Float64(abs(value)), True), value < 0)
 
 
 def js_to_precision(value: Float64, precision: Int) raises -> String:
@@ -803,6 +832,29 @@ def js_pow(base: Float64, exponent: Float64) -> Float64:
         The power.
     """
     return external_call["pow", Float64](base, exponent)
+
+
+@no_inline
+def _js_product(a: Float64, b: Float64) -> Float64:
+    """Return `a * b`, rounded before a sum uses it, as JavaScript rounds."""
+    return a * b
+
+
+def js_linear_to_srgb(value: Float64) -> Float64:
+    """Return three.js's `LinearToSRGB` of a linear channel, in doubles.
+
+    The exporters and the SVG renderer write colors with it, so each byte
+    or number they write is the one three.js writes. It is not clamped, as three.js's is not.
+
+    Args:
+        value: The linear channel.
+
+    Returns:
+        The sRGB channel.
+    """
+    if value < 0.0031308:
+        return _js_product(value, 12.92)
+    return _js_product(1.055, js_pow(value, 0.41666)) - 0.055
 
 
 def js_log2(value: Float64) -> Float64:

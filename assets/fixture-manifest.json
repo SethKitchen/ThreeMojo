@@ -332,7 +332,7 @@
       ],
       "artifacts": {
         "assets/js_number/v8.json": "3818f7a49f6a5fad3ee9be3ce7a7d7721b402d5c301ecd7a19b0472d108ad091",
-        "loaders/js_number.mojo": "a7f8cd0bdaf91756b5583de24cf27e7d8ee86c7cc91cb68ab2da2dec3bd9b19d"
+        "loaders/js_number.mojo": "781d7935278d9de07a73046b6df4fb4454e095a0d7ec189dfae09839fd88db7b"
       },
       "verified_runtime": {
         "node": "24.19.0",

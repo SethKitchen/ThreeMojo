@@ -96,6 +96,15 @@ def test_texts_match_v8() raises:
             assert_equal(Float32(_read(mine)), Float32(value))
 
 
+def test_number_text_reads_back_where_mojo_text_does_not() raises:
+    # Mojo writes this Float32 as 27.19699, which reads back one unit
+    # lower, and this double as -18377601753042850. The shortest texts
+    # that read back, as V8 and Python's `repr` give them:
+    var float32 = bitcast[DType.float32](UInt32(0x41D99370))
+    assert_equal(js_float32_text(float32), "27.196991")
+    assert_equal(js_number_text(-1.8377601753042852e16), "-18377601753042852")
+
+
 def test_number_reads_the_whole_text() raises:
     # Each text and what V8's `Number( text )` gives, NaN as -1.
     var texts: List[String] = [

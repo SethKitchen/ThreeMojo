@@ -107,7 +107,7 @@ from loaders.draco_mesh import (
     DRACO_VALENCE_TRAVERSAL,
     NONE,
 )
-from exporters.numbers import js_linear_to_srgb
+from loaders.js_number import js_linear_to_srgb
 from std.collections import Dict
 from std.memory import bitcast
 from std.pathlib import Path

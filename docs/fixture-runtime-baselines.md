@@ -43,6 +43,13 @@ sRGB words did not change. A second
 chains from the #760 source to the 1.2 source. It names both complete source
 hashes and the same table digest.
 
+The number text then changed `loaders/js_number.mojo` again. `js_number_text`
+and `js_float32_text` now check that their text reads back, and
+`js_linear_to_srgb` moved into the file. The 256 accepted sRGB words did not
+change. A third
+[source successor record](fixtures/srgb-source-successor-round-trip.json)
+chains from the 1.2 source to the current source.
+
 The manifest binds the reviewed current source. It still rejects any
 other whole-file change, even when the table is unchanged. The fixture tests
 also check the fixed accepted word digest independently of the manifest.

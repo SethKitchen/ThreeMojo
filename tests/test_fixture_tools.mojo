@@ -551,8 +551,11 @@ comptime _SRGB_BEFORE_SOURCE_SHA256 = (
 comptime _SRGB_760_SOURCE_SHA256 = (
     "9d7d0dc7f0a7c526881e469ed2b7e918fbcfb8b27258641631515b6893c5905e"
 )
-comptime _SRGB_CURRENT_SOURCE_SHA256 = (
+comptime _SRGB_MOJO_1_2_SOURCE_SHA256 = (
     "a7f8cd0bdaf91756b5583de24cf27e7d8ee86c7cc91cb68ab2da2dec3bd9b19d"
+)
+comptime _SRGB_CURRENT_SOURCE_SHA256 = (
+    "781d7935278d9de07a73046b6df4fb4454e095a0d7ec189dfae09839fd88db7b"
 )
 comptime _SRGB_RUNTIME_REPORT_SHA256 = (
     "c45b8ee4c2d08d1d7486985e1c9460d2b037e1816dc04571ccf192260f93494b"
@@ -618,6 +621,11 @@ def test_srgb_source_successor_preserves_the_accepted_runtime_words() raises:
         (
             String("docs/fixtures/srgb-source-successor-mojo-1-2.json"),
             String(_SRGB_760_SOURCE_SHA256),
+            String(_SRGB_MOJO_1_2_SOURCE_SHA256),
+        ),
+        (
+            String("docs/fixtures/srgb-source-successor-round-trip.json"),
+            String(_SRGB_MOJO_1_2_SOURCE_SHA256),
             String(_SRGB_CURRENT_SOURCE_SHA256),
         ),
     ]
