@@ -48,6 +48,7 @@ An unknown or nonfinite E gives a zero radius, so that candidate is not skipped.
 
 On `assets/carla/town.xodr` the skip removes about 44 percent of the candidate certifications.
 See [the #685 measurement](https://github.com/SethKitchen/ThreeMojo/blob/37ecbc599777ebfe114679c197c27302ee9f5e1b/docs/validation/certified-query-685.md).
+`bench/carla_certified_query_bench.mojo` repeats it.
 
 ## Separate limits
 
