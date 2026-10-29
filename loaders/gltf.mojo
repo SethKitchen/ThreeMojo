@@ -113,10 +113,12 @@ instanced, where three.js drops the skin.
 **Names.** A node's name is made unique as three.js's `createUniqueName`
 makes it. White space becomes `_`, and `[`, `]`, `.`, `:` and `/` are
 dropped, as `PropertyBinding.sanitizeNodeName` drops them. A name used
-before then takes `_1`, `_2` and on, in the order the scene's walk
-reaches the nodes. `GltfModel.node_names` and `userData.name` keep the
-file's names. three.js names every scene's nodes, scene by scene; this
-loader names the nodes of the scene it reads.
+before then takes `_1`, `_2` and on. The names count in the order
+three.js's walk takes them: every scene in turn, its own name first, then
+each node's, its camera's and its light's, then its children's and its
+skin's joints'. `GltfModel.node_names` and `userData.name` keep the
+file's names. So a scene that is not read must be whole, as three.js
+reads it too.
 
 **Extras.** An object's `extras` become user data, as three.js's
 `assignExtrasToUserData` makes them. A node's become its `user_data`,
@@ -1208,6 +1210,26 @@ struct UniqueNames(Movable):
         self.names.append(name)
         self.uses.append(0)
         return name
+
+
+struct _Reached(Movable):
+    """What three.js's naming walk has reached so far: each node shallow,
+    as `_loadNodeShallow` reads it, and deep, as `loadNode` reads it with
+    its children; each camera and light; and each node's name."""
+
+    var shallow: List[Bool]
+    var deep: List[Bool]
+    var cameras: List[Int]
+    var lights: List[Int]
+    var names: List[String]
+
+    def __init__(out self, count: Int):
+        """Start with none of `count` nodes reached."""
+        self.shallow = List[Bool](length=count, fill=False)
+        self.deep = List[Bool](length=count, fill=False)
+        self.cameras = List[Int]()
+        self.lights = List[Int]()
+        self.names = List[String](length=count, fill=String())
 
 
 struct _Loader(Movable):
@@ -2864,13 +2886,9 @@ struct _Loader(Movable):
         var chosen = self.integer(self.document.root(), "scene", 0)
         var top = self.entry("scenes", chosen)
         self.model.scene_extras = self.extras(top)
-        var roots = self.document.get(top, "nodes")
-        if roots == NO_NODE:
+        if not self.document.has(top, "nodes"):
             return
-        if self.document.kind(roots) != ARRAY:
-            raise Error("glTF: a scene's nodes must be an array")
-        for slot in range(self.document.length(roots)):
-            var root = self.document.integer(self.document.at(roots, slot))
+        for root in self.listed(top, "nodes", "a scene's nodes"):
             self.place(root, NO_PARENT, scene, assets)
         self.model.mesh_count = len(scene.meshes) - self.model.first_mesh
         self.model.instanced_mesh_count = (
@@ -2886,6 +2904,89 @@ struct _Loader(Movable):
         self.model.skinned_mesh_count = (
             len(scene.skinned_meshes) - self.model.first_skinned_mesh
         )
+        self.name_nodes(scene)
+
+    def listed(self, node: Int, key: String, what: String) raises -> List[Int]:
+        """Return an object's array of indices under `key`, or none when
+        the key is absent. `what` names the array in the error."""
+        var out = List[Int]()
+        var found = self.document.get(node, key)
+        if found == NO_NODE:
+            return out^
+        if self.document.kind(found) != ARRAY:
+            raise Error("glTF: " + what + " must be an array")
+        for slot in range(self.document.length(found)):
+            out.append(self.document.integer(self.document.at(found, slot)))
+        return out^
+
+    def name_nodes(mut self, mut scene: Scene) raises:
+        """Name every node placed as three.js's `GLTFLoader` names it.
+
+        three.js reads every scene, in order, in one walk that names as it
+        goes. A scene takes its name first. A node takes its name, then its
+        camera's and its light's the first time the walk reaches them, then
+        its children theirs, then its skin's joints theirs. Each name is
+        made unique by `createUniqueName`, so a node named as a scene, a
+        camera or a light that came before takes `_1` and on.
+        """
+        var reached = _Reached(len(self.model.nodes))
+        for index in range(self.count("scenes")):
+            var entry = self.entry("scenes", index)
+            var name = self.text(entry, "name")
+            if name != "":
+                _ = self.node_names_used.unique(name)
+            for root in self.listed(entry, "nodes", "a scene's nodes"):
+                self.name_deep(root, reached)
+        for index in range(len(self.model.nodes)):
+            var id = self.model.nodes[index]
+            if id != NO_PARENT and reached.names[index] != "":
+                var placed = scene.get(id)
+                placed.name = reached.names[index]
+                scene.set(id, placed^)
+
+    def name_deep(mut self, index: Int, mut reached: _Reached) raises:
+        """Name a node and what it holds, three.js's `loadNode`: the node,
+        then its children, then its skin's joints. A node is read once."""
+        _ = self.entry("nodes", index)
+        if reached.deep[index]:
+            return
+        reached.deep[index] = True
+        self.name_shallow(index, reached)
+        var node = self.entry("nodes", index)
+        for child in self.listed(node, "children", "a node's children"):
+            self.name_deep(child, reached)
+        var skin = self.integer(node, "skin", -1)
+        if skin >= 0:
+            var joints = self.entry("skins", skin)
+            for joint in self.listed(joints, "joints", "a skin's joints"):
+                self.name_shallow(joint, reached)
+
+    def name_shallow(mut self, index: Int, mut reached: _Reached) raises:
+        """Name a node, then its camera and its light the first time they
+        are reached, three.js's `_loadNodeShallow`. A node is read once."""
+        var node = self.entry("nodes", index)
+        if reached.shallow[index]:
+            return
+        reached.shallow[index] = True
+        var name = self.model.node_names[index]
+        if name != "":
+            reached.names[index] = self.node_names_used.unique(name)
+        var camera = self.integer(node, "camera", -1)
+        if camera >= 0:
+            var lens = self.text(self.entry("cameras", camera), "name")
+            if camera not in reached.cameras:
+                reached.cameras.append(camera)
+                if lens != "":
+                    _ = self.node_names_used.unique(lens)
+        var lamp = self.extension(node, LIGHTS_PUNCTUAL)
+        if lamp != NO_NODE:
+            var light = self.required_integer(lamp, "light")
+            var label = self.text(self.light_entry(light), "name")
+            if light not in reached.lights:
+                reached.lights.append(light)
+                _ = self.node_names_used.unique(
+                    label if label != "" else "light_" + String(light)
+                )
 
     def place(
         mut self,
@@ -2907,11 +3008,8 @@ struct _Loader(Movable):
             raise Error("glTF: a node is reached twice")
         var node = self.entry("nodes", index)
         var placed = Object3D()
-        # three.js names a node as `createUniqueName` makes it, and keeps
-        # the file's name as `userData.name`.
-        var name = self.model.node_names[index]
-        if name != "":
-            placed.name = self.node_names_used.unique(name)
+        # `name_nodes` names it once the scene is read. The file's name
+        # stays in `userData.name`.
         placed.user_data = self.node_user_data(node, index)
         var matrix = self.numbers(node, "matrix", 16)
         if len(matrix) == 16:
@@ -2960,15 +3058,8 @@ struct _Loader(Movable):
         var lamp = self.extension(node, LIGHTS_PUNCTUAL)
         if lamp != NO_NODE:
             self.add_light(self.required_integer(lamp, "light"), id, scene)
-        var children = self.document.get(node, "children")
-        if children != NO_NODE:
-            if self.document.kind(children) != ARRAY:
-                raise Error("glTF: a node's children must be an array")
-            for slot in range(self.document.length(children)):
-                var child = self.document.integer(
-                    self.document.at(children, slot)
-                )
-                self.place(child, id, scene, assets)
+        for child in self.listed(node, "children", "a node's children"):
+            self.place(child, id, scene, assets)
 
     def node_user_data(self, node: Int, index: Int) raises -> UserData:
         """Return a node's user data as three.js's `GLTFLoader.loadNode`
@@ -3243,6 +3334,20 @@ struct _Loader(Movable):
 
     # --- lights -------------------------------------------------------------
 
+    def light_entry(self, index: Int) raises -> Int:
+        """Return one `KHR_lights_punctual` light's object."""
+        var root = present(
+            self.extension(self.document.root(), LIGHTS_PUNCTUAL),
+            "glTF: a node names a light and the file has none",
+        )
+        var lights = self.array_of(root, "lights")
+        require_index_in_count(
+            index,
+            self.document.length(lights),
+            "glTF: a node names a light that is not there",
+        )
+        return self.object_at(lights, index)
+
     def add_light(mut self, index: Int, node: NodeId, mut scene: Scene) raises:
         """Add a `KHR_lights_punctual` light riding a scene node, as
         three.js's `GLTFLightsExtension` builds it.
@@ -3255,17 +3360,7 @@ struct _Loader(Movable):
         shines down the node's -z axis: toward a target node one meter down
         it, as three.js adds its `target` to the light.
         """
-        var root = present(
-            self.extension(self.document.root(), LIGHTS_PUNCTUAL),
-            "glTF: a node names a light and the file has none",
-        )
-        var lights = self.array_of(root, "lights")
-        require_index_in_count(
-            index,
-            self.document.length(lights),
-            "glTF: a node names a light that is not there",
-        )
-        var entry = self.object_at(lights, index)
+        var entry = self.light_entry(index)
         var color = Color(255, 255, 255)
         var hue = self.numbers(entry, "color", 3)
         if len(hue) == 3:

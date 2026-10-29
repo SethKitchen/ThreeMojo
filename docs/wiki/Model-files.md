@@ -301,7 +301,7 @@ The loader reads the three formats: `ascii`, `binary_little_endian` and `binary_
 | `vertex`: `alpha` or `a` | The fourth channel of `color`, divided by 255. three.js does not read it. |
 | `face`: `vertex_indices` or `vertex_index` | The index. |
 | `face`: `texcoord` | `uv` at each corner of the face. It holds two numbers for each corner. three.js reads it only for a triangle. |
-| `face`: `red`, `green`, `blue`, or their other names | `color` at each corner of the face, divided by 255 and decoded from sRGB. |
+| `face`: `red`, `green`, `blue`, or their other names | `color` at each corner of the face, divided by 255 and decoded from sRGB. three.js gives a quad only three corners' colors, so its later colors move one triangle along. Here each triangle of a face takes the face's color. |
 
 A face of more than three corners becomes a fan of triangles from its first corner. Thus the face must be convex, as an OBJ face must be. three.js cuts a quad on the other diagonal, and it does not read a face of five or more corners.
 
@@ -402,7 +402,7 @@ The model says what went where, by the file's own indices.
 The loader reads `extras` into user data, as three.js's `assignExtrasToUserData` does. User data is a `UserData` from `core/user_data.mojo`, the same map that [Scene JSON](Scene-JSON) reads.
 
 - A node's `extras` go into its `user_data`. A named node also gets `name` in its `user_data`, as three.js sets `userData.name`.
-- A node's `name` is made unique as three.js's `createUniqueName` makes it. White space becomes `_`, and `[`, `]`, `.`, `:` and `/` are dropped. A name used before then takes `_1`, `_2` and on, in the order the scene's walk reaches the nodes. So two nodes named `Cube.001` are `Cube001` and `Cube001_1`. `GltfModel.node_names` and `userData.name` keep the file's names.
+- A node's `name` is made unique as three.js's `createUniqueName` makes it. White space becomes `_`, and `[`, `]`, `.`, `:` and `/` are dropped. A name used before then takes `_1`, `_2` and on. So two nodes named `Cube.001` are `Cube001` and `Cube001_1`. The names count in the order three.js's walk takes them. It reads every scene in turn: the scene's name first, then each node's, its camera's and light's, then its children's and its joints'. So a node named as its camera takes the name, and the next node of that name takes `_2`. `GltfModel.node_names` and `userData.name` keep the file's names.
 - In three.js, the node of a mesh with one primitive is the mesh itself. Thus such a node takes the mesh's `extras` first, then `name`, then its own `extras`. A node with a camera or a light does not, and a joint does not. three.js makes a group or a bone of it.
 - A primitive's `extras` go into its geometry's `user_data`, as three.js reads them into `geometry.userData`.
 - A `Mesh`, a `Material` and a `Scene` here hold no user data. `mesh_extras`, `material_extras` and `scene_extras` hold their `extras`.

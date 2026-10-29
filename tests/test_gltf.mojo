@@ -162,6 +162,72 @@ def test_node_names_are_sanitized_and_unique_as_in_three_js() raises:
     assert_equal(scene.get(model.nodes[1]).user_data.string("name"), "Cube.001")
 
 
+def test_scene_camera_and_light_names_count_as_three_js_counts_them() raises:
+    # three.js's walk names the scene first, then each node, then the
+    # node's camera and light the first time it reaches them, a light with
+    # no name as `light_<i>`. Each name goes through `createUniqueName`, so
+    # each counts against the names after it. three.js 0.180 names these
+    # nodes `Lamp`, `Lamp_2`, `Eye`, `Eye_2`, `Room_1`, ``, `light_1_1`
+    # and `Eye_3`.
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        doc(
+            '"extensionsUsed":["KHR_lights_punctual"],'
+            + '"extensions":{"KHR_lights_punctual":{"lights":['
+            + '{"type":"point","name":"Lamp"},{"type":"point"}]}},'
+            + '"cameras":[{"type":"perspective","name":"Eye",'
+            + '"perspective":{"yfov":0.8,"znear":0.1}}],'
+            + '"scenes":[{"name":"Room","nodes":[0,1,2,3,4,5,6,7]}],'
+            + '"nodes":['
+            + '{"name":"Lamp","extensions":{"KHR_lights_punctual":{"light":0}}},'
+            + '{"name":"Lamp"},{"name":"Eye","camera":0},{"name":"Eye"},'
+            + '{"name":"Room"},{"extensions":{"KHR_lights_punctual":'
+            + '{"light":1}}},{"name":"light_1"},{"name":"Eye","camera":0}]'
+        ),
+        scene,
+        assets,
+    )
+    var expected: List[String] = [
+        "Lamp",
+        "Lamp_2",
+        "Eye",
+        "Eye_2",
+        "Room_1",
+        "",
+        "light_1_1",
+        "Eye_3",
+    ]
+    for index in range(len(expected)):
+        assert_equal(scene.get(model.nodes[index]).name, expected[index])
+
+
+def test_every_scene_counts_toward_the_names_as_in_three_js() raises:
+    # three.js reads every scene, in order, so a scene before the one shown
+    # takes its names first. A scene that is not shown must be whole.
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        doc(
+            '"scene":1,"scenes":[{"name":"A","nodes":[0]},'
+            + '{"name":"A","nodes":[1]}],"nodes":[{"name":"N"},{"name":"N"}]'
+        ),
+        scene,
+        assets,
+    )
+    assert_equal(model.nodes[0], NO_PARENT)
+    assert_equal(scene.get(model.nodes[1]).name, "N_1")
+    assert_true(
+        "a scene's nodes must be an array"
+        in refused(
+            doc(
+                '"scene":1,"scenes":[{"nodes":{}},{"nodes":[0]}],'
+                + '"nodes":[{"name":"N"}]'
+            )
+        )
+    )
+
+
 def check_cube(
     model: GltfModel, scene: Scene, assets: Assets, first_mesh: Int
 ) raises:
