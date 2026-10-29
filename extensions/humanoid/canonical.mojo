@@ -131,7 +131,9 @@ from extensions.humanoid.skeleton.torso.sweep import SweepField
 from geometries.utils import merge_geometries
 from loaders.json import parse_json
 from math.vector3 import Vector3
+from render.tasks import TaskGroup
 from std.math import ceil, isfinite, max, min
+from std.sys import num_logical_cores
 from std.memory import bitcast
 from units.si import CUBIC_METER, METER, MILLIMETER, Density, Length, Volume
 
@@ -757,6 +759,13 @@ struct CanonicalSkeleton(Copyable, Movable):
         """
         if index < 0 or index >= self.count():
             raise Error("A canonical bone index must name a bone")
+        return self._probe_at(index, point)
+
+    def _probe_at(
+        self, index: Int, point: Vector3
+    ) -> Tuple[Float32, BoneOccupancy]:
+        """Return one bone's distance and fill, for an index known to be valid.
+        """
         var local = point - self.offsets[index]
         if index < len(self.sweeps):
             var d = self.sweeps[index].distance(local)
@@ -921,7 +930,7 @@ struct CanonicalSkeleton(Copyable, Movable):
                 if self.lows[index].x < 0:
                     self.buckets[2 * slab + 1].append(index)
 
-    def locate(self, point: Vector3) raises -> BoneHit:
+    def locate(self, point: Vector3) -> BoneHit:
         """Return the first bone that holds a point and the nearest surface.
 
         Args:
@@ -930,9 +939,6 @@ struct CanonicalSkeleton(Copyable, Movable):
         Returns:
             The bone index, its fill, and the least distance to a bone
             whose box holds the point. A point in no box is `_FAR` away.
-
-        Raises:
-            Error: If a bone index is out of range.
         """
         var hit = BoneHit(-1, EMPTY, _FAR)
         var bucket = self._bucket(point)
@@ -940,7 +946,8 @@ struct CanonicalSkeleton(Copyable, Movable):
             return hit
         for index in self.buckets[bucket]:  # pragma: no branch
             if _in_box(self.lows[index], self.highs[index], point):
-                var d, fill = self.probe(index, point)
+                # The buckets hold only valid indices.
+                var d, fill = self._probe_at(index, point)
                 hit.nearest = min(hit.nearest, d)
                 # The first bone that holds the point owns it.
                 if fill != EMPTY:
@@ -1114,6 +1121,132 @@ def check_canonical_step(step: Length) raises:
         raise Error("A canonical grid step must be at most 10 mm")
 
 
+@fieldwise_init
+struct _CellGrid(ImplicitlyCopyable):
+    """Where the property grid's vertices stand, and its block counts."""
+
+    var origin: Vector3
+    var h: Float32
+    var nx: Int
+    var ny: Int
+    var nz: Int
+    var cx: Int
+    var cy: Int
+    var margin: Float32
+    """How near the skin a vertex is given a region label."""
+
+    def point(self, ix: Int, iy: Int, iz: Int) -> Vector3:
+        """Return a vertex of the grid."""
+        return self.origin + Vector3(
+            Float32(ix) * self.h, Float32(iy) * self.h, Float32(iz) * self.h
+        )
+
+
+def _sample_blocks(
+    envelope: Pointer[CanonicalEnvelope, ImmutAnyOrigin],
+    skeleton: Pointer[CanonicalSkeleton, ImmutAnyOrigin],
+    kept: MutPointer[Int, MutAnyOrigin],
+    grid: _CellGrid,
+    skin: MutPointer[Float32, MutAnyOrigin],
+    bones: MutPointer[Float32, MutAnyOrigin],
+    labels: MutPointer[Int, MutAnyOrigin],
+    held: MutPointer[Int, MutAnyOrigin],
+    fills: MutPointer[Int, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Read the skin and the bones at every vertex of some kept blocks.
+
+    Blocks hold different vertices, so tasks write different places.
+    """
+    for at in range(first, past):  # pragma: no branch
+        var block = kept[unsafe_offset=at]
+        var bx = block % grid.cx
+        var by = (block // grid.cx) % grid.cy
+        var bz = block // (grid.cx * grid.cy)
+        for iz in range(
+            bz * _BLOCK, min((bz + 1) * _BLOCK, grid.nz)
+        ):  # pragma: no branch
+            for iy in range(
+                by * _BLOCK, min((by + 1) * _BLOCK, grid.ny)
+            ):  # pragma: no branch
+                for ix in range(
+                    bx * _BLOCK, min((bx + 1) * _BLOCK, grid.nx)
+                ):  # pragma: no branch
+                    var v = (iz * grid.ny + iy) * grid.nx + ix
+                    var p = grid.point(ix, iy, iz)
+                    var e = envelope[].distance(p)
+                    var hit = skeleton[].locate(p)
+                    skin[unsafe_offset=v] = e
+                    bones[unsafe_offset=v] = hit.nearest
+                    if e < grid.margin:
+                        labels[unsafe_offset=v] = envelope[].region(p).value
+                    held[unsafe_offset=v] = hit.index
+                    fills[unsafe_offset=v] = hit.fill.value
+
+
+__async def _sample_task(
+    envelope: Pointer[CanonicalEnvelope, ImmutAnyOrigin],
+    skeleton: Pointer[CanonicalSkeleton, ImmutAnyOrigin],
+    kept: MutPointer[Int, MutAnyOrigin],
+    grid: _CellGrid,
+    skin: MutPointer[Float32, MutAnyOrigin],
+    bones: MutPointer[Float32, MutAnyOrigin],
+    labels: MutPointer[Int, MutAnyOrigin],
+    held: MutPointer[Int, MutAnyOrigin],
+    fills: MutPointer[Int, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Sample one share of the kept blocks."""
+    _sample_blocks(
+        envelope,
+        skeleton,
+        kept,
+        grid,
+        skin,
+        bones,
+        labels,
+        held,
+        fills,
+        first,
+        past,
+    )
+
+
+def _sample_cells(
+    envelope: CanonicalEnvelope,
+    skeleton: CanonicalSkeleton,
+    mut kept: List[Int],
+    grid: _CellGrid,
+    mut skin: List[Float32],
+    mut bones: List[Float32],
+    mut labels: List[Int],
+    mut held: List[Int],
+    mut fills: List[Int],
+):
+    """Sample the kept blocks on every logical core."""
+    var tasks = max(1, min(num_logical_cores(), len(kept)))
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _sample_task(
+                Pointer(to=envelope).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=skeleton).unsafe_origin_cast[ImmutAnyOrigin](),
+                kept.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                grid,
+                skin.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                bones.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                labels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                held.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                fills.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                task * len(kept) // tasks,
+                (task + 1) * len(kept) // tasks,
+            )
+        )
+    group.wait()
+
+
 def canonical_body(
     spec: HumanoidSpec, step: Length = CANONICAL_STEP
 ) raises -> CanonicalBody:
@@ -1194,6 +1327,8 @@ def canonical_body(
                         )
                     )
                 )
+    # The blocks the coarse pass keeps, in order.
+    var kept = List[Int]()
     for bz in range(cz):  # pragma: no branch
         for by in range(cy):  # pragma: no branch
             for bx in range(cx):  # pragma: no branch
@@ -1205,50 +1340,52 @@ def canonical_body(
                     least = min(
                         least, coarse[(kz * (cy + 1) + ky) * (cx + 1) + kx]
                     )
-                if least > reach:
-                    continue
-                for iz in range(
-                    bz * _BLOCK, min((bz + 1) * _BLOCK, nz)
+                if least <= reach:
+                    kept.append((bz * cy + by) * cx + bx)
+    # The fields at every vertex of a kept block, in parallel. The sums
+    # below then run in the order one thread would run them, so the parts
+    # and their properties are the same bits whatever the thread count.
+    var held = List[Int](length=count, fill=-1)
+    var fills = List[Int](length=count, fill=0)
+    var grid = _CellGrid(origin, h, nx, ny, nz, cx, cy, margin)
+    _sample_cells(
+        envelope, skeleton, kept, grid, skin, bones, labels, held, fills
+    )
+    for block in kept:
+        var bx = block % cx
+        var by = (block // cx) % cy
+        var bz = block // (cx * cy)
+        for iz in range(
+            bz * _BLOCK, min((bz + 1) * _BLOCK, nz)
+        ):  # pragma: no branch
+            for iy in range(
+                by * _BLOCK, min((by + 1) * _BLOCK, ny)
+            ):  # pragma: no branch
+                for ix in range(
+                    bx * _BLOCK, min((bx + 1) * _BLOCK, nx)
                 ):  # pragma: no branch
-                    for iy in range(
-                        by * _BLOCK, min((by + 1) * _BLOCK, ny)
-                    ):  # pragma: no branch
-                        for ix in range(
-                            bx * _BLOCK, min((bx + 1) * _BLOCK, nx)
-                        ):  # pragma: no branch
-                            var v = (iz * ny + iy) * nx + ix
-                            var p = origin + Vector3(
-                                Float32(ix) * h,
-                                Float32(iy) * h,
-                                Float32(iz) * h,
-                            )
-                            var e = envelope.distance(p)
-                            var hit = skeleton.locate(p)
-                            skin[v] = e
-                            bones[v] = hit.nearest
-                            if e < margin:
-                                labels[v] = envelope.region(p).value
-                            if hit.index >= 0:
-                                var at = part_index(
-                                    skeleton.regions[hit.index], BONE_TISSUE
-                                )
-                                var rho = Float64(
-                                    apparent_density_of(
-                                        hit.fill, cortical, trabecular
-                                    ).value
-                                )
-                                if hit.fill == MARROW:
-                                    rho = marrow
-                                tallies[at].add_cell(rho * cell, p, widths)
-                                volumes[at] += cell
-                                continue
-                            if e < 0:
-                                var at = part_index(
-                                    BodyRegion(labels[v]), SOFT_TISSUE
-                                )
-                                tallies[at].add_cell(soft * cell, p, widths)
-                                volumes[at] += cell
-                                _grow(boxes, labels[v], ix, iy, iz)
+                    var v = (iz * ny + iy) * nx + ix
+                    var p = grid.point(ix, iy, iz)
+                    if held[v] >= 0:
+                        var at = part_index(
+                            skeleton.regions[held[v]], BONE_TISSUE
+                        )
+                        var fill = BoneOccupancy(fills[v])
+                        var rho = Float64(
+                            apparent_density_of(
+                                fill, cortical, trabecular
+                            ).value
+                        )
+                        if fill == MARROW:
+                            rho = marrow
+                        tallies[at].add_cell(rho * cell, p, widths)
+                        volumes[at] += cell
+                        continue
+                    if skin[v] < 0:
+                        var at = part_index(BodyRegion(labels[v]), SOFT_TISSUE)
+                        tallies[at].add_cell(soft * cell, p, widths)
+                        volumes[at] += cell
+                        _grow(boxes, labels[v], ix, iy, iz)
     var parts = List[CanonicalPart]()
     var whole = InertiaTally()
     for region in named_body_regions():  # pragma: no branch
