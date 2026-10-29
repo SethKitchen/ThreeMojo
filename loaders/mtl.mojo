@@ -100,7 +100,7 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from loaders.js_text import comment_start, split_fields
+from loaders.js_text import comment_start, split_fields, without_bom
 from loaders.text_number import file_line
 from std.pathlib import Path
 from units.si import METER, Length
@@ -1049,6 +1049,9 @@ def parse_mtl(
     """Read a material library's text, building a `PHONG` material per
     `newmtl` and a texture per image it names.
 
+    A byte order mark at the start is dropped, as three.js's `trim` drops
+    it from the first line.
+
     Args:
         text: The whole file.
         directory: Where texture file names are relative to, ending in `/`,
@@ -1070,7 +1073,7 @@ def parse_mtl(
             is none of the named.
     """
     options.validate()
-    var infos = _read_infos(text)
+    var infos = _read_infos(without_bom(text))
     var library = MtlLibrary(options.side)
     var textures = _Textures()
     for index in range(len(infos)):
@@ -1201,8 +1204,8 @@ def read_obj_with_materials(
     object its material.
 
     Each `mtllib` is read relative to the OBJ file's directory, in file
-    order. A later library's material replaces an earlier one's of the
-    same name. The geometries stay in the model, to go into a store with
+    order. A `#` comment after the file name is not part of it. A later
+    library's material replaces an earlier one's of the same name. The geometries stay in the model, to go into a store with
     `ObjObject.take_geometry`.
 
     Args:
@@ -1224,10 +1227,13 @@ def read_obj_with_materials(
     var directory = path_directory(path)
     var library = MtlLibrary(options.side)
     for index in range(len(model.material_libraries)):
-        library.merge(
-            read_mtl(
-                directory + model.material_libraries[index], assets, options
-            )
-        )
+        # The model keeps the whole rest of an `mtllib` line, as three.js
+        # does. The file is the part before a comment.
+        var name = model.material_libraries[index]
+        var comment = comment_start(name)
+        if comment >= 0:
+            var kept = String(name[byte=0:comment].strip())
+            name = kept^
+        library.merge(read_mtl(directory + name, assets, options))
     var ids = set_materials(model, library, assets)
     return ObjWithMaterials(model^, library^, ids^)

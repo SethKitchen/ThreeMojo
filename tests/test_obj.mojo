@@ -618,6 +618,17 @@ def test_a_file_that_is_not_utf8_reads_as_replacement_characters() raises:
     assert_equal(model.objects[0].geometry.triangle_count(), 1)
 
 
+def test_a_leading_byte_order_mark_is_dropped() raises:
+    # three.js's `TextDecoder` and `trimStart` drop a U+FEFF at the start.
+    # So the first vertex is read, and the face names three vertices.
+    var model = parse_obj(chr(0xFEFF) + "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n")
+    assert_equal(model.count(), 1)
+    assert_equal(model.objects[0].geometry.triangle_count(), 1)
+    var path = temporary_path("marked.obj")
+    Path(path).write_text(chr(0xFEFF) + "mtllib a.mtl\n")
+    assert_equal(read_obj(path).material_libraries[0], "a.mtl")
+
+
 def main() raises:
     with TestScratch():
         TestSuite.discover_tests[__functions_in_module()]().run()

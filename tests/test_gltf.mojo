@@ -22,10 +22,10 @@ from core.buffer_geometry import COLOR, NORMAL, POSITION, UV
 from core.object3d import NO_PARENT, Object3D
 from core.scene import Scene
 from lights.light import directional_light
+from loaders.js_text import without_bom
 from loaders.json import parse_json
 from loaders.gltf import (
     _Loader,
-    _without_bom,
     GltfModel,
     _integer_component,
     decode_base64,
@@ -332,8 +332,8 @@ def test_a_leading_byte_order_mark_is_dropped() raises:
     # byte order mark, before `JSON.parse` reads it: in a `.gltf` and in
     # a `.glb`'s JSON chunk. A mark that does not lead stays.
     var mark = chr(0xFEFF)
-    assert_equal(_without_bom(mark + "{}"), "{}")
-    assert_equal(_without_bom("{}" + mark), "{}" + mark)
+    assert_equal(without_bom(mark + "{}"), "{}")
+    assert_equal(without_bom("{}" + mark), "{}" + mark)
     var text = Path(HERE + "embedded.gltf").read_text()
     var path = temporary_path("marked.gltf")
     Path(path).write_text(mark + text)

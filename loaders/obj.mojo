@@ -75,7 +75,7 @@ from core.buffer_geometry import (
     MaterialIndex,
 )
 from loaders.fan import fan_problem
-from loaders.js_text import comment_start, split_fields
+from loaders.js_text import comment_start, split_fields, without_bom
 from loaders.text_number import file_line
 from math.vector3 import Vector3
 from render.srgb import srgb_to_linear
@@ -575,6 +575,9 @@ def _read_face(
 def parse_obj(text: String) raises -> ObjModel:
     """Read an OBJ file's text into a model.
 
+    A byte order mark at the start is dropped, as three.js's `trimStart`
+    drops it from the first line.
+
     Args:
         text: The whole file.
 
@@ -603,7 +606,7 @@ def parse_obj(text: String) raises -> ObjModel:
     var lines = List[String]()
     # A split yields at least one piece, even of an empty file: the loops
     # always run.
-    for raw in text.split("\n"):  # pragma: no branch
+    for raw in without_bom(text).split("\n"):  # pragma: no branch
         lines.append(String(raw))
     # A line that ends in a backslash goes on into the next, three.js's
     # `replace( /\\\n/g, '' )`, so a statement is read, and named in an

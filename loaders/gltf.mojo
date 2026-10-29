@@ -257,6 +257,7 @@ from loaders.draco import (
     _decode_draco_owned,
 )
 from loaders.bytes import decode_base64
+from loaders.js_text import without_bom
 from loaders.image_file import decode_image
 from loaders.fbx import sanitize_node_name
 from loaders.file_path import path_directory
@@ -836,7 +837,7 @@ def read_gltf(
         var parts = split_glb(bytes)
         return load_gltf(parts[0], parts[1], directory, scene, assets, workers)
     return load_gltf(
-        _without_bom(String(from_utf8=Span(bytes))),
+        without_bom(String(from_utf8=Span(bytes))),
         List[UInt8](),
         directory,
         scene,
@@ -890,7 +891,7 @@ def split_glb(bytes: List[UInt8]) raises -> Tuple[String, List[UInt8]]:
             if seen_json:
                 raise Error("glTF: two JSON chunks")
             seen_json = True
-            json = _without_bom(String(from_utf8=Span(chunk)))
+            json = without_bom(String(from_utf8=Span(chunk)))
         elif kind == GLB_BIN_CHUNK:
             if not seen_json:
                 raise Error("glTF: the first chunk must be JSON")
@@ -1076,14 +1077,6 @@ def is_supported_extension(name: String) -> Bool:
         or name == TEXTURE_WEBP
         or name == DRACO_MESH_COMPRESSION
     )
-
-
-def _without_bom(text: String) -> String:
-    """Return a text less one leading byte order mark, as three.js's
-    `TextDecoder` drops it before `JSON.parse` reads the text."""
-    if text.startswith(chr(0xFEFF)):
-        return String(text[byte=3:])
-    return text
 
 
 def _check_asset(document: JsonDocument, root: Int) raises:

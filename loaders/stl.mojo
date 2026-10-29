@@ -57,7 +57,7 @@ from core.buffer_geometry import (
 from core.ordinal import require_positive
 from geometries.surface import position_normal_surface
 from loaders.bytes import bytes_match
-from loaders.js_text import split_fields
+from loaders.js_text import split_fields, without_bom
 from loaders.text_number import file_line
 from render.srgb import srgb_to_linear
 from std.memory import bitcast
@@ -413,10 +413,7 @@ def parse_stl_text(text: String) raises -> StlModel:
             number or not finite, or a word is not STL at all.
     """
     # A UTF-8 BOM is an encoding marker only at the start of the file.
-    var source = text
-    if source.startswith(chr(0xFEFF)):
-        var trimmed = String(source[byte=3:])
-        source = trimmed^
+    var source = without_bom(text)
     var words = _Words(source)
     var positions = List[Float32]()
     var normals = List[Float32]()

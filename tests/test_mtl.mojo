@@ -509,6 +509,31 @@ def test_a_library_that_is_not_utf8_reads_as_replacement_characters() raises:
     assert_color(built.color, 255, 0, 0)
 
 
+def test_a_leading_byte_order_mark_is_dropped() raises:
+    # three.js's `TextDecoder` and `trim` drop a U+FEFF at the start, so
+    # the first material is read.
+    var assets = Assets()
+    var library = parse_mtl(chr(0xFEFF) + "newmtl red\nKd 1 0 0\n", "", assets)
+    assert_equal(len(library.names), 1)
+    assert_equal(library.names[0], "red")
+
+
+def test_a_comment_after_a_library_name_is_not_part_of_the_file() raises:
+    # The model keeps the whole rest of the line, as three.js's OBJLoader
+    # does. The file that is read is the part before the comment.
+    Path(temporary_path("noted.mtl")).write_text("newmtl Red\nKd 1 0 0\n")
+    var path = temporary_path("noted.obj")
+    Path(path).write_text(
+        "mtllib noted.mtl # the library\nv 0 0 0\nv 1 0 0\nv 0 1 0\n"
+        + "usemtl Red\nf 1 2 3\n"
+    )
+    var assets = Assets()
+    var read = read_obj_with_materials(path, assets)
+    assert_equal(read.model.material_libraries[0], "noted.mtl # the library")
+    assert_equal(read.library.names[0], "Red")
+    assert_color(assets.materials.get(read.materials[0][0]).color, 255, 0, 0)
+
+
 def main() raises:
     with TestScratch():
         TestSuite.discover_tests[__functions_in_module()]().run()
