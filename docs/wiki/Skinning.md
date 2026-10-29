@@ -177,14 +177,16 @@ Skinning happens in `Renderer.prepare`, which is the one place the CPU and GPU r
 | A node or a bone the scene does not hold. | An error at `add_skinned_mesh`. |
 | A geometry without `skinIndex` and `skinWeight`. | An error at `prepare`. |
 | A skin attribute that is not four numbers a vertex. | An error at `prepare`. |
-| A vertex naming a bone the skeleton does not have. | An error at `prepare`. |
+| A slot with a weight that names a bone the skeleton does not have. | An error at `prepare`. |
 | A weight that is not a number, or is below zero. | An error at `prepare`. |
-| A bone index that is not a whole number in range. | An error at `prepare`. |
+| A slot with a weight whose bone index is not a whole number. | An error at `prepare`. |
 | A supplied inverse bind with no inverse of its own. | An error at construction. |
 | A bind mode that is neither of the two. | An error at construction. |
 | An `ATTACHED` mesh scaled to nothing. | An error at `prepare`. |
 
 Negative weights are refused for the same reason. Two bones at minus one and two sum to one, and send a vertex twice as far as the further one. glTF forbids them.
+
+A slot whose weight is zero names no bone, and its bone index is not read. three.js's `applyBoneTransform` skips such a slot too. So an exporter can leave any number there.
 
 ### Weights that do not sum to one
 
