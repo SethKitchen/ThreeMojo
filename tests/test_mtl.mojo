@@ -33,6 +33,7 @@ from render.srgb import LINEAR, SRGB
 from render.texture import CLAMP, COVERAGE, IGNORED, REPEAT
 from render.texture_store import NO_TEXTURE
 from renderers.renderer import Renderer
+from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -41,6 +42,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+from tests.test_scratch import TestScratch, temporary_path
 from units.si import Angle, DEGREE, Length, METER
 
 comptime TOLERANCE = Float64(1e-6)
@@ -479,5 +481,29 @@ def test_a_default_material_for_vertex_colors_turns_them_on() raises:
     assert_false(ids[3][0] == ids[0][0])
 
 
+def test_a_library_that_is_not_utf8_reads_as_replacement_characters() raises:
+    # A material named in Windows-1252 in both files. three.js decodes each
+    # byte that is not UTF-8 as U+FFFD, so the names still match.
+    var library = List[UInt8]("# Biblioth".as_bytes())
+    library.append(0xE8)
+    library += List[UInt8]("que\nnewmtl Rouge".as_bytes())
+    library.append(0xE2)
+    library += List[UInt8]("tre\nKd 1 0 0\n".as_bytes())
+    Path(temporary_path("latin.mtl")).write_bytes(library)
+    var model = List[UInt8](
+        "mtllib latin.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\nusemtl Rouge".as_bytes()
+    )
+    model.append(0xE2)
+    model += List[UInt8]("tre\nf 1 2 3\n".as_bytes())
+    var path = temporary_path("latin.obj")
+    Path(path).write_bytes(model)
+    var assets = Assets()
+    var read = read_obj_with_materials(path, assets)
+    assert_equal(read.library.names[0], "Rouge" + chr(0xFFFD) + "tre")
+    var built = assets.materials.get(read.materials[0][0])
+    assert_color(built.color, 255, 0, 0)
+
+
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

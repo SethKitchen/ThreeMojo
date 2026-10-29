@@ -546,11 +546,31 @@ def test_a_header_that_is_not_ply_is_refused() raises:
         "not a header line"
         in refusal("ply\nformat ascii 1.0\nvertex 3\nend_header\n")
     )
-    var bytes = text_bytes("ply\ncomment ")
-    bytes.append(0xFF)
-    bytes += text_bytes("\nend_header\n")
-    with assert_raises():
-        _ = parse_ply(bytes)
+
+
+def test_text_that_is_not_utf8_reads_as_replacement_characters() raises:
+    # A comment in Windows-1252, before ASCII and binary bodies, and a byte
+    # that is not UTF-8 after an ASCII body's rows. three.js reads each as
+    # U+FFFD and keeps going.
+    var header = text_bytes("ply\nformat ascii 1.0\ncomment Cr")
+    header.append(0xE9)
+    header += text_bytes(
+        "\nelement vertex 1\nproperty float x\nproperty float y\n"
+        "property float z\nend_header\n1 2 3\n"
+    )
+    header.append(0xFF)
+    header += text_bytes("\n")
+    var geometry = parse_ply(header)
+    assert_point(geometry.attribute_view(String(POSITION)).vector3(0), 1, 2, 3)
+    var binary = text_bytes("ply\nformat binary_little_endian 1.0\ncomment ")
+    binary.append(0xFF)
+    binary += text_bytes(
+        "\nelement vertex 1\nproperty uchar x\nproperty uchar y\n"
+        "property uchar z\nend_header\n"
+    )
+    binary += [UInt8(4), 5, 6]
+    var read = parse_ply(binary)
+    assert_point(read.attribute_view(String(POSITION)).vector3(0), 4, 5, 6)
 
 
 def test_malformed_elements_and_properties_are_refused() raises:

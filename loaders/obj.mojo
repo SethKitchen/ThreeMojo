@@ -52,6 +52,10 @@ a corner black without a word.
 A number that cannot be read or is not finite once it is a `Float32`, a
 face with fewer than three corners or that is not convex, and an index
 that names nothing are refused, with the line they were found on.
+
+`read_obj` reads the file as UTF-8. A byte that is not UTF-8 becomes
+U+FFFD, as three.js's `FileLoader` decodes the text, so a comment or a
+name in another encoding does not refuse the file.
 """
 
 from std.math import isfinite, isnan
@@ -742,6 +746,8 @@ def parse_obj(text: String) raises -> ObjModel:
 def read_obj(path: String) raises -> ObjModel:
     """Read an OBJ file into a model.
 
+    A byte that is not UTF-8 becomes U+FFFD, as three.js decodes it.
+
     Args:
         path: The file to read.
 
@@ -752,4 +758,4 @@ def read_obj(path: String) raises -> ObjModel:
         Error: If the file cannot be read, or for anything `parse_obj`
             refuses.
     """
-    return parse_obj(Path(path).read_text())
+    return parse_obj(String(from_utf8_lossy=Path(path).read_bytes()))

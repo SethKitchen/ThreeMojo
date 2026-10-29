@@ -39,6 +39,10 @@ What is read is what three.js's loader reads:
 A file without a `face` element is a point cloud: its geometry has no
 index, as three.js's has none.
 
+The header and an ASCII body are read as UTF-8. A byte that is not UTF-8
+becomes U+FFFD, as three.js's `TextDecoder` decodes the body, so a
+comment in another encoding does not refuse the file.
+
 **Options.** `PlyOptions` holds three.js's two mappings.
 `set_property_name` renames a property of the file as the header is
 read, three.js's `setPropertyNameMapping`: `diffuse_red` to `red` reads
@@ -340,8 +344,9 @@ def _find_bytes(bytes: List[UInt8], word: String) -> Int:
     return -1
 
 
-def _text(bytes: List[UInt8], start: Int, end: Int) raises -> String:
-    """Return part of the file as text.
+def _text(bytes: List[UInt8], start: Int, end: Int) -> String:
+    """Return part of the file as text, as three.js's `TextDecoder` reads
+    it: a byte that is not UTF-8 becomes U+FFFD.
 
     Args:
         bytes: The file.
@@ -350,15 +355,9 @@ def _text(bytes: List[UInt8], start: Int, end: Int) raises -> String:
 
     Returns:
         The text.
-
-    Raises:
-        Error: If the bytes are not UTF-8.
     """
     var part = copy_byte_range(bytes, start, end)
-    try:
-        return String(from_utf8=Span(part))
-    except:
-        raise Error("PLY: text in the file that is not UTF-8")
+    return String(from_utf8_lossy=Span(part))
 
 
 def _where(line: Int) -> String:

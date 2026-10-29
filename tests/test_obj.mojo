@@ -21,6 +21,7 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
 from renderers.renderer import Renderer
+from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -29,6 +30,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+from tests.test_scratch import TestScratch, temporary_path
 from units.si import Angle, DEGREE, Length, METER
 
 comptime TOLERANCE = Float64(1e-6)
@@ -562,5 +564,22 @@ def test_polygon_convexity_is_independent_of_finite_scale() raises:
     assert_equal(translated.objects[0].geometry.triangle_count(), 2)
 
 
+def test_a_file_that_is_not_utf8_reads_as_replacement_characters() raises:
+    # A comment and a name in Windows-1252. three.js's `FileLoader` reads
+    # each byte that is not UTF-8 as U+FFFD and keeps going.
+    var bytes = List[UInt8]("# Export".as_bytes())
+    bytes.append(0xE9)
+    bytes += List[UInt8]("\no Pi".as_bytes())
+    bytes.append(0xE8)
+    bytes += List[UInt8]("ce\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n".as_bytes())
+    var path = temporary_path("latin.obj")
+    Path(path).write_bytes(bytes)
+    var model = read_obj(path)
+    assert_equal(model.count(), 1)
+    assert_equal(model.objects[0].name, "Pi" + chr(0xFFFD) + "ce")
+    assert_equal(model.objects[0].geometry.triangle_count(), 1)
+
+
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

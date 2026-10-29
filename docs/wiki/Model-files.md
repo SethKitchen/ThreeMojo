@@ -23,6 +23,10 @@ XMP also reject malformed encoding. `UsdzFiles.text` refuses bytes that are
 not valid UTF-8. This does not change a format that explicitly uses lossy
 decoding elsewhere.
 
+The OBJ, MTL, PLY and STL readers decode text as three.js's `TextDecoder`
+decodes it. A byte that is not UTF-8 becomes U+FFFD. Thus a comment or a
+name in another encoding, such as Windows-1252, does not refuse the file.
+
 ## Read a file
 
 ```mojo
@@ -264,7 +268,7 @@ The loader raises for:
 - An ASCII file with no solid, or a solid without `endsolid`. A solid in a solid.
 - A keyword in the wrong place, such as `vertex` outside a facet.
 - A facet without `normal`, or with other than three vertices. `outer` without `loop`.
-- A word that STL does not have. Text that is not UTF-8.
+- A word that STL does not have.
 
 ## PLY
 

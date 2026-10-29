@@ -73,6 +73,8 @@ A value that is not a number, a color outside zero to one, an option that
 is not known or lacks its numbers, a texture line with no file, and an
 image that cannot be read or decoded are refused, with the line they were
 found on. Text before the first `newmtl` is skipped, as three.js skips it.
+`read_mtl` reads the file as UTF-8, and a byte that is not UTF-8 becomes
+U+FFFD, as three.js's `FileLoader` decodes the text.
 """
 
 from std.math import isfinite
@@ -1081,7 +1083,8 @@ def read_mtl(
 ) raises -> MtlLibrary:
     """Read a material library file; see `parse_mtl`.
 
-    Texture file names are relative to the library's own directory.
+    Texture file names are relative to the library's own directory. A
+    byte that is not UTF-8 becomes U+FFFD, as three.js decodes it.
 
     Args:
         path: The file.
@@ -1096,7 +1099,10 @@ def read_mtl(
             refuses.
     """
     return parse_mtl(
-        Path(path).read_text(), path_directory(path), assets, options
+        String(from_utf8_lossy=Path(path).read_bytes()),
+        path_directory(path),
+        assets,
+        options,
     )
 
 

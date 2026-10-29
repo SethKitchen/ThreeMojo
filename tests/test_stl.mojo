@@ -417,11 +417,21 @@ def test_a_word_stl_does_not_have_is_refused() raises:
     assert_true("color" in seen, seen)
 
 
-def test_text_that_is_not_utf8_is_refused() raises:
-    var bytes = ascii_bytes("solid ")
-    bytes.append(0xFF)
-    with assert_raises():
-        _ = parse_stl(bytes)
+def test_text_that_is_not_utf8_reads_as_replacement_characters() raises:
+    # A solid named in Windows-1252, as a CAD program writes `Gehäuse`.
+    # three.js's `TextDecoder` reads the byte as U+FFFD and keeps going.
+    var facet = String(
+        "\n  facet normal 0 0 1\n    outer loop\n      vertex 0 0 0\n"
+        "      vertex 1 0 0\n      vertex 0 1 0\n    endloop\n  endfacet\n"
+    )
+    var bytes = ascii_bytes("solid Geh")
+    bytes.append(0xE4)
+    bytes += ascii_bytes("use" + facet + "endsolid Geh")
+    bytes.append(0xE4)
+    bytes += ascii_bytes("use\n")
+    var model = parse_stl(bytes)
+    assert_equal(model.geometry.vertex_count(), 3)
+    assert_equal(model.solids[0].name, "Geh" + chr(0xFFFD) + "use")
 
 
 # --- a file on disk ----------------------------------------------------------
