@@ -33,6 +33,10 @@ index is three.js's.
 The profile's numbers are bare meters, as a `Vector3` position is: the
 lathe is where a shape drawn by hand meets the scene, and the drawing is
 made of plain points.
+
+The arithmetic is three.js's, in doubles, and each number is rounded to
+`Float32` once, when it is stored. three.js clamps the sweep to a turn,
+and so does this, so a `Float32` full turn is three.js's `Math.PI * 2`.
 """
 
 from core.buffer_geometry import BufferGeometry, LATHE_GEOMETRY
@@ -46,31 +50,34 @@ from math.curve_checks import require_at_least_one
 from core.user_data import json_number_text
 from geometries.circle import FULL_TURN, check_sweep
 from math.finite import require_finite, require_finite_group
-from math.norm import normalized2
-from math.vector2 import Vector2, vector2_from_float64
-from std.math import cos, isfinite, sin
+from math.norm import rounded_product
+from math.vector2 import Vector2
+from std.math import cos, pi, sin, sqrt
 from units.si import Angle, RADIAN
 
 
-def _unit(x: Float32, y: Float32) -> Vector2:
-    """Return a direction in the profile's plane made unit length. The
-    caller has checked the direction is not zero."""
-    var direction = normalized2(x, y)
-    return Vector2(direction[0], direction[1])
+comptime _Normal = SIMD[DType.float64, 2]
 
 
-def _wide_unit(before: Vector2, after: Vector2) raises -> Vector2:
-    """Normalize the endpoint difference before narrowing its components."""
+def _unit(v: _Normal) -> _Normal:
+    """Return three.js's `Vector3.normalize` of a nonzero direction in the
+    profile's plane: the direction times one over its length."""
+    var length = sqrt(rounded_product(v[0], v[0]) + rounded_product(v[1], v[1]))
+    return v * (1 / length)
+
+
+def _wide_unit(before: Vector2, after: Vector2) raises -> _Normal:
+    """Return the unit normal of the outer endpoint difference."""
     var x = Float64(after.y) - Float64(before.y)
     var y = Float64(before.x) - Float64(after.x)
     if x == 0 and y == 0:
         raise Error("A lathe's profile cannot turn straight back")
-    var direction = normalized2(x, y)
-    return vector2_from_float64(direction[0], direction[1])
+    return _unit(_Normal(x, y))
 
 
-def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:
-    """Return the direction each profile point faces, three.js's way.
+def _profile_normals(points: List[Vector2]) raises -> List[_Normal]:
+    """Return the direction each profile point faces, three.js's way, in
+    doubles.
 
     A segment from one point to the next faces `(dy, -dx)`, its direction
     turned a quarter turn toward +x and as long as the segment. The first
@@ -80,44 +87,40 @@ def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:
     no segment after it, faces the way the last segment does, left as long
     as that segment, as three.js leaves it.
     Consecutive points were checked to differ, so no segment is zero, but
-    two that cancel are caught here.
+    two that cancel are caught here. No difference of `Float32` points, nor
+    its square, overflows a double.
 
     Raises:
         Error: If a point's two segments face exactly opposite ways, which
             leaves it no direction to face, or the last unnormalized normal
             cannot fit in Float32.
     """
-    var normals = List[Vector2]()
-    var previous = Vector2(0, 0)
+    var normals = List[_Normal]()
+    var previous = _Normal(0, 0)
     for index in range(len(points)):  # pragma: no branch
         if index == len(points) - 1:
             # Checked radii are nonnegative Float32 values, so their
-            # difference (previous.y) fits in Float32.
+            # difference (previous[1]) fits in Float32.
             require_finite(
-                Float64(previous.x),
+                Float64(Float32(previous[0])),
                 "A lathe's final profile normal must fit in Float32",
             )
             normals.append(previous)
             continue
-        var dx = points[index + 1].x - points[index].x
-        var dy = points[index + 1].y - points[index].y
-        var ahead = Vector2(dy, -dx)
+        var dx = Float64(points[index + 1].x) - Float64(points[index].x)
+        var dy = Float64(points[index + 1].y) - Float64(points[index].y)
+        var ahead = _Normal(dy, -dx)
         if index == 0:
-            # Only the signed height difference can overflow: both radii
-            # lie between zero and the largest finite Float32.
-            if isfinite(ahead.x):
-                normals.append(_unit(ahead.x, ahead.y))
-            else:
-                normals.append(_wide_unit(points[0], points[1]))
+            normals.append(_unit(ahead))
         else:
-            var summed = Vector2(ahead.x + previous.x, ahead.y + previous.y)
-            if not summed.is_finite() or (summed.x == 0 and summed.y == 0):
-                # The two raw segment directions telescope to the outer
-                # endpoint difference. This also distinguishes an exact
-                # return from cancellation in rounded segment differences.
+            var summed = ahead + previous
+            if summed[0] == 0 and summed[1] == 0:
+                # The two segment normals cancel, and three.js would leave
+                # a zero normal. The outer endpoint difference tells an
+                # exact return from cancellation in rounded differences.
                 normals.append(_wide_unit(points[index - 1], points[index + 1]))
             else:
-                normals.append(_unit(summed.x, summed.y))
+                normals.append(_unit(summed))
         previous = ahead
     return normals^
 
@@ -190,23 +193,30 @@ def lathe(
 
     var normals_2d = _profile_normals(points)
     var count = len(points)
+    # three.js's arithmetic, in doubles, the product before each sum
+    # rounded on its own. The sweep is clamped to a turn, so a Float32 full
+    # turn becomes three.js's `Math.PI * 2`.
+    var inverse_segments = 1.0 / Float64(segments)
+    var sweep = min(Float64(phi_length.value), pi * 2)
     var data = List[Float32]()
     var normals = List[Float32]()
     var uvs = List[Float32]()
     for column in range(segments + 1):  # pragma: no branch
-        var u = Float32(column) / Float32(segments)
-        var phi = phi_start.value + u * phi_length.value
+        var phi = Float64(phi_start.value) + rounded_product(
+            Float64(column) * inverse_segments, sweep
+        )
         var sin_phi = sin(phi)
         var cos_phi = cos(phi)
         for row in range(count):  # pragma: no branch
-            data.append(points[row].x * sin_phi)
+            var x = Float64(points[row].x)
+            data.append(Float32(x * sin_phi))
             data.append(points[row].y)
-            data.append(points[row].x * cos_phi)
-            normals.append(normals_2d[row].x * sin_phi)
-            normals.append(normals_2d[row].y)
-            normals.append(normals_2d[row].x * cos_phi)
-            uvs.append(u)
-            uvs.append(Float32(row) / Float32(count - 1))
+            data.append(Float32(x * cos_phi))
+            normals.append(Float32(normals_2d[row][0] * sin_phi))
+            normals.append(Float32(normals_2d[row][1]))
+            normals.append(Float32(normals_2d[row][0] * cos_phi))
+            uvs.append(Float32(Float64(column) / Float64(segments)))
+            uvs.append(Float32(Float64(row) / Float64(count - 1)))
 
     var index = List[Int]()
     for column in range(segments):  # pragma: no branch

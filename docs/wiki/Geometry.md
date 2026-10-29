@@ -343,7 +343,9 @@ The normals come from the profile's segments, as in three.js. A corner faces the
 
 The last point faces the way its own segment does, and its normal is as long as that segment. three.js does not make it unit length, and this keeps that. The builder refuses a final segment normal whose components cannot fit in `Float32`.
 
-Lathe unit normals use a scaled calculation when a direct norm overflows or underflows. Lathe corner normals use the outer endpoint difference when rounded segment differences lose the direction. Ordinary profiles keep their existing arithmetic and order.
+The arithmetic is three.js's, in doubles, and each number is rounded to `Float32` once when it is stored. No difference of `Float32` points overflows a double. three.js clamps the sweep to `Math.PI * 2`, and so does this, so a `Float32` full turn gives three.js's full turn.
+
+Two segment normals can cancel at a corner, in doubles, while the outer points differ. three.js then leaves the corner with a zero normal. This port gives it the normal of the outer endpoint difference instead.
 
 A point on the axis is a pole. The half of each cell against it has no area, and three.js keeps it, as this does. `u` runs around and `v` up the profile, one point per equal step. The sweep starts at +z, as the cylinder's does.
 

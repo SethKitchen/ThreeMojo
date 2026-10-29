@@ -2458,6 +2458,37 @@ def test_a_lathe_sweep_makes_a_section() raises:
     assert_faces_wind_with_their_normals(half)
 
 
+def test_a_lathe_has_three_js_s_numbers() raises:
+    """A lathe is computed in doubles, as three.js computes it, and its
+    sweep is clamped to `Math.PI * 2`. So the last column of a full turn
+    has three.js's x of -1.22e-16 at a radius of a half, and not 8.74e-8.
+    The expected values are three.js r180's, given the same Float32
+    numbers."""
+    var dome = lathe(profile([0, -0.5, 0.5, 0, 0, 0.5]), 12)
+    assert_js_number(
+        dome.attribute_view(String(POSITION)).component(37, 0),
+        -1.2246468525851679e-16,
+    )
+    assert_js_number(
+        dome.attribute_view(String(NORMAL)).component(37, 0),
+        -2.4492937051703357e-16,
+    )
+    var vase = lathe(
+        profile([0.1, -1, 0.6, -0.7, 0.3, 0.2, 0.45, 0.9, 0.2, 1.3]),
+        5,
+        Angle(0.3, RADIAN),
+        Angle(4.0, RADIAN),
+    )
+    assert_js_number(
+        vase.attribute_view(String(POSITION)).component(26, 2),
+        -0.2404794991016388,
+    )
+    assert_js_number(
+        vase.attribute_view(String(NORMAL)).component(28, 2),
+        -0.3991531729698181,
+    )
+
+
 def test_a_lathe_needs_a_profile_a_segment_and_a_sweep() raises:
     with assert_raises():
         _ = lathe(profile([1, 0]))
