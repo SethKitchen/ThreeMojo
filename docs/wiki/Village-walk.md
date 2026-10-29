@@ -30,7 +30,7 @@ The window is 1920 by 1080 pixels by default. Give a width and a height for a di
 
 The buttons are named by position, as SDL names them. The south button is A on an Xbox controller and the cross on a PlayStation controller.
 
-The game builds for about 15 seconds before the window opens. On a four-core Linux host, the `low` quality draws about 41 frames a second at 1920 by 1080 on the CPU. The game moves by the time each frame takes. So a slow frame moves the player as far as many quick frames do.
+The game builds for about 15 seconds before the window opens. On a four-core Linux host, the `low` quality draws about 34 frames a second at 1920 by 1080 on the CPU. The game moves by the time each frame takes. So a slow frame moves the player as far as many quick frames do.
 
 The game prints the frames a second to the standard error.
 

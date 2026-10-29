@@ -27,7 +27,7 @@ mojo run -I . examples/village_walk.mojo --play 1920 1080 low
 | `plants` | `FEWEST_PLANTS` | `FEWER_PLANTS` | `MANY_PLANTS` | `ALL_PLANTS` |
 | `grass_wind_every` | 4 frames | 2 frames | 1 frame | 1 frame |
 | `sky_step` | 3 pixels | 2 pixels | 2 pixels | 1 pixel |
-| `water_step` | 8 pixels | 2 pixels | 2 pixels | 1 pixel |
+| `water_step` | 8 pixels | 4 pixels | 2 pixels | 1 pixel |
 | `water_refresh_every` | 4 frames | 2 frames | 1 frame | 1 frame |
 | `animal_coarseness` | 3 | 2 | 1.5 | 1 |
 | `shadows` | `CACHED_SHADOWS` | `CACHED_SHADOWS` | `CACHED_SHADOWS` | `FULL_SHADOWS` |
@@ -75,8 +75,8 @@ The bench walks a scripted player through the village. It prints the median, the
 
 | Preset | Frame size | Median frame | 95th percentile | Median frames a second |
 |---|---|---|---|---|
-| `LOW` | 640 by 360 | 24.3 ms | 34.2 ms | 41 |
-| `MEDIUM` | 960 by 540 | 71.0 ms | 109 ms | 14 |
+| `LOW` | 640 by 360 | 29.4 ms | 41.5 ms | 34 |
+| `MEDIUM` | 960 by 540 | 75.4 ms | 98.1 ms | 13 |
 
 `GameRenderer.timings` holds the time of each stage of the last frame, in milliseconds. The stages are the shadow maps, the gathering, the vertices, the setup, the bins, the raster, the sky and the resolve.
 
