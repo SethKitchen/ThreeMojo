@@ -37,7 +37,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle, DEGREE, FOOT, Length, METER, TURN
+from units.si import Angle, DEGREE, FOOT, Length, METER, RADIAN, TURN
 
 comptime TOLERANCE = Float64(1e-6)
 
@@ -175,6 +175,14 @@ def assert_xyz(got: Vector3, x: Float32, y: Float32, z: Float32) raises:
     assert_almost_equal(got.x, x, atol=Float64(1e-5))
     assert_almost_equal(got.y, y, atol=Float64(1e-5))
     assert_almost_equal(got.z, z, atol=Float64(1e-5))
+
+
+def assert_js_number(got: Float32, expected: Float64) raises:
+    """Assert a stored number is three.js's, within about one unit in the
+    last place."""
+    assert_almost_equal(
+        got, Float32(expected), atol=Float64(1e-30), rtol=Float64(1.5e-7)
+    )
 
 
 def triangle_attribute() raises -> BufferAttribute:
@@ -1138,6 +1146,45 @@ def test_a_ring_needs_enough_segments() raises:
         _ = ring(Length(1.0, METER), Length(2.0, METER), 8, 2097153)
     with assert_raises(contains="larger than this port"):
         _ = ring(Length(1.0, METER), Length(2.0, METER), Int.MAX, 1)
+
+
+def test_a_circle_and_a_ring_have_three_js_s_numbers() raises:
+    """A circle and a ring are computed in doubles, as three.js computes
+    them, and each number is rounded once when it is stored. In Float32,
+    vertex 25 of a disk of 32 segments had an x of 1.19e-8, where three.js
+    has 1.31e-7. The expected values are three.js r180's, given the same
+    Float32 angles."""
+    var disk = circle(Length(1, METER), 32)
+    assert_js_number(
+        disk.attribute_view(String(POSITION)).component(25, 0),
+        1.3113417196564114e-07,
+    )
+    var slice = circle(
+        Length(2, METER), 7, Angle(0.5, RADIAN), Angle(2.0, RADIAN)
+    )
+    assert_js_number(
+        slice.attribute_view(String(POSITION)).component(5, 0),
+        -0.1439969390630722,
+    )
+    assert_js_number(
+        slice.attribute_view(String(UV)).component(7, 0), 0.2000046819448471
+    )
+    var arc = ring(
+        Length(0.3, METER),
+        Length(1.7, METER),
+        9,
+        4,
+        Angle(0.2, RADIAN),
+        Angle(3.0, RADIAN),
+    )
+    assert_js_number(
+        arc.attribute_view(String(POSITION)).component(34, 0),
+        0.050563208758831024,
+    )
+    assert_js_number(
+        arc.attribute_view(String(UV)).component(49, 0),
+        0.0008526121964678168,
+    )
 
 
 # --- cylinder ---------------------------------------------------------------

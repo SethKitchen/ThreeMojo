@@ -234,6 +234,8 @@ The third argument is where the rim starts, counter-clockwise from +x. The fourt
 
 The texture coordinates map the square around the disk onto the image. The center is `(0.5, 0.5)`. A pie slice shows its part of the image.
 
+The arithmetic is three.js's, in doubles, and each number is rounded to `Float32` once when it is stored. The same `Float32` angles give three.js's numbers.
+
 ## Ring
 
 ```mojo
@@ -246,6 +248,8 @@ A flat ring in the xy plane, facing +z, centered on the origin. The first radius
 The texture coordinates map the square around the outer edge onto the image, as the circle's do. A grid of more than 16777216 cells is refused.
 
 An inner radius of zero makes a disk, as in three.js. The inner row is then every vertex at the center.
+
+The radius grows by one step a row, added up in doubles as three.js adds it.
 
 ## Cylinder
 
