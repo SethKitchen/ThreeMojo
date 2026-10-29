@@ -1528,7 +1528,7 @@ def test_a_skin_glTF_cannot_hold_is_refused() raises:
     nowhere.scene.skinned_meshes[0].skeleton.bones[1].node = NodeId(40)
     nowhere.refuses("a bone names a node")
     # Skin indices and weights glTF cannot hold.
-    for trial in range(6):
+    for trial in range(7):
         var small = Small()
         var shape = skinned_triangle()
         if trial == 0:
@@ -1562,6 +1562,11 @@ def test_a_skin_glTF_cannot_hold_is_refused() raises:
                 String(SKIN_WEIGHT),
                 BufferAttribute([Float32(1), 0, 0, 1, 0, 0, 1, 0, 0], 3),
             )
+        elif trial == 6:
+            shape.set_attribute(
+                String(SKIN_WEIGHT),
+                BufferAttribute([Float32(1), 0, 0, 0, 1, 0, 0, 0], 4),
+            )
         var id = small.assets.geometries.add(shape^)
         var mesh = SkinnedMesh(id, small.white, small.first, two_bones(small))
         small.scene.add_skinned_mesh(mesh^)
@@ -1582,10 +1587,37 @@ def test_a_skin_glTF_cannot_hold_is_refused() raises:
                 0
             ].geometry = small.assets.geometries.add(empty^)
             small.refuses("needs skinIndex and skinWeight")
+        elif trial == 6:
+            small.refuses("cover different vertices")
         elif trial >= 3:
             small.refuses("four bones a vertex")
         else:
             small.refuses("whole number that names a bone")
+
+
+def test_a_slot_without_a_weight_names_no_bone() raises:
+    # three.js's `applyBoneTransform` skips a slot whose weight is zero, so
+    # an exporter can leave any number there. Such a slot is written, and
+    # one that names no bone is written as zero, as glTF asks for an
+    # unused slot. A whole index that names a bone stays.
+    var small = Small()
+    var shape = skinned_triangle()
+    shape.set_attribute(
+        String(SKIN_INDEX),
+        BufferAttribute([Float32(0), 7, 0, 0, 1, -1, 0, 0, 1, 0.5, 1, 0], 4),
+    )
+    var id = small.assets.geometries.add(shape^)
+    small.scene.add_skinned_mesh(
+        SkinnedMesh(id, small.white, small.first, two_bones(small))
+    )
+    var files = export_gltf(small.scene, small.assets)
+    var back = Loaded(String(unsafe_from_utf8=files.document))
+    ref read = back.assets.geometries.get(back.scene.skinned_meshes[0].geometry)
+    var joints = read.attribute_view(String(SKIN_INDEX)).packed()
+    assert_equal(joints[1], 0)
+    assert_equal(joints[5], 0)
+    assert_equal(joints[9], 0)
+    assert_equal(joints[10], 1)
 
 
 def test_lines_and_points_write_their_modes() raises:

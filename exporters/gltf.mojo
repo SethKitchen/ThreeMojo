@@ -911,14 +911,20 @@ struct _Exporter(Movable):
             self.require(MESH_QUANTIZATION)
         return len(self.accessors) - 1
 
-    def joint_accessor(mut self, joints: List[Float32]) raises -> Int:
+    def joint_accessor(
+        mut self, joints: List[Float32], bones: Int
+    ) raises -> Int:
         """Write a `JOINTS_0` of unsigned shorts, as three.js's
         `GLTFExporter` converts a `skinIndex` to them, and return its
-        accessor. `primitive` has checked every index."""
+        accessor. `primitive` has checked every index of a slot with a
+        weight. An index of a slot without one that names no bone is
+        written as zero, as glTF asks for an unused slot."""
         var bytes = List[UInt8](capacity=len(joints) * 2)
         # A skinned geometry has at least one vertex.
         for value in joints:  # pragma: no branch
-            push_word(bytes, Int(value), 2, True)
+            push_word(
+                bytes, Int(value) if _names_bone(value, bones) else 0, 2, True
+            )
         var view = self.view(bytes, ARRAY_BUFFER, 8)
         var writer = JsonWriter()
         writer.begin_object()
@@ -962,12 +968,13 @@ struct _Exporter(Movable):
         id: GeometryId,
         colored: Bool,
         assets: Assets,
-        skinned: Bool = False,
+        bones: Int = 0,
         triangles: Bool = True,
     ) raises -> Int:
         """Write a geometry's accessors and its morph targets, once, and
         its colors and its skin once they are asked for; return its slot in
-        the geometry lists."""
+        the geometry lists. `bones` is the skeleton's size for a skinned
+        mesh, and zero otherwise."""
         ref geometry = assets.geometries.get(id)
         # Checked each time, since a line's geometry need not hold whole
         # triangles and a mesh's must.
@@ -1011,9 +1018,9 @@ struct _Exporter(Movable):
             self.joints.append(-1)
             self.skin_weights.append(-1)
             slot = len(self.geometry_keys) - 1
-        if skinned and self.joints[slot] < 0:
+        if bones > 0 and self.joints[slot] < 0:
             self.joints[slot] = self.joint_accessor(
-                geometry.attribute_view(SKIN_INDEX).packed()
+                geometry.attribute_view(SKIN_INDEX).packed(), bones
             )
             self.skin_weights[slot] = self.attribute_accessor(
                 geometry.attribute_view(SKIN_WEIGHT), "VEC4", False, "WEIGHTS"
@@ -1731,7 +1738,7 @@ struct _Exporter(Movable):
             _check_skin(shape, bones)
         var colored = material.vertex_colors and shape.has_attribute(COLOR)
         var slot = self.geometry(
-            id, colored, assets, bones > 0, mode == MODE_TRIANGLES
+            id, colored, assets, bones, mode == MODE_TRIANGLES
         )
         var indices = -1
         if len(slice) > 0:
@@ -2579,23 +2586,32 @@ def _light_type(kind: LightKind) -> String:
     return "spot"
 
 
+def _names_bone(value: Float32, bones: Int) -> Bool:
+    """Return True if a skin index is a whole number that names one of
+    `bones` bones."""
+    return value >= 0 and value < Float32(bones) and value == floor(value)
+
+
 def _check_skin(shape: BufferGeometry, bones: Int) raises:
     """Refuse a skinned geometry whose `skinIndex` and `skinWeight` glTF
-    cannot hold: four of each a vertex, and every index a whole number
-    that names a bone."""
+    cannot hold: four of each a vertex, and the index of every slot with a
+    weight a whole number that names a bone. A slot whose weight is zero
+    names no bone, as three.js's `applyBoneTransform` reads it."""
     if not shape.has_attribute(String(SKIN_INDEX)) or not shape.has_attribute(
         String(SKIN_WEIGHT)
     ):
         raise Error("glTF: a skinned geometry needs skinIndex and skinWeight")
     ref joints = shape.attribute_view(String(SKIN_INDEX))
-    if (
-        joints.item_size != 4
-        or shape.attribute_view(String(SKIN_WEIGHT)).item_size != 4
-    ):
+    ref weights = shape.attribute_view(String(SKIN_WEIGHT))
+    if joints.item_size != 4 or weights.item_size != 4:
         raise Error("glTF: a skinned geometry has four bones a vertex")
+    var indices = joints.packed()
+    var shares = weights.packed()
+    if len(shares) != len(indices):
+        raise Error("glTF: skinIndex and skinWeight cover different vertices")
     # A skinned geometry has at least one vertex.
-    for value in joints.packed():  # pragma: no branch
-        if value < 0 or value >= Float32(bones) or value != floor(value):
+    for at in range(len(indices)):  # pragma: no branch
+        if shares[at] != 0 and not _names_bone(indices[at], bones):
             raise Error(
                 "glTF: a skin index must be a whole number that names a bone"
             )
