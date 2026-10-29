@@ -33,7 +33,7 @@ row vectors. A binding copies `Matrix4.elements` as it is, with no transpose.
 
 **Measured on a running DLSS.** Streamline's headers do not say which way
 `jitterOffset` points, or which way a motion vector does. `sl.dlss` 2.14.16
-answered on an NVIDIA TITAN RTX (`docs/validation/streamline/evaluate.cpp`).
+answered on an NVIDIA TITAN RTX (the harness that the Streamline page links).
 A scene whose detail the render grid cannot hold was rendered with a known
 offset each frame, and the error against the true image was measured for each
 sign:

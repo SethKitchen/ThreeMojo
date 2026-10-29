@@ -15,7 +15,7 @@ Streamline returns is the size to render at.
 `estimated_optimal_settings` adds the range of sizes that dynamic resolution
 can use. Both match `sl.dlss` and `sl.dlss_d` 2.14.16 on a TITAN RTX with
 driver 610.88, at 3840x2160, 2560x1440, 1920x1080, 1280x720 and 1000x563
-(`docs/validation/streamline/result.tsv`). Streamline answers for five modes.
+(the harness that the Streamline page links). Streamline answers for five modes.
 For off and for ultra quality it returns `eErrorInvalidParameter`.
 
 `OptimalSettings` is `sl::DLSSOptimalSettings` and `sl::DLSSDOptimalSettings`,

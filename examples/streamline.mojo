@@ -21,7 +21,7 @@ This is the CPU fallback and not DLSS.
 writes what a Streamline harness needs to run DLSS on the same scene: the
 jittered renders, their depth, the jitter that `frame_constants` hands to
 Streamline, and the full-size render and the fallback's result to compare
-with. `docs/validation/streamline/evaluate_frames.cpp` reads them.
+with. The DLSS harness that the Streamline page links reads them.
 """
 
 from cameras.perspective_camera import PerspectiveCamera

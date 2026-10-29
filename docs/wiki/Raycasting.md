@@ -187,7 +187,7 @@ throughput work and its measured limits.
 
 Unprepared box queries classify finite and nonzero components from their stored bits.
 This avoids wide regularity sums without changing slab or point arithmetic.
-The [throughput report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/ray-query-550.md) records the complete baseline/candidate matrix and pending aggregate checks.
+The [throughput report](https://github.com/SethKitchen/ThreeMojo/blob/d58766390fa97aadc6addf7782a2378373fcb080/docs/validation/ray-query-550.md) records the complete baseline/candidate matrix and pending aggregate checks.
 
 `bench/ray_query_bench.mojo` and `bench/ray_query_consumers.mojo` run those queries.
 

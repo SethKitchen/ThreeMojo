@@ -247,7 +247,7 @@ def test_the_estimate_matches_the_running_plugin() raises:
     # Each row is what `slDLSSGetOptimalSettings` and `slDLSSDGetOptimalSettings`
     # of Streamline 2.14.16 answered on an NVIDIA TITAN RTX with driver 610.88:
     # the mode, the output size, the optimal size, the smallest and the largest.
-    # Both features answered alike. See docs/validation/streamline/result.tsv.
+    # Both features answered alike. The Streamline page links the harness.
     var rows: List[List[Int]] = [
         [1, 3840, 2160, 1920, 1080, 1920, 1080, 3840, 2160],
         [2, 3840, 2160, 2227, 1253, 1920, 1080, 3840, 2160],
