@@ -73,6 +73,7 @@ from extensions.village.character import (
 )
 from extensions.village.gathering import GatherParameters, Gathering
 from extensions.village.hud import draw_hud, note_text, use_prompt
+from extensions.village.critters import Critters, Haunt, default_haunts
 from extensions.village.day import DayCycle, dim_water
 from extensions.village.talk import (
     SPEECH_SECONDS,
@@ -256,6 +257,9 @@ struct PlayParameters(Copyable, Movable):
     # who talk and give errands.
     var gathering: GatherParameters
     var speakers: List[Speaker]
+    # Where the fireflies and the butterflies keep: see
+    # `extensions.village.critters`.
+    var haunts: List[Haunt]
     # Whether `VillageGame.render` writes the satchel, the prompt and the
     # last note over the frame: see `extensions.village.hud`.
     var hud: Bool
@@ -273,7 +277,8 @@ struct PlayParameters(Copyable, Movable):
         trail who looks toward the houses. He wears a madder-red tunic
         trimmed in weld yellow over a linen shirt, walnut hose and
         leather boots. The village has its default spots to gather, and
-        the heads-up display is on. Its villagers talk and give errands. The
+        the heads-up display is on. Its villagers talk and give errands.
+        Fireflies and butterflies keep to its default haunts. The
         weather is clear, and stays so. It is two in the afternoon, and
         stays so.
 
@@ -296,6 +301,7 @@ struct PlayParameters(Copyable, Movable):
         self.field_of_view = Angle(55.0, DEGREE)
         self.gathering = GatherParameters()
         self.speakers = default_speakers()
+        self.haunts = default_haunts()
         self.hud = True
         self.weather = CLEAR
         self.weather_cycle = False
@@ -374,6 +380,8 @@ struct VillageGame(Movable):
     # The villagers who talk, and how tall each villager is, in meters.
     var talk: Talk
     var heads: List[Float32]
+    # The fireflies and the butterflies.
+    var critters: Critters
     # The weather, and how long its clouds, fog and rain took to draw in
     # the last frame, in milliseconds.
     var weather: Weather
@@ -497,6 +505,14 @@ struct VillageGame(Movable):
             self.village.looks,
             parameters.speakers.copy(),
             len(parameters.residents.villagers),
+        )
+        self.critters = Critters(
+            scene,
+            assets,
+            self.village.looks,
+            parameters.haunts,
+            self.village.meadow.field.ground,
+            self.village.level,
         )
         self.heads = List[Float32]()
         for villager in parameters.residents.villagers:
@@ -626,7 +642,9 @@ struct VillageGame(Movable):
         # A house's inside shows only to a camera near it: from further
         # away, its windows show little of it.
         # The houses' lamps are lit from dusk to dawn.
-        var lamps = self.day.daylight() < 0.5
+        var daylight = self.day.daylight()
+        var lamps = daylight < 0.5
+        self.critters.update(scene, daylight, self.weather.look.rain, delta)
         ref eye_at = self.camera.position
         for index in range(len(self.village.houses)):
             ref house = self.village.houses[index]

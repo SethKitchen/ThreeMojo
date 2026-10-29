@@ -44,7 +44,7 @@ The sun's direction and its shadows do not change with the hour.
 2. Toward night, the sky turns to the deep blue `NIGHT_SKY`.
 3. Once the twilight has mostly gone, stars show where the clouds leave the sky clear. A star stands in a cell of the sky's direction, so it stays fixed as the camera turns. It fades into the haze near the horizon.
 
-The pond's water is shaded by its own sun and sky. `dim_water` darkens the pixels that the water was composed into, by `water_light`: one by day, and `MOON` at night.
+The pond's water is shaded by its own sun and sky. `dim_water` darkens the pixels that the water was composed into, by `water_light`: one by day, and `MOON` at night. It multiplies each color by the square of that share, and adds `NIGHT_WATER` for the rest. So at night the pond mirrors the deep blue of the sky.
 
 ## The houses
 

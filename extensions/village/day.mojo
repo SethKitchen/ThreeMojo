@@ -25,7 +25,8 @@ day changes how much light there is, and its color:
    clouds leave it clear.
 
 The pond's water is shaded by its own sun and sky, so `dim_water`
-darkens the pixels it was composed into, by `water_light`.
+darkens the pixels it was composed into, by `water_light`, toward the
+deep blue of the night sky that it mirrors.
 
 The windows of the houses and the lanterns by their doors are drawn
 unlit, so they glow at night: see `extensions.village.house_view`.
@@ -61,6 +62,9 @@ comptime DUSK_ORANGE = Vector3(1.0, 0.58, 0.32)
 """The tint of the low sun's light."""
 comptime NIGHT_SKY = Vector3(8, 12, 30)
 """The color of the night sky, in sRGB bytes."""
+comptime NIGHT_WATER = Vector3(6, 10, 22)
+"""The color of the pond at night, as it mirrors the night sky, in sRGB
+bytes."""
 comptime STAR_GRID = Float32(220)
 """How many cells of the sky's direction a star can stand in, on each
 axis of a unit direction."""
@@ -273,15 +277,18 @@ struct DayCycle(ImplicitlyCopyable):
 def dim_water(
     mut image: Framebuffer, before: List[Float32], share: Float32
 ) raises:
-    """Darken the pixels that the pond's water was composed into.
+    """Darken the pixels that the pond's water was composed into, toward
+    `NIGHT_WATER`.
 
     The water is shaded by its own sun and sky. A pixel whose depth the
-    water's composition changed shows the water.
+    water's composition changed shows the water. Its color is multiplied
+    by the square of `share`, and `NIGHT_WATER` makes up the rest: so at
+    night the pond mirrors the dark sky, and by day it is left as it is.
 
     Args:
         image: The frame, after the water was composed into it.
         before: Each pixel's depth before the water was composed.
-        share: What the water's colors are multiplied by, from 0 to 1.
+        share: How much of the water's own light is left, from 0 to 1.
 
     Raises:
         Error: If the depths are not one a pixel.
@@ -294,10 +301,15 @@ def dim_water(
         if image.depth[k] == before[k]:
             continue
         var p = k * 4
-        for c in range(3):
-            image.pixels[p + c] = UInt8(
-                Int(Float32(image.pixels[p + c]) * share)
-            )
+        var c = Vector3(
+            Float32(image.pixels[p]),
+            Float32(image.pixels[p + 1]),
+            Float32(image.pixels[p + 2]),
+        )
+        var dark = c * (share * share) + NIGHT_WATER * (1 - share)
+        image.pixels[p] = UInt8(Int(dark.x))
+        image.pixels[p + 1] = UInt8(Int(dark.y))
+        image.pixels[p + 2] = UInt8(Int(dark.z))
 
 
 def _color(c: Vector3) -> Color:

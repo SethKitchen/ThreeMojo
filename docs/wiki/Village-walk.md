@@ -83,7 +83,7 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 5. Each resident steps along its route, and its body or its mesh is posed.
 6. Each door swings open while someone stands near it, and shut after.
 7. The use button uses the spot in reach: see [Village gathering](Village-gathering). With no spot in reach, it talks to the villager in reach: see [Village errands](Village-errands).
-8. The camera's focus follows the player. The eye comes in before a wall, and stays below a ceiling and above the ground. The inside of each house hides while the eye is more than `INSIDE_REACH`, 18 meters, past the house's edge.
+8. The camera's focus follows the player. The eye comes in before a wall, and stays below a ceiling and above the ground. The inside of each house hides while the eye is more than `INSIDE_REACH`, 18 meters, past the house's edge. The fireflies and the butterflies fly on: see [Village critters](Village-critters).
 9. The village grows the grass for the camera, and moves the water's clock on.
 10. The weather moves on, and scales the lights and the fog. See [Village weather](Village-weather). The day moves on, and dims and tints them for the hour. See [Village day and night](Village-day).
 
@@ -100,6 +100,7 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 | `talk.mojo` | The villagers who talk, and their errands. See [Village errands](Village-errands). |
 | `weather.mojo` | The clouds, the rain and the fog. See [Village weather](Village-weather). |
 | `day.mojo` | The hour, the night's light and its sky. See [Village day and night](Village-day). |
+| `critters.mojo` | The fireflies and the butterflies. See [Village critters](Village-critters). |
 | `residents.mojo` | `Body`, `Route`, `wander_route`, `visit`, `Villager`, `Herd`, `ResidentsParameters`, `Flipbook` and `Residents`. |
 | `play.mojo` | `default_residents`, `PlayParameters`, `tree_obstacles` and `VillageGame`. |
 | `quality.mojo` | `QualityPreset`, `PlantDetail`, `GameQuality`, `game_quality` and `planted`. See [Game renderer](Game-renderer). |

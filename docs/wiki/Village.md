@@ -79,6 +79,7 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 | `gathering.mojo` | `GatherKind`, `Spot`, `GatherParameters`, `Satchel` and `Gathering`. See [Village gathering](Village-gathering). |
 | `hud.mojo` | `draw_hud`, `draw_text` and the prompts. See [Village gathering](Village-gathering#the-heads-up-display). |
 | `day.mojo` | `DayCycle` and `dim_water`. See [Village day and night](Village-day). |
+| `critters.mojo` | `Haunt`, `default_haunts`, `wing_color` and `Critters`. See [Village critters](Village-critters). |
 | `talk.mojo` | `ErrandState`, `Errand`, `Speaker`, `default_speakers` and `Talk`. See [Village errands](Village-errands). |
 | `weather.mojo` | `WeatherKind`, `WeatherLook`, `weather_look`, `cloud_cover` and `Weather`. See [Village weather](Village-weather). |
 | `surfaces.mojo` | The textures, `HouseLooks` and `house_looks`. |

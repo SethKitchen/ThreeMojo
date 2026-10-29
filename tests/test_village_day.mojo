@@ -169,7 +169,9 @@ def test_the_water_darkens() raises:
     var before = image.depth.copy()
     image.depth[100 * 0 + 5000] = 0.25
     dim_water(image, before, 0.5)
-    assert_equal(Int(image.pixels[5000 * 4]), 60)
+    # A quarter of 120, and half of the night water's 6.
+    assert_equal(Int(image.pixels[5000 * 4]), 33)
+    assert_equal(Int(image.pixels[5000 * 4 + 2]), 230 // 4 + 11)
     assert_equal(Int(image.pixels[5001 * 4]), 120)
     with assert_raises(contains="depth for each pixel"):
         dim_water(image, List[Float32](), 0.5)
