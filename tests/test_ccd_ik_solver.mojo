@@ -14,6 +14,8 @@ from math.euler import Euler, XYZ
 from math.vector3 import Vector3
 from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SkinnedMesh
+from std.benchmark import black_box
+from std.math import cos, sin
 from std.testing import TestSuite, assert_almost_equal, assert_raises
 from units.si import Angle, DEGREE, RADIAN
 
@@ -110,6 +112,20 @@ def test_a_hand_on_target_does_not_tremble() raises:
     var solver = CCDIKSolver(scene, 0, chains^)
     solver.update(scene)
     assert_almost_equal(hand(scene).x, Float32(0), atol=TOLERANCE)
+
+
+def test_a_small_turn_is_not_lost() raises:
+    # 2e-4 radians off the arm: three.js turns any angle above 1e-5, and
+    # a Float32 `acos` of the cosine reads this one as zero.
+    var turn = black_box(Float32(2e-4))
+    var scene = Scene()
+    arm(scene, 2 * sin(turn), 2 * cos(turn))
+    var links: List[IkLink] = [IkLink(0)]
+    var chains = List[IkChain]()
+    chains.append(reach(links^))
+    var solver = CCDIKSolver(scene, 0, chains^)
+    solver.update(scene)
+    assert_almost_equal(hand(scene).x, Float32(4e-4), atol=2e-5)
 
 
 def elbow_turn(scene: Scene) raises -> Float32:

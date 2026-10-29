@@ -192,7 +192,7 @@ var chrome = Material(Color(255, 255, 255), kind=BASIC, env_map=seen)
 | `face_camera(face, scene) -> PerspectiveCamera` | The camera that draws one face, placed. |
 | `layers` | Which layers the six faces draw. Layer zero alone to begin with. |
 
-Each face camera looks along `face_forward(face)` with `face_up(face)` as its up. Those are the two tables the cube texture sampler reads with, and three.js's own six ups. So a rendered cube reflects the scene it was rendered from with no flip. The node's own turn is not read: a cube texture is sampled in world space.
+Each face camera looks along `face_forward(face)` with `face_up(face)` as its up. Those are the two tables the cube texture sampler reads with, and three.js's own six ups. So a rendered cube reflects the scene it was rendered from with no flip. The node's own turn is not read: a cube texture is sampled in world space. In three.js, the six face cameras are children of the `CubeCamera` and turn with it. A turned cube camera there renders a cube map that is turned against the world it is sampled in.
 
 `render_cube` draws each face with a renderer of the face's size and this renderer's background, shading and workers, through `render`. The scene's own background is in the faces. The tone mapping is left off, as three.js turns it off around its update: the faces are light the main frame maps once.
 

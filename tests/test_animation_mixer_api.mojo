@@ -182,6 +182,14 @@ def test_the_mixer_keeps_its_root_and_files_actions_under_one() raises:
     assert_equal(mixer.existing_action("slide", NodeId(1)).value(), rooted)
     assert_false(Bool(mixer.existing_action("walk")))
     assert_equal(AnimationMixer().get_root(), NO_PARENT)
+    # three.js's `optionalRoot || this._root` makes the mixer's own root
+    # and no root one, so `uncacheRoot(getRoot())` forgets plain actions.
+    var at_root = mixer.add(AnimationAction(slide()), mixer.get_root())
+    assert_equal(mixer.existing_action("slide", NodeId(3)).value(), plain)
+    assert_equal(mixer.action(at_root).root, NO_PARENT)
+    mixer.uncache_root(mixer.get_root())
+    assert_false(Bool(mixer.existing_action("slide")))
+    assert_equal(mixer.existing_action("slide", NodeId(1)).value(), rooted)
 
 
 def test_stop_all_action_stops_the_active_ones() raises:
@@ -198,6 +206,51 @@ def test_stop_all_action_stops_the_active_ones() raises:
     assert_equal(mixer.action(playing).phase, 0)
     # three.js stops only the actions that are running.
     assert_equal(mixer.action(idle).phase, 0.25)
+
+
+def test_stop_all_action_rewinds_an_action_that_finished() raises:
+    # A `ONCE` action that finished is no longer active, but three.js
+    # still schedules it, and `stopAllAction` rewinds it.
+    var scene = one_node()
+    var mixer = AnimationMixer()
+    var once = mixer.add(AnimationAction(slide(2), ONCE))
+    mixer.action(once).play()
+    for _ in range(3):
+        mixer.update(scene, at(1))
+    assert_false(mixer.action(once).is_active())
+    mixer.stop_all_action()
+    assert_equal(mixer.action(once).phase, 0)
+    mixer.action(once).play()
+    mixer.update(scene, at(0.5))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(2.5), atol=TOLERANCE
+    )
+
+
+def test_play_does_not_restart_a_finished_action() raises:
+    # three.js's `play` changes neither `paused` nor `enabled`, so a
+    # clamped action that finished finishes once however often it is
+    # played; `reset` lets it run again.
+    var scene = one_node()
+    var mixer = AnimationMixer()
+    var once = mixer.add(
+        AnimationAction(slide(2), ONCE, clamp_when_finished=True)
+    )
+    var finished = 0
+    for _ in range(10):
+        mixer.action(once).play()
+        mixer.update(scene, at(0.5))
+        for event in mixer.drain_events():
+            if event.kind == FINISHED:
+                finished += 1
+    assert_equal(finished, 1)
+    assert_true(mixer.action(once).paused)
+    mixer.action(once).reset()
+    mixer.action(once).play()
+    mixer.update(scene, at(0.5))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(2.5), atol=TOLERANCE
+    )
 
 
 def test_sync_with_takes_the_other_actions_place_and_pace() raises:

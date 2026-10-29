@@ -56,6 +56,7 @@ from animation.keyframe_track import (
     MATERIAL_SPECULAR_INTENSITY,
     MORPH_INFLUENCE,
     MeshIndex,
+    NODE_NAME,
     POSITION,
     QUATERNION,
     SCALE,
@@ -77,6 +78,8 @@ from materials.material import MAX_IOR, MIN_IOR, Material, MaterialId
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from objects.mesh import Mesh
+from objects.skeleton import bind_skeleton
+from objects.skinned_mesh import SkinnedMesh
 from render.framebuffer import Color
 from std.math import inf, pi
 from std.testing import (
@@ -884,6 +887,40 @@ def test_members_sharing_a_material_drive_it_once() raises:
     assert_equal(mixer.binding_count(), 1)
 
 
+def test_a_group_material_track_reaches_skinned_meshes() raises:
+    # A crowd of skinned characters is the usual group, and three.js
+    # resolves `material.opacity` on each.
+    var scene = world()
+    scene.update()
+    var skeleton = bind_skeleton([NodeId(1)], [scene.world_matrix(NodeId(1))])
+    scene.add_skinned_mesh(
+        SkinnedMesh(GeometryId(0), MaterialId(1), NodeId(2), skeleton^)
+    )
+    scene.update()
+    var assets = stuff()
+    var group = AnimationObjectGroup()
+    group.add(NodeId(2))
+    var action = AnimationAction(
+        AnimationClip(
+            "fade",
+            [
+                number_track(
+                    material_target(MaterialId(0), MATERIAL_OPACITY), 1, 0
+                )
+            ],
+        )
+    )
+    action.use_group(group^)
+    var mixer = AnimationMixer()
+    var which = mixer.add(action^)
+    mixer.action(which).play()
+    mixer.update(scene, assets, at(1))
+    assert_equal(mixer.binding_count(), 1)
+    assert_almost_equal(
+        assets.materials.materials[1].opacity, Float32(0.5), atol=TOLERANCE
+    )
+
+
 def test_an_empty_group_drives_nothing() raises:
     var scene = world()
     var action = AnimationAction(
@@ -1012,6 +1049,24 @@ def test_a_subclip_starts_at_its_earliest_key() raises:
     assert_almost_equal(cut.tracks[0].times[0], Float32(1), atol=TOLERANCE)
     assert_almost_equal(cut.tracks[1].times[0], Float32(0), atol=TOLERANCE)
     assert_almost_equal(cut.tracks[2].times[0], Float32(0.5), atol=TOLERANCE)
+
+
+def test_a_subclip_keeps_a_string_tracks_strings() raises:
+    # three.js cuts a `StringKeyframeTrack` as it cuts any other.
+    var names: List[String] = ["walk", "run", "jump"]
+    var clip = AnimationClip(
+        "all",
+        [
+            KeyframeTrack(
+                node_target(NodeId(0), NODE_NAME), seconds([0, 1, 2]), names
+            )
+        ],
+    )
+    var cut = subclip(clip, "tail", 10, 21, 10)
+    assert_equal(len(cut.tracks[0].times), 2)
+    assert_equal(cut.tracks[0].strings[0], "run")
+    assert_equal(cut.tracks[0].strings[1], "jump")
+    assert_almost_equal(cut.tracks[0].times[1], Float32(1), atol=TOLERANCE)
 
 
 def test_a_subclip_refuses_a_range_it_cannot_cut() raises:

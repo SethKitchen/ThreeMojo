@@ -275,7 +275,7 @@ An action is one clip being played.
 
 | Member | Meaning |
 |---|---|
-| `play()`, `pause()`, `stop()` | Start, hold where it is, or stop and rewind. |
+| `play()`, `pause()`, `stop()` | Start, hold where it is, or stop and rewind. `play` does not start an action again that a `ONCE` finish or a fade to nothing ended. Use `reset` or `stop` first, as in three.js. |
 | `reset()` | Rewind, and forget the loops, the fade, the warp and the start time. |
 | `set_loop(loop, repetitions)` | Set the loop mode, and how many times it repeats. |
 | `set_duration(duration)` | Set the time scale so that one run through the clip lasts `duration`. |
@@ -334,7 +334,7 @@ mixer.update(scene, clock.delta())
 | `time_scale` | How fast the mixer's clock runs, three.js's `timeScale`. |
 | `get_root() -> NodeId` | The root node, three.js's `getRoot`. |
 | `existing_action(clip_name, root) -> Optional[Int]` | The action on a clip of that name, filed under that root. |
-| `stop_all_action()` | Stop every active action. |
+| `stop_all_action()` | Stop every action that has been played, a finished one too. |
 | `sync_with(index, with_index)` | Put one action in step with another. |
 | `uncache_action(index)`, `uncache_clip(name)`, `uncache_root(root)` | Forget actions. See [The cache](#the-cache). |
 | `update(scene, delta)` | Move every playing action on, and set the nodes, meshes and lights. |
@@ -393,7 +393,7 @@ A `PerspectiveCamera` has a `zoom`, as in three.js. It divides the height of the
 
 ### The root
 
-A mixer is made for a root node, and `add` can file an action under another root. In three.js, the root is where a track's name is looked up. Here a track names its target by index, so the root does not change what a track drives. It is the key that `get_root`, `existing_action` and `uncache_root` use.
+A mixer is made for a root node, and `add` can file an action under another root. In three.js, the root is where a track's name is looked up. Here a track names its target by index, so the root does not change what a track drives. It is the key that `get_root`, `existing_action` and `uncache_root` use. The mixer's own root and `NO_PARENT` are the same key, as in three.js.
 
 ### The cache
 
@@ -443,7 +443,7 @@ from animation.animation_utils import subclip
 var wave = subclip(everything, "wave", 30, 60, 30)
 ```
 
-A key stays if its frame, its time times `fps`, is at `start_frame` or after it and before `end_frame`. The kept keys move back so that the earliest one is at zero. No key is made at the cut. A track with no key in the range is left out. The subclip keeps the clip's blend mode.
+A key stays if its frame, its time times `fps`, is at `start_frame` or after it and before `end_frame`. The kept keys move back so that the earliest one is at zero. No key is made at the cut. A track with no key in the range is left out. A string track keeps its strings. The subclip keeps the clip's blend mode.
 
 ## Groups
 
@@ -465,7 +465,7 @@ An action with a group plays each track on each member, not on the index that th
 |---|---|
 | A node kind | The member node. |
 | `MORPH_INFLUENCE` | Every mesh at the member. |
-| A `MATERIAL_` kind | The material of every mesh at the member. |
+| A `MATERIAL_` kind | The material of every mesh and skinned mesh at the member. |
 | A `LIGHT_` kind | Every light at the member. |
 
 Two members whose meshes share a material drive it once.

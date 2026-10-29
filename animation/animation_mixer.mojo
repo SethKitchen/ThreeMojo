@@ -1454,8 +1454,8 @@ def resolve_targets(
     Each member is to the track what the object is to a three.js path: the
     member node for a node kind, every mesh at the member for a morph
     influence, every skinned mesh at the member for a skinned morph
-    influence, the material of every mesh at the member for a material
-    kind, every light at the member for a light kind, and every camera at
+    influence, the material of every mesh and skinned mesh at the member
+    for a material kind, every light at the member for a light kind, and every camera at
     the member, of the list the track names, for a camera kind. A target
     reached twice is listed once.
 
@@ -1509,6 +1509,13 @@ def resolve_targets(
                     reached.append(
                         TrackTarget(kind, scene.meshes[mesh].material.value, 0)
                     )
+            if kind.is_material():
+                for mesh in range(len(scene.skinned_meshes)):
+                    ref skinned = scene.skinned_meshes[mesh]
+                    if skinned.node.value == node:
+                        reached.append(
+                            TrackTarget(kind, skinned.material.value, 0)
+                        )
         for index in range(len(reached)):
             if find_target(found, reached[index]) < 0:
                 found.append(reached[index])
@@ -1617,6 +1624,13 @@ struct AnimationAction(Copyable, Movable):
     var active: Bool
     # Whether its clock has stopped. A paused action still contributes.
     var paused: Bool
+    # Whether `play` has run since the last `stop`, three.js's being
+    # scheduled on its mixer. A finished action is still played.
+    var played: Bool
+    # Whether a `ONCE` finish or a fade to nothing ended the action,
+    # three.js's `enabled` false, or its `paused` set by a clamped finish.
+    # `play` does not undo that; `reset` and `stop` do, as in three.js.
+    var ended: Bool
     # Whether a `ONCE` action holds its last frame once it finishes.
     var clamp_when_finished: Bool
     # The mixer's clock, in seconds, as of the last update. Fades and
@@ -1712,6 +1726,8 @@ struct AnimationAction(Copyable, Movable):
         self.time_scale = time_scale
         self.active = False
         self.paused = False
+        self.played = False
+        self.ended = False
         self.clamp_when_finished = clamp_when_finished
         self.now = 0
         self.fading = False
@@ -1745,6 +1761,8 @@ struct AnimationAction(Copyable, Movable):
         self.time_scale = copy.time_scale
         self.active = copy.active
         self.paused = copy.paused
+        self.played = copy.played
+        self.ended = copy.ended
         self.clamp_when_finished = copy.clamp_when_finished
         self.now = copy.now
         self.fading = copy.fading
@@ -1781,7 +1799,15 @@ struct AnimationAction(Copyable, Movable):
         self.grouped = True
 
     def play(mut self):
-        """Start the action from where it is, three.js's `play`."""
+        """Start the action from where it is, three.js's `play`.
+
+        A paused action goes on. An action that a `ONCE` finish or a fade
+        to nothing ended stays as it ended until `reset` or `stop`, as in
+        three.js, whose `play` changes neither `enabled` nor `paused`.
+        """
+        self.played = True
+        if self.ended:
+            return
         self.active = True
         self.paused = False
 
@@ -1799,6 +1825,7 @@ struct AnimationAction(Copyable, Movable):
         three.js's `stop`: `reset`, and no longer active.
         """
         self.active = False
+        self.played = False
         self.reset()
 
     def reset(mut self):
@@ -1810,6 +1837,7 @@ struct AnimationAction(Copyable, Movable):
         `enabled` and its being scheduled, so `play` does that.
         """
         self.paused = False
+        self.ended = False
         self.phase = 0
         self.started = False
         self.loop_count = -1
@@ -2085,6 +2113,7 @@ struct AnimationAction(Copyable, Movable):
             self.paused = True
         else:
             self.active = False
+        self.ended = True
         self.just_finished = True
         self.direction = -1 if moved_by < 0 else 1
 
@@ -2327,6 +2356,7 @@ struct AnimationAction(Copyable, Movable):
                 self.fading = False
                 if share == 0:
                     self.active = False
+                    self.ended = True
         self.applied_weight = weight
         return weight
 
@@ -2429,7 +2459,7 @@ struct AnimationMixer(Movable):
             Which action it is, for `action`.
         """
         action.now = self.elapsed
-        action.root = root
+        action.root = self._filed(root)
         self.actions.append(action^)
         self.uncached.append(False)
         return len(self.actions) - 1
@@ -2443,6 +2473,12 @@ struct AnimationMixer(Movable):
         """Return the node the mixer was made for, three.js's `getRoot`, or
         `NO_PARENT` for the whole scene."""
         return self.root
+
+    def _filed(self, root: NodeId) -> NodeId:
+        """Return the root an action is filed under: the mixer's own root
+        is `NO_PARENT`, as three.js's `optionalRoot || this._root` makes
+        the two one."""
+        return NO_PARENT if root == self.root else root
 
     def _check_index(self, index: Int) raises:
         """Refuse an index that names no action, or an uncached one."""
@@ -2472,17 +2508,18 @@ struct AnimationMixer(Movable):
         for index in range(len(self.actions)):
             if self.uncached[index]:
                 continue
-            if self.actions[index].root != root:
+            if self.actions[index].root != self._filed(root):
                 continue
             if self.actions[index].clip.name == clip_name:
                 return index
         return None
 
     def stop_all_action(mut self):
-        """Stop every action that is active, three.js's `stopAllAction`;
-        see `AnimationAction.stop`."""
+        """Stop every action that has been played, three.js's
+        `stopAllAction`; see `AnimationAction.stop`. That includes one a
+        finish or a fade has ended, which three.js still schedules."""
         for index in range(len(self.actions)):
-            if self.actions[index].active:
+            if self.actions[index].played:
                 self.actions[index].stop()
 
     def sync_with(mut self, index: Int, with_index: Int) raises:
@@ -2519,6 +2556,7 @@ struct AnimationMixer(Movable):
         """
         self._check_index(index)
         self.actions[index].active = False
+        self.actions[index].played = False
         self.actions[index].clip.tracks = List[KeyframeTrack]()
         self.uncached[index] = True
         self._prune()
@@ -2558,6 +2596,7 @@ struct AnimationMixer(Movable):
                 continue
             if self.actions[index].clip.name == clip_name:
                 self.actions[index].active = False
+                self.actions[index].played = False
                 self.actions[index].clip.tracks = List[KeyframeTrack]()
                 self.uncached[index] = True
         self._prune()
@@ -2573,8 +2612,9 @@ struct AnimationMixer(Movable):
         for index in range(len(self.actions)):
             if self.uncached[index]:
                 continue
-            if self.actions[index].root == root:
+            if self.actions[index].root == self._filed(root):
                 self.actions[index].active = False
+                self.actions[index].played = False
                 self.actions[index].clip.tracks = List[KeyframeTrack]()
                 self.uncached[index] = True
         self._prune()
