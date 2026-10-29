@@ -6,7 +6,7 @@
 """Tests for `geometries.edges`."""
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, POSITION
+from core.buffer_geometry import BufferGeometry, MaterialIndex, POSITION
 from geometries.box import cube
 from geometries.edges import (
     DEFAULT_THRESHOLD,
@@ -18,12 +18,14 @@ from geometries.edges import (
 )
 from geometries.plane import plane
 from geometries.sphere import sphere
+from std.math import nan
 from std.testing import (
     TestSuite,
     assert_equal,
     assert_raises,
     assert_true,
 )
+from math.vector3 import Vector3
 from units.si import Angle, DEGREE, Length, METER
 
 
@@ -75,6 +77,18 @@ def test_two_points_a_weld_apart_are_still_one_point() raises:
     assert_equal(near[0], near[1])
     var apart = welded_points(points([0.0, 0.0, 0.0, 1.0, 0.0, 0.0]))
     assert_true(apart[0] != apart[1])
+
+
+def test_a_weld_compares_every_axis() raises:
+    """A point in the next cell that is too far on y, or on z, stays
+    apart."""
+    var step = WELD * 1.5
+    var spread = welded_points(
+        points([0.0, 0.0, 0.0, 0.0, step, 0.0, 0.0, 0.0, step])
+    )
+    assert_true(spread[0] != spread[1])
+    assert_true(spread[0] != spread[2])
+    assert_true(spread[1] != spread[2])
 
 
 def test_a_triangle_has_three_edges() raises:
@@ -154,8 +168,9 @@ def test_a_face_with_no_area_lends_no_crease() raises:
         ]
     )
     assert_equal(segments_of(edges_geometry(flat)), 4)
-    # Nor does a wireframe draw the point they collapse to as an edge.
-    assert_equal(segments_of(wireframe_geometry(flat)), 5)
+    # three.js's `WireframeGeometry` does not skip them. Their edge of no
+    # length, from the origin to the origin, is kept once: six edges.
+    assert_equal(segments_of(wireframe_geometry(flat)), 6)
 
 
 def test_a_cube_keeps_its_twelve_edges() raises:
@@ -228,10 +243,11 @@ def test_a_surface_with_no_points_has_no_edges() raises:
     assert_equal(len(triangle_edges(nothing)[0]), 0)
 
 
-def test_a_third_face_on_one_edge_does_not_change_its_angle() raises:
-    """A non-manifold edge keeps the turn its first two faces make."""
+def test_faces_that_run_an_edge_the_same_way_do_not_pair() raises:
+    """An edge pairs only with itself run the other way, as in three.js."""
     # Three triangles hinged on the segment from the origin to (1, 0, 0):
-    # one flat, one turned a quarter, one turned back on the first.
+    # one flat, one turned a quarter, one turned back on the first. Each
+    # runs the hinge from the origin out, so none pairs with another.
     var fan = points(
         [
             0.0,
@@ -266,9 +282,11 @@ def test_a_third_face_on_one_edge_does_not_change_its_angle() raises:
     # The hinge is shared by all three, and the other six edges have one
     # face each: seven unique edges in all.
     assert_equal(segments_of(wireframe_geometry(fan)), 7)
-    # The first two faces turn a quarter, which a half turn threshold
-    # drops. The six boundary edges stay whatever the threshold.
-    assert_equal(segments_of(edges_geometry(fan, Angle(180.0, DEGREE))), 6)
+    # three.js's `EdgesGeometry` keeps the hinge of the first face and
+    # skips it in the other two, so it is an edge with one face. Every
+    # threshold keeps all seven. The port paired the first two faces and
+    # dropped the hinge at a half turn.
+    assert_equal(segments_of(edges_geometry(fan, Angle(180.0, DEGREE))), 7)
 
 
 def test_a_cube_keeps_its_right_angles_at_an_inclusive_ninety() raises:
@@ -302,6 +320,276 @@ def test_edges_paired_by_index_do_not_weld() raises:
     assert_true(len(many[0]) > 1000)
     # Every edge once: three per triangle, less the ones shared.
     assert_true(len(many[0]) < ball.triangle_count() * 3)
+
+
+def segment(drawn: BufferGeometry, index: Int) raises -> List[Vector3]:
+    """Return the two ends of one segment of a geometry of point pairs.
+
+    Args:
+        drawn: The drawn edges.
+        index: Which segment, from zero.
+
+    Returns:
+        Its first end and its second.
+
+    Raises:
+        Error: If it has no positions or no such segment.
+    """
+    ref positions = drawn.attribute_view(String(POSITION))
+    return [positions.vector3(index * 2), positions.vector3(index * 2 + 1)]
+
+
+def test_a_wireframe_keeps_points_that_are_near_but_not_equal() raises:
+    """The `WireframeGeometry` of three.js keys an edge by the exact
+    positions of its ends. Two triangles 5e-5 apart are six edges there.
+    The port welded points within a tenth of a millimeter and drew three.
+    Minus zero is zero, as JavaScript prints it, and every NaN is one
+    number."""
+    var near = points(
+        [
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            5e-5,
+            0.0,
+            0.0,
+            1.00005,
+            0.0,
+            0.0,
+            5e-5,
+            1.0,
+            0.0,
+        ]
+    )
+    assert_equal(segments_of(wireframe_geometry(near)), 6)
+    var signed = points(
+        [
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            -0.0,
+            -0.0,
+            -0.0,
+            0.0,
+            0.0,
+            1.0,
+        ]
+    )
+    assert_equal(segments_of(wireframe_geometry(signed)), 5)
+    var unknown = nan[DType.float32]()
+    var missing = points(
+        [
+            unknown,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            -unknown,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        ]
+    )
+    assert_equal(segments_of(wireframe_geometry(missing)), 5)
+
+
+def test_a_small_sphere_keeps_every_wireframe_edge() raises:
+    """A wireframe does not depend on the scale, as in three.js. A sphere
+    of a millimeter has points closer than a tenth of a millimeter near its
+    poles, and the port welded them."""
+    var large = wireframe_geometry(sphere(Length(1, METER), 32, 16))
+    var small = wireframe_geometry(sphere(Length(0.001, METER), 32, 16))
+    assert_equal(segments_of(small), segments_of(large))
+
+
+def test_a_wireframe_reads_an_indexed_geometry_group_by_group() raises:
+    """The `WireframeGeometry` of three.js reads the groups of an indexed
+    geometry. A triangle in no group gives no edge."""
+    var quad = plane(Length(2, METER), Length(2, METER))
+    quad.add_group(0, 3, MaterialIndex(0))
+    assert_equal(segments_of(wireframe_geometry(quad)), 3)
+    # A second group adds the edges of its own triangle that are new.
+    quad.add_group(3, 3, MaterialIndex(1))
+    assert_equal(segments_of(wireframe_geometry(quad)), 5)
+
+
+def test_an_edge_geometry_is_in_three_js_s_order() raises:
+    """A pair is drawn when three.js meets the second face, in that face's
+    direction, and the edges with one face after the pairs. The port drew
+    every edge in the order and direction of its first face."""
+    # Two faces hinged a quarter turn on the segment from the origin to
+    # (1, 0, 0). The second runs the hinge from (1, 0, 0) back.
+    var folded = points(
+        [
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        ]
+    )
+    var drawn = edges_geometry(folded)
+    assert_equal(segments_of(drawn), 5)
+    var hinge = segment(drawn, 0)
+    assert_true(hinge[0] == Vector3(1, 0, 0))
+    assert_true(hinge[1] == Vector3(0, 0, 0))
+    var expected: List[Vector3] = [
+        Vector3(1, 0, 0),
+        Vector3(0, 1, 0),
+        Vector3(0, 1, 0),
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 1),
+        Vector3(0, 0, 1),
+        Vector3(1, 0, 0),
+    ]
+    for index in range(4):
+        var ends = segment(drawn, index + 1)
+        assert_true(ends[0] == expected[index * 2])
+        assert_true(ends[1] == expected[index * 2 + 1])
+
+
+def test_an_edge_key_is_three_js_s_rounded_coordinate() raises:
+    """A point is keyed by `Math.round` of each coordinate times ten
+    thousand, as in three.js. Points at 4e-5 and 6e-5 round apart, so the
+    hinge between two faces does not pair, and it is drawn twice. The port
+    welded the two points and dropped the hinge at a half turn."""
+    var straddle = points(
+        [
+            4e-5,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            6e-5,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        ]
+    )
+    var drawn = edges_geometry(straddle, Angle(180.0, DEGREE))
+    assert_equal(segments_of(drawn), 6)
+
+
+def test_a_third_face_after_a_pair_is_an_edge_with_one_face() raises:
+    """In three.js a pair closes its edge. A third face that runs the edge
+    the way the second did starts a new edge, which has one face."""
+    var hinged = points(
+        [
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            -1.0,
+            0.0,
+        ]
+    )
+    # Seven edges with one face. The paired hinge turns a quarter, which a
+    # half turn threshold drops. The port kept that pair for the third
+    # face too, and drew six.
+    var drawn = edges_geometry(hinged, Angle(180.0, DEGREE))
+    assert_equal(segments_of(drawn), 7)
+    var hinge = segment(drawn, 4)
+    assert_true(hinge[0] == Vector3(1, 0, 0))
+    assert_true(hinge[1] == Vector3(0, 0, 0))
+
+
+def test_a_face_in_a_line_has_no_normal() raises:
+    """Three corners on one line, on three keys, give three.js's zero
+    normal. It dots to zero, so a right angle threshold keeps the edge it
+    shares with a flat face."""
+    var thin = points(
+        [
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            2.0,
+            0.0,
+            0.0,
+        ]
+    )
+    # The hinge, then the four edges with one face.
+    var drawn = edges_geometry(thin, Angle(90.0, DEGREE))
+    assert_equal(segments_of(drawn), 5)
 
 
 def main() raises:

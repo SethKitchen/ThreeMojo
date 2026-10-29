@@ -22,44 +22,64 @@ sphere depends on how finely the sphere is divided and on the threshold:
 a sphere of twenty-four segments turns fifteen degrees a facet, so the
 default one-degree threshold keeps most of its edges rather than none.
 
-## Welding first
+## Positions, not indices
 
-Both weld before they pair. Two triangles that meet along an edge often
-hold two copies of each of its two points, because a corner carries a
-normal and a texture coordinate as well as a position and the two faces
-disagree about those. Pairing by vertex index would then find no shared
-edge anywhere, and `edges_geometry` would keep every edge of everything.
+Two triangles that meet along an edge often hold two copies of each of its
+two points, because a corner carries a normal and a texture coordinate as
+well as a position and the two faces disagree about those. Pairing by
+vertex index would then find no shared edge anywhere. So both builders
+find an edge by the positions of its ends, as three.js does.
 
-So the points are welded by position first, to a tolerance, and the edges
-are paired by welded point. `WELD` is that tolerance. It is a distance and
-not a fraction, which is the same bargain three.js makes with its
-four-decimal position hash: a geometry built at a scale far from one meter
-has to be welded at its own scale, and neither library does that for you.
+`wireframe_geometry` compares the positions exactly, as three.js's
+`isUniqueEdge` compares the numbers it prints. Zero and minus zero are one
+number, and so is every NaN. An indexed geometry with groups is read group
+by group, as three.js reads it. A triangle in no group gives no edge. A
+triangle with two corners at one place keeps its edge of no length, once.
+
+`edges_geometry` rounds each coordinate first, as three.js does: the key
+is `Math.round` of the coordinate times ten thousand. Two points nearer
+than a ten-thousandth can still round apart, in three.js and here. A
+triangle with two corners on one key has no area, and it is skipped.
+
+An edge pairs only with the same edge run the other way. So two faces
+that run an edge the same way do not pair. The first face keeps the edge,
+and it is drawn as an edge with one face. A pair is drawn when its second
+face is met, in that face's direction. The edges with one face come last,
+in the order they were first met. The order is three.js's, so segment `s`
+of the result is segment `s` of three.js's.
 
 ## Buckets, not a search
 
-An edge is looked up in a bucket chosen from its two welded points, and a
-point in a bucket chosen from its rounded position. Both then scan a few
-entries rather than the whole list. Scanning the whole list is the obvious
-way to write this, and it is quadratic: a sphere of a thousand points and
-three thousand edges does millions of comparisons and takes visible time
-in the instrumented build.
+`triangle_edges` looks an edge up in a bucket chosen from its two vertex
+indices. `welded_points` looks a point up in a bucket chosen from its
+rounded position. Both then scan a few entries rather than the whole list.
+Scanning the whole list is the obvious way to write this, and it is
+quadratic: a sphere of a thousand points and three thousand edges does
+millions of comparisons and takes visible time in the instrumented build.
+
+`welded_points` welds by a distance, `WELD`, and not by a key. Neither
+builder uses it.
 
 ## Numerical range correction
 
 Finite norm-dependent directions and lengths use scale-safe arithmetic.
 Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
-limits, and explicit zero and nonfinite rules.
+limits, and explicit zero and nonfinite rules. A face normal of
+`edges_geometry` is three.js's, in `Float64`. No product of `Float32`
+coordinates overflows or underflows there.
 """
 
 from core.ordinal import require_non_negative
-from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
+from math.norm import rounded_dot3, rounded_product
+from math.utils import js_round
 from math.vector3 import Vector3
-from std.math import cos, floor
+from std.collections import Dict, Set
+from std.math import cos, floor, isnan, sqrt
+from std.memory import bitcast
 from units.si import Angle, DEGREE
 
 # How near two points must be to count as one point. A tenth of a
@@ -80,6 +100,11 @@ comptime DEFAULT_THRESHOLD = Angle(1.0, DEGREE)
 # image can show: it is the tolerance `renderers.renderer.CULL_SLACK` and
 # `geometries.shape.NOISE` are, for the same reason.
 comptime ANGLE_SLACK = Float32(1e-6)
+# What `edges_geometry` scales a coordinate by before it rounds it: three.js's
+# `Math.pow( 10, precisionPoints )`, four decimal places.
+comptime EDGE_PRECISION = Float64(1e4)
+
+comptime _Vector = SIMD[DType.float64, 4]
 
 
 def _hashed(value: Int, buckets: Int) -> Int:
@@ -173,109 +198,93 @@ def welded_points(geometry: BufferGeometry) raises -> List[Int]:
     return welded^
 
 
-def _degenerate(a: Int, b: Int, c: Int) -> Bool:
-    """Return True if two of a face's three welded points are one point.
+def _canonical(value: Float64) -> UInt64:
+    """Return the bits that stand for a number in a key.
+
+    three.js's keys are the numbers as JavaScript prints them. Zero and
+    minus zero print the same, and so does every NaN.
 
     Args:
-        a: The first corner's welded point.
-        b: The second's.
-        c: The third's.
+        value: The number.
 
     Returns:
-        True for a face with no area to have a normal.
+        Its bits, with one zero and one NaN.
     """
-    if a == b:
-        return True
-    if b == c:
-        return True
-    return a == c
+    if value == 0:
+        return 0
+    if isnan(value):
+        return 0x7FF8000000000000
+    return bitcast[DType.uint64](value)
 
 
-def _paired(
-    geometry: BufferGeometry,
-) raises -> Tuple[List[Int], List[Int], List[Float32]]:
-    """Return every edge of a geometry once, with how its faces turn.
+def _point_keys(positions: BufferAttribute, rounded: Bool) raises -> List[Int]:
+    """Return a point number for each vertex, one number per key.
 
     Args:
-        geometry: The surface, which must carry positions.
+        positions: The positions.
+        rounded: True for the key `edges_geometry` makes, each coordinate
+            times `EDGE_PRECISION` and rounded as `Math.round` rounds.
+            False for the exact coordinates `wireframe_geometry` compares.
 
     Returns:
-        Three lists of one entry per unique edge: the vertex index of each
-        end, taken from the first face that used the edge, and the cosine
-        of the angle between the two faces that meet at it. An edge with
-        one face carries a cosine of minus two, which no angle gives and
-        which every threshold therefore keeps.
+        One number per vertex, from zero, in the order the keys are met.
 
     Raises:
-        Error: If the geometry has no positions, or an index entry points
-            past the last vertex.
+        Error: If a position cannot be read.
     """
-    var welded = welded_points(geometry)
-    ref positions = geometry.attribute_view(String(POSITION))
-    var spread = positions.count() + 1
-    var triangles = geometry.triangle_count()
-    var buckets = max(1, triangles * 3)
-    var bucketed = List[List[Int]](length=buckets, fill=List[Int]())
-    # Per unique edge: the one number its two welded points make, the two
-    # vertices to draw it with, the first face's normal and how the second
-    # face turns from it. One number and not two, because two numbers
-    # compared one after the other is a pair of conditions where the edge
-    # is one thing.
-    var keys = List[Int]()
-    var first_end = List[Int]()
-    var second_end = List[Int]()
-    var normals = List[Vector3]()
-    var turns = List[Float32]()
-    for triangle in range(triangles):
-        var corners = List[Int]()
-        for corner in range(3):  # pragma: no branch
-            corners.append(geometry.corner_index(triangle, corner))
-        # A face with two corners on one welded point has no area and no
-        # normal, and three.js's `EdgesGeometry` skips it. Counted, it
-        # lent the edges it shares a turn of ninety degrees -- a zero
-        # normal dots to zero -- and drew a crease across a flat surface
-        # wherever a generator left a degenerate pole fan.
-        if _degenerate(
-            welded[corners[0]], welded[corners[1]], welded[corners[2]]
-        ):
-            continue
-        var normal = normal_or_zero(
-            geometry.corner(triangle, 0),
-            geometry.corner(triangle, 1),
-            geometry.corner(triangle, 2),
-        )
-        for corner in range(3):  # pragma: no branch
-            var start = corners[corner]
-            var finish = corners[(corner + 1) % 3]
-            # `corner_index` has already refused an entry past the last
-            # vertex, so a welded point is there to be read.
-            var one = welded[start]
-            var two = welded[finish]
-            if one > two:
-                one, two = two, one
-            # The lower point times one more than the point count, plus the
-            # higher: one number that no other pair of points makes.
-            var key = one * spread + two
-            var slot = _hashed(one * 73856093 + two * 19349663, buckets)
-            var found = -1
-            ref nearby = bucketed[slot]
-            for index in range(len(nearby)):
-                var edge = nearby[index]
-                if keys[edge] == key:
-                    found = edge
-                    break
-            if found < 0:
-                bucketed[slot].append(len(keys))
-                keys.append(key)
-                first_end.append(start)
-                second_end.append(finish)
-                normals.append(normal)
-                # Minus two until a second face is met: no angle gives it,
-                # so a boundary edge survives every threshold.
-                turns.append(-2)
-            elif turns[found] == -2:
-                turns[found] = normals[found].dot(normal)
-    return (first_end^, second_end^, turns^)
+    var numbers = Dict[String, Int]()
+    var points = List[Int]()
+    for vertex in range(positions.count()):
+        var key = String()
+        for axis in range(3):  # pragma: no branch
+            var value = Float64(positions.component(vertex, axis))
+            if rounded:
+                value = js_round(value * EDGE_PRECISION)
+            key += String(_canonical(value)) + ","
+        if key not in numbers:
+            numbers[key] = len(numbers)
+        points.append(numbers[key])
+    return points^
+
+
+def _face_normal(a: Vector3, b: Vector3, c: Vector3) -> _Vector:
+    """Return three.js's `Triangle.getNormal`, in `Float64`.
+
+    The cross product of `c - b` and `a - b`, each product rounded, times
+    one over its length. A face with no area has a zero normal.
+
+    Args:
+        a: The first corner.
+        b: The second corner.
+        c: The third corner.
+
+    Returns:
+        The unit normal, or zero.
+    """
+    var cb = _Vector(
+        Float64(c.x) - Float64(b.x),
+        Float64(c.y) - Float64(b.y),
+        Float64(c.z) - Float64(b.z),
+        0,
+    )
+    var ab = _Vector(
+        Float64(a.x) - Float64(b.x),
+        Float64(a.y) - Float64(b.y),
+        Float64(a.z) - Float64(b.z),
+        0,
+    )
+    var normal = _Vector(
+        rounded_product(cb[1], ab[2]) - rounded_product(cb[2], ab[1]),
+        rounded_product(cb[2], ab[0]) - rounded_product(cb[0], ab[2]),
+        rounded_product(cb[0], ab[1]) - rounded_product(cb[1], ab[0]),
+        0,
+    )
+    var squared = rounded_dot3(
+        normal[0], normal[1], normal[2], normal[0], normal[1], normal[2]
+    )
+    if squared > 0:
+        return normal * (1 / sqrt(squared))
+    return _Vector(0)
 
 
 def _as_segments(
@@ -315,7 +324,7 @@ def triangle_edges(
     `getWireframeAttribute` builds: the edges of the triangles as they are
     indexed, with an edge shared by two triangles kept once.
 
-    Paired by vertex index and not by welded position, which is the one
+    Paired by vertex index and not by position, which is the one
     way it differs from `wireframe_geometry`. three.js draws the same
     distinction, and it is the right one here: a wireframe is drawn from
     the mesh's own vertices, already morphed, skinned and carried into
@@ -381,21 +390,49 @@ def wireframe_geometry(geometry: BufferGeometry) raises -> BufferGeometry:
 
     three.js's `WireframeGeometry`. It shows how a surface is built, which
     is what a modeler and a bug hunt both want to see. Every edge is kept,
-    including the diagonal that splits a quad into two triangles.
+    including the diagonal that splits a quad into two triangles. Two edges
+    whose ends are at the same two places are one edge. An indexed geometry
+    with groups gives the edges of its groups. The groups are read as the
+    renderer reads them, clamped to whole triangles in the stream.
 
     Args:
         geometry: The surface, which must carry positions.
 
     Returns:
-        A geometry carrying positions only, two points per edge. Draw it
-        with a `Line` in `SEGMENTS` mode.
+        A geometry carrying positions only, two points per edge, in the
+        order three.js gives them. Draw it with a `Line` in `SEGMENTS`
+        mode.
 
     Raises:
         Error: If the geometry has no positions, or an index entry points
             past the last vertex.
     """
-    var paired = _paired(geometry)
-    return _as_segments(geometry, paired[0], paired[1])
+    ref positions = geometry.attribute_view(String(POSITION))
+    var points = _point_keys(positions, False)
+    var spread = len(points) + 1
+    var runs = List[Tuple[Int, Int]]()
+    if geometry.is_indexed() and len(geometry.groups) > 0:
+        for group in geometry.groups:  # pragma: no branch
+            runs.append(geometry.triangle_run(group.start, group.count))
+    else:
+        runs.append(geometry.triangle_run(0, -1))
+    var seen = Set[Int]()
+    var first = List[Int]()
+    var second = List[Int]()
+    for run in runs:  # pragma: no branch
+        for triangle in range(run[1]):
+            var slot = run[0] + triangle * 3
+            for corner in range(3):  # pragma: no branch
+                var start = geometry.vertex_at(slot + corner)
+                var finish = geometry.vertex_at(slot + (corner + 1) % 3)
+                var low = min(points[start], points[finish])
+                var high = max(points[start], points[finish])
+                var key = low * spread + high
+                if key not in seen:
+                    seen.add(key)
+                    first.append(start)
+                    second.append(finish)
+    return _as_segments(geometry, first, second)
 
 
 def edges_geometry(
@@ -404,9 +441,10 @@ def edges_geometry(
     """Return the edges that show a surface's shape, as segments.
 
     three.js's `EdgesGeometry`. An edge is kept when the two faces meeting
-    at it turn by more than `threshold`, and when it has one face and no
+    at it turn by at least `threshold`, and when it has one face and no
     neighbor. A cube keeps its twelve edges and loses the diagonal across
-    each face. A smooth sphere keeps nothing but its open ends.
+    each face. A smooth sphere keeps nothing but its open ends. An edge
+    pairs with the same edge run the other way; see the module docstring.
 
     Args:
         geometry: The surface, which must carry positions.
@@ -415,8 +453,9 @@ def edges_geometry(
             `thresholdAngle`.
 
     Returns:
-        A geometry carrying positions only, two points per edge. Draw it
-        with a `Line` in `SEGMENTS` mode.
+        A geometry carrying positions only, two points per edge, in the
+        order three.js gives them. Draw it with a `Line` in `SEGMENTS`
+        mode.
 
     Raises:
         Error: If the geometry has no positions, if an index entry points
@@ -425,17 +464,66 @@ def edges_geometry(
     require_non_negative(
         threshold.value, "An edge threshold cannot be a negative angle"
     )
-    var paired = _paired(geometry)
     # Widened by the slack, so an edge turning exactly as far as the
     # threshold is kept rather than lost to the rounding of a float32
-    # cosine. See `ANGLE_SLACK`.
-    var limit = cos(threshold.value) + ANGLE_SLACK
+    # angle. See `ANGLE_SLACK`.
+    var limit = cos(Float64(threshold.value)) + Float64(ANGLE_SLACK)
+    ref positions = geometry.attribute_view(String(POSITION))
+    var points = _point_keys(positions, True)
+    var spread = len(points) + 1
+    # three.js's `edgeData`: each edge run one way, by the key of its two
+    # points in order. A pair closes the entry, and its key stays taken.
+    var entries = Dict[Int, Int]()
+    var starts = List[Int]()
+    var ends = List[Int]()
+    var normals = List[_Vector]()
+    var open = List[Bool]()
     var first = List[Int]()
     var second = List[Int]()
-    for edge in range(len(paired[2])):
-        # A cosine at or below the threshold's is an angle at or above it.
-        # A boundary edge carries minus two and is always below.
-        if paired[2][edge] <= limit:
-            first.append(paired[0][edge])
-            second.append(paired[1][edge])
+    for triangle in range(geometry.triangle_count()):
+        var corners = List[Int]()
+        var keys = List[Int]()
+        for corner in range(3):  # pragma: no branch
+            corners.append(geometry.corner_index(triangle, corner))
+            keys.append(points[corners[corner]])
+        # A face with two corners on one key has no area and no normal,
+        # and three.js skips it.
+        if keys[0] == keys[1] or keys[1] == keys[2] or keys[2] == keys[0]:
+            continue
+        var normal = _face_normal(
+            positions.vector3(corners[0]),
+            positions.vector3(corners[1]),
+            positions.vector3(corners[2]),
+        )
+        for corner in range(3):  # pragma: no branch
+            var after = (corner + 1) % 3
+            var forward = keys[corner] * spread + keys[after]
+            var backward = keys[after] * spread + keys[corner]
+            if backward in entries and open[entries[backward]]:
+                var sibling = entries[backward]
+                var turn = rounded_dot3(
+                    normal[0],
+                    normal[1],
+                    normal[2],
+                    normals[sibling][0],
+                    normals[sibling][1],
+                    normals[sibling][2],
+                )
+                # A cosine at or below the threshold's is an angle at or
+                # above it.
+                if turn <= limit:
+                    first.append(corners[corner])
+                    second.append(corners[after])
+                open[sibling] = False
+            elif forward not in entries:
+                entries[forward] = len(starts)
+                starts.append(corners[corner])
+                ends.append(corners[after])
+                normals.append(normal)
+                open.append(True)
+    # The edges no second face paired with, in the order they were met.
+    for entry in range(len(starts)):
+        if open[entry]:
+            first.append(starts[entry])
+            second.append(ends[entry])
     return _as_segments(geometry, first, second)

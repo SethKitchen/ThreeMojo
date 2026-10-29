@@ -659,19 +659,25 @@ scene.add_line(Line(outline, ink, node, mode=SEGMENTS))
 
 `edges_geometry` keeps an edge when the two faces meeting at it turn by at least `threshold`, and when it has one face and no neighbor. A cube keeps its twelve edges and drops the diagonal across each face. `threshold` is one degree unless said otherwise, as three.js defaults `thresholdAngle`.
 
-`triangle_edges` is what a [wireframe material](Materials#wireframe) draws. It pairs by vertex index rather than by welded position, as three.js pairs the two rules. A wireframe is drawn from the mesh's own vertices, and two indices that stand at one place are still two vertices with their own colors. A cube has thirty edges by index and eighteen by position.
+`triangle_edges` is what a [wireframe material](Materials#wireframe) draws. It pairs by vertex index rather than by position, as three.js pairs the two rules. A wireframe is drawn from the mesh's own vertices, and two indices that stand at one place are still two vertices with their own colors. A cube has thirty edges by index and eighteen by position.
 
 `edges_geometry` finds creases and boundaries, not silhouettes. It is given no camera, and its answer does not move when one does. What it keeps of a sphere depends on how finely the sphere is divided. Twenty-four segments turn fifteen degrees a facet, so the default threshold keeps most of those edges rather than none.
 
 The comparison is inclusive. An edge turning exactly as far as the threshold is kept. `ANGLE_SLACK` is what makes that true in practice. An `Angle` holds radians as a `Float32`, so an authored 90 degrees has a cosine of −4.37e−8 rather than zero. Two perpendicular faces give a dot product of exactly zero. Without the slack a cube asked for its right angles lost all twelve.
 
-### Welding first
+### Positions, not indices
 
-Both weld by position before they pair. Two triangles that meet along an edge often hold two copies of each of its ends. A corner carries a normal and a texture coordinate as well as a position, and the two faces disagree about those. Pairing by vertex index would then find no shared edge anywhere.
+Both builders pair edges by the positions of their ends. Two triangles that meet along an edge often hold two copies of each of its ends. A corner carries a normal and a texture coordinate as well as a position, and the two faces disagree about those. Pairing by vertex index would then find no shared edge anywhere.
 
-`WELD` is the tolerance: a tenth of a millimeter, in meters. It is a distance and not a fraction, which is the bargain three.js makes with its four-decimal position hash. A geometry built at a scale far from one meter has to be welded at its own scale, and neither library does that for you.
+`wireframe_geometry` compares the positions exactly, as three.js's `WireframeGeometry` does. Zero and minus zero are one number. An indexed geometry with groups gives the edges of its groups only. A triangle with two corners at one place keeps its edge of no length, once.
 
-A welded cube has eighteen unique edges, not thirty-six: twelve around the shape and one diagonal in each face.
+`edges_geometry` rounds each coordinate first, as three.js's `EdgesGeometry` does. The key is `Math.round` of the coordinate times ten thousand. A geometry built at a scale far from one meter rounds at that scale, in both libraries. A triangle with two corners on one key has no area, and it is skipped.
+
+An edge pairs only with the same edge in the other direction. Two faces that run an edge in the same direction do not pair, and the edge is drawn as an edge with one face. The result is in three.js's order. A pair comes when its second face is met, in that face's direction. The unpaired edges follow, in the order they were met.
+
+`welded_points` welds by a distance, `WELD`: a tenth of a millimeter, in meters. Neither builder uses it.
+
+A cube has eighteen unique edges by position, not thirty-six: twelve around the shape and one diagonal in each face.
 
 ## Merge, weld and tangents
 
