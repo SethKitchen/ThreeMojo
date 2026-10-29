@@ -99,8 +99,10 @@ inverse this frame, which is a mesh scaled to nothing.
 
 The skin attributes are checked where they are read, by the renderer,
 because that is where the geometry is known: a mesh names a geometry by id
-and cannot see it. What is checked there is that a bone index is a whole
-number in range, and that a weight is a number and not negative.
+and cannot see it. What is checked there is that a weight is a number and
+not negative, and that a slot with a weight names a bone index that is a
+whole number in range. A slot whose weight is zero names no bone, as in
+three.js, so its index is not read.
 
 ## Weights that do not sum to one
 
