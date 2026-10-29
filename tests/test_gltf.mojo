@@ -138,6 +138,32 @@ def triangle(extra: String = "", material: String = "") -> String:
     )
 
 
+def test_node_names_are_sanitized_and_unique_as_in_three_js() raises:
+    # three.js's `createUniqueName`: white space becomes `_`, `[ ] . : /`
+    # are dropped, and a name used before takes `_1`, `_2`, in the order
+    # the scene's walk reaches the nodes. `userData.name` keeps the file's.
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        doc(
+            '"nodes":[{"name":"Cube.001","children":[2]},{"name":"Cube.001"},'
+            + '{"name":"my node[0]"},{"name":"Cube001"},{}],'
+            + '"scenes":[{"nodes":[0,1,3,4]}]'
+        ),
+        scene,
+        assets,
+    )
+    assert_equal(scene.get(model.nodes[0]).name, "Cube001")
+    assert_equal(scene.get(model.nodes[2]).name, "my_node0")
+    assert_equal(scene.get(model.nodes[1]).name, "Cube001_1")
+    assert_equal(scene.get(model.nodes[3]).name, "Cube001_2")
+    assert_equal(scene.get(model.nodes[4]).name, "")
+    assert_equal(model.node_names[1], "Cube.001")
+    assert_equal(
+        scene.get(model.nodes[1]).user_data.string("name"), "Cube.001"
+    )
+
+
 def check_cube(
     model: GltfModel, scene: Scene, assets: Assets, first_mesh: Int
 ) raises:

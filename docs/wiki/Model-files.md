@@ -402,6 +402,7 @@ The model says what went where, by the file's own indices.
 The loader reads `extras` into user data, as three.js's `assignExtrasToUserData` does. User data is a `UserData` from `core/user_data.mojo`, the same map that [Scene JSON](Scene-JSON) reads.
 
 - A node's `extras` go into its `user_data`. A named node also gets `name` in its `user_data`, as three.js sets `userData.name`.
+- A node's `name` is made unique as three.js's `createUniqueName` makes it. White space becomes `_`, and `[`, `]`, `.`, `:` and `/` are dropped. A name used before then takes `_1`, `_2` and on, in the order the scene's walk reaches the nodes. So two nodes named `Cube.001` are `Cube001` and `Cube001_1`. `GltfModel.node_names` and `userData.name` keep the file's names.
 - In three.js, the node of a mesh with one primitive is the mesh itself. Thus such a node takes the mesh's `extras` first, then `name`, then its own `extras`. A node with a camera or a light does not, and a joint does not. three.js makes a group or a bone of it.
 - A primitive's `extras` go into its geometry's `user_data`, as three.js reads them into `geometry.userData`.
 - A `Mesh`, a `Material` and a `Scene` here hold no user data. `mesh_extras`, `material_extras` and `scene_extras` hold their `extras`.

@@ -110,6 +110,14 @@ that reads a third set of texture coordinates or past it, since a
 geometry here has only `uv` and `uv1`; and a skinned node that is
 instanced, where three.js drops the skin.
 
+**Names.** A node's name is made unique as three.js's `createUniqueName`
+makes it. White space becomes `_`, and `[`, `]`, `.`, `:` and `/` are
+dropped, as `PropertyBinding.sanitizeNodeName` drops them. A name used
+before then takes `_1`, `_2` and on, in the order the scene's walk
+reaches the nodes. `GltfModel.node_names` and `userData.name` keep the
+file's names. three.js names every scene's nodes, scene by scene; this
+loader names the nodes of the scene it reads.
+
 **Extras.** An object's `extras` become user data, as three.js's
 `assignExtrasToUserData` makes them. A node's become its `user_data`,
 after its `name`, which three.js also keeps as `userData.name`. A node
@@ -250,6 +258,7 @@ from loaders.draco import (
 )
 from loaders.bytes import decode_base64
 from loaders.image_file import decode_image
+from loaders.fbx import sanitize_node_name
 from loaders.file_path import path_directory
 from loaders.draco_attributes import DracoDataType
 from loaders.meshopt import (
@@ -1171,6 +1180,43 @@ struct _DracoPrimitive(Movable):
         self.ids = ids^
 
 
+struct UniqueNames(Movable):
+    """The names used so far, three.js's `GLTFParser.nodeNamesUsed`.
+
+    `unique` is three.js's `createUniqueName`: a name sanitized as
+    `PropertyBinding.sanitizeNodeName` sanitizes it, then `_1`, `_2` and on
+    for a name used before. The glTF and the gaussian splat loaders share
+    it.
+    """
+
+    var names: List[String]
+    var uses: List[Int]
+
+    def __init__(out self):
+        """Start with none used."""
+        self.names = List[String]()
+        self.uses = List[Int]()
+
+    def unique(mut self, original: String) -> String:
+        """Return a name made unique, three.js's `createUniqueName`.
+
+        Args:
+            original: The name wanted.
+
+        Returns:
+            The sanitized name, or it with `_N` after it when it was used
+            before.
+        """
+        var name = sanitize_node_name(original)
+        for at in range(len(self.names)):
+            if self.names[at] == name:
+                self.uses[at] += 1
+                return name + "_" + String(self.uses[at])
+        self.names.append(name)
+        self.uses.append(0)
+        return name
+
+
 struct _Loader(Movable):
     """The document, its bytes, and the ids handed out so far."""
 
@@ -1217,6 +1263,9 @@ struct _Loader(Movable):
     # index and the scene node it became.
     var skinned_nodes: List[Int]
     var skinned_ids: List[NodeId]
+    # The node names given out, in the order the scene's walk reaches the
+    # nodes, as three.js's `loadNode` gives them out.
+    var node_names_used: UniqueNames
 
     def __init__(
         out self,
@@ -1245,6 +1294,7 @@ struct _Loader(Movable):
         self.node_skins = List[List[Int]]()
         self.skinned_nodes = List[Int]()
         self.skinned_ids = List[NodeId]()
+        self.node_names_used = UniqueNames()
 
     def list(self, key: String) raises -> Int:
         """Return the root's array under `key`, or `NO_NODE`."""
@@ -2864,7 +2914,11 @@ struct _Loader(Movable):
             raise Error("glTF: a node is reached twice")
         var node = self.entry("nodes", index)
         var placed = Object3D()
-        placed.name = self.model.node_names[index]
+        # three.js names a node as `createUniqueName` makes it, and keeps
+        # the file's name as `userData.name`.
+        var name = self.model.node_names[index]
+        if name != "":
+            placed.name = self.node_names_used.unique(name)
         placed.user_data = self.node_user_data(node, index)
         var matrix = self.numbers(node, "matrix", 16)
         if len(matrix) == 16:
