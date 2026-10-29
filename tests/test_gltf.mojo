@@ -228,6 +228,32 @@ def test_every_scene_counts_toward_the_names_as_in_three_js() raises:
     )
 
 
+def test_the_name_walk_reads_each_node_and_light_once() raises:
+    # A node that two scenes hold is named once, and a light that two
+    # nodes hold counts once: so the third `L` takes `_2`, as in three.js.
+    # A skin with no joints names nothing more.
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        doc(
+            '"extensionsUsed":["KHR_lights_punctual"],'
+            + '"extensions":{"KHR_lights_punctual":{"lights":['
+            + '{"type":"point","name":"L"}]}},'
+            + '"skins":[{"joints":[]}],'
+            + '"scenes":[{"nodes":[0,1,2]},{"nodes":[0]}],'
+            + '"nodes":[{"extensions":{"KHR_lights_punctual":{"light":0}},'
+            + '"skin":0},'
+            + '{"name":"L","extensions":{"KHR_lights_punctual":{"light":0}}},'
+            + '{"name":"L"}]'
+        ),
+        scene,
+        assets,
+    )
+    assert_equal(scene.get(model.nodes[0]).name, "")
+    assert_equal(scene.get(model.nodes[1]).name, "L_1")
+    assert_equal(scene.get(model.nodes[2]).name, "L_2")
+
+
 def check_cube(
     model: GltfModel, scene: Scene, assets: Assets, first_mesh: Int
 ) raises:

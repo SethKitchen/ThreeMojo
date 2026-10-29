@@ -2930,7 +2930,8 @@ struct _Loader(Movable):
         camera or a light that came before takes `_1` and on.
         """
         var reached = _Reached(len(self.model.nodes))
-        for index in range(self.count("scenes")):
+        # `read_nodes` names only a document with a scene or more.
+        for index in range(self.count("scenes")):  # pragma: no branch
             var entry = self.entry("scenes", index)
             var name = self.text(entry, "name")
             if name != "":
