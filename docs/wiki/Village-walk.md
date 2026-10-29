@@ -100,6 +100,7 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 | `talk.mojo` | The villagers who talk, and their errands. See [Village errands](Village-errands). |
 | `weather.mojo` | The clouds, the rain and the fog. See [Village weather](Village-weather). |
 | `day.mojo` | The hour, the night's light and its sky. See [Village day and night](Village-day). |
+| `skills.mojo` | The player's foraging, mining and fishing levels. See [Village skills](Village-skills). |
 | `critters.mojo` | The fireflies and the butterflies. See [Village critters](Village-critters). |
 | `residents.mojo` | `Body`, `Route`, `wander_route`, `visit`, `Villager`, `Herd`, `ResidentsParameters`, `Flipbook` and `Residents`. |
 | `play.mojo` | `default_residents`, `PlayParameters`, `tree_obstacles` and `VillageGame`. |

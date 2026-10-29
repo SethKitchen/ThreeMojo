@@ -73,6 +73,16 @@ from extensions.village.character import (
 )
 from extensions.village.gathering import GatherParameters, Gathering
 from extensions.village.hud import draw_hud, note_text, use_prompt
+from extensions.village.skills import (
+    FISHING,
+    FORAGING,
+    MINING,
+    Skills,
+    fish_haste,
+    forage_bonus,
+    ore_strikes,
+    skill_name,
+)
 from extensions.village.critters import Critters, Haunt, default_haunts
 from extensions.village.day import DayCycle, dim_water
 from extensions.village.talk import (
@@ -382,6 +392,8 @@ struct VillageGame(Movable):
     var heads: List[Float32]
     # The fireflies and the butterflies.
     var critters: Critters
+    # The player's gathering skills.
+    var skills: Skills
     # The weather, and how long its clouds, fog and rain took to draw in
     # the last frame, in milliseconds.
     var weather: Weather
@@ -514,6 +526,7 @@ struct VillageGame(Movable):
             self.village.meadow.field.ground,
             self.village.level,
         )
+        self.skills = Skills()
         self.heads = List[Float32]()
         for villager in parameters.residents.villagers:
             self.heads.append(villager.spec.stature.to(METER))
@@ -594,11 +607,22 @@ struct VillageGame(Movable):
             )
         self.village.doors.update(scene, people, delta)
         self.note_age += delta.to(SECOND)
+        # The player's skills set how well they gather.
+        self.gathering.ore_strikes = ore_strikes(self.skills.level(MINING))
+        self.gathering.forage_bonus = forage_bonus(self.skills.level(FORAGING))
+        self.gathering.fish_haste = fish_haste(self.skills.level(FISHING))
         var gathered = self.gathering.update(scene, feet, input.use, delta)
         if gathered:
             var kind = gathered.value()
-            self.note = note_text(kind, self.gathering.satchel.last)
+            var gives = self.gathering.satchel.last
+            self.note = note_text(kind, gives)
             self.note_age = 0
+            var risen = self.skills.gain(kind, gives)
+            if risen:
+                var skill = risen.value()
+                self.note = String(
+                    skill_name(skill), " LEVEL ", self.skills.level(skill), "!"
+                )
         # The use button talks only where no spot is in reach.
         var places = List[Vector3]()
         for index in range(len(self.residents.people)):
@@ -747,6 +771,7 @@ struct VillageGame(Movable):
                 self.talk.speech,
                 self.talk.age,
                 self.talk.errands(self.gathering.satchel),
+                self.skills.lines(),
             )
 
     def prompt(self) -> String:
@@ -761,4 +786,6 @@ struct VillageGame(Movable):
         if focus < 0:
             return self.talk.prompt()
         ref g = self.gathering.spots[focus]
-        return use_prompt(g.spot.kind, g.strikes, g.phase)
+        return use_prompt(
+            g.spot.kind, g.strikes, g.phase, self.gathering.ore_strikes
+        )

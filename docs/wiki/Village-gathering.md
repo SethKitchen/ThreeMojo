@@ -69,9 +69,11 @@ var gathering = Gathering(scene, assets, looks, parameters, ground, lots)
 
 `update` returns the kind that gave something this frame, or `None`. `Satchel.last` holds how many things it gave.
 
+The player's skills change three settings of `Gathering`: `ore_strikes`, `forage_bonus` and `fish_haste`. See [Village skills](Village-skills).
+
 ## The heads-up display
 
-`draw_hud` writes three things over the window's frame, after the frame is stretched:
+`draw_hud` writes these things over the window's frame, after the frame is stretched:
 
 | Part | Where | What it says |
 |---|---|---|
@@ -80,6 +82,7 @@ var gathering = Gathering(scene, assets, looks, parameters, ground, lots)
 | The note | Over the prompt | What the player gathered, such as `+3 BERRIES`, for 2 seconds. It fades over its last half second. |
 | The speech | Over the note | What a villager said, for 5 seconds. See [Village errands](Village-errands). |
 | The errands | The top right | Each errand taken and not done |
+| The skills | The top left | Each skill's level and experience. See [Village skills](Village-skills). |
 
 The font has 5 by 7 dots and needs no font file. It draws capitals, digits, and `+ / : . , ! ? ' -`. A dot is `hud_scale` pixels on a side: one pixel for each 270 pixels of the frame's height. So the text keeps its size on the screen. Each line has a dark shadow, so it reads over the sky and the grass.
 

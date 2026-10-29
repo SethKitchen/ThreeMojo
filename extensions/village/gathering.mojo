@@ -817,6 +817,13 @@ struct Gathering(Movable):
     var triangles: Int
     # The height of the pond's water, where a fishing float lies.
     var water: Float32
+    # How the player's skills change their gathering: how many strikes a
+    # boulder takes, how many more things a pick of herbs, mushrooms or
+    # berries gives, and the share of a fish's usual wait that it waits.
+    # See `extensions.village.skills`.
+    var ore_strikes: Int
+    var forage_bonus: Int
+    var fish_haste: Float32
 
     def __init__(
         out self,
@@ -862,6 +869,9 @@ struct Gathering(Movable):
         var before = len(scene.meshes)
         var water = ground.water_level()
         self.water = water
+        self.ore_strikes = STRIKES
+        self.forage_bonus = 0
+        self.fish_haste = 1
         # A boulder's stone shows its vertex colors: gray, mossy on top.
         var rough = standard_material(Color(255, 255, 255), roughness=0.9)
         rough.vertex_colors = True
@@ -1060,20 +1070,22 @@ struct Gathering(Movable):
                 if g.phase == IDLE:
                     g.casts += 1
                     g.phase = WAITING
-                    g.timer = 2 + 4 * hash01(g.casts, 0, 79)
+                    g.timer = (2 + 4 * hash01(g.casts, 0, 79)) * self.fish_haste
                 else:
                     g.phase = IDLE
                 scene.node(g.hinge).visible = g.phase != IDLE
             elif kind == MUSHROOMS:
-                gives = 2
+                gives = 2 + self.forage_bonus
             elif kind == BERRIES:
-                gives = 3
+                gives = 3 + self.forage_bonus
             elif kind == CHEST:
                 gives = CHEST_COINS
             elif kind == ORE:
                 g.strikes += 1
-                if g.strikes < STRIKES:
+                if g.strikes < self.ore_strikes:
                     gives = 0
+            elif kind == HERBS:
+                gives = 1 + self.forage_bonus
             if gives > 0 and kind == FISH:
                 self.satchel.counts[kind.value] += gives
                 self.satchel.last = gives

@@ -279,6 +279,11 @@ def test_a_press_gathers_herbs_mushrooms_and_berries() raises:
     assert_equal(gathering.spots[0].wait, 0)
     assert_true(scene.node(gathering.spots[0].node).visible)
     assert_true(scene.node(gathering.spots[0].glint).visible)
+    # A forager of skill picks one thing more.
+    gathering.forage_bonus = 1
+    assert_true(_press(gathering, scene, _at(gathering, 0, 0.5)))
+    assert_equal(gathering.satchel.last, 2)
+    assert_equal(gathering.satchel.count(HERBS), 3)
 
 
 def test_a_boulder_takes_strikes_and_a_chest_opens_once() raises:
@@ -292,6 +297,14 @@ def test_a_boulder_takes_strikes_and_a_chest_opens_once() raises:
     assert_true(_press(gathering, scene, rock))
     assert_equal(gathering.satchel.count(ORE), 1)
     assert_equal(gathering.spots[3].strikes, 0)
+    # A miner of skill needs fewer strikes.
+    gathering.ore_strikes = 1
+    for _ in range(30):
+        _ = gathering.update(
+            scene, Vector3(100, 0, 100), False, Duration(0.1, SECOND)
+        )
+    assert_true(_press(gathering, scene, rock))
+    assert_equal(gathering.satchel.count(ORE), 2)
     var chest = _at(gathering, 4, 0.9)
     assert_true(_press(gathering, scene, chest))
     assert_equal(gathering.satchel.count(CHEST), CHEST_COINS)
@@ -307,7 +320,7 @@ def test_a_boulder_takes_strikes_and_a_chest_opens_once() raises:
     assert_true(_press(gathering, scene, trinket))
     assert_false(_press(gathering, scene, trinket))
     assert_equal(gathering.satchel.count(TRINKET), 1)
-    assert_equal(gathering.satchel.total(), 1 + CHEST_COINS + 1)
+    assert_equal(gathering.satchel.total(), 2 + CHEST_COINS + 1)
 
 
 def test_a_trinket_bobs_and_turns() raises:
@@ -375,6 +388,10 @@ def test_a_fish_is_cast_for_waited_on_and_hooked() raises:
     assert_false(_press(gathering, scene, shore))
     _ = gathering.update(scene, Vector3(100, 0, 100), False, step)
     assert_equal(gathering.spots[6].phase, IDLE)
+    # A fisher of skill waits less.
+    gathering.fish_haste = 0.5
+    assert_false(_press(gathering, scene, shore))
+    assert_true(gathering.spots[6].timer <= 3)
 
 
 def main() raises:

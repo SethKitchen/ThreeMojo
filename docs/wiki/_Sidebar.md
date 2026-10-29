@@ -86,6 +86,7 @@
   - [Village weather](Village-weather)
   - [Village day and night](Village-day)
   - [Village critters](Village-critters)
+  - [Village skills](Village-skills)
   - [Game renderer](Game-renderer)
 - [Streamline](Streamline)
 - [Animals](Animals)

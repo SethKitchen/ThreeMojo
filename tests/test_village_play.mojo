@@ -34,6 +34,7 @@ from extensions.village.play import (
     default_residents,
     tree_obstacles,
 )
+from extensions.village.skills import FORAGING
 from extensions.village.quality import LOW, ULTRA, game_quality
 from extensions.village.residents import (
     Herd,
@@ -310,6 +311,8 @@ def test_a_player_gathers_and_the_display_says_so() raises:
     _ = game.tick(scene, assets, use, step)
     assert_equal(game.gathering.satchel.count(HERBS), 1)
     assert_equal(game.note, "+1 herbs")
+    # The herb trained foraging, which the display lists.
+    assert_equal(game.skills.lines()[0], "FORAGING 1  10/50")
     assert_equal(game.prompt(), "")
     game.render(scene, assets)
     # The display drew the satchel and the note, so the frame changed.
@@ -321,6 +324,11 @@ def test_a_player_gathers_and_the_display_says_so() raises:
     # The note ages with the frames.
     _ = game.tick(scene, assets, no_input(), step)
     assert_almost_equal(game.note_age, 0.1, atol=1e-5)
+    # The herbs come back, and a herb that lifts foraging a level says so.
+    game.skills.experience[FORAGING.value] = 45
+    game.gathering.spots[0].wait = 0
+    _ = game.tick(scene, assets, use, step)
+    assert_equal(game.note, "FORAGING LEVEL 2!")
     # Facing away from the pond, the camera does not see it, and its water
     # is not composed. Facing it, the camera sees it.
     var x = Float32(-6)

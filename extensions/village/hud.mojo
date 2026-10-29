@@ -230,13 +230,16 @@ def kind_color(kind: GatherKind) -> Rgb:
     return Rgb(80, 140, 240)
 
 
-def use_prompt(kind: GatherKind, strikes: Int, phase: Int = 0) -> String:
+def use_prompt(
+    kind: GatherKind, strikes: Int, phase: Int = 0, needed: Int = STRIKES
+) -> String:
     """Return what the prompt says the use button does at a spot.
 
     Args:
         kind: The spot's kind.
         strikes: How many times a boulder has been struck.
         phase: A fishing spot's phase: `IDLE`, `WAITING` or `BITING`.
+        needed: How many strikes a boulder takes to give its ore.
 
     Returns:
         The button and the deed, such as "E  GATHER HERBS", or for a
@@ -250,7 +253,7 @@ def use_prompt(kind: GatherKind, strikes: Int, phase: Int = 0) -> String:
     if kind == BERRIES:
         return "E  PICK BERRIES"
     if kind == ORE:
-        return String("E  MINE ORE ", strikes, "/", STRIKES)
+        return String("E  MINE ORE ", strikes, "/", needed)
     if kind == CHEST:
         return "E  OPEN CHEST"
     if kind == FISH and phase == BITING:
@@ -304,9 +307,10 @@ def draw_hud(
     speech: String = String(),
     speech_age: Float32 = SPEECH_SECONDS,
     errands: List[String] = List[String](),
+    skills: List[String] = List[String](),
 ) raises:
-    """Draw the satchel, the prompt, the note, what a villager said and the
-    errands taken over a frame.
+    """Draw the satchel, the prompt, the note, what a villager said, the
+    errands taken and the player's skills over a frame.
 
     Args:
         frame: The frame, the window's size.
@@ -319,6 +323,7 @@ def draw_hud(
             in a panel over the note for `SPEECH_SECONDS`.
         speech_age: How long it has shown, in seconds.
         errands: A line for each errand taken, listed in the top right.
+        skills: A line for each skill, listed in the top left.
 
     Raises:
         Error: Never: each kind's name is known.
@@ -417,5 +422,15 @@ def draw_hud(
             errands[row],
             scale,
             GOLD_TEXT,
+            1,
+        )
+    for row in range(len(skills)):
+        draw_text(
+            frame,
+            margin,
+            margin + row * line,
+            skills[row],
+            scale,
+            WHITE_TEXT,
             1,
         )

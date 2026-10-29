@@ -123,6 +123,7 @@ def test_each_kind_has_a_color_and_a_prompt() raises:
             assert_true(reds[a] != reds[b])
             assert_true(prompts[a] != prompts[b])
     assert_equal(use_prompt(ORE, 2), "E  MINE ORE 2/3")
+    assert_equal(use_prompt(ORE, 0, 0, 1), "E  MINE ORE 0/1")
     assert_equal(use_prompt(HERBS, 0), "E  GATHER HERBS")
     assert_equal(use_prompt(FISH, 0, IDLE), "E  CAST LINE")
     assert_equal(use_prompt(FISH, 0, WAITING), "E  REEL IN")
@@ -205,6 +206,21 @@ def test_the_hud_shows_what_was_said_and_the_errands() raises:
                     elsewhere += 1
     assert_true(top_right > 0)
     assert_equal(elsewhere, 0)
+    # The skills are listed in the top left.
+    var skilled = _frame(480, 270)
+    var skills: List[String] = ["MINING 2  60/150"]
+    draw_hud(skilled, satchel, "", "", 0, "", 0, List[String](), skills)
+    var top_left = 0
+    var other = 0
+    for y in range(270):
+        for x in range(480):
+            if skilled.pixels[4 * (y * 480 + x)] != 100:
+                if x < 240 and y < 40:
+                    top_left += 1
+                else:
+                    other += 1
+    assert_true(top_left > 0)
+    assert_equal(other, 0)
     # A note lasts as long as it is given.
     assert_equal(note_alpha(4, 5), 1)
     assert_equal(note_alpha(5, 5), 0)
