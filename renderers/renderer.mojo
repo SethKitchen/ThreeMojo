@@ -363,7 +363,7 @@ from renderers.clip import (
 from render.tasks import TaskGroup
 from math.curve_checks import require_at_least_one
 from math.finite import require_positive_finite
-from std.math import cos, max, min, pi, sin
+from std.math import cos, max, min, nextafter, pi, sin
 from std.memory import ArcPointer, unsafe_memcpy
 from std.sys import num_logical_cores
 from core.ordinal import require_valid, require_positive
@@ -4954,12 +4954,19 @@ def _spot_camera(
     `at` looking at `aimed`. The aspect is one but for a projector; see
     `lights.projector_light.projector_aspect`.
 
+    A cone of a quarter turn, or a focus above one, can ask for a half turn
+    or more, which no camera sees. three.js builds the degenerate camera
+    such a field gives. The widest camera there is stands in for it.
+
     Raises:
-        Error: If `PerspectiveCamera` refuses the planes, the angle or the
-            aspect.
+        Error: If `PerspectiveCamera` refuses the planes or the aspect.
     """
+    var field = light.shadow.spot_field_of_view(light.angle)
+    var widest = nextafter(Float32(pi), Float32(0))
+    if not (field.value < widest):
+        field = Angle(widest, RADIAN)
     var camera = PerspectiveCamera(
-        light.shadow.spot_field_of_view(light.angle),
+        field,
         aspect,
         light.shadow.near,
         light.shadow_far(),
