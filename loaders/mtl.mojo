@@ -1019,6 +1019,9 @@ def _read_infos(text: String) raises -> List[_Info]:
         var key = first.lower()
         var value = String(stripped[byte = first.byte_length() :].strip())
         if key == "newmtl":
+            # The name is the rest of the line, a `#` too, as three.js's is.
+            var whole = String(String(raw).strip())
+            value = String(whole[byte = first.byte_length() :].strip())
             if value == "":
                 raise Error(_where(line) + "newmtl names no material")
             current = -1

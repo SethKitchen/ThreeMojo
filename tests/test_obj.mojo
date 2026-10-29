@@ -274,7 +274,8 @@ def test_material_libraries_are_kept_in_file_order() raises:
     var model = parse_obj(String("mtllib first.mtl\nmtllib my  second.mtl\n"))
     assert_equal(len(model.material_libraries), 2)
     assert_equal(model.material_libraries[0], String("first.mtl"))
-    assert_equal(model.material_libraries[1], String("my second.mtl"))
+    # The rest of the line, as three.js's `substring( 7 ).trim()` reads it.
+    assert_equal(model.material_libraries[1], String("my  second.mtl"))
     assert_equal(len(read_obj("assets/cube.obj").material_libraries), 1)
     with assert_raises(contains="OBJ line 2: mtllib names no file"):
         _ = parse_obj(String("v 0 0 0\nmtllib\n"))
@@ -339,6 +340,20 @@ def test_a_hash_inside_a_word_is_not_a_comment() raises:
     assert_equal(len(model.objects), 1)
     assert_equal(model.objects[0].materials[0], "Material#1")
     assert_equal(model.objects[0].materials[1], "Material#2")
+
+
+def test_a_name_is_the_rest_of_its_line() raises:
+    # three.js takes the rest of an `o`, `g`, `usemtl` or `mtllib` line,
+    # trimmed, as the name: a `#` and two spaces are kept, so the names
+    # match the material library's. A face's comment is still cut.
+    var model = parse_obj(
+        "mtllib my lib.mtl #2\no Brick  Wall #3\nv 0 0 0\nv 1 0 0\nv 0 1 0"
+        "\nusemtl Mat #1\nf 1 2 3 # done\n"
+    )
+    assert_equal(model.material_libraries[0], "my lib.mtl #2")
+    assert_equal(model.objects[0].name, "Brick  Wall #3")
+    assert_equal(model.objects[0].material, "Mat #1")
+    assert_equal(model.objects[0].geometry.triangle_count(), 1)
 
 
 def test_a_corner_with_too_many_parts_is_refused() raises:

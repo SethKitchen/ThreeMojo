@@ -25,7 +25,9 @@ What is read is what three.js's loader reads and this renderer can draw:
   from one, and a negative one counts back from the last entry so far,
   as the format allows.
 - `o name` and `g name` start a new object. An object with no faces is
-  left out, as three.js leaves it out.
+  left out, as three.js leaves it out. A name, here and in `usemtl` and
+  `mtllib`, is the rest of the line, trimmed: a `#` and the spaces in it
+  are kept, as three.js keeps them.
 - `usemtl name` starts a new run of faces under that material, in the
   same object. An object that uses more than one material gets a group
   per run, and run `i` wears material `i` of `ObjObject.materials`, as
@@ -383,23 +385,21 @@ def _index(field: String, pool: Int, line: Int) raises -> Int:
     return value
 
 
-def _rest(fields: List[String]) -> String:
-    """Return a line's fields after the first, joined by single spaces:
-    the name an `o`, `g` or `usemtl` line gives, which can hold spaces.
+def _rest(line: String, keyword: String) -> String:
+    """Return the name an `o`, `g`, `usemtl` or `mtllib` line gives: the
+    rest of the line after its keyword, trimmed, as three.js reads it. A
+    `#` and the spaces inside the name are kept.
 
     Args:
-        fields: The line, split on whitespace.
+        line: The line, with any comment still on it.
+        keyword: Its first field.
 
     Returns:
         The name, or an empty string for a line with nothing after the
         keyword.
     """
-    var name = String()
-    for index in range(1, len(fields)):
-        if index > 1:
-            name += " "
-        name += fields[index]
-    return name^
+    var trimmed = String(line.strip())
+    return String(trimmed[byte = keyword.byte_length() :].strip())
 
 
 def _read_coordinates(
@@ -688,7 +688,8 @@ def parse_obj(text: String) raises -> ObjModel:
         var stripped = String(joined.strip())
         # A comment runs from a `#` that starts a word to the end of the
         # line; the format allows one after the data, and three.js reads a
-        # trailing one as a corner. A `#` inside a name is kept.
+        # trailing one as a corner. A name keeps the whole rest of its
+        # line, a `#` too, as three.js's does: see `_rest`.
         var comment = comment_start(stripped)
         if comment >= 0:
             var data = String(stripped[byte=0:comment].strip())
@@ -722,22 +723,22 @@ def parse_obj(text: String) raises -> ObjModel:
                 # cube's. No part is finished before it: only an `o` or
                 # a `g` finishes one.
                 declared = True
-                part.name = _rest(fields)
+                part.name = _rest(joined, keyword)
                 continue
             # A new object, under the material in force, as three.js
             # carries it over. One with no faces is dropped.
             var material = part.material()
             if part.corners > 0:
                 model.objects.append(part.finish())
-            part = _Part(_rest(fields), material^)
+            part = _Part(_rest(joined, keyword), material^)
         elif keyword == "mtllib":
-            var library = _rest(fields)
+            var library = _rest(joined, keyword)
             if library == "":
                 raise Error(_where(line) + "mtllib names no file")
             model.material_libraries.append(library^)
         elif keyword == "usemtl":
             # A new material starts a new run of the same object.
-            part.use_material(_rest(fields))
+            part.use_material(_rest(joined, keyword))
     if part.corners > 0:
         model.objects.append(part.finish())
     return model^

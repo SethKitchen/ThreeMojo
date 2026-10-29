@@ -140,7 +140,9 @@ def test_text_before_the_first_material_comments_and_empty_values() raises:
         assets,
     )
     assert_equal(library.count(), 1)
-    assert_equal(library.names[0], String("a"))
+    # A name is the rest of its line, as three.js reads it: only a value's
+    # trailing comment is cut.
+    assert_equal(library.names[0], String("a # trailing"))
     var built = assets.materials.get(library.materials[0])
     assert_color(built.color, 0, 255, 0)
     assert_true(built.map == NO_TEXTURE)
@@ -450,16 +452,19 @@ def test_a_textured_cube_from_its_library_renders() raises:
     _ = renderer.render(second, assets, camera)
 
 
-def test_a_hash_inside_a_material_name_keeps_the_name() raises:
+def test_a_hash_or_spaces_in_a_material_name_keep_the_name() raises:
+    # three.js takes the rest of a `newmtl` line, trimmed, as the name, so
+    # `Mat #1` and `Mat #2` are two materials, and two spaces stay two.
     var assets = Assets()
     var library = parse_mtl(
-        "newmtl Material#1 # red\nKd 1 0 0\nnewmtl Material#2\nKd 0 0 1\n",
+        "newmtl Mat #1\nKd 1 0 0\nnewmtl Mat #2\nKd 0 0 1\nnewmtl Brick  Red\n",
         "",
         assets,
     )
-    assert_equal(library.count(), 2)
-    assert_true(library.find("Material#1") >= 0)
-    assert_true(library.find("Material#2") >= 0)
+    assert_equal(library.count(), 3)
+    assert_true(library.find("Mat #1") >= 0)
+    assert_true(library.find("Mat #2") >= 0)
+    assert_true(library.find("Brick  Red") >= 0)
 
 
 def test_a_default_material_for_vertex_colors_turns_them_on() raises:

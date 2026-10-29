@@ -70,7 +70,7 @@ OBJ polygon convexity is checked in translated, widened coordinates so small or 
 | `o name`, `g name` | A new object. One with no faces is dropped. |
 | `usemtl name` | A new run of faces under that material, in the same object. A run with no faces is dropped. The first `usemtl` also takes the faces before it, as in three.js. |
 | `mtllib name` | A material library. The rest of the line is one file name. |
-| `#` | A comment, to the end of the line, when the `#` starts the line or follows a space or a tab. A `#` inside a word is part of it, so `usemtl Material#1` names `Material#1`. |
+| `#` | A comment, to the end of the line, when the `#` starts the line or follows a space or a tab. A name is the rest of its line, as in three.js: `usemtl Mat #1` names `Mat #1`, and two spaces in a name stay two. |
 
 An index counts from one. A negative index counts back from the last entry so far. `s`, `l`, `p` and unknown lines are skipped.
 
@@ -169,7 +169,7 @@ A keyword can be in any case. Each key keeps the last value that a material give
 | `norm file` | The normal map, as data. |
 | `map_Ks file` | The specular map, as data. |
 | `disp file` | The displacement map, as data. |
-| `#` | A comment, to the end of the line, when the `#` starts the line or follows a space or a tab. A `#` inside a word is part of it, so `usemtl Material#1` names `Material#1`. |
+| `#` | A comment, to the end of the line, when the `#` starts the line or follows a space or a tab. A `newmtl` name is the rest of its line, as in three.js: `newmtl Mat #1` names `Mat #1`. |
 
 The defaults are those of three.js's `MeshPhongMaterial`: a white color, a specular of `0x111111`, a shininess of 30, no emissive color, and opaque. Lines before the first `newmtl` are skipped. A key with no value is skipped. `Ka`, `map_Ka` and unknown keys are skipped, as three.js skips them.
 
