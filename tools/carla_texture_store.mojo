@@ -13,6 +13,7 @@ the cut-out.
 """
 
 from std.os import makedirs
+from std.os.path import join
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
@@ -235,9 +236,9 @@ def _write(
     if format == "JPEG":
         suffix = ".jpg"
     var name = "texture_" + sha256_hex(Span(payload)) + suffix
-    var folder = _join(out_dir, "textures")
+    var folder = join(out_dir, "textures")
     makedirs(folder, exist_ok=True)
-    Path(_join(folder, name)).write_bytes(Span(payload))
+    Path(join(folder, name)).write_bytes(Span(payload))
     return "textures/" + name
 
 
@@ -377,16 +378,6 @@ def _flag(doc: PyJson, node: Int, message: String) raises -> Bool:
     if doc.kind(node) != PY_BOOL:
         raise Error(message)
     return doc.flag(node)
-
-
-def _join(directory: String, name: String) -> String:
-    """Join a directory and a file name with `/`."""
-    if directory.byte_length() == 0:
-        return name
-    var raw = directory.as_bytes()
-    if raw[len(raw) - 1] == 47:
-        return directory + name
-    return directory + "/" + name
 
 
 def main() raises:

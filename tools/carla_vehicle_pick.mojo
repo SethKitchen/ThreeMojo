@@ -15,6 +15,7 @@ names no body, `extras` supplies one from its folder. The file name
 must end in `.uasset`. A skeleton or physics asset there is left out.
 """
 
+from std.os.path import basename
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
@@ -47,7 +48,7 @@ def pick_text(text: String) raises -> String:
         var path = refs[index].path
         if _has(path, "/Pedestrian/"):
             continue
-        names.append(_basename(path))
+        names.append(basename(path))
         if refs[index].kind == "SkeletalMesh":
             skeletal.append(index)
         elif refs[index].kind == "StaticMesh" and not _static_skip(path):
@@ -224,14 +225,6 @@ def _fold(byte: UInt8) -> UInt8:
     if byte >= 65 and byte <= 90:
         return byte + 32
     return byte
-
-
-def _basename(path: String) -> String:
-    """Return the last path segment."""
-    var slash = path.rfind("/")
-    if slash < 0:
-        return path
-    return String(path[byte = slash + 1 :])
 
 
 def _json(text: String) -> String:

@@ -13,6 +13,7 @@ kept. A missing root prints `{}`.
 """
 
 from std.os import listdir
+from std.os.path import join
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
@@ -45,7 +46,7 @@ def _walk(mut tree: JsonTree, obj: Int, path: String, suffix: String) raises:
     var dirs = List[String]()
     for name in listdir(path):
         var child = String(name)
-        var full = _join(path, child)
+        var full = join(path, child)
         if Path(full).is_dir():
             dirs.append(child)
         else:
@@ -59,16 +60,9 @@ def _walk(mut tree: JsonTree, obj: Int, path: String, suffix: String) raises:
         )
         if tree.has(obj, stem):
             continue
-        tree.set(obj, stem, tree.string(_join(path, name)))
+        tree.set(obj, stem, tree.string(join(path, name)))
     for index in range(len(dirs)):
-        _walk(tree, obj, _join(path, dirs[index]), suffix)
-
-
-def _join(directory: String, name: String) -> String:
-    """Join a directory and a file name."""
-    if directory.byte_length() == 0 or directory.endswith("/"):
-        return directory + name
-    return directory + "/" + name
+        _walk(tree, obj, join(path, dirs[index]), suffix)
 
 
 def main() raises:

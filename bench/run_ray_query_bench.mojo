@@ -21,7 +21,7 @@ from std.collections import Dict, Set
 from std.math import isfinite
 from std.os import getenv, makedirs
 from std.os.path import exists
-from std.pathlib import Path
+from std.pathlib import Path, cwd
 from std.sys import argv, exit, stderr
 from std.time import perf_counter_ns
 
@@ -486,8 +486,7 @@ def _absolute(path: String) raises -> String:
     """Return a path made absolute against the working directory."""
     if path.startswith("/"):
         return path
-    var here = run_program(["pwd", "-P"], 10.0)
-    return String(here.output.rstrip("\n")) + "/" + path
+    return String(cwd()) + "/" + path
 
 
 def _command_output(command: List[String]) raises -> String:

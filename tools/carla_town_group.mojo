@@ -354,13 +354,7 @@ def _spline_request(
 
 def _join(chunks: List[String]) -> String:
     """Return a JSON list of JSON values."""
-    var out = String("[")
-    for index in range(len(chunks)):
-        if index > 0:
-            out += ","
-        out += chunks[index]
-    out += "]"
-    return out
+    return "[" + ",".join(chunks) + "]"
 
 
 def _vec3_json(values: List[Float64]) raises -> String:
