@@ -90,7 +90,9 @@ set them to what a pointer should reach. three.js measures the gap in
 the object's own space, against the threshold over the mean of the
 object's own scale. This measures it in world space, against the
 threshold times the mean world scale over that mean own scale. The two
-agree under an even world scale, a parent's scale included. A sprite is
+agree under an even world scale, a parent's scale included. Before that,
+the ray must meet the bounding sphere grown by the threshold as it is, as
+in three.js. A sprite is
 met on its two triangles, laid flat to the camera as the renderer lays
 them, so a sprite needs the camera that `set_from_camera` records. None
 of the three has a face, so a hit's `normal` is zero, as three.js gives no
@@ -903,9 +905,11 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         if geometry.is_indexed():
             raise Error("A line geometry cannot be indexed")
         var world = scene.world_matrix(line.node)
-        reach = _world_reach(reach, scene.get(line.node).scale, world)
+        # three.js grows the bound by the threshold as it is, and scales
+        # the threshold only for the test of each segment.
         if not self._near_bound(geometry.bounding_sphere(), world, reach):
             return hits^
+        reach = _world_reach(reach, scene.get(line.node).scale, world)
         var vertices = geometry.vertex_count()
         ref positions = geometry.attribute_view(String("position"))
         var mesh = Mesh(line.geometry, line.material, line.node)
@@ -983,9 +987,11 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         if geometry.is_indexed():
             raise Error("A points geometry cannot be indexed")
         var world = scene.world_matrix(cloud.node)
-        reach = _world_reach(reach, scene.get(cloud.node).scale, world)
+        # three.js grows the bound by the threshold as it is, and scales
+        # the threshold only for the test of each point.
         if not self._near_bound(geometry.bounding_sphere(), world, reach):
             return hits^
+        reach = _world_reach(reach, scene.get(cloud.node).scale, world)
         ref positions = geometry.attribute_view(String("position"))
         var mesh = Mesh(cloud.geometry, cloud.material, cloud.node)
         # Only the points the draw range lets through, as three.js's

@@ -554,6 +554,23 @@ def test_a_parents_scale_grows_the_threshold() raises:
     assert_equal(away[1], 0)
 
 
+def test_the_bound_grows_by_the_threshold_as_it_is() raises:
+    # three.js grows the world bound by the threshold as it is, and scales
+    # the threshold only for each point and segment. Under a parent of
+    # scale ten the bound has a radius of 5 m about (10, 5, 0). A ray at
+    # x = 12.5 passes 5.59 m from its center, beyond 5.3 m. So it meets
+    # nothing, though it passes 2.5 m from the point, within 3 m.
+    var made = _scaled(Vector3(10, 10, 10), Vector3(1, 1, 1))
+    var off = _met(made, 12.5)
+    assert_equal(off[0], 0)
+    assert_equal(off[1], 0)
+    # At x = 11.7 the ray passes 5.28 m from the center, inside the bound,
+    # and 1.7 m from the point, within the scaled threshold.
+    var inside = _met(made, 11.7)
+    assert_equal(inside[0], 1)
+    assert_equal(inside[1], 1)
+
+
 # --- sprites ----------------------------------------------------------------
 
 
