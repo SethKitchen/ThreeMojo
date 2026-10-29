@@ -300,8 +300,12 @@ The loader reads the three formats: `ascii`, `binary_little_endian` and `binary_
 | `vertex`: `red`, `green`, `blue`, or `r`, `g`, `b`, or `diffuse_red` and so on | `color`, divided by 255 and decoded from sRGB. |
 | `vertex`: `alpha` or `a` | The fourth channel of `color`, divided by 255. three.js does not read it. |
 | `face`: `vertex_indices` or `vertex_index` | The index. |
+| `face`: `texcoord` | `uv` at each corner of the face. It holds two numbers for each corner. three.js reads it only for a triangle. |
+| `face`: `red`, `green`, `blue`, or their other names | `color` at each corner of the face, divided by 255 and decoded from sRGB. |
 
 A face of more than three corners becomes a fan of triangles from its first corner. Thus the face must be convex, as an OBJ face must be. three.js cuts a quad on the other diagonal, and it does not read a face of five or more corners.
+
+A face's own texture coordinates or colors need a vertex for each corner. So the geometry then has no index, as three.js's `toNonIndexed` makes it. They replace the vertices' `uv` and `color`, as in three.js.
 
 The loader reads past all other elements and properties. A file without a `face` element is a point cloud, and its geometry has no index.
 
@@ -333,12 +337,12 @@ The loader raises, and names the element and the row, for:
 - A header line that is not `format`, `element`, `property`, `comment` or `obj_info`.
 - No `vertex` element, or a vertex without `x`, `y` and `z`. A vertex property that is a list.
 - A custom attribute that names a property the `vertex` element does not have, or a list.
-- Only some channels of a normal, a texture coordinate or a color. An alpha without a color.
+- Only some channels of a normal, a texture coordinate or a color, of a vertex or a face. An alpha without a color.
 - A face without a list of integer vertex indices.
 - An ASCII row with too few or too many values. A value that is not a number of its type, or is out of its range.
 - A file that ends before its last row. A list with a negative length.
 - A value of a vertex that is not finite as a `Float32`.
-- A face with fewer than three corners, or one that names a vertex the file does not have. A face that is not convex, or has no area.
+- A face with fewer than three corners, or one that names a vertex the file does not have. A face that is not convex, or has no area. A face's `texcoord` without two numbers for each corner, when another face has some.
 
 ### Example
 
