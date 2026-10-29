@@ -201,6 +201,8 @@ The width is the height times the aspect, rounded in `Float64`. A rounded width 
 
 The polar angle stays a millionth of a radian away from each pole. At a pole, the camera's right is undefined. A range about y with its low limit above its high limit passes through a half turn. An angle outside it goes to the nearer limit, as in three.js.
 
+Far from the origin, that millionth can round away in `Float32`. So a pan reads the camera's right and up from its view matrix, as three.js reads them from the camera's matrix. `look_at` nudges a camera that looks along its up, so a camera straight above its target pans too.
+
 With damping, `damping_factor` of each pending rotation and pan applies each frame. The rest waits. A dolly is not damped, as in three.js.
 
 ### Orthographic cameras

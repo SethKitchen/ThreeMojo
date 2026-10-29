@@ -690,7 +690,7 @@ def test_an_orthographic_pan_divides_a_wide_view_in_full() raises:
         Length(100.0, METER),
     )
     camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
-    var view = _orthographic_view(camera, Vector3(0, 0, 0), 16777217, 100)
+    var view = _orthographic_view(camera, 16777217, 100)
     var expected = Float32(Float64(10) / Float64(16777217))
     assert_equal(view.per_x, expected)
     assert_true(view.per_x != Float32(10) / Float32(16777217))

@@ -363,9 +363,7 @@ struct OrbitControls(Copyable, Movable):
         self._pan_by(
             delta_x,
             delta_y,
-            _orthographic_view(
-                camera, self.target, viewport_width, viewport_height
-            ),
+            _orthographic_view(camera, viewport_width, viewport_height),
         )
 
     def _pan_by(mut self, delta_x: Float32, delta_y: Float32, view: _View):
@@ -376,16 +374,15 @@ struct OrbitControls(Copyable, Movable):
             delta_y: Pixels down the view content moves.
             view: The camera, as the controls see it.
         """
-        var axes = _camera_axes(view.offset, view.up)
-        var upward = axes[1]
+        var upward = view.above
         if not self.screen_space_panning:
             # three.js: the camera's up crossed with its right, which is
             # forward along the plane at right angles to the up.
             upward = view.up
-            upward.cross(axes[0])
+            upward.cross(view.right)
         # The content follows the pointer, so the camera moves the other
         # way across the view and the same way up it.
-        self._pan = self._pan + axes[0] * (-delta_x * view.per_x)
+        self._pan = self._pan + view.right * (-delta_x * view.per_x)
         self._pan = self._pan + upward * (delta_y * view.per_y)
 
     # --- input -------------------------------------------------------------
@@ -443,9 +440,7 @@ struct OrbitControls(Copyable, Movable):
         """
         self._handle(
             event,
-            _orthographic_view(
-                camera, self.target, viewport_width, viewport_height
-            ),
+            _orthographic_view(camera, viewport_width, viewport_height),
         )
 
     def _handle(mut self, event: InputEvent, view: _View) raises:
@@ -1033,11 +1028,14 @@ def _check_height(viewport_height: Int) raises:
 @fieldwise_init
 struct _View(ImplicitlyCopyable):
     """What the controls need of a camera to turn input into a change:
-    where it is, which way is up, how many meters a pixel of pan moves,
+    its axes, which way is up, how many meters a pixel of pan moves,
     the view's size, and the matrix that takes a pixel back into space."""
 
-    # The camera's position less the target.
-    var offset: Vector3
+    # The camera's right and its own y in the world: the first two rows of
+    # its view matrix, three.js's columns of `object.matrix`. They hold the
+    # nudge that `look_at` gives a camera that looks along its up.
+    var right: Vector3
+    var above: Vector3
     var up: Vector3
     # Meters a pixel of pan moves the target, across and up.
     var per_x: Float32
@@ -1075,11 +1073,13 @@ def _perspective_view(
     var covered = offset.length() * tan(camera.fov.to(RADIAN) / 2)
     var per = _per_pixel(2 * covered, viewport_height)
     var width = _view_width(viewport_height, camera.aspect)
+    var view = camera.view_matrix()
     var inverse = camera.projection_matrix()
-    inverse.multiply(camera.view_matrix())
+    inverse.multiply(view)
     inverse.invert()
     return _View(
-        offset,
+        _row(view, 0),
+        _row(view, 1),
         camera.up,
         per,
         per,
@@ -1092,7 +1092,6 @@ def _perspective_view(
 
 def _orthographic_view(
     camera: OrthographicCamera,
-    target: Vector3,
     viewport_width: Int,
     viewport_height: Int,
 ) raises -> _View:
@@ -1104,7 +1103,6 @@ def _orthographic_view(
 
     Args:
         camera: The camera.
-        target: The point it orbits.
         viewport_width: The view's width, in pixels.
         viewport_height: The view's height, in pixels.
 
@@ -1120,11 +1118,13 @@ def _orthographic_view(
         raise Error("A viewport width must be positive, got ", viewport_width)
     var wide = (camera.right.value - camera.left.value) / camera.zoom
     var tall = (camera.top.value - camera.bottom.value) / camera.zoom
+    var view = camera.view_matrix()
     var inverse = camera.projection_matrix()
-    inverse.multiply(camera.view_matrix())
+    inverse.multiply(view)
     inverse.invert()
     return _View(
-        camera.position - target,
+        _row(view, 0),
+        _row(view, 1),
         camera.up,
         _per_pixel(wide, viewport_width),
         _per_pixel(tall, viewport_height),
@@ -1158,25 +1158,19 @@ def _unproject(
     return inverse.transform_point(Vector3(x, y, 0))
 
 
-def _camera_axes(offset: Vector3, up: Vector3) -> List[Vector3]:
-    """Return the camera's right and up, for a camera at `offset` from the
-    point it looks at.
+def _row(view: Matrix4, row: Int) -> Vector3:
+    """Return one of a camera's axes in the world, from its view matrix.
 
     Args:
-        offset: The camera's position less its target.
-        up: The camera's up.
+        view: The camera's view matrix, a rotation and a move.
+        row: 0 for the camera's right, 1 for its own y.
 
     Returns:
-        The right, then the up.
+        The axis, unit length.
     """
-    var back = offset
-    back.normalize()
-    var right = up
-    right.cross(back)
-    right.normalize()
-    var above = back
-    above.cross(right)
-    return [right, above]
+    # Column-major, as three.js stores a matrix.
+    ref e = view.elements
+    return Vector3(e[row], e[4 + row], e[8 + row])
 
 
 def _limit_azimuth(theta: Float32, low: Float32, high: Float32) -> Float32:
