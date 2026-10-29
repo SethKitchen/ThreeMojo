@@ -641,6 +641,30 @@ def test_a_turn_let_go_goes_on_and_slows_as_three_js_does() raises:
     assert_false(rig.frame())
 
 
+def test_a_turn_let_go_goes_on_with_two_moves_a_frame() raises:
+    # three.js reads a new time for each move. Here every move of a frame
+    # reads the frame's time, so the speed is measured over the frame. The
+    # same drag in two moves a frame then turns as it does in one.
+    var rig = Rig()
+    _ = rig.frame()
+    rig.send(POINTER_DOWN, 50, 50)
+    _ = rig.frame()
+    rig.send(POINTER_MOVE, 52, 50)
+    rig.send(POINTER_MOVE, 55, 50)
+    _ = rig.frame()
+    rig.send(POINTER_MOVE, 57, 50)
+    rig.send(POINTER_MOVE, 60, 50)
+    rig.send(POINTER_UP, 60, 50)
+    assert_true(rig.frame())
+    assert_true(rig.controls.state() == STATE_ANIMATION_ROTATE)
+    _ = rig.frame()
+    _near(rig.camera.position, -0.728921, 0.000945, 4.946582)
+    for _ in range(62):
+        _ = rig.frame()
+    _near(rig.camera.position, -1.377917, 0.002407, 4.806385)
+    assert_true(rig.controls.state() == STATE_IDLE)
+
+
 def test_a_turn_let_go_after_a_pause_stops() raises:
     var rig = Rig()
     _ = rig.frame()

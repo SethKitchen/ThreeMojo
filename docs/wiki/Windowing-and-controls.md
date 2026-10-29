@@ -505,7 +505,7 @@ A scale whose start point has no length along an axis keeps that axis's scale. t
 
 ### The trackball
 
-The pointer is read on a sphere about the center. Farther out, it is read on a hyperboloid, which joins the sphere smoothly. The turn is about the axis at right angles to the start and the point now. Its angle is the larger of the angle between them and their distance over the radius. A turn let go less than 120 ms after the last move goes on at the mean speed of the last two moves. It then slows by `damping_factor`.
+The pointer is read on a sphere about the center. Farther out, it is read on a hyperboloid, which joins the sphere smoothly. The turn is about the axis at right angles to the start and the point now. Its angle is the larger of the angle between them and their distance over the radius. A turn let go less than 120 ms after the last move goes on at the mean speed of the last two frames of moves. It then slows by `damping_factor`.
 
 A focus moves the center to the point that a double click hits on a mesh. A line, points and a sprite have no face, so a double click passes over them, as in three.js. Two clicks count when each is shorter than 250 ms, and when they are less than 300 ms and 24 pixels apart.
 
@@ -530,7 +530,9 @@ A focus moves the center to the point that a double click hits on a mesh. A line
 
 The camera is read at each call and written back. Its `up` is always its own y axis. After a turn, three.js sets `up` to the first `up` turned by the camera. That is the same for a first `up` of +y. For another first `up`, three.js's `up` can point along the view.
 
-The controls read time from `update`. An event happens at the time of the last `update`. A pointer is read at the center of its pixel. On a side above 8388608 pixels that center is a `Float64`. A camera that rides a scene node is refused, as three.js requires.
+The controls read time from `update`. An event happens at the time of the last `update`. So the speed of a turn let go is measured over frames, not over moves. Two moves in one frame count as one move. three.js reads a new time for each move.
+
+A pointer is read at the center of its pixel. On a side above 8388608 pixels that center is a `Float64`. A camera that rides a scene node is refused, as three.js requires.
 
 `enable_gizmos` hides the gizmo, as three.js documents. three.js has the member but does not read it. three.js works out the grid's cells in floating point, and here they are 60.
 
