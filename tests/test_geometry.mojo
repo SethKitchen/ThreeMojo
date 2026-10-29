@@ -757,6 +757,38 @@ def test_sphere_quads_split_on_three_js_diagonal() raises:
     assert_equal(geometry.index[first + 5], d)
 
 
+def test_a_sphere_has_three_js_s_numbers() raises:
+    """A sphere is computed in doubles, as three.js computes it, and each
+    number is rounded once when it is stored. In Float32, a vertex by the
+    south pole of the default sphere had an x of -1.10e-8, where three.js
+    has -1.21e-7. The expected values are three.js r180's, given the same
+    Float32 angles."""
+    var ball = sphere(Length(1, METER), 32, 16)
+    assert_js_number(
+        ball.attribute_view(String(POSITION)).component(222, 0),
+        -1.2115218339658895e-07,
+    )
+    var band = sphere(
+        Length(1.5, METER),
+        7,
+        5,
+        Angle(0.3, RADIAN),
+        Angle(4.0, RADIAN),
+        Angle(0.2, RADIAN),
+        Angle(2.0, RADIAN),
+    )
+    assert_js_number(
+        band.attribute_view(String(POSITION)).component(10, 0),
+        -0.10806446522474289,
+    )
+    assert_js_number(
+        band.attribute_view(String(NORMAL)).component(34, 0),
+        -0.12425363808870316,
+    )
+    # One less three fifths, in doubles, then rounded: Float32 0.4.
+    assert_equal(band.attribute_view(String(UV)).component(24, 1), Float32(0.4))
+
+
 # --- plane -------------------------------------------------------------------
 
 

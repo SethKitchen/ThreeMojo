@@ -16,6 +16,10 @@ The poles are where this gets fiddly. A quad against a pole has two of its
 corners in the same spot, so one of its two triangles is degenerate and is
 skipped rather than emitted with zero area.
 
+The arithmetic is three.js's, in doubles, and each number is rounded to
+`Float32` once, when it is stored. A `Float32` half turn is a little more
+than `Math.PI`, and three.js's `thetaEnd` clamps it to a pole, as here.
+
 Each vertex's normal is simply the direction it lies from the center, so
 neighboring triangles agree along their shared edges and the renderer's
 interpolation hides the facets. That is the whole difference between this and
@@ -34,7 +38,8 @@ from geometries.surface import (
     require_positive_radius,
     require_three_segments,
 )
-from std.math import cos, isfinite, pi, sin
+from math.norm import rounded_dot3, rounded_product
+from std.math import cos, isfinite, pi, sin, sqrt
 from units.si import Angle, Length, RADIAN
 
 
@@ -84,10 +89,10 @@ def sphere(
         height_segments,
         "A sphere's segment count is larger than this port builds",
     )
-    var phi0 = phi_start.to(RADIAN)
-    var phi_run = phi_length.to(RADIAN)
-    var theta0 = theta_start.to(RADIAN)
-    var theta_run = theta_length.to(RADIAN)
+    var phi0 = Float64(phi_start.to(RADIAN))
+    var phi_run = Float64(phi_length.to(RADIAN))
+    var theta0 = Float64(theta_start.to(RADIAN))
+    var theta_run = Float64(theta_length.to(RADIAN))
     if not (
         isfinite(phi0)
         and isfinite(phi_run)
@@ -95,20 +100,22 @@ def sphere(
         and isfinite(theta_run)
     ):
         raise Error("A sphere's angles must be finite")
-    # three.js's `thetaEnd`: a part reaches the south pole only when its
-    # end is past it.
-    var theta_end = min(theta0 + theta_run, Float32(pi))
+    # three.js's `thetaEnd`, in doubles: a part reaches the south pole only
+    # when its end is at it or past it. A Float32 half turn is past it.
+    var theta_end = min(theta0 + theta_run, pi)
 
-    var r = radius.value
+    var r = Float64(radius.value)
     var data = List[Float32]()
     var normals = List[Float32]()
     var uvs = List[Float32]()
 
     # One extra column, so the seam has a vertex on each side of the wrap.
     # Segment counts were validated above, so none of these run zero times.
+    # three.js's arithmetic, in doubles, each product before a sum rounded
+    # on its own. A number is rounded to `Float32` once, when it is stored.
     for ring in range(height_segments + 1):  # pragma: no branch
-        var ring_fraction = Float32(ring) / Float32(height_segments)
-        var theta = theta0 + ring_fraction * theta_run
+        var ring_fraction = Float64(ring) / Float64(height_segments)
+        var theta = theta0 + rounded_product(ring_fraction, theta_run)
         var sin_theta = sin(theta)
         var cos_theta = cos(theta)
         # At a pole every column's vertex is the same point, and the one
@@ -118,30 +125,31 @@ def sphere(
         # meets the pole squarely rather than sheared into a pinwheel.
         # Only at a real pole: a part that starts below the north pole or
         # ends above the south has no tip there.
-        var u_offset = Float32(0)
+        var u_offset = Float64(0)
         if ring == 0 and theta0 == 0:
-            u_offset = 0.5 / Float32(width_segments)
-        elif ring == height_segments and theta_end == Float32(pi):
-            u_offset = -0.5 / Float32(width_segments)
+            u_offset = 0.5 / Float64(width_segments)
+        elif ring == height_segments and theta_end == pi:
+            u_offset = -0.5 / Float64(width_segments)
         for column in range(width_segments + 1):  # pragma: no branch
-            var column_fraction = Float32(column) / Float32(width_segments)
-            var phi = phi0 + column_fraction * phi_run
-            var nx = -cos(phi) * sin_theta
-            var ny = cos_theta
-            var nz = sin(phi) * sin_theta
-            data.append(nx * r)
-            data.append(ny * r)
-            data.append(nz * r)
-            # Already unit length: the normal of a sphere at the origin is
-            # just the direction the point lies in.
-            normals.append(nx)
-            normals.append(ny)
-            normals.append(nz)
+            var column_fraction = Float64(column) / Float64(width_segments)
+            var phi = phi0 + rounded_product(column_fraction, phi_run)
+            var x = -r * cos(phi) * sin_theta
+            var y = r * cos_theta
+            var z = r * sin(phi) * sin_theta
+            data.append(Float32(x))
+            data.append(Float32(y))
+            data.append(Float32(z))
+            # The normal of a sphere at the origin is the direction the
+            # point lies in: three.js's `normal.copy( vertex ).normalize()`.
+            var scale = 1 / sqrt(rounded_dot3(x, y, z, x, y, z))
+            normals.append(Float32(x * scale))
+            normals.append(Float32(y * scale))
+            normals.append(Float32(z * scale))
             # u wraps once around the equator; v runs 1 at the north pole to
             # 0 at the south, because texture space has its origin at the
             # bottom while `ring` counts downwards from the top.
-            uvs.append(column_fraction + u_offset)
-            uvs.append(1 - ring_fraction)
+            uvs.append(Float32(column_fraction + u_offset))
+            uvs.append(Float32(1 - ring_fraction))
 
     var stride = width_segments + 1
     var index = List[Int]()
@@ -161,7 +169,7 @@ def sphere(
                 index.append(top_right)
                 index.append(top_left)
                 index.append(bottom_right)
-            if ring != height_segments - 1 or theta_end < Float32(pi):
+            if ring != height_segments - 1 or theta_end < pi:
                 index.append(top_left)
                 index.append(bottom_left)
                 index.append(bottom_right)

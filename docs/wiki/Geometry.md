@@ -210,6 +210,8 @@ A latitude and longitude sphere, three.js's `SphereGeometry`. Each normal points
 
 `phi_start` and `phi_length` say where the surface starts around the y axis and how far it runs, a whole turn by default. `theta_start` and `theta_length` say where it starts down from the north pole and how far it runs, pole to pole by default. As in three.js, a part that reaches a pole ends in a point there. A part that stops short of a pole has a full ring of triangles at its edge. An angle that is not finite is refused.
 
+The arithmetic is three.js's, in doubles, and each number is rounded to `Float32` once when it is stored. The same `Float32` angles give three.js's numbers. The default `theta_length` is a `Float32` half turn, a little more than `Math.PI`. three.js's `thetaEnd` clamps it, so the part still ends at the south pole.
+
 ## Plane
 
 ```mojo
