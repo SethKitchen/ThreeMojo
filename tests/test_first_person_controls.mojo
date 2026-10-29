@@ -336,17 +336,36 @@ def test_an_orthographic_camera_walks() raises:
     _near(camera.target, 0, 0, -1)
 
 
-def test_disabled_controls_do_nothing() raises:
+def test_disabled_controls_leave_the_camera_and_follow_the_input() raises:
+    # three.js's listeners do not read `enabled`. Only `update` does.
     var camera = _camera()
     var controls = FirstPersonControls(camera)
     controls.enabled = False
     _press(controls, Key(119))
-    controls.enabled = True
-    controls.handle(InputEvent(WHEEL, wheel=1), SIZE, SIZE)
-    _press(controls, Key(119))
-    controls.enabled = False
     controls.update(camera, _seconds(1))
     _near(camera.position, 0, 0, 5)
+    # The key went down while the controls were off, and it is held.
+    controls.enabled = True
+    controls.handle(InputEvent(WHEEL, wheel=1), SIZE, SIZE)
+    controls.update(camera, _seconds(0.25))
+    _near(camera.position, 0, 0, 4.75)
+
+
+def test_a_release_while_disabled_stops_the_walk() raises:
+    var camera = _camera()
+    var controls = FirstPersonControls(camera)
+    controls.handle(InputEvent(POINTER_MOVE, x=50, y=50), SIZE, SIZE)
+    controls.handle(
+        InputEvent(POINTER_DOWN, button=PRIMARY, x=50, y=50), SIZE, SIZE
+    )
+    controls.enabled = False
+    controls.handle(
+        InputEvent(POINTER_UP, button=PRIMARY, x=50, y=50), SIZE, SIZE
+    )
+    controls.enabled = True
+    controls.update(camera, _seconds(1))
+    _near(camera.position, 0, 0, 5)
+    assert_false(controls.mouse_drag_on)
 
 
 def test_bad_input_is_refused() raises:

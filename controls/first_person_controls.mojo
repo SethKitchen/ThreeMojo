@@ -89,7 +89,9 @@ comptime HALF_TURN = Float32(pi)
 struct FirstPersonControls(Copyable, Movable):
     """Turns keys and the pointer into a camera that walks and looks."""
 
-    # False to ignore all input and leave the camera alone.
+    # False to leave the camera alone. `handle` still follows the keys, the
+    # buttons and the pointer, as three.js's listeners do: they do not read
+    # `enabled`, and only `update` does.
     var enabled: Bool
     # How fast the camera moves.
     var movement_speed: Velocity
@@ -253,6 +255,9 @@ struct FirstPersonControls(Copyable, Movable):
     ) raises:
         """Change what is held, or where the pointer is, by one event.
 
+        The event counts also while `enabled` is False, as in three.js. So
+        a release while the controls are off stops the walk it ends.
+
         Args:
             event: The event, with its position in pixels.
             viewport_width: The view's width, in pixels.
@@ -264,8 +269,6 @@ struct FirstPersonControls(Copyable, Movable):
         """
         require_input(event)
         require_viewport_size(viewport_width, viewport_height)
-        if not self.enabled:
-            return
         if event.kind == KEY_DOWN:
             self._held.press(event.key)
             self._set_key(event.key, True)

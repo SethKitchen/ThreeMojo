@@ -298,6 +298,7 @@ three.js sets a speed multiplier on Shift and never reads it. The port leaves it
 
 | Member | Default | Meaning |
 |---|---|---|
+| `enabled` | `True` | False leaves the camera alone. `handle` still follows the keys, the buttons and the pointer, as three.js's listeners do. |
 | `movement_speed` | 1 m/s | A `Velocity`. |
 | `look_speed` | 0.005 deg/s | An `AngularVelocity` for each pixel the pointer is from the middle. |
 | `look_vertical` | `True` | False turns only left and right. |
