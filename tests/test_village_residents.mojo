@@ -57,10 +57,11 @@ from extensions.village.residents import (
     visit,
     wander_route,
 )
+from controls.third_person_controls import yaw_of
 from core.geometry_store import GeometryId
 from math.vector3 import Vector3
 from render.framebuffer import Color
-from std.math import pi
+from std.math import cos, pi
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -454,6 +455,34 @@ def test_residents_wander_and_stand_in_the_players_way() raises:
     assert_almost_equal(
         obstacles[0].x, residents.people[0].position.x, atol=1e-6
     )
+    # A held villager slows to a stop, stands, and turns to face the
+    # point.
+    var point = residents.people[0].position + Vector3(0, 0, 5)
+    residents.hold(0, 2, point)
+    for _ in range(8):
+        residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    var here = residents.people[0].position
+    for _ in range(4):
+        residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    var stood = residents.people[0].position - here
+    assert_true(stood.length() < 0.01)
+    var toward = point - residents.people[0].position
+    var miss = residents.people[0].heading.to(RADIAN) - yaw_of(
+        Vector3(toward.x, 0, toward.z)
+    ).to(RADIAN)
+    assert_almost_equal(cos(miss), 1, atol=1e-4)
+    # The hold counts down, and once it is over their route steers them
+    # again.
+    assert_almost_equal(residents.holds[0], 0.8, atol=1e-4)
+    for _ in range(9):
+        residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    assert_true(residents.holds[0] <= 0)
+    with assert_raises(contains="one of the residents"):
+        residents.hold(1, 2, point)
+    with assert_raises(contains="one of the residents"):
+        residents.hold(-1, 2, point)
+    with assert_raises(contains="negative"):
+        residents.hold(0, -1, point)
 
 
 def test_a_shy_animal_runs_from_the_player_and_a_tame_one_does_not() raises:

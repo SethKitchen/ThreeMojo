@@ -74,7 +74,12 @@ from extensions.village.character import (
 from extensions.village.gathering import GatherParameters, Gathering
 from extensions.village.hud import draw_hud, note_text, use_prompt
 from extensions.village.day import DayCycle, dim_water
-from extensions.village.talk import Speaker, Talk, default_speakers
+from extensions.village.talk import (
+    SPEECH_SECONDS,
+    Speaker,
+    Talk,
+    default_speakers,
+)
 from extensions.village.weather import CLEAR, Weather, WeatherKind
 from extensions.village.residents import (
     Body,
@@ -583,7 +588,7 @@ struct VillageGame(Movable):
         for index in range(len(self.residents.people)):
             places.append(self.residents.people[index].position)
         var free = input.use and self.gathering.focus < 0 and not gathered
-        _ = self.talk.update(
+        var spoke = self.talk.update(
             scene,
             feet,
             places,
@@ -592,6 +597,10 @@ struct VillageGame(Movable):
             self.gathering.satchel,
             delta,
         )
+        if spoke:
+            # The villager stops, and turns to the player while they talk.
+            var who = self.talk.speakers[self.talk.focus].villager
+            self.residents.hold(who, SPEECH_SECONDS, feet)
         self.view.follow_target(
             Vector3(feet.x, feet.y + FOCUS_HEIGHT, feet.z), delta
         )

@@ -12,6 +12,8 @@ The use button gathers first. It talks only when no spot is in reach.
 
 What the villager says shows in a panel over the prompt for `SPEECH_SECONDS`, 5 seconds, after the villager's name.
 
+The villager stops for the same time and turns to face the player. `Residents.hold` stops a person and turns them toward a point at 4 radians a second. Their route waits for them.
+
 ## Errands
 
 A `Speaker` is a villager, a name and lines. A speaker can also have an `Errand`. An errand holds the kind of thing wanted, how many, and the coins paid. It also holds what the speaker says to ask and to thank.
@@ -44,5 +46,4 @@ A speaker whose villager is not in the village is left out. Two speakers of one 
 
 ## Limits
 
-- A villager does not stop or turn to the player while they talk.
 - An errand is given once. The speaker does not give another after it is done.

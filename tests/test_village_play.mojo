@@ -439,6 +439,15 @@ def test_a_villager_moves_and_a_frame_one_row_short_is_stretched() raises:
     assert_equal(game.window.height, 20)
     assert_true(game.upscale_ms > 0)
     assert_equal(game.smooth_ms, 0)
+    # A press beside her speaks, and she stops and turns to the player.
+    game.player.position = game.residents.people[0].position + Vector3(
+        0.8, 0, 0
+    )
+    var use = no_input()
+    use.use = True
+    _ = game.tick(scene, assets, use, Duration(0.1, SECOND))
+    assert_true(game.talk.speech != "")
+    assert_true(game.residents.holds[0] > 0)
 
 
 def main() raises:
