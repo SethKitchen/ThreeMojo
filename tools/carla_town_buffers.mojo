@@ -360,25 +360,12 @@ def _before(
     if lods[left] != lods[right]:
         return lods[left] < lods[right]
     if kinds[left] != kinds[right]:
-        return _text_before(kinds[left], kinds[right])
+        return kinds[left] < kinds[right]
     if cell_x[left] != cell_x[right]:
         return cell_x[left] < cell_x[right]
     if cell_y[left] != cell_y[right]:
         return cell_y[left] < cell_y[right]
     return materials[left] < materials[right]
-
-
-def _text_before(left: String, right: String) -> Bool:
-    """Return whether `left` sorts before `right`, byte by byte."""
-    var a = left.as_bytes()
-    var b = right.as_bytes()
-    var count = len(a)
-    if len(b) < count:
-        count = len(b)
-    for index in range(count):
-        if a[index] != b[index]:
-            return a[index] < b[index]
-    return len(a) < len(b)
 
 
 def _lamps(doc: PyJson, node: Int) raises -> String:

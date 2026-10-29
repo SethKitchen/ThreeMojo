@@ -69,11 +69,7 @@ struct _Head(DistanceField, ImplicitlyCopyable):
 
 
 def _median(var times: List[Int]) -> Float64:
-    for i in range(1, len(times)):
-        var j = i
-        while j > 0 and times[j - 1] > times[j]:
-            times.swap_elements(j - 1, j)
-            j -= 1
+    sort(times)
     return Float64(times[len(times) // 2]) / 1e6
 
 

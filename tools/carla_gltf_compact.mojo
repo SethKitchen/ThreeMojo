@@ -207,21 +207,10 @@ def _compact(mut doc: PyJson, data: Span[UInt8, _]) raises -> List[UInt8]:
 def _unique_sorted(values: List[Int]) -> List[Int]:
     """Return the values once, in ascending order."""
     var unique = List[Int]()
-    for index in range(len(values)):
-        var value = values[index]
-        var seen = False
-        for other in range(len(unique)):
-            if unique[other] == value:
-                seen = True
-        if not seen:
+    for value in values:
+        if value not in unique:
             unique.append(value)
-    for index in range(1, len(unique)):
-        var value = unique[index]
-        var place = index
-        while place > 0 and unique[place - 1] > value:
-            unique[place] = unique[place - 1]
-            place -= 1
-        unique[place] = value
+    sort(unique)
     return unique^
 
 
