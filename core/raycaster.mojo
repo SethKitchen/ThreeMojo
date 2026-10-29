@@ -44,6 +44,12 @@ is past the end of the list is not picked, as it is not drawn. A hit's
 `Raycaster.layers`, and a mesh whose node shares none is not tested.
 Layer zero alone by default, as everywhere.
 
+**Hidden nodes.** A node that is not shown is not tested either: one
+hidden itself, or one under a hidden parent. three.js's `Raycaster` tests
+only the layers, so it picks hidden objects too. To pick something that
+is not drawn, keep its node shown and turn its material's `visible` off.
+Neither raycaster reads that flag.
+
 The two distances are `Length`s: this is the edge of the API, where the
 units live, and a bare number here does not compile. The ray inside holds
 meters, as the math does.

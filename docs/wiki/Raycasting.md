@@ -33,6 +33,8 @@ Line picking measures the gap between the nearest points on the ray and the segm
 
 `caster.layers` is a `Layers`, on layer zero by default. An object whose node shares no layer with it is not tested. See [Scene graph](Scene-graph#layers).
 
+A node that is not shown is not tested either. That is a node that is hidden, or a node under a hidden parent. three.js's `Raycaster` tests only the layers, so it picks hidden objects too. To pick an object that is not drawn, keep its node shown. Then set its material's `visible` to False. Neither raycaster reads that flag.
+
 ## Aim it
 
 | Method | Meaning |
