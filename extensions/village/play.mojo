@@ -703,4 +703,4 @@ struct VillageGame(Movable):
         if focus < 0:
             return self.talk.prompt()
         ref g = self.gathering.spots[focus]
-        return use_prompt(g.spot.kind, g.strikes)
+        return use_prompt(g.spot.kind, g.strikes, g.phase)

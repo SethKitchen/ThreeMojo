@@ -8,7 +8,11 @@ and the note."""
 
 from extensions.village.gathering import (
     BERRIES,
+    BITING,
     CHEST,
+    FISH,
+    IDLE,
+    WAITING,
     GatherKind,
     HERBS,
     MUSHROOMS,
@@ -107,18 +111,22 @@ def test_each_kind_has_a_color_and_a_prompt() raises:
         ORE,
         CHEST,
         TRINKET,
+        FISH,
     ]
     var reds = List[Int]()
     var prompts = List[String]()
     for kind in kinds:
         reds.append(kind_color(kind).g * 1000 + kind_color(kind).r)
         prompts.append(use_prompt(kind, 1))
-    for a in range(6):
-        for b in range(a + 1, 6):
+    for a in range(7):
+        for b in range(a + 1, 7):
             assert_true(reds[a] != reds[b])
             assert_true(prompts[a] != prompts[b])
     assert_equal(use_prompt(ORE, 2), "E  MINE ORE 2/3")
     assert_equal(use_prompt(HERBS, 0), "E  GATHER HERBS")
+    assert_equal(use_prompt(FISH, 0, IDLE), "E  CAST LINE")
+    assert_equal(use_prompt(FISH, 0, WAITING), "E  REEL IN")
+    assert_equal(use_prompt(FISH, 0, BITING), "E  HOOK IT!")
     assert_equal(note_text(BERRIES, 3), "+3 berries")
 
 

@@ -30,13 +30,16 @@ reads over the sky and the grass alike.
 
 from extensions.village.gathering import (
     BERRIES,
+    BITING,
     CHEST,
+    FISH,
     GatherKind,
     HERBS,
     KINDS,
     MUSHROOMS,
     ORE,
     STRIKES,
+    WAITING,
     Satchel,
     TRINKET,
     kind_name,
@@ -210,7 +213,7 @@ def kind_color(kind: GatherKind) -> Rgb:
 
     Returns:
         Green herbs, red mushrooms, purple berries, copper ore, gold
-        coins and blue trinkets.
+        coins, blue trinkets and silver fish.
     """
     if kind == HERBS:
         return Rgb(90, 160, 60)
@@ -222,19 +225,23 @@ def kind_color(kind: GatherKind) -> Rgb:
         return Rgb(200, 110, 50)
     if kind == CHEST:
         return Rgb(250, 200, 70)
+    if kind == FISH:
+        return Rgb(150, 190, 210)
     return Rgb(80, 140, 240)
 
 
-def use_prompt(kind: GatherKind, strikes: Int) -> String:
+def use_prompt(kind: GatherKind, strikes: Int, phase: Int = 0) -> String:
     """Return what the prompt says the use button does at a spot.
 
     Args:
         kind: The spot's kind.
         strikes: How many times a boulder has been struck.
+        phase: A fishing spot's phase: `IDLE`, `WAITING` or `BITING`.
 
     Returns:
         The button and the deed, such as "E  GATHER HERBS", or for a
-        boulder "E  MINE ORE 1/3".
+        boulder "E  MINE ORE 1/3". At a fishing spot, it casts the line,
+        reels it in, or hooks the fish that bites.
     """
     if kind == HERBS:
         return "E  GATHER HERBS"
@@ -246,6 +253,12 @@ def use_prompt(kind: GatherKind, strikes: Int) -> String:
         return String("E  MINE ORE ", strikes, "/", STRIKES)
     if kind == CHEST:
         return "E  OPEN CHEST"
+    if kind == FISH and phase == BITING:
+        return "E  HOOK IT!"
+    if kind == FISH and phase == WAITING:
+        return "E  REEL IN"
+    if kind == FISH:
+        return "E  CAST LINE"
     return "E  TAKE TRINKET"
 
 

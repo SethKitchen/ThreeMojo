@@ -1,6 +1,6 @@
 # Village gathering
 
-A player of the [Village walk](Village-walk) can gather things about the village: herbs, mushrooms, berries, ore, coins from a chest and lost trinkets. The use button gathers the thing in reach. A heads-up display shows what the player holds.
+A player of the [Village walk](Village-walk) can gather things about the village: herbs, mushrooms, berries, ore, coins from a chest, lost trinkets and fish. The use button gathers the thing in reach. A heads-up display shows what the player holds.
 
 The modules are `extensions/village/gathering.mojo` and `extensions/village/hud.mojo`. `VillageGame` builds a `Gathering` from `PlayParameters.gathering`, and runs it in each `tick`.
 
@@ -22,8 +22,19 @@ A held button gathers once. Let it go and press it again to gather again.
 | `ORE` | A boulder with copper nuggets. It takes `STRIKES`, three, uses. The boulder stays. | 1 ore | After the respawn time |
 | `CHEST` | An iron-bound chest. Its lid swings open. | `CHEST_COINS`, twelve, coins | Never |
 | `TRINKET` | A gold ring hung with a gem, which bobs and turns 90 centimeters up | 1 trinket | Never |
+| `FISH` | An oak stake and a creel on the pond's shore | 1 fish, when hooked | It is never used up |
 
 A boulder, a chest and a berry bush stop a character. `Gathering.obstacles` gives each as round: 0.6, 0.45 and 0.4 meters across. A character walks through herbs, mushrooms and trinkets.
+
+## Fishing
+
+A fishing spot's float lies on the water `CAST`, 3.2 meters, out along the spot's turn. Turn the spot to face the pond.
+
+1. A press casts the float. The prompt says `E  REEL IN`.
+2. After two to six seconds a fish bites. The float dips and jerks for `BITE`, 1.2 seconds. The prompt says `E  HOOK IT!`.
+3. A press while the fish bites hooks it, and the satchel holds one more fish.
+
+A press before the bite reels the line in, and nothing is caught. A bite that is missed lets the fish get away. A player who walks out of reach reels the line in.
 
 ## Build the spots
 
@@ -44,7 +55,7 @@ var gathering = Gathering(scene, assets, looks, parameters, ground, lots)
 
 `Gathering` leaves out each spot on a lot or its apron, and each spot in the water, as the meadow does with a tree. The spots wear the houses' materials, `HouseLooks`. A boulder is the meadow's `boulder`.
 
-`GatherParameters()` holds the default village's 16 spots. Its reach is 1.8 meters, and its respawn time is 60 seconds.
+`GatherParameters()` holds the default village's 17 spots, with a fishing spot on the pond's west shore. Its reach is 1.8 meters, and its respawn time is 60 seconds.
 
 ## One frame
 

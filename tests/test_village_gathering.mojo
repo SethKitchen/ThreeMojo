@@ -11,8 +11,14 @@ from core.scene import Scene
 from extensions.vegetation.ground import Ground, Lot, Pond
 from extensions.village.gathering import (
     BERRIES,
+    BITE,
+    BITING,
+    CAST,
     CHEST,
     CHEST_COINS,
+    FISH,
+    IDLE,
+    WAITING,
     GatherKind,
     GatherParameters,
     Gathering,
@@ -51,7 +57,10 @@ def test_the_kinds_are_named_and_checked() raises:
     assert_equal(kind_name(HERBS), "herbs")
     assert_equal(kind_name(CHEST), "coins")
     assert_equal(kind_name(TRINKET), "trinkets")
-    with assert_raises(contains="one of the six"):
+    assert_equal(kind_name(FISH), "fish")
+    assert_true(respawns(FISH))
+    assert_equal(solid_radius(FISH), 0)
+    with assert_raises(contains="one of the seven"):
         _ = kind_name(GatherKind(9))
     # A chest and a trinket are found once; the rest come back.
     assert_false(respawns(CHEST))
@@ -67,8 +76,8 @@ def test_the_kinds_are_named_and_checked() raises:
 
 def test_a_spot_and_a_satchel_are_checked() raises:
     Spot(HERBS, 3, -4, Angle(0.0, RADIAN)).check()
-    with assert_raises(contains="one of the six"):
-        Spot(GatherKind(6), 0, 0, Angle(0.0, RADIAN)).check()
+    with assert_raises(contains="one of the seven"):
+        Spot(GatherKind(7), 0, 0, Angle(0.0, RADIAN)).check()
     with assert_raises(contains="10 kilometers"):
         Spot(HERBS, 2.0e4, 0, Angle(0.0, RADIAN)).check()
     with assert_raises(contains="10 kilometers"):
@@ -79,7 +88,7 @@ def test_a_spot_and_a_satchel_are_checked() raises:
     satchel.counts[HERBS.value] = 1
     assert_equal(satchel.count(ORE), 2)
     assert_equal(satchel.total(), 3)
-    with assert_raises(contains="one of the six"):
+    with assert_raises(contains="one of the seven"):
         _ = satchel.count(GatherKind(7))
     # The default village has a spot of every kind.
     var spots = default_spots()
@@ -101,8 +110,8 @@ def _spots() -> List[Spot]:
     var out = List[Spot]()
     for k in range(KINDS):
         out.append(Spot(GatherKind(k), Float32(4 * k), 0, Angle(0.5, RADIAN)))
-    out.append(Spot(TRINKET, 24, 0, Angle(0.0, RADIAN)))
     out.append(Spot(TRINKET, 28, 0, Angle(0.0, RADIAN)))
+    out.append(Spot(TRINKET, 32, 0, Angle(0.0, RADIAN)))
     return out^
 
 
@@ -181,7 +190,7 @@ def test_a_gathering_refuses_a_bad_spot_reach_or_respawn() raises:
     var looks = house_looks(assets, 4, 1)
     var bad = GatherParameters()
     bad.spots = [Spot(GatherKind(12), 0, 0, Angle(0.0, RADIAN))]
-    with assert_raises(contains="one of the six"):
+    with assert_raises(contains="one of the seven"):
         _ = Gathering(scene, assets, looks, bad, Ground(), List[Lot]())
     var far = GatherParameters()
     far.reach = Length(-1.0, METER)
@@ -315,6 +324,57 @@ def test_a_trinket_bobs_and_turns() raises:
         highest = max(highest, y)
     assert_true(highest - lowest > 0.1)
     assert_true(lowest > TRINKET_LIFT - 0.1)
+
+
+def test_a_fish_is_cast_for_waited_on_and_hooked() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var gathering = _gathering(scene, assets, _spots())
+    assert_true(gathering.spots[6].spot.kind == FISH)
+    var hinge = gathering.spots[6].hinge
+    var foot = gathering.spots[6].foot
+    var shore = _at(gathering, 6, 0.5)
+    assert_false(scene.node(hinge).visible)
+    # The float lies on the water, out along the spot's turn.
+    assert_almost_equal(scene.node(hinge).position.x, CAST, atol=1e-6)
+    var step = Duration(0.1, SECOND)
+    # Cast: the float shows, and a fish bites in two to six seconds.
+    assert_false(_press(gathering, scene, shore))
+    assert_equal(gathering.spots[6].phase, WAITING)
+    assert_true(scene.node(hinge).visible)
+    assert_true(gathering.spots[6].timer >= 2)
+    # Reel in before it bites: nothing.
+    assert_false(_press(gathering, scene, shore))
+    assert_equal(gathering.spots[6].phase, IDLE)
+    assert_false(scene.node(hinge).visible)
+    # Cast again, and wait for the bite.
+    assert_false(_press(gathering, scene, shore))
+    var waited = 0
+    while gathering.spots[6].phase == WAITING and waited < 100:
+        _ = gathering.update(scene, shore, False, step)
+        waited += 1
+    assert_equal(gathering.spots[6].phase, BITING)
+    assert_true(scene.node(hinge).position.y < gathering.water - foot)
+    # Hook it.
+    assert_true(_press(gathering, scene, shore))
+    assert_equal(gathering.satchel.count(FISH), 1)
+    assert_equal(gathering.spots[6].phase, IDLE)
+    # The spot stays ready, so a player can fish again.
+    assert_true(gathering.spots[6].ready)
+    # A bite missed lets the fish get away.
+    assert_false(_press(gathering, scene, shore))
+    for _ in range(100):
+        if gathering.spots[6].phase == BITING:
+            break
+        _ = gathering.update(scene, shore, False, step)
+    for _ in range(Int(BITE / 0.1) + 2):
+        _ = gathering.update(scene, shore, False, step)
+    assert_equal(gathering.spots[6].phase, IDLE)
+    assert_equal(gathering.satchel.count(FISH), 1)
+    # Walking away reels the line in.
+    assert_false(_press(gathering, scene, shore))
+    _ = gathering.update(scene, Vector3(100, 0, 100), False, step)
+    assert_equal(gathering.spots[6].phase, IDLE)
 
 
 def main() raises:

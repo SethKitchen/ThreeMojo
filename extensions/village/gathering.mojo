@@ -17,6 +17,13 @@ spot, and lets a player use the nearest one within reach:
 | `ORE` | A boulder with copper veins. It takes `STRIKES` uses. The boulder stays. | 1 ore | After the respawn time |
 | `CHEST` | An iron-bound chest. Its lid swings open. | `CHEST_COINS` coins | Never |
 | `TRINKET` | A gold trinket with a gem, which bobs and turns in the air | 1 trinket | Never |
+| `FISH` | An oak stake on a pond's shore, with a creel. Its float lies on the water `CAST` out. | 1 fish, when hooked | It is never used up |
+
+At a fishing spot, a press casts the float onto the water. After two to
+six seconds a fish bites: the float dips and jerks for `BITE` seconds.
+A press while it bites hooks the fish. A press before it reels the line
+in, and a bite missed lets the fish get away. Walking out of reach reels
+the line in.
 
 A spot is ready, or it waits. A ready spot within `GatherParameters.reach`
 of the player's feet, and less than `HEADROOM` above or below them, can
@@ -68,6 +75,16 @@ comptime LID_OPEN = Float32(1.9)
 """How far a chest's lid swings open, in radians."""
 comptime BOULDER = Float32(0.55)
 """The radius of a boulder of ore, in meters."""
+comptime CAST = Float32(3.2)
+"""How far out along a fishing spot's turn its float lies, in meters."""
+comptime BITE = Float32(1.2)
+"""How long a fish bites before it gets away, in seconds."""
+comptime IDLE = 0
+"""A fishing spot's line is in."""
+comptime WAITING = 1
+"""A fishing spot's float is out, and no fish bites yet."""
+comptime BITING = 2
+"""A fish bites at a fishing spot's float."""
 comptime TRINKET_LIFT = Float32(0.9)
 """How high a trinket hangs over the ground, in meters."""
 comptime GOLD = Vector3(1.0, 0.72, 0.2)
@@ -83,12 +100,12 @@ struct GatherKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the six kinds there are.
+        """Return True if this is one of the seven kinds there are.
 
         Returns:
             Whether the value names a kind.
         """
-        return ordinal_valid(self.value, 5)
+        return ordinal_valid(self.value, 6)
 
 
 comptime HERBS = GatherKind(0)
@@ -97,7 +114,8 @@ comptime BERRIES = GatherKind(2)
 comptime ORE = GatherKind(3)
 comptime CHEST = GatherKind(4)
 comptime TRINKET = GatherKind(5)
-comptime KINDS = 6
+comptime FISH = GatherKind(6)
+comptime KINDS = 7
 """How many kinds of spot there are."""
 
 
@@ -108,13 +126,14 @@ def kind_name(kind: GatherKind) raises -> String:
         kind: The kind.
 
     Returns:
-        "herbs", "mushrooms", "berries", "ore", "coins" or "trinkets".
+        "herbs", "mushrooms", "berries", "ore", "coins", "trinkets" or
+        "fish".
 
     Raises:
         Error: If the kind is not one.
     """
     if not kind.is_valid():
-        raise Error("A gathering kind must be one of the six")
+        raise Error("A gathering kind must be one of the seven")
     var names: List[String] = [
         "herbs",
         "mushrooms",
@@ -122,6 +141,7 @@ def kind_name(kind: GatherKind) raises -> String:
         "ore",
         "coins",
         "trinkets",
+        "fish",
     ]
     return names[kind.value]
 
@@ -177,7 +197,7 @@ struct Spot(ImplicitlyCopyable):
                 10 kilometers away.
         """
         if not self.kind.is_valid():
-            raise Error("A gathering kind must be one of the six")
+            raise Error("A gathering kind must be one of the seven")
         require_between(
             self.x, -1.0e4, 1.0e4, "A spot must stand within 10 kilometers"
         )
@@ -193,7 +213,7 @@ def default_spots() -> List[Spot]:
         Four tufts of herbs, three clusters of mushrooms, three berry
         bushes, two boulders, a chest behind the barn and three lost
         trinkets, scattered over the meadow clear of the houses, the
-        trail and the pond.
+        trail and the pond, and a fishing spot on the pond's west shore.
     """
     return [
         Spot(HERBS, -5, 18, Angle(0.3, RADIAN)),
@@ -212,6 +232,7 @@ def default_spots() -> List[Spot]:
         Spot(TRINKET, 2, 14, Angle(0.0, RADIAN)),
         Spot(TRINKET, -12, -28, Angle(0.0, RADIAN)),
         Spot(TRINKET, 18, -47, Angle(0.0, RADIAN)),
+        Spot(FISH, 1.5, 19.5, Angle(0.0, RADIAN)),
     ]
 
 
@@ -257,7 +278,7 @@ struct Satchel(Copyable, Movable):
             Error: If the kind is not one.
         """
         if not kind.is_valid():
-            raise Error("A gathering kind must be one of the six")
+            raise Error("A gathering kind must be one of the seven")
         return self.counts[kind.value]
 
     def total(self) -> Int:
@@ -280,7 +301,8 @@ struct Gatherable(Copyable, Movable):
     var spot: Spot
     # The node of the part that hides when gathered: the herbs, the
     # mushrooms, the berries, the veins, the chest's coins or the
-    # trinket. A chest's lid hangs from `hinge`.
+    # trinket. A chest's lid, or a fishing spot's float, hangs from
+    # `hinge`.
     var node: NodeId
     var hinge: NodeId
     # The shimmer of gold motes that turns over the spot while it is ready.
@@ -297,6 +319,12 @@ struct Gatherable(Copyable, Movable):
     # in radians.
     var strikes: Int
     var lid: Float32
+    # A fishing spot's phase, `IDLE`, `WAITING` or `BITING`, how long until
+    # it changes, in seconds, and how many casts it has made. Its float
+    # hangs from `hinge`.
+    var phase: Int
+    var timer: Float32
+    var casts: Int
 
 
 struct _Parts(Movable):
@@ -581,6 +609,71 @@ def _trinket(mut parts: _Parts, seed: Int) -> Float32:
     return 0.3
 
 
+def _stake(mut parts: _Parts) -> Float32:
+    """Add a fishing spot: an oak stake with a coil of rope, and a creel of
+    woven willow beside it; return the stake's height."""
+    prism(
+        parts.wood,
+        Vector3(0, -0.1, 0),
+        0.06,
+        0.05,
+        1.0,
+        6,
+        Vector3(0.8, 0.7, 0.6),
+    )
+    prism(
+        parts.wood,
+        Vector3(0, 0.55, 0),
+        0.1,
+        0.1,
+        0.08,
+        8,
+        Vector3(0.95, 0.85, 0.6),
+    )
+    prism(
+        parts.wood,
+        Vector3(0.1, 0, 0.35),
+        0.16,
+        0.19,
+        0.28,
+        8,
+        Vector3(1.1, 0.9, 0.6),
+    )
+    return 0.9
+
+
+def _float(mut parts: _Parts):
+    """Add a fishing float about the origin: red over the water and white
+    under it, with a quill on top."""
+    prism(
+        parts.glass,
+        Vector3(0, -0.03, 0),
+        0.03,
+        0.045,
+        0.03,
+        8,
+        Vector3(0.9, 0.9, 0.85),
+    )
+    prism(
+        parts.glass,
+        Vector3(0, 0, 0),
+        0.045,
+        0.02,
+        0.05,
+        8,
+        Vector3(0.75, 0.06, 0.04),
+    )
+    prism(
+        parts.wood,
+        Vector3(0, 0.05, 0),
+        0.006,
+        0.004,
+        0.08,
+        4,
+        Vector3(0.3, 0.3, 0.3),
+    )
+
+
 def _glint() -> Sheet:
     """Return the shimmer over a ready spot: four gold motes on a ring 35
     centimeters across, at three heights."""
@@ -676,6 +769,32 @@ def _node(
     return scene.add(node^)
 
 
+def _fish(
+    mut scene: Scene,
+    mut g: Gatherable,
+    near: Bool,
+    seconds: Float32,
+    clock: Float32,
+    water: Float32,
+) raises:
+    """Move a fishing spot's line on by one frame: a fish bites when the
+    wait is over, and gets away when the bite is; a player out of reach
+    reels the line in. The float bobs on the water at `water`, and dips
+    and jerks while a fish bites."""
+    g.timer -= seconds
+    if not near or (g.phase == BITING and g.timer <= 0):
+        g.phase = IDLE
+    elif g.phase == WAITING and g.timer <= 0:
+        g.phase = BITING
+        g.timer = BITE
+    ref bobber = scene.node(g.hinge)
+    bobber.visible = g.phase != IDLE
+    var bob = 0.012 * sin(clock * 3)
+    if g.phase == BITING:
+        bob = -0.05 + 0.03 * sin(clock * 31)
+    bobber.position.y = water - g.foot + bob
+
+
 struct Gathering(Movable):
     """Every spot of the village, what the player has gathered, and the
     marker over the spot the player can use."""
@@ -696,6 +815,8 @@ struct Gathering(Movable):
     var root: NodeId
     var meshes: Int
     var triangles: Int
+    # The height of the pond's water, where a fishing float lies.
+    var water: Float32
 
     def __init__(
         out self,
@@ -739,6 +860,8 @@ struct Gathering(Movable):
         self.triangles = 0
         self.root = scene.add(Object3D())
         var before = len(scene.meshes)
+        var water = ground.water_level()
+        self.water = water
         # A boulder's stone shows its vertex colors: gray, mossy on top.
         var rough = standard_material(Color(255, 255, 255), roughness=0.9)
         rough.vertex_colors = True
@@ -797,6 +920,20 @@ struct Gathering(Movable):
                 self.triangles += _add_parts(
                     scene, assets, lid, looks, hinge, True
                 )
+            elif spot.kind == FISH:
+                var stake = _Parts()
+                top = _stake(stake)
+                self.triangles += _add_parts(
+                    scene, assets, stake, looks, at, True
+                )
+                # The float lies on the water, out along the spot's turn.
+                var bobber = _Parts()
+                _float(bobber)
+                hinge = _node(scene, at, CAST, water - foot, 0)
+                scene.node(hinge).visible = False
+                self.triangles += _add_parts(
+                    scene, assets, bobber, looks, hinge, False
+                )
             else:
                 top = _trinket(part, index)
                 lift = TRINKET_LIFT
@@ -810,7 +947,19 @@ struct Gathering(Movable):
             )
             self.spots.append(
                 Gatherable(
-                    spot, node, hinge, glint, foot, top + lift, True, 0, 0, 0
+                    spot,
+                    node,
+                    hinge,
+                    glint,
+                    foot,
+                    top + lift,
+                    True,
+                    0,
+                    0,
+                    0,
+                    IDLE,
+                    0,
+                    0,
                 )
             )
         var marker = Object3D()
@@ -905,7 +1054,17 @@ struct Gathering(Movable):
             ref g = self.spots[self.focus]
             var kind = g.spot.kind
             var gives = 1
-            if kind == MUSHROOMS:
+            if kind == FISH:
+                # Cast, reel in early, or hook the fish that bites.
+                gives = 1 if g.phase == BITING else 0
+                if g.phase == IDLE:
+                    g.casts += 1
+                    g.phase = WAITING
+                    g.timer = 2 + 4 * hash01(g.casts, 0, 79)
+                else:
+                    g.phase = IDLE
+                scene.node(g.hinge).visible = g.phase != IDLE
+            elif kind == MUSHROOMS:
                 gives = 2
             elif kind == BERRIES:
                 gives = 3
@@ -915,7 +1074,11 @@ struct Gathering(Movable):
                 g.strikes += 1
                 if g.strikes < STRIKES:
                     gives = 0
-            if gives > 0:
+            if gives > 0 and kind == FISH:
+                self.satchel.counts[kind.value] += gives
+                self.satchel.last = gives
+                gathered = kind
+            elif gives > 0:
                 self.satchel.counts[kind.value] += gives
                 self.satchel.last = gives
                 g.ready = False
@@ -927,6 +1090,17 @@ struct Gathering(Movable):
                 gathered = kind
                 self.focus = self.nearest(feet)
         var spin = self.clock * 1.5
+        for index in range(len(self.spots)):
+            ref g = self.spots[index]
+            if g.spot.kind == FISH and g.phase != IDLE:
+                _fish(
+                    scene,
+                    g,
+                    index == self.focus,
+                    seconds,
+                    self.clock,
+                    self.water,
+                )
         for ref g in self.spots:
             if g.ready:
                 ref glint = scene.node(g.glint)
