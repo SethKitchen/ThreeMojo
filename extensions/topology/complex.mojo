@@ -23,7 +23,6 @@ and DesignScript" (2013).
 
 from core.search import first_match
 from math.finite import require_finite_group
-from std.math import sqrt
 from extensions.topology.ids import (
     CellId,
     EdgeId,

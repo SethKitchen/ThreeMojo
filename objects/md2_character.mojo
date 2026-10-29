@@ -49,7 +49,6 @@ from units.si import (
     AngularVelocity,
     DEGREE,
     Duration,
-    METER,
     METER_PER_SECOND,
     METER_PER_SECOND_SQUARED,
     RADIAN,

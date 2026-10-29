@@ -22,7 +22,7 @@ from math.scaled_products import (
     _common_scale,
 )
 
-from std.math import isfinite, sqrt
+from std.math import fma, isfinite, sqrt
 
 
 def _ordinary_squared[dtype: DType](squared: SIMD[dtype, 1]) -> Bool:
@@ -42,6 +42,86 @@ def _ordinary_product[
         (_ordinary_squared(abs(a * b)) or a == 0 or b == 0)
         and isfinite(a)
         and isfinite(b)
+    )
+
+
+def rounded_product[
+    dtype: DType
+](a: SIMD[dtype, 1], b: SIMD[dtype, 1]) -> SIMD[dtype, 1]:
+    """Return `a * b` rounded on its own.
+
+    Mojo contracts `a * b - c * d` into a fused multiply-add, which rounds
+    only one of the two products. JavaScript rounds both, so three.js gets
+    an exact zero for two parallel vectors. `fma(a, b, 0)` rounds one
+    product, and nothing can fuse it into the next operation. Adding a
+    `-0` instead would let the compiler drop the addition and fuse the
+    product again. The sum is `+0` for a zero product, so a zero product
+    is taken from `a * b`, which keeps the sign JavaScript gives it:
+    `-1 * 0` is `-0`.
+
+    Args:
+        a: The first factor.
+        b: The second factor.
+
+    Returns:
+        The rounded product, with the sign of a zero kept.
+    """
+    var product = fma(a, b, SIMD[dtype, 1](0))
+    return product if product != 0 else a * b
+
+
+def rounded_difference[
+    dtype: DType
+](
+    a: SIMD[dtype, 1], b: SIMD[dtype, 1], c: SIMD[dtype, 1], d: SIMD[dtype, 1]
+) -> SIMD[dtype, 1]:
+    """Return `a * b - c * d` with each product rounded, as JavaScript
+    rounds it.
+
+    Args:
+        a: The first product's first factor.
+        b: The first product's second factor.
+        c: The second product's first factor.
+        d: The second product's second factor.
+
+    Returns:
+        The difference, exactly zero when the rounded products are equal.
+    """
+    return rounded_product(a, b) - rounded_product(c, d)
+
+
+def rounded_dot3[
+    dtype: DType
+](
+    ax: SIMD[dtype, 1],
+    ay: SIMD[dtype, 1],
+    az: SIMD[dtype, 1],
+    bx: SIMD[dtype, 1],
+    by: SIMD[dtype, 1],
+    bz: SIMD[dtype, 1],
+) -> SIMD[dtype, 1]:
+    """Return the dot product with each product rounded, as JavaScript
+    rounds it, summed left to right.
+
+    A caller that tests the result for an exact zero needs this: the
+    contracted `dot3` leaves a rounding residual for two perpendicular
+    vectors.
+
+    Args:
+        ax: The first vector's x.
+        ay: The first vector's y.
+        az: The first vector's z.
+        bx: The second vector's x.
+        by: The second vector's y.
+        bz: The second vector's z.
+
+    Returns:
+        The dot product.
+    """
+    return (
+        rounded_product(ax, bx)
+        + rounded_product(ay, by)
+        + rounded_product(az, bz)
     )
 
 

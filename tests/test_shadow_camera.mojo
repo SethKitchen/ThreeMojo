@@ -272,6 +272,17 @@ def test_a_spot_shadow_focus_narrows_its_camera() raises:
         scene.lights[0].shadow.focus = bad
         with assert_raises(contains="focus"):
             _ = renderer.shadow_maps(scene, assets)
+    # A cone of a quarter turn asks for a half-turn camera, and a focus of
+    # two for more. three.js builds the degenerate camera such a field
+    # gives. The widest camera there is stands in for it, so the map is
+    # drawn, and its y scale is all but zero.
+    scene.lights[0].shadow.focus = 1
+    scene.lights[0].angle = Angle(90.0, DEGREE)
+    var flat = renderer.shadow_maps(scene, assets)
+    assert_true(_y_scale(flat[0].frame) < 1e-6)
+    scene.lights[0].shadow.focus = 2
+    var flatter = renderer.shadow_maps(scene, assets)
+    assert_true(_y_scale(flatter[0].frame) < 1e-6)
 
 
 def test_a_frozen_shadow_keeps_the_map_it_was_given() raises:

@@ -52,7 +52,6 @@ from extensions.anatomy.evidence import DESIGN, FROM_TEXT, Cited, evidence_label
 from extensions.anatomy.inertia import InertiaTally
 from extensions.attire.cover import cover_values, dominant_joints, joint_cover
 from extensions.attire.fabric import Fabric, fabric
-from extensions.attire.garment import Garment
 from extensions.attire.kinds import (
     LEATHER,
     MAIL,

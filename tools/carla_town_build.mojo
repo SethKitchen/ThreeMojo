@@ -32,6 +32,7 @@ from tools._python_json import (
     PY_STR,
     PyJson,
 )
+from tools._text import ascii_lower
 from tools.carla_bake_identity import bake_key
 from tools.carla_file_index import index_text
 from tools.carla_geometry_digest import digest_text
@@ -483,7 +484,7 @@ def _remembered_town(
     var cache = ".cache/town-package/" + key
     if not exists(cache + "/result.txt") or islink(cache):
         return ""
-    var out_dir = out_root + "/carla.town." + _lower_ascii(town)
+    var out_dir = out_root + "/carla.town." + ascii_lower(town)
     var removed = run_program(["rm", "-rf", out_dir], 30.0)
     if removed.status != 0:
         raise Error(removed.output)
@@ -570,7 +571,7 @@ def build_town(
     )
     if remembered.byte_length() > 0:
         return remembered
-    var name = "carla.town." + _lower_ascii(town)
+    var name = "carla.town." + ascii_lower(town)
     var out_dir = out_root + "/" + name
     var removed = run_program(["rm", "-rf", out_dir], 30.0)
     if removed.status != 0:
@@ -907,7 +908,7 @@ def main() raises:
                 continue
             var doc = PyJson.parse(text)
             var triangles = doc.at(doc.root, "triangles")
-            var folder = out_root + "/carla.town." + _lower_ascii(town)
+            var folder = out_root + "/carla.town." + ascii_lower(town)
             print(
                 town_summary_line(
                     town,
@@ -1956,15 +1957,3 @@ def _whole(text: String) raises -> Int:
         return Int(text)
     except:
         raise Error("expected an integer")
-
-
-def _lower_ascii(text: String) -> String:
-    """Return `text` with ASCII capitals folded."""
-    var raw = text.as_bytes()
-    var out = List[UInt8]()
-    for index in range(len(raw)):
-        var value = Int(raw[index])
-        if value >= 65 and value <= 90:
-            value += 32
-        out.append(UInt8(value))
-    return String(unsafe_from_utf8=Span(out))

@@ -34,10 +34,20 @@ What is read is what three.js's loader reads:
   fan from its first corner, and so it must be convex, as `loaders.obj`
   requires of an OBJ face. three.js cuts a quad on its other diagonal,
   and leaves out a face of five or more.
+- A face's own `texcoord` list and its `red`, `green` and `blue`, or
+  their other names: three.js's `faceVertexUvs` and `faceVertexColors`.
+  The geometry then loses its index, as three.js's `toNonIndexed` makes
+  it, and they replace `uv` and `color` at every corner of the face. A
+  color is decoded from sRGB, as a vertex's is. A `texcoord` holds two
+  numbers for each corner. three.js reads one only for a triangle.
 - Every other element and property is read past and dropped.
 
 A file without a `face` element is a point cloud: its geometry has no
 index, as three.js's has none.
+
+The header and an ASCII body are read as UTF-8. A byte that is not UTF-8
+becomes U+FFFD, as three.js's `TextDecoder` decodes the body, so a
+comment in another encoding does not refuse the file.
 
 **Options.** `PlyOptions` holds three.js's two mappings.
 `set_property_name` renames a property of the file as the header is
@@ -67,19 +77,19 @@ limits, and explicit zero and nonfinite rules.
 
 from std.math import isfinite
 
-from core.ordinal import index_in_count
-
-from core.binary import copy_byte_range
 from core.ordinal import (
+    index_in_count,
     ordinal_valid,
     require_valid,
     require_non_negative,
 )
+
+from core.binary import copy_byte_range
 from loaders.bytes import bytes_match
 from loaders.text_number import file_line
 from loaders.js_text import split_fields
 
-from math.triangle_normal import _polygon_cross_wide, _triangle_cross_wide
+from loaders.fan import fan_problem
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
@@ -340,8 +350,9 @@ def _find_bytes(bytes: List[UInt8], word: String) -> Int:
     return -1
 
 
-def _text(bytes: List[UInt8], start: Int, end: Int) raises -> String:
-    """Return part of the file as text.
+def _text(bytes: List[UInt8], start: Int, end: Int) -> String:
+    """Return part of the file as text, as three.js's `TextDecoder` reads
+    it: a byte that is not UTF-8 becomes U+FFFD.
 
     Args:
         bytes: The file.
@@ -350,15 +361,9 @@ def _text(bytes: List[UInt8], start: Int, end: Int) raises -> String:
 
     Returns:
         The text.
-
-    Raises:
-        Error: If the bytes are not UTF-8.
     """
     var part = copy_byte_range(bytes, start, end)
-    try:
-        return String(from_utf8=Span(part))
-    except:
-        raise Error("PLY: text in the file that is not UTF-8")
+    return String(from_utf8_lossy=Span(part))
 
 
 def _where(line: Int) -> String:
@@ -656,13 +661,16 @@ def _coordinate(value: Float64, what: String) raises -> Float32:
     return narrow
 
 
-def _all_or_none(found: List[Int], what: String) raises -> Bool:
-    """Return whether a vertex has every channel of something, refusing
-    some of them without the rest.
+def _all_or_none(
+    found: List[Int], what: String, owner: String = "vertex"
+) raises -> Bool:
+    """Return whether a vertex or a face has every channel of something,
+    refusing some of them without the rest.
 
     Args:
         found: Each channel's position in a row, or -1.
         what: What the channels are, for the error.
+        owner: The element, `vertex` or `face`, for the error.
 
     Returns:
         True when every channel is there, False when none is.
@@ -676,8 +684,18 @@ def _all_or_none(found: List[Int], what: String) raises -> Bool:
         if position >= 0:
             count += 1
     if count > 0 and count < len(found):
-        raise Error("PLY: a vertex has some channels of its " + what + " only")
+        raise Error(
+            "PLY: a " + owner + " has some channels of its " + what + " only"
+        )
     return count > 0
+
+
+def _append_run(
+    mut out: List[Float32], values: List[Float32], start: Int, count: Int
+):
+    """Append `count` values from `start`."""
+    for at in range(start, start + count):  # pragma: no branch
+        out.append(values[at])
 
 
 def _names(*names: String) -> List[String]:
@@ -687,42 +705,6 @@ def _names(*names: String) -> List[String]:
     for name in names:  # pragma: no branch
         out.append(name)
     return out^
-
-
-def _check_convex(points: List[Vector3], face: Int) raises:
-    """Refuse a face of four or more corners that a fan from its first
-    corner would not cover: one that is not convex, or has no area.
-
-    The same test as `loaders.obj`'s: the face's normal is Newell's sum
-    over its edges, and each corner of a convex face turns the same way
-    about it, within a millionth of straight.
-
-    Args:
-        points: The corners, in order.
-        face: Which face, for the error.
-
-    Raises:
-        Error: If the face has no area, or a corner turns the wrong way.
-    """
-    var count = len(points)
-    var normal = _polygon_cross_wide(points)
-    var area_squared = (normal * normal).reduce_add()
-    if area_squared == 0:
-        raise Error("PLY face " + String(face) + ": " + "a face has no area")
-    for index in range(count):  # pragma: no branch
-        var turn = _triangle_cross_wide(
-            points[index],
-            points[(index + 1) % count],
-            points[(index + 2) % count],
-        )
-        if (turn * normal).reduce_add() < -1e-6 * area_squared:
-            raise Error(
-                "PLY face "
-                + String(face)
-                + ": "
-                + "a face is not convex, and only a convex face cuts into a"
-                " fan of triangles"
-            )
 
 
 def parse_ply(
@@ -737,7 +719,9 @@ def parse_ply(
     Returns:
         A geometry with `position`, and `normal`, `uv` and `color` when
         the vertices have them, indexed by the faces when the file has a
-        `face` element.
+        `face` element. When the faces have texture coordinates or colors
+        of their own, the geometry has no index, and those give `uv` and
+        `color`.
 
     Raises:
         Error: If the header is refused (see the module docstring), the
@@ -746,8 +730,10 @@ def parse_ply(
             file ends early, a coordinate is not finite, a vertex has only
             some channels of a normal, a texture coordinate or a color, or
             a face has fewer than three corners, names a vertex the file
-            does not have, or is not convex. Also if a custom attribute
-            names a property the vertex element has not got, or a list.
+            does not have, is not convex, has some channels of a color,
+            or has a `texcoord` without two numbers for each corner. Also
+            if a custom attribute names a property the vertex element has
+            not got, or a list.
     """
     var end = _find_bytes(bytes, "end_header")
     require_non_negative(end, "PLY: the file has no `end_header`")
@@ -819,11 +805,22 @@ def parse_ply(
     # Every face's corners, one after the other, and how many each has.
     var corners = List[Int]()
     var sizes = List[Int]()
+    # A face's own texture coordinates and color, three.js's
+    # `faceVertexUvs` and `faceVertexColors`: each face's `texcoord`
+    # numbers and their count, and the places of its red, green and blue.
+    var face_uvs = List[Float32]()
+    var uv_sizes = List[Int]()
+    var fr = -1
+    var fg = -1
+    var fb = -1
+    var face_rgb = List[Float32]()
     # The `vertex` element is there: the loop always runs.
     for element in elements:  # pragma: no branch
         var is_vertex = element.name == "vertex"
         var is_face = element.name == "face"
         var list = -1
+        # The face's `texcoord` list, read only in the face element.
+        var uv_list = -1
         if is_face:
             for index in range(len(element.properties)):
                 ref property = element.properties[index]
@@ -841,6 +838,17 @@ def parse_ply(
                 raise Error(
                     "PLY: a face's vertex indices must be an integer type"
                 )
+            # A face has its vertex indices: the loop always runs.
+            for index in range(len(element.properties)):  # pragma: no branch
+                ref property = element.properties[index]
+                if property.name == "texcoord" and property.is_list:
+                    uv_list = index
+            fr = element.find(_names("red", "diffuse_red", "r", "diffuse_r"))
+            fg = element.find(
+                _names("green", "diffuse_green", "g", "diffuse_g")
+            )
+            fb = element.find(_names("blue", "diffuse_blue", "b", "diffuse_b"))
+            _ = _all_or_none([fr, fg, fb], "color", "face")
         for row in range(element.rows):
             try:
                 rows.begin()
@@ -859,9 +867,22 @@ def parse_ply(
                         var item = rows.value(bytes, property.scalar)
                         if index == list:
                             corners.append(Int(item))
+                        elif index == uv_list:
+                            face_uvs.append(
+                                _coordinate(item, "a texture coordinate")
+                            )
                     if index == list:
                         sizes.append(length)
+                    elif index == uv_list:
+                        uv_sizes.append(length)
                 rows.end()
+                if is_face and fr >= 0:
+                    # Three channels: the loop always runs.
+                    for channel in [fr, fg, fb]:  # pragma: no branch
+                        var value = _coordinate(
+                            values[channel], "red, green or blue"
+                        )
+                        face_rgb.append(srgb_to_linear(value / 255))
                 if is_vertex:
                     positions.append(_coordinate(values[x], "x"))
                     positions.append(_coordinate(values[y], "y"))
@@ -899,6 +920,11 @@ def parse_ply(
 
     var index = List[Int]()
     var first = 0
+    # A texture coordinate and a color for each corner of each triangle.
+    var with_face_uv = len(face_uvs) > 0
+    var corner_uvs = List[Float32]()
+    var corner_rgb = List[Float32]()
+    var uv_first = 0
     for face in range(len(sizes)):
         var count = sizes[face]
         if count < 3:
@@ -924,12 +950,34 @@ def parse_ply(
                 points.append(
                     Vector3(positions[at], positions[at + 1], positions[at + 2])
                 )
-            _check_convex(points, face)
+            var problem = fan_problem(points)
+            if problem:
+                raise Error("PLY face " + String(face) + ": " + problem)
+        if with_face_uv and uv_sizes[face] != 2 * count:
+            raise Error(
+                "PLY face "
+                + String(face)
+                + ": its `texcoord` must hold two numbers for each corner"
+            )
         for triangle in range(count - 2):  # pragma: no branch
             index.append(corners[first])
             index.append(corners[first + triangle + 1])
             index.append(corners[first + triangle + 2])
+            if with_face_uv:
+                _append_run(corner_uvs, face_uvs, uv_first, 2)
+                _append_run(
+                    corner_uvs, face_uvs, uv_first + 2 * triangle + 2, 2
+                )
+                _append_run(
+                    corner_uvs, face_uvs, uv_first + 2 * triangle + 4, 2
+                )
+            if len(face_rgb) > 0:
+                # The face's color, at each of the triangle's corners.
+                for _ in range(3):  # pragma: no branch
+                    _append_run(corner_rgb, face_rgb, face * 3, 3)
         first += count
+        if with_face_uv:
+            uv_first += uv_sizes[face]
 
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
@@ -952,6 +1000,15 @@ def parse_ply(
                 ),
             )
     geometry.set_index(index^)
+    if with_face_uv or len(corner_rgb) > 0:
+        # three.js's `postProcess`: a face's own data needs a vertex for
+        # each corner, so the geometry loses its index first.
+        var flat = geometry.to_non_indexed()
+        if with_face_uv:
+            flat.set_attribute(String(UV), BufferAttribute(corner_uvs^, 2))
+        if len(corner_rgb) > 0:
+            flat.set_attribute(String(COLOR), BufferAttribute(corner_rgb^, 3))
+        return flat^
     return geometry^
 
 

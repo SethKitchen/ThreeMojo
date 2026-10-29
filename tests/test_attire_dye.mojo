@@ -6,7 +6,7 @@
 """Tests for a garment's dyes, its patterns and its wear."""
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, POSITION, BufferGeometry
+from core.buffer_geometry import COLOR, BufferGeometry
 from extensions.attire.dye import (
     DYE,
     TRIM_LEVEL,
@@ -20,7 +20,6 @@ from extensions.attire.dye import (
 )
 from extensions.attire.kinds import (
     BLOOD,
-    DAMAGE,
     DIRT,
     PARTY,
     PRIMARY_DYE,
@@ -34,7 +33,7 @@ from extensions.attire.kinds import (
     WearKind,
 )
 from extensions.attire.shell import COVER
-from extensions.humanoid.rig.joints import HIPS, RIGHT_UPPER_ARM, SPINE
+from extensions.humanoid.rig.joints import HIPS, RIGHT_UPPER_ARM
 from math.vector3 import Vector3
 from render.framebuffer import Color
 from std.math import nan

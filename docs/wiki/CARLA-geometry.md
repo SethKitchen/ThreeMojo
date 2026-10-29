@@ -118,7 +118,7 @@ The distance kernel uses endpoint signs and cross products to retain that gap.
 It uses expanded products when ordinary wide arithmetic cannot resolve them.
 
 Distances are Float64 estimates. They are not exact rational results.
-The [numerical design](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/segment-query-numerics.md)
+The [numerical design](https://github.com/SethKitchen/ThreeMojo/blob/d58766390fa97aadc6addf7782a2378373fcb080/docs/segment-query-numerics.md)
 gives the error bounds and the supported ordering contract.
 
 A node box gives a lower bound for each segment below it. Each segment key

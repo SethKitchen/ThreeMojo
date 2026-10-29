@@ -26,7 +26,7 @@ from animation.animation_clip import AnimationClip, find_by_name
 from animation.animation_mixer import AnimationAction, AnimationMixer
 from animation.keyframe_track import MeshIndex
 from core.scene import Scene
-from units.si import Duration, SECOND
+from units.si import Duration
 
 
 struct MorphAnimMesh(Movable):

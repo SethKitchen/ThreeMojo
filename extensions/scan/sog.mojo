@@ -49,7 +49,6 @@ caller can tell an antialiased or a 2D Gaussian scene apart.
 """
 
 from core.gaussian_splat_utils import (
-    GaussianSplatGeometry,
     clamped_byte,
     create_gaussian_splat_geometry,
     packed_band,

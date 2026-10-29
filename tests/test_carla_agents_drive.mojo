@@ -28,7 +28,7 @@ from extensions.carla.agents_behavior import (
     BehaviorAgent,
     ConstantVelocityAgent,
 )
-from extensions.carla.agents_local_planner import PlanItem, plan_item
+from extensions.carla.agents_local_planner import PlanItem
 from extensions.carla.agents_misc import (
     AGGRESSIVE,
     BehaviorType,
@@ -62,7 +62,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import DEGREE, METER, SECOND, Angle, Duration, Length, Velocity
+from units.si import DEGREE, METER, SECOND, Angle, Duration, Length
 
 # The two-lane road of `test_carla_agents.mojo`. `{CHANGE}` is lane -1's
 # outer mark: "both" lets a car cross either way; "decrease" only from

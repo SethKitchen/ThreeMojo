@@ -64,10 +64,10 @@ from core.gaussian_splat_utils import (
     write_covariance,
 )
 from core.user_data import UserData, user_data_of
-from loaders.fbx import sanitize_node_name
 from loaders.file_path import path_directory
 from loaders.gltf import (
     _FLAT_NODE_MATRIX,
+    UniqueNames,
     decode_base64,
     require_rising_sparse_index,
     require_sparse_indices,
@@ -176,37 +176,6 @@ struct _Accessor(Movable):
         self.values = values^
         self.count = count
         self.size = size
-
-
-struct _Names(Movable):
-    """The names used so far, three.js's `nodeNamesUsed`."""
-
-    var names: List[String]
-    var uses: List[Int]
-
-    def __init__(out self):
-        """Start with none used."""
-        self.names = List[String]()
-        self.uses = List[Int]()
-
-    def unique(mut self, original: String) -> String:
-        """Return a name made unique, three.js's `createUniqueName`.
-
-        Args:
-            original: The name wanted.
-
-        Returns:
-            The sanitized name, or it with `_N` after it when it was used
-            before.
-        """
-        var name = sanitize_node_name(original)
-        for at in range(len(self.names)):
-            if self.names[at] == name:
-                self.uses[at] += 1
-                return name + "_" + String(self.uses[at])
-        self.names.append(name)
-        self.uses.append(0)
-        return name
 
 
 def _component_bytes(component: Int) raises -> Int:
@@ -608,7 +577,7 @@ def load_gltf_gaussian_splats(
     var document = parse_json(json)
     var buffers = _buffers(document, binary, directory)
     var out = List[GltfGaussianSplatMesh]()
-    var names = _Names()
+    var names = UniqueNames()
     if document.has(document.root(), "nodes"):
         var nodes = document.get(document.root(), "nodes")
         for index in range(document.length(nodes)):
@@ -1012,7 +981,7 @@ def load_gltf_gaussian_splat_scene(
                 pending.append(
                     (document.integer(document.at(children, slot)), index)
                 )
-    var names = _Names()
+    var names = UniqueNames()
     var node_names = List[String]()
     for index in range(count):
         var node = document.at(document.get(document.root(), "nodes"), index)

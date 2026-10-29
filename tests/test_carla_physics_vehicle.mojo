@@ -16,12 +16,10 @@ of a bicycle model. The PID and controller values are CARLA's formulas
 worked by hand.
 """
 
-from extensions.carla.physics.body import BodyId, DYNAMIC, RigidBody
+from extensions.carla.physics.body import DYNAMIC, RigidBody
 from extensions.carla.physics.quantities import (
-    CorneringStiffness,
     NEWTON_METER,
     NEWTON_PER_CENTIMETER,
-    NEWTON_PER_DEGREE,
     REVOLUTION_PER_MINUTE,
     Jerk,
     Stiffness,
@@ -73,7 +71,7 @@ from math.quaternion import Quaternion
 from math.triangle import Triangle
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from std.math import atan2, cos, inf, nan, pi, sin, sqrt, tan
+from std.math import cos, inf, nan, pi, sin, sqrt, tan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -87,10 +85,8 @@ from units.si import (
     Angle,
     AngularVelocity,
     Area,
-    CENTIMETER,
     DEGREE,
     Duration,
-    Force,
     KILOGRAM,
     Length,
     METER,

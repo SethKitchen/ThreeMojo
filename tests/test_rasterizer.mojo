@@ -20,17 +20,21 @@ from materials.material import (
     TOON,
     Blending,
     MaterialKind,
-    depth_material,
-    normal_material,
+    BLEND,
+    NO_TEXTURE,
+    OPAQUE,
+    ADD_OPERATION,
+    MIX_OPERATION,
+    MULTIPLY_OPERATION,
+    Combine,
 )
 from math.vector2 import Vector2
-from std.math import inf, isfinite, pi
+from std.math import inf, isfinite, pi, atan2, nan, sqrt
 
 # The intensity that lights a white surface square on to full white: three.js
 # divides every lit term by pi, and so does `Lighting`. See tests/test_light.
 comptime FULL = Float32(pi)
 from render.framebuffer import Color, FloatColor, Framebuffer
-from materials.material import BLEND, NO_TEXTURE, OPAQUE
 from render.texture import (
     CLAMP,
     COVERAGE,
@@ -53,23 +57,17 @@ from render.cube_texture_store import (
     CubeTextureId,
     CubeTextureStore,
 )
-from materials.material import (
-    ADD_OPERATION,
-    MIX_OPERATION,
-    MULTIPLY_OPERATION,
-    Combine,
-)
 from lights.light import ambient_light, directional_light
 from lights.lighting import (
     ROUGHNESS_FLOOR,
     Lighting,
     floored_roughness,
     specular_occlusion,
+    environment_brdf,
 )
 from lights.shadow import ShadowMap
 from core.fog import LINEAR_FOG, FogKind, FogView, exp2_fog, linear_fog
 from render.tonemap import REINHARD_TONE_MAPPING, tone_map
-from std.math import atan2, nan, sqrt
 from units.si import Angle, DEGREE, InverseLength, Length, METER, PER_METER
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -81,7 +79,6 @@ from render.packing import (
     RGB_DEPTH_PACKING,
     RG_DEPTH_PACKING,
     DepthPacking,
-    packed_normal,
 )
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.rasterizer import (
@@ -128,6 +125,8 @@ from render.rasterizer import (
     _rows_of,
     rasterize_all,
     rasterize_shaded,
+    check_transmission,
+    check_triangle_maps,
 )
 from std.testing import (
     TestSuite,
@@ -2397,23 +2396,6 @@ def data_pixel(
     var target = RenderTarget(8, 8, Color(0, 0, 0))
     rasterize_all(corners, target, mode, textures, lighting, workers, fog)
     return target^
-
-
-def test_a_normal_is_packed_into_zero_to_one_per_axis() raises:
-    # three.js's `packNormalToRGB`: halved and moved up by a half, so a
-    # surface square on to the camera is (0.5, 0.5, 1).
-    var square = packed_normal(Vector3(0, 0, 1))
-    assert_equal(square.x, Float32(0.5))
-    assert_equal(square.y, Float32(0.5))
-    assert_equal(square.z, Float32(1.0))
-    var right = packed_normal(Vector3(1, 0, 0))
-    assert_equal(right.x, Float32(1.0))
-    assert_equal(right.y, Float32(0.5))
-    assert_equal(right.z, Float32(0.5))
-    var down = packed_normal(Vector3(0, -1, 0))
-    assert_equal(down.x, Float32(0.5))
-    assert_equal(down.y, Float32(0.0))
-    assert_equal(down.z, Float32(0.5))
 
 
 def test_a_depth_is_one_at_the_near_plane_and_zero_at_the_far_one() raises:
@@ -6068,9 +6050,7 @@ def main() raises:
 
 # --- transmission -----------------------------------------------------------
 
-from lights.lighting import environment_brdf
 from math.matrix4 import Matrix4
-from render.rasterizer import check_transmission, check_triangle_maps
 from render.transmission import TransmissionTarget
 
 

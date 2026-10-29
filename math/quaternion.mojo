@@ -23,11 +23,11 @@ as the matrices `a.to_matrix() * b.to_matrix()` would.
 
 from math.euler import Euler
 from math.matrix4 import Matrix4
-from math.norm import dot4, length4, normalized4
+from math.norm import dot4, length3, length4, normalized4
 from core.ordinal import ordinal_valid, require_valid
-from math.utils import SeededRandom, clamp_unit
+from math.utils import SeededRandom
 from math.vector3 import Vector3
-from std.math import acos, atan2, cos, pi, sin, sqrt
+from std.math import atan2, cos, pi, sin, sqrt
 from units.si import Angle, RADIAN
 
 # Below this, two quaternions are close enough that slerp falls back to a
@@ -440,8 +440,10 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         if cos_half < 0:
             target = -other
             cos_half = -cos_half
-        # Already there, or as close as a Float32 can tell.
-        if cos_half >= 1:
+        # Already there. three.js also stops at a cosine of one, but in
+        # Float32 every turn below about 5e-4 radians rounds to that cosine,
+        # and the blend below still moves through it.
+        if target == self:
             return self
         var sin_half_squared = 1 - cos_half * cos_half
         # So close that the arc is a line: blend straight and renormalize,
@@ -580,8 +582,12 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         Returns:
             From zero to a half turn: the short way round.
         """
-        var cosine = clamp_unit(self.dot(other))
-        return Angle(2 * acos(abs(cosine)), RADIAN)
+        # three.js takes `2 acos |q . r|`. Near a cosine of one that loses
+        # every turn below about 5e-4 radians in Float32. The relative
+        # rotation's vector part holds the sine, and atan2 keeps both.
+        var turn = self.conjugate() * other
+        var sine = length3(turn.x, turn.y, turn.z)
+        return Angle(2 * atan2(sine, abs(turn.w)), RADIAN)
 
     def rotate_towards(mut self, other: Self, step: Angle):
         """Turn this rotation toward `other` by at most `step`, three.js's

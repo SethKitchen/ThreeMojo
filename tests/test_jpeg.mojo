@@ -15,7 +15,6 @@ gray file by hand.
 """
 
 from core.search import first_match
-from render.framebuffer import Color
 from render.jpeg import (
     BLOCK_SAMPLES,
     BitReader,
@@ -29,8 +28,7 @@ from render.jpeg import (
     ycbcr_to_rgb,
     zigzag_order,
 )
-from render.png import DecodedImage
-from render.png import decode as decode_png
+from render.png import DecodedImage, decode as decode_png
 from render.srgb import SRGB
 from render.texture import BILINEAR, REPEAT, texture_from
 from std.math import inf, nan

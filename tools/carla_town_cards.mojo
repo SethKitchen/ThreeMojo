@@ -321,53 +321,13 @@ def _rotr(value: UInt64, rot: Int) -> UInt64:
 
 def _unique(values: List[Int]) -> List[Int]:
     """Return the sorted unique integers in `values`."""
-    var order = List[Int]()
-    for index in range(len(values)):
-        order.append(index)
-    _sort(values, order)
+    var ordered = values.copy()
+    sort(ordered)
     var out = List[Int]()
-    if len(order) == 0:
-        return out^
-    out.append(values[order[0]])
-    for index in range(1, len(order)):
-        var value = values[order[index]]
-        if value != out[len(out) - 1]:
+    for value in ordered:
+        if len(out) == 0 or value != out[len(out) - 1]:
             out.append(value)
     return out^
-
-
-def _sort(values: List[Int], mut order: List[Int]):
-    """Sort `order` by `values`."""
-    var count = len(order)
-    var start = count // 2
-    while start > 0:
-        start -= 1
-        _sift(values, order, start, count)
-    var end = count
-    while end > 1:
-        end -= 1
-        var tmp = order[0]
-        order[0] = order[end]
-        order[end] = tmp
-        _sift(values, order, 0, end)
-
-
-def _sift(values: List[Int], mut order: List[Int], start: Int, end: Int):
-    """Restore one heap whose root is `start`."""
-    var root = start
-    while True:
-        var child = root * 2 + 1
-        if child >= end:
-            return
-        if child + 1 < end and values[order[child]] < values[order[child + 1]]:
-            child += 1
-        if values[order[root]] < values[order[child]]:
-            var tmp = order[root]
-            order[root] = order[child]
-            order[child] = tmp
-            root = child
-        else:
-            return
 
 
 def _fmul(left: Float64, right: Float64) -> Float64:

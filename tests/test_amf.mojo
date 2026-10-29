@@ -21,7 +21,7 @@ from loaders.amf import (
     parse_amf,
     read_amf,
 )
-from loaders.json import JsonDocument, parse_json
+from loaders.json import parse_json
 from loaders.zip import ZIP_STORED, ZipEntry, zip_archive
 from render.framebuffer import Color
 from std.pathlib import Path

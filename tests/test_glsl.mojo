@@ -13,7 +13,6 @@ its message, which names the shader and the line.
 
 from materials.glsl import (
     _Type,
-    MAX_WHILE_COUNT,
     _TokenKind,
     compile_raw_shader_material,
     compile_shader_material,
@@ -49,7 +48,7 @@ from math.vector4 import Vector4
 from render.framebuffer import FloatColor
 from render.cube_texture_store import CubeTextureId
 from render.volume_texture_store import Data3DTextureId, DataArrayTextureId
-from render.texture_store import NO_TEXTURE, TextureId
+from render.texture_store import TextureId
 from std.math import cos, sin, sqrt
 from units.si import Duration, SECOND
 from std.testing import (

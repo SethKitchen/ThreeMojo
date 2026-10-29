@@ -22,7 +22,7 @@ from extensions.carla.curve_interval import (
     _next_down,
     _next_up,
 )
-from extensions.carla.geometry import RoadGeometry, SPIRAL
+from extensions.carla.geometry import SPIRAL
 from extensions.carla.lane_geometry import _lane_geometry_pos_at
 from extensions.carla.lane_refinement import (
     _chord_certificate,

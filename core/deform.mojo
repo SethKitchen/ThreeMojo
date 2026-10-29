@@ -40,7 +40,6 @@ paying for that by asking `Mesh.is_morphed` first, which is why this does
 not try to be clever about it.
 """
 
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
     NORMAL,
@@ -336,8 +335,7 @@ def skin_pose(scene: Scene, index: Int) raises -> SkinPose:
 
     Raises:
         Error: If no skinned mesh has that index, a bone's node is not
-            there, the scene is stale, or the matrix the bones' result is
-            carried back out of has no inverse.
+            there, or the scene is stale.
     """
     require_skinned_mesh(index, len(scene.skinned_meshes))
     ref skinned = scene.skinned_meshes[index]
@@ -354,8 +352,9 @@ def skin_pose(scene: Scene, index: Int) raises -> SkinPose:
     var undo = Matrix4(copy=skinned.bind_matrix)
     if skinned.bind_mode == ATTACHED:
         undo = scene.world_matrix(skinned.node)
-    if undo.determinant() == 0:
-        raise Error("A skinned mesh has no inverse to undo its bind")
+    # A singular matrix inverts to zeros, as three.js's `bindMatrixInverse`
+    # does: a node scaled to nothing collapses its mesh, and the rest of
+    # the scene is still drawn and picked.
     undo.invert()
     return SkinPose(skinned.skeleton.pose(placed), skinned.bind_matrix, undo)
 
@@ -370,6 +369,11 @@ def skin_carriers(
     so do these: the sandwich `bind_inverse * blend * bind` is a linear
     map, so the same matrix moves the position and turns the normal.
 
+    A slot whose weight is zero carries nothing, so its bone index is not
+    read. three.js's `applyBoneTransform` skips such a slot, and its
+    shader multiplies that bone by zero. An exporter can leave any number
+    in an unused slot.
+
     Args:
         geometry: The geometry; it must carry `skinIndex` and
             `skinWeight`.
@@ -382,8 +386,8 @@ def skin_carriers(
     Raises:
         Error: If the geometry has no skin attributes, if either is not
             four numbers a vertex or does not cover every vertex, or if a
-            vertex names a bone that is not a whole number in range or
-            carries weights that are not numbers or are negative.
+            slot with a weight names a bone that is not a whole number in
+            range, or if a weight is not a number or is negative.
     """
     var out = List[Matrix4]()
     if not geometry.has_attribute(String(SKIN_INDEX)) or not (
@@ -404,8 +408,12 @@ def skin_carriers(
     var shares = List[Float32](length=BONES_PER_VERTEX, fill=0)
     for vertex in range(vertex_count):  # pragma: no branch
         for slot in range(BONES_PER_VERTEX):  # pragma: no branch
-            named[slot] = whole_bone(bones.component(vertex, slot), count)
             shares[slot] = weights.component(vertex, slot)
+            # Bone zero stands in for an unused slot. `blend_bones` skips
+            # a weight of zero, so it is never read.
+            named[slot] = 0
+            if shares[slot] != 0:
+                named[slot] = whole_bone(bones.component(vertex, slot), count)
         var blended = blend_bones(pose.palette, named, shares)
         # Into the bones' space, through them, and back out: three.js's
         # `bindMatrixInverse * skinMatrix * bindMatrix`.

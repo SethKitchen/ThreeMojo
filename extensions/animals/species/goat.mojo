@@ -27,12 +27,7 @@ from extensions.animals.coat import (
     srgb,
 )
 from extensions.sdf.ids import BoneId
-from extensions.animals.parts import (
-    APPENDAGE,
-    HORN,
-    JAW,
-    WATTLE,
-)
+from extensions.animals.parts import APPENDAGE, HORN, JAW, WATTLE, BODY
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
     side_sign,
@@ -63,7 +58,6 @@ from extensions.animals.options import (
 )
 from extensions.animals.rig import Rig, tail_chain
 from extensions.sdf.field import SdfModel
-from extensions.animals.parts import BODY
 from extensions.animals.species.hoofed import (
     HeadFrame,
     head_frame,

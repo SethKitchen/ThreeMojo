@@ -110,9 +110,8 @@ comptime RUNNING = Stance(2)
 comptime AIRBORNE = Stance(3)
 
 
-@fieldwise_init
 struct MoveInput(ImplicitlyCopyable):
-    """One frame of a player's input: two sticks and two buttons."""
+    """One frame of a player's input: two sticks and three buttons."""
 
     # How far the move stick leans forward and right, from -1 to 1.
     var forward: Float32
@@ -120,16 +119,47 @@ struct MoveInput(ImplicitlyCopyable):
     # How far the look stick leans right and up, from -1 to 1.
     var look_right: Float32
     var look_up: Float32
-    # Whether the run and the jump buttons are held.
+    # Whether the run, the jump and the use buttons are held.
     var run: Bool
     var jump: Bool
+    var use: Bool
+
+    def __init__(
+        out self,
+        forward: Float32,
+        right: Float32,
+        look_right: Float32,
+        look_up: Float32,
+        run: Bool,
+        jump: Bool,
+        use: Bool = False,
+    ):
+        """Hold one frame of input.
+
+        Args:
+            forward: How far the move stick leans forward, from -1 to 1.
+            right: How far it leans right, from -1 to 1.
+            look_right: How far the look stick leans right, from -1 to 1.
+            look_up: How far it leans up, from -1 to 1.
+            run: Whether the run button is held.
+            jump: Whether the jump button is held.
+            use: Whether the use button is held: see
+                `extensions.village.gathering`.
+        """
+        self.forward = forward
+        self.right = right
+        self.look_right = look_right
+        self.look_up = look_up
+        self.run = run
+        self.jump = jump
+        self.use = use
 
 
 def no_input() -> MoveInput:
     """Return the input of a player who touches nothing.
 
     Returns:
-        Both sticks at rest, and neither button held.
+        Both sticks at rest, and no button held.
     """
     return MoveInput(0, 0, 0, 0, False, False)
 

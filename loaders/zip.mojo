@@ -33,7 +33,7 @@ does not write ZIP64, so an archive must stay under 4 GiB. It checks all
 field lengths before it allocates or writes the archive.
 """
 
-from core.ordinal import index_in_count
+from core.ordinal import index_in_count, require_positive
 
 from core.binary import (
     append_little_endian_u16,
@@ -42,7 +42,6 @@ from core.binary import (
     little_endian_u16,
     little_endian_u32,
 )
-from core.ordinal import require_positive
 from render.checksum import crc32
 from render.inflate import inflate
 

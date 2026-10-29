@@ -29,6 +29,7 @@ from tools._python_json import (
 )
 from tools.carla_gltf_material import plan_material
 from tools.carla_texture_store import store_text
+from tools._text import ascii_lower
 from tools._town_json import json_int, json_text
 
 
@@ -221,7 +222,7 @@ def _town_glass(mut material: PyJson, name: String) raises:
     var mode = material.get(material.root, "alphaMode")
     if mode == MISSING or material.kind(mode) != PY_STR:
         return
-    if material.text(mode) != "BLEND" or _find(_lower(name), "glass") < 0:
+    if material.text(mode) != "BLEND" or "glass" not in ascii_lower(name):
         return
     material.remove(material.root, "alphaMode")
     var pbr = material.at(material.root, "pbrMetallicRoughness")
@@ -528,35 +529,6 @@ def _flag(doc: PyJson, node: Int, message: String) raises -> Bool:
     if doc.kind(node) != PY_BOOL:
         raise Error(message)
     return doc.flag(node)
-
-
-def _lower(text: String) -> String:
-    """Return `text` in ASCII lowercase."""
-    var out = String()
-    var raw = text.as_bytes()
-    for index in range(len(raw)):
-        var byte = raw[index]
-        if byte >= 65 and byte <= 90:
-            byte += 32
-        out += chr(Int(byte))
-    return out
-
-
-def _find(text: String, needle: String) -> Int:
-    """Return the byte index of `needle`, or -1."""
-    var raw = text.as_bytes()
-    var want = needle.as_bytes()
-    if len(want) == 0 or len(want) > len(raw):
-        return -1
-    for start in range(len(raw) - len(want) + 1):
-        var same = True
-        for offset in range(len(want)):
-            if raw[start + offset] != want[offset]:
-                same = False
-                break
-        if same:
-            return start
-    return -1
 
 
 def main() raises:

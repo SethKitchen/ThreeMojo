@@ -25,6 +25,7 @@ from tools._python_json import (
     PY_STR,
     PyJson,
 )
+from tools._text import ascii_lower
 
 
 @fieldwise_init
@@ -105,9 +106,9 @@ def _decide(
         blend = blend or parsed[3]
         masked = parsed[4]
         paint = (
-            _has(parent, "M_CarExterior_Master")
-            or _has(parent, "M_CarPaint")
-            or _has(parent, "CarPaint")
+            "M_CarExterior_Master" in parent
+            or "M_CarPaint" in parent
+            or "CarPaint" in parent
         )
         var vectors = parsed[1].copy()
         var scalars = parsed[2].copy()
@@ -137,7 +138,7 @@ def _decide(
             metal = _scalar(scalars, "metallic")
         if metal.byte_length() > 0:
             metallic = _clamp(metal)
-    var glass = _has(_lower(name), "glass") or _has(_lower(parent), "glass")
+    var glass = "glass" in ascii_lower(name) or "glass" in ascii_lower(parent)
     if glass:
         blend = True
         color = _glass_color()
@@ -160,15 +161,15 @@ def _decide(
         if (
             normal.byte_length() > 0
             and _listed(pngs, normal)
-            and not _has(_lower(normal), "flat")
+            and "flat" not in ascii_lower(normal)
         ):
             textures.append("normal " + normal)
         if masked:
             var stem = diffuse
             if (
                 stem.byte_length() == 0
-                or _has(_lower(stem), "alpha")
-                or _has(_lower(stem), "mask")
+                or "alpha" in ascii_lower(stem)
+                or "mask" in ascii_lower(stem)
             ):
                 var named = _other(entries, True)
                 if named.byte_length() > 0:
@@ -188,8 +189,8 @@ def _decide(
             metallic = _float("1.0")
             roughness = _float("1.0")
     var extras = String("")
-    var lamps = _has(_lower(name), "light") and not glass
-    if paint or _has(_lower(name), "bodywork"):
+    var lamps = "light" in ascii_lower(name) and not glass
+    if paint or "bodywork" in ascii_lower(name):
         extras = "paint"
     elif lamps:
         extras = "lamps"
@@ -217,45 +218,45 @@ def _decide(
 
 def _by_name(name: String) raises -> Tuple[List[_Num], _Num, _Num, Bool]:
     """Return the name-only factors."""
-    var low = _lower(name)
-    if _has(low, "glass") or _has(low, "window"):
+    var low = ascii_lower(name)
+    if "glass" in low or "window" in low:
         return (_glass_color(), _float("0.0"), _float("0.05"), True)
-    if _has(low, "rubber") or _has(low, "tire") or _has(low, "tyre"):
+    if "rubber" in low or "tire" in low or "tyre" in low:
         return (
             _row("0.03", "0.03", "0.03", True),
             _float("0.0"),
             _float("0.9"),
             False,
         )
-    if _has(low, "chrome") or _has(low, "polished"):
+    if "chrome" in low or "polished" in low:
         return (
             _row("0.9", "0.9", "0.9", True),
             _float("1.0"),
             _float("0.15"),
             False,
         )
-    if _has(low, "alumin") or _has(low, "metal"):
+    if "alumin" in low or "metal" in low:
         return (
             _row("0.6", "0.6", "0.62", True),
             _float("1.0"),
             _float("0.35"),
             False,
         )
-    if _has(low, "black"):
+    if "black" in low:
         return (
             _row("0.02", "0.02", "0.02", True),
             _float("0.0"),
             _float("0.6"),
             False,
         )
-    if _has(low, "grey") or _has(low, "gray"):
+    if "grey" in low or "gray" in low:
         return (
             _row("0.25", "0.25", "0.25", True),
             _float("0.0"),
             _float("0.6"),
             False,
         )
-    if _has(low, "light"):
+    if "light" in low:
         return (
             _row("0.9", "0.9", "0.85", True),
             _float("0.0"),
@@ -325,11 +326,11 @@ def _clamp(text: String) raises -> _Num:
 
 def _rgba(text: String) raises -> List[_Num]:
     """Return R, G, B and a float 1 from a stored vector."""
-    var parts = _split(text, " ")
+    var parts = text.split(" ")
     var color = List[_Num]()
-    color.append(_float(parts[0]))
-    color.append(_float(parts[1]))
-    color.append(_float(parts[2]))
+    color.append(_float(String(parts[0])))
+    color.append(_float(String(parts[1])))
+    color.append(_float(String(parts[2])))
     color.append(_float("1.0"))
     return color^
 
@@ -340,13 +341,13 @@ def _read_mat(text: String) -> List[String]:
     var others = String("")
     var lines = _lines(text)
     for index in range(len(lines)):
-        var line = _strip(lines[index])
-        var at = _find(line, "=")
+        var line = String(lines[index].strip(" \t\r"))
+        var at = line.find("=")
         if at < 0:
             continue
         var key = String(line[byte=0:at])
         var value = String(line[byte = at + 1 :])
-        if _starts(key, "Other"):
+        if key.startswith("Other"):
             if others.byte_length() > 0:
                 others += "\n"
             others += value
@@ -360,7 +361,7 @@ def _field(entries: List[String], key: String) -> String:
     """Return one mat value, or empty when the key is absent."""
     for index in range(len(entries)):
         var row = entries[index]
-        var at = _find(row, "\n")
+        var at = row.find("\n")
         if String(row[byte=0:at]) == key:
             return String(row[byte = at + 1 :])
     return ""
@@ -379,12 +380,12 @@ def _other(entries: List[String], mask: Bool) -> String:
     for index in range(len(rows)):
         if rows[index].byte_length() == 0:
             continue
-        var low = _lower(rows[index])
-        var selected = _has(low, "basecolor")
+        var low = ascii_lower(rows[index])
+        var selected = "basecolor" in low
         if mask:
-            selected = selected or _has(low, "front") or _has(low, "color")
+            selected = selected or "front" in low or "color" in low
         else:
-            selected = selected or _has(low, "diffuse") or _has(low, "albedo")
+            selected = selected or "diffuse" in low or "albedo" in low
         if selected:
             return rows[index]
     return ""
@@ -396,7 +397,7 @@ def _orm(entries: List[String]) -> String:
     var specular = _field(entries, "Specular")
     rows.append(specular)
     for index in range(len(rows)):
-        if _ends(_lower(rows[index]), "_orm"):
+        if ascii_lower(rows[index]).endswith("_orm"):
             return rows[index]
     return ""
 
@@ -408,18 +409,18 @@ def _read_props(
     var parent = String("")
     var lines = _lines(text)
     for index in range(len(lines)):
-        var line = _strip(lines[index])
-        if not _starts(line, "Parent = "):
+        var line = String(lines[index].strip(" \t\r"))
+        if not line.startswith("Parent = "):
             continue
         var rest = String(line[byte=9:])
-        var quote = _find(rest, "'")
+        var quote = rest.find("'")
         if quote < 0:
             continue
         var word = String(rest[byte=0:quote])
         if word.byte_length() == 0 or not _word(word):
             continue
         var tail = String(rest[byte = quote + 1 :])
-        var end = _find(tail, "'")
+        var end = tail.find("'")
         if end < 0:
             continue
         parent = String(tail[byte=0:end])
@@ -429,11 +430,11 @@ def _read_props(
     var at = 0
     var raw = text
     while at < raw.byte_length():
-        var found = _find_from(raw, "Name=", at)
+        var found = raw.find("Name=", at)
         if found < 0:
             break
         var name_at = found + 5
-        var brace = _find_from(raw, " }", name_at)
+        var brace = raw.find(" }", name_at)
         if brace < 0:
             break
         var name = String(raw[byte=name_at:brace])
@@ -456,15 +457,15 @@ def _read_props(
         parent,
         vectors^,
         scalars^,
-        _has(text, "BlendMode = BLEND_Translucent"),
-        _has(text, "BlendMode = BLEND_Masked"),
+        "BlendMode = BLEND_Translucent" in text,
+        "BlendMode = BLEND_Masked" in text,
     )
 
 
 def _vector(rows: List[String], key: String) -> String:
     """Return `R G B A` for a named vector, or empty."""
     for index in range(len(rows)):
-        var at = _find(rows[index], "\n")
+        var at = rows[index].find("\n")
         if String(rows[index][byte=0:at]) == key:
             return String(rows[index][byte = at + 1 :])
     return ""
@@ -545,15 +546,15 @@ def _report_keys(textures: List[String]) -> List[String]:
     var material = List[String]()
     for index in range(len(textures)):
         var step = textures[index]
-        if _starts(step, "color ") or _starts(step, "masked "):
+        if step.startswith("color ") or step.startswith("masked "):
             _add(pbr, "baseColorTexture")
-        elif _starts(step, "normal "):
+        elif step.startswith("normal "):
             _add(material, "normalTexture")
-        elif _starts(step, "orm "):
+        elif step.startswith("orm "):
             _add(pbr, "metallicRoughnessTexture")
             _add(material, "occlusionTexture")
-    _sort(pbr)
-    _sort(material)
+    sort(pbr)
+    sort(material)
     for index in range(len(material)):
         pbr.append(material[index])
     return pbr^
@@ -597,18 +598,18 @@ def _encode(plan: _Plan) raises -> String:
 def _step(mut doc: PyJson, text: String) raises -> Int:
     """Return one texture step object."""
     var step = doc.new_dict()
-    if _starts(text, "color "):
+    if text.startswith("color "):
         doc.set(step, "kind", doc.new_str("color"))
         doc.set(step, "stem", doc.new_str(String(text[byte=6:])))
-    elif _starts(text, "normal "):
+    elif text.startswith("normal "):
         doc.set(step, "kind", doc.new_str("normal"))
         doc.set(step, "stem", doc.new_str(String(text[byte=7:])))
-    elif _starts(text, "orm "):
+    elif text.startswith("orm "):
         doc.set(step, "kind", doc.new_str("orm"))
         doc.set(step, "stem", doc.new_str(String(text[byte=4:])))
     else:
         var body = String(text[byte=7:])
-        var at = _find(body, "\n")
+        var at = body.find("\n")
         doc.set(step, "kind", doc.new_str("masked"))
         doc.set(step, "color", doc.new_str(String(body[byte=0:at])))
         doc.set(step, "mask", doc.new_str(String(body[byte = at + 1 :])))
@@ -646,43 +647,8 @@ def _listed(pngs: List[String], stem: String) -> Bool:
 
 def _add(mut keys: List[String], key: String):
     """Append `key` once."""
-    for index in range(len(keys)):
-        if keys[index] == key:
-            return
-    keys.append(key)
-
-
-def _sort(mut keys: List[String]):
-    """Sort ASCII strings."""
-    for index in range(1, len(keys)):
-        var value = keys[index]
-        var place = index
-        while place > 0 and keys[place - 1] > value:
-            keys[place] = keys[place - 1]
-            place -= 1
-        keys[place] = value
-
-
-def _lower(text: String) -> String:
-    """Return `text` in ASCII lowercase."""
-    var out = String()
-    var raw = text.as_bytes()
-    for index in range(len(raw)):
-        var byte = raw[index]
-        if byte >= 65 and byte <= 90:
-            byte += 32
-        out += chr(Int(byte))
-    return out
-
-
-def _has(text: String, needle: String) -> Bool:
-    """Return whether `needle` occurs in `text`."""
-    return _find(text, needle) >= 0
-
-
-def _starts(text: String, prefix: String) -> Bool:
-    """Return whether `text` begins with `prefix`."""
-    return _starts_at(text, 0, prefix)
+    if key not in keys:
+        keys.append(key)
 
 
 def _starts_at(text: String, at: Int, prefix: String) -> Bool:
@@ -695,15 +661,6 @@ def _starts_at(text: String, at: Int, prefix: String) -> Bool:
         if raw[at + index] != head[index]:
             return False
     return True
-
-
-def _ends(text: String, suffix: String) -> Bool:
-    """Return whether `text` ends with `suffix`."""
-    var raw = text.as_bytes()
-    var tail = suffix.as_bytes()
-    if len(raw) < len(tail):
-        return False
-    return _starts_at(text, len(raw) - len(tail), suffix)
 
 
 def _word(text: String) -> Bool:
@@ -722,73 +679,12 @@ def _word(text: String) -> Bool:
     return True
 
 
-def _find(text: String, needle: String) -> Int:
-    """Return the first index of `needle`, or -1."""
-    return _find_from(text, needle, 0)
-
-
-def _find_from(text: String, needle: String, start: Int) -> Int:
-    """Return the next index of `needle` at or after `start`, or -1."""
-    var raw = text.as_bytes()
-    var head = needle.as_bytes()
-    if len(head) == 0:
-        return start
-    var last = len(raw) - len(head)
-    var index = start
-    while index <= last:
-        var same = True
-        for offset in range(len(head)):
-            if raw[index + offset] != head[offset]:
-                same = False
-                break
-        if same:
-            return index
-        index += 1
-    return -1
-
-
 def _lines(text: String) -> List[String]:
-    """Split `text` at newline characters."""
+    """Return the lines of `text`, without spaces, tabs or CRs at the ends."""
     var rows = List[String]()
-    var raw = text.as_bytes()
-    var start = 0
-    for index in range(len(raw)):
-        if raw[index] == 10:
-            rows.append(_strip(String(text[byte=start:index])))
-            start = index + 1
-    rows.append(_strip(String(text[byte=start:])))
+    for line in text.split("\n"):
+        rows.append(String(line.strip(" \t\r")))
     return rows^
-
-
-def _split(text: String, separator: String) -> List[String]:
-    """Split `text` on `separator`."""
-    var rows = List[String]()
-    var start = 0
-    while True:
-        var at = _find_from(text, separator, start)
-        if at < 0:
-            rows.append(String(text[byte=start:]))
-            return rows^
-        rows.append(String(text[byte=start:at]))
-        start = at + separator.byte_length()
-
-
-def _strip(text: String) -> String:
-    """Remove ASCII spaces and carriage returns from both ends."""
-    var raw = text.as_bytes()
-    var first = 0
-    var last = len(raw)
-    while first < last:
-        var byte = raw[first]
-        if byte != 32 and byte != 9 and byte != 13:
-            break
-        first += 1
-    while last > first:
-        var byte = raw[last - 1]
-        if byte != 32 and byte != 9 and byte != 13:
-            break
-        last -= 1
-    return String(text[byte=first:last])
 
 
 def _skip(text: String, at: Int) -> Int:

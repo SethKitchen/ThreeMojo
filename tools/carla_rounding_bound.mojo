@@ -25,7 +25,7 @@ from std.pathlib import Path
 from tools._bigint import BigInt
 from tools._fraction import Fraction
 from tools._json_tools import JsonWriter
-from tools._json_value import JsonTree
+from tools._json_tree import JsonTree
 from tools._lane_reports import repository_root, output_directory, nstr, isqrt
 from tools._python_float import parse_float
 
@@ -160,8 +160,8 @@ def _parse_rational(text: String) raises -> Fraction:
 
 def _rational(tree: JsonTree, node: Int, name: String) raises -> Fraction:
     """Read one `exact_rational` member."""
-    var member = tree.get(node, name)
-    var text = tree.string_value(tree.get(member, "exact_rational"))
+    var member = tree.item(node, name)
+    var text = tree.text(tree.item(member, "exact_rational"))
     return _parse_rational(text)
 
 

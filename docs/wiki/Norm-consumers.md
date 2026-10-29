@@ -42,10 +42,10 @@ normal products and area weights without narrowing or early product rounding.
 | `core.raycaster` | Geometric face normals use the shared triangle helper. The projected-segment parameter widens its squared-length fallback. |
 | `core.gaussian_splat_utils` | A finite quaternion normalizes before covariance construction. A zero quaternion still means identity. |
 | `geometries.edges`, `geometries.utils`, `geometries.parametric`, `geometries.surface_sampler` | Unit face normals retain original coordinates until the safe cross is computed. Degenerate normals remain zero. |
-| `geometries.loft`, `geometries.torus` | Cap normals and physical-scale knot frames avoid overflow in products before normalization. |
+| `geometries.loft`, `geometries.torus` | Cap normals avoid overflow in products before normalization. Torus normals and knot frames use `Float64`, where no product of `Float32` inputs overflows. |
 | `geometries.mikktspace` | Lengths and unit tangents use shared norms. Extreme edge and UV products widen before multiplication. Nonzero subnormals participate in frame construction. Thin-corner angle weights use original-coordinate crosses when a cosine rounds to one. Invalid faces retain the existing default-frame behavior. |
 | `geometries.simplify`, `geometries.convex_object_breaker` | Vector and tangent normalizers use shared scalar helpers. Simplification edge lengths use the shared length. |
-| `geometries.polyhedron` | Latitude uses a scale-safe horizontal length. |
+| `geometries.polyhedron` | Latitude, the radius and the normals are formed in Float64 from widened Float32 vertices. Their squares fit in Float64. |
 | `geometries.sculptor`, `geometries.sculptor_tools`, `geometries.sculptor_mesh`, `geometries.sculptor_utils` | Native Float64 direction and length helpers use shared norms. The intentional zero-normal fallback to +x remains explicit. Range-limited stored face areas are reconstructed before drawing or normal-dependent tools use them. Stored squared brush radii keep their squared-value contract. |
 | `loaders.gltf`, `loaders.object_loader`, `loaders.model_nodes` | Matrix axes use shared lengths and `Matrix4.decompose`. Tiny axes are not flat. Mirror signs survive determinant range loss. Nonfinite entries and unrepresentable output scales are refused before node mutation. |
 | `loaders.ldraw` | Axis lengths, unit directions, and face normals with finite Float32 positions are scale-safe. Rotation extraction reads normalized axes. Invalid stored corners retain the r180 normal arithmetic. |
@@ -74,7 +74,7 @@ blind replacements of every square root.
 |---|---|
 | `geometries.edge_split`, `geometries.surface_sampler` area, `geometries.capsule`, `geometries.extrude` edge lengths | Finite stored Float32 coordinates are widened before subtraction and multiplication. Their two- and four-factor products fit in Float64, including the smallest Float32 subnormals. |
 | `geometries.rounded_box`, `geometries.teapot` | Norms operate on the bounded unit-box construction or fixed control-patch derivatives, before the physical size is applied. |
-| `geometries.cylinder` | Its existing fallback already forms a safe direction from widened height and radius difference before an overflowing slope is used. |
+| `geometries.cylinder` | The slope and its normal are formed in Float64 from widened Float32 radii and height. The slope and its square fit in Float64, including the smallest Float32 height. |
 | `loaders.lwo._normalize`, final USD stored-normal normalization | Operands are widened Float32 components. The range-sensitive pre-storage area accumulators are corrected separately. |
 | `objects.gaussian_splat` bounds and column lengths | The existing widened Float32 products and outward-rounding proof remain intact. Ellipsoid intersection roots are discriminants, not vector normalizers. |
 | `objects.marching_cubes`, `render.flakes_texture`, `postprocessing.gtao` noise | Directions and lengths come from a bounded grid or bounded random construction. |

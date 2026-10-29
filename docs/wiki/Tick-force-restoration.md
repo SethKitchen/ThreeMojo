@@ -65,7 +65,7 @@ Wall time is also retained in the raw results.
 
 The exact source base is `f72d5e7a5c363981d0a254e471fb042045832fd0`.
 Its tree is `06217239bc6b961c6b214f0543958da63fb2f03c`.
-The [raw results](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/benchmarks/force-restoration-linux.json) contain source hashes, all 729 timing samples and all 81 allocation captures.
+The [raw results](https://github.com/SethKitchen/ThreeMojo/blob/d58766390fa97aadc6addf7782a2378373fcb080/docs/benchmarks/force-restoration-linux.json) contain source hashes, all 729 timing samples and all 81 allocation captures.
 
 ## CPU results
 

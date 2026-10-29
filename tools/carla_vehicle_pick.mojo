@@ -15,6 +15,7 @@ names no body, `extras` supplies one from its folder. The file name
 must end in `.uasset`. A skeleton or physics asset there is left out.
 """
 
+from std.os.path import basename
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
@@ -45,9 +46,9 @@ def pick_text(text: String) raises -> String:
     var names = List[String]()
     for index in range(len(refs)):
         var path = refs[index].path
-        if _has(path, "/Pedestrian/"):
+        if "/Pedestrian/" in path:
             continue
-        names.append(_basename(path))
+        names.append(basename(path))
         if refs[index].kind == "SkeletalMesh":
             skeletal.append(index)
         elif refs[index].kind == "StaticMesh" and not _static_skip(path):
@@ -57,7 +58,7 @@ def pick_text(text: String) raises -> String:
             var item = extras[index]
             if item.kind != "SkeletalMesh":
                 continue
-            if not _ends_exact(item.label, ".uasset"):
+            if not item.label.endswith(".uasset"):
                 continue
             if _contains(item.label, "skeleton") or _contains(
                 item.label, "physics"
@@ -159,36 +160,6 @@ def _path_at(mark: Int, refs: List[_Entry], extras: List[_Entry]) -> String:
     return refs[mark].path
 
 
-def _has(text: String, needle: String) -> Bool:
-    """Return whether `text` contains `needle`."""
-    var raw = text.as_bytes()
-    var pat = needle.as_bytes()
-    if len(pat) == 0 or len(raw) < len(pat):
-        return False
-    for start in range(len(raw) - len(pat) + 1):
-        var matched = True
-        for index in range(len(pat)):
-            if raw[start + index] != pat[index]:
-                matched = False
-                break
-        if matched:
-            return True
-    return False
-
-
-def _ends_exact(text: String, needle: String) -> Bool:
-    """Return whether `text` ends with `needle`."""
-    var raw = text.as_bytes()
-    var pat = needle.as_bytes()
-    if len(raw) < len(pat):
-        return False
-    var start = len(raw) - len(pat)
-    for index in range(len(pat)):
-        if raw[start + index] != pat[index]:
-            return False
-    return True
-
-
 def _contains(text: String, needle: String) -> Bool:
     """Return whether `text` contains `needle`, ignoring ASCII case."""
     var raw = text.as_bytes()
@@ -224,14 +195,6 @@ def _fold(byte: UInt8) -> UInt8:
     if byte >= 65 and byte <= 90:
         return byte + 32
     return byte
-
-
-def _basename(path: String) -> String:
-    """Return the last path segment."""
-    var slash = path.rfind("/")
-    if slash < 0:
-        return path
-    return String(path[byte = slash + 1 :])
 
 
 def _json(text: String) -> String:

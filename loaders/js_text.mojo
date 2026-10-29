@@ -50,6 +50,24 @@ def is_js_space(unit: Int) -> Bool:
     return unit in spaces
 
 
+def without_bom(text: String) -> String:
+    """Return a text less one leading byte order mark.
+
+    three.js's `TextDecoder` drops it, and JavaScript's `trim` drops it at
+    the start of a line, so a file that starts with one reads as one
+    without it.
+
+    Args:
+        text: The text.
+
+    Returns:
+        The text without a U+FEFF at its start.
+    """
+    if text.startswith(chr(0xFEFF)):
+        return String(text[byte=3:])
+    return text
+
+
 def is_js_word(byte: UInt8) -> Bool:
     """Return True for a byte that JavaScript's `\\w` matches.
 

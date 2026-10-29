@@ -12,7 +12,7 @@ every piece of furniture stands inside its room without overlap, and the
 same seed gives the same building.
 """
 
-from std.math import inf, nan, pi
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -38,7 +38,6 @@ from extensions.building.generate.plan import (
     FloorProgram,
     LOBBY_FLOOR,
     OFFICE_FLOOR,
-    PlanOptions,
     RESIDENTIAL_FLOOR,
     clip_half,
     default_plan_options,
@@ -89,16 +88,7 @@ from extensions.building.model import (
 )
 from extensions.topology.arrangement import Point2, polygon_area
 from generators.skyscraper import SkyscraperParameters
-from units.si import (
-    Angle64,
-    DEGREE,
-    DEGREE64,
-    Length,
-    Length64,
-    METER,
-    RADIAN,
-    SQUARE_METER,
-)
+from units.si import Angle64, DEGREE64, Length, Length64, METER
 
 
 def _m(v: Float64) -> Length64:

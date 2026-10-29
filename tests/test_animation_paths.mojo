@@ -33,13 +33,11 @@ from animation.keyframe_track import (
     MATERIAL_MAP_OFFSET,
     MATERIAL_MAP_REPEAT,
     MATERIAL_MAP_ROTATION,
-    MATERIAL_OPACITY,
     MORPH_INFLUENCE,
     POSITION,
     POSITION_ELEMENT,
     ROTATION_ELEMENT,
     SCALE_ELEMENT,
-    TrackKind,
     TrackTarget,
     VISIBLE,
     material_target,
@@ -55,8 +53,6 @@ from loaders.json import JsonDocument, parse_json
 from loaders.object_loader import read_object_json
 from materials.material import Material, MaterialId
 from math.euler import Euler
-from math.quaternion import Quaternion
-from math.vector3 import Vector3
 from render.framebuffer import Color
 from render.texture import Texture
 from render.texture_store import TextureId

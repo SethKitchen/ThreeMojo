@@ -9,13 +9,7 @@ The expected numbers are what three.js 0.180's `BufferGeometryUtils` gives
 under node, for the same input built the same way."""
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import (
-    BufferGeometry,
-    GeometryGroup,
-    MaterialIndex,
-    NORMAL,
-    POSITION,
-)
+from core.buffer_geometry import BufferGeometry, MaterialIndex, NORMAL, POSITION
 from core.interleaved_buffer import InterleavedBuffer
 from core.morph import MorphInfluences
 from geometries.attribute_utils import (

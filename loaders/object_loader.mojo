@@ -182,7 +182,7 @@ from core.object3d import (
 )
 from core.scene import Scene
 from exporters.json_writer import JsonWriter
-from core.user_data import user_data_of
+from core.user_data import user_data_of, json_value_text
 from cameras.camera import ViewOffset
 from animation.animation_clip import AnimationClip
 from animation.animation_json import (
@@ -216,13 +216,11 @@ from loaders.curve_json import read_shape
 from loaders.file_path import path_directory
 from loaders.geometry_json import geometry_from_parameters
 from math.path import Shape
-from core.user_data import json_value_text
 from lights.light import (
     AMBIENT,
     DIRECTIONAL,
     HEMISPHERE,
     POINT,
-    RECT_AREA,
     LIGHT_PROBE,
     SPOT,
     Light,
@@ -246,7 +244,6 @@ from loaders.json import (
     ARRAY,
     NO_NODE,
     NULL,
-    NUMBER,
     OBJECT,
     STRING,
     JsonDocument,
@@ -271,8 +268,6 @@ from materials.material import (
     DEFAULT_LINE_WIDTH,
     DEFAULT_POINT_SIZE,
     DISTANCE,
-    DEFAULT_FAR_DISTANCE,
-    DEFAULT_NEAR_DISTANCE,
     LAMBERT,
     NO_DASH,
     NO_ROTATION,
@@ -351,12 +346,20 @@ from render.texture import (
 from render.texture_store import TextureId
 from std.collections import Dict
 from math.finite import require_finite
-from std.math import inf, pi, sqrt
+from std.math import inf, pi
 from std.memory import bitcast
 from std.pathlib import Path
-from units.si import Angle, DEGREE, InverseLength, Length, METER, NANOMETER
-from units.si import MILLIMETER
-from units.si import PER_METER, RADIAN
+from units.si import (
+    Angle,
+    DEGREE,
+    InverseLength,
+    Length,
+    METER,
+    NANOMETER,
+    MILLIMETER,
+    PER_METER,
+    RADIAN,
+)
 from core.ordinal import require_valid, require_non_negative, require_positive
 
 # The format version `Object3D.toJSON` writes, and the one major version

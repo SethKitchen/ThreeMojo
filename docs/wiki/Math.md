@@ -63,6 +63,27 @@ The completed [consumer audit](Norm-consumers) lists geometry, loader, render,
 control, and postprocessing consumers. It records range corrections and the
 bounded or already-wide arithmetic that remains unchanged.
 
+## Products and small angles
+
+Each product is rounded on its own where a test needs an exact zero. Mojo
+fuses a product and the next addition into one fused multiply-add. JavaScript
+rounds each product. For two parallel vectors, the fused form leaves a small
+residual where three.js gets an exact zero.
+
+`Vector3.cross`, `Vector2.cross` and `cross_components` round each product.
+Parallel vectors give an exact zero cross product. A degenerate triangle then
+has a zero normal, and a ray misses it, as in three.js. The ray tests against
+a plane and a triangle round the products of their dot products for the same
+reason. `math.norm` provides `rounded_product`, `rounded_difference` and
+`rounded_dot3` for other exact-zero tests.
+
+A `Float32` cosine rounds to one for every angle below about 5e-4 radians,
+and `acos` then gives zero. `Vector2.angle_to`, `Vector3.angle_to`,
+`Quaternion.angle_to` and `Spherical.from_vector3` use `atan2` forms, so they
+keep small angles. `Quaternion.slerp` stops early only for the same
+quaternion. `Quaternion.rotate_towards` reaches a target that is a small turn
+away.
+
 ## Vector2 and Vector3
 
 `Vector2(x, y)` and `Vector3(x, y, z)` hold `Float32` components. Both are value types. Assignment copies.
@@ -486,7 +507,7 @@ A degenerate triangle has its corners on one line. It has no normal, no plane an
 
 `Line3(start, end)` is a segment. `delta()`, `center()`, `distance()`, `distance_sq()` and `at(t)` describe it. `a == b` compares the ends. `closest_point_parameter(point, clamp)` and `closest_point(point, clamp)` find the point nearest a point. A segment of no length raises for them.
 
-`distance_to_line(other)` is the shortest distance between two segments. `closest_points_to_line(other, on_self, on_other)` is three.js's `distanceSqToLine3`. It writes the two nearest points and returns the squared distance. `apply_matrix4(matrix)` moves both ends.
+`distance_to_line(other)` is the shortest distance between two segments. `closest_points_to_line(other, on_self, on_other)` is three.js's `distanceSqToLine3`. It writes the two nearest points and returns the squared distance. For two parallel segments, the point on this segment is its start, as in three.js. The Octree keeps its own choice for parallel edges. `apply_matrix4(matrix)` moves both ends.
 
 ## Spherical and Cylindrical
 

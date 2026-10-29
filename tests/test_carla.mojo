@@ -6,7 +6,6 @@
 """CARLA's frame, OpenDRIVE roads, sensor encodings, cameras and LiDAR."""
 
 from core.assets import Assets
-from core.buffer_geometry import NORMAL, POSITION
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.carla.capture import depth_frame, nearest_hit, semantic_frame

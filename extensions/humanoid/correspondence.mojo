@@ -64,23 +64,8 @@ from extensions.humanoid.fidelity import (
 from extensions.humanoid.rig.joints import (
     CHEST,
     HEAD,
-    HIPS,
-    LEFT_FOOT,
-    LEFT_FOREARM,
-    LEFT_HAND,
-    LEFT_SHIN,
-    LEFT_THIGH,
-    LEFT_TOES,
-    LEFT_UPPER_ARM,
     NECK,
-    RIGHT_FOOT,
-    RIGHT_FOREARM,
-    RIGHT_HAND,
-    RIGHT_SHIN,
-    RIGHT_THIGH,
-    RIGHT_TOES,
     RIGHT_UPPER_ARM,
-    SPINE,
     Joint,
 )
 from extensions.humanoid.skeleton.head.contents import HeadContents

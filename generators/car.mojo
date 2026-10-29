@@ -26,7 +26,6 @@ from core.ordinal import ordinal_valid, require_valid
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
-from generators.street_furniture import unit_vectors_turn
 from generators.utils import (
     Instances,
     PART_ID,

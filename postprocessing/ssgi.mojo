@@ -57,8 +57,7 @@ from postprocessing.screen_space import DepthView, glsl_rand
 from render.framebuffer import FloatColor
 from render.target import RenderTarget, UNSIGNED_BYTE_TARGET, stored
 from std.bit import pop_count
-from std.math import acos, ceil, cos, isfinite, max, min, pi, pow, sin
-from std.math import sqrt
+from std.math import acos, ceil, cos, isfinite, max, min, pi, pow, sin, sqrt
 from units.si import Length, METER
 from core.ordinal import require_valid, require_non_negative
 

@@ -50,15 +50,10 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.finite import unit_finite
+from math.finite import unit_finite, require_finite, require_positive_finite
 from core.ordinal import ordinal_valid, require_index_in_count
 
-from math.norm import (
-    length2,
-    length3,
-    reciprocal_normalized3,
-    squared_length3,
-)
+from math.norm import length2, reciprocal_normalized3, squared_length3
 from cameras.camera import Camera, project_point, unproject_point
 from controls.input import PRIMARY, PointerButton, require_named
 from core.assets import Assets
@@ -92,10 +87,6 @@ from geometries.sculptor_utils import (
 )
 from math.ray import Ray
 from math.vector3 import Vector3, vector3_from_float64
-from math.finite import (
-    require_finite,
-    require_positive_finite,
-)
 from std.math import floor, inf, isfinite, sqrt
 from units.measure import length_meters
 from units.si import Length

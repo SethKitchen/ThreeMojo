@@ -12,16 +12,10 @@ localization stays pinned to its recorded bytes.
 
 from std.collections import Set
 from std.pathlib import Path
-from std.testing import (
-    TestSuite,
-    assert_equal,
-    assert_false,
-    assert_raises,
-    assert_true,
-)
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 from tests._tree import Tree
-from tools._json_tree import NOTHING, JsonTree
+from tools._json_tree import JsonTree
 from tools._sha256 import sha256_hex
 from tools.anatomy_overlaps import (
     SCHEMA_VERSION,
@@ -39,13 +33,7 @@ from tools.anatomy_overlaps import (
     tool_sha256,
     witness_request,
 )
-from tools.anatomy_validity import (
-    Component,
-    Num,
-    Prober,
-    source_digest,
-    validate_catalog,
-)
+from tools.anatomy_validity import Num, Prober, source_digest, validate_catalog
 
 comptime CURRENT = "docs/validation/anatomy-overlaps-595.json"
 """The repaired evidence."""

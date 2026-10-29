@@ -27,8 +27,6 @@ from extensions.humanoid.skeleton.soft_tissue import (
 from extensions.humanoid.skeleton.torso.muscles.dimensions import (
     TorsoMuscleDimensions,
     torso_muscle_dimensions,
-)
-from extensions.humanoid.skeleton.torso.muscles.dimensions import (
     TorsoMuscle,
     torso_muscle_distance,
     torso_muscle_field,

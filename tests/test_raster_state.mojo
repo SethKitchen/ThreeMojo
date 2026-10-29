@@ -14,7 +14,7 @@ from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.plane import plane
-from lights.light import ambient_light, directional_light
+from lights.light import directional_light
 from materials.material import (
     BASIC,
     BLEND,
@@ -29,7 +29,7 @@ from objects.line import Line, SEGMENTS
 from objects.mesh import Mesh
 from objects.points import Points
 from objects.sprite import Sprite
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import Color, FloatColor
 from render.raster_state import (
     ALWAYS_DEPTH,
     ALWAYS_STENCIL_FUNC,

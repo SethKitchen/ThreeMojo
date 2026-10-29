@@ -11,7 +11,7 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from lights.light import directional_light
 from lights.vxgi_cone_tracer import UNBOUNDED, floats_of, half_rounded

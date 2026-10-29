@@ -12,7 +12,6 @@ of a slab between a ceiling and the floor above it.
 """
 
 from extensions.building.scan.levels import (
-    LevelOptions,
     ScanLevels,
     _peaks,
     clear_layers,

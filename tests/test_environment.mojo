@@ -27,12 +27,11 @@ from core.background import (
     texture_background,
 )
 from core.fog import linear_fog
-from core.layers import Layers
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from geometries.plane import plane
 from geometries.sphere import sphere
-from lights.light import ambient_light, directional_light
+from lights.light import directional_light
 from materials.material import (
     ADD_OPERATION,
     BASIC,
@@ -53,15 +52,7 @@ from objects.line import LOOP, Line
 from objects.mesh import Mesh
 from objects.points import Points
 from objects.sprite import Sprite
-from render.cube_texture import (
-    FACE_COUNT,
-    NEGATIVE_X,
-    NEGATIVE_Z,
-    POSITIVE_X,
-    POSITIVE_Z,
-    CubeTexture,
-    face_forward,
-)
+from render.cube_texture import FACE_COUNT, face_forward, env_rotation
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
     SCENE_ENVIRONMENT,
@@ -77,8 +68,6 @@ from renderers.renderer import Renderer, _BackdropRays, _backdrop_band
 from render.rect import Rect
 from render.tasks import TaskGroup
 from math.matrix4 import Matrix4
-from render.cube_texture import env_rotation
-from render.rect import Rect
 from std.math import pi
 from std.testing import (
     TestSuite,
@@ -97,7 +86,6 @@ from tests._cube_faces import (
     YELLOW,
     a_cube,
     face_colors,
-    solid,
 )
 
 comptime WIDTH = 32

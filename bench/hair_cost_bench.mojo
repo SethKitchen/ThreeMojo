@@ -30,11 +30,7 @@ from extensions.humanoid.skeleton.complexion import hair_tone
 from extensions.humanoid.skeleton.field import DistanceField
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.head.hair.collider import HairCollider
-from extensions.humanoid.skeleton.head.hair.groom import (
-    GroomSpec,
-    HairGroom,
-    groom_hair,
-)
+from extensions.humanoid.skeleton.head.hair.groom import GroomSpec, groom_hair
 from extensions.humanoid.skeleton.head.hair.shading import (
     HairLight,
     HairLook,
@@ -73,11 +69,7 @@ struct _Head(DistanceField, ImplicitlyCopyable):
 
 
 def _median(var times: List[Int]) -> Float64:
-    for i in range(1, len(times)):
-        var j = i
-        while j > 0 and times[j - 1] > times[j]:
-            times.swap_elements(j - 1, j)
-            j -= 1
+    sort(times)
     return Float64(times[len(times) // 2]) / 1e6
 
 

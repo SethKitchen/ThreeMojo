@@ -11,7 +11,7 @@ points, its `createShapes` and its `pointsToStroke`. The first test
 compares all of it. The others reach every branch and every refusal.
 """
 
-from core.buffer_geometry import NORMAL, POSITION, UV
+from core.buffer_geometry import NORMAL, UV
 from loaders.js_number import js_parse_float
 from loaders.json import JsonDocument, parse_json
 from loaders.svg import (
@@ -60,7 +60,6 @@ from loaders.svg_shapes import (
     SvgFillRule,
     SvgLineCap,
     SvgLineJoin,
-    SvgShape,
     SvgStrokeStyle,
     create_shapes,
     create_shapes_with_rule,
@@ -88,7 +87,6 @@ from std.math import inf, isnan, nan, pi
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
-    assert_almost_equal,
     assert_equal,
     assert_false,
     assert_raises,

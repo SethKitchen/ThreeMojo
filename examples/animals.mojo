@@ -50,7 +50,6 @@ from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from render.apng import encode
 from renderers.renderer import Renderer
-from std.math import max
 from std.pathlib import Path
 from units.si import DEGREE, METER, Angle, Length
 

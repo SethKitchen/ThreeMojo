@@ -73,7 +73,7 @@ from generators.skyscraper import SkyscraperParameters
 from extensions.topology.arrangement import Point2, Region
 from extensions.topology.storeys import build_storeys
 from extensions.topology.ids import CellId
-from units.si import Angle64, DEGREE, DEGREE64, Length, Length64, METER
+from units.si import Angle64, DEGREE64, Length, Length64, METER
 
 
 def _m(v: Float64) -> Length64:

@@ -126,7 +126,7 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
 from std.collections import Dict
-from std.math import inf, isinf, isnan, nan, sqrt
+from std.math import inf, isinf, isnan, nan
 from std.os import rmdir
 from std.os.path import exists
 from std.pathlib import Path
@@ -140,7 +140,6 @@ from std.testing import (
 )
 from units.si import (
     DEGREE,
-    DEGREE_PER_SECOND,
     METER,
     METER_PER_SECOND,
     METER_PER_SECOND_SQUARED,

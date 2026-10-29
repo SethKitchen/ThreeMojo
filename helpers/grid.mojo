@@ -50,7 +50,8 @@ def grid_helper(
     Returns:
         `divisions + 1` lines each way, two points each, with a `color`
         attribute in linear light. The lines run along x first and then
-        along z at each step, in the order three.js writes them.
+        along z at each step, in the order three.js writes them. Each
+        step is added in `Float64`, as three.js adds it.
 
     Raises:
         Error: If `size` is not positive, or `divisions` is below one or
@@ -64,13 +65,18 @@ def grid_helper(
             "A grid helper's division count is larger than this port draws"
         )
     var half = side / 2
-    var step = side / Float32(divisions)
+    # three.js adds the step to `k` in doubles at each line and stores
+    # each sum as a `Float32`. A step that is not a `Float32`, such as a
+    # third of a meter, then rounds once per line, as there.
+    var step = Float64(side) / Float64(divisions)
+    var offset = -Float64(half)
     var middle = FloatColor(srgb=center_color)
     var plain = FloatColor(srgb=grid_color)
     var positions = List[Float32]()
     var colors = List[Float32]()
     for index in range(divisions + 1):  # pragma: no branch
-        var k = -half + step * Float32(index)
+        var k = Float32(offset)
+        offset += step
         # Along x at this depth, then along z at this offset.
         for number in [
             -half,

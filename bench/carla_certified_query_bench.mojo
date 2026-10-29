@@ -24,7 +24,7 @@ times every query three times after one warm-up pass.
 Run it with `mojo run -I . bench/carla_certified_query_bench.mojo`.
 """
 
-from extensions.carla.lane_refinement import _LaneCertificate, _checked_center
+from extensions.carla.lane_refinement import _checked_center
 from extensions.carla.map import Map, Waypoint
 from extensions.carla.map_search import MapQueryBudget, _MapQueryWork
 from extensions.carla.opendrive import load_opendrive_file

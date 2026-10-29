@@ -32,7 +32,6 @@ from loaders.object_loader import ObjectModel, read_object_json
 from materials.material import (
     BASIC,
     DISTANCE,
-    LAMBERT,
     MIX_OPERATION,
     PHONG,
     PHYSICAL,
@@ -43,7 +42,6 @@ from materials.material import (
     line_dashed_material,
 )
 from math.bounds import Plane
-from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.line import Line
 from objects.mesh import Mesh
@@ -60,14 +58,7 @@ from render.framebuffer import Color, Framebuffer
 from render.pmrem import pmrem_from_cube
 from render.png import encode as encode_png
 from render.srgb import LINEAR, SRGB
-from render.texture import (
-    BILINEAR,
-    CLAMP,
-    COVERAGE,
-    NEAREST,
-    Texture,
-    float_texture,
-)
+from render.texture import BILINEAR, CLAMP, NEAREST, Texture, float_texture
 from renderers.renderer import Renderer
 from std.testing import (
     TestSuite,

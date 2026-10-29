@@ -62,10 +62,7 @@ the last row and column of blocks hang off the edge; the texels past the
 edge are decoded and dropped, as a GPU stores and never shows them.
 """
 
-from core.ordinal import index_in_count
-from core.ordinal import (
-    ordinal_valid,
-)
+from core.ordinal import index_in_count, ordinal_valid
 
 from render.bptc import BptcTables, bc6h_block, bc7_block
 from render.etc import (

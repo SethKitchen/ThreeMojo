@@ -50,7 +50,6 @@ from extensions.carla.actor import (
     RED,
     TrafficLightState,
     YELLOW,
-    no_rotation,
     relative,
 )
 from extensions.carla.bounding_box import BoundingBox

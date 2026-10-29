@@ -27,7 +27,6 @@ from extensions.gamepad.controller_type import (
     CONTROLLER_UNKNOWN_NON_STEAM,
     CONTROLLER_XBOX360,
     CONTROLLER_XBOXONE,
-    CONTROLLER_XINPUT_PS4,
     CONTROLLER_XINPUT_PS4 as XINPUT_PS4,
     ControllerType,
     gamepad_type_from_guid,

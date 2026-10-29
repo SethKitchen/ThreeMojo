@@ -109,7 +109,12 @@ from extensions.gamepad.gamepad import (
     GAMEPAD_BUTTON_DOWN,
     GAMEPAD_SENSOR_UPDATE,
 )
-from extensions.gamepad.joystick import SENSOR_ACCEL, SENSOR_GYRO, SensorType
+from extensions.gamepad.joystick import (
+    SENSOR_ACCEL,
+    SENSOR_GYRO,
+    SensorType,
+    Joystick,
+)
 from units.si import Duration64, Frequency, SECOND
 from extensions.gamepad.guid import JoystickGuid, VendorId, guid_to_string
 from extensions.gamepad.ids import (
@@ -119,7 +124,6 @@ from extensions.gamepad.ids import (
     GamepadAxis,
     GamepadButton,
 )
-from extensions.gamepad.joystick import Joystick
 from extensions.gamepad.linux import (
     _before,
     EVIOCGID,

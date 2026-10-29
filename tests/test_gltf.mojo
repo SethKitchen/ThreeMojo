@@ -22,6 +22,7 @@ from core.buffer_geometry import COLOR, NORMAL, POSITION, UV
 from core.object3d import NO_PARENT, Object3D
 from core.scene import Scene
 from lights.light import directional_light
+from loaders.js_text import without_bom
 from loaders.json import parse_json
 from loaders.gltf import (
     _Loader,
@@ -135,6 +136,122 @@ def triangle(extra: String = "", material: String = "") -> String:
         + ',"nodes":[{"mesh":0}],"scenes":[{"nodes":[0]}]'
         + material
     )
+
+
+def test_node_names_are_sanitized_and_unique_as_in_three_js() raises:
+    # three.js's `createUniqueName`: white space becomes `_`, `[ ] . : /`
+    # are dropped, and a name used before takes `_1`, `_2`, in the order
+    # the scene's walk reaches the nodes. `userData.name` keeps the file's.
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        doc(
+            '"nodes":[{"name":"Cube.001","children":[2]},{"name":"Cube.001"},'
+            + '{"name":"my node[0]"},{"name":"Cube001"},{}],'
+            + '"scenes":[{"nodes":[0,1,3,4]}]'
+        ),
+        scene,
+        assets,
+    )
+    assert_equal(scene.get(model.nodes[0]).name, "Cube001")
+    assert_equal(scene.get(model.nodes[2]).name, "my_node0")
+    assert_equal(scene.get(model.nodes[1]).name, "Cube001_1")
+    assert_equal(scene.get(model.nodes[3]).name, "Cube001_2")
+    assert_equal(scene.get(model.nodes[4]).name, "")
+    assert_equal(model.node_names[1], "Cube.001")
+    assert_equal(scene.get(model.nodes[1]).user_data.string("name"), "Cube.001")
+
+
+def test_scene_camera_and_light_names_count_as_three_js_counts_them() raises:
+    # three.js's walk names the scene first, then each node, then the
+    # node's camera and light the first time it reaches them, a light with
+    # no name as `light_<i>`. Each name goes through `createUniqueName`, so
+    # each counts against the names after it. three.js 0.180 names these
+    # nodes `Lamp`, `Lamp_2`, `Eye`, `Eye_2`, `Room_1`, ``, `light_1_1`
+    # and `Eye_3`.
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        doc(
+            '"extensionsUsed":["KHR_lights_punctual"],'
+            + '"extensions":{"KHR_lights_punctual":{"lights":['
+            + '{"type":"point","name":"Lamp"},{"type":"point"}]}},'
+            + '"cameras":[{"type":"perspective","name":"Eye",'
+            + '"perspective":{"yfov":0.8,"znear":0.1}}],'
+            + '"scenes":[{"name":"Room","nodes":[0,1,2,3,4,5,6,7]}],'
+            + '"nodes":['
+            + '{"name":"Lamp","extensions":{"KHR_lights_punctual":{"light":0}}},'
+            + '{"name":"Lamp"},{"name":"Eye","camera":0},{"name":"Eye"},'
+            + '{"name":"Room"},{"extensions":{"KHR_lights_punctual":'
+            + '{"light":1}}},{"name":"light_1"},{"name":"Eye","camera":0}]'
+        ),
+        scene,
+        assets,
+    )
+    var expected: List[String] = [
+        "Lamp",
+        "Lamp_2",
+        "Eye",
+        "Eye_2",
+        "Room_1",
+        "",
+        "light_1_1",
+        "Eye_3",
+    ]
+    for index in range(len(expected)):
+        assert_equal(scene.get(model.nodes[index]).name, expected[index])
+
+
+def test_every_scene_counts_toward_the_names_as_in_three_js() raises:
+    # three.js reads every scene, in order, so a scene before the one shown
+    # takes its names first. A scene that is not shown must be whole.
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        doc(
+            '"scene":1,"scenes":[{"name":"A","nodes":[0]},'
+            + '{"name":"A","nodes":[1]}],"nodes":[{"name":"N"},{"name":"N"}]'
+        ),
+        scene,
+        assets,
+    )
+    assert_equal(model.nodes[0], NO_PARENT)
+    assert_equal(scene.get(model.nodes[1]).name, "N_1")
+    assert_true(
+        "a scene's nodes must be an array"
+        in refused(
+            doc(
+                '"scene":1,"scenes":[{"nodes":{}},{"nodes":[0]}],'
+                + '"nodes":[{"name":"N"}]'
+            )
+        )
+    )
+
+
+def test_the_name_walk_reads_each_node_and_light_once() raises:
+    # A node that two scenes hold is named once, and a light that two
+    # nodes hold counts once: so the third `L` takes `_2`, as in three.js.
+    # A skin with no joints names nothing more.
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        doc(
+            '"extensionsUsed":["KHR_lights_punctual"],'
+            + '"extensions":{"KHR_lights_punctual":{"lights":['
+            + '{"type":"point","name":"L"}]}},'
+            + '"skins":[{"joints":[]}],'
+            + '"scenes":[{"nodes":[0,1,2]},{"nodes":[0]}],'
+            + '"nodes":[{"extensions":{"KHR_lights_punctual":{"light":0}},'
+            + '"skin":0},'
+            + '{"name":"L","extensions":{"KHR_lights_punctual":{"light":0}}},'
+            + '{"name":"L"}]'
+        ),
+        scene,
+        assets,
+    )
+    assert_equal(scene.get(model.nodes[0]).name, "")
+    assert_equal(scene.get(model.nodes[1]).name, "L_1")
+    assert_equal(scene.get(model.nodes[2]).name, "L_2")
 
 
 def check_cube(
@@ -281,6 +398,47 @@ def test_a_glb_reads_the_same_cube_from_its_chunks() raises:
     assert_true(len(parts[1]) > 840)
 
 
+def test_a_chunk_of_an_unknown_type_is_skipped() raises:
+    # glTF 2.0 says a reader must skip a chunk of a type it does not know,
+    # and three.js's `GLTFBinaryExtension` skips it, before the binary
+    # chunk or after it.
+    var bin = List[UInt8]("abcd".as_bytes())
+    var good = glb_of('{"asset":{"version":"2.0"}}', bin)
+    var unknown = good.copy()
+    unknown[52] = 0x58
+    var parts = split_glb(unknown)
+    assert_equal(parts[0], '{"asset":{"version":"2.0"}} ')
+    assert_equal(len(parts[1]), 0)
+    var after = good.copy()
+    append_little_endian_u32(after, 4)
+    append_little_endian_u32(after, 0x12345678)
+    after += List[UInt8]("wxyz".as_bytes())
+    after[8] = UInt8(len(after))
+    var kept = split_glb(after)
+    assert_equal(len(kept[1]), 4)
+    assert_equal(kept[1][0], UInt8(ord("a")))
+
+
+def test_a_leading_byte_order_mark_is_dropped() raises:
+    # three.js decodes a file with `TextDecoder`, which drops one leading
+    # byte order mark, before `JSON.parse` reads it: in a `.gltf` and in
+    # a `.glb`'s JSON chunk. A mark that does not lead stays.
+    var mark = chr(0xFEFF)
+    assert_equal(without_bom(mark + "{}"), "{}")
+    assert_equal(without_bom("{}" + mark), "{}" + mark)
+    var text = Path(HERE + "embedded.gltf").read_text()
+    var path = temporary_path("marked.gltf")
+    Path(path).write_text(mark + text)
+    var scene = Scene()
+    var assets = Assets()
+    var model = read_gltf(path, scene, assets)
+    check_cube(model, scene, assets, 0)
+    var parts = split_glb(
+        glb_of(mark + '{"asset":{"version":"2.0"}}', List[UInt8]())
+    )
+    assert_true(parts[0].startswith('{"asset"'))
+
+
 def test_a_file_that_is_not_there_or_not_gltf_is_refused() raises:
     var scene = Scene()
     var assets = Assets()
@@ -421,8 +579,7 @@ def test_a_container_is_checked_chunk_by_chunk() raises:
     append_little_endian_u32(overrun, 0x4E4F534A)
     with assert_raises():
         _ = split_glb(overrun)
-    # A binary chunk before the JSON, two of either, an unknown type,
-    # and no JSON at all.
+    # A binary chunk before the JSON, two of either, and no JSON at all.
     var bin_first = good.copy()
     bin_first[16] = 0x42
     bin_first[17] = 0x49
@@ -437,10 +594,6 @@ def test_a_container_is_checked_chunk_by_chunk() raises:
     two_json[55] = 0x4E
     with assert_raises():
         _ = split_glb(two_json)
-    var unknown = good.copy()
-    unknown[52] = 0x58
-    with assert_raises():
-        _ = split_glb(unknown)
     var twice_bin = good.copy()
     append_little_endian_u32(twice_bin, 4)
     append_little_endian_u32(twice_bin, 0x004E4942)
@@ -1161,14 +1314,23 @@ def test_a_malformed_material_or_texture_is_refused() raises:
     assert_equal(first.roughness_map, model.data_textures[0])
     assert_equal(first.metalness_map, model.data_textures[0])
     assert_equal(first.normal_map, model.data_textures[0])
+    # The scale's y is flipped, as three.js's `assignFinalMaterial` flips
+    # it for a geometry with no tangents.
     assert_almost_equal(first.normal_scale.x, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(first.normal_scale.y, Float32(-0.5), atol=TOLERANCE)
     assert_equal(first.emissive_map, model.color_textures[1])
     assert_almost_equal(first.alpha_test, Float32(0.5), atol=TOLERANCE)
+    # A masked material is not blended, and writes its depth.
+    assert_false(first.transparent)
+    assert_true(first.depth_write)
     assert_true(model.color_textures[0] != model.data_textures[0])
     assert_equal(model.data_textures[1], NO_TEXTURE)
     var second = assets.materials.get(model.materials[1])
     assert_equal(second.map, first.map)
     assert_equal(second.normal_map, first.normal_map)
+    # With no scale, the scale is one, and y is flipped all the same.
+    assert_equal(second.normal_scale.x, Float32(1))
+    assert_equal(second.normal_scale.y, Float32(-1))
     assert_equal(assets.textures.count(), 3)
     ref mirrored = assets.textures.get(model.color_textures[0])
     assert_equal(mirrored.wrap_s, MIRROR)

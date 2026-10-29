@@ -35,20 +35,6 @@ def _require(condition: Bool, message: String) raises:
         raise Error("spiral moment word: " + message)
 
 
-def _as_int(word: UInt64) -> BigInt:
-    """Return `word` as an integer.
-
-    Args:
-        word: A binary64 encoding.
-
-    Returns:
-        The same bits as a non-negative integer.
-    """
-    var low = BigInt(Int(word & 0xFFFFFFFF))
-    var high = BigInt(Int(word >> 32))
-    return (high << 32) + low
-
-
 def fraction_of_word(word: UInt64) raises -> Fraction:
     """Return the exact value of one finite binary64 word.
 

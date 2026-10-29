@@ -114,38 +114,10 @@ def _cut_comment(line: String) -> String:
     Returns:
         The line up to, and not including, the first `#`.
     """
-    var raw = line.as_bytes()
-    var index = 0
-    while index < len(raw):
-        if raw[index] == 35:
-            var head = line[byte=0:index]
-            return String(head)
-        index += 1
-    return line
-
-
-def _strip(text: String) -> String:
-    """Drop leading and trailing ASCII whitespace.
-
-    Args:
-        text: The comment-stripped source.
-
-    Returns:
-        The same text without outer whitespace.
-    """
-    var raw = text.as_bytes()
-    var begin = 0
-    var end = len(raw)
-    while begin < end:
-        if not _is_space(raw[begin]):
-            break
-        begin += 1
-    while end > begin:
-        if not _is_space(raw[end - 1]):
-            break
-        end -= 1
-    var body = text[byte=begin:end]
-    return String(body)
+    var index = line.find("#")
+    if index < 0:
+        return line
+    return String(line[byte=0:index])
 
 
 def _code(text: String) -> String:
@@ -158,26 +130,11 @@ def _code(text: String) -> String:
         The declaration text. Comments are gone and outer whitespace
         is gone.
     """
-    var raw = text.as_bytes()
     var rows = List[String]()
-    var start = 0
-    var index = 0
-    while index < len(raw):
-        if raw[index] == 10:
-            var piece = text[byte=start:index]
-            rows.append(_cut_comment(String(piece)))
-            start = index + 1
-        index += 1
-    var tail = text[byte=start:]
-    rows.append(_cut_comment(String(tail)))
-    var joined = String()
-    var row = 0
-    while row < len(rows):
-        if row > 0:
-            joined += "\n"
-        joined += rows[row]
-        row += 1
-    return _strip(joined)
+    for line in text.split("\n"):
+        rows.append(_cut_comment(String(line)))
+    var joined = "\n".join(rows)
+    return String(joined.strip(" \t\n\r\x0b\x0c"))
 
 
 def _has(raw: Span[UInt8, _], index: Int, literal: String) -> Bool:

@@ -74,7 +74,7 @@ from render.splatrule import (
     stored_splat_depth,
 )
 from render.target import RenderTarget
-from std.math import exp, isnan, log2, nan, sqrt
+from std.math import exp, log2, nan, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,

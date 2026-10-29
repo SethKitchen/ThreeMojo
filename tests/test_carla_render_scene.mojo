@@ -70,7 +70,6 @@ from extensions.carla.props import (
     YIELD_PROP,
     lamp_intensity,
     prop_kind_of,
-    signal_facing,
     signal_prop,
     signal_props,
 )
@@ -125,12 +124,7 @@ from extensions.carla.sensor import (
     SKY,
     SemanticTag,
     TERRAIN,
-    TRAFFIC_LIGHT,
-    TRAFFIC_SIGN,
     VEGETATION,
-    WALL,
-    cityscapes_color,
-    decode_depth,
 )
 from extensions.carla.town import (
     GROUND_FLOOR,
@@ -156,14 +150,13 @@ from extensions.carla.town import (
     wet_color,
     _clear_of_roads,
 )
-from extensions.carla.render_weather import WetSurface
+from extensions.carla.render_weather import WetSurface, SkySettings
 from extensions.carla.render_sky import (
     GROUND,
     NIGHT_ZENITH,
     cloud_density,
     sky_texel,
 )
-from extensions.carla.render_weather import SkySettings
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from extensions.carla.vehicle import (
     LIGHT_BRAKE,
@@ -172,7 +165,7 @@ from extensions.carla.vehicle import (
     LIGHT_POSITION,
     VehicleLightState,
 )
-from extensions.carla.weather import WeatherParameters, weather_preset
+from extensions.carla.weather import weather_preset
 from extensions.carla.world import EpisodeSettings, World
 from math.bounds import Box3
 from math.noise import ImprovedNoise
@@ -185,9 +178,8 @@ from postprocessing.composer import (
     RENDER,
     SSR_NODE,
 )
-from render.color_utils import kelvin_color
 from render.framebuffer import Color, FloatColor
-from std.math import atan, inf, log2, pi, pow, sqrt
+from std.math import atan, inf, log2, pi, sqrt
 from std.os import makedirs
 from test_scratch import TestScratch, temporary_path
 from std.pathlib import Path

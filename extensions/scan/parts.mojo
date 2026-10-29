@@ -52,7 +52,7 @@ from extensions.scan.terrain import GroundSurface, flat_ground, ground_grid
 from generators.utils import Vec3d
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import atan2, floor, sqrt
+from std.math import atan2, floor
 from units.si import (
     Acceleration64,
     Angle64,

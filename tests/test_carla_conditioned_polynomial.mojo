@@ -19,7 +19,7 @@ from extensions.carla.curve_rounded_arc import (
     _rounded_arc_context,
 )
 from extensions.carla.curve_rounded_line import _rounded_line_axis_context
-from extensions.carla.geometry import LINE, ARC, RoadGeometry, with_arc
+from extensions.carla.geometry import LINE, RoadGeometry, with_arc
 from extensions.carla.junction_bounds import (
     _polynomial_bounds,
     _centered_elevation_enclosure,

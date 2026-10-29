@@ -30,7 +30,6 @@ from loaders.object_loader import load_object_json
 from materials.material import physical_material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.cube_texture import CubeTexture
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.pmrem import pmrem_from_cube

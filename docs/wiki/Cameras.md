@@ -160,7 +160,9 @@ eyes.add(stereo.right, Rect(120, 0, 120, 120))
 | `focus` | `camera.focus` | 10 m | How far ahead the two views cross. Positive. three.js reads the camera's `focus`. This port keeps its own. |
 | `aspect` | `aspect` | `1.0` | What the camera's aspect is multiplied by for each eye. A half for a side-by-side pair. |
 
-`update(camera, scene)` places `left` and `right` from the camera as it stands, placed or riding a node of the scene. The eyes take the camera's field of view, zoom, planes and layers. They take the vertical part of its view offset and not the horizontal part or the film offset, as in three.js. The skew is `eye_separation / 2 * near / focus` at the near plane, three.js's own arithmetic, set as each eye's `view_shift`. A point at the focus lands on the same column in both eyes. A nearer point lands further apart, which is the parallax.
+`update(camera, scene)` places `left` and `right` from the camera as it stands, placed or riding a node of the scene. The eyes take the camera's field of view, zoom, planes and layers. three.js's left eye draws layers 0 and 1 and its right eye layers 0 and 2, whatever layers the camera draws. They take the vertical part of its view offset and not the horizontal part or the film offset, as in three.js.
+
+The skew is `eye_separation / 2 * near / focus` at the near plane, three.js's own arithmetic, set as each eye's `view_shift`. A point at the focus lands on the same column in both eyes. A nearer point lands further apart, which is the parallax.
 
 The three settings are open fields. `validate()` refuses a negative or non-finite separation and a focus or aspect that is not positive and finite. `update` calls it before it places an eye. It builds both eyes before it keeps either, so a refused update leaves the pair as it was.
 
@@ -192,7 +194,7 @@ var chrome = Material(Color(255, 255, 255), kind=BASIC, env_map=seen)
 | `face_camera(face, scene) -> PerspectiveCamera` | The camera that draws one face, placed. |
 | `layers` | Which layers the six faces draw. Layer zero alone to begin with. |
 
-Each face camera looks along `face_forward(face)` with `face_up(face)` as its up. Those are the two tables the cube texture sampler reads with, and three.js's own six ups. So a rendered cube reflects the scene it was rendered from with no flip. The node's own turn is not read: a cube texture is sampled in world space.
+Each face camera looks along `face_forward(face)` with `face_up(face)` as its up. Those are the two tables the cube texture sampler reads with, and three.js's own six ups. So a rendered cube reflects the scene it was rendered from with no flip. The node's own turn is not read: a cube texture is sampled in world space. In three.js, the six face cameras are children of the `CubeCamera` and turn with it. A turned cube camera there renders a cube map that is turned against the world it is sampled in.
 
 `render_cube` draws each face with a renderer of the face's size and this renderer's background, shading and workers, through `render`. The scene's own background is in the faces. The tone mapping is left off, as three.js turns it off around its update: the faces are light the main frame maps once.
 

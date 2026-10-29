@@ -67,7 +67,7 @@ def uv_text(text: String) raises -> String:
         var d01 = _dot(e0x, e0y, e0z, e1x, e1y, e1z)
         var d11 = _dot(e1x, e1y, e1z, e1x, e1y, e1z)
         var denom = _fsub(_fmul(d00, d11), _fmul(d01, d01))
-        if _abs(denom) <= 1e-18:
+        if abs(denom) <= 1e-18:
             denom = 1e-18
         for corner in range(3):
             var at = base + corner
@@ -108,13 +108,6 @@ def _dot(
 ) -> Float64:
     """Return a dot product, each product rounded first."""
     return _fadd(_fadd(_fmul(ax, bx), _fmul(ay, by)), _fmul(az, bz))
-
-
-def _abs(value: Float64) -> Float64:
-    """Return the absolute value."""
-    if value < 0.0:
-        return -value
-    return value
 
 
 @no_inline

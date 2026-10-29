@@ -24,11 +24,9 @@ from materials.material import (
 )
 from materials.nodes import (
     EMISSIVE_NODE,
-    NO_NODES,
     NodeGraph,
     NodeInputs,
     NodeProgram,
-    NodeProgramId,
     OFFSET_NODE,
     ProgramSource,
     SCATTERING_NODE,

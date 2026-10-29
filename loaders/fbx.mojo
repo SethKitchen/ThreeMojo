@@ -102,7 +102,7 @@ from lights.light import (
     point_light,
     spot_light,
 )
-from loaders.bytes import space_tab_line
+from loaders.bytes import space_tab_line, decode_base64
 from loaders.file_path import path_directory
 from loaders.fbx_tree import (
     FBX_BYTES,
@@ -120,23 +120,14 @@ from loaders.fbx_animation import (
     _connections,
     read_fbx_animations,
 )
-from loaders.bytes import decode_base64
 from loaders.model_nodes import (
     authored_color,
     compose,
     decompose_onto,
     remember_material,
     texture_from_bytes,
-    texture_from_file,
 )
-from materials.material import (
-    LAMBERT,
-    NO_TEXTURE,
-    PHONG,
-    Material,
-    MaterialId,
-    MaterialKind,
-)
+from materials.material import LAMBERT, NO_TEXTURE, PHONG, Material, MaterialId
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.matrix4 import Matrix4, scaling, translation
 from math.vector2 import Vector2, append_vector2, vector2_from_float64
@@ -156,7 +147,7 @@ from render.texture_store import TextureId
 from std.math import atan, pi
 from std.pathlib import Path
 from units.measure import angle_degrees, length_meters
-from units.si import CENTIMETER, DEGREE, METER, Angle, Length
+from units.si import CENTIMETER, DEGREE, Angle, Length
 
 # How deep the model hierarchy can go. The models are placed by
 # recursion, parent first.

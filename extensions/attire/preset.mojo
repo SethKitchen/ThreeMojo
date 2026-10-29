@@ -36,7 +36,6 @@ from extensions.attire.cover import Cover
 from extensions.attire.garment import (
     NO_ANCHOR,
     Garment,
-    bascinet,
     boots,
     coif,
     cuirass,

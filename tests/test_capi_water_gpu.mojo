@@ -26,7 +26,7 @@ from window.capi_water_gpu import (
     tm_step,
     tm_width,
 )
-from window.water_app import BED, STEP_MICROSECONDS
+from window.water_app import STEP_MICROSECONDS
 
 comptime Handle = OpaquePointer[MutUntrackedOrigin]
 comptime WIDTH = 48

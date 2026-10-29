@@ -13,6 +13,7 @@ base-color texture, it also prints `image`: the width, the height and
 the RGBA samples. Each byte is divided by 255.
 """
 
+from std.os.path import join
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
@@ -107,7 +108,7 @@ def _image(doc: PyJson, material: Int, out_dir: String) raises -> String:
     if source < 0 or source >= doc.length(images):
         raise Error("image index is out of range")
     var uri = _text(doc, json_member(doc, doc.item(images, source), "uri"))
-    var opened = PyJson.parse(image_file(_join(out_dir, uri)))
+    var opened = PyJson.parse(image_file(join(out_dir, uri)))
     var unit = PyJson.parse(
         unit_text(
             '{"pixels":'
@@ -123,19 +124,6 @@ def _image(doc: PyJson, material: Int, out_dir: String) raises -> String:
     out += _compact(unit, unit.at(unit.root, "rgba"))
     out += "}"
     return out
-
-
-def _join(directory: String, uri: String) -> String:
-    """Return `directory` joined with a relative `uri`."""
-    var raw = uri.as_bytes()
-    if len(raw) > 0 and raw[0] == 47:
-        return uri
-    var base = directory.as_bytes()
-    if len(base) == 0:
-        return uri
-    if base[len(base) - 1] == 47:
-        return directory + uri
-    return directory + "/" + uri
 
 
 def _number(doc: PyJson, node: Int) raises -> Float64:

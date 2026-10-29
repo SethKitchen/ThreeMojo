@@ -37,22 +37,9 @@ CARLA passes bare floats: an arc length is a `Length`, a heading an
 number, which reads as the opposite.
 """
 
-from extensions.carla.quantity_boundary import _finite_si, _positive_si
-from units.si import Area
-
-from extensions.carla.transform import (
-    CarlaRotation,
-    CarlaTransform,
-    _wrap_degrees,
-)
-from math.matrix4 import Matrix4
-from math.quaternion import Quaternion
-from math.utils import clamp
-from math.vector2 import Vector2
-from math.vector3 import Vector3
-from std.ffi import external_call
-from std.math import asin, atan2, cos, pi, sin, sqrt
+from extensions.carla.quantity_boundary import _finite_si
 from units.si import (
+    Area,
     DEGREE,
     DEGREE_PER_SECOND,
     METER,
@@ -66,6 +53,19 @@ from units.si import (
     Length,
     Velocity,
 )
+
+from extensions.carla.transform import (
+    CarlaRotation,
+    CarlaTransform,
+    _wrap_degrees,
+)
+from math.matrix4 import Matrix4
+from math.quaternion import Quaternion
+from math.utils import clamp
+from math.vector2 import Vector2
+from math.vector3 import Vector3
+from std.ffi import external_call
+from std.math import asin, atan2, cos, pi, sin, sqrt
 
 # Twice the machine epsilon of a `float`, CARLA's `MakeUnitVector` default.
 comptime UNIT_VECTOR_EPSILON: Float32 = 2.0 * 1.1920928955078125e-07

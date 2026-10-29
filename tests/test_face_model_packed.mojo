@@ -40,6 +40,7 @@ from extensions.humanoid.skeleton.head.skin.scan import (
     rest_expression,
     scan_model,
 )
+from math.norm import rounded_difference
 from math.vector3 import Vector3
 from std.memory import bitcast
 from std.testing import TestSuite, assert_equal, assert_raises
@@ -108,10 +109,11 @@ def _reference_part(
         var c = points[owners[indices[t + 2]]]
         var e1 = b - a
         var e2 = c - a
+        # Each product is rounded on its own, as in JavaScript.
         var n = Vector3(
-            e1.y * e2.z - e1.z * e2.y,
-            e1.z * e2.x - e1.x * e2.z,
-            e1.x * e2.y - e1.y * e2.x,
+            rounded_difference(e1.y, e2.z, e1.z, e2.y),
+            rounded_difference(e1.z, e2.x, e1.x, e2.z),
+            rounded_difference(e1.x, e2.y, e1.y, e2.x),
         )
         for c in range(3):  # pragma: no branch
             var p = owners[indices[t + c]]

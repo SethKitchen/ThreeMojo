@@ -7,9 +7,15 @@
 
 from cameras.camera import Camera
 from cameras.orthographic_camera import OrthographicCamera, centered
-from render.rasterizer import RasterVertex
+from render.rasterizer import (
+    RasterVertex,
+    SHADE_LIT,
+    SHADE_TEXTURE,
+    SHADE_UV,
+    ShadeMode,
+)
 from core.geometry_store import GeometryId
-from core.object3d import NodeId
+from core.object3d import NodeId, Object3D
 from cameras.perspective_camera import PerspectiveCamera
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -20,7 +26,6 @@ from core.buffer_geometry import (
     UV,
     UV1,
 )
-from core.object3d import Object3D
 from geometries.plane import plane
 from core.assets import Assets
 from core.search import first_match
@@ -33,11 +38,7 @@ from materials.material import (
     DOUBLE_SIDE,
     FRONT_SIDE,
     Material,
-)
-from lights.light import point_light
-from materials.material import (
     BASIC,
-    DEPTH,
     LAMBERT,
     MATCAP,
     NORMALS,
@@ -58,15 +59,16 @@ from materials.material import (
     standard_material,
     toon_material,
 )
-from render.cube_texture import CubeTexture
-from render.cube_texture_store import SCENE_ENVIRONMENT
-from core.scene import Scene
 from lights.light import (
+    point_light,
     ambient_light,
     directional_light,
     rect_area_light,
     spot_light,
 )
+from render.cube_texture import CubeTexture
+from render.cube_texture_store import SCENE_ENVIRONMENT
+from core.scene import Scene
 from lights.ltc import LtcTables, load_ltc_tables
 from core.layers import Layers
 from lights.lighting import Lighting
@@ -89,7 +91,15 @@ from render.tonemap import (
     REINHARD_TONE_MAPPING,
     ToneMapping,
 )
-from units.si import InverseLength, PER_METER
+from units.si import (
+    InverseLength,
+    PER_METER,
+    Angle,
+    DEGREE,
+    Length,
+    METER,
+    NANOMETER,
+)
 from geometries.box import cube
 from geometries.sphere import sphere
 from math.vector2 import Vector2
@@ -104,7 +114,6 @@ from objects.line import Line
 from objects.points import Points
 from math.matrix4 import Matrix4
 from render.framebuffer import Color, FloatColor, Framebuffer
-from render.rasterizer import SHADE_LIT, SHADE_TEXTURE, SHADE_UV, ShadeMode
 from geometries.polyhedron import octahedron
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.texture import (
@@ -125,7 +134,6 @@ from render.texture_store import NO_TEXTURE, TextureId
 from renderers.renderer import (
     Renderer,
     available_workers,
-    camera_position,
     camera_up,
     face_normal,
     toward_camera,
@@ -143,7 +151,6 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle, DEGREE, Length, METER, NANOMETER
 
 
 def rendered[

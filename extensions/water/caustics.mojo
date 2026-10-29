@@ -22,7 +22,7 @@ from math.vector3 import Vector3
 from render.fillrule import pixel_index, shifted_pixel_index
 from render.tasks import TaskGroup
 from math.norm import squared_length3
-from std.math import abs, floor, hypot, isfinite, sqrt
+from std.math import abs, floor, hypot, sqrt
 from units.si import Length
 
 # Clearwater caps unresolved point focusing rather than emitting infinite light.

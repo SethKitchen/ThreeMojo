@@ -90,7 +90,7 @@ from math.utils import clamp, js_round
 from math.vector2 import Vector2
 from math.vector3 import Vector3, radians_between
 from render.framebuffer import Color, FloatColor
-from std.math import acos, atan2, cos, inf, pi, sin, sqrt
+from std.math import atan2, cos, inf, pi, sin
 from units.si import Angle, Length, METER, RADIAN
 
 # An axis this close to the line of sight is hidden, and a plane this close

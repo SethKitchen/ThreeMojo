@@ -11,7 +11,7 @@ numbers are three.js's formulas worked by hand."""
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
-from core.object3d import NO_PARENT, NodeId, Object3D
+from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from lights.light import (
     ambient_light,
@@ -47,7 +47,7 @@ from math.bounds import Box3
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from std.math import cos, inf, nan, sqrt
+from std.math import cos, inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,

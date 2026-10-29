@@ -66,9 +66,8 @@ coordinates, and the specular and ambient maps. `<polygons>` is read,
 which three.js does not read.
 """
 
-from core.ordinal import index_in_count
-
 from core.ordinal import (
+    index_in_count,
     ordinal_valid,
     require_index_in_count,
     require_valid,
@@ -120,7 +119,6 @@ from materials.material import (
     PHONG,
     Material,
     MaterialId,
-    MaterialKind,
     Side,
 )
 from math.matrix4 import Matrix4, rotation_axis, scaling, translation
@@ -138,7 +136,7 @@ from objects.skinned_mesh import (
 )
 from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB, ColorSpace, srgb_to_linear
-from render.texture import CLAMP, COVERAGE, IGNORED, REPEAT, Alpha, Wrap
+from render.texture import CLAMP, COVERAGE, IGNORED, REPEAT, Alpha
 from render.texture_store import TextureId
 from std.math import sqrt
 from std.pathlib import Path

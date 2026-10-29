@@ -75,11 +75,9 @@ def props_text(path: String) raises -> String:
     tree.set(
         obj,
         "translucent",
-        tree.boolean(_has(text, "BlendMode = BLEND_Translucent")),
+        tree.boolean("BlendMode = BLEND_Translucent" in text),
     )
-    tree.set(
-        obj, "masked", tree.boolean(_has(text, "BlendMode = BLEND_Masked"))
-    )
+    tree.set(obj, "masked", tree.boolean("BlendMode = BLEND_Masked" in text))
     return tree.dumps(obj, False)
 
 
@@ -173,12 +171,8 @@ def _utf8_size(data: List[UInt8], index: Int) -> Int:
 def _lines(text: String) -> List[String]:
     """Return stripped lines."""
     var out = List[String]()
-    var raw = text.as_bytes()
-    var start = 0
-    for index in range(len(raw) + 1):
-        if index == len(raw) or raw[index] == 10:
-            out.append(_strip(String(text[byte=start:index])))
-            start = index + 1
+    for line in text.split("\n"):
+        out.append(_strip(String(line)))
     return out^
 
 
@@ -411,11 +405,6 @@ def _space(raw: Span[UInt8, _], index: Int) -> Int:
     return at
 
 
-def _has(text: String, needle: String) -> Bool:
-    """Return whether `needle` occurs in `text`."""
-    return text.find(needle) >= 0
-
-
 def _starts_at(text: String, index: Int, prefix: String) -> Bool:
     """Return whether `prefix` occurs at `index`."""
     var raw = text.as_bytes()
@@ -430,14 +419,7 @@ def _starts_at(text: String, index: Int, prefix: String) -> Bool:
 
 def _strip(text: String) -> String:
     """Strip ASCII whitespace from both ends."""
-    var raw = text.as_bytes()
-    var start = 0
-    var end = len(raw)
-    while start < end and _space_byte(raw[start]):
-        start += 1
-    while end > start and _space_byte(raw[end - 1]):
-        end -= 1
-    return String(text[byte=start:end])
+    return String(text.strip(" \t\n\r\x0b\x0c"))
 
 
 def _space_byte(byte: UInt8) -> Bool:

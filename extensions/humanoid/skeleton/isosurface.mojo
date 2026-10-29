@@ -19,7 +19,7 @@ from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import DistanceField
 from math.utils import clamp, max3
 from math.vector3 import Vector3, centroid, midpoint, mix_delta3, append_vector3
-from std.math import atan2, max, min, pi
+from std.math import atan2, min, pi
 
 comptime MIN_DETAIL = 8
 comptime MAX_DETAIL = 64
@@ -371,14 +371,6 @@ def _march_cube(
     iz: Int,
 ):
     """Emit isosurface triangles for the six tetrahedra of one cube."""
-    var p0 = _grid_point(origin, dx, dy, dz, ix, iy, iz)
-    var p1 = _grid_point(origin, dx, dy, dz, ix + 1, iy, iz)
-    var p2 = _grid_point(origin, dx, dy, dz, ix + 1, iy + 1, iz)
-    var p3 = _grid_point(origin, dx, dy, dz, ix, iy + 1, iz)
-    var p4 = _grid_point(origin, dx, dy, dz, ix, iy, iz + 1)
-    var p5 = _grid_point(origin, dx, dy, dz, ix + 1, iy, iz + 1)
-    var p6 = _grid_point(origin, dx, dy, dz, ix + 1, iy + 1, iz + 1)
-    var p7 = _grid_point(origin, dx, dy, dz, ix, iy + 1, iz + 1)
     var d0 = _sample(samples, sx, sy, ix, iy, iz)
     var d1 = _sample(samples, sx, sy, ix + 1, iy, iz)
     var d2 = _sample(samples, sx, sy, ix + 1, iy + 1, iz)
@@ -387,6 +379,29 @@ def _march_cube(
     var d5 = _sample(samples, sx, sy, ix + 1, iy, iz + 1)
     var d6 = _sample(samples, sx, sy, ix + 1, iy + 1, iz + 1)
     var d7 = _sample(samples, sx, sy, ix, iy + 1, iz + 1)
+    # Most cubes lie wholly inside or wholly outside. Each tetrahedron
+    # holds both kinds of corner only when the cube does, so such a cube
+    # emits nothing, and its corners need not be placed.
+    var inside = (
+        Int(d0 < 0)
+        + Int(d1 < 0)
+        + Int(d2 < 0)
+        + Int(d3 < 0)
+        + Int(d4 < 0)
+        + Int(d5 < 0)
+        + Int(d6 < 0)
+        + Int(d7 < 0)
+    )
+    if inside == 0 or inside == 8:
+        return
+    var p0 = _grid_point(origin, dx, dy, dz, ix, iy, iz)
+    var p1 = _grid_point(origin, dx, dy, dz, ix + 1, iy, iz)
+    var p2 = _grid_point(origin, dx, dy, dz, ix + 1, iy + 1, iz)
+    var p3 = _grid_point(origin, dx, dy, dz, ix, iy + 1, iz)
+    var p4 = _grid_point(origin, dx, dy, dz, ix, iy, iz + 1)
+    var p5 = _grid_point(origin, dx, dy, dz, ix + 1, iy, iz + 1)
+    var p6 = _grid_point(origin, dx, dy, dz, ix + 1, iy + 1, iz + 1)
+    var p7 = _grid_point(origin, dx, dy, dz, ix, iy + 1, iz + 1)
     _clip_tetrahedron(positions, indices, p0, p1, p2, p6, d0, d1, d2, d6)
     _clip_tetrahedron(positions, indices, p0, p2, p3, p6, d0, d2, d3, d6)
     _clip_tetrahedron(positions, indices, p0, p3, p7, p6, d0, d3, d7, d6)

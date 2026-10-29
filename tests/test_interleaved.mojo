@@ -42,6 +42,7 @@ from geometries.utils import merge_geometries, merge_vertices
 from lights.light import ambient_light, directional_light
 from loaders.object_loader import read_object_json
 from materials.material import BASIC, LAMBERT, Material
+from math.matrix4 import translation
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
@@ -299,6 +300,27 @@ def test_a_write_through_one_attribute_shows_through_the_buffer() raises:
     assert_equal(plain.data[1], 5)
     with assert_raises(contains="not interleaved"):
         _ = plain.interleaved_buffer()
+
+
+def test_a_matrix_moves_an_interleaved_item_through_its_buffer() raises:
+    # A matrix writes each interleaved item back through the buffer, as
+    # three.js's `setXYZ` does, and leaves the numbers beside it alone.
+    var buffer = InterleavedBuffer([1, 2, 3, 10, 20, 4, 5, 6, 40, 50], 5)
+    var positions = BufferAttribute(buffer, 3, 0)
+    positions.apply_matrix4(translation(1, 0, 0))
+    assert_equal(buffer.value(0), 2)
+    assert_equal(buffer.value(5), 5)
+    assert_equal(buffer.value(3), 10)
+    # A plain attribute checks a vertex index below zero and past the end.
+    var plain = BufferAttribute([Float32(1), 2, 3], 3)
+    with assert_raises(contains="vertex index out of range"):
+        _ = plain.vector3(-1)
+    with assert_raises(contains="vertex index out of range"):
+        _ = plain.vector3(1)
+    # An item of two numbers has no third to write.
+    var flat = BufferAttribute([Float32(1), 2], 2)
+    with assert_raises(contains="component offset out of range"):
+        flat._put3(0, Vector3(1, 2, 3))
 
 
 def test_an_interleaved_attribute_refuses_an_item_outside_its_run() raises:

@@ -6,7 +6,7 @@
 """Tests for the arrow, polar grid, plane, skeleton, light and vertex
 helpers, and the segment list they are built with."""
 
-from cameras.orthographic_camera import OrthographicCamera, centered
+from cameras.orthographic_camera import centered
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION
@@ -218,6 +218,24 @@ def test_the_polar_grid_is_spokes_then_rings() raises:
     assert_linear(color_of(grid, 32), DEFAULT_POLAR_COLOR2)
     assert_near(point_of(grid, 160), 0, 0, 8.75)
     assert_linear(color_of(grid, 160), DEFAULT_POLAR_COLOR1)
+
+
+def test_the_polar_grid_turns_in_doubles_as_three_js_does() raises:
+    # three.js works each angle, its sine and its cosine out in doubles
+    # and stores each point as a Float32. The values here are that
+    # arithmetic in Python doubles, rounded to Float32. Worked in Float32,
+    # the spoke at a quarter turn ended 0.44 micrometers behind the x
+    # axis, and the other points were off by up to fourteen steps.
+    var grid = polar_grid_helper()
+    var quarter = point_of(grid, 9)
+    assert_equal(quarter.x, Float32(10))
+    assert_equal(quarter.z, Float32(6.123233998228043e-16))
+    var spoke = point_of(grid, 15)
+    assert_equal(spoke.x, Float32(3.8268344402313232))
+    assert_equal(spoke.z, Float32(-9.238795280456543))
+    var ring = point_of(grid, 65)
+    assert_equal(ring.x, Float32(9.951847076416016))
+    assert_equal(ring.z, Float32(-0.9801713824272156))
 
 
 def test_the_polar_grid_draws_what_its_counts_ask_for() raises:

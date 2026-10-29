@@ -6,6 +6,8 @@
 """Tests for `math.vector3`."""
 
 from math.vector3 import Vector3
+from std.benchmark import black_box
+from std.math import copysign
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -88,6 +90,39 @@ def test_cross_of_parallel_vectors_is_zero() raises:
     var v = Vector3(2, 4, 6)
     v.cross(Vector3(1, 2, 3))
     assert_equal(v.length(), Float32(0))
+
+
+def test_a_vector_and_its_double_cross_to_exactly_zero() raises:
+    # three.js rounds each product, so the cross product is exactly zero. A
+    # fused multiply-add leaves about 6e-8. `black_box` keeps the compiler
+    # from folding the arithmetic at compile time.
+    var v = Vector3(0.64410096, 0.79458356, 0.66250294) * black_box(Float32(1))
+    var product = v
+    product.cross(v * 2)
+    assert_equal(product.x, Float32(0))
+    assert_equal(product.y, Float32(0))
+    assert_equal(product.z, Float32(0))
+
+
+def test_a_cross_product_keeps_the_sign_of_a_zero() raises:
+    # In JavaScript, -1 * 0 - 0 * 1 is -0. A binary STL writes that sign.
+    var product = Vector3(1, black_box(Float32(-1)), 0)
+    product.cross(Vector3(1, 1, 0))
+    assert_equal(copysign(Float32(1), product.x), Float32(-1))
+    assert_equal(copysign(Float32(1), product.y), Float32(1))
+    assert_equal(product.z, Float32(2))
+
+
+def test_an_angle_below_what_a_float32_cosine_holds_is_kept() raises:
+    # The cosine of 2e-4 radians rounds to one in Float32.
+    var tilted = Vector3(1, black_box(Float32(2e-4)), 0)
+    var angle = Vector3(1, 0, 0).angle_to(tilted).value
+    assert_almost_equal(angle, Float32(2e-4), rtol=1e-3)
+    assert_almost_equal(
+        tilted.angle_to(Vector3(-1, 0, 0)).value,
+        Float32(3.14159265 - 2e-4),
+        rtol=1e-6,
+    )
 
 
 def test_normalize_gives_unit_length() raises:

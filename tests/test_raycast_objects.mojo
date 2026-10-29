@@ -11,7 +11,9 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
+from core.deform import skin_pose
 from core.object3d import NodeId, Object3D
+from core.object_bounds import box_from_object
 from core.raycaster import (
     LINE_HIT,
     POINTS_HIT,
@@ -25,10 +27,10 @@ from materials.material import (
     points_material,
     sprite_material,
 )
-from math.matrix4 import Matrix4, translation
+from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from objects.line import LOOP, Line, LineMode, STRIP
+from objects.line import LOOP, Line, LineMode, SEGMENTS, STRIP
 from objects.points import Points
 from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
@@ -100,8 +102,15 @@ def _camera() raises -> PerspectiveCamera:
 # --- skinned meshes ---------------------------------------------------------
 
 
-def _rigged() raises -> Tuple[Scene, Assets]:
+def _rigged(
+    unused: Float32 = 0, share: Float32 = 0
+) raises -> Tuple[Scene, Assets]:
     """Return a triangle on one bone that has moved five meters along +x.
+
+    Args:
+        unused: The bone index in each vertex's second slot.
+        share: The weight of that slot. Zero, the default, leaves the
+            slot unused.
 
     Returns:
         The scene and its assets.
@@ -111,8 +120,34 @@ def _rigged() raises -> Tuple[Scene, Assets]:
     """
     var assets = Assets()
     var geometry = _geometry([Float32(0), 0, 0, 1, 0, 0, 0, 1, 0])
-    var bones: List[Float32] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    var weights: List[Float32] = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]
+    var bones: List[Float32] = [
+        0,
+        unused,
+        0,
+        0,
+        0,
+        unused,
+        0,
+        0,
+        0,
+        unused,
+        0,
+        0,
+    ]
+    var weights: List[Float32] = [
+        1,
+        share,
+        0,
+        0,
+        1,
+        share,
+        0,
+        0,
+        1,
+        share,
+        0,
+        0,
+    ]
     geometry.set_attribute(String(SKIN_INDEX), BufferAttribute(bones^, 4))
     geometry.set_attribute(String(SKIN_WEIGHT), BufferAttribute(weights^, 4))
     var shape = assets.geometries.add(geometry^)
@@ -147,6 +182,47 @@ def test_a_skinned_mesh_is_picked_where_its_bones_carry_it() raises:
         _ = _down(0, 0).intersect_skinned_mesh(scene, assets, 1)
     with assert_raises(contains="No skinned mesh"):
         _ = _down(0, 0).intersect_skinned_mesh(scene, assets, -1)
+
+
+def test_a_slot_with_no_weight_may_name_any_bone() raises:
+    # An exporter can leave any number in an unused slot. three.js's
+    # `applyBoneTransform` skips a slot of weight zero, so the triangle is
+    # picked and bounded where bone zero alone carries it.
+    for unused in [Float32(7), Float32(0.5)]:
+        var rig = _rigged(unused)
+        ref scene = rig[0]
+        ref assets = rig[1]
+        var hits = _down(5.2, 0.2).intersect_skinned_mesh(scene, assets, 0)
+        assert_equal(len(hits), 1)
+        assert_almost_equal(hits[0].point.x, Float32(5.2), atol=TOLERANCE)
+        var box = box_from_object(scene, assets, scene.skinned_meshes[0].node)
+        assert_almost_equal(box.min.x, Float32(5), atol=TOLERANCE)
+        assert_almost_equal(box.max.x, Float32(6), atol=TOLERANCE)
+    # A slot with weight behind it must still name a bone.
+    for unused in [Float32(7), Float32(0.5)]:
+        var rig = _rigged(unused, 0.5)
+        ref scene = rig[0]
+        ref assets = rig[1]
+        with assert_raises(contains="bone"):
+            _ = _down(5.2, 0.2).intersect_skinned_mesh(scene, assets, 0)
+        with assert_raises(contains="bone"):
+            _ = box_from_object(scene, assets, scene.skinned_meshes[0].node)
+
+
+def test_a_skinned_mesh_scaled_to_nothing_is_hidden() raises:
+    # three.js hides a character by scaling its node to zero. Its bind
+    # inverse is then the zero matrix: the mesh collapses and has no hit,
+    # and nothing that draws or picks the scene raises.
+    var rig = _rigged()
+    ref scene = rig[0]
+    ref assets = rig[1]
+    var body = scene.skinned_meshes[0].node
+    scene.node(body).set_scale(0, 0, 0)
+    scene.update()
+    var pose = skin_pose(scene, 0)
+    for element in range(16):
+        assert_equal(pose.bind_inverse.elements[element], Float32(0))
+    assert_equal(len(_down(5.2, 0.2).intersect_scene(scene, assets)), 0)
 
 
 # --- lines ------------------------------------------------------------------
@@ -389,6 +465,110 @@ def test_a_points_pick_refuses_what_it_cannot_measure() raises:
     var indexed = _with_points([Float32(0), 0, 0], indexed=True)
     with assert_raises(contains="indexed"):
         _ = _down(0, 0).intersect_points(indexed[0], indexed[1], 0)
+
+
+def _scaled(group: Vector3, own: Vector3) raises -> Tuple[Scene, Assets]:
+    """Return a point at (1, 0, 0) and a stick from it, as `Points` and as a
+    `SEGMENTS` line, on a node of scale `own` under a group of scale
+    `group`.
+
+    Args:
+        group: The parent group's scale.
+        own: The node's own scale.
+
+    Returns:
+        The scene and its assets.
+
+    Raises:
+        Error: Never.
+    """
+    var assets = Assets()
+    var shape = assets.geometries.add(_geometry([Float32(1), 0, 0, 1, 1, 0]))
+    var dots = assets.materials.add(points_material(Color(255, 255, 255)))
+    var ink = assets.materials.add(Material(Color(255, 255, 255)))
+    var scene = Scene()
+    var parent = Object3D()
+    parent.set_scale(group.x, group.y, group.z)
+    var held = Object3D()
+    held.set_scale(own.x, own.y, own.z)
+    var top = scene.add(parent^)
+    var node = scene.attach(held^, top)
+    scene.update()
+    scene.add_points(Points(shape, dots, node))
+    scene.add_line(Line(shape, ink, node, mode=SEGMENTS))
+    return (scene^, assets^)
+
+
+def _met(made: Tuple[Scene, Assets], x: Float32) raises -> Tuple[Int, Int]:
+    """Return how many points and segments a ray down from `x` meets, at a
+    threshold of 0.3 m.
+
+    Args:
+        made: The scene and its assets, from `_scaled`.
+        x: Where the ray starts across.
+
+    Returns:
+        The point hits and the line hits.
+
+    Raises:
+        Error: Never.
+    """
+    var caster = _down(x, 0)
+    caster.points_threshold = Length(0.3, METER)
+    caster.line_threshold = Length(0.3, METER)
+    return (
+        len(caster.intersect_points(made[0], made[1], 0)),
+        len(caster.intersect_line(made[0], made[1], 0)),
+    )
+
+
+def test_a_parents_scale_grows_the_threshold() raises:
+    # three.js divides the threshold by the mean of the object's own scale,
+    # and measures the gap in the object's own space. Under a parent of
+    # scale two, a gap of 0.4 m is 0.2 there, within 0.3; 0.7 m is not.
+    var made = _scaled(Vector3(2, 2, 2), Vector3(1, 1, 1))
+    var near = _met(made, 2.4)
+    assert_equal(near[0], 1)
+    assert_equal(near[1], 1)
+    var far = _met(made, 2.7)
+    assert_equal(far[0], 0)
+    assert_equal(far[1], 0)
+    # The node's own scale divides the threshold and grows the gap alike,
+    # so 0.3 m holds in the world, as it did before.
+    for own in [Float32(1), Float32(2)]:
+        var plain = _scaled(Vector3(1, 1, 1), Vector3(own, own, own))
+        var inside = _met(plain, own + 0.25)
+        assert_equal(inside[0], 1)
+        assert_equal(inside[1], 1)
+        var outside = _met(plain, own + 0.4)
+        assert_equal(outside[0], 0)
+        assert_equal(outside[1], 0)
+    # An own scale whose mean is zero keeps 0.3 m in the world. three.js
+    # divides by zero there.
+    var flat = _scaled(Vector3(1, 1, 1), Vector3(-1, 0.5, 0.5))
+    var close = _met(flat, -1.25)
+    assert_equal(close[0], 1)
+    assert_equal(close[1], 1)
+    var away = _met(flat, -1.4)
+    assert_equal(away[0], 0)
+    assert_equal(away[1], 0)
+
+
+def test_the_bound_grows_by_the_threshold_as_it_is() raises:
+    # three.js grows the world bound by the threshold as it is, and scales
+    # the threshold only for each point and segment. Under a parent of
+    # scale ten the bound has a radius of 5 m about (10, 5, 0). A ray at
+    # x = 12.5 passes 5.59 m from its center, beyond 5.3 m. So it meets
+    # nothing, though it passes 2.5 m from the point, within 3 m.
+    var made = _scaled(Vector3(10, 10, 10), Vector3(1, 1, 1))
+    var off = _met(made, 12.5)
+    assert_equal(off[0], 0)
+    assert_equal(off[1], 0)
+    # At x = 11.7 the ray passes 5.28 m from the center, inside the bound,
+    # and 1.7 m from the point, within the scaled threshold.
+    var inside = _met(made, 11.7)
+    assert_equal(inside[0], 1)
+    assert_equal(inside[1], 1)
 
 
 # --- sprites ----------------------------------------------------------------

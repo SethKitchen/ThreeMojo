@@ -86,7 +86,7 @@ from extensions.carla.road_info import (
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.vector3 import Vector3
 from std.math import atan2, cos, isfinite, sin, sqrt
-from units.si import DEGREE, Angle, Length, Length64, METER, RADIAN
+from units.si import DEGREE, Angle, Length, Length64, METER
 from extensions.carla.quantity_boundary import (
     _RAW_SI,
     _RawSI,

@@ -51,23 +51,24 @@ from core.ordinal import (
     require_positive,
 )
 
-from std.math import isfinite
+from std.math import isfinite, cos, pow, sin, sqrt
 
-from math.norm import normalized_difference2, _ordinary_product
-
-from math.norm import length2, squared_length2
+from math.norm import (
+    normalized_difference2,
+    _ordinary_product,
+    length2,
+    squared_length2,
+)
 
 from math.arc_tangent import atan2_float32
 from math.matrix4 import Matrix4
-from math.utils import glsl_mod, mix_delta, rec709_luminance
+from math.utils import glsl_mod, mix_delta, rec709_luminance, scaled_side
 from math.vector3 import Vector3
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView, glsl_rand
 from render.framebuffer import TRANSPARENT_BLACK, Color, FloatColor
 from render.target import RenderTarget
-from std.math import cos, isfinite, pow, sin, sqrt
 from units.si import Angle, RADIAN
-from math.utils import scaled_side
 
 
 @fieldwise_init

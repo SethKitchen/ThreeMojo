@@ -17,7 +17,7 @@ from extensions.water.random import Mulberry32
 from extensions.water.resolution import require_resolution, SpectrumResolution
 from math.norm import squared_length2
 from std.math import cos, exp, floor, hypot, log, sin, sqrt
-from units.si import SECOND, Duration, Length
+from units.si import Duration, Length
 
 
 def require_ocean_patch(length: Float32) raises:

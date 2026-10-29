@@ -14,7 +14,7 @@ each can be turned up or down alone:
 | `render_scale` | A third of the window, stretched to it | The window itself |
 | `plants` | `FEWEST_PLANTS` | `ALL_PLANTS` |
 | `grass_wind_every` | 0: still grass | 1: every blade every frame |
-| `sky_step` | One sky sample every 8 pixels | Every pixel |
+| `sky_step` | One sky sample every 3 pixels | Every pixel |
 | `water_step` | One water sample every 8 pixels | Every pixel |
 | `water_refresh_every` | The waves found every fourth frame | Every frame |
 | `animal_coarseness` | Animals three times coarser | Each tier's own mesh |
@@ -208,12 +208,12 @@ def game_quality(preset: QualityPreset) raises -> GameQuality:
 
     Returns:
         `LOW`: a third of the window, the fewest plants, the grass's wind
-        every fourth frame, a sky sample every 8 pixels, and a water
+        every fourth frame, a sky sample every 3 pixels, and a water
         sample every 8 pixels on a surface found every fourth frame,
         animals three times coarser, and cached shadows on a map of 1,024
         texels. Every preset smooths the frame's edges.
-        `MEDIUM`: half, fewer plants, every other frame, every 4 pixels,
-        every 2 pixels, every other frame, twice as coarse, cached on
+        `MEDIUM`: half, fewer plants, every other frame, every 2 pixels,
+        every 4 pixels, every other frame, twice as coarse, cached on
         2,048. `HIGH`: two thirds, many plants, every frame, every 2
         pixels, every 2 pixels, every frame, one and a half times as
         coarse, cached on 2,048.
@@ -228,7 +228,7 @@ def game_quality(preset: QualityPreset) raises -> GameQuality:
             Float32(1) / 3,
             FEWEST_PLANTS,
             4,
-            8,
+            3,
             8,
             4,
             3,
@@ -238,7 +238,7 @@ def game_quality(preset: QualityPreset) raises -> GameQuality:
         )
     if preset == MEDIUM:
         return GameQuality(
-            0.5, FEWER_PLANTS, 2, 4, 2, 2, 2, CACHED_SHADOWS, 2048, True
+            0.5, FEWER_PLANTS, 2, 2, 4, 2, 2, CACHED_SHADOWS, 2048, True
         )
     if preset == HIGH:
         return GameQuality(

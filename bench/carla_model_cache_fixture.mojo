@@ -19,7 +19,7 @@ from std.os import makedirs
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from render.png import push_be32, push_chunk, push_ihdr, push_signature
+from render.png import push_chunk, push_ihdr, push_signature
 from tools._json_tools import JsonWriter
 from tools._sha256 import sha256_hex
 from tools._zlib import compress

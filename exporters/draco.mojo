@@ -57,7 +57,6 @@ from core.ordinal import ordinal_valid
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from exporters.draco_connectivity import (
     EdgebreakerData,
-    EncodingData,
     encode_edgebreaker,
     traverse,
 )
@@ -107,9 +106,8 @@ from loaders.draco_mesh import (
     DRACO_STANDARD_TRAVERSAL,
     DRACO_VALENCE_TRAVERSAL,
     NONE,
-    DracoTraversalMethod,
 )
-from exporters.numbers import js_linear_to_srgb
+from loaders.js_number import js_linear_to_srgb
 from std.collections import Dict
 from std.memory import bitcast
 from std.pathlib import Path

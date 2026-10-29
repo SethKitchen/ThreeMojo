@@ -20,8 +20,7 @@ from core.skeleton_utils import (
     retarget,
 )
 from materials.material import MaterialId
-from math.matrix4 import Matrix4, rotation_z, scaling, translation
-from math.quaternion import Quaternion
+from math.matrix4 import Matrix4, rotation_z, scaling
 from math.vector3 import Vector3
 from objects.skeleton import Bone, Skeleton, bind_skeleton
 from objects.skinned_mesh import SkinnedMesh

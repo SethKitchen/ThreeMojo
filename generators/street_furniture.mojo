@@ -18,8 +18,8 @@ facing +z, so a placement whose +z faces the road turns it to the road.
 The materials are not ported. The street tree's leaf clumps jitter their
 vertices by a hash of `sin` of the `Float32` position times 43758.5453, as
 three.js does. The hash turns a difference in the last bit of a position
-into a different jitter, so the lobes of the canopy can differ from
-three.js's where a primitive rounds a vertex differently.
+into a different jitter. So each clump is built in doubles, as three.js
+builds it, and the lobes of the canopy are three.js's.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -38,10 +38,11 @@ from generators.utils import (
 from geometries.box import box
 from geometries.circle import ring
 from geometries.cylinder import cylinder
-from geometries.polyhedron import icosahedron
+from geometries.polyhedron import _icosahedron, icosahedron
 from geometries.sphere import sphere
 from geometries.utils import merge_geometries, merge_vertices
 from math.matrix4 import Matrix4
+from math.norm import rounded_dot3, rounded_product
 from math.vector3 import append_float64_xyz
 from math.sine import fraction
 from std.math import pi, sin, sqrt
@@ -70,11 +71,10 @@ comptime TREE_TRUNK = PartId(0)
 comptime TREE_LEAF = PartId(1)
 comptime TREE_GRATE = PartId(2)
 
-# The crown sphere the street tree's clump normals blend toward, in
-# meters.
+# The center of the crown sphere the street tree's clump normals blend
+# toward, in meters.
 comptime CROWN_CENTER_Y = 3.9
 comptime CROWN_CENTER_Z = 0.1
-comptime CROWN_RADIUS = 3.1
 
 
 def _moved(
@@ -669,10 +669,67 @@ def clump_hash(x: Float32, y: Float32, z: Float32) -> Float64:
         A number from zero up to one.
     """
     var s = (
-        sin(Float64(x) * 127.1 + Float64(y) * 311.7 + Float64(z) * 74.7)
+        sin(
+            rounded_product(Float64(x), 127.1)
+            + rounded_product(Float64(y), 311.7)
+            + rounded_product(Float64(z), 74.7)
+        )
         * 43758.5453
     )
     return fraction(s)
+
+
+def _squash(mut geometry: BufferGeometry, factor: Float64) raises:
+    """Scale a geometry along y, three.js's `scale( 1, factor, 1 )` in
+    doubles.
+
+    The positions go through the scaling matrix and the normals through
+    its normal matrix, three.js's inverse transpose, and are made unit
+    length. Each number is rounded to `Float32` once, when it is stored.
+    A zero coordinate comes out as plus zero, as three.js's sum of the
+    matrix row gives it.
+    """
+    # three.js's `Matrix3.invert` of the diagonal: one over the factor in
+    # the middle, and the factor times that at each end.
+    var middle = 1 / factor
+    var ends = factor * middle
+    ref positions = geometry.attribute_view(String(POSITION))
+    var moved = List[Float32](capacity=positions.count() * 3)
+    for i in range(positions.count()):  # pragma: no branch
+        var p = positions.vector3(i)
+        append_float64_xyz(
+            moved,
+            Float64(p.x) + 0,
+            rounded_product(Float64(p.y), factor) + 0,
+            Float64(p.z) + 0,
+        )
+    ref normals = geometry.attribute_view(String(NORMAL))
+    var turned = List[Float32](capacity=normals.count() * 3)
+    for i in range(normals.count()):  # pragma: no branch
+        var n = normals.vector3(i)
+        var x = rounded_product(Float64(n.x), ends)
+        var y = rounded_product(Float64(n.y), middle)
+        var z = rounded_product(Float64(n.z), ends)
+        var scale = 1 / sqrt(rounded_dot3(x, y, z, x, y, z))
+        append_float64_xyz(turned, x * scale, y * scale, z * scale)
+    geometry.set_attribute(String(POSITION), BufferAttribute(moved^, 3))
+    geometry.set_attribute(String(NORMAL), BufferAttribute(turned^, 3))
+
+
+def _shifted(
+    mut geometry: BufferGeometry, x: Float64, y: Float64, z: Float64
+) raises:
+    """Move a geometry's positions, three.js's `translate`, in doubles.
+    Each number is rounded to `Float32` once, when it is stored. The
+    normals are left, because the caller works them out again."""
+    ref positions = geometry.attribute_view(String(POSITION))
+    var moved = List[Float32](capacity=positions.count() * 3)
+    for i in range(positions.count()):  # pragma: no branch
+        var p = positions.vector3(i)
+        append_float64_xyz(
+            moved, Float64(p.x) + x, Float64(p.y) + y, Float64(p.z) + z
+        )
+    geometry.set_attribute(String(POSITION), BufferAttribute(moved^, 3))
 
 
 def leaf_clump(
@@ -694,19 +751,22 @@ def leaf_clump(
     Raises:
         Error: If the radius is not positive.
     """
-    var ball = icosahedron(_l(radius), 1)
-    ball.scale(1, 0.82, 1)
+    # In doubles, as three.js builds it: the radius is not rounded to
+    # Float32 first, and nor is the flattening. The hash below turns a
+    # difference in the last place of a vertex into another lobe.
+    var ball = _icosahedron(radius, 1)
+    _squash(ball, 0.82)
     var g = merge_vertices(ball)
     var count = g.vertex_count()
     var jittered = List[Float32]()
     for i in range(count):  # pragma: no branch
         var v = g.attribute_view(String(POSITION)).vector3(i)
-        var k = 0.86 + clump_hash(v.x, v.y, v.z) * 0.3
+        var k = 0.86 + rounded_product(clump_hash(v.x, v.y, v.z), 0.3)
         append_float64_xyz(
             jittered, Float64(v.x) * k, Float64(v.y) * k, Float64(v.z) * k
         )
     g.set_attribute(String(POSITION), BufferAttribute(jittered^, 3))
-    g = _moved(g^, x, y, z)
+    _shifted(g, x, y, z)
     g.compute_vertex_normals()
     var blended = List[Float32]()
     var center = Vec3d(0, CROWN_CENTER_Y, CROWN_CENTER_Z)
@@ -718,9 +778,9 @@ def leaf_clump(
         ).normalized()
         append_float64_xyz(
             blended,
-            Float64(n.x) * 0.45 + out.x * 0.55,
-            Float64(n.y) * 0.45 + out.y * 0.55,
-            Float64(n.z) * 0.45 + out.z * 0.55,
+            rounded_product(Float64(n.x), 0.45) + rounded_product(out.x, 0.55),
+            rounded_product(Float64(n.y), 0.45) + rounded_product(out.y, 0.55),
+            rounded_product(Float64(n.z), 0.45) + rounded_product(out.z, 0.55),
         )
     g.set_attribute(String(NORMAL), BufferAttribute(blended^, 3))
     g.normalize_normals()

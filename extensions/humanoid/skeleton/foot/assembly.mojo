@@ -16,7 +16,16 @@ body-right. Plus z is anterior. Pass `ankle_center()` from a leg as
 """
 
 from core.assets import Assets
-from extensions.humanoid.skeleton.look import resolved_paint as _resolved_paint
+from extensions.humanoid.skeleton.look import (
+    resolved_paint as _resolved_paint,
+    UNSET_PAINT,
+    artery_phong,
+    hair_phong,
+    lymph_phong,
+    nerve_phong,
+    skin_phong,
+    vein_phong,
+)
 from core.object3d import NodeId
 from core.scene import Scene
 from extensions.humanoid.side import RIGHT, BodySide
@@ -67,15 +76,6 @@ from extensions.humanoid.skeleton.foot.vessels.dimensions import (
 )
 from extensions.humanoid.skeleton.foot.vessels.geometry import (
     vessel_from_dimensions,
-)
-from extensions.humanoid.skeleton.look import (
-    UNSET_PAINT,
-    artery_phong,
-    hair_phong,
-    lymph_phong,
-    nerve_phong,
-    skin_phong,
-    vein_phong,
 )
 from materials.material import MaterialId
 from math.vector3 import Vector3

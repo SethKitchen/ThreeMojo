@@ -33,6 +33,7 @@ from render.srgb import LINEAR, SRGB
 from render.texture import CLAMP, COVERAGE, IGNORED, REPEAT
 from render.texture_store import NO_TEXTURE
 from renderers.renderer import Renderer
+from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -41,6 +42,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+from tests.test_scratch import TestScratch, temporary_path
 from units.si import Angle, DEGREE, Length, METER
 
 comptime TOLERANCE = Float64(1e-6)
@@ -138,7 +140,9 @@ def test_text_before_the_first_material_comments_and_empty_values() raises:
         assets,
     )
     assert_equal(library.count(), 1)
-    assert_equal(library.names[0], String("a"))
+    # A name is the rest of its line, as three.js reads it: only a value's
+    # trailing comment is cut.
+    assert_equal(library.names[0], String("a # trailing"))
     var built = assets.materials.get(library.materials[0])
     assert_color(built.color, 0, 255, 0)
     assert_true(built.map == NO_TEXTURE)
@@ -448,16 +452,19 @@ def test_a_textured_cube_from_its_library_renders() raises:
     _ = renderer.render(second, assets, camera)
 
 
-def test_a_hash_inside_a_material_name_keeps_the_name() raises:
+def test_a_hash_or_spaces_in_a_material_name_keep_the_name() raises:
+    # three.js takes the rest of a `newmtl` line, trimmed, as the name, so
+    # `Mat #1` and `Mat #2` are two materials, and two spaces stay two.
     var assets = Assets()
     var library = parse_mtl(
-        "newmtl Material#1 # red\nKd 1 0 0\nnewmtl Material#2\nKd 0 0 1\n",
+        "newmtl Mat #1\nKd 1 0 0\nnewmtl Mat #2\nKd 0 0 1\nnewmtl Brick  Red\n",
         "",
         assets,
     )
-    assert_equal(library.count(), 2)
-    assert_true(library.find("Material#1") >= 0)
-    assert_true(library.find("Material#2") >= 0)
+    assert_equal(library.count(), 3)
+    assert_true(library.find("Mat #1") >= 0)
+    assert_true(library.find("Mat #2") >= 0)
+    assert_true(library.find("Brick  Red") >= 0)
 
 
 def test_a_default_material_for_vertex_colors_turns_them_on() raises:
@@ -479,5 +486,54 @@ def test_a_default_material_for_vertex_colors_turns_them_on() raises:
     assert_false(ids[3][0] == ids[0][0])
 
 
+def test_a_library_that_is_not_utf8_reads_as_replacement_characters() raises:
+    # A material named in Windows-1252 in both files. three.js decodes each
+    # byte that is not UTF-8 as U+FFFD, so the names still match.
+    var library = List[UInt8]("# Biblioth".as_bytes())
+    library.append(0xE8)
+    library += List[UInt8]("que\nnewmtl Rouge".as_bytes())
+    library.append(0xE2)
+    library += List[UInt8]("tre\nKd 1 0 0\n".as_bytes())
+    Path(temporary_path("latin.mtl")).write_bytes(library)
+    var model = List[UInt8](
+        "mtllib latin.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\nusemtl Rouge".as_bytes()
+    )
+    model.append(0xE2)
+    model += List[UInt8]("tre\nf 1 2 3\n".as_bytes())
+    var path = temporary_path("latin.obj")
+    Path(path).write_bytes(model)
+    var assets = Assets()
+    var read = read_obj_with_materials(path, assets)
+    assert_equal(read.library.names[0], "Rouge" + chr(0xFFFD) + "tre")
+    var built = assets.materials.get(read.materials[0][0])
+    assert_color(built.color, 255, 0, 0)
+
+
+def test_a_leading_byte_order_mark_is_dropped() raises:
+    # three.js's `TextDecoder` and `trim` drop a U+FEFF at the start, so
+    # the first material is read.
+    var assets = Assets()
+    var library = parse_mtl(chr(0xFEFF) + "newmtl red\nKd 1 0 0\n", "", assets)
+    assert_equal(len(library.names), 1)
+    assert_equal(library.names[0], "red")
+
+
+def test_a_comment_after_a_library_name_is_not_part_of_the_file() raises:
+    # The model keeps the whole rest of the line, as three.js's OBJLoader
+    # does. The file that is read is the part before the comment.
+    Path(temporary_path("noted.mtl")).write_text("newmtl Red\nKd 1 0 0\n")
+    var path = temporary_path("noted.obj")
+    Path(path).write_text(
+        "mtllib noted.mtl # the library\nv 0 0 0\nv 1 0 0\nv 0 1 0\n"
+        + "usemtl Red\nf 1 2 3\n"
+    )
+    var assets = Assets()
+    var read = read_obj_with_materials(path, assets)
+    assert_equal(read.model.material_libraries[0], "noted.mtl # the library")
+    assert_equal(read.library.names[0], "Red")
+    assert_color(assets.materials.get(read.materials[0][0]).color, 255, 0, 0)
+
+
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

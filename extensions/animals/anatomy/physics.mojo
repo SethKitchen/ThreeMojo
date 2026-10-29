@@ -23,7 +23,7 @@ from extensions.animals.anatomy.mass import BodyMass, require_sampled_rig
 from extensions.animals.build import Animal
 from extensions.physics.body import DYNAMIC, RigidBody, rotation_matrix
 from extensions.physics.shape import Shape
-from extensions.sdf.vector import V3, length
+from extensions.sdf.vector import length
 from math.finite import require_non_negative_finite
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion

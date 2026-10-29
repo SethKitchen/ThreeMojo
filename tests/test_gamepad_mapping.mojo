@@ -18,28 +18,18 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from extensions.gamepad.guid import (
-    JoystickGuid,
-    guid_to_string,
-    string_to_guid,
-)
+from extensions.gamepad.guid import JoystickGuid, string_to_guid
 from extensions.gamepad.ids import (
     AXIS_LEFTX,
     AXIS_LEFT_TRIGGER,
     AXIS_RIGHTX,
-    BUTTON_COUNT,
     BUTTON_DPAD_DOWN,
-    BUTTON_DPAD_LEFT,
-    BUTTON_DPAD_RIGHT,
     BUTTON_DPAD_UP,
     BUTTON_EAST,
     BUTTON_MISC1,
     BUTTON_NORTH,
     BUTTON_SOUTH,
     BUTTON_TOUCHPAD,
-    BUTTON_WEST,
-    GamepadAxis,
-    GamepadButton,
     JOYSTICK_AXIS_MAX,
     JOYSTICK_AXIS_MIN,
 )

@@ -9,13 +9,7 @@ Every expected value here is what CPython 3.12.14 printed for the same
 expression.
 """
 
-from std.testing import (
-    TestSuite,
-    assert_equal,
-    assert_false,
-    assert_raises,
-    assert_true,
-)
+from std.testing import TestSuite, assert_equal, assert_raises
 
 from tools._bigint import BigInt, gcd
 from tools._fraction import Fraction

@@ -24,13 +24,12 @@ from core.object3d import NodeId
 from core.scene import Scene
 from math.vector3 import Vector3
 from render.framebuffer import Color
-from units.si import DEGREE, METER, Angle, Length
+from units.si import DEGREE, METER, Angle, Length, Length64
 from extensions.building.fingerprint import fingerprint
 from extensions.building.generate.tower import TowerOptions, generate_tower
 from extensions.building.ifc.ifc4 import read_ifc, write_ifc
 from extensions.building.views.render import FULL, RenderOptions, add_building
 from generators.skyscraper import SkyscraperParameters
-from units.si import Length64
 
 comptime DEFAULT_OUTPUT = "out/ifc-exchange.png"
 comptime WIDTH = 240

@@ -10,7 +10,6 @@ from std.testing import TestSuite, assert_equal, assert_true
 
 from tools.reference_animation_loops import (
     Case,
-    PATH,
     controls,
     exact,
     outcome,

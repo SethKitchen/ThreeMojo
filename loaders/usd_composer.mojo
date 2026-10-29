@@ -96,7 +96,6 @@ from loaders.usd_specs import (
     USD_SAMPLES,
     USD_STRINGS,
     UsdLayer,
-    UsdSpec,
 )
 from materials.material import Material, MaterialId, physical_material
 from math.euler import XYZ, ZYX, Euler
@@ -134,7 +133,7 @@ from render.texture_store import NO_TEXTURE, TextureId
 from std.math import nan, pi
 from std.pathlib import Path
 from units.measure import angle_degrees, angle_radians, length_meters
-from units.si import DEGREE, METER, RADIAN, Angle, Length
+from units.si import RADIAN, Angle
 
 # How deep references may nest before the composer refuses them.
 comptime MAX_REFERENCE_DEPTH = 64

@@ -39,7 +39,7 @@ from std.tempfile import mkdtemp
 from std.time import perf_counter_ns, sleep
 
 from bench.image_decode_fixture import resolve_path
-from tools._json_value import ABSENT, JsonTree, canonical_integer
+from tools._json_tree import NOTHING, JsonTree, canonical_integer
 
 from loaders.json import STRING
 from tools._process import run_program
@@ -62,8 +62,6 @@ from tools._host import (
     uname_fields,
 )
 
-comptime BASELINE_REVISION = "51b4424ceef57fef1f8a5e787c583126f999baf5"
-"""The baseline commit of the recorded #505 comparison."""
 comptime RUSAGE_MARKER = "THREEMOJO_RUSAGE_V1 "
 """The prefix of the supervisor's one usage line on standard error."""
 comptime MIN_AVAILABLE_BYTES = 3 * 1024 * 1024 * 1024
@@ -193,7 +191,7 @@ def sha(path: String) raises -> String:
     return hasher^.hexdigest()
 
 
-def write_json(tree: JsonTree, node: Int, path: String) raises:
+def write_json(mut tree: JsonTree, node: Int, path: String) raises:
     """Write a node as `json.dumps(value, indent=2, sort_keys=True)`.
 
     Args:
@@ -204,7 +202,7 @@ def write_json(tree: JsonTree, node: Int, path: String) raises:
     Raises:
         Error: If the file cannot be written.
     """
-    Path(path).write_text(tree.dumps(node, 2, True, ",", ": ") + "\n")
+    Path(path).write_text(tree.dumps(node, sort_keys=True) + "\n")
 
 
 def read_json(mut tree: JsonTree, path: String) raises -> Int:
@@ -223,7 +221,7 @@ def read_json(mut tree: JsonTree, path: String) raises -> Int:
     return tree.parse(Path(path).read_text())
 
 
-def compact(tree: JsonTree, node: Int) raises -> String:
+def compact(mut tree: JsonTree, node: Int) raises -> String:
     """Return `json.dumps(value)`: one line, Python's default separators.
 
     Args:
@@ -236,7 +234,7 @@ def compact(tree: JsonTree, node: Int) raises -> String:
     Raises:
         Error: If the node does not exist.
     """
-    return tree.dumps(node)
+    return tree.dumps(node, False)
 
 
 def python_repr_text(text: String) -> String:
@@ -421,7 +419,7 @@ def source_record(mut tree: JsonTree, root: String) raises -> Int:
         tree.set(files, path, tree.string(sha(folder + "/" + path)))
     if len(paths) == 0:
         raise Error("No Mojo sources: " + folder)
-    var text = tree.dumps(files, -1, True, ",", ":")
+    var text = tree.dumps(files, False, sort_keys=True, spaces=False)
     var hasher = Sha256()
     hasher.update(text.as_bytes())
     var record = tree.object()
@@ -622,12 +620,12 @@ def prepare_stride(source_root: String, destination_root: String) raises:
             "Candidate changed during stride snapshot; create a new snapshot"
         )
     var after = source_record(tree, destination)
-    var before_files = tree.get(before, "files")
-    var after_files = tree.get(after, "files")
+    var before_files = tree.item(before, "files")
+    var after_files = tree.item(after, "files")
     var changed = List[String]()
-    for path in tree.keys(before_files):
-        if tree.text(tree.get(before_files, path)) != tree.text(
-            tree.get(after_files, path)
+    for path in tree.names(before_files):
+        if tree.text(tree.item(before_files, path)) != tree.text(
+            tree.item(after_files, path)
         ):
             changed.append(path)
     if len(changed) != 1 or changed[0] != "loaders/image_batch.mojo":
@@ -655,7 +653,7 @@ def prepare_stride(source_root: String, destination_root: String) raises:
     write_json(tree, record, destination + "/stride-provenance.json")
     var printed = tree.object()
     tree.set(printed, "stride_source", tree.string(destination))
-    tree.set(printed, "sha256", tree.get(after, "mojo_tree_sha256"))
+    tree.set(printed, "sha256", tree.item(after, "mojo_tree_sha256"))
     print(compact(tree, printed))
 
 
@@ -928,27 +926,27 @@ def build_rusage(build_path: String, compiler: String, timeout: Float64) raises:
     var path = resolve_path(build_path)
     var tree = JsonTree()
     var record = read_json(tree, path)
-    var status = tree.find(record, "status")
+    var status = tree.get(record, "status")
     if (
-        status == ABSENT
+        status == NOTHING
         or not _is_string(tree, status)
         or tree.text(status) != "complete"
     ):
         raise Error("An existing completed native build record is required")
-    if tree.find(record, "rusage_helper") != ABSENT:
+    if tree.get(record, "rusage_helper") != NOTHING:
         raise Error("Build record already has an RSS helper")
-    var variants = tree.get(record, "variants")
-    for label in tree.keys(variants):
-        var info = tree.get(variants, label)
-        if sha(tree.string_value(tree.get(info, "binary"))) != tree.text(
-            tree.get(info, "binary_sha256")
+    var variants = tree.item(record, "variants")
+    for label in tree.names(variants):
+        var info = tree.item(variants, label)
+        if sha(tree.text(tree.item(info, "binary"))) != tree.text(
+            tree.item(info, "binary_sha256")
         ):
             raise Error("Native binary changed since its build record")
     var helper = build_helper(tree, compiler, _parent(path), timeout)
     tree.set(record, "rusage_helper", helper)
     tree.set(record, "rss_harness_updated_utc", tree.string(now()))
     write_json(tree, record, path)
-    print("RSS_HELPER", tree.text(tree.get(helper, "binary")))
+    print("RSS_HELPER", tree.text(tree.item(helper, "binary")))
 
 
 def build(
@@ -1018,7 +1016,7 @@ def build(
         all_flags.extend(flags.copy())
     for item in labelled:
         var before = source_record(tree, item.value)
-        var root = tree.string_value(tree.get(before, "root"))
+        var root = tree.text(tree.item(before, "root"))
         var executable = destination + "/" + item.label
         var command: List[String] = [toolchain, "build"]
         command.extend(all_flags.copy())
@@ -1064,16 +1062,16 @@ def build(
         tree.set(variant, "revision", tree.string(revision))
         tree.set(variants, item.label, variant)
         write_json(tree, record, record_path)
-    var dynamic = tree.find(variants, "dynamic")
-    var stride = tree.find(variants, "stride")
-    if dynamic != ABSENT and stride != ABSENT:
-        var dynamic_files = tree.get(tree.get(dynamic, "source"), "files")
-        var stride_files = tree.get(tree.get(stride, "source"), "files")
-        var dynamic_names = tree.keys(dynamic_files)
-        var stride_names = tree.keys(stride_files)
+    var dynamic = tree.get(variants, "dynamic")
+    var stride = tree.get(variants, "stride")
+    if dynamic != NOTHING and stride != NOTHING:
+        var dynamic_files = tree.item(tree.item(dynamic, "source"), "files")
+        var stride_files = tree.item(tree.item(stride, "source"), "files")
+        var dynamic_names = tree.names(dynamic_files)
+        var stride_names = tree.names(stride_files)
         var same = len(dynamic_names) == len(stride_names)
         for name in dynamic_names:
-            if tree.find(stride_files, name) == ABSENT:
+            if tree.get(stride_files, name) == NOTHING:
                 same = False
         if not same:
             raise Error(
@@ -1082,8 +1080,8 @@ def build(
             )
         var changed = List[String]()
         for name in dynamic_names:
-            if tree.text(tree.get(dynamic_files, name)) != tree.text(
-                tree.get(stride_files, name)
+            if tree.text(tree.item(dynamic_files, name)) != tree.text(
+                tree.item(stride_files, name)
             ):
                 changed.append(name)
         if len(changed) != 1 or changed[0] != "loaders/image_batch.mojo":
@@ -1341,27 +1339,27 @@ def parse_rusage(mut tree: JsonTree, stderr_text: String) raises -> Usage:
         lines[marker][byte = String(RUSAGE_MARKER).byte_length() :]
     )
     var result = tree.parse(text)
-    var unit = tree.find(result, "rss_unit")
-    var schema = tree.find(result, "schema")
+    var unit = tree.get(result, "rss_unit")
+    var schema = tree.get(result, "schema")
     var expected = _rss_unit()
     if (
-        unit == ABSENT
+        unit == NOTHING
         or not _is_string(tree, unit)
         or tree.text(unit) != expected
-        or schema == ABSENT
+        or schema == NOTHING
         or not tree.equal(schema, tree.integer(1))
     ):
         raise Error("Unsupported RSS supervisor platform, units, or schema")
     var multiplier = 1024 if expected == "KiB" else 1
-    var raw = tree.get(result, "maxrss_raw")
-    var raw_value = tree.float_value(raw)
-    var peak = tree.get(result, "peak_rss_bytes")
+    var raw = tree.item(result, "maxrss_raw")
+    var raw_value = tree.value(raw)
+    var peak = tree.item(result, "peak_rss_bytes")
     var valid = raw_value >= 0
     if valid:
-        if tree.is_integer(raw) and tree.is_integer(peak):
+        if tree.is_int(raw) and tree.is_int(peak):
             valid = tree.int_value(peak) == tree.int_value(raw) * multiplier
         else:
-            valid = tree.float_value(peak) == raw_value * Float64(multiplier)
+            valid = tree.value(peak) == raw_value * Float64(multiplier)
     if not valid:
         raise Error("Invalid RSS supervisor unit conversion")
     return Usage(result, rest^)
@@ -1369,7 +1367,7 @@ def parse_rusage(mut tree: JsonTree, stderr_text: String) raises -> Usage:
 
 def _integer_or_float(tree: JsonTree, node: Int) raises -> Int:
     """Return an integer usage value, rejecting other kinds."""
-    if not tree.is_integer(node):
+    if not tree.is_int(node):
         raise Error("expected an integer usage value")
     return tree.int_value(node)
 
@@ -1434,12 +1432,12 @@ def measurement_row(
             "voluntary_context_switches",
             "involuntary_context_switches",
         ]:
-            tree.set(row, key, tree.get(usage.record, key))
+            tree.set(row, key, tree.item(usage.record, key))
         var signal = _integer_or_float(
-            tree, tree.get(usage.record, "native_signal")
+            tree, tree.item(usage.record, "native_signal")
         )
         var native_code = -signal if signal != 0 else _integer_or_float(
-            tree, tree.get(usage.record, "native_exit_status")
+            tree, tree.item(usage.record, "native_exit_status")
         )
         tree.set(row, "native_exit_code", tree.integer(native_code))
         if native_code != exit_code:
@@ -1447,7 +1445,7 @@ def measurement_row(
                 "Supervisor did not propagate the native exit/signal status"
             )
         var errno = _integer_or_float(
-            tree, tree.get(usage.record, "exec_errno")
+            tree, tree.item(usage.record, "exec_errno")
         )
         if errno != 0:
             raise Error("Native exec failed with errno " + String(errno))
@@ -1742,9 +1740,9 @@ def parse_output(mut tree: JsonTree, stdout_text: String) raises -> Int:
 
 def _number(tree: JsonTree, node: Int) raises -> PyNumber:
     """Return a JSON number as a Python `int` or `float`."""
-    if tree.is_integer(node):
+    if tree.is_int(node):
         return PyNumber.of_int(tree.int_value(node))
-    return PyNumber.of_float(tree.float_value(node))
+    return PyNumber.of_float(tree.value(node))
 
 
 def _divide(a: PyNumber, b: PyNumber) raises -> Float64:
@@ -1786,10 +1784,10 @@ struct _Group(Copyable, Movable):
 def _group_of(tree: JsonTree, row: Int) raises -> _Group:
     """Return a row's group key."""
     return _Group(
-        tree.text(tree.get(row, "dataset")),
-        tree.text(tree.get(row, "api")),
-        tree.int_value(tree.get(row, "workers")),
-        tree.text(tree.get(row, "variant")),
+        tree.text(tree.item(row, "dataset")),
+        tree.text(tree.item(row, "api")),
+        tree.int_value(tree.item(row, "workers")),
+        tree.text(tree.item(row, "variant")),
     )
 
 
@@ -1850,22 +1848,22 @@ def summarize(
         var megapixels = List[PyNumber]()
         var parallelism = List[Int]()
         for row in group:
-            var native = tree.get(row, "native")
-            var load = _number(tree, tree.get(native, "load_ns"))
+            var native = tree.item(row, "native")
+            var load = _number(tree, tree.item(native, "load_ns"))
             loads.append(load.copy())
-            peaks.append(_number(tree, tree.get(row, "peak_rss_bytes")))
-            var textures = _number(tree, tree.get(native, "textures"))
+            peaks.append(_number(tree, tree.item(row, "peak_rss_bytes")))
+            var textures = _number(tree, tree.item(native, "textures"))
             images.append(
                 PyNumber.of_float(
                     _divide(PyNumber.of_float(textures.as_float() * 1e9), load)
                 )
             )
-            var base = _number(tree, tree.get(native, "base_bytes"))
+            var base = _number(tree, tree.item(native, "base_bytes"))
             var scaled = PyNumber.of_int(
                 base.integer * 250
             ) if base.is_int else PyNumber.of_float(base.as_float() * 250)
             megapixels.append(PyNumber.of_float(_divide(scaled, load)))
-            var level = tree.int_value(tree.get(native, "runtime_parallelism"))
+            var level = tree.int_value(tree.item(native, "runtime_parallelism"))
             if not level in parallelism:
                 var position = 0
                 while (
@@ -1882,44 +1880,44 @@ def summarize(
         )
         out.set(item, "runtime_parallelism", out.integers(parallelism))
         var checksums = out.object()
-        var first = tree.get(group[0], "native")
+        var first = tree.item(group[0], "native")
         for field in fields:
             out.set(
                 checksums,
                 field,
-                out.integer_text(tree.text(tree.get(first, field))),
+                out.adopt(tree, tree.item(first, field)),
             )
         out.set(item, "checksums", checksums)
         var speedups = List[PyNumber]()
         var ratios = List[PyNumber]()
         for row in group:
-            var repetition = tree.int_value(tree.get(row, "repetition"))
+            var repetition = tree.int_value(tree.item(row, "repetition"))
             # The last baseline row of this pair key, as the dict keeps it.
             var paired = -1
             for other in rows:
                 if (
-                    tree.text(tree.get(other, "dataset")) == key.dataset
-                    and tree.text(tree.get(other, "api")) == key.api
-                    and tree.int_value(tree.get(other, "workers"))
+                    tree.text(tree.item(other, "dataset")) == key.dataset
+                    and tree.text(tree.item(other, "api")) == key.api
+                    and tree.int_value(tree.item(other, "workers"))
                     == key.workers
-                    and tree.int_value(tree.get(other, "repetition"))
+                    and tree.int_value(tree.item(other, "repetition"))
                     == repetition
-                    and tree.text(tree.get(other, "variant")) == baseline
+                    and tree.text(tree.item(other, "variant")) == baseline
                 ):
                     paired = other
             if paired >= 0:
                 var base_load = _number(
-                    tree, tree.get(tree.get(paired, "native"), "load_ns")
+                    tree, tree.item(tree.item(paired, "native"), "load_ns")
                 )
                 var load = _number(
-                    tree, tree.get(tree.get(row, "native"), "load_ns")
+                    tree, tree.item(tree.item(row, "native"), "load_ns")
                 )
                 speedups.append(PyNumber.of_float(_divide(base_load, load)))
                 ratios.append(
                     PyNumber.of_float(
                         _divide(
-                            _number(tree, tree.get(row, "peak_rss_bytes")),
-                            _number(tree, tree.get(paired, "peak_rss_bytes")),
+                            _number(tree, tree.item(row, "peak_rss_bytes")),
+                            _number(tree, tree.item(paired, "peak_rss_bytes")),
                         )
                     )
                 )
@@ -2049,26 +2047,26 @@ def run[M: Measurer](options: RunOptions, mut measurer: M) raises:
     """
     var tree = JsonTree()
     var build_record = read_json(tree, options.build)
-    var status = tree.find(build_record, "status")
+    var status = tree.get(build_record, "status")
     if (
-        status == ABSENT
+        status == NOTHING
         or not _is_string(tree, status)
         or tree.text(status) != "complete"
     ):
         raise Error("Build record is incomplete or failed")
     var fixtures = read_json(tree, _join(options.fixtures, "fixtures.json"))
-    var variants = tree.get(build_record, "variants")
-    var helper_record = tree.find(build_record, "rusage_helper")
+    var variants = tree.item(build_record, "variants")
+    var helper_record = tree.get(build_record, "rusage_helper")
     if not tree.truthy(helper_record):
         raise Error(
             "RSS helper missing; run build-rusage before measuring. Old smoke"
             " RSS is invalid."
         )
-    var helper = tree.string_value(tree.get(helper_record, "binary"))
-    if sha(helper) != tree.text(tree.get(helper_record, "binary_sha256")):
+    var helper = tree.text(tree.item(helper_record, "binary"))
+    if sha(helper) != tree.text(tree.item(helper_record, "binary_sha256")):
         raise Error("RSS supervisor binary changed since its build record")
     if (
-        tree.find(variants, options.baseline) == ABSENT
+        tree.get(variants, options.baseline) == NOTHING
         or tree.length(variants) < 2
     ):
         raise Error("Need a named baseline and at least one comparison variant")
@@ -2078,19 +2076,19 @@ def run[M: Measurer](options: RunOptions, mut measurer: M) raises:
     makedirs(destination)
     if options.repetitions < 1:
         raise Error("repetitions must be positive")
-    var labels = tree.keys(variants)
+    var labels = tree.names(variants)
     for label in labels:
-        var info = tree.get(variants, label)
-        if sha(tree.string_value(tree.get(info, "binary"))) != tree.text(
-            tree.get(info, "binary_sha256")
+        var info = tree.item(variants, label)
+        if sha(tree.text(tree.item(info, "binary"))) != tree.text(
+            tree.item(info, "binary_sha256")
         ):
             raise Error("Binary changed since build: " + label)
     var names = List[String]()
     var entries = List[Int]()
-    var listed = tree.get(fixtures, "datasets")
+    var listed = tree.item(fixtures, "datasets")
     for index in range(tree.length(listed)):
         var entry = tree.at(listed, index)
-        var name = tree.string_value(tree.get(entry, "name"))
+        var name = tree.text(tree.item(entry, "name"))
         var at = -1
         for i in range(len(names)):
             if names[i] == name:
@@ -2112,17 +2110,17 @@ def run[M: Measurer](options: RunOptions, mut measurer: M) raises:
         if at < 0:
             raise Error("'" + name + "'")
         chosen.append(entries[at])
-        var files = tree.get(entries[at], "files")
+        var files = tree.item(entries[at], "files")
         var folder = _join(
-            options.fixtures, tree.string_value(tree.get(entries[at], "path"))
+            options.fixtures, tree.text(tree.item(entries[at], "path"))
         )
         for k in range(tree.length(files)):
             var item = tree.at(files, k)
-            var path = _join(folder, tree.string_value(tree.get(item, "path")))
+            var path = _join(folder, tree.text(tree.item(item, "path")))
             var size = len(Path(path).read_bytes())
-            if size != tree.int_value(tree.get(item, "bytes")) or sha(
+            if size != tree.int_value(tree.item(item, "bytes")) or sha(
                 path
-            ) != tree.text(tree.get(item, "sha256")):
+            ) != tree.text(tree.item(item, "sha256")):
                 raise Error("Fixture changed: " + path)
     var cases = List[_Case]()
     for c in range(len(selected)):
@@ -2132,7 +2130,7 @@ def run[M: Measurer](options: RunOptions, mut measurer: M) raises:
                 1,
                 2,
                 4,
-                tree.int_value(tree.get(chosen[c], "count")) + 1,
+                tree.int_value(tree.item(chosen[c], "count")) + 1,
             ]
         var unique = List[Int]()
         for worker in choices:
@@ -2287,16 +2285,16 @@ def _measure_all[
             var folder = resolve_path(
                 _join(
                     options.fixtures,
-                    tree.string_value(tree.get(fixture, "path")),
+                    tree.text(tree.item(fixture, "path")),
                 )
             )
             # Explicit warm-page-cache experiment. The native process is fresh.
-            var files = tree.get(fixture, "files")
+            var files = tree.item(fixture, "files")
             for k in range(tree.length(files)):
                 _ = Path(
                     folder
                     + "/"
-                    + tree.string_value(tree.get(tree.at(files, k), "path"))
+                    + tree.text(tree.item(tree.at(files, k), "path"))
                 ).read_bytes()
             # With three variants and three trials every variant leads once.
             var first = 0
@@ -2310,8 +2308,8 @@ def _measure_all[
                 variant_order.append(labels[(offset + k) % len(labels)])
             for position in range(len(variant_order)):
                 var variant = variant_order[position]
-                var binary = tree.string_value(
-                    tree.get(tree.get(variants, variant), "binary")
+                var binary = tree.text(
+                    tree.item(tree.item(variants, variant), "binary")
                 )
                 var command: List[String] = [
                     binary,
@@ -2331,9 +2329,9 @@ def _measure_all[
                 tree.set(row, "case_order", tree.integer(case_index))
                 tree.set(row, "variant_order", tree.integer(position))
                 var failed = (
-                    tree.truthy(tree.get(row, "exit_code"))
-                    or tree.truthy(tree.get(row, "timed_out"))
-                    or tree.truthy(tree.get(row, "measurement_error"))
+                    tree.truthy(tree.item(row, "exit_code"))
+                    or tree.truthy(tree.item(row, "timed_out"))
+                    or tree.truthy(tree.item(row, "measurement_error"))
                 )
                 # Save evidence before validation, including a malformed result.
                 _append_line(raw_path, compact(tree, row))
@@ -2349,21 +2347,22 @@ def _measure_all[
                         + variant
                     )
                 var native = parse_output(
-                    tree, tree.string_value(tree.get(row, "stdout"))
+                    tree, tree.text(tree.item(row, "stdout"))
                 )
                 tree.set(row, "native", native)
                 if (
-                    tree.text(tree.get(native, "api")) != case_.api
+                    tree.text(tree.item(native, "api")) != case_.api
                     or not tree.equal(
-                        tree.get(native, "workers"), tree.integer(case_.workers)
+                        tree.item(native, "workers"),
+                        tree.integer(case_.workers),
                     )
-                    or tree.float_value(tree.get(native, "load_ns")) <= 0
+                    or tree.value(tree.item(native, "load_ns")) <= 0
                 ):
                     raise Error("Native result does not match the request")
-                var expected = tree.get(fixture, "expected")
-                for key in tree.keys(expected):
-                    var value = tree.get(native, key)
-                    var wanted = tree.get(expected, key)
+                var expected = tree.item(fixture, "expected")
+                for key in tree.names(expected):
+                    var value = tree.item(native, key)
+                    var wanted = tree.item(expected, key)
                     if not tree.equal(value, wanted):
                         raise Error(
                             "Fixture oracle failed: "
@@ -2371,13 +2370,15 @@ def _measure_all[
                             + " "
                             + key
                             + ": "
-                            + tree.text(value)
+                            + tree.dumps(value, False)
                             + " != "
-                            + tree.text(wanted)
+                            + tree.dumps(wanted, False)
                         )
                 var signature = String()
                 for field in fields:
-                    signature += tree.text(tree.get(native, field)) + ","
+                    signature += (
+                        tree.dumps(tree.item(native, field), False) + ","
+                    )
                 var oracle_key = case_.dataset + "\n" + case_.api
                 var at = -1
                 for k in range(len(oracle_keys)):
@@ -2409,8 +2410,8 @@ def _measure_all[
                     shape_values.append(signature)
                 rows.append(row)
                 _append_line(validated_path, compact(tree, row))
-                var load = tree.int_value(tree.get(native, "load_ns"))
-                var peak = _number(tree, tree.get(row, "peak_rss_bytes"))
+                var load = tree.int_value(tree.item(native, "load_ns"))
+                var peak = _number(tree, tree.item(row, "peak_rss_bytes"))
                 print(
                     String(len(rows))
                     + "/"

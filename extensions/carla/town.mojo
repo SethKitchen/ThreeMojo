@@ -45,8 +45,8 @@ three.js's frame with `mesh_factory.to_three_frame` or
 The sizes, colors and spacings here are this port's own choices.
 """
 
-from extensions.carla.quantity_boundary import _finite_si, _positive_si
-from units.si import Length64
+from extensions.carla.quantity_boundary import _finite_si
+from units.si import Length64, DEGREE, METER, RADIAN, Angle, Length
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -60,14 +60,12 @@ from core.buffer_geometry import (
 )
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from extensions.carla.map import Map, Waypoint
+from extensions.carla.map import Map
 from extensions.carla.mesh_factory import (
     CROSSWALK_SURFACE,
-    CURB_SURFACE,
     LaneMarkMesh,
     MeshFactory,
     ROAD_SURFACE,
-    SIDEWALK_SURFACE,
     SurfaceKind,
     WALL_SURFACE,
     WHITE_MARK_SURFACE,
@@ -90,7 +88,6 @@ from extensions.carla.render_textures import (
     PANELS,
     SHOPFRONT,
     PLASTER,
-    SurfaceMaps,
     asphalt_maps,
     concrete_maps,
     facade_maps,
@@ -102,7 +99,6 @@ from extensions.carla.render_textures import (
 )
 from extensions.carla.render_weather import (
     PUDDLE_ROUGHNESS,
-    WET_ROUGHNESS,
     WetSurface,
     street_lights_on,
     wet_surface,
@@ -128,14 +124,7 @@ from extensions.carla.sensor import (
     WATER,
 )
 from extensions.carla.world import surface_tag
-from extensions.carla.road_info import (
-    LANE_ANY,
-    LANE_DRIVING,
-    LANE_SIDEWALK,
-    LaneId,
-    RoadId,
-    SectionId,
-)
+from extensions.carla.road_info import LANE_DRIVING, LANE_SIDEWALK
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from extensions.carla.weather import WeatherParameters
 from geometries.box import box
@@ -145,11 +134,7 @@ from geometries.sphere import sphere
 from geometries.rounded_box import rounded_box
 from geometries.utils import merge_geometries
 from lights.light import spot_light
-from materials.material import (
-    DOUBLE_SIDE,
-    MaterialId,
-    standard_material,
-)
+from materials.material import MaterialId, standard_material
 from math.bounds import Box3
 from math.noise import ImprovedNoise
 from math.matrix4 import Matrix4
@@ -163,7 +148,6 @@ from render.srgb import linear_to_srgb
 from render.texture import Texture
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import atan2, cos, isfinite, pow, sin, sqrt
-from units.si import DEGREE, METER, RADIAN, Angle, Length
 from units.temperature import KELVIN, Temperature
 
 # How many procedural trees share a mesh.

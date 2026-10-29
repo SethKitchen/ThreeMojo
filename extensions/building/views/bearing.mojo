@@ -41,9 +41,8 @@ from extensions.building.ids import ElementId, StoreyId
 from extensions.building.kinds import BEAM, COLUMN, ROOF, SLAB, WALL
 from extensions.building.model import Building
 from extensions.building.views.structural import live_load, roof_live_load
-from extensions.topology.ids import FaceId
 from math.finite import require_positive_finite
-from std.math import inf, isfinite
+from std.math import inf
 from units.si import (
     Acceleration64,
     Area64,
@@ -54,7 +53,6 @@ from units.si import (
     METER,
     METER_PER_SECOND_SQUARED,
     NEWTON,
-    Pressure64,
     SQUARE_METER,
 )
 

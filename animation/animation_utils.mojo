@@ -206,6 +206,13 @@ def subclip(
                 )
             )
             continue
+        if track.target.kind.is_string():
+            # A string key's value is its string's place in the track.
+            var strings = List[String]()
+            for place in kept_values[index]:  # pragma: no branch
+                strings.append(track.strings[Int(place)])
+            tracks.append(KeyframeTrack(track.target, shifted, strings))
+            continue
         tracks.append(
             KeyframeTrack(
                 track.target,

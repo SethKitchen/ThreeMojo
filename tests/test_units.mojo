@@ -11,10 +11,8 @@ stop this file building. Those cases live in `tests/compile_fail/`, which the
 `make compile-fail` target checks by asserting each file does not compile.
 """
 
-from units.quantity import Quantity, Unit
 from units.si import (
     Angle,
-    Area,
     CENTIMETER,
     CUBIC_CENTIMETER,
     CUBIC_METER,
@@ -47,7 +45,6 @@ from units.si import (
     RADIAN,
     SECOND,
     SQUARE_FOOT,
-    SQUARE_METER,
     STANDARD_GRAVITY,
     Scalar,
     TURN,

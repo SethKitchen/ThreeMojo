@@ -16,8 +16,10 @@ stored without that suffix.
 
 from std.ffi import c_int, external_call
 from std.os import getenv, makedirs, remove
-from std.pathlib import Path
+from std.os.path import join
+from std.pathlib import Path, cwd
 from std.sys import argv, exit, stderr
+from std.time import perf_counter, sleep
 
 from tools._owned_process import (
     SIGKILL,
@@ -53,7 +55,7 @@ def dump_layouts(
     """
     if not limit > 0:
         raise Error("limit is not positive")
-    var binaries = _child(root, "release/CarlaUE4/Binaries/Win64")
+    var binaries = join(root, "release/CarlaUE4/Binaries/Win64")
     _install(binaries, lua)
     var chosen = List[String]()
     if len(towns) == 0:
@@ -61,7 +63,7 @@ def dump_layouts(
     else:
         for index in range(len(towns)):
             chosen.append(towns[index])
-    var layout = _child(root, "layout")
+    var layout = join(root, "layout")
     makedirs(layout, exist_ok=True)
     for index in range(len(chosen)):
         var note = _dump(binaries, layout, client, chosen[index], limit)
@@ -70,17 +72,17 @@ def dump_layouts(
 
 def _install(binaries: String, lua: String) raises:
     """Copy the mod and enable only it."""
-    if not Path(_child(binaries, "ue4ss")).is_dir():
+    if not Path(join(binaries, "ue4ss")).is_dir():
         raise Error("UE4SS is not in " + binaries)
-    var scripts = _child(binaries, "ue4ss/Mods/LayoutDump/Scripts")
+    var scripts = join(binaries, "ue4ss/Mods/LayoutDump/Scripts")
     makedirs(scripts, exist_ok=True)
     var source = Path(lua).read_bytes()
-    Path(_child(scripts, "main.lua")).write_bytes(Span(source))
-    var mods = _child(binaries, "ue4ss/Mods")
-    Path(_child(mods, "mods.json")).write_text(
+    Path(join(scripts, "main.lua")).write_bytes(Span(source))
+    var mods = join(binaries, "ue4ss/Mods")
+    Path(join(mods, "mods.json")).write_text(
         '[{"mod_name": "LayoutDump", "mod_enabled": true}]\n'
     )
-    Path(_child(mods, "mods.txt")).write_text("LayoutDump : 1\n")
+    Path(join(mods, "mods.txt")).write_text("LayoutDump : 1\n")
 
 
 def _dump(
@@ -95,8 +97,8 @@ def _dump(
     if town.endswith("_Opt"):
         var end = town.byte_length() - 4
         stem = String(town[byte=:end])
-    var target = _child(layout, stem + ".jsonl")
-    var request = _child(binaries, "layout_dump_request.txt")
+    var target = join(layout, stem + ".jsonl")
+    var request = join(binaries, "layout_dump_request.txt")
     _remove(target)
     _remove(target + ".done")
     _remove(target + ".progress")
@@ -105,7 +107,7 @@ def _dump(
         "cd -- "
         + shell_quote(binaries)
         + " && exec "
-        + shell_quote(_child(binaries, "CarlaUE4-Win64-Shipping.exe"))
+        + shell_quote(join(binaries, "CarlaUE4-Win64-Shipping.exe"))
         + " CarlaUE4 -nullrhi >/dev/null 2>&1"
     )
     var command = List[String]()
@@ -140,7 +142,7 @@ def _drive(
     mut alive: Bool,
 ) raises -> String:
     """Load the town and wait for the mod to finish."""
-    var start = _now()
+    var start = perf_counter()
     var arguments = List[String]()
     for index in range(len(client)):
         arguments.append(client[index])
@@ -155,24 +157,24 @@ def _drive(
     var ran = run_program(arguments, limit + 5, merge_errors=False)
     if ran.timed_out or ran.status != 0:
         return "the server did not answer"
-    while _now() - start < limit:
+    while perf_counter() - start < limit:
         if Path(target + ".done").exists():
-            return _strip(Path(target + ".done").read_text())
+            return String(Path(target + ".done").read_text().strip(" \t\n\r"))
         var waited = try_wait(pid)
         if waited.done:
             alive = False
             return "the server stopped while reading " + _last_line(
                 target + ".progress"
             )
-        var remain = limit - (_now() - start)
+        var remain = limit - (perf_counter() - start)
         if remain <= 0:
             break
         var pause = remain
         if pause > 1:
             pause = 1
-        _sleep(pause)
+        sleep(pause)
     if Path(target + ".done").exists():
-        return _strip(Path(target + ".done").read_text())
+        return String(Path(target + ".done").read_text().strip(" \t\n\r"))
     return "out of time"
 
 
@@ -203,39 +205,6 @@ def _last_line(path: String) raises -> String:
     return String(text[byte=start:end])
 
 
-def _strip(text: String) -> String:
-    """Drop leading and trailing spaces and newlines."""
-    var raw = text.as_bytes()
-    var start = 0
-    var end = len(raw)
-    while start < end and _space(raw[start]):
-        start += 1
-    while end > start and _space(raw[end - 1]):
-        end -= 1
-    return String(text[byte=start:end])
-
-
-def _space(byte: UInt8) -> Bool:
-    """Return whether `byte` is ASCII space that `str.strip` drops."""
-    return byte == 9 or byte == 10 or byte == 13 or byte == 32
-
-
-def _now() -> Float64:
-    """Return seconds from the realtime clock."""
-    var now = List[Int64](length=2, fill=0)
-    _ = external_call["clock_gettime", Int32](
-        Int32(0), now.unsafe_ptr().unsafe_bitcast[NoneType]()
-    )
-    return Float64(Int(now[0])) + Float64(Int(now[1])) / 1000000000.0
-
-
-def _sleep(seconds: Float64) raises:
-    """Wait for `seconds`."""
-    if not seconds > 0:
-        return
-    _ = run_program(["sleep", String(seconds)], seconds + 2)
-
-
 def _default_towns() -> List[String]:
     """Return the towns the layout dump writes."""
     var towns = List[String]()
@@ -248,31 +217,14 @@ def _default_towns() -> List[String]:
     return towns^
 
 
-def _child(root: String, child: String) -> String:
-    """Join `child` onto `root` with one slash."""
-    var raw = root.as_bytes()
-    if len(raw) > 0 and raw[len(raw) - 1] == 47:
-        return root + child
-    return root + "/" + child
-
-
 def _absolute(path: String) raises -> String:
     """Return a relative path joined to the working directory."""
-    var raw = path.as_bytes()
-    if len(raw) > 0 and raw[0] == 47:
+    if path.startswith("/"):
         return path
-    var pwd = run_program(["pwd"], 5)
-    if pwd.status != 0:
-        raise Error("cannot read the working directory")
-    var cwd = pwd.output
-    var length = cwd.byte_length()
-    if length > 0 and cwd.as_bytes()[length - 1] == 10:
-        var end = length - 1
-        var trimmed = String(cwd[byte=:end])
-        cwd = trimmed
+    var here = String(cwd())
     if path == "." or path.byte_length() == 0:
-        return cwd
-    return _child(cwd, path)
+        return here
+    return join(here, path)
 
 
 def _drive_cli(arguments: List[String]) raises:

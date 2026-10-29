@@ -9,7 +9,6 @@ from extensions.humanoid.sex import MALE, FEMALE
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.skeleton.torso.sweep import Sweep
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
-    torso_dimensions,
     torso_bone_field,
     TorsoBone,
 )

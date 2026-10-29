@@ -28,7 +28,6 @@ from geometries.sphere import sphere
 from geometries.torus import torus_knot
 from lights.light import ambient_light, point_light
 from materials.material import Material
-from math.vector3 import Vector3
 from objects.mesh import Mesh
 from postprocessing.composer import (
     EffectComposer,

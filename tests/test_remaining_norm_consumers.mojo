@@ -4,12 +4,17 @@
 """Independent direction and length oracles for the remaining norm consumers."""
 
 from geometries.torus import torus_knot
-from geometries.utils import to_creased_normals
 from loaders.fbx import _triangulate as fbx_triangulate
-from loaders.ply import _check_convex as ply_convex
+from loaders.fan import fan_problem
 from loaders.lwo import _vertex_normals as lwo_normals
 from loaders.usd_geometry import compute_vertex_normals as usd_normals
-from loaders.svg_path import eigen_decomposition
+from loaders.svg_path import (
+    eigen_decomposition,
+    SvgVector,
+    svg_scale,
+    transform_scale_x,
+    transform_scale_y,
+)
 from math.triangle_normal import normal_or_zero, polygon_normal
 from renderers.renderer import face_normal
 from units.si import Length, METER
@@ -26,12 +31,6 @@ from loaders.ldraw import _face_normal, Vec as LDrawVec
 from loaders.model_nodes import decompose_onto
 from loaders.object_loader import decompose as object_decompose
 from loaders.svg import _svg_angle
-from loaders.svg_path import (
-    SvgVector,
-    svg_scale,
-    transform_scale_x,
-    transform_scale_y,
-)
 from loaders.svg_shapes import (
     _normalize as svg_unit,
     _normal as svg_normal,
@@ -39,7 +38,7 @@ from loaders.svg_shapes import (
 )
 from loaders.vrml_geometry import _Vector, normal_attribute
 from math.matrix3 import Matrix3
-from math.matrix4 import Matrix4, scaling
+from math.matrix4 import scaling
 from math.norm import (
     length2,
     normalized_cross3,
@@ -59,14 +58,13 @@ from render.texture import (
     _major_direction,
 )
 from renderers.projector import apply_normal, Vec
-from std.math import inf, isfinite, isnan, nan, pi, sqrt
+from std.math import inf, isfinite, isnan, nan, pi
 from std.memory import bitcast
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
     assert_true,
-    assert_raises,
 )
 
 
@@ -411,7 +409,7 @@ def test_loader_and_polygon_normal_builders_keep_small_faces() raises:
             Vector3(0, scale, 0),
         ]
         near3(polygon_normal(points), 0, 0, 1)
-        ply_convex(points, 1)
+        assert_equal(fan_problem(points), "")
         var cut = fbx_triangulate(points)
         assert_equal(len(cut), 6)
         var knot = torus_knot(

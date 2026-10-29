@@ -66,7 +66,6 @@ and keeps the averaged light without a display conversion.
 
 from render.framebuffer import (
     TRANSPARENT_BLACK,
-    Color,
     FloatColor,
     Framebuffer,
     append_color,

@@ -42,7 +42,6 @@ from render.target import (
     OUTPUT_COLOR,
     OUTPUT_METAL_ROUGH,
     OUTPUT_NORMAL,
-    UNSIGNED_BYTE_TARGET,
     RenderTarget,
     TargetOutput,
 )

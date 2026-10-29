@@ -23,7 +23,6 @@ from lights.light import (
     DEFAULT_SPOT_ANGLE,
     DIRECTIONAL,
     HEMISPHERE,
-    DEFAULT_RECT_SIZE,
     POINT,
     RECT_AREA,
     SPOT,
@@ -33,7 +32,6 @@ from lights.light import (
     directional_light,
     hemisphere_light,
     point_light,
-    rect_area_light,
     spot_light,
 )
 from math.smoothstep import smoothstep
@@ -67,7 +65,7 @@ from lights.lighting import (
 )
 from lights.physical_layers import PhysicalLayers, charlie_sheen, ibl_sheen
 from math.vector3 import Vector3
-from units.si import Angle, DEGREE, Length, METER, RADIAN
+from units.si import Angle, DEGREE, Length, METER
 from render.framebuffer import Color, FloatColor
 from render.texture_store import NO_TEXTURE
 from std.testing import (

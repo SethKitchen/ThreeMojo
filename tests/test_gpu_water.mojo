@@ -29,7 +29,7 @@ from materials.material import BASIC, Material
 from math.vector3 import Vector3
 from max.gpu.host import DeviceContext
 from objects.mesh import Mesh
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color
 from renderers.renderer import Renderer
 from std.math import isfinite
 from std.memory import bitcast

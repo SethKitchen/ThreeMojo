@@ -33,6 +33,7 @@ from exporters.gltf import (
     export_gltf,
     gltf_pixels,
     index_component,
+    percent_encoded,
     write_gltf,
 )
 from loaders.bytes import encode_base64
@@ -51,18 +52,16 @@ from loaders.json import parse_json
 from materials.material import (
     BASIC,
     DOUBLE_SIDE,
-    NO_TEXTURE,
     PHONG,
     Material,
     MaterialId,
     standard_material,
 )
-from math.euler import XYZ
 from math.matrix4 import Matrix4, translation
 from math.vector2 import Vector2
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from render.srgb import LINEAR, SRGB
+from render.srgb import SRGB
 from render.texture import (
     BILINEAR,
     CLAMP,
@@ -75,7 +74,6 @@ from render.texture import (
     float_texture,
 )
 from render.texture_store import TextureId
-from std.math import sqrt
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -425,7 +423,9 @@ def check_round_trip(container: GltfContainer) raises:
     assert_equal(shiny.metalness, original.metalness)
     assert_equal(shiny.side, DOUBLE_SIDE)
     assert_equal(shiny.alpha_test, original.alpha_test)
+    # The writer writes x, and the reader flips y, as three.js's do.
     assert_equal(shiny.normal_scale.x, 0.5)
+    assert_equal(shiny.normal_scale.y, -0.5)
     assert_equal(shiny.emissive.r, original.emissive.r)
     assert_equal(shiny.emissive.g, original.emissive.g)
     assert_equal(shiny.emissive.b, original.emissive.b)
@@ -569,6 +569,21 @@ def test_a_file_written_to_disk_reads_back() raises:
     _ = empty.add(Object3D())
     write_gltf("out/export_empty.gltf", empty, Assets(), GLTF_SEPARATE)
     assert_false(Path("out/export_empty.bin").exists())
+
+
+def test_a_buffer_name_is_written_as_a_uri() raises:
+    # The specification asks for a URI, and `read_gltf` decodes one: a
+    # raw `%` was a malformed escape, and `%41` named another file.
+    assert_equal(percent_encoded("Plain-Name_1.~bin"), "Plain-Name_1.~bin")
+    assert_equal(percent_encoded("100% a/é.bin"), "100%25%20a%2F%C3%A9.bin")
+    assert_equal(percent_encoded(""), "")
+    var built = Built()
+    for name in [String("100%"), String("x%41")]:
+        var path = "out/export_" + name + ".gltf"
+        write_gltf(path, built.scene, built.assets, GLTF_SEPARATE)
+        var scene = Scene()
+        var assets = Assets()
+        assert_equal(read_gltf(path, scene, assets).mesh_count, 4)
 
 
 def test_an_empty_scene_writes_a_file_that_reads() raises:

@@ -22,7 +22,6 @@ from extensions.carla.road_info import (
     JuncId,
     LANE_DRIVING,
     LaneId,
-    LaneType,
     RoadId,
     SectionId,
 )

@@ -44,6 +44,12 @@ is past the end of the list is not picked, as it is not drawn. A hit's
 `Raycaster.layers`, and a mesh whose node shares none is not tested.
 Layer zero alone by default, as everywhere.
 
+**Hidden nodes.** A node that is not shown is not tested either: one
+hidden itself, or one under a hidden parent. three.js's `Raycaster` tests
+only the layers, so it picks hidden objects too. To pick something that
+is not drawn, keep its node shown and turn its material's `visible` off.
+Neither raycaster reads that flag.
+
 The two distances are `Length`s: this is the edge of the API, where the
 units live, and a bare number here does not compile. The ray inside holds
 meters, as the math does.
@@ -60,9 +66,9 @@ not be hit and the modelled one could be hit where nothing was.
 each at the node's transform times its own, and the hit says which in
 `instance`, three.js's `instanceId`; a batched mesh the same, with each
 instance's own geometry, three.js's `batchId`. An LOD is picked on the
-level its distance from the ray's origin picks with no memory, three.js's
-`LOD.raycast` through `getObjectForDistance`, and `instance` says which
-level. A hit's `kind` says which of the scene's lists `index` counts in,
+level its distance from the ray's origin picks, with the shown level's
+hysteresis, three.js's `LOD.raycast` through `getObjectForDistance`, and
+`instance` says which level. A hit's `kind` says which of the scene's lists `index` counts in,
 and `mesh` is the shape struck as a `Mesh`: its node, geometry and
 material, whatever list it came from.
 
@@ -80,14 +86,18 @@ geometry and not the map, so it picks the surface as it was modelled.
 `line_threshold` of one of its segments, three.js's `params.Line.threshold`,
 and points where it passes within `points_threshold` of a point,
 `params.Points.threshold`. Both are a meter by default, as in three.js, so
-set them to what a pointer should reach. The gap is measured in world
-space, where three.js divides the threshold by the object's average scale;
-the two agree under an even scale, and this one is exact under an uneven
-one. A sprite is met on its two triangles, laid flat to the camera as the
-renderer lays them, so a sprite needs the camera that `set_from_camera`
-records. None of the three has a face, so a hit's `normal` is zero, as
-three.js gives no `face`. `triangle` says which segment, point or half of
-the sprite was struck.
+set them to what a pointer should reach. three.js measures the gap in
+the object's own space, against the threshold over the mean of the
+object's own scale. This measures it in world space, against the
+threshold times the mean world scale over that mean own scale. The two
+agree under an even world scale, a parent's scale included. Before that,
+the ray must meet the bounding sphere grown by the threshold as it is, as
+in three.js. A sprite is
+met on its two triangles, laid flat to the camera as the renderer lays
+them, so a sprite needs the camera that `set_from_camera` records. None
+of the three has a face, so a hit's `normal` is zero, as three.js gives no
+`face`. `triangle` says which segment, point or half of the sprite was
+struck.
 
 **What a mesh hit carries.** three.js's record, field for field. A hit on
 a mesh of any kind has a `face`: the three vertices of the triangle
@@ -115,11 +125,10 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.ordinal import require_index_in_count, require_non_negative
-from math.norm import length2, squared_length2
+from math.norm import length2, squared_length2, _ordinary_squared
 
 from math.triangle_normal import normal_or_zero
 
-from math.norm import _ordinary_squared
 from cameras.camera import Camera
 from core.assets import Assets
 from core.deform import (
@@ -694,7 +703,8 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             index: Which, as its position in `scene.instanced_meshes`.
 
         Returns:
-            The hits, nearest first, across every instance.
+            The hits, nearest first, across every instance. An instance
+            whose transform projects or scales an axis to nothing has none.
 
         Raises:
             Error: If no instanced mesh has that index, or for anything
@@ -709,6 +719,8 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             mesh.morph_influences = group.morph_at(instance)
             var placed = Matrix4(copy=world)
             placed.multiply(group.matrix_at(instance))
+            if not _pickable(placed):
+                continue
             hits.extend(
                 self._intersect_shape(
                     scene, assets, mesh, placed, INSTANCED_HIT, index, instance
@@ -731,7 +743,8 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             index: Which, as its position in `scene.batched_meshes`.
 
         Returns:
-            The hits, nearest first, across every instance.
+            The hits, nearest first, across every instance. An instance
+            whose transform projects or scales an axis to nothing has none.
 
         Raises:
             Error: If no batched mesh has that index, or for anything
@@ -755,6 +768,8 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             )
             var placed = Matrix4(copy=world)
             placed.multiply(batch.matrix_at(instance))
+            if not _pickable(placed):
+                continue
             hits.extend(
                 self._intersect_shape(
                     scene, assets, mesh, placed, BATCHED_HIT, index, instance
@@ -767,9 +782,9 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         self, scene: Scene, assets: Assets, index: Int
     ) raises -> List[Hit]:
         """Return every place this ray meets one LOD, nearest first,
-        three.js's `LOD.raycast`: the level tested is the one the distance
-        from the ray's origin to the node picks with no memory, and a
-        hit's `instance` says which level that was.
+        three.js's `LOD.raycast`: the level tested is the one
+        `Lod.level_for` picks from the distance between the ray's origin
+        and the node, and a hit's `instance` says which level that was.
 
         three.js calls the level object's own `raycast`, so the meshes on
         the level's node are tested and its descendants are not. A level
@@ -890,8 +905,11 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         if geometry.is_indexed():
             raise Error("A line geometry cannot be indexed")
         var world = scene.world_matrix(line.node)
+        # three.js grows the bound by the threshold as it is, and scales
+        # the threshold only for the test of each segment.
         if not self._near_bound(geometry.bounding_sphere(), world, reach):
             return hits^
+        reach = _world_reach(reach, scene.get(line.node).scale, world)
         var vertices = geometry.vertex_count()
         ref positions = geometry.attribute_view(String("position"))
         var mesh = Mesh(line.geometry, line.material, line.node)
@@ -969,8 +987,11 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         if geometry.is_indexed():
             raise Error("A points geometry cannot be indexed")
         var world = scene.world_matrix(cloud.node)
+        # three.js grows the bound by the threshold as it is, and scales
+        # the threshold only for the test of each point.
         if not self._near_bound(geometry.bounding_sphere(), world, reach):
             return hits^
+        reach = _world_reach(reach, scene.get(cloud.node).scale, world)
         ref positions = geometry.attribute_view(String("position"))
         var mesh = Mesh(cloud.geometry, cloud.material, cloud.node)
         # Only the points the draw range lets through, as three.js's
@@ -1535,17 +1556,17 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             The hits, nearest first, across every object on a layer this
             raycaster tests.
 
-        A mesh whose world transform projects, as a shadow mesh's does, or
-        scales an axis to nothing has no hit, as in three.js, where its
-        inverse is the zero matrix. `intersect_mesh` refuses such a mesh.
+        A mesh, a skinned mesh or an instance whose world transform
+        projects, as a shadow mesh's does, or scales an axis to nothing has
+        no hit, as in three.js, where its inverse is the zero matrix.
+        `intersect_mesh` and `intersect_skinned_mesh` refuse such a mesh.
 
         Raises:
             Error: For anything the pickers above raise for.
         """
         var hits = List[Hit]()
         for index in range(len(scene.meshes)):
-            var world = scene.world_matrix(scene.meshes[index].node)
-            if not world.is_affine() or not world.has_extent():
+            if not _pickable(scene.world_matrix(scene.meshes[index].node)):
                 continue
             hits.extend(self.intersect_mesh(scene, assets, index))
         for index in range(len(scene.instanced_meshes)):
@@ -1555,6 +1576,9 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         # An LOD's levels are nodes whose meshes are in `scene.meshes`:
         # the shown level is picked there, once.
         for index in range(len(scene.skinned_meshes)):
+            ref node = scene.skinned_meshes[index].node
+            if not _pickable(scene.world_matrix(node)):
+                continue
             hits.extend(self.intersect_skinned_mesh(scene, assets, index))
         for index in range(len(scene.lines)):
             hits.extend(self.intersect_line(scene, assets, index))
@@ -1565,6 +1589,34 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
                 hits.extend(self.intersect_sprite(scene, assets, index))
         _sort_by_distance(hits)
         return hits^
+
+
+def _world_reach(reach: Float32, own: Vector3, world: Matrix4) -> Float32:
+    """Return a line or points threshold as a gap in the world.
+
+    three.js's `Line.raycast` and `Points.raycast` divide the threshold by
+    the mean of the object's own scale, and measure the gap in the
+    object's own space. Under an even world scale, that is the world gap
+    against the threshold times the mean world scale over the mean own
+    scale. So a parent's scale grows the reach, as it does in three.js.
+    Under an uneven world scale the mean world scale stands in for it.
+
+    A mean own scale of zero leaves the threshold as it is, where three.js
+    divides by zero.
+
+    Args:
+        reach: The threshold, in meters.
+        own: The scale the object's node holds, three.js's `scale`.
+        world: The node's world matrix.
+
+    Returns:
+        The gap that counts, in meters.
+    """
+    var mean_own = abs(own.x + own.y + own.z) / 3
+    if not (mean_own > 0):
+        return reach
+    var spread = Vector3.from_matrix_scale(world)
+    return reach * ((spread.x + spread.y + spread.z) / 3) / mean_own
 
 
 def _within_on_image(
@@ -1648,6 +1700,16 @@ def _within_on_image(
     var closest = from_point + span * share
     var depth = mix_delta(near_end.z, far_end.z, share)
     return depth >= -1 and depth <= 1 and (target - closest).length() < reach
+
+
+def _pickable(world: Matrix4) -> Bool:
+    """Return whether a shape at `world` can be struck at all.
+
+    A transform that projects, as a shadow mesh's does, or that scales an
+    axis to nothing has no hit, as in three.js, where its inverse is the
+    zero matrix. Scaling an instance to nothing is how three.js hides one.
+    """
+    return world.is_affine() and world.has_extent()
 
 
 def _sort_by_distance(mut hits: List[Hit]) raises:

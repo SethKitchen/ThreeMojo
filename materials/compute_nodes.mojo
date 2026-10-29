@@ -71,10 +71,9 @@ one launch a step. Both backends call `run_statements` on a
 `ComputeSource`, so the two agree to the float.
 """
 
-from core.ordinal import index_in_count
+from core.ordinal import index_in_count, require_valid, require_positive
 
 from core.extent import require_positive_extent, require_texel_count
-from core.ordinal import require_valid, require_positive
 from materials.compute_ids import (
     ATOMIC_ADD,
     ATOMIC_AND,

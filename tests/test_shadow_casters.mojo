@@ -27,7 +27,7 @@ from geometries.box import cube
 from geometries.plane import plane
 from lights.csm import CSM
 from lights.light import directional_light, point_light, spot_light
-from lights.shadow import PCF_SHADOW_MAP, VSM_SHADOW_MAP, ShadowMap
+from lights.shadow import VSM_SHADOW_MAP, ShadowMap
 from loaders.object_loader import read_object_json
 from materials.material import (
     BASIC,
@@ -38,7 +38,7 @@ from materials.material import (
     line_dashed_material,
     points_material,
 )
-from math.matrix4 import Matrix4, translation
+from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.instanced_mesh import BatchedMesh, InstancedMesh
 from objects.line import CONTROL0, CONTROL1, DIRECTION, Line, SEGMENTS

@@ -26,6 +26,11 @@ longitude, and a face that straddles the seam has its low corners moved a
 turn on. That last repair is why a coordinate can exceed one; the wrap mode
 reads it as the same place.
 
+The arithmetic is three.js's, in doubles, each product before a sum
+rounded on its own, and each number is rounded to `Float32` once, when it
+is stored. The icosahedron and the dodecahedron are built on three.js's
+golden ratio in doubles.
+
 ## Numerical range correction
 
 Finite norm-dependent directions and lengths use scale-safe arithmetic.
@@ -37,10 +42,10 @@ limits, and explicit zero and nonfinite rules.
 from core.ordinal import require_index_in_count, require_non_negative
 from geometries.surface import (
     record_kind,
-    require_positive_radius,
     textured_surface,
 )
-from math.norm import length2
+from math.finite import require_finite
+from math.norm import rounded_dot3, rounded_product
 from core.buffer_geometry import (
     BufferGeometry,
     DODECAHEDRON_GEOMETRY,
@@ -51,13 +56,14 @@ from core.buffer_geometry import (
     GeometryType,
 )
 from core.user_data import json_number_text
-from math.vector3 import Vector3, append_vector3, centroid, mix_delta3
 from std.math import atan2, pi, sqrt
 from units.si import Length
 
 # The golden ratio, (1 + root 5) / 2, which the icosahedron and the
-# dodecahedron are built on.
-comptime GOLDEN = Float32(1.618034)
+# dodecahedron are built on: three.js's `( 1 + Math.sqrt( 5 ) ) / 2`.
+comptime GOLDEN = (1 + sqrt(Float64(5))) / 2
+
+comptime _Point = SIMD[DType.float64, 4]
 
 # Each face becomes `(detail + 1)` squared triangles, and the row loop is
 # one longer than that. A detail of `Int.MAX` wraps that count and the
@@ -66,8 +72,17 @@ comptime GOLDEN = Float32(1.618034)
 comptime MAX_POLYHEDRON_DETAIL = 256
 
 
+def _lerp(a: _Point, b: _Point, alpha: Float64) -> _Point:
+    """Return three.js's `a.clone().lerp( b, alpha )`, the product rounded
+    on its own."""
+    var out = a
+    for axis in range(3):  # pragma: no branch
+        out[axis] = a[axis] + rounded_product(b[axis] - a[axis], alpha)
+    return out
+
+
 def _subdivide_face(
-    a: Vector3, b: Vector3, c: Vector3, detail: Int, mut data: List[Float32]
+    a: _Point, b: _Point, c: _Point, detail: Int, mut data: List[_Point]
 ):
     """Cut one triangle into `(detail + 1)` squared and append them.
 
@@ -78,57 +93,72 @@ def _subdivide_face(
     the one case taken outright.
     """
     var columns = detail + 1
-    var rows = List[List[Vector3]]()
+    var rows = List[List[_Point]]()
     for i in range(columns + 1):  # pragma: no branch
-        var fraction = Float32(i) / Float32(columns)
-        var along_a = mix_delta3(a, c, fraction)
-        var along_b = mix_delta3(b, c, fraction)
+        var fraction = Float64(i) / Float64(columns)
+        var along_a = _lerp(a, c, fraction)
+        var along_b = _lerp(b, c, fraction)
         var length = columns - i
-        var row = List[Vector3]()
+        var row = List[_Point]()
         for j in range(length + 1):  # pragma: no branch
             if j == 0 and i == columns:
                 row.append(along_a)
             else:
                 row.append(
-                    mix_delta3(along_a, along_b, Float32(j) / Float32(length))
+                    _lerp(along_a, along_b, Float64(j) / Float64(length))
                 )
         rows.append(row^)
     for i in range(columns):  # pragma: no branch
         for j in range(2 * (columns - i) - 1):  # pragma: no branch
             var k = j // 2
             if j % 2 == 0:
-                append_vector3(data, rows[i][k + 1])
-                append_vector3(data, rows[i + 1][k])
-                append_vector3(data, rows[i][k])
+                data.append(rows[i][k + 1])
+                data.append(rows[i + 1][k])
+                data.append(rows[i][k])
             else:
-                append_vector3(data, rows[i][k + 1])
-                append_vector3(data, rows[i + 1][k + 1])
-                append_vector3(data, rows[i + 1][k])
+                data.append(rows[i][k + 1])
+                data.append(rows[i + 1][k + 1])
+                data.append(rows[i + 1][k])
 
 
-def _azimuth(point: Vector3) -> Float32:
+def _normalized(point: _Point) -> _Point:
+    """Return three.js's `Vector3.normalize`: the point times one over its
+    length, or the point itself when its length is zero."""
+    var length = sqrt(
+        rounded_dot3(point[0], point[1], point[2], point[0], point[1], point[2])
+    )
+    return point * (1 / (length if length != 0 else 1))
+
+
+def _azimuth(point: _Point) -> Float64:
     """Return a point's longitude, three.js's way round: zero at -x."""
-    return atan2(point.z, -point.x)
+    return atan2(point[2], -point[0])
 
 
-def _inclination(point: Vector3) -> Float32:
+def _inclination(point: _Point) -> Float64:
     """Return a point's latitude, negative toward +y, as three.js has it."""
-    return atan2(-point.y, length2(point.x, point.z))
+    return atan2(
+        -point[1],
+        sqrt(
+            rounded_product(point[0], point[0])
+            + rounded_product(point[2], point[2])
+        ),
+    )
 
 
 def _correct_uv(
-    mut uvs: List[Float32], index: Int, point: Vector3, face_azimuth: Float32
+    mut uvs: List[Float64], index: Int, point: _Point, face_azimuth: Float64
 ):
     """Repair one corner's u, three.js's `correctUV`: a corner on the seam
     takes the side its face's middle is on, and a corner at a pole, which
     has no longitude of its own, takes its face's."""
     if face_azimuth < 0 and uvs[index * 2] == 1:
         uvs[index * 2] = uvs[index * 2] - 1
-    if point.x == 0 and point.z == 0:
-        uvs[index * 2] = face_azimuth / (2 * Float32(pi)) + 0.5
+    if point[0] == 0 and point[2] == 0:
+        uvs[index * 2] = face_azimuth / 2 / pi + 0.5
 
 
-def _correct_seam(mut uvs: List[Float32], triangle: Int):
+def _correct_seam(mut uvs: List[Float64], triangle: Int):
     """Move a face that straddles the seam a turn on, three.js's
     `correctSeam`: if its u runs from near one to near zero, the low
     corners are moved past one so the face does not wrap the whole image."""
@@ -141,13 +171,13 @@ def _correct_seam(mut uvs: List[Float32], triangle: Int):
                 uvs[first + corner * 2] += 1
 
 
-def _numbers_json(values: List[Float32]) raises -> String:
+def _numbers_json(values: List[Float64]) raises -> String:
     """Return numbers as a JSON array."""
     var out = String("[")
     for at in range(len(values)):  # pragma: no branch
         if at > 0:
             out += ","
-        out += json_number_text(Float64(values[at]))
+        out += json_number_text(values[at])
     return out + "]"
 
 
@@ -194,7 +224,33 @@ def polyhedron(
             not whole triangles, either list is empty, or an index names
             no vertex.
     """
-    require_positive_radius(radius.value, "polyhedron")
+    var wide = List[Float64](capacity=len(vertices))
+    for value in vertices:
+        wide.append(Float64(value))
+    return _polyhedron(wide, indices, Float64(radius.value), detail)
+
+
+def _polyhedron(
+    vertices: List[Float64],
+    indices: List[Int],
+    radius: Float64,
+    detail: Int,
+) raises -> BufferGeometry:
+    """Return a polyhedron from vertices in doubles, three.js's
+    `PolyhedronGeometry`.
+
+    The arithmetic is three.js's, in doubles, each product before a sum
+    rounded on its own. A number is rounded to `Float32` once, when it is
+    stored. At a detail above zero each normal is three.js's
+    `normalizeNormals` of the stored position.
+
+    Raises:
+        Error: As `polyhedron` raises.
+    """
+    require_finite(radius, "A polyhedron needs a finite radius")
+    # `not (radius > 0)`, not `radius <= 0`: NaN compares false both ways.
+    if not (radius > 0):
+        raise Error("A polyhedron needs a positive radius")
     require_non_negative(detail, "A polyhedron's detail cannot be negative")
     if detail > MAX_POLYHEDRON_DETAIL:
         raise Error("A polyhedron's detail is larger than this port builds")
@@ -210,74 +266,83 @@ def polyhedron(
             "A polyhedron's face names a vertex that is not there",
         )
 
-    var data = List[Float32]()
+    var points = List[_Point]()
     for face in range(len(indices) // 3):  # pragma: no branch
         _subdivide_face(
             _vertex(vertices, indices[face * 3]),
             _vertex(vertices, indices[face * 3 + 1]),
             _vertex(vertices, indices[face * 3 + 2]),
             detail,
-            data,
+            points,
         )
 
-    # Every point out onto the sphere. Its direction is its normal, which
-    # is right for a subdivided face and replaced below for a flat one.
-    var count = len(data) // 3
-    var normals = List[Float32]()
-    var uvs = List[Float32]()
-    var points = List[Vector3]()
+    # Every point out onto the sphere, three.js's `applyRadius`.
+    var count = len(points)
+    var scale = radius
     for vertex in range(count):  # pragma: no branch
-        var direction = Vector3(
-            data[vertex * 3], data[vertex * 3 + 1], data[vertex * 3 + 2]
-        )
-        direction.normalize()
-        points.append(direction)
-        append_vector3(normals, direction)
-        data[vertex * 3] = direction.x * radius.value
-        data[vertex * 3 + 1] = direction.y * radius.value
-        data[vertex * 3 + 2] = direction.z * radius.value
-        uvs.append(_azimuth(direction) / (2 * Float32(pi)) + 0.5)
-        # Latitude runs the other way from the inclination: one at the top,
-        # as the sphere's v does and as three.js writes it.
-        uvs.append(0.5 - _inclination(direction) / Float32(pi))
+        points[vertex] = _normalized(points[vertex]) * scale
 
-    # The seam repairs, per face, in three.js's order.
+    # Longitude and latitude, three.js's `generateUVs`. Latitude runs the
+    # other way from the inclination: one at the top, as the sphere's v
+    # does and as three.js writes it.
+    var uvs = List[Float64]()
+    for vertex in range(count):  # pragma: no branch
+        uvs.append(_azimuth(points[vertex]) / 2 / pi + 0.5)
+        uvs.append(1 - (_inclination(points[vertex]) / pi + 0.5))
+
+    # The seam repairs, per face, in three.js's order. A face's middle is
+    # three.js's `divideScalar( 3 )`, a product with a third.
     for triangle in range(count // 3):  # pragma: no branch
-        var middle = centroid(
-            points[triangle * 3],
-            points[triangle * 3 + 1],
-            points[triangle * 3 + 2],
-        )
-        var face_azimuth = _azimuth(middle)
+        var middle = (points[triangle * 3] + points[triangle * 3 + 1]) + points[
+            triangle * 3 + 2
+        ]
+        var face_azimuth = _azimuth(middle * (1.0 / 3))
         for corner in range(3):  # pragma: no branch
             var index = triangle * 3 + corner
             _correct_uv(uvs, index, points[index], face_azimuth)
     for triangle in range(count // 3):  # pragma: no branch
         _correct_seam(uvs, triangle)
 
+    var data = List[Float32](capacity=count * 3)
+    var normals = List[Float32](capacity=count * 3)
+    for vertex in range(count):  # pragma: no branch
+        var stored = _Point(
+            Float64(Float32(points[vertex][0])),
+            Float64(Float32(points[vertex][1])),
+            Float64(Float32(points[vertex][2])),
+            0,
+        )
+        var normal = _normalized(stored)
+        for axis in range(3):  # pragma: no branch
+            data.append(Float32(stored[axis]))
+            normals.append(Float32(normal[axis]))
+    var texture = List[Float32](capacity=len(uvs))
+    for value in uvs:  # pragma: no branch
+        texture.append(Float32(value))
+
     var geometry = BufferGeometry()
-    textured_surface(geometry, data^, normals^, uvs^)
+    textured_surface(geometry, data^, normals^, texture^)
     if detail == 0:
         geometry.compute_vertex_normals()
     record_kind(geometry, POLYHEDRON_GEOMETRY)
     geometry.parameters.set_json("vertices", _numbers_json(vertices))
     geometry.parameters.set_json("indices", _integers_json(indices))
-    geometry.parameters.set_meters("radius", radius)
+    geometry.parameters.set_number("radius", radius)
     geometry.parameters.set_number("detail", Float64(detail))
     return geometry^
 
 
-def _vertex(vertices: List[Float32], index: Int) -> Vector3:
+def _vertex(vertices: List[Float64], index: Int) -> _Point:
     """Return one vertex of a flat list of triples."""
-    return Vector3(
-        vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]
+    return _Point(
+        vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2], 0
     )
 
 
 def _regular_solid(
-    vertices: List[Float32],
+    vertices: List[Float64],
     indices: List[Int],
-    radius: Length,
+    radius: Float64,
     detail: Int,
     kind: GeometryType,
 ) raises -> BufferGeometry:
@@ -286,9 +351,9 @@ def _regular_solid(
     The four named solids share this finish. The kind is the three.js
     class, and the parameters are the radius and the detail.
     """
-    var geometry = polyhedron(vertices, indices, radius, detail)
+    var geometry = _polyhedron(vertices, indices, radius, detail)
     record_kind(geometry, kind)
-    geometry.parameters.set_meters("radius", radius)
+    geometry.parameters.set_number("radius", radius)
     geometry.parameters.set_number("detail", Float64(detail))
     return geometry^
 
@@ -307,10 +372,10 @@ def tetrahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         Error: If the radius is not positive, or the detail is negative
             or above 256.
     """
-    var vertices: List[Float32] = [1, 1, 1, -1, -1, 1, -1, 1, -1, 1, -1, -1]
+    var vertices: List[Float64] = [1, 1, 1, -1, -1, 1, -1, 1, -1, 1, -1, -1]
     var indices: List[Int] = [2, 1, 0, 0, 3, 2, 1, 3, 0, 2, 3, 1]
     return _regular_solid(
-        vertices, indices, radius, detail, TETRAHEDRON_GEOMETRY
+        vertices, indices, Float64(radius.value), detail, TETRAHEDRON_GEOMETRY
     )
 
 
@@ -328,7 +393,7 @@ def octahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         Error: If the radius is not positive, or the detail is negative
             or above 256.
     """
-    var vertices: List[Float32] = [
+    var vertices: List[Float64] = [
         1,
         0,
         0,
@@ -375,7 +440,7 @@ def octahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         2,
     ]
     return _regular_solid(
-        vertices, indices, radius, detail, OCTAHEDRON_GEOMETRY
+        vertices, indices, Float64(radius.value), detail, OCTAHEDRON_GEOMETRY
     )
 
 
@@ -395,8 +460,20 @@ def icosahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         Error: If the radius is not positive, or the detail is negative
             or above 256.
     """
+    return _icosahedron(Float64(radius.value), detail)
+
+
+def _icosahedron(radius: Float64, detail: Int) raises -> BufferGeometry:
+    """Return an icosahedron of a radius in meters given in doubles, as
+    three.js's `IcosahedronGeometry` takes a JavaScript number. A generator
+    that computes in doubles calls this, so its radius is not rounded to
+    `Float32` first.
+
+    Raises:
+        Error: As `icosahedron` raises.
+    """
     var t = GOLDEN
-    var vertices: List[Float32] = [
+    var vertices: List[Float64] = [
         -1,
         t,
         0,
@@ -518,7 +595,7 @@ def dodecahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
     """
     var t = GOLDEN
     var r = 1 / t
-    var vertices: List[Float32] = [
+    var vertices: List[Float64] = [
         -1,
         -1,
         -1,
@@ -691,5 +768,5 @@ def dodecahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         9,
     ]
     return _regular_solid(
-        vertices, indices, radius, detail, DODECAHEDRON_GEOMETRY
+        vertices, indices, Float64(radius.value), detail, DODECAHEDRON_GEOMETRY
     )

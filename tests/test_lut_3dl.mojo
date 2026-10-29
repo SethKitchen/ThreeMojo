@@ -13,7 +13,7 @@ wraps. `row.png` and `column.png` hold one table of size three as a row
 and as a column of squares.
 """
 
-from loaders.json import JsonDocument, parse_json
+from loaders.json import parse_json
 from loaders.lut_3dl import (
     _checked_grid_cells,
     lut_3dl_byte,
@@ -23,16 +23,10 @@ from loaders.lut_3dl import (
 from loaders.lut_image import lut_image_from, parse_lut_image, read_lut_image
 from render.png import DecodedImage
 from render.srgb import SRGB
-from render.texture import FLOAT_TYPE, UNSIGNED_BYTE_TYPE, TexelType
+from render.texture import FLOAT_TYPE, TexelType
 from std.math import inf, nan
 from std.pathlib import Path
-from std.testing import (
-    TestSuite,
-    assert_equal,
-    assert_false,
-    assert_raises,
-    assert_true,
-)
+from std.testing import TestSuite, assert_equal, assert_raises
 
 
 def near(got: Float64, want: Float64) raises:

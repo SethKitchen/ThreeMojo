@@ -171,7 +171,7 @@ def weld_text(text: String) raises -> String:
         ):
             chosen.append(face)
             first = face
-    _sort_ints(chosen)
+    sort(chosen)
     var out = String('{"points":[')
     for index in range(unique):
         if index > 0:
@@ -316,17 +316,6 @@ def _triangle_before(
     if ky[right] != ky[left]:
         return ky[right] < ky[left]
     return kz[right] < kz[left]
-
-
-def _sort_ints(mut values: List[Int]):
-    """Sort integers into ascending order."""
-    for index in range(1, len(values)):
-        var key = values[index]
-        var slot = index
-        while slot > 0 and key < values[slot - 1]:
-            values[slot] = values[slot - 1]
-            slot -= 1
-        values[slot] = key
 
 
 @no_inline

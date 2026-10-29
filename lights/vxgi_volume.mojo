@@ -58,6 +58,7 @@ from core.scene import Scene
 from lights.light import DIRECTIONAL, POINT, SPOT, Light
 from lights.lighting import falloff
 from lights.vxgi_cone_tracer import (
+    GOLDEN_STEP,
     Lanes,
     UNBOUNDED,
     Untracked,
@@ -963,7 +964,7 @@ def bounce_voxel(
     var blue = Float32(0)
     for cone in range(BOUNCE_CONE_COUNT):  # pragma: no branch
         var u1 = (Float32(cone) + 0.5) / Float32(BOUNCE_CONE_COUNT)
-        var u2 = fract(Float32(cone) * Float32(0.618034) + rotation)
+        var u2 = fract(Float32(cone) * GOLDEN_STEP + rotation)
         var direction = cosine_direction(
             frame[0], frame[1], surface.normal, u1, u2
         )

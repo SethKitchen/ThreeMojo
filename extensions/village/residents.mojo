@@ -69,7 +69,7 @@ from extensions.village.character import (
     Stance,
     no_input,
 )
-from controls.third_person_controls import yaw_of
+from controls.third_person_controls import turn_toward, yaw_of
 from materials.material import MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -107,6 +107,9 @@ does."""
 comptime SOLE = Float32(0.02)
 """How far the sole is below the toes' joint, in meters for a person of
 six feet."""
+comptime FACE_SPEED = Float32(4)
+"""How fast a held person turns to face their point, in radians a
+second."""
 comptime ARRIVED = Float32(0.6)
 """How near a point a resident must come, in meters, to have reached it."""
 comptime STALL_SPEED = Float32(0.1)
@@ -720,6 +723,10 @@ struct Residents(Movable):
     var walks: List[Route]
     var books: List[Flipbook]
     var beasts: List[Beast]
+    # How long each person still stands still, in seconds, and the point
+    # they face while they do: see `hold`.
+    var holds: List[Float32]
+    var faces: List[Vector3]
 
     def __init__(
         out self,
@@ -750,6 +757,10 @@ struct Residents(Movable):
         self.bodies = List[Body]()
         self.people = List[Character]()
         self.walks = List[Route]()
+        self.holds = List[Float32](length=len(parameters.villagers), fill=0)
+        self.faces = List[Vector3](
+            length=len(parameters.villagers), fill=Vector3(0, 0, 0)
+        )
         for index in range(len(parameters.villagers)):
             ref villager = parameters.villagers[index]
             self.bodies.append(
@@ -894,7 +905,8 @@ struct Residents(Movable):
         every other resident: where it stands now, for one that has moved
         this frame, and where it stood, for one that has not. An animal
         that the player comes nearer than its herd's `flee` runs straight
-        away, and walks back to its route once the player is further.
+        away, and walks back to its route once the player is further. A
+        person held by `hold` stands and turns to face their point.
 
         Args:
             scene: The scene the residents are in.
@@ -913,8 +925,24 @@ struct Residents(Movable):
         var first = len(crowd)
         crowd.extend(self.obstacles())
         var people = len(self.people)
+        var seconds = delta.to(SECOND)
         for index in range(people):
-            var steer = self.walks[index].steer(self.people[index], delta)
+            var steer: Tuple[MoveInput, Angle]
+            if self.holds[index] > 0:
+                # A held person stands, and turns to face their point. Their
+                # route waits.
+                self.holds[index] -= seconds
+                ref at = self.people[index].position
+                var toward = self.faces[index] - at
+                var turned = turn_toward(
+                    self.people[index].heading,
+                    yaw_of(Vector3(toward.x, 0, toward.z)),
+                    Angle(FACE_SPEED * seconds, RADIAN),
+                )
+                self.people[index].heading = turned
+                steer = (no_input(), turned)
+            else:
+                steer = self.walks[index].steer(self.people[index], delta)
             self.people[index].step(
                 steer[0], steer[1], delta, terrain, crowd, first + index
             )
@@ -948,6 +976,25 @@ struct Residents(Movable):
             scene.meshes[beast.mesh].geometry = self.books[beast.book].frame(
                 beast.character
             )
+
+    def hold(mut self, index: Int, seconds: Float32, toward: Vector3) raises:
+        """Stop a person on their route for a while, turned to face a point,
+        as a villager stops to talk to the player.
+
+        Args:
+            index: The person's place among `people`.
+            seconds: How long they stand. Their route waits for them.
+            toward: The point they turn to face.
+
+        Raises:
+            Error: If the person is not one, or the time is negative.
+        """
+        if index < 0 or index >= len(self.people):
+            raise Error("A held person must be one of the residents")
+        if not (seconds >= 0):
+            raise Error("A hold's time must not be negative")
+        self.holds[index] = seconds
+        self.faces[index] = toward
 
     def obstacles(self) -> List[Obstacle]:
         """Return each resident as an obstacle, for the player to bump.

@@ -39,7 +39,6 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.ordinal import require_index_in_count
-from std.math import isfinite
 from math.norm import _ordinary_squared
 from core.layers import Layers
 from core.object3d import NO_PARENT

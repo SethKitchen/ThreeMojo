@@ -17,7 +17,8 @@ A Python report keeps an integer an `int` until an operation makes it a
 
 from tools._bigint import BigInt
 from tools._fraction import Fraction
-from tools._json_value import JsonTree
+from tools._json_tree import JsonTree
+from tools._python_float import python_repr
 
 comptime _EXACT = 9007199254740992
 """2**53: every integer up to this size is a double."""
@@ -81,7 +82,7 @@ struct PyNumber(Copyable, Movable):
             return self.integer < other.integer
         return self.as_float() < other.as_float()
 
-    def add_to_json(self, mut tree: JsonTree) raises -> Int:
+    def add_to_json(self, mut tree: JsonTree) -> Int:
         """Add this number to a JSON tree, as `json.dumps` writes it.
 
         Args:
@@ -89,9 +90,6 @@ struct PyNumber(Copyable, Movable):
 
         Returns:
             The node.
-
-        Raises:
-            Error: If a float has no shortest text.
         """
         if self.is_int:
             return tree.integer(self.integer)
@@ -106,8 +104,9 @@ struct PyNumber(Copyable, Movable):
         Raises:
             Error: If a float has no shortest text.
         """
-        var tree = JsonTree()
-        return tree.text(self.add_to_json(tree))
+        if self.is_int:
+            return String(self.integer)
+        return python_repr(self.real)
 
 
 def true_divide(numerator: Int, denominator: Int) raises -> Float64:

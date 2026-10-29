@@ -60,7 +60,6 @@ from core.ordinal import ordinal_valid, require_non_negative
 from core.search import last_match
 
 from loaders.usd_specs import (
-    NO_VALUE,
     SpecType,
     USD_NULL,
     USD_NUMBERS,

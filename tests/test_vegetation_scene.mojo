@@ -8,7 +8,7 @@
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.background import CUBE_BACKGROUND
-from core.buffer_geometry import COLOR, NORMAL, POSITION
+from core.buffer_geometry import COLOR, POSITION
 from core.fog import EXP2_FOG
 from core.scene import Scene
 from extensions.vegetation.crown import (
@@ -18,7 +18,6 @@ from extensions.vegetation.crown import (
     bush_parameters,
     crown_level_for,
     default_crown_levels,
-    dress,
     grow_crown,
     hang_leaves,
     leafy_tree,
@@ -50,7 +49,6 @@ from extensions.vegetation.meadow import (
 from extensions.vegetation.sky import SkyDome, SkyLook, cloud_density, paint_sky
 from lights.shadow import PCF_SOFT_SHADOW_MAP
 from materials.nodes import NORMAL_NODE, POSITION_NODE
-from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.cube_texture import FACE_COUNT, face_direction
 from render.tonemap import ACES_FILMIC_TONE_MAPPING

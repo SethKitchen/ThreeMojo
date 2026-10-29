@@ -13,7 +13,6 @@ negated. The arc's corners and the junction smoothing come from
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV, UV1
-from extensions.carla.map import Map
 from extensions.carla.map_builder import MapBuilder
 from extensions.carla.mesh_factory import (
     CROSSWALK_SURFACE,

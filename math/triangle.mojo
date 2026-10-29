@@ -43,12 +43,16 @@ def _segment_closest_points(
     start2: Vector3,
     end2: Vector3,
     point_epsilon: Float64,
+    octree_ties: Bool,
 ) -> Tuple[Vector3, Vector3]:
     """Apply Ericson's constrained segment minimization in Float64.
 
     The squared cross product replaces the cancelling Gram determinant.
     Recompute the other parameter when an endpoint constrains the minimum.
-    The caller chooses when a short segment counts as a point.
+    The caller chooses when a short segment counts as a point, and whether
+    two parallel segments start from the first one's start, as three.js's
+    `Line3` does, or from the end nearer the overlap's middle, as its
+    Octree does.
     """
     var first = widen_vector(start1)
     var second = widen_vector(start2)
@@ -78,7 +82,7 @@ def _segment_closest_points(
                     0.0,
                     1.0,
                 )
-            else:
+            elif octree_ties:
                 # Preserve Octree's tie choice for parallel overlapping lines.
                 var at_start = f / e
                 var at_end = (b + f) / e
@@ -300,10 +304,10 @@ struct Triangle(Equatable, ImplicitlyCopyable):
                 return self.a * w.x + self.b * w.y + self.c * w.z
         var best = _nearest_on_segment(point, self.a, self.b)
         var other = _nearest_on_segment(point, self.b, self.c)
-        if _gap(other, point) < _gap(best, point):
+        if other.distance_to_squared(point) < best.distance_to_squared(point):
             best = other
         other = _nearest_on_segment(point, self.c, self.a)
-        if _gap(other, point) < _gap(best, point):
+        if other.distance_to_squared(point) < best.distance_to_squared(point):
             best = other
         return best
 
@@ -366,12 +370,6 @@ struct Triangle(Equatable, ImplicitlyCopyable):
             Whether the two differ.
         """
         return not self == other
-
-
-def _gap(a: Vector3, b: Vector3) -> Float32:
-    """Return the squared distance between two points."""
-    var d = a - b
-    return d.dot(d)
 
 
 def _nearest_on_segment(
@@ -513,7 +511,12 @@ struct Line3(Equatable, ImplicitlyCopyable):
             The squared distance between the two points.
         """
         var points = _segment_closest_points(
-            self.start, self.end, other.start, other.end, Float64(POINT_EPSILON)
+            self.start,
+            self.end,
+            other.start,
+            other.end,
+            Float64(POINT_EPSILON),
+            octree_ties=False,
         )
         on_self = points[0]
         on_other = points[1]

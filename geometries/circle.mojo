@@ -27,6 +27,10 @@ image: the center is (0.5, 0.5) and the rim of a full circle touches the four
 edges. A pie slice or an arc shows only its part of the image, which is what
 three.js does and what keeps a texture still when the sweep animates.
 
+The arithmetic is three.js's, in doubles, and each number is rounded to
+`Float32` once, when it is stored. A ring's radius grows by one step a row,
+added up as three.js adds it.
+
 A ring with an inner radius of zero is a disk, as three.js's `RingGeometry`
 accepts it. Its inner row is then every vertex at the center, and the first
 triangle of each inner cell has two corners there and no area. A rasterizer
@@ -56,7 +60,7 @@ from geometries.surface import (
     require_three_segments,
 )
 from math.curve_checks import require_at_least_one
-from math.finite import require_finite
+from math.norm import rounded_product
 from std.math import cos, sin
 from units.si import Angle, Length, RADIAN, TURN
 
@@ -88,23 +92,32 @@ def _append_flat_vertex(
     mut data: List[Float32],
     mut normals: List[Float32],
     mut uvs: List[Float32],
-    x: Float32,
-    y: Float32,
-    outer: Float32,
+    x: Float64,
+    y: Float64,
+    outer: Float64,
 ):
     """Append a vertex at (x, y, 0) facing +z.
 
     Its texture coordinate is where it lies in the square of half-width
-    `outer` around the origin: the center maps to (0.5, 0.5).
+    `outer` around the origin: the center maps to (0.5, 0.5). The numbers
+    are three.js's doubles, rounded to `Float32` once, here.
     """
-    data.append(x)
-    data.append(y)
+    data.append(Float32(x))
+    data.append(Float32(y))
     data.append(Float32(0))
     normals.append(Float32(0))
     normals.append(Float32(0))
     normals.append(Float32(1))
-    uvs.append((x / outer + 1) / 2)
-    uvs.append((y / outer + 1) / 2)
+    uvs.append(Float32((x / outer + 1) / 2))
+    uvs.append(Float32((y / outer + 1) / 2))
+
+
+def _angle(start: Angle, step: Int, steps: Int, sweep: Angle) -> Float64:
+    """Return three.js's `thetaStart + i / segments * thetaLength`, in
+    doubles, the product rounded on its own."""
+    return Float64(start.value) + rounded_product(
+        Float64(step) / Float64(steps), Float64(sweep.value)
+    )
 
 
 def circle(
@@ -139,7 +152,7 @@ def circle(
     )
     check_sweep(theta_length)
 
-    var r = radius.value
+    var r = Float64(radius.value)
     var data = List[Float32]()
     var normals = List[Float32]()
     var uvs = List[Float32]()
@@ -148,10 +161,7 @@ def circle(
     # segment count was checked above, so the loop always runs.
     _append_flat_vertex(data, normals, uvs, 0, 0, r)
     for step in range(segments + 1):  # pragma: no branch
-        var theta = (
-            theta_start.value
-            + Float32(step) / Float32(segments) * theta_length.value
-        )
+        var theta = _angle(theta_start, step, segments, theta_length)
         _append_flat_vertex(
             data, normals, uvs, r * cos(theta), r * sin(theta), r
         )
@@ -226,20 +236,22 @@ def ring(
     )
     check_sweep(theta_length)
 
-    var outer = outer_radius.value
-    var radius_step = (outer - inner_radius.value) / Float32(phi_segments)
+    var outer = Float64(outer_radius.value)
+    var radius_step = (outer - Float64(inner_radius.value)) / Float64(
+        phi_segments
+    )
     var data = List[Float32]()
     var normals = List[Float32]()
     var uvs = List[Float32]()
     # Rows from the inner edge outwards, each one vertex longer than the
     # number of cells around so the seam has a vertex on each side. The
-    # segment counts were checked above, so every loop runs.
-    for row in range(phi_segments + 1):  # pragma: no branch
-        var radius = inner_radius.value + Float32(row) * radius_step
+    # radius grows by a step a row, as three.js adds it up. The segment
+    # counts were checked above, so every loop runs.
+    var radius = Float64(inner_radius.value)
+    for _ in range(phi_segments + 1):  # pragma: no branch
         for column in range(theta_segments + 1):  # pragma: no branch
-            var theta = (
-                theta_start.value
-                + Float32(column) / Float32(theta_segments) * theta_length.value
+            var theta = _angle(
+                theta_start, column, theta_segments, theta_length
             )
             _append_flat_vertex(
                 data,
@@ -249,6 +261,7 @@ def ring(
                 radius * sin(theta),
                 outer,
             )
+        radius += radius_step
 
     var stride = theta_segments + 1
     var index = List[Int]()

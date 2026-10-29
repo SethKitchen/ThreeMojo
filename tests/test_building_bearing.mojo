@@ -31,7 +31,6 @@ from extensions.building.model import (
 )
 from extensions.building.views.bearing import (
     BearingCheck,
-    BearingOptions,
     StoreyBearing,
     bearing_check,
     default_bearing_options,

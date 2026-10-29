@@ -11,8 +11,8 @@ can hold its length between two bounds.
 """
 
 from math.norm import _ordinary_squared
-from math.utils import clamp, clamp_unit
-from std.math import acos, pi, sqrt
+from math.utils import clamp
+from std.math import atan2, pi
 from units.measure import angle_radians
 from units.si import Angle
 
@@ -211,26 +211,19 @@ def angle_between[T: PolylineVertex](start: T, end: T) -> Angle:
     Returns:
         From zero to a half turn. A right angle if either vector is zero.
     """
-    var first_squared = start.length_sq()
-    var second_squared = end.length_sq()
-    var product = first_squared * second_squared
-    var theta: Float32
-    if (
-        _ordinary_squared(first_squared)
-        and _ordinary_squared(second_squared)
-        and _ordinary_squared(product)
-    ):
-        theta = start.dot(end) / sqrt(product)
-    else:
-        var first = start
-        var second = end
-        first.normalize()
-        second.normalize()
-        # A zero vector stays zero, so this is every component being zero.
-        if first.length_sq() == 0 or second.length_sq() == 0:
-            return angle_radians(pi / 2)
-        theta = first.dot(second)
-    return angle_radians(Float64(acos(clamp_unit(theta))))
+    var first = start
+    var second = end
+    first.normalize()
+    second.normalize()
+    # A zero vector stays zero, so this is every component being zero.
+    if first.length_sq() == 0 or second.length_sq() == 0:
+        return angle_radians(pi / 2)
+    # Kahan's form of three.js's `acos` of the cosine. In Float32 the
+    # cosine rounds to one for every angle below about 5e-4 radians, and
+    # `acos` then gives zero; the chord and its complement keep the angle.
+    var apart = (first - second).length()
+    var together = (first - second * -1).length()
+    return angle_radians(Float64(2 * atan2(apart, together)))
 
 
 def lerp_in_place[T: PolylineVertex](mut value: T, other: T, alpha: Float32):

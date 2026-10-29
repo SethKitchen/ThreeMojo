@@ -27,7 +27,19 @@ from core.scene import Scene
 from generators.utils import Vec3d
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
-from units.si import DEGREE, DEGREE64, METER, Angle, Length
+from units.si import (
+    DEGREE,
+    DEGREE64,
+    METER,
+    Angle,
+    Length,
+    Angle64,
+    Duration64,
+    HOUR,
+    Length64,
+    METER_PER_SECOND,
+    Velocity64,
+)
 from extensions.building.construction import Construction, Layer, double_glazing
 from extensions.building.generate.openings import (
     WindowOptions,
@@ -62,14 +74,6 @@ from extensions.energy.ids import ZoneId
 from extensions.energy.simulation import default_options, simulate
 from extensions.energy.weather import WeatherLocation, design_day
 from extensions.topology.arrangement import Point2
-from units.si import (
-    Angle64,
-    Duration64,
-    HOUR,
-    Length64,
-    METER_PER_SECOND,
-    Velocity64,
-)
 from units.temperature import CELSIUS, Temperature64
 
 comptime DEFAULT_OUTPUT = "out/building-energy.png"

@@ -31,6 +31,7 @@ from controls.input import (
     PointerButton,
     SECONDARY,
     WHEEL,
+    pixel_center_ndc,
 )
 from controls.orbit_controls import (
     DOLLY,
@@ -42,7 +43,6 @@ from controls.orbit_controls import (
     _orthographic_view,
     _perspective_view,
 )
-from controls.input import pixel_center_ndc
 from math.vector3 import Vector3
 from std.math import cos, inf, nan, pi, sin, sqrt, tan
 from std.testing import (
@@ -318,6 +318,29 @@ def test_a_disabled_action_does_nothing() raises:
     assert_false(controls.update(camera, _frame()))
 
 
+def test_a_release_while_disabled_ends_the_drag() raises:
+    # three.js's `onPointerUp` does not read `enabled`. An app turns the
+    # controls off while a gizmo drags, and on again after the release.
+    var camera = _camera()
+    var controls = OrbitControls()
+    controls.handle(
+        InputEvent(POINTER_DOWN, button=PRIMARY, x=50, y=50), camera, HEIGHT
+    )
+    controls.enabled = False
+    controls.handle(
+        InputEvent(POINTER_MOVE, button=PRIMARY, x=60, y=50), camera, HEIGHT
+    )
+    controls.handle(
+        InputEvent(POINTER_UP, button=PRIMARY, x=60, y=50), camera, HEIGHT
+    )
+    controls.enabled = True
+    controls.handle(
+        InputEvent(POINTER_MOVE, button=NO_BUTTON, x=85, y=50), camera, HEIGHT
+    )
+    assert_false(controls.update(camera, _frame()))
+    _at(camera, 0, 0, 5)
+
+
 def test_a_move_with_no_button_held_does_nothing() raises:
     var camera = _camera()
     var controls = OrbitControls()
@@ -578,6 +601,23 @@ def test_damping_spreads_a_change_over_frames() raises:
     _at(camera, radius, 0, 0)
 
 
+def test_a_damped_change_counts_until_it_has_added_up() raises:
+    # three.js compares with where the camera was at the last change it
+    # reported. So the last frame it reports is within a millimeter of
+    # where the camera comes to rest, though each late frame moves less.
+    var camera = _camera()
+    var controls = OrbitControls()
+    controls.enable_damping = True
+    controls.rotate_left(Angle(30.0, DEGREE))
+    var reported = camera.position
+    for _ in range(600):
+        if controls.update(camera, _frame()):
+            reported = camera.position
+    var gap = camera.position - reported
+    assert_true(gap.length() < 1e-3)
+    assert_true(camera.position.x < -2.4)
+
+
 def test_auto_rotate_turns_while_no_button_is_held() raises:
     var camera = _camera()
     var controls = OrbitControls()
@@ -667,7 +707,7 @@ def test_an_orthographic_pan_divides_a_wide_view_in_full() raises:
         Length(100.0, METER),
     )
     camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
-    var view = _orthographic_view(camera, Vector3(0, 0, 0), 16777217, 100)
+    var view = _orthographic_view(camera, 16777217, 100)
     var expected = Float32(Float64(10) / Float64(16777217))
     assert_equal(view.per_x, expected)
     assert_true(view.per_x != Float32(10) / Float32(16777217))

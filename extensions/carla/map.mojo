@@ -150,7 +150,7 @@ from extensions.carla.math import (
     make_unit_vector,
     vector_angle,
 )
-from extensions.carla.road import Lane, LaneKey, LaneSection, Road
+from extensions.carla.road import Lane, LaneKey, Road
 from extensions.carla.road_info import (
     CHANGE_BOTH,
     CHANGE_LEFT,
@@ -166,7 +166,6 @@ from extensions.carla.road_info import (
     LaneId,
     LaneMarking,
     LaneType,
-    LaneValidity,
     RoadId,
     RoadInfoMarkRecord,
     RoadInfoSignal,
@@ -195,10 +194,8 @@ from extensions.carla.quantity_boundary import (
     _RawSI,
     _finite_si,
     _nonnegative_si,
-    _positive_si,
 )
-from units.si import DEGREE, Angle, Length, Length64, METER, Velocity64
-from units.si import Angle64
+from units.si import DEGREE, Angle, Length, Length64, METER, Velocity64, Angle64
 
 # CARLA's `EPSILON`: waypoints sit this far inside a section's edges.
 comptime EPSILON = 10.0 * 2.220446049250313e-16

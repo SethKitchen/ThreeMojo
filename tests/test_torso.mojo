@@ -10,7 +10,7 @@ from core.buffer_geometry import COLOR
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.humanoid.athleticism import Athleticism
-from extensions.humanoid.sex import FEMALE, MALE, Sex
+from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.arm.frame import arm_dimensions
@@ -150,7 +150,6 @@ from extensions.humanoid.skeleton.torso.muscles.dimensions import (
     SUBCLAVIUS,
     TRAPEZIUS,
     TorsoMuscle,
-    TorsoMuscleDimensions,
     is_paired_muscle,
     named_torso_muscles,
     torso_muscle_dimensions,

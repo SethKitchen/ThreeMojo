@@ -10,14 +10,11 @@ with three.js."""
 
 from core.binary import append_little_endian, store_little_endian
 from loaders.usd_specs import (
-    SPEC_PRIM,
     USD_BOOLEAN,
     USD_NULL,
-    USD_NUMBER,
     USD_NUMBERS,
     USD_OBJECT,
     USD_SAMPLES,
-    USD_STRING,
     USD_STRINGS,
     UsdLayer,
 )
@@ -74,7 +71,6 @@ from std.math import isinf, isnan
 from std.memory import bitcast
 from std.testing import (
     TestSuite,
-    assert_almost_equal,
     assert_equal,
     assert_false,
     assert_raises,

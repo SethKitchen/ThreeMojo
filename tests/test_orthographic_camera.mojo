@@ -12,12 +12,11 @@ than "the picture has no perspective in it".
 """
 
 from cameras.camera import Camera
-from render.framebuffer import Framebuffer
-from core.object3d import NodeId
+from render.framebuffer import Framebuffer, Color
+from core.object3d import NodeId, Object3D
 from cameras.orthographic_camera import OrthographicCamera, centered
 from core.assets import Assets
 from materials.material import Material
-from core.object3d import Object3D
 from core.scene import Scene
 from lights.light import ambient_light, directional_light
 from geometries.box import cube
@@ -25,7 +24,6 @@ from math.matrix4 import Matrix4
 from math.projection import look_at, orthographic
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.framebuffer import Color
 from renderers.renderer import Renderer
 from std.testing import (
     TestSuite,

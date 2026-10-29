@@ -53,7 +53,7 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/road/MeshFactory.cpp`,
 """
 
 from extensions.carla.quantity_boundary import _finite_si, _positive_si
-from units.si import Length64
+from units.si import Length64, Length, METER
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -87,7 +87,6 @@ from extensions.carla.transform import CarlaTransform
 from math.bounds import Box3
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from units.si import Length, METER
 
 # CARLA's `EPSILON` and `MESH_EPSILON`: 10 and 50 double epsilons.
 comptime EPSILON = 10.0 * 2.220446049250313e-16

@@ -76,13 +76,7 @@ from extensions.gamepad.guid import (
     VendorId,
     joystick_guid_info,
 )
-from extensions.gamepad.hid import (
-    HID_BUS_BLUETOOTH,
-    HID_BUS_USB,
-    HidDeviceInfo,
-    HidSource,
-    enumerate_hidraw,
-)
+from extensions.gamepad.hid import HidDeviceInfo, HidSource, enumerate_hidraw
 from extensions.gamepad.hid_device import (
     HidapiDevice,
     USB_VENDOR_DRAGONRISE,
@@ -109,7 +103,7 @@ from extensions.gamepad.linux import (
     GAMEPAD_REMOVED,
     folder_change_time,
 )
-from extensions.gamepad.mapping import MappingDatabase, PRIORITY_DEFAULT
+from extensions.gamepad.mapping import MappingDatabase
 from extensions.gamepad.names import should_ignore_joystick
 from std.time import perf_counter_ns
 from units.si import Duration64, SECOND

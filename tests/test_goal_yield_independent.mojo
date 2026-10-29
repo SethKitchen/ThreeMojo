@@ -4,7 +4,6 @@
 """Independent interruption, ownership, tie and cumulative-ledger controls."""
 
 from extensions.carla.curve_distance import _wide_point_order
-from extensions.carla.curve_interval import _next_up
 from extensions.carla.geometry import _Sample
 from extensions.carla.lane_refinement import (
     _LaneCertificate,

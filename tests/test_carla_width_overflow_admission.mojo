@@ -10,7 +10,6 @@ All expression enclosures come from the unchanged Road producers.
 """
 
 from extensions.carla.curve_bounds import _reference_work
-from extensions.carla.curve_interval import _Interval
 from extensions.carla.lane_refinement import (
     _ClosedInterval,
     _ClosedIntervals,

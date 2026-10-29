@@ -27,21 +27,28 @@ from core.extent import positive_extent, require_positive_extent
 from cameras.camera import Camera
 from core.assets import Assets
 from core.scene import Scene
+from loaders.js_number import js_number_text
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer
 from std.math import floor, isfinite
+from math.norm import rounded_product
 from math.utils import scaled_side
 
 # The character set three.js's constructor takes by default.
-comptime ASCII_CHARACTERS = " .:-+*=%@#"
+comptime ASCII_CHARACTERS = " .:-=+*#%@"
 # The set three.js falls back to when it is given an empty one.
 comptime ASCII_FALLBACK = " .,:;i1tfLCG08@"
 # The fallback when the color option is on.
 comptime ASCII_COLOR_FALLBACK = " CGO08@"
 
 
-def ascii_brightness(color: Color) -> Float32:
+def ascii_brightness(color: Color) -> Float64:
     """Return the brightness three.js's `AsciiEffect` reads from a pixel.
+
+    The sum is a `Float64`, as JavaScript's number is: in `Float32` some
+    pixels pick the character next to three.js's. Each product is rounded
+    on its own, as JavaScript rounds it, where Mojo would fuse them into
+    multiply-adds and pick the next character for a few colors.
 
     Args:
         color: The pixel, in sRGB bytes.
@@ -54,13 +61,13 @@ def ascii_brightness(color: Color) -> Float32:
     if color.a == 0:
         return 1
     return (
-        0.3 * Float32(color.r)
-        + 0.59 * Float32(color.g)
-        + 0.11 * Float32(color.b)
+        rounded_product(Float64(0.3), Float64(color.r))
+        + rounded_product(Float64(0.59), Float64(color.g))
+        + rounded_product(Float64(0.11), Float64(color.b))
     ) / 255
 
 
-def ascii_index(brightness: Float32, count: Int, invert: Bool) raises -> Int:
+def ascii_index(brightness: Float64, count: Int, invert: Bool) raises -> Int:
     """Return which character of a set a brightness picks:
     `Math.floor((1 - brightness) * (count - 1))`, the other way round
     when `invert` is on.
@@ -81,9 +88,7 @@ def ascii_index(brightness: Float32, count: Int, invert: Bool) raises -> Int:
     Raises:
         Error: If the index is not finite or does not fit in an integer.
     """
-    var scaled = floor(
-        (Float64(1) - Float64(brightness)) * (Float64(count) - 1)
-    )
+    var scaled = floor((Float64(1) - brightness) * (Float64(count) - 1))
     # `Float64(Int.MAX)` is 2^63. `Int` of a float at or past it is not
     # the index. A float below `-2^63` is not one either.
     if (
@@ -275,17 +280,21 @@ struct AsciiImage(Movable):
             out += "\n"
         return out^
 
-    def html(self) -> String:
+    def html(self) raises -> String:
         """Return the markup three.js's `asciifyImage` writes into the
         table cell.
 
         A space is `&nbsp;` and a line ends with `<br/>`. With the color
         option on, each character is a `span` in its cell's color, with
         that color as its background when the block option is on and
-        with its opacity when the alpha option is on.
+        with its opacity when the alpha option is on, written as
+        JavaScript writes a number.
 
         Returns:
             The markup.
+
+        Raises:
+            Error: If an opacity cannot be written, which does not happen.
         """
         var out = String()
         for row in range(self.rows):  # pragma: no branch
@@ -305,7 +314,7 @@ struct AsciiImage(Movable):
                 if self.block:
                     out += "background-color:" + rgb + ";"
                 if self.alpha:
-                    out += "opacity:" + String(Float32(c.a) / 255) + ";"
+                    out += "opacity:" + js_number_text(Float64(c.a) / 255) + ";"
                 out += "'>" + character + "</span>"
             out += "<br/>"
         return out^

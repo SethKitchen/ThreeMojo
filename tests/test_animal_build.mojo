@@ -23,7 +23,6 @@ from extensions.animals.coat import (
     EYE,
     CoatSample,
     FUR,
-    KERATIN,
     NOSE,
     SURFACE_CLASS_COUNT,
     EyeLook,
@@ -56,17 +55,8 @@ from extensions.animals.gait import (
     walk_pose_at,
     walk_stride,
 )
-from extensions.sdf.ids import (
-    BoneId,
-    FIN,
-)
-from extensions.animals.parts import (
-    BODY,
-    EYEBALL,
-    HORN,
-    JAW,
-    TONGUE,
-)
+from extensions.sdf.ids import BoneId
+from extensions.animals.parts import EYEBALL, HORN, JAW, TONGUE
 from extensions.animals.kit import EyeSpec
 from extensions.sdf.mesher import SurfaceMesh
 from extensions.animals.options import (
@@ -103,7 +93,6 @@ from extensions.animals.registry import (
 )
 from extensions.animals.rig import Pose, Rig
 from extensions.sdf.field import SdfModel
-from extensions.animals.traits import Traits
 from extensions.anatomy.locomotion import (
     WALK_FROUDE,
     stride_frequency,
@@ -115,7 +104,7 @@ from extensions.sdf.vector import (
     length,
     rotation_about,
 )
-from std.math import floor, isfinite, pi
+from std.math import floor, isfinite
 from std.testing import (
     TestSuite,
     assert_almost_equal,

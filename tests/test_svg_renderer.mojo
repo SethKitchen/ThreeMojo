@@ -19,7 +19,7 @@ from core.assets import Assets
 from core.background import color_background
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR
-from core.object3d import NO_PARENT, NodeId, Object3D
+from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import box
 from geometries.plane import plane
@@ -36,7 +36,6 @@ from materials.material import (
     DOUBLE_SIDE,
     LAMBERT,
     Material,
-    MaterialId,
     PointSize,
     TOON,
     normal_material,
@@ -52,7 +51,7 @@ from renderers.projector import (
     RENDERABLE_LINE,
     RENDERABLE_SPRITE,
     RenderableKind,
-    project_scene,
+    Vec,
 )
 from renderers.svg_renderer import (
     HIGH_QUALITY,
@@ -63,7 +62,6 @@ from renderers.svg_renderer import (
     _unit,
     color_style,
 )
-from renderers.projector import Vec
 from std.pathlib import Path
 from std.testing import (
     TestSuite,

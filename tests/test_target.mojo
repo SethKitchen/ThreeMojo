@@ -12,7 +12,7 @@ eight bits, so the losses compounded.
 """
 
 from render.framebuffer import Color, FloatColor
-from render.srgb import LINEAR, SRGB, srgb_to_linear
+from render.srgb import LINEAR, SRGB
 from render.target import RenderTarget
 from render.texture import IGNORED, NEAREST, REPEAT
 from render.tonemap import (

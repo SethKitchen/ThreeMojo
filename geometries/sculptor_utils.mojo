@@ -30,7 +30,7 @@ limits, and explicit zero and nonfinite rules.
 from math.cross import cross_components
 from math.norm import dot3, length3, squared_length3
 from math.vector3 import Vector3
-from std.math import isfinite, isnan, sqrt
+from std.math import isfinite, isnan
 
 # The tag three.js writes in the fourth slot of a face. Kept for the
 # record; a face here is three corners.

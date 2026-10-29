@@ -22,6 +22,7 @@ from std.memory import OpaquePointer
 from std.sys import argv, exit, stderr
 
 from tools._owned_process import EINTR, errno
+from tools._text import ascii_lower
 
 
 def kind_of(mesh_path: String) -> String:
@@ -35,10 +36,10 @@ def kind_of(mesh_path: String) -> String:
     """
     if mesh_path.startswith("/Engine/"):
         return "prop"
-    var parts = _split(mesh_path, "/")
+    var parts = mesh_path.split("/")
     var folder = String("")
     if len(parts) > 4 and parts[3] == "Static":
-        folder = parts[4]
+        folder = String(parts[4])
     if _skipped(folder):
         return "skip"
     if folder == "Building" or folder == "Bridge":
@@ -97,17 +98,17 @@ def near_budget(kind: String, triangles: Int, mesh_path: String) -> Int:
     if _flat(kind):
         return triangles
     if kind == "building":
-        return _max(_min(triangles, 2500), triangles // 6)
+        return max(min(triangles, 2500), triangles // 6)
     if kind == "parked_vehicle":
-        return _min(triangles, 2500)
+        return min(triangles, 2500)
     if kind == "vegetation":
         var cap = 4000
-        if _has(mesh_path, "/Bushes/"):
+        if "/Bushes/" in mesh_path:
             cap = 800
-        return _min(triangles, cap)
+        return min(triangles, cap)
     if kind == "pole" or kind == "traffic_light" or kind == "traffic_sign":
-        return _min(triangles, _max(400, triangles // 6))
-    return _min(triangles, _max(600, triangles // 4))
+        return min(triangles, max(400, triangles // 6))
+    return min(triangles, max(600, triangles // 4))
 
 
 def far_budget(kind: String, triangles: Int, mesh_path: String) -> Int:
@@ -121,21 +122,21 @@ def far_budget(kind: String, triangles: Int, mesh_path: String) -> Int:
     Returns:
         The far triangle limit, or 0 when the far level leaves the mesh out.
     """
-    var low = _lower(mesh_path)
+    var low = ascii_lower(mesh_path)
     if kind == "prop" or kind == "parked_vehicle" or kind == "traffic_sign":
         return 0
     if kind == "vegetation":
-        if _has(low, "/trees/"):
-            return _min(triangles, _max(150, triangles // 5))
+        if "/trees/" in low:
+            return min(triangles, max(150, triangles // 5))
         return 0
     if kind == "building":
-        return _max(_min(triangles, 300), triangles // 60)
+        return max(min(triangles, 300), triangles // 60)
     if kind == "pole" or kind == "traffic_light":
-        if _has(low, "glass") or _has(low, "leds"):
+        if "glass" in low or "leds" in low:
             return 0
-        return _min(triangles, _max(120, triangles // 12))
+        return min(triangles, max(120, triangles // 12))
     if kind == "wall" or kind == "fence":
-        return _min(triangles, _max(150, triangles // 10))
+        return min(triangles, max(150, triangles // 10))
     return near_budget(kind, triangles, mesh_path)
 
 
@@ -157,17 +158,17 @@ def object_fields(full_name: String) raises -> List[String]:
         raise Error("object path has no class")
     var cls = String(full_name[byte=0:space])
     var path = String(full_name[byte = space + 1 :])
-    var dot = _rfind(path, ".")
+    var dot = path.rfind(".")
     var package = String("")
     var name = String(path)
     if dot >= 0:
         package = String(path[byte=0:dot])
         name = String(path[byte = dot + 1 :])
-    var colon = _rfind(name, ":")
+    var colon = name.rfind(":")
     if colon >= 0:
         var after_colon = String(name[byte = colon + 1 :])
         name = after_colon
-    var nested = _rfind(name, ".")
+    var nested = name.rfind(".")
     if nested >= 0:
         var after_dot = String(name[byte = nested + 1 :])
         name = after_dot
@@ -205,69 +206,6 @@ def _skipped(folder: String) -> Bool:
     )
 
 
-def _min(left: Int, right: Int) -> Int:
-    """Return the smaller integer."""
-    if left < right:
-        return left
-    return right
-
-
-def _max(left: Int, right: Int) -> Int:
-    """Return the larger integer."""
-    if left > right:
-        return left
-    return right
-
-
-def _lower(text: String) -> String:
-    """Return `text` in ASCII lowercase."""
-    var out = String()
-    var raw = text.as_bytes()
-    for index in range(len(raw)):
-        var byte = raw[index]
-        if byte >= 65 and byte <= 90:
-            byte += 32
-        out += chr(Int(byte))
-    return out
-
-
-def _has(text: String, needle: String) -> Bool:
-    """Return whether `needle` occurs in `text`."""
-    return text.find(needle) >= 0
-
-
-def _rfind(text: String, needle: String) -> Int:
-    """Return the last index of `needle`, or -1."""
-    var raw = text.as_bytes()
-    var head = needle.as_bytes()
-    if len(head) == 0 or len(raw) < len(head):
-        return -1
-    var index = len(raw) - len(head)
-    while index >= 0:
-        var same = True
-        for offset in range(len(head)):
-            if raw[index + offset] != head[offset]:
-                same = False
-                break
-        if same:
-            return index
-        index -= 1
-    return -1
-
-
-def _split(text: String, separator: String) -> List[String]:
-    """Split `text` on every `separator`."""
-    var rows = List[String]()
-    var start = 0
-    while True:
-        var at = String(text[byte=start:]).find(separator)
-        if at < 0:
-            rows.append(String(text[byte=start:]))
-            return rows^
-        rows.append(String(text[byte = start : start + at]))
-        start += at + separator.byte_length()
-
-
 def _int(text: String) raises -> Int:
     """Return a decimal integer."""
     var raw = text.as_bytes()
@@ -295,7 +233,9 @@ def _int(text: String) raises -> Int:
 
 def _reply(line: String) raises -> String:
     """Return one `ok` line for a tab-separated request."""
-    var fields = _split(line, "\t")
+    var fields = List[String]()
+    for field in line.split("\t"):
+        fields.append(String(field))
     if len(fields) == 0:
         raise Error("usage: carla_town_budget kind|near|far|object ...")
     var command = fields[0]

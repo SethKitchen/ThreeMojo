@@ -124,14 +124,6 @@ def _int(doc: PyJson, node: Int) raises -> Int:
     return Int(doc.text(node))
 
 
-def _ends_with(text: String, suffix: String) -> Bool:
-    """Return whether `text` ends with `suffix`."""
-    var size = suffix.byte_length()
-    if text.byte_length() < size:
-        return False
-    return text[byte = text.byte_length() - size :] == suffix
-
-
 def _resolve(
     mut doc: PyJson,
     node: Int,
@@ -159,7 +151,7 @@ def _resolve(
         var name = doc.key(node, index)
         var child = doc.value(node, index)
         if (
-            _ends_with(name, "Texture")
+            name.endswith("Texture")
             and doc.kind(child) == PY_DICT
             and doc.find(child, "index") != MISSING
         ):

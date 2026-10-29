@@ -73,6 +73,8 @@ A value that is not a number, a color outside zero to one, an option that
 is not known or lacks its numbers, a texture line with no file, and an
 image that cannot be read or decoded are refused, with the line they were
 found on. Text before the first `newmtl` is skipped, as three.js skips it.
+`read_mtl` reads the file as UTF-8, and a byte that is not UTF-8 becomes
+U+FFFD, as three.js's `FileLoader` decodes the text.
 """
 
 from std.math import isfinite
@@ -98,7 +100,7 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from loaders.js_text import comment_start, split_fields
+from loaders.js_text import comment_start, split_fields, without_bom
 from loaders.text_number import file_line
 from std.pathlib import Path
 from units.si import METER, Length
@@ -1017,6 +1019,9 @@ def _read_infos(text: String) raises -> List[_Info]:
         var key = first.lower()
         var value = String(stripped[byte = first.byte_length() :].strip())
         if key == "newmtl":
+            # The name is the rest of the line, a `#` too, as three.js's is.
+            var whole = String(String(raw).strip())
+            value = String(whole[byte = first.byte_length() :].strip())
             if value == "":
                 raise Error(_where(line) + "newmtl names no material")
             current = -1
@@ -1044,6 +1049,9 @@ def parse_mtl(
     """Read a material library's text, building a `PHONG` material per
     `newmtl` and a texture per image it names.
 
+    A byte order mark at the start is dropped, as three.js's `trim` drops
+    it from the first line.
+
     Args:
         text: The whole file.
         directory: Where texture file names are relative to, ending in `/`,
@@ -1065,7 +1073,7 @@ def parse_mtl(
             is none of the named.
     """
     options.validate()
-    var infos = _read_infos(text)
+    var infos = _read_infos(without_bom(text))
     var library = MtlLibrary(options.side)
     var textures = _Textures()
     for index in range(len(infos)):
@@ -1081,7 +1089,8 @@ def read_mtl(
 ) raises -> MtlLibrary:
     """Read a material library file; see `parse_mtl`.
 
-    Texture file names are relative to the library's own directory.
+    Texture file names are relative to the library's own directory. A
+    byte that is not UTF-8 becomes U+FFFD, as three.js decodes it.
 
     Args:
         path: The file.
@@ -1096,7 +1105,10 @@ def read_mtl(
             refuses.
     """
     return parse_mtl(
-        Path(path).read_text(), path_directory(path), assets, options
+        String(from_utf8_lossy=Path(path).read_bytes()),
+        path_directory(path),
+        assets,
+        options,
     )
 
 
@@ -1192,8 +1204,8 @@ def read_obj_with_materials(
     object its material.
 
     Each `mtllib` is read relative to the OBJ file's directory, in file
-    order. A later library's material replaces an earlier one's of the
-    same name. The geometries stay in the model, to go into a store with
+    order. A `#` comment after the file name is not part of it. A later
+    library's material replaces an earlier one's of the same name. The geometries stay in the model, to go into a store with
     `ObjObject.take_geometry`.
 
     Args:
@@ -1215,10 +1227,13 @@ def read_obj_with_materials(
     var directory = path_directory(path)
     var library = MtlLibrary(options.side)
     for index in range(len(model.material_libraries)):
-        library.merge(
-            read_mtl(
-                directory + model.material_libraries[index], assets, options
-            )
-        )
+        # The model keeps the whole rest of an `mtllib` line, as three.js
+        # does. The file is the part before a comment.
+        var name = model.material_libraries[index]
+        var comment = comment_start(name)
+        if comment >= 0:
+            var kept = String(name[byte=0:comment].strip())
+            name = kept^
+        library.merge(read_mtl(directory + name, assets, options))
     var ids = set_materials(model, library, assets)
     return ObjWithMaterials(model^, library^, ids^)

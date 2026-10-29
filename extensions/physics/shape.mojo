@@ -47,7 +47,7 @@ from math.matrix_determinant import _determinant3_f32
 from math.triangle import Triangle
 from math.vector3 import Vector3, vector3_from_float64
 from std.math import atan2, sqrt
-from units.si import Length, METER
+from units.si import Length
 
 # Two hull faces are one face when their normals and offsets agree this
 # well.

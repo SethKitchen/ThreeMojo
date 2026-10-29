@@ -52,7 +52,7 @@ from extensions.building.kinds import (
     TOILET,
     WARDROBE,
 )
-from extensions.building.model import Building, Furnishing, quads_apart
+from extensions.building.model import Building, quads_apart
 from extensions.topology.arrangement import Point2, contains, polygon_area
 from math.utils import SeededRandom
 from units.si import Angle64, Length64, METER, RADIAN, SQUARE_METER

@@ -57,7 +57,6 @@ from postprocessing.effects import (
     bokeh2_pixel,
     check_bokeh2,
     BOKEH_TAPS,
-    GLITCH_BAND,
     HALFTONE_ADD,
     HALFTONE_DARKER,
     HALFTONE_DOT,
@@ -106,7 +105,7 @@ from render.target import RenderTarget
 from render.texture import data_texture
 from render.texture_store import NO_TEXTURE, TextureId
 from renderers.renderer import Renderer
-from std.math import cos, floor, fma, inf, nan, pi, sin, sqrt
+from std.math import floor, fma, inf, nan, pi, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,

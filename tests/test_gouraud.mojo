@@ -37,13 +37,7 @@ from render.framebuffer import Color, Framebuffer
 from render.srgb import LINEAR
 from render.texture import IGNORED, NEAREST, REPEAT, Texture
 from renderers.renderer import Renderer
-from std.testing import (
-    TestSuite,
-    assert_equal,
-    assert_false,
-    assert_raises,
-    assert_true,
-)
+from std.testing import TestSuite, assert_equal, assert_false, assert_true
 from units.si import Angle, DEGREE, Length, METER
 
 comptime SIZE = 24

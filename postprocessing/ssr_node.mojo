@@ -38,7 +38,6 @@ off.
 """
 
 from math.matrix4 import Matrix4
-from math.vector2 import Vector2
 from math.cross import cross_vectors
 from math.vector3 import Vector3
 from math.utils import rec709_luminance

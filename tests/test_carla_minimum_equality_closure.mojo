@@ -5,7 +5,7 @@
 
 """Exact minimum closure at equal outward value bounds."""
 
-from extensions.carla.curve_interval import _next_down, _next_up
+from extensions.carla.curve_interval import _next_down
 from extensions.carla.lane_distance import _refinement_square
 from extensions.carla.lane_refinement import (
     _ClosedInterval,

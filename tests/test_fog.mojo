@@ -19,7 +19,6 @@ from core.fog import (
     EXP2_FOG,
     LINEAR_FOG,
     NO_FOG,
-    Fog,
     FogKind,
     FogView,
     exp2_fog,

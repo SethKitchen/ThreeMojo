@@ -151,7 +151,10 @@ def test_hysteresis_keeps_a_level_until_the_camera_comes_nearer() raises:
     assert_equal(lod.update(Length(9.0, METER)), 0)
     assert_equal(lod.update(Length(10.0, METER)), 1)
     assert_equal(lod.current_level(), 1)
-    assert_equal(lod.level_for(Length(9.0, METER)), 0)
+    # three.js's `getObjectForDistance` keeps the shown level's hysteresis.
+    assert_equal(lod.level_for(Length(9.0, METER)), 1)
+    assert_equal(lod.level_for(Length(7.9, METER)), 0)
+    assert_equal(lod.level_from(Length(9.0, METER), -1), 0)
     assert_equal(lod.update(Length(9.0, METER)), 1)
     assert_equal(lod.update(Length(8.0, METER)), 1)
     assert_equal(lod.update(Length(7.9, METER)), 0)

@@ -50,8 +50,6 @@ from extensions.humanoid.skeleton.foot.muscles.dimensions import (
     FootMuscleField,
     foot_muscle_dimensions,
     named_foot_muscles,
-)
-from extensions.humanoid.skeleton.foot.muscles.dimensions import (
     is_tendon as is_foot_tendon,
 )
 from extensions.humanoid.skeleton.leg.assembly import LegAssembly, assemble_leg
@@ -103,17 +101,7 @@ from extensions.humanoid.skeleton.limb.regions import (
     require_limb_region,
 )
 from math.vector3 import Vector3
-from std.math import isfinite, sqrt
-from units.si import (
-    KILOGRAM,
-    KILOGRAM_SQUARE_METER,
-    Length,
-    METER,
-    MILLIMETER,
-    Mass,
-    MomentOfInertia,
-    Volume,
-)
+from units.si import KILOGRAM, Length, MILLIMETER, Mass, Volume
 
 # Default maximum grid-cell width. Convergence depends on the spec and
 # reported quantity; no universal sampling-error claim is made.

@@ -31,10 +31,6 @@ def _neg_inf() -> Float64:
     return bitcast[DType.float64](UInt64(0xFFF0000000000000))
 
 
-def _neg_zero() -> Float64:
-    return bitcast[DType.float64](UInt64(0x8000000000000000))
-
-
 def _max_finite() -> Float64:
     return bitcast[DType.float64](UInt64(0x7FEFFFFFFFFFFFFF))
 

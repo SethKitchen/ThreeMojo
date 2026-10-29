@@ -38,7 +38,7 @@ from math.norm import length3
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from math.finite import require_finite_group, require_non_negative_finite
-from std.math import floor, isfinite, max, min, sqrt
+from std.math import floor, isfinite, max, min
 
 # three.js's `PackUpscale`, `Inv255`, `ShiftRight8` and `UnpackDownscale`.
 comptime PACK_UPSCALE = Float32(256.0 / 255.0)

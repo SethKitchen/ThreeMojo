@@ -24,17 +24,8 @@ This port has no debug drawing.
 """
 
 from extensions.carla.quantity_boundary import _finite_si
-from units.si import Velocity64
-
-from extensions.carla.actor import ActorId
-from extensions.carla.bounding_box import BoundingBox
-from extensions.carla.physics.quantities import KILOMETER_PER_HOUR
-from extensions.carla.transform import CarlaTransform
-from extensions.carla.world import World
-from math.vector3 import Vector3
-from std.ffi import external_call
-from std.math import cos, sin, sqrt
 from units.si import (
+    Velocity64,
     DEGREE,
     METER,
     RADIAN,
@@ -44,6 +35,15 @@ from units.si import (
     Length,
     Velocity,
 )
+
+from extensions.carla.actor import ActorId
+from extensions.carla.bounding_box import BoundingBox
+from extensions.carla.physics.quantities import KILOMETER_PER_HOUR
+from extensions.carla.transform import CarlaTransform
+from extensions.carla.world import World
+from math.vector3 import Vector3
+from std.ffi import external_call
+from std.math import cos, sin, sqrt
 
 # `np.finfo(float).eps`.
 comptime _EPS = 2.220446049250313e-16

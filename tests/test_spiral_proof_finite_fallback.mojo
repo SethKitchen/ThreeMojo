@@ -35,14 +35,18 @@ from math.vector3 import Vector3
 from std.math import inf
 from std.memory import bitcast
 from std.testing import TestSuite, assert_equal, assert_true, assert_false
-from tests._spiral_domain_controls import _jet_bits, _point_bits, _interval_bits
+from tests._spiral_domain_controls import (
+    _jet_bits,
+    _point_bits,
+    _interval_bits,
+    _proof,
+)
 from tests._spiral_acceptance_controls import (
     _acceptance_road,
     _capture_acceptance_proof,
     _assert_acceptance_hit,
     _narrow_high,
 )
-from tests._spiral_domain_controls import _proof
 
 
 def test_finite_guard_requires_derivatives_and_complete_rounded_enclosure() raises:

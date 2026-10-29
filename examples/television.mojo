@@ -24,7 +24,7 @@ from tools._example_output import (
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
 from geometries.plane import plane

@@ -25,7 +25,9 @@ eye's edges move right and the right eye's move left. That is the
 `view_shift` a `PerspectiveCamera` carries, and the reason it carries
 one. The field of view, the zoom, the planes and the layers are the camera's own;
 the aspect is the camera's times this camera's `aspect`, which three.js
-keeps at one and a side-by-side image sets to a half.
+keeps at one and a side-by-side image sets to a half. The layers are not
+three.js's: its left eye draws layers 0 and 1 and its right eye layers 0
+and 2, whatever layers the camera draws.
 
 ## Where the eyes look
 
@@ -52,7 +54,6 @@ scene's scale; the test suite pins the baseline at a thousand meters.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.scene import Scene
-from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from math.finite import require_positive_finite, require_non_negative_finite
 from units.si import Angle, DEGREE, Length, METER

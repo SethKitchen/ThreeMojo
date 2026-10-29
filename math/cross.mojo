@@ -12,6 +12,7 @@ is that product for any width, including the `Float64` vectors.
 four `Float64` lanes.
 """
 
+from math.norm import rounded_difference
 from math.vector3 import Vector3
 
 
@@ -44,7 +45,8 @@ def cross_components[
 ) -> Tuple[SIMD[dtype, 1], SIMD[dtype, 1], SIMD[dtype, 1]]:
     """Return the components of `a` cross `b`.
 
-    The products are taken in three.js's order. The width is the caller's.
+    The products are taken in three.js's order and each is rounded on its
+    own, as in JavaScript. The width is the caller's.
 
     Args:
         ax: The first vector's x.
@@ -58,9 +60,9 @@ def cross_components[
         The product's x, y, and z.
     """
     return (
-        ay * bz - az * by,
-        az * bx - ax * bz,
-        ax * by - ay * bx,
+        rounded_difference(ay, bz, az, by),
+        rounded_difference(az, bx, ax, bz),
+        rounded_difference(ax, by, ay, bx),
     )
 
 

@@ -161,14 +161,6 @@ def _fetch_error(text: String) -> Error:
     return Error("FetchError: " + text)
 
 
-def _contains(items: List[String], text: String) -> Bool:
-    """Return whether a list holds a text."""
-    for item in items:
-        if item == text:
-            return True
-    return False
-
-
 def _text(doc: PyJson, node: Int, key: String, place: String) raises -> String:
     """Return a non-empty string under a key, or raise.
 
@@ -197,7 +189,7 @@ def _one_of(
 ) raises -> String:
     """Return a string under a key that is one of a list, or raise."""
     var text = _text(doc, node, key, place)
-    if not _contains(allowed, text):
+    if text not in allowed:
         raise _manifest_error(
             place
             + ": "
@@ -358,7 +350,7 @@ def check_scan_manifest(doc: PyJson, manifest: Int) raises:
         var entry_id = _text(doc, entry, "id", place)
         if not is_file_name(entry_id):
             raise _manifest_error(place + ": id must be one file name")
-        if _contains(seen, entry_id):
+        if entry_id in seen:
             raise _manifest_error("duplicate id " + py_repr(entry_id))
         seen.append(entry_id)
         place = py_repr(entry_id)
@@ -388,7 +380,7 @@ def check_scan_manifest(doc: PyJson, manifest: Int) raises:
                 raise _manifest_error(spot + " must be an object")
             _check_file(doc, item, entry_id, spot)
             var path = doc.text(doc.get(item, "path"))
-            if _contains(paths, path):
+            if path in paths:
                 raise _manifest_error(
                     spot + ": duplicate path " + py_repr(path)
                 )
@@ -554,7 +546,7 @@ def meta_names(text: String) raises -> List[String]:
                 raise _fetch_error(
                     "meta.json names " + py_repr(name) + ", not a file name"
                 )
-            if not _contains(names, name):
+            if name not in names:
                 names.append(name)
     if len(names) == 0:
         raise _fetch_error("meta.json names no image")

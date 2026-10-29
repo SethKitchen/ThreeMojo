@@ -45,38 +45,7 @@ from materials.material import (
     MaterialKind,
     SUBTRACTIVE,
     custom_blending,
-)
-from render.blend import DST_COLOR_FACTOR, ONE_MINUS_SRC_ALPHA_FACTOR
-from cameras.camera import Camera
-from cameras.orthographic_camera import centered
-from cameras.perspective_camera import PerspectiveCamera
-from core.assets import Assets
-from materials.material import Material
-from core.object3d import Object3D
-from core.object3d import NodeId, Object3D
-from core.scene import Scene
-from lights.light import ambient_light, directional_light, point_light
-from lights.shadow import (
-    BASIC_SHADOW_MAP,
-    PCF_SHADOW_MAP,
-    PCF_SOFT_SHADOW_MAP,
-    SHADOW_HEADER,
-    SHADOW_INTENSITY_AT,
-    SHADOW_TYPE_AT,
-    SPOT_MAP_FLOATS,
-    VSM_SHADOW_MAP,
-    ShadowCascade,
-)
-from lights.csm import CSM
-from geometries.box import cube
-from geometries.sphere import sphere
-from math.matrix4 import translation, scaling
-from math.vector2 import Vector2
-from std.math import cos, inf, isinf, max, pi, sin
-from std.sys import default_accelerator
-from math.vector3 import Vector3
-from objects.instanced_mesh import InstancedMesh
-from materials.material import (
+    Material,
     MaterialId,
     LineWidth,
     PointSize,
@@ -84,242 +53,13 @@ from materials.material import (
     line_material,
     points_material,
     sprite_material,
-)
-from objects.line import LOOP, Line, SEGMENTS
-from objects.line_segments2 import (
-    Line2,
-    LineSegments2,
-    line_geometry,
-    line_segments_geometry,
-)
-from objects.points import Points
-from objects.sprite import Sprite
-from objects.mesh import Mesh
-from renderers.renderer import Renderer
-from units.si import Angle, DEGREE, Length, METER
-from render.framebuffer import Color, FloatColor, Framebuffer
-from materials.material import BLEND, NO_TEXTURE, OPAQUE
-from render.texture_store import NO_TEXTURE, TextureId, TextureStore
-from render.srgb import SRGB
-from render.texture import (
-    BILINEAR,
-    COVERAGE,
-    IGNORED,
-    NEAREST,
-    CLAMP,
-    MIRROR,
-    REPEAT,
-    FLOAT_TYPE,
-    UNSIGNED_BYTE_TYPE,
-    UV_CHANNEL_0,
-    UV_CHANNEL_1,
-    Texture,
-    checkerboard,
-    float_from_bytes,
-    float_texture,
-)
-from std.memory import bitcast
-from lights.light import (
-    ambient_light,
-    directional_light,
-    hemisphere_light,
-    light_probe,
-    point_light,
-    rect_area_light,
-    spot_light,
-)
-from lights.light_probe import light_probe_from_cube
-from lights.ies_spot_light import ies_spot_light
-from lights.light_probe_grid import LightProbeGrid
-from lights.projector_light import projector_light
-from lights.sun_light import SunLight
-from math.spherical_harmonics3 import SphericalHarmonics3
-from render.pmrem import pmrem_from_cube
-from lights.lighting import PERSPECTIVE_VIEW, Lighting
-from lights.ltc import LTC_FLOATS, load_ltc_tables
-from core.fog import Fog, FogView, exp2_fog, linear_fog, no_fog
-from render.tonemap import (
-    ACES_FILMIC_TONE_MAPPING,
-    AGX_TONE_MAPPING,
-    CINEON_TONE_MAPPING,
-    LINEAR_TONE_MAPPING,
-    NEUTRAL_TONE_MAPPING,
-    NO_TONE_MAPPING,
-    REINHARD_TONE_MAPPING,
-    ToneMapping,
-)
-from render.rect import Rect
-from render.rasterizer import (
-    DRAW_POINTS,
-    DRAW_SEGMENTS,
-    LayerFactors,
-    Draw,
-    rasterize_all,
-    rasterize_frame,
-    rasterize_lines_all,
-    rasterize_points_all,
-)
-from units.si import InverseLength, PER_METER
-from core.layers import Layers
-from renderers.renderer import (
-    camera_back,
-    camera_position,
-    camera_up,
-    toward_camera,
-)
-from render.packing import (
-    BASIC_DEPTH_PACKING,
-    RGBA_DEPTH_PACKING,
-    RGB_DEPTH_PACKING,
-    RG_DEPTH_PACKING,
-    DepthPacking,
-    unpack_rgba_to_depth,
-)
-from render.gpu import (
-    FLOATS_PER_VERTEX,
-    LANE_AO_INTENSITY,
-    LANE_ANISOTROPY_X,
-    LANE_ANISOTROPY_Y,
-    LANE_IRIDESCENCE,
-    LANE_IRIDESCENCE_IOR,
-    LANE_SHEEN_B,
-    LANE_SHEEN_G,
-    LANE_SHEEN_R,
-    LANE_SHEEN_ROUGHNESS,
-    LANE_THICKNESS_MAXIMUM,
-    LANE_THICKNESS_MINIMUM,
-    STATE_ANISOTROPY_MAP,
-    STATE_IRIDESCENCE_MAP,
-    STATE_SHEEN_COLOR_MAP,
-    STATE_SHEEN_ROUGHNESS_MAP,
-    STATE_FILM_THICKNESS_MAP,
-    LANE_BUMP_SCALE,
-    LANE_LIGHT_MAP_INTENSITY,
-    LANE_U1,
-    LANE_V1,
-    STATE_AO_MAP,
-    STATE_LIGHT_MAP,
-    LANE_FAR_DISTANCE,
-    LANE_NEAR_DISTANCE,
-    LANE_REFERENCE_X,
-    LANE_REFERENCE_Y,
-    LANE_REFERENCE_Z,
-    LINE_STATE_FOG,
-    STATE_PER_LINE,
-    POINT_STATE_FOG,
-    STATE_DEPTH_PACKING,
-    STATE_FOG,
-    LANE_CLEARCOAT,
-    LANE_CLEARCOAT_ROUGHNESS,
-    LANE_ENV_INTENSITY,
-    LANE_METALNESS,
-    LANE_NORMAL_SCALE_X,
-    LANE_NORMAL_SCALE_Y,
-    LANE_REFLECTIVITY,
-    LANE_ROUGHNESS,
-    LANE_SPECULAR_INTENSITY,
-    STATE_BUMP_MAP,
-    STATE_SPECULAR_MAP,
-    STATE_COMBINE,
-    STATE_ENV_MAP,
-    STATE_METALNESS_MAP,
-    STATE_NORMAL_MAP,
-    STATE_ROUGHNESS_MAP,
-    LANE_DASH,
-    LANE_GAP,
-    LANE_LINE_DISTANCE,
-    LANE_LOG_DEPTH,
-    LANE_POINT_SIZE,
-    STATE_PER_POINT,
-    POINT_STATE_ALPHA_MAP,
-    POINT_STATE_BLEND,
-    POINT_STATE_TEXTURE,
-    point_state,
-    LINE_STATE_OPS,
-    LINE_STATE_STENCIL,
-    POINT_STATE_OPS,
-    POINT_STATE_STENCIL,
-    STATE_OPS,
-    STATE_STENCIL,
-    line_state,
-    FOG_FLOATS,
-    LIGHTS_AMBIENT,
-    CASCADE_AT,
-    DIRECTIONAL_FLOATS,
-    LIGHTS_BACK,
-    LIGHTS_EYE,
-    LIGHTS_FIRST,
-    LIGHTS_PROBE,
-    LIGHTS_RECT_COUNT,
-    LIGHTS_TOWARD,
-    LIGHTS_UP,
-    RECT_FLOATS,
-    STATE_PER_TRIANGLE,
-    STATE_RECEIVES_SHADOW,
-    NO_SHADOW,
-    POINT_FLOATS,
-    SPOT_FLOATS,
-    TABLE_COLUMNS,
-    TABLE_PLACEMENT,
-    PLANE_COLOR,
-    PLANE_DATA,
-    PLANE_FLOATS,
-    PLANE_NORMAL,
-    GpuRenderer,
-    available,
-    flatten,
-    flatten_fog,
-    flatten_lights,
-    flatten_textures,
-    pack,
-    render,
-    render_triangles,
-    triangle_state,
-)
-from render.srgb import LINEAR, SRGB, ColorSpace
-from render.raster_state import (
-    EQUAL_STENCIL_FUNC,
-    GREATER_DEPTH,
-    INCREMENT_STENCIL_OP,
-    LOGARITHMIC_DEPTH,
-    NOT_EQUAL_STENCIL_FUNC,
-    RasterState,
-    REPLACE_STENCIL_OP,
-    REVERSED_DEPTH,
-    STANDARD_DEPTH,
-)
-from render.texture import Alpha
-from render.cube_texture import CubeTexture, face_forward
-from render.cube_texture_store import (
-    NO_CUBE_TEXTURE,
-    SCENE_ENVIRONMENT,
-    CubeTextureId,
-    CubeTextureStore,
-)
-from core.background import cube_background
-from render.antialias import SUPERSAMPLE, downsample
-from materials.material import (
+    BLEND,
+    NO_TEXTURE,
+    OPAQUE,
     ADD_OPERATION,
     MIX_OPERATION,
     MULTIPLY_OPERATION,
     Combine,
-)
-from geometries.plane import plane
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import (
-    BufferGeometry,
-    COLOR,
-    NORMAL,
-    POSITION,
-    UV,
-    UV1,
-)
-from math.matrix4 import Matrix4, rotation_x
-from objects.skeleton import Bone, Skeleton, bind_skeleton
-from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
-from objects.instanced_mesh import BatchedMesh
-from objects.lod import Lod
-from materials.material import (
     BASIC,
     DEPTH,
     DISTANCE,
@@ -339,16 +79,134 @@ from materials.material import (
     shadow_material,
     standard_material,
     toon_material,
+    shader_material,
+    GOURAUD as GOURAUD_KIND,
+    DEFAULT_REFRACTION_RATIO,
+    OBJECT_SPACE_NORMAL_MAP,
+    custom_blending as _custom_blending,
 )
-from render.target import (
-    FLOAT_TARGET,
-    OUTPUT_COLOR,
-    OUTPUT_METAL_ROUGH,
-    OUTPUT_NORMAL,
-    RenderTarget,
-    TargetOutput,
+from render.blend import (
+    DST_COLOR_FACTOR,
+    ONE_MINUS_SRC_ALPHA_FACTOR,
+    CONSTANT_COLOR_FACTOR as _CONSTANT_COLOR,
+    ZERO_FACTOR as _ZERO_FACTOR,
 )
+from cameras.camera import Camera
+from cameras.orthographic_camera import centered
+from cameras.perspective_camera import PerspectiveCamera
+from core.assets import Assets
+from core.object3d import Object3D, NodeId
+from core.scene import Scene
+from lights.light import (
+    ambient_light,
+    directional_light,
+    point_light,
+    hemisphere_light,
+    light_probe,
+    rect_area_light,
+    spot_light,
+)
+from lights.shadow import (
+    BASIC_SHADOW_MAP,
+    PCF_SHADOW_MAP,
+    PCF_SOFT_SHADOW_MAP,
+    VSM_SHADOW_MAP,
+)
+from lights.csm import CSM
+from geometries.box import cube, box
+from geometries.sphere import sphere
+from math.matrix4 import translation, scaling, Matrix4, rotation_x
+from math.vector2 import Vector2
+from std.math import cos, inf, isinf, max, pi, sin
+from std.sys import default_accelerator
+from math.vector3 import Vector3
+from objects.instanced_mesh import InstancedMesh, BatchedMesh
+from objects.line import LOOP, Line, SEGMENTS
+from objects.line_segments2 import (
+    Line2,
+    LineSegments2,
+    line_geometry,
+    line_segments_geometry,
+)
+from objects.points import Points
+from objects.sprite import Sprite
+from objects.mesh import Mesh
+from renderers.renderer import (
+    Renderer,
+    camera_back,
+    camera_position,
+    camera_up,
+    toward_camera,
+)
+from units.si import (
+    Angle,
+    DEGREE,
+    Length,
+    METER,
+    InverseLength,
+    PER_METER,
+    Duration,
+    SECOND,
+    RADIAN,
+)
+from render.framebuffer import Color, FloatColor, Framebuffer
+from render.texture_store import NO_TEXTURE, TextureId, TextureStore
+from render.srgb import SRGB, LINEAR, ColorSpace
+from render.texture import (
+    BILINEAR,
+    COVERAGE,
+    IGNORED,
+    NEAREST,
+    CLAMP,
+    MIRROR,
+    REPEAT,
+    UV_CHANNEL_1,
+    Texture,
+    checkerboard,
+    float_texture,
+    Alpha,
+    CUBE_REFRACTION_MAPPING,
+    EQUIRECTANGULAR_REFLECTION_MAPPING,
+    EQUIRECTANGULAR_REFRACTION_MAPPING,
+    LINEAR_MIPMAP_LINEAR,
+    LINEAR_MIPMAP_NEAREST,
+    NEAREST_MIPMAP_LINEAR,
+    NEAREST_MIPMAP_NEAREST,
+    Filter,
+    Mapping,
+)
+from std.memory import bitcast
+from lights.light_probe import light_probe_from_cube
+from lights.ies_spot_light import ies_spot_light
+from lights.light_probe_grid import LightProbeGrid
+from lights.projector_light import projector_light
+from lights.sun_light import SunLight
+from math.spherical_harmonics3 import SphericalHarmonics3
+from render.pmrem import pmrem_from_cube
+from lights.lighting import Lighting
+from lights.ltc import load_ltc_tables
+from core.fog import Fog, FogView, exp2_fog, linear_fog, no_fog
+from render.tonemap import (
+    ACES_FILMIC_TONE_MAPPING,
+    AGX_TONE_MAPPING,
+    CINEON_TONE_MAPPING,
+    LINEAR_TONE_MAPPING,
+    NEUTRAL_TONE_MAPPING,
+    NO_TONE_MAPPING,
+    REINHARD_TONE_MAPPING,
+    ToneMapping,
+    CUSTOM_TONE_MAPPING as _CUSTOM,
+)
+from render.rect import Rect, Rect as _Rect
 from render.rasterizer import (
+    DRAW_POINTS,
+    DRAW_SEGMENTS,
+    LayerFactors,
+    Draw,
+    rasterize_all,
+    rasterize_frame,
+    rasterize_lines_all,
+    rasterize_points_all,
     SHADE_LIT,
     SHADE_SHADOW,
     SHADE_TEXTURE,
@@ -359,6 +217,76 @@ from render.rasterizer import (
     check_output_kinds,
     rasterize,
     rasterize_shaded,
+    TextureFrames,
+)
+from core.layers import Layers
+from render.packing import (
+    BASIC_DEPTH_PACKING,
+    RGBA_DEPTH_PACKING,
+    RGB_DEPTH_PACKING,
+    RG_DEPTH_PACKING,
+    DepthPacking,
+    unpack_rgba_to_depth,
+)
+from render.gpu import (
+    FOG_FLOATS,
+    GpuRenderer,
+    available,
+    render,
+    render_triangles,
+    GpuCompute,
+    GpuComposer,
+    GpuComputation,
+    GpuSplats,
+)
+from render.raster_state import (
+    EQUAL_STENCIL_FUNC,
+    GREATER_DEPTH,
+    INCREMENT_STENCIL_OP,
+    LOGARITHMIC_DEPTH,
+    RasterState,
+    REPLACE_STENCIL_OP,
+    REVERSED_DEPTH,
+    STANDARD_DEPTH,
+    DepthMode as _DepthMode,
+    REVERSED_DEPTH as _REVERSED_DEPTH,
+)
+from render.cube_texture import (
+    CubeTexture,
+    Basis3,
+    cube_of_panorama,
+    env_rotation,
+)
+from render.cube_texture_store import (
+    NO_CUBE_TEXTURE,
+    SCENE_ENVIRONMENT,
+    CubeTextureId,
+    CubeTextureStore,
+)
+from core.background import cube_background
+from render.antialias import SUPERSAMPLE, downsample
+from geometries.plane import plane
+from core.buffer_attribute import BufferAttribute
+from core.buffer_geometry import (
+    BufferGeometry,
+    COLOR,
+    NORMAL,
+    POSITION,
+    UV,
+    UV1,
+)
+from objects.skeleton import Bone, Skeleton, bind_skeleton
+from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
+from objects.lod import Lod
+from render.target import (
+    FLOAT_TARGET,
+    OUTPUT_COLOR,
+    OUTPUT_METAL_ROUGH,
+    OUTPUT_NORMAL,
+    RenderTarget,
+    TargetOutput,
+    color_only as only_color,
+    RenderTarget as HudTarget,
 )
 from std.testing import (
     TestSuite,
@@ -369,24 +297,11 @@ from std.testing import (
     assert_true,
 )
 from postprocessing.composer import (
-    BOKEH,
-    COPY,
     CUBE_TEXTURE,
-    GOD_RAYS,
-    GTAO,
     LUT,
-    MASK,
-    RENDER,
-    RENDER_PIXELATED,
-    RENDER_TRANSITION,
-    SAVE,
-    SHADER,
-    SHADER_EFFECT,
-    SMAA,
     TEXTURE,
     EffectComposer,
     Pass,
-    PassKind,
     cube_texture_pass,
     effect_pass,
     god_rays_pass,
@@ -426,17 +341,46 @@ from postprocessing.effects import (
     HalftoneShape,
 )
 from postprocessing.shader_pass import SCREEN_VERTEX_SHADER
-from postprocessing.shaders import MIRROR_TOP, ShaderEffect
-from postprocessing.shaders import MIRROR as MIRROR_SHADER
-from materials.glsl import compile_shader_material
-from materials.nodes import NodeProgram, NodeProgramId
-from render.computation import GPUComputationRenderer
-from render.gpu import (
-    GpuCompute,
-    GpuComposer,
-    GpuComputation,
-    runs_on_device,
+from postprocessing.shaders import (
+    MIRROR_TOP,
+    ShaderEffect,
+    MIRROR as MIRROR_SHADER,
 )
+from materials.glsl import compile_shader_material
+from materials.nodes import (
+    NodeProgram,
+    NodeProgramId,
+    NODE_FLOAT as COMPUTE_FLOAT,
+    NODE_VEC4 as COMPUTE_VEC4,
+    COLOR_NODE as NODES_COLOR,
+    EMISSIVE_NODE as NODES_EMISSIVE,
+    NORMAL_NODE as NODES_NORMAL,
+    OPACITY_NODE as NODES_OPACITY,
+    OUTPUT_NODE as NODES_OUTPUT,
+    POSITION_NODE as NODES_POSITION,
+    NodeGraph,
+    NodeProgramStore,
+    AO_NODE as NODES_AO,
+    DEPTH_NODE as NODES_DEPTH,
+    MASK_NODE as NODES_MASK,
+    Fn as NodeFn,
+    NODE_FLOAT as NODES_FLOAT,
+    NodeRef,
+    NODE_VEC3 as NODES_VEC3,
+    NodeGraph as _NodeGraph,
+    NO_NODES as _NO_NODES,
+    OUTPUT_NODE as _OUTPUT_NODE,
+    OFFSET_NODE,
+    SCATTERING_NODE,
+    THICKNESS_COLOR_NODE,
+    THICKNESS_POWER_NODE,
+    NodeContext as _IntegerNodeContext,
+    NodeInputs as _IntegerNodeInputs,
+    NodeSource as _IntegerNodeSource,
+    ProgramSource as _IntegerProgramSource,
+    run_code as _integer_run_code,
+)
+from render.computation import GPUComputationRenderer
 from materials.compute_ids import StorageBufferId
 from materials.compute_nodes import (
     ComputeKernel,
@@ -447,8 +391,6 @@ from materials.compute_nodes import (
     run_compute,
 )
 from render.gpgpu_sort import BitonicSort, CountingSort
-from materials.nodes import NODE_FLOAT as COMPUTE_FLOAT
-from materials.nodes import NODE_VEC4 as COMPUTE_VEC4
 from render.volume_texture import (
     Data3DTexture,
     DataArrayTexture,
@@ -9355,7 +9297,6 @@ def test_both_backends_fill_a_float_target_and_its_normals_alike() raises:
 # --- multisampled and layered render targets ---------------------------------
 
 from render.layered_target import array_render_target
-from render.target import color_only as only_color
 from render.texture_copy import (
     TexelPoint,
     copy_framebuffer_to_texture as host_framebuffer_copy,
@@ -9791,26 +9732,7 @@ def test_both_backends_agree_on_a_flat_shaded_scene() raises:
 
 # --- transmission -----------------------------------------------------------
 
-from math.matrix4 import Matrix4
-from render.gpu import (
-    LANE_ATTENUATION_B,
-    LANE_ATTENUATION_DISTANCE,
-    LANE_ATTENUATION_R,
-    LANE_DISPERSION,
-    LANE_IOR,
-    LANE_THICKNESS_X,
-    LANE_THICKNESS_Z,
-    LANE_TRANSMISSION,
-    STATE_THICKNESS_MAP,
-    STATE_TRANSMISSION_MAP,
-    TRANSMISSION_HEADER,
-    TRANSMISSION_LEVELS,
-    TRANSMISSION_WIDTH,
-    flatten_transmission,
-)
-
 from render.transmission import TransmissionTarget
-from materials.material import physical_material
 
 
 def glass_pair(
@@ -11512,26 +11434,6 @@ def test_the_gpu_refuses_a_layer_map_it_cannot_sample() raises:
 
 # --- node materials ---------------------------------------------------------
 
-from materials.nodes import (
-    COLOR_NODE as NODES_COLOR,
-    EMISSIVE_NODE as NODES_EMISSIVE,
-    NORMAL_NODE as NODES_NORMAL,
-    OPACITY_NODE as NODES_OPACITY,
-    OUTPUT_NODE as NODES_OUTPUT,
-    POSITION_NODE as NODES_POSITION,
-    NodeGraph,
-    NodeProgramId,
-    NodeProgramStore,
-)
-from materials.material import shader_material
-from render.gpu import (
-    FOG_FLOATS,
-    STATE_NODES,
-    flatten_programs,
-    program_starts,
-)
-from units.si import Duration, SECOND
-
 
 def every_node(map: TextureId) raises -> NodeGraph:
     """Return a graph that reads every attribute and runs every operation,
@@ -11783,13 +11685,7 @@ def test_the_gpu_refuses_a_program_it_cannot_run() raises:
     )
 
 
-from materials.glsl import compile_shader_material
 from math.matrix3 import Matrix3
-from materials.nodes import (
-    AO_NODE as NODES_AO,
-    DEPTH_NODE as NODES_DEPTH,
-    MASK_NODE as NODES_MASK,
-)
 
 
 def the_node_library(map: TextureId) raises -> NodeGraph:
@@ -11969,9 +11865,6 @@ def test_both_backends_run_the_node_library_alike() raises:
                 lighting,
             )
             assert_true(count_mismatches(gpu, plain) > 50)
-
-
-from materials.nodes import Fn as NodeFn, NODE_FLOAT as NODES_FLOAT, NodeRef
 
 
 def stops_at_a_square(
@@ -12347,9 +12240,6 @@ def test_both_backends_fetch_a_texel_and_a_size_alike() raises:
         programs=store,
     )
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
-
-
-from materials.nodes import NODE_VEC3 as NODES_VEC3
 
 
 def test_both_backends_read_a_custom_attribute_alike() raises:
@@ -12803,9 +12693,6 @@ def test_both_backends_run_a_graph_on_lines_alike() raises:
         assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
 
 
-from materials.material import GOURAUD as GOURAUD_KIND
-
-
 def test_both_backends_shade_a_gouraud_surface_alike() raises:
     # Each corner carries its own light, which the kernel packs in its
     # lanes and interpolates as the host does; the shadows darken the
@@ -13219,19 +13106,6 @@ def test_the_gpu_refuses_a_texture_uniform_that_names_none() raises:
 
 # --- specular and clearcoat maps --------------------------------------------
 
-from render.gpu import (
-    LANE_CLEARCOAT_NORMAL_SCALE_X,
-    LANE_CLEARCOAT_NORMAL_SCALE_Y,
-    LANE_SPECULAR_COLOR_B,
-    LANE_SPECULAR_COLOR_G,
-    LANE_SPECULAR_COLOR_R,
-    STATE_CLEARCOAT_MAP,
-    STATE_CLEARCOAT_NORMAL_MAP,
-    STATE_CLEARCOAT_ROUGHNESS_MAP,
-    STATE_SPECULAR_COLOR_MAP,
-    STATE_SPECULAR_INTENSITY_MAP,
-)
-
 
 def a_gpu_tint_map() raises -> Texture:
     """Return a 2x2 sRGB map of four colors whose alpha is ignored, as a
@@ -13565,36 +13439,7 @@ def test_both_backends_agree_on_geometric_roughness() raises:
 
 # --- samplers, panoramas, refraction and the environment's turn ---------------
 
-from render.cube_texture import Basis3, cube_of_panorama, env_rotation
-from render.gpu import (
-    CUBE_PANORAMA,
-    CUBE_ROWS,
-    TABLE_FLIP_Y,
-    TABLE_MAPPING,
-    TABLE_MIN_FILTER,
-    TABLE_WRAP_T,
-)
-from render.texture import (
-    CUBE_REFLECTION_MAPPING,
-    CUBE_REFRACTION_MAPPING,
-    CUBE_UV_REFLECTION_MAPPING,
-    EQUIRECTANGULAR_REFLECTION_MAPPING,
-    EQUIRECTANGULAR_REFRACTION_MAPPING,
-    LINEAR_MIPMAP_LINEAR,
-    LINEAR_MIPMAP_NEAREST,
-    NEAREST_MIPMAP_LINEAR,
-    NEAREST_MIPMAP_NEAREST,
-    Filter,
-    Mapping,
-)
-from render.rasterizer import TextureFrames
-from materials.material import (
-    DEFAULT_REFRACTION_RATIO,
-    MIX_OPERATION,
-    OBJECT_SPACE_NORMAL_MAP,
-)
 from math.euler import XYZ, Euler
-from units.si import RADIAN
 
 
 def a_gpu_panorama(mapping: Mapping) raises -> Texture:
@@ -13812,11 +13657,9 @@ def test_both_backends_read_an_object_space_normal_map_alike() raises:
 # --- helpers drawn as meshes --------------------------------------------------
 
 from animation.keyframe_track import LightIndex
-from geometries.box import box
 from helpers.light_probe import LightProbeHelper
 from helpers.shadow_map_viewer import ShadowMapViewer
 from helpers.texture import texture_helper
-from render.target import RenderTarget as HudTarget
 
 
 def test_both_backends_draw_the_texture_and_probe_helpers_alike() raises:
@@ -13935,15 +13778,6 @@ def test_both_backends_draw_the_shadow_map_viewer_alike() raises:
 
 
 # --- material flags, the blend constant and the custom curve (#170) --------
-
-from materials.material import custom_blending as _custom_blending
-from materials.nodes import NodeGraph as _NodeGraph
-from materials.nodes import NO_NODES as _NO_NODES
-from materials.nodes import OUTPUT_NODE as _OUTPUT_NODE
-from render.blend import CONSTANT_COLOR_FACTOR as _CONSTANT_COLOR
-from render.blend import ZERO_FACTOR as _ZERO_FACTOR
-from render.gpu import LANE_BLEND_CONSTANT
-from render.tonemap import CUSTOM_TONE_MAPPING as _CUSTOM
 
 
 def _flagged_scene(mut assets: Assets, blended: Bool) raises -> Scene:
@@ -14152,10 +13986,6 @@ from core.gaussian_splat_utils import (
     packed_band as _packed_band,
 )
 from objects.gaussian_splat import GaussianSplat as _GaussianSplat
-from render.gpu import GpuSplats
-from render.raster_state import DepthMode as _DepthMode
-from render.raster_state import REVERSED_DEPTH as _REVERSED_DEPTH
-from render.rect import Rect as _Rect
 from render.splatrule import ProjectedSplat as _ProjectedSplat
 from render.splat_raster import (
     draw_gaussian_splat as _draw_gaussian_splat,
@@ -14641,13 +14471,6 @@ def test_both_backends_gather_a_corner_alike() raises:
 
 # --- node lighting models: MeshSSSNodeMaterial and VolumeNodeMaterial ------
 
-from materials.nodes import (
-    NodeGraph,
-    OFFSET_NODE,
-    SCATTERING_NODE,
-    THICKNESS_COLOR_NODE,
-    THICKNESS_POWER_NODE,
-)
 from materials.volume_node_material import volume_node_material
 
 
@@ -15924,14 +15747,6 @@ def test_gpu_refuses_missing_or_wrong_sized_volume_scene_depth() raises:
 
 
 # --- exact integer node register transport ------------------------------------
-
-from materials.nodes import (
-    NodeContext as _IntegerNodeContext,
-    NodeInputs as _IntegerNodeInputs,
-    NodeSource as _IntegerNodeSource,
-    ProgramSource as _IntegerProgramSource,
-    run_code as _integer_run_code,
-)
 
 
 @fieldwise_init

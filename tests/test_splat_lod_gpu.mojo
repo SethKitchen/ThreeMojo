@@ -26,7 +26,7 @@ from core.scene import Scene
 from math.vector3 import Vector3
 from render.framebuffer import Color
 from render.gpu_splat_lod import GpuSplatScene
-from render.splat_lod import SplatLod, build_splat_lod, draw_splat_lod
+from render.splat_lod import build_splat_lod, draw_splat_lod
 from render.working_space import resolve_srgb_working, srgb_working_target
 from std.sys import has_accelerator
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true

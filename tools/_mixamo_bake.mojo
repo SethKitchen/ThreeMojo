@@ -31,7 +31,7 @@ from extensions.humanoid.sex import Sex
 from extensions.humanoid.spec import HumanoidSpec
 from renderers.renderer import available_workers
 from std.os import listdir
-from tools._json_value import sorted_strings
+from tools._python_json import sorted_order
 from units.si import FOOT, Length
 
 # The record's asset revision, as the game example writes it.
@@ -76,8 +76,8 @@ def fbx_files(folder: String, only: String = "") raises -> List[String]:
             continue
         names.append(name)
     var paths = List[String]()
-    for name in sorted_strings(names^):  # pragma: no branch
-        paths.append(folder + "/" + name)
+    for index in sorted_order(names):  # pragma: no branch
+        paths.append(folder + "/" + names[index])
     return paths^
 
 

@@ -10,7 +10,7 @@ doorways, all read from the house's building model."""
 from extensions.building.kinds import COLUMN, DOOR, WALL
 from extensions.building.material import brick
 from extensions.building.model import Element, Opening
-from extensions.vegetation.ground import Ground, Lot
+from extensions.vegetation.ground import Ground
 from extensions.village.house import (
     BREAST_DEPTH,
     BREAST_WIDTH,
@@ -32,7 +32,6 @@ from extensions.village.interior import (
 )
 from extensions.village.terrain import OPEN_SKY
 from extensions.building.ids import ElementId
-from math.vector3 import Vector3
 from std.testing import (
     TestSuite,
     assert_almost_equal,

@@ -25,7 +25,8 @@ UModel on each batch. A batch that takes too long is cut in half.
 """
 
 from std.os import getenv
-from std.pathlib import Path
+from std.os.path import join
+from std.pathlib import Path, cwd
 from std.sys import argv, exit, stderr
 
 from tools._process import run_program
@@ -115,7 +116,8 @@ def _read(
     mut meshes: List[String], mut materials: List[String], path: String
 ) raises:
     """Add the packages named in one layout file."""
-    var lines = _lines(_newlines(Path(path).read_text()))
+    var text = Path(path).read_text()
+    var lines = _lines(text.replace("\r\n", "\n").replace("\r", "\n"))
     for index in range(len(lines)):
         var doc = PyJson.parse(lines[index])
         if doc.kind(doc.root) != PY_DICT:
@@ -160,25 +162,10 @@ def _add(mut found: List[String], var text: String):
     while index < len(found):
         if found[index] == text:
             return
-        if _before(text, found[index]):
+        if text < found[index]:
             break
         index += 1
     found.insert(index, text^)
-
-
-def _before(left: String, right: String) -> Bool:
-    """Return whether `left` sorts before `right`."""
-    var a = left.as_bytes()
-    var b = right.as_bytes()
-    var count = len(a)
-    if len(b) < count:
-        count = len(b)
-    for index in range(count):
-        if a[index] < b[index]:
-            return True
-        if a[index] > b[index]:
-            return False
-    return len(a) < len(b)
 
 
 def _lines(text: String) -> List[String]:
@@ -193,26 +180,6 @@ def _lines(text: String) -> List[String]:
     if start < len(raw):
         out.append(String(text[byte=start:]))
     return out^
-
-
-def _newlines(text: String) -> String:
-    """Return `text` with CR, LF and CRLF written as LF."""
-    var out = String()
-    var skip_lf = False
-    for codepoint in text.codepoints():
-        var code = Int(codepoint.to_u32())
-        if skip_lf:
-            skip_lf = False
-            if code == 10:
-                continue
-        if code == 13:
-            out += "\n"
-            skip_lf = True
-        elif code == 10:
-            out += "\n"
-        else:
-            out += chr(code)
-    return out
 
 
 def export_path(root: String, game_path: String, suffix: String) -> String:
@@ -232,7 +199,7 @@ def export_path(root: String, game_path: String, suffix: String) -> String:
     var rest = String("")
     if game_path.byte_length() > 6:
         rest = String(game_path[byte=6:])
-    return _join(root, _split(rest)) + suffix
+    return _join(root, rest) + suffix
 
 
 def pending_text(text: String) raises -> String:
@@ -312,42 +279,24 @@ def _batches(mut tree: JsonTree, paths: List[String], batch: Int) raises -> Int:
     return groups
 
 
-def _split(text: String) -> List[String]:
-    """Split `text` on `/`, keeping empty segments."""
-    var parts = List[String]()
-    var raw = text.as_bytes()
-    var start = 0
-    for index in range(len(raw) + 1):
-        if index == len(raw) or raw[index] == 47:
-            parts.append(String(text[byte=start:index]))
-            start = index + 1
-    return parts^
-
-
-def _join(root: String, parts: List[String]) -> String:
-    """Join `parts` onto `root`, as `os.path.join` does for `/`."""
+def _join(root: String, path: String) -> String:
+    """Join the `/` parts of `path` onto `root`, as `os.path.join` does."""
     var out = root
     var trailing = False
     var saw = False
-    for index in range(len(parts)):
-        if parts[index].byte_length() == 0:
+    for part in path.split("/"):
+        if part.byte_length() == 0:
             trailing = True
             continue
         trailing = False
         saw = True
-        if not _slash(out):
+        if not out.endswith("/"):
             out += "/"
-        out += parts[index]
+        out += part
     if trailing or not saw:
-        if not _slash(out):
+        if not out.endswith("/"):
             out += "/"
     return out^
-
-
-def _slash(text: String) -> Bool:
-    """Return whether `text` ends with `/`."""
-    var raw = text.as_bytes()
-    return len(raw) > 0 and raw[len(raw) - 1] == 47
 
 
 def _whole(doc: PyJson, node: Int) raises -> Int:
@@ -496,13 +445,13 @@ def drive(root: String, towns: List[String], batch: Int, limit: Float64) raises:
         raise Error("limit is not positive")
     var files = List[String]()
     for index in range(len(towns)):
-        files.append(_child(root, "layout/" + towns[index] + ".jsonl"))
+        files.append(join(root, "layout/" + towns[index] + ".jsonl"))
     var wanted = PyJson.parse(wanted_text(files^))
     var meshes = _paths(wanted, wanted.at(wanted.root, "meshes"))
     var materials = _paths(wanted, wanted.at(wanted.root, "materials"))
-    var raw = _child(root, "raw_town")
-    var umodel = _child(root, "umodel/umodel_64.exe")
-    var content = _child(root, "release/CarlaUE4/Content")
+    var raw = join(root, "raw_town")
+    var umodel = join(root, "umodel/umodel_64.exe")
+    var content = join(root, "release/CarlaUE4/Content")
     var plan = PyJson.parse(
         pending_text(_pending_json(raw, batch, meshes, materials))
     )
@@ -649,37 +598,14 @@ def _run_batch(
     _run_batch(right, mesh, umodel, content, raw, limit)
 
 
-def _child(root: String, child: String) -> String:
-    """Join `child` onto `root` with one slash."""
-    var raw = root.as_bytes()
-    if len(raw) > 0 and raw[len(raw) - 1] == 47:
-        return root + child
-    return root + "/" + child
-
-
 def _absolute(path: String) raises -> String:
     """Return `path` as an absolute path, as `os.path.abspath` does for `.`."""
-    var raw = path.as_bytes()
-    if len(raw) > 0 and raw[0] == 47:
+    if path.startswith("/"):
         return path
-    var pwd = run_program(["pwd"], 5)
-    if pwd.status != 0:
-        raise Error("cannot read the working directory")
-    var cwd = pwd.output
-    var length = cwd.byte_length()
-    var newline = False
-    if length > 0:
-        newline = cwd.as_bytes()[length - 1] == 10
-    if newline:
-        var end = length - 1
-        var trimmed = String(cwd[byte=:end])
-        cwd = trimmed
+    var here = String(cwd())
     if path == "." or path.byte_length() == 0:
-        return cwd
-    var base = cwd.as_bytes()
-    if len(base) > 0 and base[len(base) - 1] == 47:
-        return cwd + path
-    return cwd + "/" + path
+        return here
+    return join(here, path)
 
 
 def _drive_cli(arguments: List[String]) raises:

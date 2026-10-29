@@ -56,14 +56,13 @@ from controls.input import (
     WHEEL,
 )
 from math.matrix4 import Matrix4
-from math.utils import clamp
+from math.utils import clamp, scaled_side
 from math.quaternion import Quaternion
 from math.spherical import Spherical
 from math.vector3 import Vector3
 from std.math import inf, isfinite, pi, tan
 from units.measure import angle_radians
 from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
-from math.utils import scaled_side
 
 # A change smaller than this, squared, is no change. three.js: `_EPS`.
 comptime EPSILON = Float32(1e-6)
@@ -123,7 +122,8 @@ struct OrbitControls(Copyable, Movable):
 
     # The point the camera orbits and looks at.
     var target: Vector3
-    # False to ignore all input. `update` still applies what is pending.
+    # False to ignore all input but a release, which ends a drag, as in
+    # three.js. `update` still applies what is pending.
     var enabled: Bool
     # How near the camera can dolly to the target, and how far from it.
     var min_distance: Length
@@ -207,6 +207,11 @@ struct OrbitControls(Copyable, Movable):
     # `zoom0`. None before the first save.
     var _saved: Optional[List[Vector3]]
     var _saved_zoom: Float32
+    # Where the camera and the target were when `update` last returned
+    # True, three.js's `_lastPosition` and `_lastTargetPosition`. None
+    # before the first update.
+    var _last_position: Optional[Vector3]
+    var _last_target: Vector3
 
     def __init__(out self, target: Vector3 = Vector3(0, 0, 0)):
         """Create controls about `target`, with three.js's defaults.
@@ -264,6 +269,8 @@ struct OrbitControls(Copyable, Movable):
         self._theta = 0
         self._saved = None
         self._saved_zoom = 1
+        self._last_position = None
+        self._last_target = target
 
     # --- the three changes -------------------------------------------------
 
@@ -363,9 +370,7 @@ struct OrbitControls(Copyable, Movable):
         self._pan_by(
             delta_x,
             delta_y,
-            _orthographic_view(
-                camera, self.target, viewport_width, viewport_height
-            ),
+            _orthographic_view(camera, viewport_width, viewport_height),
         )
 
     def _pan_by(mut self, delta_x: Float32, delta_y: Float32, view: _View):
@@ -376,16 +381,15 @@ struct OrbitControls(Copyable, Movable):
             delta_y: Pixels down the view content moves.
             view: The camera, as the controls see it.
         """
-        var axes = _camera_axes(view.offset, view.up)
-        var upward = axes[1]
+        var upward = view.above
         if not self.screen_space_panning:
             # three.js: the camera's up crossed with its right, which is
             # forward along the plane at right angles to the up.
             upward = view.up
-            upward.cross(axes[0])
+            upward.cross(view.right)
         # The content follows the pointer, so the camera moves the other
         # way across the view and the same way up it.
-        self._pan = self._pan + axes[0] * (-delta_x * view.per_x)
+        self._pan = self._pan + view.right * (-delta_x * view.per_x)
         self._pan = self._pan + upward * (delta_y * view.per_y)
 
     # --- input -------------------------------------------------------------
@@ -403,7 +407,8 @@ struct OrbitControls(Copyable, Movable):
         pointer went. Shift or Ctrl swaps a rotation for a pan and a pan
         for a rotation, as in three.js. A wheel notch dollies. An arrow
         pans by `key_pan_speed` pixels, or with Shift or Ctrl rotates. A
-        resize changes nothing here.
+        resize changes nothing here. A release ends a drag also while
+        `enabled` is False, as three.js's `onPointerUp` does.
 
         Args:
             event: The event, with its position in pixels.
@@ -442,9 +447,7 @@ struct OrbitControls(Copyable, Movable):
         """
         self._handle(
             event,
-            _orthographic_view(
-                camera, self.target, viewport_width, viewport_height
-            ),
+            _orthographic_view(camera, viewport_width, viewport_height),
         )
 
     def _handle(mut self, event: InputEvent, view: _View) raises:
@@ -459,14 +462,17 @@ struct OrbitControls(Copyable, Movable):
                 action is invalid.
         """
         require_input(event)
+        if event.kind == POINTER_UP:
+            # three.js's `onPointerUp` does not read `enabled`. So a drag
+            # that the controls were turned off during ends at its release.
+            self._action = NO_ACTION
+            return
         if not self.enabled:
             return
         if event.kind == POINTER_DOWN:
             self._press(event, view)
         elif event.kind == POINTER_MOVE:
             self._move(event, view)
-        elif event.kind == POINTER_UP:
-            self._action = NO_ACTION
         elif event.kind == WHEEL:
             self._wheel(event, view)
         elif event.kind == KEY_DOWN:
@@ -742,7 +748,8 @@ struct OrbitControls(Copyable, Movable):
             delta: The time since the last frame, for an automatic rotation.
 
         Returns:
-            True if the camera moved or turned.
+            True if the camera moved, turned or dollied since the last
+            update that returned True, as three.js sends `change`.
         """
         var cursor = self.zoom_to_cursor and self._cursor
         var placed = self._orbit(camera.position, camera.up, delta, not cursor)
@@ -769,11 +776,13 @@ struct OrbitControls(Copyable, Movable):
             ]
             self._cursor = False
         self._scale = 1
-        var changed = self._settle(camera.position, placed[0], placed[1])
-        camera.place(placed[0], placed[1])
         # A dolly smaller than the movement test still counts, as three.js
         # counts `zoomChanged`.
-        return changed or self._zoomed
+        var changed = self._settle(
+            camera.position, placed[0], placed[1], self._zoomed
+        )
+        camera.place(placed[0], placed[1])
+        return changed
 
     def update(
         mut self, mut camera: OrthographicCamera, delta: Duration
@@ -788,12 +797,14 @@ struct OrbitControls(Copyable, Movable):
             delta: The time since the last frame, for an automatic rotation.
 
         Returns:
-            True if the camera moved, turned or zoomed.
+            True if the camera moved, turned or zoomed since the last
+            update that returned True, as three.js sends `change`.
 
         Raises:
             Error: If the camera's zoom or volume is refused.
         """
         var cursor = self.zoom_to_cursor and self._cursor
+        var was = camera.position
         var placed = self._orbit(camera.position, camera.up, delta, False)
         var old_zoom = camera.zoom
         var new_zoom = clamp(
@@ -820,9 +831,11 @@ struct OrbitControls(Copyable, Movable):
             ]
             self._cursor = False
         camera.zoom = new_zoom
-        var changed = self._settle(camera.position, placed[0], placed[1])
+        var changed = self._settle(
+            was, placed[0], placed[1], new_zoom != old_zoom
+        )
         camera.place(placed[0], placed[1])
-        return changed or new_zoom != old_zoom
+        return changed
 
     def _cursor_target(
         self,
@@ -863,22 +876,48 @@ struct OrbitControls(Copyable, Movable):
         return position + forward * along
 
     def _settle(
-        mut self, was: Vector3, position: Vector3, target: Vector3
+        mut self,
+        was: Vector3,
+        position: Vector3,
+        target: Vector3,
+        zoomed: Bool,
     ) -> Bool:
-        """Keep a new target, and say whether anything moved.
+        """Keep a new target, and say whether anything changed since
+        `update` last said so, as three.js's `update` says it.
+
+        three.js compares with where the camera and the target were at the
+        last change it reported, not at the last frame. So a change that
+        dies away over many frames, each one too small to count, still
+        counts once it adds up.
 
         Args:
-            was: Where the camera was.
+            was: Where the camera was before this update.
             position: Where it goes.
             target: What it looks at.
+            zoomed: Whether the distance or the zoom changed, three.js's
+                `zoomChanged`.
 
         Returns:
-            True if the camera or the target moved.
+            True if the camera zoomed, or the camera or the target moved.
         """
-        var moved = position - was
-        var shifted = target - self.target
+        if not self._last_position:
+            # three.js's constructor runs `update` once, and keeps the
+            # camera and the target it finds. These controls get no camera
+            # until the first update.
+            self._last_position = was
+            self._last_target = self.target
+        var moved = position - self._last_position.value()
+        var shifted = target - self._last_target
         self.target = target
-        return moved.dot(moved) > EPSILON or shifted.dot(shifted) > EPSILON
+        var changed = (
+            zoomed
+            or moved.dot(moved) > EPSILON
+            or shifted.dot(shifted) > EPSILON
+        )
+        if changed:
+            self._last_position = position
+            self._last_target = target
+        return changed
 
     def _orbit(
         mut self,
@@ -1029,11 +1068,14 @@ def _check_height(viewport_height: Int) raises:
 @fieldwise_init
 struct _View(ImplicitlyCopyable):
     """What the controls need of a camera to turn input into a change:
-    where it is, which way is up, how many meters a pixel of pan moves,
+    its axes, which way is up, how many meters a pixel of pan moves,
     the view's size, and the matrix that takes a pixel back into space."""
 
-    # The camera's position less the target.
-    var offset: Vector3
+    # The camera's right and its own y in the world: the first two rows of
+    # its view matrix, three.js's columns of `object.matrix`. They hold the
+    # nudge that `look_at` gives a camera that looks along its up.
+    var right: Vector3
+    var above: Vector3
     var up: Vector3
     # Meters a pixel of pan moves the target, across and up.
     var per_x: Float32
@@ -1071,11 +1113,13 @@ def _perspective_view(
     var covered = offset.length() * tan(camera.fov.to(RADIAN) / 2)
     var per = _per_pixel(2 * covered, viewport_height)
     var width = _view_width(viewport_height, camera.aspect)
+    var view = camera.view_matrix()
     var inverse = camera.projection_matrix()
-    inverse.multiply(camera.view_matrix())
+    inverse.multiply(view)
     inverse.invert()
     return _View(
-        offset,
+        _row(view, 0),
+        _row(view, 1),
         camera.up,
         per,
         per,
@@ -1088,7 +1132,6 @@ def _perspective_view(
 
 def _orthographic_view(
     camera: OrthographicCamera,
-    target: Vector3,
     viewport_width: Int,
     viewport_height: Int,
 ) raises -> _View:
@@ -1100,7 +1143,6 @@ def _orthographic_view(
 
     Args:
         camera: The camera.
-        target: The point it orbits.
         viewport_width: The view's width, in pixels.
         viewport_height: The view's height, in pixels.
 
@@ -1116,11 +1158,13 @@ def _orthographic_view(
         raise Error("A viewport width must be positive, got ", viewport_width)
     var wide = (camera.right.value - camera.left.value) / camera.zoom
     var tall = (camera.top.value - camera.bottom.value) / camera.zoom
+    var view = camera.view_matrix()
     var inverse = camera.projection_matrix()
-    inverse.multiply(camera.view_matrix())
+    inverse.multiply(view)
     inverse.invert()
     return _View(
-        camera.position - target,
+        _row(view, 0),
+        _row(view, 1),
         camera.up,
         _per_pixel(wide, viewport_width),
         _per_pixel(tall, viewport_height),
@@ -1154,25 +1198,19 @@ def _unproject(
     return inverse.transform_point(Vector3(x, y, 0))
 
 
-def _camera_axes(offset: Vector3, up: Vector3) -> List[Vector3]:
-    """Return the camera's right and up, for a camera at `offset` from the
-    point it looks at.
+def _row(view: Matrix4, row: Int) -> Vector3:
+    """Return one of a camera's axes in the world, from its view matrix.
 
     Args:
-        offset: The camera's position less its target.
-        up: The camera's up.
+        view: The camera's view matrix, a rotation and a move.
+        row: 0 for the camera's right, 1 for its own y.
 
     Returns:
-        The right, then the up.
+        The axis, unit length.
     """
-    var back = offset
-    back.normalize()
-    var right = up
-    right.cross(back)
-    right.normalize()
-    var above = back
-    above.cross(right)
-    return [right, above]
+    # Column-major, as three.js stores a matrix.
+    ref e = view.elements
+    return Vector3(e[row], e[4 + row], e[8 + row])
 
 
 def _limit_azimuth(theta: Float32, low: Float32, high: Float32) -> Float32:

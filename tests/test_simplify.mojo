@@ -9,7 +9,7 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from core.geometry_store import GeometryId
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from extensions.humanoid.skeleton.simplify import (
     BEST_EFFORT,

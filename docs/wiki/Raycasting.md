@@ -33,6 +33,8 @@ Line picking measures the gap between the nearest points on the ray and the segm
 
 `caster.layers` is a `Layers`, on layer zero by default. An object whose node shares no layer with it is not tested. See [Scene graph](Scene-graph#layers).
 
+A node that is not shown is not tested either. That is a node that is hidden, or a node under a hidden parent. three.js's `Raycaster` tests only the layers, so it picks hidden objects too. To pick an object that is not drawn, keep its node shown. Then set its material's `visible` to False. Neither raycaster reads that flag.
+
 ## Aim it
 
 | Method | Meaning |
@@ -106,7 +108,7 @@ The mesh as it is drawn, not as it was modelled. A mesh wearing a [morph target]
 
 They did not always. Rendering wore the targets and picking did not. The drawn shape could not be hit, and the modelled one could be hit where nothing was.
 
-An [instanced mesh](Meshes-and-assets#instancedmesh) is picked instance by instance. Each instance is tested at the node's transform times its own. A [batched mesh](Meshes-and-assets#batchedmesh) is picked the same way, with each instance's own geometry. An [LOD](Meshes-and-assets#lod) is picked on one level. That level is the one the distance from the ray's origin to the node picks with no memory, as three.js's `LOD.raycast` does.
+An [instanced mesh](Meshes-and-assets#instancedmesh) is picked instance by instance. Each instance is tested at the node's transform times its own. A [batched mesh](Meshes-and-assets#batchedmesh) is picked the same way, with each instance's own geometry. An [LOD](Meshes-and-assets#lod) is picked on one level. That level is the one the distance from the ray's origin to the node picks. The level shown now keeps its hysteresis, as three.js's `LOD.raycast` does.
 
 A [skinned mesh](Skinning) is picked where its bones carry it, after its morph targets. The renderer and the raycaster both ask `core/deform.mojo` for the posed bones and the matrix that carries each vertex.
 
@@ -118,7 +120,9 @@ A line is met where the ray passes within `line_threshold` of a segment. The hit
 
 Points are met where the ray passes within `points_threshold` of a point. The hit's `point` is the ray's point nearest that point.
 
-The gap is measured in world space. three.js divides the threshold by the object's average scale and measures in the object's own space. The two agree under an even scale. Under an uneven scale, this port is exact and three.js is not.
+three.js measures the gap in the object's own space. It divides the threshold by the mean of the object's own scale. This port measures the gap in world space. It multiplies the threshold by the mean world scale, and divides it by the mean own scale.
+
+The two agree when the world scale is even, and a parent's scale counts in both. Under an uneven world scale, the two can differ. A node whose own scale has a mean of zero keeps the threshold as it is. three.js divides by zero there.
 
 A sprite is met on its two triangles, laid flat to the kept camera with its center, rotation and size, as the renderer lays them.
 
@@ -187,7 +191,7 @@ throughput work and its measured limits.
 
 Unprepared box queries classify finite and nonzero components from their stored bits.
 This avoids wide regularity sums without changing slab or point arithmetic.
-The [throughput report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/ray-query-550.md) records the complete baseline/candidate matrix and pending aggregate checks.
+The [throughput report](https://github.com/SethKitchen/ThreeMojo/blob/d58766390fa97aadc6addf7782a2378373fcb080/docs/validation/ray-query-550.md) records the complete baseline/candidate matrix and pending aggregate checks.
 
 `bench/ray_query_bench.mojo` and `bench/ray_query_consumers.mojo` run those queries.
 

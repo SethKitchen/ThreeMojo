@@ -48,16 +48,7 @@ from extensions.sdf.vector import V3, cross, length, lerp, normalize
 from math.finite import require_non_negative_finite
 from std.math import sqrt
 from units.measure import length_meters
-from units.si import (
-    DEGREE,
-    KILOGRAM,
-    MEGAPASCAL,
-    PASCAL,
-    Angle,
-    Length,
-    Mass,
-    Pressure,
-)
+from units.si import DEGREE, KILOGRAM, MEGAPASCAL, PASCAL, Angle, Mass, Pressure
 
 # Fibers fill this share of a trunk muscle's path.
 comptime FIBER_SHARE = 0.8

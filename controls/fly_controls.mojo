@@ -23,6 +23,13 @@ along each axis held. A turn is the quaternion three.js builds, (x, y, z,
 half of `roll_speed` and the time. three.js's `rollSpeed` is that half:
 its default of 0.005 is 0.01 radians a second here, the same turn.
 
+The controls keep the camera's turn as a quaternion, as three.js keeps
+`object.quaternion`, and turn that. The camera's target only shows the
+turn: far from the origin a `Float32` target rounds a small turn away,
+and a turn read back from it would not move. The controls read the turn
+from the camera again only when the camera was moved from outside: when
+its position, its target or its up is not what they last placed.
+
 Differences from three.js: Shift does not set a speed multiplier, which
 three.js sets and never reads. A terminal sends no key for Shift alone.
 """
@@ -129,6 +136,13 @@ struct FlyControls(Copyable, Movable):
     var _status: Int
     var _last_position: Vector3
     var _last_rotation: Quaternion
+    # The camera's turn, three.js's `object.quaternion`: what the controls
+    # turned the camera to last.
+    var _rotation: Quaternion
+    # The position, the target and the up that the controls last placed
+    # the camera at. Empty until they first place it. A camera with other
+    # values was moved from outside, and its turn is read again.
+    var _placed: List[Vector3]
 
     def __init__(out self):
         """Create controls with three.js's defaults."""
@@ -154,6 +168,8 @@ struct FlyControls(Copyable, Movable):
         self._status = 0
         self._last_position = Vector3(0, 0, 0)
         self._last_rotation = Quaternion.identity()
+        self._rotation = Quaternion.identity()
+        self._placed = List[Vector3]()
 
     def move_vector(self) -> Vector3:
         """Return the move held, along the camera's right, up and back.
@@ -299,8 +315,10 @@ struct FlyControls(Copyable, Movable):
                 positive, or the camera's placement is refused.
         """
         var frame = CameraFrame.of(camera)
+        self._orient(frame, [camera.position, camera.target, camera.up])
         var changed = self._fly(frame, delta)
         frame.place(camera)
+        self._placed = [camera.position, camera.target, camera.up]
         return changed
 
     def update(
@@ -321,9 +339,23 @@ struct FlyControls(Copyable, Movable):
                 positive, or the camera's placement is refused.
         """
         var frame = CameraFrame.of(camera)
+        self._orient(frame, [camera.position, camera.target, camera.up])
         var changed = self._fly(frame, delta)
         frame.place(camera)
+        self._placed = [camera.position, camera.target, camera.up]
         return changed
+
+    def _orient(mut self, mut frame: CameraFrame, placed: List[Vector3]):
+        """Give a frame the turn the controls keep. Read the turn from the
+        frame first if the camera was moved from outside.
+
+        Args:
+            frame: The camera's frame. Its axes become the kept turn's.
+            placed: The camera's position, target and up.
+        """
+        if self._placed != placed:
+            self._rotation = Quaternion.from_matrix(frame.rotation())
+        _set_axes(frame, self._rotation)
 
     def _fly(mut self, mut frame: CameraFrame, delta: Duration) raises -> Bool:
         """Move and turn a frame, then let go of each key not repeated.
@@ -351,17 +383,33 @@ struct FlyControls(Copyable, Movable):
         var spin = self.rotation_vector() * half
         var turn = Quaternion(spin.x, spin.y, spin.z, 1)
         turn.normalize()
-        frame.turn(turn)
+        # three.js's `object.quaternion.multiply`. It stays a unit
+        # quaternion, so a `Float32` turn does not drift over many frames.
+        self._rotation.multiply(turn)
+        self._rotation.normalize()
+        _set_axes(frame, self._rotation)
         self._held.timeout = self.key_timeout
         for key in self._held.advance(delta):
             self._set_key(key, 0)
-        var rotation = Quaternion.from_matrix(frame.rotation())
         var moved = frame.position - self._last_position
-        var closeness = self._last_rotation.dot(rotation)
+        var closeness = self._last_rotation.dot(self._rotation)
         var changed = moved.dot(moved) > EPSILON or (
             8 * (1 - closeness) > EPSILON
         )
         if changed:
             self._last_position = frame.position
-            self._last_rotation = rotation
+            self._last_rotation = self._rotation
         return changed
+
+
+def _set_axes(mut frame: CameraFrame, rotation: Quaternion):
+    """Give a frame the axes of a turn.
+
+    Args:
+        frame: The frame. Its right, up and back change; its position and
+            its reach stay.
+        rotation: The turn from the camera's axes to the world's.
+    """
+    frame.right = rotation.rotate(Vector3(1, 0, 0))
+    frame.above = rotation.rotate(Vector3(0, 1, 0))
+    frame.back = rotation.rotate(Vector3(0, 0, 1))

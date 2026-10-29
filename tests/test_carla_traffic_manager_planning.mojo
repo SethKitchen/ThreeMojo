@@ -57,8 +57,6 @@ from extensions.carla.traffic_manager_shared import (
     CollisionHazardData,
     LargeVehicle,
     LocalizationData,
-    NO_COMMAND,
-    SET_VEHICLE_LIGHT_STATE,
     TrafficCommand,
     TrafficManagerShared,
     apply_vehicle_control,

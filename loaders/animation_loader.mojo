@@ -59,7 +59,7 @@ from animation.keyframe_track import (
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from loaders.js_number import is_decimal_text
-from loaders.json import ARRAY, JsonDocument, parse_json
+from loaders.json import ARRAY, parse_json
 from std.pathlib import Path
 
 

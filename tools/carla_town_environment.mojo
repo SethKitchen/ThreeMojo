@@ -13,10 +13,11 @@ angle to four decimal places and writes `environment/<town>.json`. A
 file that is already there is kept.
 """
 
-from std.ffi import external_call
 from std.os import getenv, makedirs
-from std.pathlib import Path
+from std.os.path import join
+from std.pathlib import Path, cwd
 from std.sys import argv, exit, stderr
+from std.time import perf_counter
 
 from tools._json_tools import quote_ascii
 from tools._process import run_program
@@ -57,22 +58,23 @@ def write_environments(
     """
     var chosen = List[String]()
     if len(towns) == 0:
-        chosen = _sorted(_names(_run(client, host, port, "", True)))
+        chosen = _names(_run(client, host, port, "", True))
+        sort(chosen)
     else:
         for index in range(len(towns)):
             chosen.append(towns[index])
-    var folder = _child(root, "environment")
+    var folder = join(root, "environment")
     makedirs(folder, exist_ok=True)
     for index in range(len(chosen)):
         var town = chosen[index]
-        var path = _child(folder, town + ".json")
+        var path = join(folder, town + ".json")
         if Path(path).exists():
             print("kept " + path)
             continue
-        var started = _now()
+        var started = perf_counter()
         var raw = PyJson.parse(_run(client, host, port, town, False))
         var count = _write(path, raw)
-        var seconds = Int(round_half_even(_now() - started))
+        var seconds = Int(round_half_even(perf_counter() - started))
         print(
             town
             + ": "
@@ -203,7 +205,7 @@ def _run(
         if message.byte_length() == 0:
             message = ran.output
         raise Error(message)
-    return _trim(ran.output)
+    return String(ran.output.rstrip("\r\n"))
 
 
 def _names(text: String) raises -> List[String]:
@@ -220,74 +222,14 @@ def _names(text: String) raises -> List[String]:
     return names^
 
 
-def _sorted(var names: List[String]) -> List[String]:
-    """Return `names` in byte order, as `sorted` does for ASCII."""
-    for index in range(1, len(names)):
-        var current = names[index]
-        var place = index
-        while place > 0 and _before(current, names[place - 1]):
-            names[place] = names[place - 1]
-            place -= 1
-        names[place] = current
-    return names^
-
-
-def _before(left: String, right: String) -> Bool:
-    """Return whether `left` sorts before `right`."""
-    var a = left.as_bytes()
-    var b = right.as_bytes()
-    var count = len(a)
-    if len(b) < count:
-        count = len(b)
-    for index in range(count):
-        if a[index] != b[index]:
-            return a[index] < b[index]
-    return len(a) < len(b)
-
-
-def _now() -> Float64:
-    """Return seconds from the realtime clock."""
-    var now = List[Int64](length=2, fill=0)
-    _ = external_call["clock_gettime", Int32](
-        Int32(0), now.unsafe_ptr().unsafe_bitcast[NoneType]()
-    )
-    return Float64(Int(now[0])) + Float64(Int(now[1])) / 1000000000.0
-
-
-def _trim(text: String) -> String:
-    """Drop a trailing newline."""
-    var raw = text.as_bytes()
-    var end = len(raw)
-    while end > 0 and (raw[end - 1] == 10 or raw[end - 1] == 13):
-        end -= 1
-    return String(text[byte=:end])
-
-
-def _child(root: String, child: String) -> String:
-    """Join `child` onto `root` with one slash."""
-    var raw = root.as_bytes()
-    if len(raw) > 0 and raw[len(raw) - 1] == 47:
-        return root + child
-    return root + "/" + child
-
-
 def _absolute(path: String) raises -> String:
     """Return a relative path joined to the working directory."""
-    var raw = path.as_bytes()
-    if len(raw) > 0 and raw[0] == 47:
+    if path.startswith("/"):
         return path
-    var pwd = run_program(["pwd"], 5)
-    if pwd.status != 0:
-        raise Error("cannot read the working directory")
-    var cwd = pwd.output
-    var length = cwd.byte_length()
-    if length > 0 and cwd.as_bytes()[length - 1] == 10:
-        var end = length - 1
-        var trimmed = String(cwd[byte=:end])
-        cwd = trimmed
+    var here = String(cwd())
     if path == "." or path.byte_length() == 0:
-        return cwd
-    return _child(cwd, path)
+        return here
+    return join(here, path)
 
 
 def _drive(arguments: List[String]) raises:

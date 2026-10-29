@@ -29,7 +29,7 @@ from animation.keyframe_track import (
     VISIBLE,
 )
 from core.object3d import NodeId
-from loaders.json import JsonDocument, parse_json
+from loaders.json import parse_json
 from materials.material import MaterialId
 from math.utils import SeededRandom
 from math.vector3 import Vector3

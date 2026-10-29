@@ -21,8 +21,6 @@ from extensions.carla.traffic_manager_map import (
     ROAD_OPTION_LANE_FOLLOW,
     ROAD_OPTION_LEFT,
     ROAD_OPTION_RIGHT,
-    ROAD_OPTION_STRAIGHT,
-    ROAD_OPTION_VOID,
     SimpleWaypointIndex,
 )
 from extensions.carla.traffic_manager_random import RandomGenerator

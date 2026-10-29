@@ -9,7 +9,7 @@ staircase."""
 
 from cameras.array_camera import ArrayCamera
 from cameras.cube_camera import CubeCamera
-from cameras.orthographic_camera import OrthographicCamera, centered
+from cameras.orthographic_camera import centered
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute

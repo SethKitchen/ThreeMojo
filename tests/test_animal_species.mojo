@@ -11,8 +11,7 @@ cheetah. The other species are in `test_animal_species_*`, which import
 `_species` from here, so that the coverage run measures them side by side."""
 
 from extensions.animals.build import Animal, _unwarp, create_animal
-from extensions.animals.coat import CoatSample
-from extensions.sdf.ids import BoneId
+from extensions.animals.coat import CoatSample, Palette
 from extensions.animals.options import (
     ADULT,
     AnimalOptions,
@@ -26,7 +25,6 @@ from extensions.animals.options import (
     animal_options,
     body_random,
 )
-from extensions.animals.coat import Palette
 from extensions.animals.rig import Bone
 from extensions.animals.species.bear import _arc_for, _pick
 from extensions.animals.species.boar import _tusk_paint
@@ -52,12 +50,7 @@ from extensions.animals.registry import (
     species_traits,
     species_variants,
 )
-from extensions.sdf.vector import (
-    V3,
-    dot,
-    length,
-    normalize,
-)
+from extensions.sdf.vector import V3, dot, normalize
 from std.collections import Dict
 from std.math import floor
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true

@@ -19,8 +19,6 @@ from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.skeleton.torso.muscles.dimensions import (
     TorsoMuscleDimensions,
     torso_muscle_dimensions,
-)
-from extensions.humanoid.skeleton.torso.muscles.dimensions import (
     TorsoMuscle,
     torso_muscle_field,
     torso_muscle_label,

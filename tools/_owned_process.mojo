@@ -935,26 +935,6 @@ def wait_blocking(pid: Int) -> WaitResult:
         return WaitResult(True, _decode(Int(raw[0])), 0)
 
 
-def wait_any() -> Tuple[Int, WaitResult]:
-    """Wait for any child to end and reap it.
-
-    Returns:
-        The child's process id and its return code, or -1 and the `errno`
-        of a failed `waitpid`.
-    """
-    var raw = List[Int32](length=1, fill=0)
-    while True:
-        var got = external_call["waitpid", c_int](
-            c_int(-1), _at(Int(raw.unsafe_ptr())), c_int(0)
-        )
-        if got < 0:
-            var number = errno()
-            if number == EINTR:
-                continue
-            return (-1, WaitResult(False, 0, number))
-        return (Int(got), WaitResult(True, _decode(Int(raw[0])), 0))
-
-
 def signal_group(pid: Int, number: Int) -> Int:
     """Send a signal to a process group.
 

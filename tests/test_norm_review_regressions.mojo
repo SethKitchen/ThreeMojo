@@ -21,7 +21,7 @@ from geometries.mikktspace import generate_tangents
 from geometries.sculptor_mesh import SculptorMesh
 from loaders.amf import parse_amf
 from loaders.lwo import _vertex_normals as lwo_normals
-from loaders.ply import _check_convex
+from loaders.fan import fan_problem
 from loaders.svg_path import eigen_decomposition
 from loaders.usd_geometry import (
     compute_vertex_normals as usd_normals,
@@ -74,14 +74,16 @@ def test_polygon_and_loader_normals_keep_original_coordinate_terms() raises:
         Vector3(0, t, 0),
     ]
     near3(polygon_normal(points), 0, 0, -1)
-    _check_convex(
-        [
-            Vector3(h, h, 0),
-            Vector3(t, 0, 0),
-            Vector3(0, 0, 0),
-            Vector3(0, t, 0),
-        ],
-        1,
+    assert_equal(
+        fan_problem(
+            [
+                Vector3(h, h, 0),
+                Vector3(t, 0, 0),
+                Vector3(0, 0, 0),
+                Vector3(0, t, 0),
+            ]
+        ),
+        "",
     )
     for offset in range(3):
         var p32 = List[Float32]()

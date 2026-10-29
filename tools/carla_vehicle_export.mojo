@@ -15,7 +15,8 @@ package. One vehicle that fails does not stop the next.
 
 from std.collections import Dict
 from std.os import getenv, listdir, makedirs, stat
-from std.pathlib import Path
+from std.os.path import basename, dirname
+from std.pathlib import Path, cwd
 from std.sys import argv, exit, stderr
 
 from tools._bigint import BigInt
@@ -142,7 +143,7 @@ def _build(
     var size = _tree_size(out)
     return (
         "OK\t"
-        + _basename(skeletal[0])
+        + basename(skeletal[0])
         + " + "
         + String(added)
         + " attachments, "
@@ -161,7 +162,7 @@ def _choice(
     var records = List[_Mesh]()
     for index in range(len(named)):
         var path = named[index]
-        if _has(path, "/Pedestrian/"):
+        if "/Pedestrian/" in path:
             records.append(_Mesh(path, "", 0, ""))
             continue
         var kind = _class(classes, content, umodel, path)
@@ -286,7 +287,7 @@ def _buffer(gltf: String, text: String) raises -> String:
     """Return the buffer file named by the first buffer."""
     var doc = PyJson.parse(text)
     var uri = doc.text(doc.at(doc.item(doc.at(doc.root, "buffers"), 0), "uri"))
-    return _child(_dirname(gltf), uri)
+    return _child(dirname(gltf), uri)
 
 
 def _tree_size(root: String) raises -> Int:
@@ -394,27 +395,11 @@ def _under(path: String, root: String) raises -> String:
 
 def _stem(path: String) -> String:
     """Return the file name without `.uasset`."""
-    var base = _basename(path)
+    var base = basename(path)
     if base.endswith(".uasset"):
         var end = base.byte_length() - 7
         return String(base[byte=:end])
     return base
-
-
-def _basename(path: String) -> String:
-    """Return the text after the last slash."""
-    var slash = path.rfind("/")
-    if slash < 0:
-        return path
-    return String(path[byte = slash + 1 :])
-
-
-def _dirname(path: String) -> String:
-    """Return the text before the last slash."""
-    var slash = path.rfind("/")
-    if slash < 0:
-        return String("")
-    return String(path[byte=:slash])
 
 
 def _child(root: String, child: String) -> String:
@@ -425,11 +410,6 @@ def _child(root: String, child: String) -> String:
     if child.byte_length() > 0 and child.as_bytes()[0] == 47:
         return root + child
     return root + "/" + child
-
-
-def _has(text: String, needle: String) -> Bool:
-    """Return whether `needle` occurs in `text`."""
-    return text.find(needle) >= 0
 
 
 def _relative(vehicle_id: String) -> String:
@@ -519,24 +499,12 @@ def _catalog() -> String:
 
 def _absolute(path: String) raises -> String:
     """Return `path` joined to the working directory when it is relative."""
-    var raw = path.as_bytes()
-    if len(raw) > 0 and raw[0] == 47:
+    if path.startswith("/"):
         return path
-    var pwd = run_program(["pwd"], 5)
-    if pwd.status != 0:
-        raise Error("cannot read the working directory")
-    var cwd = pwd.output
-    var length = cwd.byte_length()
-    var newline = False
-    if length > 0:
-        newline = cwd.as_bytes()[length - 1] == 10
-    if newline:
-        var end = length - 1
-        var trimmed = String(cwd[byte=:end])
-        cwd = trimmed
+    var here = String(cwd())
     if path == "." or path.byte_length() == 0:
-        return cwd
-    return _child(cwd, path)
+        return here
+    return _child(here, path)
 
 
 def _drive(arguments: List[String]) raises:

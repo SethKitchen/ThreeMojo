@@ -7,7 +7,7 @@
 its building model, with its rooms, its doors, its windows and its
 furniture."""
 
-from extensions.building.ids import ElementId, SpaceId
+from extensions.building.ids import SpaceId
 from extensions.building.kinds import (
     BEDROOM,
     CABINET,
@@ -18,7 +18,6 @@ from extensions.building.kinds import (
     SHELF,
     STORAGE,
     TABLE,
-    WALL,
     WINDOW,
 )
 from extensions.building.material import brick

@@ -54,7 +54,6 @@ from extensions.carla.render_textures import (
     wall_color,
 )
 from extensions.carla.render_weather import (
-    CLOUD_SHADE,
     HAZE_EXTINCTION,
     HeightFog,
     MOON_INTENSITY,
@@ -89,7 +88,6 @@ from extensions.carla.weather import WeatherParameters, weather_preset
 from math.matrix4 import Matrix4
 from math.utils import texel_ndc
 from math.projection import perspective
-from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.color_utils import kelvin_color
 from render.framebuffer import Color, FloatColor
@@ -106,15 +104,7 @@ from std.testing import (
     assert_true,
 )
 from units.photometry import LUX, Illuminance
-from units.si import (
-    DEGREE,
-    METER,
-    PER_METER,
-    RADIAN,
-    Angle,
-    InverseLength,
-    Length,
-)
+from units.si import DEGREE, METER, PER_METER, Angle, InverseLength, Length
 from units.temperature import KELVIN, Temperature
 
 

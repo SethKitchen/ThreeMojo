@@ -67,7 +67,7 @@ from math.utils import mix_delta
 from math.vector3 import Vector3
 from math.finite import require_finite_group
 from render.framebuffer import Color
-from std.math import ceil, floor, log, exp, max, min, sqrt
+from std.math import ceil, floor, log, exp, max, min
 from units.si import Length, METER
 
 # How many cascades a sun draws, three.js's `_cascadeCount`.

@@ -73,7 +73,7 @@ from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
 )
 from math.vector3 import Vector3
 from math.finite import require_positive_finite
-from std.math import max, pi, sqrt
+from std.math import pi, sqrt
 
 
 @fieldwise_init

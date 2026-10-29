@@ -24,7 +24,6 @@ from extensions.humanoid.rig.clips import (
 from extensions.humanoid.fidelity import (
     CANONICAL_RECIPE,
     ENGINEERING_USE,
-    FIDELITY_KEY,
     GAME_RECIPE,
     humanoid_provenance,
     require_bake_provenance,

@@ -58,7 +58,6 @@ from extensions.physics.ccd import (
 from extensions.physics.ccd_index import _CCDIndex
 from extensions.physics.body import (
     BodyId,
-    BodyKind,
     DYNAMIC,
     KINEMATIC,
     RigidBody,
@@ -96,7 +95,7 @@ from math.triangle import Line3, Triangle
 from math.norm import squared_length2
 from math.vector3 import Vector3
 from std.math import cos, fma, inf, isfinite, sin, sqrt
-from units.si import Duration, Length, METER, SECOND
+from units.si import Duration, Length
 from core.ordinal import require_valid
 
 

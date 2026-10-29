@@ -51,21 +51,26 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import normalized_difference2
-
 from math.norm import (
+    normalized_difference2,
     length3,
-    normalized2,
     normalized3,
     _ordinary_squared,
     squared_length2,
 )
+
 from cameras.camera import Camera
 from core.assets import Assets
 from core.background import COLOR_BACKGROUND
 from core.scene import Scene
 from lights.light import AMBIENT, DIRECTIONAL, POINT, Light
-from loaders.js_number import js_float32_text, js_number_text, js_to_fixed
+from loaders.js_number import (
+    js_float32_text,
+    js_linear_to_srgb,
+    js_number_text,
+    js_to_fixed,
+    srgb_to_linear,
+)
 from materials.material import (
     BASIC,
     LAMBERT,
@@ -87,7 +92,7 @@ from renderers.projector import (
     apply_normal,
     project_scene,
 )
-from std.math import floor, pow, sqrt
+from std.math import floor, sqrt
 from core.ordinal import require_valid
 
 
@@ -214,21 +219,6 @@ struct SvgImage(Movable):
         return out^
 
 
-def srgb_to_linear(channel: UInt8) -> Float64:
-    """Return an sRGB byte as a linear number, three.js's `SRGBToLinear`.
-
-    Args:
-        channel: The byte.
-
-    Returns:
-        The linear value, from zero to one.
-    """
-    var c = Float64(channel) / 255
-    if c < 0.04045:
-        return c * 0.0773993808
-    return pow(c * 0.9478672986 + 0.0521327014, 2.4)
-
-
 def color_style(color: Vec) raises -> String:
     """Return a linear color as three.js's `getStyle` writes it in sRGB:
     `rgb(r,g,b)`, each rounded and not clamped.
@@ -244,8 +234,7 @@ def color_style(color: Vec) raises -> String:
     """
     var out = String("rgb(")
     for k in range(3):  # pragma: no branch
-        var c = color[k]
-        var s = c * 12.92 if c < 0.0031308 else 1.055 * pow(c, 0.41666) - 0.055
+        var s = js_linear_to_srgb(color[k])
         if k > 0:
             out += ","
         out += js_number_text(floor(s * 255 + 0.5))

@@ -35,8 +35,6 @@ from tools._example_studio import (
 from tools._example_preview import turn_about_vertical
 
 from core.assets import Assets
-from core.object3d import NodeId, Object3D
-from core.scene import Scene
 from extensions.humanoid.athleticism import TONED
 from extensions.humanoid.quality import (
     anatomy_detail,

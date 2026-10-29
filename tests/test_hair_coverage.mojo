@@ -15,7 +15,6 @@ from geometries.plane import plane
 from lights.light import directional_light, point_light, spot_light
 from materials.material import (
     BASIC,
-    BLEND,
     DOUBLE_SIDE,
     LineWidth,
     Material,
@@ -34,7 +33,7 @@ from objects.line_segments2 import (
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer, rgb_is_black
 from renderers.renderer import Renderer
-from std.math import isfinite, nan
+from std.math import isfinite
 from std.testing import (
     TestSuite,
     assert_equal,

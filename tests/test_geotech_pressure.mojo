@@ -44,10 +44,8 @@ from extensions.geotech.kinds import (
     HEEL_TRIANGLE,
     LS_V,
     LoadKind,
-    OVERTURNING,
     PipeRun,
     SERVICE_PRESSURE,
-    SLIDING,
     TOE_TRIANGLE,
 )
 from extensions.geotech.pipes import BuriedPipe, circle_band_area, pipe_weights

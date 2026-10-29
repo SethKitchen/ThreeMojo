@@ -10,7 +10,7 @@ from cameras.orthographic_camera import OrthographicCamera, centered
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
 from helpers.axes import DEFAULT_AXES_SIZE, axes_helper
@@ -208,6 +208,20 @@ def test_an_odd_grid_has_no_center_line() raises:
     for point in range(16):
         assert_linear(color_of(grid, point), DEFAULT_GRID_COLOR)
     assert_vector(point_of(grid, 4), -1.5, 0, -0.5)
+
+
+def test_a_grid_steps_in_doubles_as_three_js_does() raises:
+    # three.js adds a third of a meter to `k` in doubles, -1/2, then
+    # -0.16666666666666669 and 0.16666666666666663, and stores each as
+    # a Float32: plus or minus 0.16666667. Stepped in Float32, the two
+    # inner lines landed at -0.16666666 and 0.16666669.
+    var grid = grid_helper(Length(1.0, METER), 3)
+    var sixth = Float32(1.0 / 6.0)
+    assert_equal(point_of(grid, 4).z, -sixth)
+    assert_equal(point_of(grid, 6).x, -sixth)
+    assert_equal(point_of(grid, 8).z, sixth)
+    assert_equal(point_of(grid, 10).x, sixth)
+    assert_equal(point_of(grid, 12).z, Float32(0.5))
 
 
 def test_the_grid_helper_refuses_a_grid_that_is_not_one() raises:

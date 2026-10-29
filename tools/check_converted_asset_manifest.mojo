@@ -22,7 +22,7 @@ Each file must match its pinned size, SHA-256 and git blob SHA-1.
 from std.collections import Set
 from std.ffi import c_int, external_call
 from std.os import listdir, makedirs, remove, rmdir
-from std.os.path import exists, isdir, islink, realpath
+from std.os.path import exists, isdir, islink, join, realpath
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 from std.tempfile import mkdtemp
@@ -528,15 +528,6 @@ def _file_size(path: String) raises -> Int:
     return len(Path(path).read_bytes())
 
 
-def _join(base: String, relative: String) -> String:
-    """Join paths as `pathlib` does: an absolute part replaces the base."""
-    if relative.startswith("/"):
-        return relative
-    if base.byte_length() == 0 or base.endswith("/"):
-        return base + relative
-    return base + "/" + relative
-
-
 def _parameters_text(source_id: String) -> String:
     """Return the complete recipe a production entry must record, as JSON."""
     if source_id == "ict":
@@ -652,7 +643,7 @@ def validate(data: JsonDocument, root: String) raises:
         var expected = data.get(files, path)
         _require(_hex(data, expected, 64), "Invalid local SHA-256")
         _require(
-            digest(_join(root, path)) == data.string(expected),
+            digest(join(root, path)) == data.string(expected),
             "Converted asset manifest hash mismatch: " + path,
         )
     var sources = _member(data, top, "sources")
@@ -811,7 +802,7 @@ def validate(data: JsonDocument, root: String) raises:
         var size = _member(data, entry, "output_size_bytes")
         var sized = _positive(data, size)
         if sized:
-            sized = Float64(_file_size(_join(root, path))) == data.number(size)
+            sized = Float64(_file_size(join(root, path))) == data.number(size)
         _require(sized, "Production output size mismatch")
         var license = _member(data, entry, "license")
         _require(
@@ -1105,12 +1096,12 @@ def materialize_sources(
     var cache_root = resolve(cache)
     for name in _keys(data, sources):
         var source = data.get(sources, name)
-        var base = _join(
-            _join(cache, name), _text(data, _member(data, source, "revision"))
+        var base = join(
+            join(cache, name), _text(data, _member(data, source, "revision"))
         )
         for entry in _items(data, _member(data, source, "files")):
             var relative = _text(data, _member(data, entry, "path"))
-            var path = _join(base, relative)
+            var path = join(base, relative)
             _require(
                 _inside(resolve(path), cache_root), "Source path escapes cache"
             )
@@ -1147,7 +1138,7 @@ def materialize_sources(
             var content = _read_at_most(path, size + 1)
             check_source_bytes(content, data, entry)
             if equals_text(data, data.get(entry, "role"), "input"):
-                var staged = _join(_join(destination, name), relative)
+                var staged = join(join(destination, name), relative)
                 makedirs(_parent(staged), exist_ok=True)
                 Path(staged).write_bytes(Span(content))
 
@@ -1200,12 +1191,12 @@ def regenerate_production(
     for entry in _items(data, _member(data, top, "production_assets")):
         var bound = _member(data, entry, "source")
         var source_id = _text(data, _member(data, bound, "id"))
-        var source = _join(
-            _join(sources, source_id),
+        var source = join(
+            join(sources, source_id),
             _text(data, _member(data, bound, "input")),
         )
         var path = _text(data, _member(data, entry, "path"))
-        var target = _join(
+        var target = join(
             destination, String(path[byte = path.rfind("/") + 1 :])
         )
         var parameters = _member(data, entry, "parameters")
@@ -1261,7 +1252,7 @@ def verify(
         not fetch_sources or source_cache.byte_length() > 0,
         "--fetch-sources requires an explicit --source-cache",
     )
-    var path = manifest if manifest.byte_length() > 0 else _join(root, MANIFEST)
+    var path = manifest if manifest.byte_length() > 0 else join(root, MANIFEST)
     var data = load_json(Path(path).read_text())
     validate(data, root)
     var folder = mkdtemp(prefix="converted-asset-check-")
@@ -1269,9 +1260,7 @@ def verify(
         var top = data.root()
         for entry in _items(data, _member(data, top, "synthetic_regeneration")):
             var target = folder + "/out.bin"
-            var source = _join(
-                root, _text(data, _member(data, entry, "source"))
-            )
+            var source = join(root, _text(data, _member(data, entry, "source")))
             var parameters = _member(data, entry, "parameters")
             if equals_text(data, _member(data, entry, "format"), "ICTF"):
                 _convert_face(data, parameters, source, target)

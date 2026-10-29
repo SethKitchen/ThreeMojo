@@ -50,8 +50,6 @@ from extensions.carla.physics.quantities import (
     Torque,
 )
 from extensions.carla.physics.shape import (
-    BOX,
-    CAPSULE,
     CONVEX,
     MESH,
     PhysicsMaterial,
@@ -64,7 +62,6 @@ from extensions.carla.physics.shape import (
     cross,
     unit_or,
 )
-from extensions.carla.physics.world import PhysicsWorld
 from extensions.physics.collide import _supporting
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
@@ -83,13 +80,10 @@ from units.si import (
     Angle,
     AngularVelocity,
     DEGREE,
-    Duration,
     KILOGRAM,
     Length,
     METER,
     Mass,
-    RADIAN,
-    SECOND,
     Velocity,
 )
 
@@ -413,6 +407,15 @@ def test_round_round() raises:
     assert_almost_equal(pq[0].depth, 0.1, atol=1e-6)
     _near(pq[0].normal, Vector3(0, 0, 1), 1e-6)
     _near(pq[0].point, Vector3(0, 0, 0.25), 1e-6)
+    # Two parallel capsules that overlap from x = 1 to x = 2 meet at the end
+    # of the first that is nearer the middle of the second, x = 2, as
+    # three.js's Octree chooses. `Line3`'s rule starts from x = 1.
+    var r = WorldShape.round(Vector3(0, 0, 0), Vector3(2, 0, 0), 0.3)
+    var s = WorldShape.round(Vector3(1, 0.5, 0), Vector3(4, 0.5, 0), 0.3)
+    var rs = collide(r, s, 0.02)
+    assert_almost_equal(rs[0].depth, 0.1, atol=1e-6)
+    _near(rs[0].normal, Vector3(0, 1, 0), 1e-6)
+    _near(rs[0].point, Vector3(2, 0.25, 0), 1e-6)
 
 
 def test_signed_distance() raises:

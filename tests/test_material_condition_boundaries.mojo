@@ -7,7 +7,7 @@
 
 from materials import nodes, glsl
 from materials.node_validation import validate_surface_program
-from tests.test_glsl import refused_statement, refused, VERTEX
+from tests.test_glsl import refused_statement, refused
 from materials.material import Material, subsurface_scattering
 from math.vector2 import Vector2
 from render.framebuffer import Color

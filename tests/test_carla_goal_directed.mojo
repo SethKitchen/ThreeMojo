@@ -13,7 +13,6 @@ from extensions.carla.lane_refinement import (
     _refine_lane_certificate,
     _resume_lane_certificate,
     _scaled_accuracy,
-    _rebase_lower,
 )
 from extensions.carla.map import (
     Controller,
@@ -25,7 +24,7 @@ from extensions.carla.map import (
 from extensions.carla.road import Road
 from extensions.carla.road_info import LANE_DRIVING, RoadId
 from extensions.carla.map_search import MapQueryBudget, _MapQueryWork
-from tests.test_carla_cross_candidate_certificates import _road, _sampled_road
+from tests.test_carla_cross_candidate_certificates import _sampled_road
 from math.vector3 import Vector3
 from std.math import inf
 from std.testing import (

@@ -360,6 +360,114 @@ def test_other_elements_and_properties_are_read_past() raises:
     assert_equal(geometry.vertex_count(), 3)
 
 
+comptime _FACED = (
+    "ply\nformat ascii 1.0\nelement vertex 4\nproperty float x\n"
+    "property float y\nproperty float z\nproperty float u\nproperty float v\n"
+    "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+    "element face 2\nproperty list uchar int vertex_indices\n"
+)
+"""Four vertices with texture coordinates and colors, and the start of a
+face element of two faces."""
+
+comptime _CORNERS = (
+    "0 0 0 9 9 1 1 1\n1 0 0 9 9 1 1 1\n1 1 0 9 9 1 1 1\n0 1 0 9 9 1 1 1\n"
+)
+"""The four vertices' rows."""
+
+
+def test_a_face_s_texture_coordinates_and_color_give_each_corner() raises:
+    # MeshLab writes a triangle's texture coordinates on its face, and a
+    # scanner can color a face. three.js's `postProcess` loses the index
+    # and reads them at each corner, in place of the vertices'.
+    var textured = parse_ply(
+        text_bytes(
+            _FACED
+            + "property list uchar float texcoord\nend_header\n"
+            + _CORNERS
+            + "3 0 1 2 6 0 0 1 0 1 1\n4 0 1 2 3 8 0 0 1 0 1 1 0 1\n"
+        )
+    )
+    assert_false(textured.is_indexed())
+    # A triangle, then a quad's two triangles: nine corners.
+    assert_equal(textured.vertex_count(), 9)
+    ref uvs = textured.attribute_view(String(UV))
+    assert_equal(uvs.component(1, 0), Float32(1))
+    assert_equal(uvs.component(2, 1), Float32(1))
+    # The quad's second triangle is corners 0, 2 and 3.
+    assert_equal(uvs.component(7, 0), Float32(1))
+    assert_equal(uvs.component(8, 0), Float32(0))
+    assert_equal(uvs.component(8, 1), Float32(1))
+    assert_point(textured.corner(2, 2), 0, 1, 0)
+    # The vertices' colors stay where the faces have none.
+    assert_almost_equal(
+        textured.attribute_view(String(COLOR)).component(8, 0),
+        srgb_to_linear(Float32(1) / 255),
+    )
+    var colored = parse_ply(
+        text_bytes(
+            _FACED
+            + "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+            + "end_header\n"
+            + _CORNERS
+            + "3 0 1 2 255 0 0\n3 0 2 3 0 0 255\n"
+        )
+    )
+    assert_false(colored.is_indexed())
+    ref colors = colored.attribute_view(String(COLOR))
+    assert_equal(colors.item_size, 3)
+    assert_equal(colors.component(2, 0), Float32(1))
+    assert_equal(colors.component(3, 2), Float32(1))
+    assert_equal(colors.component(3, 0), Float32(0))
+    # The vertices' own texture coordinates are read through the index.
+    assert_equal(colored.attribute_view(String(UV)).component(5, 1), Float32(9))
+
+
+def test_a_face_s_texture_coordinates_must_fit_its_corners() raises:
+    var header = _FACED + "property list uchar float texcoord\nend_header\n"
+    assert_true(
+        "two numbers for each corner"
+        in refusal(header + _CORNERS + "3 0 1 2 6 0 0 1 0 1 1\n3 0 2 3 0\n")
+    )
+    # A list in a later element is not a face's texture coordinates.
+    var edged = parse_ply(
+        text_bytes(
+            _FACED
+            + "property list uchar float texcoord\n"
+            + "element edge 1\nproperty list uchar int vertex_indices\n"
+            + "property list uchar float texcoord\nend_header\n"
+            + _CORNERS
+            + "3 0 1 2 6 0 0 1 0 1 1\n3 0 2 3 6 0 0 1 1 0 1\n"
+            + "2 0 1 2 5 5\n"
+        )
+    )
+    assert_equal(edged.vertex_count(), 6)
+    # A `texcoord` that is one number is not a list of coordinates, and
+    # three.js reads none from it.
+    var single = parse_ply(
+        text_bytes(
+            _FACED
+            + "property float texcoord\nend_header\n"
+            + _CORNERS
+            + "3 0 1 2 7\n3 0 2 3 7\n"
+        )
+    )
+    assert_true(single.is_indexed())
+    # A list empty on every face is no texture coordinates at all.
+    var plain = parse_ply(
+        text_bytes(header + _CORNERS + "3 0 1 2 0\n3 0 2 3 0\n")
+    )
+    assert_true(plain.is_indexed())
+    assert_true(
+        "a face has some channels of its color only"
+        in refusal(
+            _FACED
+            + "property uchar red\nend_header\n"
+            + _CORNERS
+            + "3 0 1 2 1\n3 0 2 3 1\n"
+        )
+    )
+
+
 def test_a_file_without_faces_is_a_point_cloud() raises:
     var geometry = parse_ply(
         text_bytes(
@@ -546,11 +654,31 @@ def test_a_header_that_is_not_ply_is_refused() raises:
         "not a header line"
         in refusal("ply\nformat ascii 1.0\nvertex 3\nend_header\n")
     )
-    var bytes = text_bytes("ply\ncomment ")
-    bytes.append(0xFF)
-    bytes += text_bytes("\nend_header\n")
-    with assert_raises():
-        _ = parse_ply(bytes)
+
+
+def test_text_that_is_not_utf8_reads_as_replacement_characters() raises:
+    # A comment in Windows-1252, before ASCII and binary bodies, and a byte
+    # that is not UTF-8 after an ASCII body's rows. three.js reads each as
+    # U+FFFD and keeps going.
+    var header = text_bytes("ply\nformat ascii 1.0\ncomment Cr")
+    header.append(0xE9)
+    header += text_bytes(
+        "\nelement vertex 1\nproperty float x\nproperty float y\n"
+        "property float z\nend_header\n1 2 3\n"
+    )
+    header.append(0xFF)
+    header += text_bytes("\n")
+    var geometry = parse_ply(header)
+    assert_point(geometry.attribute_view(String(POSITION)).vector3(0), 1, 2, 3)
+    var binary = text_bytes("ply\nformat binary_little_endian 1.0\ncomment ")
+    binary.append(0xFF)
+    binary += text_bytes(
+        "\nelement vertex 1\nproperty uchar x\nproperty uchar y\n"
+        "property uchar z\nend_header\n"
+    )
+    binary += [UInt8(4), 5, 6]
+    var read = parse_ply(binary)
+    assert_point(read.attribute_view(String(POSITION)).vector3(0), 4, 5, 6)
 
 
 def test_malformed_elements_and_properties_are_refused() raises:
@@ -676,6 +804,16 @@ def test_a_polygon_must_be_convex_and_have_area() raises:
     assert_true(
         "no area" in refusal(header + "0 0 0\n1 0 0\n2 0 0\n3 0 0\n4 0 1 2 3\n")
     )
+    # A corner straight in the file, which `Float32` rounding near 5000
+    # moves off the line, is drawn, as three.js draws it.
+    var straight = parse_ply(
+        text_bytes(
+            header.replace("vertex 4", "vertex 5")
+            + "5000.1 0.1 0\n5000.4 0.3 0\n5000.7 0.5 0\n5000.7 1.5 0\n"
+            + "5000.1 1.1 0\n5 0 1 2 3 4\n"
+        )
+    )
+    assert_equal(straight.triangle_count(), 3)
 
 
 # --- a file on disk ----------------------------------------------------------

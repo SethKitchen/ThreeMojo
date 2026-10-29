@@ -7,7 +7,7 @@
 `make_fonts.py` and three.js's own `kenpixel.ttf`, read as three.js 0.180's
 `TTFLoader` reads them with opentype.js, from `three_ttf.mjs`."""
 
-from loaders.json import JsonDocument, NULL, NUMBER, OBJECT, STRING, parse_json
+from loaders.json import JsonDocument, NUMBER, OBJECT, STRING, parse_json
 from loaders.ttf import read_ttf, ttf_json
 from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true

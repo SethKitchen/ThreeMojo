@@ -64,10 +64,9 @@ from geometries.box import box
 from geometries.plane import plane
 from materials.material import BASIC, DOUBLE_SIDE, Material, MaterialId
 from math.vector2 import Vector2
-from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.cube_texture_store import CubeTextureId
-from render.framebuffer import Color, FloatColor, append_float_color
+from render.framebuffer import Color, append_float_color
 from render.texture import (
     CLAMP,
     IGNORED,

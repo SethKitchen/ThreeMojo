@@ -46,7 +46,6 @@ from extensions.building.generate.plan import (
     LOBBY_FLOOR,
     OFFICE_FLOOR,
     PlanOptions,
-    RESIDENTIAL_FLOOR,
     clip_half,
     default_plan_options,
     plan_floor,
@@ -76,7 +75,7 @@ from generators.skyscraper import (
     build_footprint,
     pick_building_color,
 )
-from units.si import Angle64, DEGREE, DEGREE64, Length64, METER
+from units.si import Angle64, DEGREE64, Length64, METER
 
 
 struct TowerOptions(Copyable, Movable):

@@ -32,7 +32,7 @@ from extensions.building.kinds import (
     WINDOW,
 )
 from extensions.building.model import Building
-from extensions.topology.ids import CellId, FaceId
+from extensions.topology.ids import FaceId
 from units.si import Length64, METER
 
 

@@ -5,27 +5,28 @@
 
 from extensions.carla.map import (
     _try_winner_seed,
-    _winner_seed_room,
     _query_node_step_cost,
     _seed_exact_interval,
     _seed_reference_domain,
 )
 from extensions.carla.map_search import MapQueryBudget, _MapQueryWork
 from extensions.carla.opendrive import load_opendrive_file
-from extensions.carla.road_info import RoadId, LaneId, LANE_DRIVING
+from extensions.carla.road_info import (
+    RoadId,
+    LaneId,
+    LANE_DRIVING,
+    RoadInfoLaneWidth,
+    RoadInfoGeometry,
+    info_index_meters as info_index,
+)
 from tests._published_seed_selector import _published_first_pass_with_work
 from extensions.carla.road import Road
 from extensions.carla.polynomial import CubicPolynomial
-from extensions.carla.road_info import RoadInfoLaneWidth
 from extensions.carla.geometry import (
     LINE,
     SPIRAL,
     RoadGeometry,
     with_spiral_si as with_spiral,
-)
-from extensions.carla.road_info import (
-    RoadInfoGeometry,
-    info_index_meters as info_index,
 )
 from tests.test_carla_cross_candidate_certificates import _road
 from extensions.carla.lane_refinement import (

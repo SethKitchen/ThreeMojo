@@ -35,6 +35,10 @@ default. The colors are sRGB, and are decoded to linear light into a
 has no `COLOR=` has no `color` attribute, whatever its attributes hold:
 most writers leave them zero, and a zero is black, not "no color".
 
+A text file is read as UTF-8. A byte that is not UTF-8 becomes U+FFFD,
+as three.js's `TextDecoder` reads it, so a solid named in another
+encoding does not refuse the file.
+
 A coordinate that is not a number or not finite as a `Float32`, a binary
 file shorter than its face count says, a facet without exactly one normal
 and three corners, and a keyword out of place are refused, naming the
@@ -53,7 +57,7 @@ from core.buffer_geometry import (
 from core.ordinal import require_positive
 from geometries.surface import position_normal_surface
 from loaders.bytes import bytes_match
-from loaders.js_text import split_fields
+from loaders.js_text import split_fields, without_bom
 from loaders.text_number import file_line
 from render.srgb import srgb_to_linear
 from std.memory import bitcast
@@ -409,10 +413,7 @@ def parse_stl_text(text: String) raises -> StlModel:
             number or not finite, or a word is not STL at all.
     """
     # A UTF-8 BOM is an encoding marker only at the start of the file.
-    var source = text
-    if source.startswith(chr(0xFEFF)):
-        var trimmed = String(source[byte=3:])
-        source = trimmed^
+    var source = without_bom(text)
     var words = _Words(source)
     var positions = List[Float32]()
     var normals = List[Float32]()
@@ -504,23 +505,19 @@ def parse_stl(bytes: List[UInt8]) raises -> StlModel:
         bytes: The whole file.
 
     Returns:
-        Its model; see `parse_stl_text` for ASCII. A binary file has one
-        solid with no name, and a `color` attribute and an alpha when its
-        header has `COLOR=`.
+        Its model; see `parse_stl_text` for ASCII, whose bytes that are
+        not UTF-8 become U+FFFD, as three.js's `TextDecoder` reads them.
+        A binary file has one solid with no name, and a `color` attribute
+        and an alpha when its header has `COLOR=`.
 
     Raises:
         Error: If a binary file is too short for its header or its face
-            count, or holds a number that is not finite; if a text file
-            is not UTF-8; or for anything `parse_stl_text` refuses.
+            count, or holds a number that is not finite; or for anything
+            `parse_stl_text` refuses.
     """
     if is_binary_stl(bytes):
         return _parse_binary(bytes)
-    var text: String
-    try:
-        text = String(from_utf8=Span(bytes))
-    except reason:
-        raise Error("STL: the file starts as text and is not UTF-8")
-    return parse_stl_text(text)
+    return parse_stl_text(String(from_utf8_lossy=Span(bytes)))
 
 
 def read_stl(path: String) raises -> StlModel:

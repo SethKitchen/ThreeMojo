@@ -48,15 +48,12 @@ from extensions.carla.quantity_boundary import (
     _RawSI,
     _finite_si,
     _nonnegative_si,
-    _positive_si,
 )
-from units.si import Velocity64
+from units.si import Velocity64, Length64, Angle64
 
 comptime _UINT32_MAX = 4294967295
 comptime _INT32_MIN = -2147483648
 comptime _INT32_MAX = 2147483647
-
-from units.si import Length64, Angle64
 
 # --- ids ----------------------------------------------------------------------
 

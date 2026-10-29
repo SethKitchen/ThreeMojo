@@ -170,7 +170,7 @@ Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y`
 | Member | Default | Meaning |
 |---|---|---|
 | `target` | the origin | The point the camera orbits and looks at. |
-| `enabled` | `True` | False ignores all input. |
+| `enabled` | `True` | False ignores all input but a release. A release ends a drag, as three.js's `onPointerUp` does. |
 | `min_distance`, `max_distance` | 0, infinity | How near and how far the camera can be, as a `Length`. |
 | `min_polar_angle`, `max_polar_angle` | 0, a half turn | How far down from straight above, as an `Angle`. |
 | `min_azimuth_angle`, `max_azimuth_angle` | minus and plus infinity | The limits about y, as an `Angle`. |
@@ -187,7 +187,7 @@ Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y`
 | `min_zoom`, `max_zoom` | 0, infinity | How far an orthographic camera can zoom. |
 | `zoom_to_cursor` | `False` | Dolly or zoom toward the point under the pointer. |
 
-`rotate_left`, `rotate_up`, `dolly_in`, `dolly_out` and `pan` make the same changes from code. `update(camera, delta)` returns True when the camera moved. The `delta` is a `Duration`, for the automatic rotation.
+`rotate_left`, `rotate_up`, `dolly_in`, `dolly_out` and `pan` make the same changes from code. `update(camera, delta)` returns True when the camera or the target moved, or the distance changed. It compares with the last update that returned True, as three.js does before it sends `change`. So a damped change counts until it is done to within a millimeter. The `delta` is a `Duration`, for the automatic rotation.
 
 ### State
 
@@ -200,6 +200,8 @@ The camera's offset from the target is a radius and two angles, as three.js's `S
 The width is the height times the aspect, rounded in `Float64`. A rounded width that is not finite or does not fit in an integer is refused. The meters one pixel of pan moves are divided in `Float64`.
 
 The polar angle stays a millionth of a radian away from each pole. At a pole, the camera's right is undefined. A range about y with its low limit above its high limit passes through a half turn. An angle outside it goes to the nearer limit, as in three.js.
+
+Far from the origin, that millionth can round away in `Float32`. So a pan reads the camera's right and up from its view matrix, as three.js reads them from the camera's matrix. `look_at` nudges a camera that looks along its up, so a camera straight above its target pans too.
 
 With damping, `damping_factor` of each pending rotation and pan applies each frame. The rest waits. A dolly is not damped, as in three.js.
 
@@ -278,6 +280,8 @@ A turn is three.js's quaternion `(x, y, z, 1)`, normalized. Here `x`, `y` and `z
 
 A roll changes the camera's `up`. The target stays ahead of the camera at the same distance. `update` returns `True` when the camera moved or turned past three.js's threshold.
 
+The controls keep the camera's turn as a quaternion, as three.js keeps `object.quaternion`. The target only shows the turn. Far from the origin, a `Float32` target rounds a small turn away. A turn read back from the target would then stay where it was. The controls read the turn from the camera again only when the camera was moved from outside. That is when its position, its target or its `up` is not what the controls last placed.
+
 three.js sets a speed multiplier on Shift and never reads it. The port leaves it out.
 
 ## FirstPersonControls
@@ -296,6 +300,7 @@ three.js sets a speed multiplier on Shift and never reads it. The port leaves it
 
 | Member | Default | Meaning |
 |---|---|---|
+| `enabled` | `True` | False leaves the camera alone. `handle` still follows the keys, the buttons and the pointer, as three.js's listeners do. |
 | `movement_speed` | 1 m/s | A `Velocity`. |
 | `look_speed` | 0.005 deg/s | An `AngularVelocity` for each pixel the pointer is from the middle. |
 | `look_vertical` | `True` | False turns only left and right. |
@@ -331,6 +336,14 @@ A browser reports how far a locked pointer moved. A terminal reports where the p
 
 three.js leaves the keys to its example. Here `update(camera, delta)` walks by the keys held: `W`, `A`, `S`, `D` and the arrows. As in three.js, the camera's `up` must be +y.
 
+### The camera's turn
+
+The controls keep the camera's turn, as three.js keeps `camera.quaternion`. Straight down, the target lies straight below the camera, and `Float32` rounds the heading away. The kept turn still holds it. So a look back up faces the same way, and a walk goes the way the camera faced. The walk reads the camera's right from the kept turn, as three.js reads column 0 of `camera.matrix`.
+
+The controls read the turn from the camera again when the camera was moved from outside. That is when its position, its target or its `up` is not what the controls last placed.
+
+A camera that looks exactly straight down is drawn through `look_at`. That view has no right, so `look_at` nudges it, and the image turns about the view to the nudge. three.js's image keeps the heading's turn. This is a difference from three.js.
+
 ## TrackballControls
 
 `controls/trackball_controls.mojo`. The camera turns about `target` like a trackball. It has no poles, and it can roll over the top. `TrackballControls(camera, target)` records the camera for `reset`. `handle(event, width, height)` records where the pointer went. `update(camera)` applies it and places the camera.
@@ -340,7 +353,7 @@ three.js leaves the keys to its example. Here `update(camera, delta)` walks by t
 | Left drag | Rotate. The camera's `up` turns too. |
 | Middle drag, or the wheel | Zoom. |
 | Right drag | Pan. |
-| Hold `A`, `S` or `D` | Any button rotates, zooms or pans. |
+| Hold `A`, `S` or `D` | Any button rotates, zooms or pans. A move with no button held does nothing, as in three.js. |
 
 | Member | Default | Meaning |
 |---|---|---|
@@ -505,7 +518,7 @@ A scale whose start point has no length along an axis keeps that axis's scale. t
 
 ### The trackball
 
-The pointer is read on a sphere about the center. Farther out, it is read on a hyperboloid, which joins the sphere smoothly. The turn is about the axis at right angles to the start and the point now. Its angle is the larger of the angle between them and their distance over the radius. A turn let go less than 120 ms after the last move goes on at the mean speed of the last two moves. It then slows by `damping_factor`.
+The pointer is read on a sphere about the center. Farther out, it is read on a hyperboloid, which joins the sphere smoothly. The turn is about the axis at right angles to the start and the point now. Its angle is the larger of the angle between them and their distance over the radius. A turn let go less than 120 ms after the last move goes on at the mean speed of the last two frames of moves. It then slows by `damping_factor`.
 
 A focus moves the center to the point that a double click hits on a mesh. A line, points and a sprite have no face, so a double click passes over them, as in three.js. Two clicks count when each is shorter than 250 ms, and when they are less than 300 ms and 24 pixels apart.
 
@@ -530,7 +543,9 @@ A focus moves the center to the point that a double click hits on a mesh. A line
 
 The camera is read at each call and written back. Its `up` is always its own y axis. After a turn, three.js sets `up` to the first `up` turned by the camera. That is the same for a first `up` of +y. For another first `up`, three.js's `up` can point along the view.
 
-The controls read time from `update`. An event happens at the time of the last `update`. A pointer is read at the center of its pixel. On a side above 8388608 pixels that center is a `Float64`. A camera that rides a scene node is refused, as three.js requires.
+The controls read time from `update`. An event happens at the time of the last `update`. So the speed of a turn let go is measured over frames, not over moves. Two moves in one frame count as one move. three.js reads a new time for each move.
+
+A pointer is read at the center of its pixel. On a side above 8388608 pixels that center is a `Float64`. A camera that rides a scene node is refused, as three.js requires.
 
 `enable_gizmos` hides the gizmo, as three.js documents. three.js has the member but does not read it. three.js works out the grid's cells in floating point, and here they are 60.
 

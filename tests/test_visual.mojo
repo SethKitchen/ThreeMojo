@@ -7,12 +7,11 @@
 the civil-works textures."""
 
 from std.collections import Dict
-from std.math import inf, nan, pi, sqrt
+from std.math import inf, nan, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
-    assert_false,
     assert_raises,
     assert_true,
 )

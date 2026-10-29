@@ -11,7 +11,6 @@ run headless in Node with the same camera and movement. three.js's
 was brought up to date after the turn, as a render does.
 """
 
-from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.camera_frame import CameraFrame
 from controls.input import (
@@ -160,6 +159,34 @@ def test_the_polar_angle_is_kept_in_range() raises:
     controls.min_polar_angle = Angle(1.2, RADIAN)
     _drag(controls, camera, 0, -500)
     _near(CameraFrame.of(camera).forward(), 0.055889, 0.362358, -0.930362)
+
+
+def test_a_look_straight_down_keeps_the_heading() raises:
+    # three.js keeps the heading in `camera.quaternion`. Straight down, the
+    # camera's target lies straight below it, and `Float32` rounds the
+    # heading away at z = 10. The controls keep it themselves.
+    var camera = PerspectiveCamera(
+        Angle(75.0, DEGREE), 1.0, Length(0.1, METER), Length(100.0, METER)
+    )
+    camera.place(Vector3(0, 1.6, 10), Vector3(1, 1.6, 5))
+    var controls = PointerLockControls()
+    controls.lock()
+    # 2000 pixels down is 4 radians, kept at straight down.
+    _drag(controls, camera, 0, 2000)
+    _near(CameraFrame.of(camera).forward(), 0, -1, 0)
+    # three.js walks along its up crossed with its right: level, and the
+    # way the camera faced.
+    controls.move_forward(camera, Length(1.0, METER))
+    _near(camera.position, 0.196116, 1.6, 9.019419)
+    controls.move_right(camera, Length(1.0, METER))
+    _near(camera.position, 1.176697, 1.6, 9.215535)
+    # 500 pixels back up is one radian.
+    _drag(controls, camera, 0, -500)
+    _near(CameraFrame.of(camera).forward(), 0.165026, -0.540302, -0.825131)
+    # A camera moved from outside is read again: this one looks along +z.
+    camera.place(Vector3(6, 0, 0), Vector3(6, 0, 5))
+    controls.move_right(camera, Length(1.0, METER))
+    _near(camera.position, 5, 0, 0)
 
 
 def test_a_move_turns_only_when_locked_and_seen() raises:

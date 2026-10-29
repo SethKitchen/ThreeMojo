@@ -10,7 +10,7 @@ from core.buffer_geometry import POSITION, BufferGeometry
 from core.deform import morphed_positions
 from core.object3d import NodeId, Object3D, NO_PARENT
 from core.scene import Scene
-from extensions.humanoid.rig.game import add_game_humanoid, game_build_settings
+from extensions.humanoid.rig.game import add_game_humanoid
 from extensions.humanoid.rig.game_face import (
     GAME_FACE_KEY,
     bind_game_face,
@@ -24,12 +24,7 @@ from extensions.humanoid.skeleton.head.aligned_speech import (
     TimedViseme,
     AudioSpeechPlayback,
 )
-from extensions.humanoid.skeleton.head.expression import (
-    AA,
-    PP,
-    SILENT,
-    FaceWeights,
-)
+from extensions.humanoid.skeleton.head.expression import AA, PP, SILENT
 from extensions.humanoid.skeleton.simplify import (
     simplify,
     fit_triangle_budget_result,
@@ -38,7 +33,6 @@ from std.testing import TestSuite, assert_equal, assert_true, assert_raises
 from units.si import Length, FOOT, Duration, Angle, DEGREE
 from exporters.gltf import GLB, write_gltf
 from loaders.gltf import read_gltf
-from math.vector3 import Vector3
 from extensions.humanoid.skeleton.head.skin.scan import scan_model, place
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from tests.test_scratch import TestScratch, temporary_path

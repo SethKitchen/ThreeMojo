@@ -108,8 +108,10 @@ struct CubeCamera(ImplicitlyCopyable):
         """Ride `node`, standing wherever the scene puts it.
 
         Only the node's world position is read: the six faces look along
-        the world axes whichever way the node is turned, as three.js's do,
-        since a cube texture is sampled in world space.
+        the world axes whichever way the node is turned, since a cube
+        texture is sampled in world space. three.js's six face cameras are
+        children of its `CubeCamera` and turn with it, which turns the
+        cube map against the world it is sampled in.
 
         Args:
             node: The scene node to ride.

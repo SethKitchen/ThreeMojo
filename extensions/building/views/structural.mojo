@@ -42,7 +42,7 @@ from extensions.building.kinds import (
 )
 from extensions.building.material import BuildingMaterial
 from extensions.building.model import Building
-from extensions.structure.ids import LoadCaseId, MemberId, NodeId, ShellId
+from extensions.structure.ids import LoadCaseId, MemberId, NodeId
 from extensions.structure.kinds import UZ
 from extensions.structure.model import StructuralModel, require_gravity
 from extensions.topology.ids import FaceId

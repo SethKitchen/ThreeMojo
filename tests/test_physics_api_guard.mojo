@@ -20,11 +20,7 @@ from math.triangle import Triangle
 from math.vector3 import Vector3
 from std.math import inf, nan
 from std.testing import TestSuite, assert_equal, assert_raises
-from tests.test_physics_modes import (
-    _body,
-    _effective_state_equal,
-    _vector_equal,
-)
+from tests.test_physics_modes import _body, _effective_state_equal
 from units.si import Duration, Mass, SECOND
 
 

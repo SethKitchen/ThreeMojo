@@ -132,7 +132,7 @@ from materials.material import (
 )
 from math.quaternion import quaternion_from_float64
 from math.vector2 import Vector2, vector2_from_float64
-from math.vector3 import Vector3, vector3_from_float64
+from math.vector3 import vector3_from_float64
 from objects.line import SEGMENTS, Line
 from objects.mesh import Mesh
 from objects.points import Points

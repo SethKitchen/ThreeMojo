@@ -12,7 +12,6 @@ span 5 cm on each side of it, so a fitted room's plan is the room less
 5 cm on each side, and its storey ends at the face below its ceiling.
 """
 
-from extensions.building.ids import ConstructionId
 from extensions.building.kinds import LIVING, SpaceUse
 from extensions.building.kits import (
     KitKind,

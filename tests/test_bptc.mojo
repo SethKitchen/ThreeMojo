@@ -33,7 +33,7 @@ from render.compressed_texture import (
 from render.exr import half_to_float
 from render.srgb import LINEAR, SRGB
 from render.texture import FLOAT_TYPE
-from std.testing import TestSuite, assert_equal, assert_raises, assert_true
+from std.testing import TestSuite, assert_equal, assert_raises
 
 
 def hex_value(text: String, at: Int, digits: Int) raises -> Int:

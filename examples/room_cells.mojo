@@ -26,11 +26,10 @@ from core.scene import Scene
 from generators.utils import Vec3d
 from math.vector3 import Vector3
 from render.framebuffer import Color
-from units.si import DEGREE, METER, Angle, Length
+from units.si import DEGREE, METER, Angle, Length, Length64
 from extensions.topology.arrangement import Point2, Region
 from extensions.topology.ids import CellId, RegionId
 from extensions.topology.storeys import build_storeys
-from units.si import Length64
 
 comptime DEFAULT_OUTPUT = "out/building-topology.png"
 comptime WIDTH = 240

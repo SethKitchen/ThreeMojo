@@ -6,7 +6,7 @@
 """Raw ASTC compared with Arm astcenc 5.3.0, plus KTX2 container boundaries."""
 
 from render.exr import half_to_float
-from render.ktx2 import KTX2Container, VkFormat, read
+from render.ktx2 import read
 from render.srgb import LINEAR, SRGB
 from render.texture import FLOAT_TYPE, UNSIGNED_BYTE_TYPE
 from render.uastc_hdr import (

@@ -14,7 +14,7 @@ one, 10 for the roof, 100, 50, 26 and 10 for a tyre, a lip, a hub and a
 well, and 24 for a mirror.
 """
 
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from core.buffer_geometry import BufferGeometry, POSITION
 from generators.car import (
     BodyType,
     CAR_BODY,

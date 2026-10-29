@@ -19,7 +19,6 @@ from postprocessing.composer import (
     DEPTH_AWARE_BLUR,
     RADIAL_BLUR,
     EffectComposer,
-    Pass,
     bilateral_blur_pass,
     crt_pass,
     depth_aware_blend_pass,

@@ -34,15 +34,16 @@ from extensions.building.views.thermal import (
     thermal_view,
 )
 from extensions.energy.ids import ZoneId
-from extensions.energy.simulation import default_options as simulation_options
-from extensions.energy.simulation import simulate
+from extensions.energy.simulation import (
+    default_options as simulation_options,
+    simulate,
+)
 from extensions.energy.weather import WeatherLocation, design_day
 from extensions.structure.modal import solve_modes
 from extensions.structure.static import solve_static
 from generators.skyscraper import SkyscraperParameters
 from units.si import (
     Angle64,
-    DEGREE,
     DEGREE64,
     Duration64,
     HOUR,

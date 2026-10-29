@@ -47,7 +47,7 @@ from postprocessing.ssgi import (
     sss_light_direction,
     sss_pixel,
 )
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color
 from render.target import (
     FLOAT_TARGET,
     OUTPUT_COLOR,
@@ -61,7 +61,6 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
-    assert_false,
     assert_raises,
     assert_true,
 )

@@ -133,6 +133,10 @@ struct TrackballControls(Copyable, Movable):
     # False after a key goes down, until a key goes up: three.js stops
     # listening for `keydown` then.
     var _listening: Bool
+    # True from a press until its release. three.js listens for
+    # `pointermove` only then, so a move with no button held does nothing,
+    # even with a key held.
+    var _pressed: Bool
     # The view's size, from the last event.
     var _width: Int
     var _height: Int
@@ -218,6 +222,7 @@ struct TrackballControls(Copyable, Movable):
         self._state = NO_ACTION
         self._key_state = NO_ACTION
         self._listening = True
+        self._pressed = False
         self._width = 1
         self._height = 1
         self._move_prev_x = 0
@@ -291,11 +296,14 @@ struct TrackballControls(Copyable, Movable):
             self._key_up()
         elif event.kind == POINTER_DOWN:
             self._state = self.action_of(event.button)
+            self._pressed = True
             self._press(event)
         elif event.kind == POINTER_MOVE:
-            self._move(event)
+            if self._pressed:
+                self._move(event)
         elif event.kind == POINTER_UP:
             self._state = NO_ACTION
+            self._pressed = False
         elif event.kind == WHEEL:
             if not self.no_zoom:
                 self._zoom_start_y -= Float32(event.wheel) * WHEEL_ZOOM

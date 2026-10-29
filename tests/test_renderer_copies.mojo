@@ -11,7 +11,7 @@ from lights.light_probe_grid import LightProbeGrid
 from render.framebuffer import Color
 from render.rect import Rect
 from render.target import FLOAT_TARGET, RenderTarget
-from renderers.draw_filter import NO_OIT_DRAWS, ONE_OIT_DRAW
+from renderers.draw_filter import ONE_OIT_DRAW
 from renderers.renderer import Renderer
 from std.testing import TestSuite, assert_equal, assert_true
 from tests.test_light_probe_grid import a_lit_floor, top_camera, uniform_sh

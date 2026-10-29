@@ -110,7 +110,7 @@ def _jobs(doc: PyJson) raises -> String:
             raise Error("triangles is negative")
         var kind = kind_of(mesh)
         var use = List[Int]()
-        if _has(mesh, "/Vegetation/Grass/"):
+        if "/Vegetation/Grass/" in mesh:
             var step = PyJson.parse(
                 share_text(
                     '{"mode":"grass","start":'
@@ -202,7 +202,7 @@ def _job(
     var out = String('{"kind":')
     out += json_quote(kind)
     out += ',"lamp_glass":'
-    if _has(mesh, "_glass_") and _has(mesh, "/StreetLights/"):
+    if "_glass_" in mesh and "/StreetLights/" in mesh:
         out += "true"
     else:
         out += "false"
@@ -235,7 +235,7 @@ def _job(
                 action = "baked"
             else:
                 action = "skip"
-        elif _has(mesh, TREES):
+        elif TREES in mesh:
             if index == first:
                 action = "impostor"
             else:
@@ -333,23 +333,6 @@ def _flag(doc: PyJson, node: Int, message: String) raises -> Bool:
     if doc.kind(node) != PY_BOOL:
         raise Error(message)
     return doc.flag(node)
-
-
-def _has(text: String, needle: String) -> Bool:
-    """Return whether `needle` occurs in `text`."""
-    var raw = text.as_bytes()
-    var want = needle.as_bytes()
-    if len(want) == 0 or len(want) > len(raw):
-        return False
-    for start in range(len(raw) - len(want) + 1):
-        var same = True
-        for offset in range(len(want)):
-            if raw[start + offset] != want[offset]:
-                same = False
-                break
-        if same:
-            return True
-    return False
 
 
 def main() raises:

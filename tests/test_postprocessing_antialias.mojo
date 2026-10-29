@@ -39,7 +39,6 @@ from postprocessing.composer import (
     TAA_RENDER,
     TAA_SAMPLES,
     EffectComposer,
-    Pass,
     PassKind,
     check_pass,
     fxaa_pass,
@@ -54,7 +53,7 @@ from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
 from render.tonemap import REINHARD_TONE_MAPPING
 from renderers.renderer import Renderer
-from std.math import inf, nan, pi, sqrt
+from std.math import inf, nan, pi
 from std.testing import (
     TestSuite,
     assert_almost_equal,

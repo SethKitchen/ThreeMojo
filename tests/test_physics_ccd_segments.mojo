@@ -28,12 +28,7 @@ from extensions.physics.world import PhysicsWorld
 from math.quaternion import Quaternion
 from math.triangle import Triangle
 from math.vector3 import Vector3
-from std.testing import (
-    TestSuite,
-    assert_true,
-    assert_equal,
-    assert_almost_equal,
-)
+from std.testing import TestSuite, assert_equal, assert_almost_equal
 from units.si import Length, Mass, Duration
 
 

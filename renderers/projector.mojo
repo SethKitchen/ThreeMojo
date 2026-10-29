@@ -51,7 +51,7 @@ limits, and explicit zero and nonfinite rules.
 """
 from core.ordinal import ordinal_valid, require_index_in_count
 
-from std.math import isfinite
+from std.math import isfinite, nan, sqrt
 
 from math.scaled_products import (
     _Scaled,
@@ -72,12 +72,11 @@ from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
-from materials.material import DOUBLE_SIDE, Material, MaterialId
+from materials.material import DOUBLE_SIDE, MaterialId
 from math.matrix4 import Matrix4
 from math.matrix_inverse import adjugate3
 from math.vector3 import Vector3
 from objects.line import SEGMENTS
-from std.math import nan, sqrt
 
 comptime Vec = SIMD[DType.float64, 4]
 
@@ -676,7 +675,11 @@ def project_scene(
                     culled = scene.sprites[i].frustum_culled
                 if owner != node:
                     continue
-                if not assets.materials.get(material).visible:
+                # three.js tests `object.material.visible`, which a list of
+                # materials does not have: a mesh wearing one is projected
+                # whatever its first material says.
+                var listed = list == 0 and scene.meshes[i].is_multi_material()
+                if not listed and not assets.materials.get(material).visible:
                     continue
                 if culled:
                     var inside: Bool

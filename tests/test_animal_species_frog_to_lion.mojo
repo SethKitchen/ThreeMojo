@@ -11,14 +11,25 @@ that the coverage run measures them beside the others."""
 
 from extensions.animals.coat import KERATIN, CoatSample
 from extensions.animals.kit import eye_frame_of
-from extensions.animals.options import ADULT, FEMALE, JUVENILE, MALE
+from extensions.animals.options import (
+    ADULT,
+    FEMALE,
+    JUVENILE,
+    MALE,
+    CROWD,
+    Variant,
+    animal_options,
+)
 from extensions.animals.parts import LIMB
-from extensions.animals.registry import HORSE, species_palette
+from extensions.animals.registry import (
+    HORSE,
+    species_palette,
+    FROG,
+    species_variants,
+)
 from extensions.animals.species.horse import _paint_body
 from extensions.animals.species.lion import HEAD_O, _paint_face, lion_eye
 from extensions.animals.build import create_animal
-from extensions.animals.options import CROWD, Variant, animal_options
-from extensions.animals.registry import FROG, species_variants
 from extensions.animals.species.goat import _horn_t, _skin
 from extensions.sdf.field import SdfModel
 from extensions.sdf.ids import BoneId

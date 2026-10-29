@@ -72,7 +72,7 @@ from renderers.renderer import available_workers
 from std.math import sin
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, FOOT, Length, METER, RADIAN
+from units.si import Angle, FOOT, Length, RADIAN
 
 comptime DEFAULT_OUTPUT = "out/talking.png"
 comptime DEFAULT_QUALITY = "high"

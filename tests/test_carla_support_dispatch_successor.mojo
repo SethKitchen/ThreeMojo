@@ -123,7 +123,6 @@ from extensions.carla.road import Road
 # before lookup. Retain the historical binary-search kernel, not a public
 # checked wrapper whose raises annotation changes this reference signature.
 from extensions.carla.road_info import _info_index_si as info_index
-from std.math import isfinite
 from std.memory import bitcast
 
 

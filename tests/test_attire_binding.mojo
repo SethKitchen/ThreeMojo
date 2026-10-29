@@ -23,7 +23,7 @@ from extensions.attire.fabric import fabric_material
 from extensions.attire.kinds import WOOL
 from extensions.humanoid.genome import SHOULDER_BREADTH, Expression, Genome
 from extensions.humanoid.rig.game import add_game_humanoid
-from extensions.humanoid.rig.joints import HIPS, Joint
+from extensions.humanoid.rig.joints import HIPS
 from extensions.humanoid.sex import FEMALE
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
@@ -39,7 +39,7 @@ from std.testing import (
 )
 from tests._attire_fixtures import empty_mesh, line_rig, strip
 from tests._attire_people import coarse_person
-from units.si import FOOT, INCH, Length
+from units.si import INCH, Length
 
 
 def _lifted(var mesh: BufferGeometry, z: Float32) raises -> BufferGeometry:

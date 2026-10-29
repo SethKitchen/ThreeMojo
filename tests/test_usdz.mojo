@@ -44,13 +44,7 @@ from exporters.usdz import (
 from loaders.json import parse_json
 from loaders.object_loader import ObjectCameras
 from loaders.zip import unzip
-from materials.material import (
-    BASIC,
-    PHYSICAL,
-    STANDARD,
-    Material,
-    MaterialId,
-)
+from materials.material import BASIC, PHYSICAL, STANDARD, Material
 from math.matrix4 import translation
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
@@ -59,7 +53,6 @@ from render.framebuffer import Color
 from render.png import decode as decode_png
 from render.srgb import LINEAR, SRGB
 from render.texture import BILINEAR, CLAMP, MIRROR, REPEAT, Texture, Wrap
-from render.texture_store import TextureId
 from units.si import DEGREE, METER, Angle, Length
 
 
@@ -330,6 +323,21 @@ def test_a_texture_is_scaled_to_the_max_texture_size() raises:
         _ = usdz_files(world.scene, world.assets, world.cameras, options)
 
 
+def test_a_texture_file_is_named_by_its_flip() raises:
+    # three.js names the file `Texture_<id>_<flipY>`: `read_gltf` makes a
+    # texture with `flip_y` off.
+    var world = _World()
+    var files = usdz_files(world.scene, world.assets, world.cameras)
+    var last = files.names[len(files.names) - 1]
+    assert_true(last.endswith("_true.png"))
+    var id = Int(last.split("_")[1])
+    world.assets.textures.textures[id].flip_y = False
+    files = usdz_files(world.scene, world.assets, world.cameras)
+    var unflipped = "textures/Texture_" + String(id) + "_false.png"
+    assert_equal(files.names[len(files.names) - 1], unflipped)
+    assert_true(files.text("model.usda").find("@" + unflipped + "@") >= 0)
+
+
 def test_a_node_of_several_things() raises:
     var scene = Scene()
     var assets = Assets()
@@ -392,6 +400,30 @@ def test_a_node_of_several_things() raises:
         "anchoring"
         in usdz_files(scene, assets, cameras, options).text("model.usda")
     )
+
+
+def test_sibling_prims_keep_different_names() raises:
+    # Three meshes on one node share its id, which three.js adds to a
+    # name in use; a count keeps the third apart from the second, since
+    # USD refuses two siblings of one name.
+    var scene = Scene()
+    var assets = Assets()
+    var geometry = BufferGeometry()
+    geometry.set_attribute(
+        String(POSITION),
+        BufferAttribute([Float32(0), 0, 0, 1, 0, 0, 0, 1, 0], 3),
+    )
+    var shape = assets.geometries.add(geometry^)
+    var shiny = assets.materials.add(
+        Material(Color(hex=0xFFFFFF), kind=STANDARD)
+    )
+    var node = scene.add(Object3D())
+    for _ in range(3):
+        scene.add_mesh(Mesh(shape, shiny, node))
+    var text = usdz_files(scene, assets).text("model.usda")
+    assert_equal(text.count('def Xform "Object"'), 1)
+    assert_equal(text.count('def Xform "Object_0"'), 1)
+    assert_equal(text.count('def Xform "Object_0_1"'), 1)
 
 
 def test_empty() raises:

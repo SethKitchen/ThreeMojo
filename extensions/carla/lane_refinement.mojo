@@ -65,7 +65,7 @@ from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
 from extensions.carla.road_info import _info_index_si as info_index
 from math.vector3 import Vector3
-from std.math import inf, isfinite, sqrt
+from std.math import isfinite, sqrt
 from std.memory import bitcast
 from std.utils import Variant
 

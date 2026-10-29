@@ -95,6 +95,8 @@ from extensions.carla.recorder_packets import (
     RecordedWheel,
     RecorderInfo,
     SceneLightId,
+    PACKET_SCENE_LIGHT,
+    write_packet,
 )
 from extensions.carla.recorder_physics import RecordedPhysicsControl
 from extensions.carla.replayer import Replayer
@@ -111,10 +113,6 @@ from extensions.carla.replayer_helper import (
     process_state_traffic_light,
     set_camera_position,
     set_walker_speed_centimeters_per_second as set_walker_speed,
-)
-from extensions.carla.recorder_packets import (
-    PACKET_SCENE_LIGHT,
-    write_packet,
 )
 from extensions.carla.road_info import SignalId
 from extensions.carla.traffic_sign import TriggerBox

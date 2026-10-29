@@ -75,6 +75,14 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 | `doors.mojo` | `Doors`. |
 | `props.mojo` | `PropKind`, `Prop`, `StandingProps` and `stand_props`. |
 | `sheet.mojo` | `Sheet`. |
+| `dressing.mojo` | `Glow`, `warm`, `warmth`, `prism`, `rug`, `patchwork`, `table_setting`, `jars`, `books`, `lantern` and `herbs`. |
+| `gathering.mojo` | `GatherKind`, `Spot`, `GatherParameters`, `Satchel` and `Gathering`. See [Village gathering](Village-gathering). |
+| `hud.mojo` | `draw_hud`, `draw_text` and the prompts. See [Village gathering](Village-gathering#the-heads-up-display). |
+| `day.mojo` | `DayCycle` and `dim_water`. See [Village day and night](Village-day). |
+| `skills.mojo` | `SkillKind`, `Skills`, `skill_of`, `level_of`, `ore_strikes`, `forage_bonus` and `fish_haste`. See [Village skills](Village-skills). |
+| `critters.mojo` | `Haunt`, `default_haunts`, `wing_color` and `Critters`. See [Village critters](Village-critters). |
+| `talk.mojo` | `ErrandState`, `Errand`, `Speaker`, `default_speakers` and `Talk`. See [Village errands](Village-errands). |
+| `weather.mojo` | `WeatherKind`, `WeatherLook`, `weather_look`, `cloud_cover` and `Weather`. See [Village weather](Village-weather). |
 | `surfaces.mojo` | The textures, `HouseLooks` and `house_looks`. |
 | `scanned.mojo` | `CutBuilding`, `cut_building`, `grid_voxel`, `linear_splats`, `scan_lot` and `stand_scan`. |
 | `village.mojo` | `HousePlacement`, `VillageParameters` and `Village`. |
@@ -94,6 +102,19 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 | The scanned building, if there is one | On the right, about 110 meters away, turned 28 degrees. |
 
 The houses' textures are 128 texels on a side.
+
+### Oaks
+
+The village's open and round trees grow as oaks. `oak` gives a tree an oak's wood and keeps its crown and its leaves:
+
+| Part | The meadow's tree | An oak |
+|---|---|---|
+| Twig tips, and so by the pipe model the trunk and the limbs | As thick as the crown says | Twice as thick |
+| The thinnest wood drawn | As the crown says | Twice as thick, so the same branches are drawn |
+| Flare at the trunk's foot | As the crown says | Twice as much, at most 3 |
+| Bark | Pale with dark patches | Gray-brown, with dark furrows four times as close |
+
+The meadow's own scene keeps its pale trees. See [Vegetation](Vegetation).
 
 The water's ocean spectrum is 256 texels on a side, and its glare is 128 texels. Its caustic grid is 64, as in the still, and its caustic texture is 256 texels on a side. The water's clock starts at 5 seconds, as the Clearwater page's does.
 

@@ -67,7 +67,7 @@ from render.srgb import linear_to_srgb, srgb_to_linear
 from render.target import RenderTarget
 from render.texture import Texture
 from render.volume_texture import Data3DTexture, VolumeSampler
-from std.math import cos, floor, fma, isfinite, pi, sin, sqrt
+from std.math import cos, floor, fma, isfinite, pi, sin
 from units.si import Angle, Length, METER, RADIAN
 from core.ordinal import require_valid, require_non_negative, require_positive
 

@@ -13,7 +13,6 @@ from animation.keyframe_track import (
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
-from core.geometry_store import GeometryId
 from core.object3d import Object3D
 from core.scene import Scene
 from core.scene_optimizer import (
@@ -33,7 +32,6 @@ from geometries.convex_object_breaker import (
 )
 from geometries.utils import merge_geometries
 from loaders.gltf import _Loader
-from loaders.gltf_format import COMPONENT_UNSIGNED_INT
 from loaders.json import parse_json
 from materials.material import Material, MaterialId, PHONG, BACK_SIDE
 from math.bounds import Plane

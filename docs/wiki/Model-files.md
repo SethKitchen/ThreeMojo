@@ -23,6 +23,10 @@ XMP also reject malformed encoding. `UsdzFiles.text` refuses bytes that are
 not valid UTF-8. This does not change a format that explicitly uses lossy
 decoding elsewhere.
 
+The OBJ, MTL, PLY and STL readers decode text as three.js's `TextDecoder`
+decodes it. A byte that is not UTF-8 becomes U+FFFD. Thus a comment or a
+name in another encoding, such as Windows-1252, does not refuse the file.
+
 ## Read a file
 
 ```mojo
@@ -37,7 +41,7 @@ var shape = assets.geometries.add(model.objects[0].take_geometry())
 | `read_obj(path) -> ObjModel` | Read a file. |
 | `parse_obj(text) -> ObjModel` | Read the text of one. |
 
-OBJ polygon convexity is checked in translated, widened coordinates so small or large finite model scales do not change whether a face is accepted.
+OBJ and PLY check polygon convexity on the exact products of the stored `Float32` corners. Thus the scale of a finite model does not change whether a face is accepted. A corner that turns the wrong way by no more than `Float32` rounding of the file's numbers can explain is accepted. So a corner that is straight in the file, such as a T-junction far from the origin, does not refuse the face.
 
 ## ObjModel and ObjObject
 
@@ -66,7 +70,7 @@ OBJ polygon convexity is checked in translated, widened coordinates so small or 
 | `o name`, `g name` | A new object. One with no faces is dropped. |
 | `usemtl name` | A new run of faces under that material, in the same object. A run with no faces is dropped. The first `usemtl` also takes the faces before it, as in three.js. |
 | `mtllib name` | A material library. The rest of the line is one file name. |
-| `#` | A comment, to the end of the line, when the `#` starts the line or follows a space or a tab. A `#` inside a word is part of it, so `usemtl Material#1` names `Material#1`. |
+| `#` | A comment, to the end of the line, when the `#` starts the line or follows a space or a tab. A name is the rest of its line, as in three.js: `usemtl Mat #1` names `Mat #1`, and two spaces in a name stay two. |
 
 An index counts from one. A negative index counts back from the last entry so far. `s`, `l`, `p` and unknown lines are skipped.
 
@@ -165,7 +169,7 @@ A keyword can be in any case. Each key keeps the last value that a material give
 | `norm file` | The normal map, as data. |
 | `map_Ks file` | The specular map, as data. |
 | `disp file` | The displacement map, as data. |
-| `#` | A comment, to the end of the line, when the `#` starts the line or follows a space or a tab. A `#` inside a word is part of it, so `usemtl Material#1` names `Material#1`. |
+| `#` | A comment, to the end of the line, when the `#` starts the line or follows a space or a tab. A `newmtl` name is the rest of its line, as in three.js: `newmtl Mat #1` names `Mat #1`. |
 
 The defaults are those of three.js's `MeshPhongMaterial`: a white color, a specular of `0x111111`, a shininess of 30, no emissive color, and opaque. Lines before the first `newmtl` are skipped. A key with no value is skipped. `Ka`, `map_Ka` and unknown keys are skipped, as three.js skips them.
 
@@ -264,7 +268,7 @@ The loader raises for:
 - An ASCII file with no solid, or a solid without `endsolid`. A solid in a solid.
 - A keyword in the wrong place, such as `vertex` outside a facet.
 - A facet without `normal`, or with other than three vertices. `outer` without `loop`.
-- A word that STL does not have. Text that is not UTF-8.
+- A word that STL does not have.
 
 ## PLY
 
@@ -296,8 +300,12 @@ The loader reads the three formats: `ascii`, `binary_little_endian` and `binary_
 | `vertex`: `red`, `green`, `blue`, or `r`, `g`, `b`, or `diffuse_red` and so on | `color`, divided by 255 and decoded from sRGB. |
 | `vertex`: `alpha` or `a` | The fourth channel of `color`, divided by 255. three.js does not read it. |
 | `face`: `vertex_indices` or `vertex_index` | The index. |
+| `face`: `texcoord` | `uv` at each corner of the face. It holds two numbers for each corner. three.js reads it only for a triangle. |
+| `face`: `red`, `green`, `blue`, or their other names | `color` at each corner of the face, divided by 255 and decoded from sRGB. three.js gives a quad only three corners' colors, so its later colors move one triangle along. Here each triangle of a face takes the face's color. |
 
 A face of more than three corners becomes a fan of triangles from its first corner. Thus the face must be convex, as an OBJ face must be. three.js cuts a quad on the other diagonal, and it does not read a face of five or more corners.
+
+A face's own texture coordinates or colors need a vertex for each corner. So the geometry then has no index, as three.js's `toNonIndexed` makes it. They replace the vertices' `uv` and `color`, as in three.js.
 
 The loader reads past all other elements and properties. A file without a `face` element is a point cloud, and its geometry has no index.
 
@@ -329,12 +337,12 @@ The loader raises, and names the element and the row, for:
 - A header line that is not `format`, `element`, `property`, `comment` or `obj_info`.
 - No `vertex` element, or a vertex without `x`, `y` and `z`. A vertex property that is a list.
 - A custom attribute that names a property the `vertex` element does not have, or a list.
-- Only some channels of a normal, a texture coordinate or a color. An alpha without a color.
+- Only some channels of a normal, a texture coordinate or a color, of a vertex or a face. An alpha without a color.
 - A face without a list of integer vertex indices.
 - An ASCII row with too few or too many values. A value that is not a number of its type, or is out of its range.
 - A file that ends before its last row. A list with a negative length.
 - A value of a vertex that is not finite as a `Float32`.
-- A face with fewer than three corners, or one that names a vertex the file does not have. A face that is not convex, or has no area.
+- A face with fewer than three corners, or one that names a vertex the file does not have. A face that is not convex, or has no area. A face's `texcoord` without two numbers for each corner, when another face has some.
 
 ### Example
 
@@ -354,7 +362,7 @@ Pass `workers` to `read_gltf` or `load_gltf` to decode core material maps
 with the [bounded image queue](Image-decode-queue). One worker keeps lazy
 serial decoding. Extension-only maps remain lazy.
 
-A `.glb` is told by its magic. Anything else is read as JSON. A buffer or an image named by a relative URI is read from the file's own directory. A `data:` URI must be base64.
+A `.glb` is told by its magic. Anything else is read as JSON. The JSON of either can start with one UTF-8 byte order mark, which the loader drops, as three.js's `TextDecoder` drops it. A `.glb` chunk of a type that is neither JSON nor binary is skipped, as the glTF specification and three.js skip it. A buffer or an image named by a relative URI is read from the file's own directory. A `data:` URI must be base64.
 
 Accessor offsets and strides must stay inside their buffer views and meet alignment rules. Matrix columns include their required padding. The final column can omit trailing padding. Integer attributes, indices, and sparse indices keep their exact values; they do not pass through Float32 storage.
 
@@ -394,6 +402,7 @@ The model says what went where, by the file's own indices.
 The loader reads `extras` into user data, as three.js's `assignExtrasToUserData` does. User data is a `UserData` from `core/user_data.mojo`, the same map that [Scene JSON](Scene-JSON) reads.
 
 - A node's `extras` go into its `user_data`. A named node also gets `name` in its `user_data`, as three.js sets `userData.name`.
+- A node's `name` is made unique as three.js's `createUniqueName` makes it. White space becomes `_`, and `[`, `]`, `.`, `:` and `/` are dropped. A name used before then takes `_1`, `_2` and on. So two nodes named `Cube.001` are `Cube001` and `Cube001_1`. The names count in the order three.js's walk takes them. It reads every scene in turn: the scene's name first, then each node's, its camera's and light's, then its children's and its joints'. So a node named as its camera takes the name, and the next node of that name takes `_2`. `GltfModel.node_names` and `userData.name` keep the file's names.
 - In three.js, the node of a mesh with one primitive is the mesh itself. Thus such a node takes the mesh's `extras` first, then `name`, then its own `extras`. A node with a camera or a light does not, and a joint does not. three.js makes a group or a bone of it.
 - A primitive's `extras` go into its geometry's `user_data`, as three.js reads them into `geometry.userData`.
 - A `Mesh`, a `Material` and a `Scene` here hold no user data. `mesh_extras`, `material_extras` and `scene_extras` hold their `extras`.
@@ -407,7 +416,7 @@ To write the user data back, give it to `GltfExportOptions`. See [Exporters](Exp
 |---|---|
 | A primitive of triangles | A `BufferGeometry` with `position`, and `normal`, `uv`, `uv1` and `color` when present, indexed when it is. `TEXCOORD_1` becomes `uv1`. |
 | A primitive of points or lines | A `Points` or a `Line`. See [Points and lines](#points-and-lines). |
-| A material | A `STANDARD` material, or a `BASIC` or `PHYSICAL` one when an [extension](#gltf-extensions) asks. It reads base color and alpha, base color texture, metallic and roughness factors, the metallic-roughness texture as both `roughness_map` and `metalness_map`, normal texture and scale, the [occlusion texture](#occlusion), emissive factor and texture, `doubleSided`. `BLEND` sets `transparent`. `MASK` sets `alpha_test` to `alphaCutoff`. |
+| A material | A `STANDARD` material, or a `BASIC` or `PHYSICAL` one when an [extension](#gltf-extensions) asks. It reads base color and alpha, base color texture, metallic and roughness factors, the metallic-roughness texture as both `roughness_map` and `metalness_map`, normal texture and scale (see [normal maps](#normal-maps)), the [occlusion texture](#occlusion), emissive factor and texture, `doubleSided`. `BLEND` sets `transparent` and turns `depth_write` off, as three.js does. `MASK` sets `alpha_test` to `alphaCutoff`. |
 | A texture | A `Texture` at its sampler's wrap and filters. A base color or emissive map is read as sRGB. A metallic-roughness, normal or occlusion map is read as linear, with its alpha ignored. One glTF texture read both ways is two textures. |
 | A node | An `Object3D` at its translation, rotation and scale, or at its matrix decomposed, with the node's `name`. Each primitive of its mesh is a `Mesh`. |
 | A node with a `skin` | Each primitive of its mesh is a `SkinnedMesh`. See [Skins, morph targets and animations](#skins-morph-targets-and-animations). |
@@ -433,11 +442,19 @@ A primitive of points or lines draws as three.js's `GLTFLoader.loadMesh` draws i
 | `LINE_STRIP`, 3 | `Line` with `STRIP`. |
 | `TRIANGLES`, 4 | `Mesh`. This is the default. |
 
-A point or a line gets a `BASIC` material of its own, as three.js makes a `PointsMaterial` or a `LineBasicMaterial`. It takes the color, the opacity and the transparency of the file's material. It has `vertex_colors` on when the primitive has `COLOR_0`. Points also take the base color texture and the alpha test, at a size of one pixel that does not shrink with distance. A line takes no texture, because a line here has none.
+A point or a line gets a `BASIC` material of its own, as three.js makes a `PointsMaterial` or a `LineBasicMaterial`. It takes the color, the opacity, the transparency and the `depth_write` of the file's material. It has `vertex_colors` on when the primitive has `COLOR_0`. Points also take the base color texture and the alpha test, at a size of one pixel that does not shrink with distance. A line takes no texture, because a line here has none.
 
 An index here holds triangles. Thus the loader copies the vertices of an indexed point or line primitive out in index order, as three.js's `toNonIndexed` does. The morph targets are copied with them.
 
 A point or a line on a skinned node or an instanced node is refused. A skinned or instanced line is not ported.
+
+### Normal maps
+
+A `normalTexture` with a `scale` of `s` gives the `normal_scale` `(s, -s)`. A clear coat's normal texture gives its `clearcoat_normal_scale` the same way. three.js's `assignFinalMaterial` flips y like this when the geometry has no `tangent` attribute.
+
+The loader reads no `TANGENT`. Thus the renderer always builds the tangent frame from the texture coordinates. The bitangent of that frame points where `v` grows, and in glTF `v` grows down the image. The green of a glTF normal map points up the image, so y must be flipped.
+
+A material without a normal map keeps the scale `(1, 1)`, because a `Material` refuses a scale with no map. three.js flips that unused scale too. The writer writes `normalTexture.scale` from x only, as three.js's `GLTFExporter` does. Thus a file that is read, written and read again keeps its scale.
 
 ### Occlusion
 

@@ -12,7 +12,6 @@ its middle, and a direction leaning toward a face's right edge, as the
 camera that rendered it would see its right, reads that edge.
 """
 
-from math.vector2 import Vector2
 from std.math import sqrt
 from math.vector3 import Vector3
 from render.cube_texture import (
@@ -65,7 +64,6 @@ from std.testing import (
 )
 from tests._cube_faces import (
     BLUE,
-    CYAN,
     GREEN,
     MAGENTA,
     RED,

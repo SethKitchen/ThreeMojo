@@ -5,12 +5,7 @@
 
 """Unsigned GLSL parser, conversion, assignment and resource boundaries."""
 
-from materials.glsl import (
-    _Type,
-    compile_raw_shader_material,
-    compile_shader_material,
-)
-from materials.nodes import NodeProgram
+from materials.glsl import _Type, compile_shader_material
 from tests.test_glsl import (
     RAW_VERTEX,
     VERTEX,

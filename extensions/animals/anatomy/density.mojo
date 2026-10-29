@@ -34,7 +34,6 @@ weigh nothing: the sampler leaves them out.
 """
 
 from extensions.animals.anatomy.body import (
-    ANURAN,
     ARACHNID,
     BIRD,
     MAMMAL,

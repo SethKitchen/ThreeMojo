@@ -36,7 +36,6 @@ from exporters.object_json import (
 )
 from geometries.box import box
 from geometries.extrude import extrude
-from geometries.shape import shape_geometry
 from geometries.sphere import sphere
 from loaders.json import (
     ARRAY,
@@ -52,7 +51,7 @@ from loaders.object_loader import (
     read_material_json,
     read_object_json,
 )
-from materials.material import Material, MaterialId
+from materials.material import Material
 from math.curve3 import CurvePath3, line3
 from math.path import Path as Outline, Shape
 from math.vector2 import Vector2

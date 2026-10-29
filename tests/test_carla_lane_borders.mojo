@@ -13,7 +13,7 @@ border cubics by hand, not from the code under test.
 from extensions.carla.map import Map, Waypoint
 from extensions.carla.map_builder import MapBuilder
 from extensions.carla.opendrive import _Cubic, _lowest, load_opendrive
-from extensions.carla.road_info import LaneId, RoadId, SectionId
+from extensions.carla.road_info import LaneId, RoadId
 from math.vector3 import Vector3
 from std.math import inf, nan
 from std.testing import (

@@ -41,7 +41,7 @@ from core.scene import Scene
 from geometries.box import cube
 from materials.material import BACK_SIDE, DOUBLE_SIDE, Material
 from math.bounds import Plane
-from math.matrix4 import translation
+from math.matrix4 import scaling, translation
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from math.vector4 import Vector4
@@ -721,6 +721,31 @@ def test_an_empty_group_is_hit_nowhere() raises:
     assert_equal(len(down_z().intersect_scene(scene, assets)), 0)
 
 
+def test_an_instance_scaled_to_nothing_is_not_struck() raises:
+    # three.js hides an instance by scaling it to zero. Its inverse is the
+    # zero matrix, so it has no hit, and the other instances are picked.
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var paint = assets.materials.add(Material(Color(255, 255, 255)))
+    var group = InstancedMesh(box, paint, node, 2)
+    group.set_matrix_at(0, scaling(1, 1, 0))
+    scene.add_instanced_mesh(group^)
+    var batch = BatchedMesh(paint, node)
+    _ = batch.add_instance(box, scaling(0, 0, 0))
+    _ = batch.add_instance(box, translation(0, 0, -3))
+    scene.add_batched_mesh(batch^)
+    var hits = down_z().intersect_instanced_mesh(scene, assets, 0)
+    assert_equal(len(hits), 1)
+    assert_equal(hits[0].instance, 1)
+    hits = down_z().intersect_batched_mesh(scene, assets, 0)
+    assert_equal(len(hits), 1)
+    assert_equal(hits[0].instance, 1)
+    assert_equal(len(down_z().intersect_scene(scene, assets)), 2)
+
+
 def test_an_lod_is_hit_on_the_level_the_rays_origin_picks() raises:
     # A unit cube up close and a two-meter cube from three meters on. The
     # ray leaves five meters out, so the far level is the one struck.
@@ -747,11 +772,14 @@ def test_an_lod_is_hit_on_the_level_the_rays_origin_picks() raises:
     assert_equal(hits[0].instance, 1)
     assert_equal(hits[0].mesh.geometry, large)
     assert_almost_equal(hits[0].distance, Float32(4.0), atol=TOLERANCE)
-    # From two meters out, the near level, whatever the LOD remembers:
-    # three.js's `LOD.raycast` goes by `getObjectForDistance`. The scene
-    # hides it, so it is not picked until the scene shows it.
+    # From two meters out the far level still shows: three.js's
+    # `getObjectForDistance` takes the shown level's hysteresis off its
+    # distance, and two meters has not crossed 3 - 1.5.
     var near = Raycaster(Vector3(0.1, 0.2, 2), Vector3(0, 0, -1))
-    assert_equal(len(near.intersect_lod(scene, assets, 0)), 0)
+    hits = near.intersect_lod(scene, assets, 0)
+    assert_equal(len(hits), 1)
+    assert_equal(hits[0].instance, 1)
+    assert_almost_equal(hits[0].distance, Float32(1.0), atol=TOLERANCE)
     scene.update_lods(Vector3(0, 0, 1))
     hits = near.intersect_lod(scene, assets, 0)
     assert_equal(hits[0].instance, 0)

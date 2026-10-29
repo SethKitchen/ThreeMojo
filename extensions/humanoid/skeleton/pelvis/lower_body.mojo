@@ -20,7 +20,15 @@ is anterior.
 """
 
 from core.assets import Assets
-from extensions.humanoid.skeleton.look import resolved_paint as _resolved_paint
+from extensions.humanoid.skeleton.look import (
+    resolved_paint as _resolved_paint,
+    UNSET_PAINT,
+    artery_phong,
+    lymph_phong,
+    nerve_phong,
+    skin_phong,
+    vein_phong,
+)
 from core.buffer_geometry import BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -39,14 +47,6 @@ from extensions.humanoid.skeleton.surface_nets import mesh_surface
 from extensions.humanoid.skeleton.leg.assembly import add_leg, assemble_leg
 from extensions.humanoid.skeleton.leg.contents import LegContents
 from extensions.humanoid.skeleton.limb.skin import LimbSkinField
-from extensions.humanoid.skeleton.look import (
-    UNSET_PAINT,
-    artery_phong,
-    lymph_phong,
-    nerve_phong,
-    skin_phong,
-    vein_phong,
-)
 from extensions.humanoid.skeleton.pelvis.assembly import add_pelvis
 from extensions.humanoid.skeleton.pelvis.contents import (
     BOTH,

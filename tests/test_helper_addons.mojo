@@ -36,7 +36,7 @@ from lights.light import (
     spot_light,
 )
 from lights.shadow import VSM_SHADOW_MAP
-from materials.material import BASIC, DOUBLE_SIDE, Material
+from materials.material import DOUBLE_SIDE, Material
 from math.bounds import Box3
 from math.octree import Octree
 from math.spherical_harmonics3 import SphericalHarmonics3
@@ -47,8 +47,7 @@ from objects.mesh import Mesh
 from render.cube_texture import CubeTexture
 from render.cube_texture_store import CubeTextureId
 from render.framebuffer import Color, FloatColor, Framebuffer
-from render.rect import Rect
-from render.srgb import LINEAR, SRGB
+from render.srgb import SRGB
 from render.target import RenderTarget
 from render.texture import BILINEAR, CLAMP, NEAREST, Texture
 from render.texture_store import TextureId
@@ -59,7 +58,7 @@ from render.volume_texture import (
 )
 from render.volume_texture_store import Data3DTextureId, DataArrayTextureId
 from renderers.renderer import Renderer
-from std.math import inf, pi
+from std.math import inf
 from std.testing import (
     TestSuite,
     assert_almost_equal,

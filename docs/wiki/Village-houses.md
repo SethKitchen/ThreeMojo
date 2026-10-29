@@ -70,12 +70,14 @@ The front door is 1 meter wide and 2.1 meters tall. A barn is different: see [Th
 
 1. **Walls.** Each face of a wall is cut into cells at the edges of its openings. No cell is more than 1 meter across. The outside face wears the facade's texture. Its vertex colors darken it at its foot and under the eaves. The inside face wears lime plaster, and is darker in the corners of the room.
 2. **Windows.** A window has a painted frame, a mullion and a transom, panes of glass and a stone sill. From outside, a pane shows the sky at its top and darkens toward its foot. The panes show the day from inside. A pair of shutters stands open against the wall, in the trim's paint.
-3. **Doors.** A door has an oak frame and a stone threshold. Its leaf is boards on ledges, with iron straps. The leaf hangs from a hinge node of its own. A door 2 meters wide or more hangs two leaves, one at each jamb. A leaf 1.2 meters wide or more has diagonal braces.
+3. **Doors.** A door has an oak frame and a stone threshold. Its leaf is boards on ledges, with iron straps. The leaf hangs from a hinge node of its own. A door 2 meters wide or more hangs two leaves, one at each jamb. A leaf 1.2 meters wide or more has diagonal braces. An outside door of a dwelling has a hood of the roof's tiles over it, on two oak brackets, with boarded cheeks at its ends. The hood reaches 75 centimeters out, and stays under the eaves. An iron lantern hangs from an arm beside the door. A barn's doors have no hood.
 4. **Rooms.** Each room has a floor of planks and a plastered ceiling. The ground storey's ceiling has oak joists.
-5. **The roof.** Two slopes of tiles or slates, 16 centimeters thick, reach 35 centimeters past the long walls. Boards line the underside of the eaves. A fascia, barge boards and a ridge close the edges. A chimney stack rises over the chimney breast. Each gable is cut into cells no more than 1 meter across, as a wall is. A zinc gutter runs along each eave. A downpipe runs from each end of each gutter down the wall to the ground.
+5. **The roof.** Two slopes of tiles or slates, 16 centimeters thick, reach 35 centimeters past the long walls. Each slope is cut into cells no more than `ROOF_CELL`, 0.8 meters, across, and `roof_shade` weathers each corner. The roof is darker and damper at the eave and paler at the ridge. Each batch of tiles is a little lighter or darker. Moss greens it in patches, most near the eave. Boards line the underside of the eaves. A fascia, barge boards and a ridge close the edges. A chimney stack rises over the chimney breast. Each gable is cut into cells no more than 1 meter across, as a wall is. A zinc gutter runs along each eave. A downpipe runs from each end of each gutter down the wall to the ground.
 6. **The plinth and the steps.** A stone plinth reaches 40 centimeters below the lowest ground under the house. Stone steps lead up to the front door.
 
-The house hangs from one node at its lot's middle, at the floor's height. Each material is one mesh. So a house is eight meshes, and one more for each door leaf.
+The house hangs from one node at its lot's middle, at the floor's height. Its shell shows from outside: its outside walls, its windows and doors, its roof, its plinth and its steps. Its inside hangs from a node of its own, `StandingHouse.inside`. The inside holds the rooms, the stair, the hearth, the furniture, the dressing and the inside faces of the walls. A game can hide the inside from far away. The inside casts no shadow, because a still shadow map is drawn only once.
+
+Each material of the shell is one mesh, and so is each material of the inside. The windows' lamplight and the night in their panes hang from the node `lit`, hidden by day. The day in their panes hangs from the node `daylit`. See [Village day and night](Village-day). A dwelling with windows is eighteen meshes with its two door leaves.
 
 ## Surfaces
 
@@ -92,6 +94,7 @@ The house hangs from one node at its lot's middle, at the floor's height. Each m
 | `tile_texture` | 1 m | Five courses of clay tiles |
 | `slate_texture` | 0.9 m | Six courses of slates |
 | `plank_texture` | 1.2 m | Floor planks of 15 centimeters |
+| `cloth_texture` | 0.25 m | Undyed wool in a two-over-two twill, for rugs, quilts and cushions |
 
 A `Sheet` holds the triangles of one material, with a normal, a color and texture coordinates at each vertex. Its texture coordinates are meters divided by its texture's size. The game renderer reads these maps at each pixel. See [Game renderer](Game-renderer#maps-at-each-pixel).
 
@@ -159,10 +162,45 @@ A brick or stone house has a chimney breast against its west gable wall. `house_
 
 `house_interior` gives a `WallSpan` along the breast's face, as high as the storey. So a character walks round the breast and does not walk into the fire.
 
+## Furnishings and light
+
+A dwelling's rooms are dressed. A barn's are not. `extensions/village/dressing.mojo` draws the small things, and `stand_house` places them:
+
+| Where | What |
+|---|---|
+| Each wall of each room | Oak paneling to `DADO`, 95 centimeters up, with a rail along its top. |
+| Each room's floor | A woven rug of 16 by 10 cells: a border, a cream line, a field and a medallion. It keeps 75 centimeters off the walls and 30 centimeters off the stair's band. It is at most 2.6 by 1.8 meters. A room with less than a meter of rug each way has no rug. |
+| Over each rug | A lantern of iron and glowing glass, on a chain 75 centimeters long. |
+| The hall | A pole of drying herbs under the ceiling, by the front wall. |
+| A table | A plate and a mug at each place on both long sides, a bowl, and a candle. |
+| A desk | A stack of four books, and a candle. |
+| A low table | A jug and two cups. |
+| A counter | A board with a loaf on it, and a crock. |
+| A shelf | Three jars and pots of glazed earthenware on each board. |
+| A bed | A mattress, a quilt of 4 by 5 patches and a pillow, in wool. |
+| A settle | A wool cushion. |
+
+The rugs, the quilts and the cushions wear `cloth_texture`. Each dye is one of `dye`: madder, woad, weld, nettle and walnut. Each glaze is one of `glaze`. A flame is drawn on the unlit material, so it shows in a dark room.
+
+### Light inside a house
+
+The game renderer has no lamps. So `warm` bakes the light inside a dwelling into the vertex colors of its plaster, wood, stone, planks and cloth:
+
+1. **The fill.** Each color inside the walls is multiplied by `FILL`. This is the warm light that bounces round a room off its floor and its walls.
+2. **The flames.** Each `Glow` adds `FIRELIGHT` times `warmth`. `warmth` starts at the glow's strength. It is multiplied by the cosine between the surface's normal and the way to the flame. It is also multiplied by the square of the share of its reach that is left.
+
+| Glow | Strength | Reach |
+|---|---|---|
+| `HEARTH`, at the embers | 1.6 | 5 meters |
+| `LANTERN`, at its flame | 0.9 | 4 meters |
+| `CANDLE`, at its flame | 0.6 | 2.5 meters |
+
+A glow warms only its own storey. A vertex outside the middle of the walls is not warmed, so a flame does not light the outside face of a wall.
+
 ## Limits
 
 - Only the first storey above the ground has a stair. A character does not reach a higher storey.
 - A door leaf does not stop a character or a camera.
-- A house has no lamp. The inside is lit by the sky and by the sun through its windows. The fire glows, but it does not light the room.
+- A flame does not light the room as a lamp does. Its light is baked into the vertex colors when the house is built, so a character does not catch it, and it casts no shadow.
 - A house of timber framing or boards has no hearth.
 - A house is a box of storeys under one gable roof. It has no porch and no wing.

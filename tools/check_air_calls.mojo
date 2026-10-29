@@ -217,14 +217,6 @@ def _byte(text: String, index: Int) -> UInt8:
     return bytes[index]
 
 
-def _contains(words: List[String], word: String) -> Bool:
-    """Return whether a list holds a word."""
-    for item in words:
-        if item == word:
-            return True
-    return False
-
-
 def _closer(byte: UInt8) -> UInt8:
     """Return the closing delimiter of an opening one, or 0."""
     if byte == 0x28:
@@ -551,7 +543,7 @@ def _strip_words(text: String, words: List[String]) -> String:
         var end = index
         while end < len(bytes) and not _space(bytes[end]):
             end += 1
-        if end == len(bytes) or not _contains(words, _cut(text, index, end)):
+        if end == len(bytes) or _cut(text, index, end) not in words:
             break
         index = _skip_space(text, end)
     return _from(text, index)
@@ -622,7 +614,7 @@ def _strip_argument_attributes(text: String) -> String:
             end += 1
         var token = _cut(text, index, end)
         var after = -1
-        if end < len(bytes) and _contains(words, token):
+        if end < len(bytes) and token in words:
             after = end
         elif _at(text, index, "align"):
             var first = _skip_space(text, index + 5)
@@ -764,7 +756,7 @@ def argument_type(item: String) raises -> String:
         or first == 0x5B
         or first == 0x7B
         or first == 0x3C
-        or _contains(keywords, _cut(value, 0, _skip_word(value, 0)))
+        or _cut(value, 0, _skip_word(value, 0)) in keywords
     ):
         raise Error(
             "unsupported call argument value or attributes: " + head(item, 80)
@@ -1230,7 +1222,7 @@ def _call_word(line: String) -> Optional[Tuple[String, Int]]:
 
 def _starts_with_word(line: String, words: List[String]) -> Bool:
     """Return whether a line's leading `\\w` run is one of `words`."""
-    return _contains(words, _cut(line, 0, _skip_word(line, 0)))
+    return _cut(line, 0, _skip_word(line, 0)) in words
 
 
 def _outside_function(line: String) -> Bool:
@@ -2035,9 +2027,7 @@ struct _Tokenizer:
                 if (
                     end < size
                     and (bytes[end] == 0x22 or bytes[end] == 0x27)
-                    and _contains(
-                        ["r", "u", "b", "f", "br", "rb", "fr", "rf"], word
-                    )
+                    and word in ["r", "u", "b", "f", "br", "rb", "fr", "rf"]
                 ):
                     var finish = self.string_end(
                         text, start, end, formatted="f" in word

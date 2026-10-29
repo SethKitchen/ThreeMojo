@@ -18,7 +18,7 @@ from lights.light import (
     rect_area_light,
     spot_light,
 )
-from lights.lighting import Lighting, Reflected, physical_surface
+from lights.lighting import Lighting, physical_surface
 from lights.shadow import (
     DEFAULT_MAP_SIZE,
     DEFAULT_SHADOW_EXTENT,

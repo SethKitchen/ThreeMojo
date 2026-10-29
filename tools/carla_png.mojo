@@ -257,9 +257,9 @@ def _paeth(
         var left = Int(raw[index - bands])
         var above = Int(previous[index])
         var upper = Int(previous[index - bands])
-        var left_distance = _abs(above - upper)
-        var above_distance = _abs(left - upper)
-        var diagonal = _abs(left + above - 2 * upper)
+        var left_distance = abs(above - upper)
+        var above_distance = abs(left - upper)
+        var diagonal = abs(left + above - 2 * upper)
         var predicted = upper
         if left_distance <= above_distance and left_distance <= diagonal:
             predicted = left
@@ -267,13 +267,6 @@ def _paeth(
             predicted = above
         out.append(UInt8((Int(raw[index]) - predicted) & 255))
     return out^
-
-
-def _abs(value: Int) -> Int:
-    """Return the absolute value of a small integer."""
-    if value < 0:
-        return -value
-    return value
 
 
 def _extend(mut out: List[UInt8], row: List[UInt8]):

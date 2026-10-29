@@ -15,7 +15,7 @@ from a xorshift generator that is the same here and in node.
 
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
-from loaders.json import JsonDocument, parse_json
+from loaders.json import parse_json
 from render.checksum import crc32
 from render.deflate import _huffman_tree, deflate, hash_bits, zlib_deflate
 from render.inflate import inflate, zlib_inflate

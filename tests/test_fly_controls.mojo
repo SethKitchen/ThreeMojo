@@ -151,6 +151,37 @@ def test_the_pointer_yaws_and_pitches_as_three_js_does() raises:
     _near(camera.up, -0.004975, 0.995025, 0.099502)
 
 
+def test_a_small_turn_far_from_the_origin_still_turns() raises:
+    # three.js turns a quaternion of its own. Here the target is one meter
+    # ahead, ten kilometers out, where a `Float32` steps by about a
+    # millimeter. A turn of a sixtieth of 0.01 radians a frame moves the
+    # target less than half a step. The controls keep the turn themselves.
+    var start = Vector3(10000, 100, 10000)
+    var camera = _camera()
+    camera.place(start, start + Vector3(0, 0, -1))
+    var controls = FlyControls()
+    for _ in range(60):
+        controls.handle(InputEvent(KEY_DOWN, key=ARROW_LEFT), SIZE, SIZE)
+        _ = controls.update(camera, _seconds(1.0 / 60.0))
+    # The target shows the turn to within a step: 0.01 radians to the left.
+    var ahead = CameraFrame.of(camera).forward()
+    assert_almost_equal(ahead.x, Float32(-0.01), atol=1e-3)
+    # A pitch shows in the camera's up, which is not rounded.
+    var level = _camera()
+    level.place(start, start + Vector3(0, 0, -1))
+    controls = FlyControls()
+    for _ in range(60):
+        controls.handle(InputEvent(KEY_DOWN, key=ARROW_UP), SIZE, SIZE)
+        _ = controls.update(level, _seconds(1.0 / 60.0))
+    _near(level.up, 0, 0.99995, 0.0099998)
+    # A camera moved from outside is read again: this one looks along -x.
+    level.place(start, start + Vector3(-1, 0, 0))
+    level.up = Vector3(0, 1, 0)
+    controls.handle(InputEvent(KEY_DOWN, key=Key(119)), SIZE, SIZE)
+    _ = controls.update(level, _seconds(1))
+    _near(level.position - start, -1, 0, 0)
+
+
 def test_every_key_holds_its_move() raises:
     var controls = FlyControls()
     for code in [119, 115, 97, 100, 114, 102, 113, 101, 120]:

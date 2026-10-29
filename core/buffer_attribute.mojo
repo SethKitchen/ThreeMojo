@@ -604,11 +604,32 @@ struct BufferAttribute(Copyable, Movable):
         """
         if self.item_size < 3:
             raise Error("This attribute has fewer than three items per vertex")
-        return Vector3(
-            self.component(index, 0),
-            self.component(index, 1),
-            self.component(index, 2),
-        )
+        if Bool(self._buffer):
+            return Vector3(
+                self.component(index, 0),
+                self.component(index, 1),
+                self.component(index, 2),
+            )
+        var at = self._item_start(index)
+        return Vector3(self.data[at], self.data[at + 1], self.data[at + 2])
+
+    def _item_start(self, index: Int) raises -> Int:
+        """Return where an item starts in an attribute's own array.
+
+        The one check that `_at` makes three times for three numbers.
+
+        Args:
+            index: Which item.
+
+        Returns:
+            The position of the item's first number in `data`.
+
+        Raises:
+            Error: If the index falls outside the attribute.
+        """
+        if index < 0 or index >= self.count():
+            raise Error("Attribute vertex index out of range")
+        return index * self.item_size
 
     def packed(self) raises -> List[Float32]:
         """Return every number, item after item, with no stride between.
@@ -707,9 +728,15 @@ struct BufferAttribute(Copyable, Movable):
             Error: If the index is out of range, or the item holds fewer
                 than three numbers.
         """
-        self.set_component(index, 0, value.x)
-        self.set_component(index, 1, value.y)
-        self.set_component(index, 2, value.z)
+        if Bool(self._buffer) or self.is_integer() or self.item_size < 3:
+            self.set_component(index, 0, value.x)
+            self.set_component(index, 1, value.y)
+            self.set_component(index, 2, value.z)
+            return
+        var at = self._item_start(index)
+        self.data[at] = value.x
+        self.data[at + 1] = value.y
+        self.data[at + 2] = value.z
 
     def apply_matrix3(mut self, matrix: Matrix3) raises:
         """Transform every item by a 3x3 matrix, three.js's

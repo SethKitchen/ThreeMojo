@@ -13,7 +13,7 @@ the slope-deflection method, as in Hibbeler, "Structural Analysis",
 chapter 11.
 """
 
-from std.math import inf, nan, sqrt
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -22,12 +22,11 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from extensions.building.material import BuildingMaterial, steel
+from extensions.building.material import steel
 from extensions.building.model import Section, i_shape, rectangle
 from extensions.building.kinds import CIRCLE
 from extensions.numerics.sparse import SparseBuilder
 from extensions.structure.frame import (
-    LocalAxes,
     frame_local_mass,
     frame_local_stiffness,
     frame_transformation,
@@ -51,8 +50,6 @@ from generators.utils import Vec3d
 from units.si import (
     Acceleration64,
     Force64,
-    GIGAPASCAL,
-    KILOGRAM_PER_CUBIC_METER,
     KILONEWTON,
     KILONEWTON_METER,
     KILONEWTON_PER_METER,
@@ -65,7 +62,6 @@ from units.si import (
     NEWTON,
     NEWTON_METER,
     PASCAL,
-    Pressure64,
     RADIAN,
     SQUARE_METER,
 )

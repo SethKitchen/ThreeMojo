@@ -33,10 +33,26 @@ metallic-roughness texture is one image read twice, as glTF stores it and
 as the standard material reads it: roughness from green, metalness from
 blue.
 
+**Blending.** `alphaMode` `BLEND` sets `transparent` and turns
+`depth_write` off, as three.js's `loadMaterial` does, so a blended surface
+does not hide the blended surfaces behind it. A point or a line takes the
+`depth_write` of the material it is made from, as three.js's
+`Material.copy` copies `depthWrite`.
+
 **Occlusion.** A material's `occlusionTexture` becomes its `ao_map`, and
 its `strength` the `ao_map_intensity`, as three.js reads them. Its red
 channel dims the indirect light. An unlit material reads no occlusion,
 as in three.js.
+
+**A normal map's green is flipped.** A `normalTexture`'s `scale` becomes
+the `normal_scale` `(scale, -scale)`, and a clear coat's normal texture
+does the same, as three.js's `assignFinalMaterial` does for a geometry
+with no `tangent` attribute. This loader reads no `TANGENT`, so the
+renderer always builds the tangent frame from the texture coordinates.
+That frame's bitangent points where `v` grows, which is down a glTF
+image, and a glTF normal map's green points up the image. A material with
+no normal map keeps the scale `(1, 1)`, because a `Material` refuses a
+scale with no map to scale; three.js flips that unused scale too.
 
 **Each map is placed on its own.** A `texCoord` of one gives the texture
 the channel `UV_CHANNEL_1`, so the renderer samples it at `uv1`, and a
@@ -93,6 +109,16 @@ color factor outside zero to one, which a `Color` cannot hold; any map
 that reads a third set of texture coordinates or past it, since a
 geometry here has only `uv` and `uv1`; and a skinned node that is
 instanced, where three.js drops the skin.
+
+**Names.** A node's name is made unique as three.js's `createUniqueName`
+makes it. White space becomes `_`, and `[`, `]`, `.`, `:` and `/` are
+dropped, as `PropertyBinding.sanitizeNodeName` drops them. A name used
+before then takes `_1`, `_2` and on. The names count in the order
+three.js's walk takes them: every scene in turn, its own name first, then
+each node's, its camera's and its light's, then its children's and its
+skin's joints'. `GltfModel.node_names` and `userData.name` keep the
+file's names. So a scene that is not read must be whole, as three.js
+reads it too.
 
 **Extras.** An object's `extras` become user data, as three.js's
 `assignExtrasToUserData` makes them. A node's become its `user_data`,
@@ -168,18 +194,18 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from std.math import isfinite
+from std.math import isfinite, inf, pi, sqrt
 
-from core.ordinal import index_in_count
-
-from core.extent import require_closed_count
 from core.ordinal import (
+    index_in_count,
     ordinal_valid,
     require_index_in_count,
     require_valid,
     require_non_negative,
     require_positive,
 )
+
+from core.extent import require_closed_count
 
 from core.binary import copy_bytes, little_endian_u16, little_endian_u32
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
@@ -233,7 +259,9 @@ from loaders.draco import (
     _decode_draco_owned,
 )
 from loaders.bytes import decode_base64
+from loaders.js_text import without_bom
 from loaders.image_file import decode_image
+from loaders.fbx import sanitize_node_name
 from loaders.file_path import path_directory
 from loaders.draco_attributes import DracoDataType
 from loaders.meshopt import (
@@ -245,7 +273,6 @@ from loaders.meshopt import (
 from loaders.json import (
     ARRAY,
     NO_NODE,
-    NUMBER,
     OBJECT,
     STRING,
     JsonDocument,
@@ -280,7 +307,6 @@ from objects.skinned_mesh import (
 )
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
-from math.vector3 import Vector3
 from objects.mesh import Mesh
 from objects.line import LOOP, SEGMENTS, STRIP, Line, LineMode
 from objects.points import Points
@@ -342,9 +368,6 @@ from render.texture import (
     NEAREST,
     REPEAT,
     LINEAR_MIPMAP_LINEAR,
-    LINEAR_MIPMAP_NEAREST,
-    NEAREST_MIPMAP_LINEAR,
-    NEAREST_MIPMAP_NEAREST,
     UV_CHANNEL_1,
     Filter,
     Texture,
@@ -353,7 +376,6 @@ from render.texture import (
 )
 from loaders.image_batch import TextureDecodeSource, decode_textures
 from render.texture_store import TextureId
-from std.math import inf, pi, sqrt
 from std.memory import bitcast
 from std.pathlib import Path
 from units.si import Angle, Duration, Length, METER, NANOMETER, RADIAN, SECOND
@@ -793,7 +815,8 @@ def read_gltf(
 ) raises -> GltfModel:
     """Read a `.gltf` or a `.glb` file into a scene and its assets.
 
-    A `.glb` is told by its magic; anything else is read as JSON. A
+    A `.glb` is told by its magic; anything else is read as JSON, less
+    one leading byte order mark, as three.js's `TextDecoder` drops it. A
     buffer or an image named by a relative URI is read from the file's
     own directory.
 
@@ -816,7 +839,7 @@ def read_gltf(
         var parts = split_glb(bytes)
         return load_gltf(parts[0], parts[1], directory, scene, assets, workers)
     return load_gltf(
-        String(from_utf8=Span(bytes)),
+        without_bom(String(from_utf8=Span(bytes))),
         List[UInt8](),
         directory,
         scene,
@@ -828,6 +851,11 @@ def read_gltf(
 def split_glb(bytes: List[UInt8]) raises -> Tuple[String, List[UInt8]]:
     """Return a `.glb` container's JSON text and its binary chunk.
 
+    The JSON loses one leading byte order mark, as three.js's
+    `TextDecoder` drops it. A chunk of a type that is neither JSON nor
+    binary is skipped, as the specification says a reader must skip it
+    and three.js's `GLTFBinaryExtension` skips it.
+
     Args:
         bytes: The whole file.
 
@@ -836,8 +864,8 @@ def split_glb(bytes: List[UInt8]) raises -> Tuple[String, List[UInt8]]:
 
     Raises:
         Error: If the magic, the version or the length is wrong, the first
-            chunk is not JSON, a chunk runs past the file, or a chunk is
-            of a type that is neither JSON nor binary.
+            chunk is not JSON, a chunk runs past the file, or there are two
+            JSON chunks or two binary chunks.
     """
     if (
         len(bytes) < GLB_HEADER_BYTES
@@ -865,15 +893,15 @@ def split_glb(bytes: List[UInt8]) raises -> Tuple[String, List[UInt8]]:
             if seen_json:
                 raise Error("glTF: two JSON chunks")
             seen_json = True
-            json = String(from_utf8=Span(chunk))
+            json = without_bom(String(from_utf8=Span(chunk)))
         elif kind == GLB_BIN_CHUNK:
             if not seen_json:
                 raise Error("glTF: the first chunk must be JSON")
             if len(bin) > 0:
                 raise Error("glTF: two binary chunks")
             bin = chunk^
-        else:
-            raise Error("glTF: a chunk of an unknown type")
+        # A chunk of any other type is skipped: glTF 2.0 says a reader
+        # must ignore it, and three.js's `GLTFBinaryExtension` does.
         at = start + length
     if not seen_json:
         raise Error("glTF: the container holds no JSON chunk")
@@ -1147,6 +1175,63 @@ struct _DracoPrimitive(Movable):
         self.ids = ids^
 
 
+struct UniqueNames(Movable):
+    """The names used so far, three.js's `GLTFParser.nodeNamesUsed`.
+
+    `unique` is three.js's `createUniqueName`: a name sanitized as
+    `PropertyBinding.sanitizeNodeName` sanitizes it, then `_1`, `_2` and on
+    for a name used before. The glTF and the gaussian splat loaders share
+    it.
+    """
+
+    var names: List[String]
+    var uses: List[Int]
+
+    def __init__(out self):
+        """Start with none used."""
+        self.names = List[String]()
+        self.uses = List[Int]()
+
+    def unique(mut self, original: String) -> String:
+        """Return a name made unique, three.js's `createUniqueName`.
+
+        Args:
+            original: The name wanted.
+
+        Returns:
+            The sanitized name, or it with `_N` after it when it was used
+            before.
+        """
+        var name = sanitize_node_name(original)
+        for at in range(len(self.names)):
+            if self.names[at] == name:
+                self.uses[at] += 1
+                return name + "_" + String(self.uses[at])
+        self.names.append(name)
+        self.uses.append(0)
+        return name
+
+
+struct _Reached(Movable):
+    """What three.js's naming walk has reached so far: each node shallow,
+    as `_loadNodeShallow` reads it, and deep, as `loadNode` reads it with
+    its children; each camera and light; and each node's name."""
+
+    var shallow: List[Bool]
+    var deep: List[Bool]
+    var cameras: List[Int]
+    var lights: List[Int]
+    var names: List[String]
+
+    def __init__(out self, count: Int):
+        """Start with none of `count` nodes reached."""
+        self.shallow = List[Bool](length=count, fill=False)
+        self.deep = List[Bool](length=count, fill=False)
+        self.cameras = List[Int]()
+        self.lights = List[Int]()
+        self.names = List[String](length=count, fill=String())
+
+
 struct _Loader(Movable):
     """The document, its bytes, and the ids handed out so far."""
 
@@ -1193,6 +1278,9 @@ struct _Loader(Movable):
     # index and the scene node it became.
     var skinned_nodes: List[Int]
     var skinned_ids: List[NodeId]
+    # The node names given out, in the order the scene's walk reaches the
+    # nodes, as three.js's `loadNode` gives them out.
+    var node_names_used: UniqueNames
 
     def __init__(
         out self,
@@ -1221,6 +1309,7 @@ struct _Loader(Movable):
         self.node_skins = List[List[Int]]()
         self.skinned_nodes = List[Int]()
         self.skinned_ids = List[NodeId]()
+        self.node_names_used = UniqueNames()
 
     def list(self, key: String) raises -> Int:
         """Return the root's array under `key`, or `NO_NODE`."""
@@ -2045,6 +2134,8 @@ struct _Loader(Movable):
                 )
             elif mode != "" and mode != "OPAQUE" and mode != "BLEND":
                 raise Error("glTF: alphaMode must be OPAQUE, MASK or BLEND")
+            # three.js's `loadMaterial` sets `depthWrite = false` for BLEND.
+            built.depth_write = not transparent
             self.model.materials.append(assets.materials.add(built))
             self.model.material_extras.append(self.extras(material))
             self.tinted_materials.append(MaterialId(0))
@@ -2084,11 +2175,13 @@ struct _Loader(Movable):
                 pbr, "metallicRoughnessTexture", LINEAR, assets
             )
         var normal_map = self.map_of(material, "normalTexture", LINEAR, assets)
-        var normal_scale = Float32(1)
+        var normal_scale = Vector2(1, 1)
         if normal_map != NO_TEXTURE:
-            normal_scale = self.number(
+            # three.js's `assignFinalMaterial` flips y with no tangents.
+            var scale = self.number(
                 self.document.get(material, "normalTexture"), "scale", 1
             )
+            normal_scale = Vector2(scale, -scale)
         var occlusion = self.occlusion_of(material, assets)
         var emissive = Color(0, 0, 0)
         var glow = self.numbers(material, "emissiveFactor", 3)
@@ -2150,7 +2243,7 @@ struct _Loader(Movable):
         var clearcoat_map = NO_TEXTURE
         var clearcoat_roughness_map = NO_TEXTURE
         var clearcoat_normal_map = NO_TEXTURE
-        var clearcoat_normal_scale = Float32(1)
+        var clearcoat_normal_scale = Vector2(1, 1)
         var coat = self.extension(material, MATERIALS_CLEARCOAT)
         if coat != NO_NODE:
             kind = PHYSICAL
@@ -2159,7 +2252,8 @@ struct _Loader(Movable):
                 coat, "clearcoatRoughnessFactor", 0
             )
             # three.js's `GLTFMaterialsClearcoatExtension`: three maps of
-            # data, and the normal texture's `scale` on both axes.
+            # data, and the normal texture's `scale` on both axes, with y
+            # then flipped as the base normal map's is.
             if clearcoat > 0:
                 clearcoat_map = self.data_map_of(
                     coat, "clearcoatTexture", assets
@@ -2171,11 +2265,12 @@ struct _Loader(Movable):
                     coat, "clearcoatNormalTexture", assets
                 )
             if clearcoat_normal_map != NO_TEXTURE:
-                clearcoat_normal_scale = self.number(
+                var scale = self.number(
                     self.document.get(coat, "clearcoatNormalTexture"),
                     "scale",
                     1,
                 )
+                clearcoat_normal_scale = Vector2(scale, -scale)
         var transmission = Float32(0)
         var transmission_map = NO_TEXTURE
         var through = self.extension(material, MATERIALS_TRANSMISSION)
@@ -2294,7 +2389,7 @@ struct _Loader(Movable):
             roughness_map=roughness_map,
             metalness_map=roughness_map,
             normal_map=normal_map,
-            normal_scale=Vector2(normal_scale, normal_scale),
+            normal_scale=normal_scale,
             bump_map=bump_map,
             bump_scale=bump_scale,
             ao_map=occlusion[0],
@@ -2330,9 +2425,7 @@ struct _Loader(Movable):
             clearcoat_map=clearcoat_map,
             clearcoat_roughness_map=clearcoat_roughness_map,
             clearcoat_normal_map=clearcoat_normal_map,
-            clearcoat_normal_scale=Vector2(
-                clearcoat_normal_scale, clearcoat_normal_scale
-            ),
+            clearcoat_normal_scale=clearcoat_normal_scale,
         )
 
     def material_for(
@@ -2793,13 +2886,9 @@ struct _Loader(Movable):
         var chosen = self.integer(self.document.root(), "scene", 0)
         var top = self.entry("scenes", chosen)
         self.model.scene_extras = self.extras(top)
-        var roots = self.document.get(top, "nodes")
-        if roots == NO_NODE:
+        if not self.document.has(top, "nodes"):
             return
-        if self.document.kind(roots) != ARRAY:
-            raise Error("glTF: a scene's nodes must be an array")
-        for slot in range(self.document.length(roots)):
-            var root = self.document.integer(self.document.at(roots, slot))
+        for root in self.listed(top, "nodes", "a scene's nodes"):
             self.place(root, NO_PARENT, scene, assets)
         self.model.mesh_count = len(scene.meshes) - self.model.first_mesh
         self.model.instanced_mesh_count = (
@@ -2815,6 +2904,90 @@ struct _Loader(Movable):
         self.model.skinned_mesh_count = (
             len(scene.skinned_meshes) - self.model.first_skinned_mesh
         )
+        self.name_nodes(scene)
+
+    def listed(self, node: Int, key: String, what: String) raises -> List[Int]:
+        """Return an object's array of indices under `key`, or none when
+        the key is absent. `what` names the array in the error."""
+        var out = List[Int]()
+        var found = self.document.get(node, key)
+        if found == NO_NODE:
+            return out^
+        if self.document.kind(found) != ARRAY:
+            raise Error("glTF: " + what + " must be an array")
+        for slot in range(self.document.length(found)):
+            out.append(self.document.integer(self.document.at(found, slot)))
+        return out^
+
+    def name_nodes(mut self, mut scene: Scene) raises:
+        """Name every node placed as three.js's `GLTFLoader` names it.
+
+        three.js reads every scene, in order, in one walk that names as it
+        goes. A scene takes its name first. A node takes its name, then its
+        camera's and its light's the first time the walk reaches them, then
+        its children theirs, then its skin's joints theirs. Each name is
+        made unique by `createUniqueName`, so a node named as a scene, a
+        camera or a light that came before takes `_1` and on.
+        """
+        var reached = _Reached(len(self.model.nodes))
+        # `read_nodes` names only a document with a scene or more.
+        for index in range(self.count("scenes")):  # pragma: no branch
+            var entry = self.entry("scenes", index)
+            var name = self.text(entry, "name")
+            if name != "":
+                _ = self.node_names_used.unique(name)
+            for root in self.listed(entry, "nodes", "a scene's nodes"):
+                self.name_deep(root, reached)
+        for index in range(len(self.model.nodes)):
+            var id = self.model.nodes[index]
+            if id != NO_PARENT and reached.names[index] != "":
+                var placed = scene.get(id)
+                placed.name = reached.names[index]
+                scene.set(id, placed^)
+
+    def name_deep(mut self, index: Int, mut reached: _Reached) raises:
+        """Name a node and what it holds, three.js's `loadNode`: the node,
+        then its children, then its skin's joints. A node is read once."""
+        _ = self.entry("nodes", index)
+        if reached.deep[index]:
+            return
+        reached.deep[index] = True
+        self.name_shallow(index, reached)
+        var node = self.entry("nodes", index)
+        for child in self.listed(node, "children", "a node's children"):
+            self.name_deep(child, reached)
+        var skin = self.integer(node, "skin", -1)
+        if skin >= 0:
+            var joints = self.entry("skins", skin)
+            for joint in self.listed(joints, "joints", "a skin's joints"):
+                self.name_shallow(joint, reached)
+
+    def name_shallow(mut self, index: Int, mut reached: _Reached) raises:
+        """Name a node, then its camera and its light the first time they
+        are reached, three.js's `_loadNodeShallow`. A node is read once."""
+        var node = self.entry("nodes", index)
+        if reached.shallow[index]:
+            return
+        reached.shallow[index] = True
+        var name = self.model.node_names[index]
+        if name != "":
+            reached.names[index] = self.node_names_used.unique(name)
+        var camera = self.integer(node, "camera", -1)
+        if camera >= 0:
+            var lens = self.text(self.entry("cameras", camera), "name")
+            if camera not in reached.cameras:
+                reached.cameras.append(camera)
+                if lens != "":
+                    _ = self.node_names_used.unique(lens)
+        var lamp = self.extension(node, LIGHTS_PUNCTUAL)
+        if lamp != NO_NODE:
+            var light = self.required_integer(lamp, "light")
+            var label = self.text(self.light_entry(light), "name")
+            if light not in reached.lights:
+                reached.lights.append(light)
+                _ = self.node_names_used.unique(
+                    label if label != "" else "light_" + String(light)
+                )
 
     def place(
         mut self,
@@ -2836,7 +3009,8 @@ struct _Loader(Movable):
             raise Error("glTF: a node is reached twice")
         var node = self.entry("nodes", index)
         var placed = Object3D()
-        placed.name = self.model.node_names[index]
+        # `name_nodes` names it once the scene is read. The file's name
+        # stays in `userData.name`.
         placed.user_data = self.node_user_data(node, index)
         var matrix = self.numbers(node, "matrix", 16)
         if len(matrix) == 16:
@@ -2885,15 +3059,8 @@ struct _Loader(Movable):
         var lamp = self.extension(node, LIGHTS_PUNCTUAL)
         if lamp != NO_NODE:
             self.add_light(self.required_integer(lamp, "light"), id, scene)
-        var children = self.document.get(node, "children")
-        if children != NO_NODE:
-            if self.document.kind(children) != ARRAY:
-                raise Error("glTF: a node's children must be an array")
-            for slot in range(self.document.length(children)):
-                var child = self.document.integer(
-                    self.document.at(children, slot)
-                )
-                self.place(child, id, scene, assets)
+        for child in self.listed(node, "children", "a node's children"):
+            self.place(child, id, scene, assets)
 
     def node_user_data(self, node: Int, index: Int) raises -> UserData:
         """Return a node's user data as three.js's `GLTFLoader.loadNode`
@@ -3006,31 +3173,33 @@ struct _Loader(Movable):
         """Return the material a primitive of points or lines draws with,
         as three.js's `GLTFLoader` makes a `PointsMaterial` or a
         `LineBasicMaterial` from the file's: its color, opacity and
-        transparency, vertex colors when the primitive carries them, and
-        for points its map and alpha test, at a size of one pixel that
-        does not shrink with distance. A line here carries no map."""
+        transparency and its depth writes, vertex colors when the
+        primitive carries them, and for points its map and alpha test, at
+        a size of one pixel that does not shrink with distance. A line
+        here carries no map."""
         var base = assets.materials.get(self.material_for(index, False, assets))
+        var built: Material
         if mode == MODE_POINTS:
-            return assets.materials.add(
-                points_material(
-                    base.color,
-                    size_attenuation=False,
-                    map=base.map,
-                    alpha_test=base.alpha_test,
-                    opacity=base.opacity,
-                    transparent=base.transparent,
-                    vertex_colors=tinted,
-                )
+            built = points_material(
+                base.color,
+                size_attenuation=False,
+                map=base.map,
+                alpha_test=base.alpha_test,
+                opacity=base.opacity,
+                transparent=base.transparent,
+                vertex_colors=tinted,
             )
-        return assets.materials.add(
-            Material(
+        else:
+            built = Material(
                 base.color,
                 kind=BASIC,
                 opacity=base.opacity,
                 transparent=base.transparent,
                 vertex_colors=tinted,
             )
-        )
+        # three.js's `Material.copy` copies `depthWrite` too.
+        built.depth_write = base.depth_write
+        return assets.materials.add(built)
 
     def _drawn_primitive(
         self, primitives: Int, mesh: Int, slot: Int, refusal: String
@@ -3166,6 +3335,20 @@ struct _Loader(Movable):
 
     # --- lights -------------------------------------------------------------
 
+    def light_entry(self, index: Int) raises -> Int:
+        """Return one `KHR_lights_punctual` light's object."""
+        var root = present(
+            self.extension(self.document.root(), LIGHTS_PUNCTUAL),
+            "glTF: a node names a light and the file has none",
+        )
+        var lights = self.array_of(root, "lights")
+        require_index_in_count(
+            index,
+            self.document.length(lights),
+            "glTF: a node names a light that is not there",
+        )
+        return self.object_at(lights, index)
+
     def add_light(mut self, index: Int, node: NodeId, mut scene: Scene) raises:
         """Add a `KHR_lights_punctual` light riding a scene node, as
         three.js's `GLTFLightsExtension` builds it.
@@ -3178,17 +3361,7 @@ struct _Loader(Movable):
         shines down the node's -z axis: toward a target node one meter down
         it, as three.js adds its `target` to the light.
         """
-        var root = present(
-            self.extension(self.document.root(), LIGHTS_PUNCTUAL),
-            "glTF: a node names a light and the file has none",
-        )
-        var lights = self.array_of(root, "lights")
-        require_index_in_count(
-            index,
-            self.document.length(lights),
-            "glTF: a node names a light that is not there",
-        )
-        var entry = self.object_at(lights, index)
+        var entry = self.light_entry(index)
         var color = Color(255, 255, 255)
         var hue = self.numbers(entry, "color", 3)
         if len(hue) == 3:

@@ -29,11 +29,11 @@ from animation.animation_mixer import AnimationAction, AnimationMixer
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
-from extensions.attire.cloth import Cloak, CloakCut, add_cloak
+from extensions.attire.cloth import CloakCut, add_cloak
 from extensions.attire.fabric import fabric_material
-from extensions.attire.kinds import LEATHER, PLATE, WOOL
+from extensions.attire.kinds import LEATHER, PLATE
 from extensions.attire.outfit import dress
 from extensions.attire.preset import outfit_named
 from extensions.attire.props import heater_shield, sword_in_scabbard
@@ -73,7 +73,7 @@ from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
 from renderers.renderer import Renderer, available_workers
-from std.math import cos, pi, sin
+from std.math import cos, sin
 from std.pathlib import Path
 from std.time import perf_counter_ns
 from units.si import (

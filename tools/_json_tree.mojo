@@ -9,7 +9,8 @@ A ported tool that reads JSON, changes it and writes it again needs three
 things that `loaders.json` does not give:
 
 - An int and a float stay apart. `json.loads` reads `0` as an int and `0.0`
-  as a float, and `json.dumps` writes each one back the same way.
+  as a float, and `json.dumps` writes each one back the same way. An int
+  outside 64 bits keeps all of its digits, so a 64-bit hash stays exact.
 - A float is the nearest double to its text, and it is written with the
   digits of Python's `repr`.
 - An object keeps its member order. Setting a member it has keeps that
@@ -42,6 +43,7 @@ from tools._python_float import (
     parse_float,
     python_repr,
 )
+from tools._python_json import sorted_order
 
 comptime NOTHING = -1
 """The index of a missing value. It acts as Python's `None`."""
@@ -84,11 +86,12 @@ struct JsonValue(Copyable, Movable):
     var integral: Bool
     """True for a number that is a Python int."""
     var number: Float64
-    """A float's value."""
+    """A float's value, or the double nearest to an int."""
     var integer: Int
-    """An int's value, or a Boolean as 0 or 1."""
+    """An int's value, or a Boolean as 0 or 1. It is 0 for an int outside
+    64 bits."""
     var text: String
-    """A string's text."""
+    """A string's text, or the digits of an int outside 64 bits."""
     var items: List[Int]
     """An array's items, or an object's member values."""
     var names: List[String]
@@ -120,6 +123,60 @@ def type_name(tree: JsonTree, node: Int) raises -> String:
     if kind == ARRAY:
         return "list"
     return "dict"
+
+
+def canonical_integer(text: String) raises -> String:
+    """Return the text Python writes for `int(text)`.
+
+    Args:
+        text: Decimal digits with an optional sign and surrounding spaces.
+
+    Returns:
+        The digits without leading zeros, with `-` for a negative value.
+
+    Raises:
+        Error: `invalid literal for int()` when the text is not an integer.
+    """
+    var stripped = String(text.strip())
+    var bytes = stripped.as_bytes()
+    var start = 0
+    var negative = False
+    var first = Int(bytes[0]) if len(bytes) > 0 else 0
+    if first == ord("-") or first == ord("+"):
+        negative = first == ord("-")
+        start = 1
+    var valid = len(bytes) > start
+    var digits = String()
+    for i in range(start, len(bytes)):
+        var byte = Int(bytes[i])
+        if byte == ord("_"):
+            # One underscore may sit between two digits.
+            if (
+                i == start
+                or i + 1 == len(bytes)
+                or Int(bytes[i - 1]) == ord("_")
+            ):
+                valid = False
+        elif byte < ord("0") or byte > ord("9"):
+            valid = False
+        elif digits.byte_length() > 0 or byte != ord("0"):
+            digits += chr(Int(byte))
+    if not valid:
+        raise Error(
+            "invalid literal for int() with base 10: " + _python_quote(text)
+        )
+    if digits.byte_length() == 0:
+        return "0"
+    if negative:
+        return "-" + digits
+    return digits^
+
+
+def _python_quote(text: String) -> String:
+    """Return `repr(text)` for printable text, in Python's quotes."""
+    if "'" in text and not ('"' in text):
+        return '"' + text + '"'
+    return "'" + text.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
 struct JsonTree(Movable):
@@ -182,6 +239,33 @@ struct JsonTree(Movable):
         self.values[node].number = Float64(value)
         return node
 
+    def integer_text(mut self, text: String) raises -> Int:
+        """Add an int from its decimal text, as `int(text)` reads it.
+
+        An int outside 64 bits keeps all of its digits.
+
+        Args:
+            text: Decimal digits with an optional sign and surrounding
+                spaces.
+
+        Returns:
+            Its index.
+
+        Raises:
+            Error: `invalid literal for int()` when the text is not an
+                integer.
+        """
+        var digits = canonical_integer(text)
+        try:
+            return self.integer(Int(digits))
+        except:
+            pass
+        var node = self._add(NUMBER)
+        self.values[node].integral = True
+        self.values[node].number = parse_float(digits)
+        self.values[node].text = digits^
+        return node
+
     def number(mut self, value: Float64) -> Int:
         """Add a float.
 
@@ -223,6 +307,21 @@ struct JsonTree(Movable):
             Its index.
         """
         return self._add(OBJECT)
+
+    def integers(mut self, values: List[Int]) -> Int:
+        """Add an array of ints.
+
+        Args:
+            values: The ints.
+
+        Returns:
+            The array's index.
+        """
+        var node = self.array()
+        for value in values:
+            var item = self.integer(value)
+            self.values[node].items.append(item)
+        return node
 
     def numbers(mut self, values: List[Float64]) -> Int:
         """Add an array of floats.
@@ -343,7 +442,7 @@ struct JsonTree(Movable):
             node: A value or `NOTHING`.
 
         Returns:
-            The value.
+            The value. An int gives the nearest double.
 
         Raises:
             Error: If the value is not a number or a Boolean.
@@ -357,8 +456,6 @@ struct JsonTree(Movable):
                 + type_name(self, node)
                 + "'"
             )
-        if self.values[node].integral:
-            return Float64(self.values[node].integer)
         return self.values[node].number
 
     def int_value(self, node: Int) raises -> Int:
@@ -371,10 +468,15 @@ struct JsonTree(Movable):
             The value.
 
         Raises:
-            Error: If the value is not an int or a Boolean.
+            Error: If the value is not an int or a Boolean, or the int is
+                outside 64 bits.
         """
         var kind = self.kind(node)
         if kind == BOOLEAN or (kind == NUMBER and self.values[node].integral):
+            if self.values[node].text.byte_length() > 0:
+                raise Error(
+                    "integer too large for this tool: " + self.values[node].text
+                )
             return self.values[node].integer
         raise Error("expected an int, not '" + type_name(self, node) + "'")
 
@@ -778,26 +880,6 @@ struct JsonTree(Movable):
             raise Error("pop from empty list")
         return self.values[node].items.pop()
 
-    def remove_at(mut self, node: Int, index: Int) raises -> Int:
-        """Remove an array item, as `list.pop(index)` does.
-
-        Args:
-            node: An array.
-            index: The position.
-
-        Returns:
-            The removed item.
-
-        Raises:
-            Error: If the value is not an array or the position is out of
-                range.
-        """
-        if self.kind(node) != ARRAY:
-            raise Error("'" + type_name(self, node) + "' object is not a list")
-        if index < 0 or index >= len(self.values[node].items):
-            raise Error("pop index out of range")
-        return self.values[node].items.pop(index)
-
     def insert(mut self, node: Int, index: Int, child: Int) raises:
         """Insert an array item, as `list.insert(index, child)` does.
 
@@ -958,14 +1040,23 @@ struct JsonTree(Movable):
         self.reprs[bits] = text
         return text^
 
-    def dumps(mut self, node: Int, indent: Bool = True) raises -> String:
+    def dumps(
+        mut self,
+        node: Int,
+        indent: Bool = True,
+        sort_keys: Bool = False,
+        spaces: Bool = True,
+    ) raises -> String:
         """Write a value as `json.dumps(value, indent=2, allow_nan=False)`
         does, or without `indent` in its compact default form.
 
         Args:
             node: A value or `NOTHING`.
-            indent: True for `indent=2`; False for one line with `, ` and
-                `: ` separators.
+            indent: True for `indent=2`; False for one line.
+            sort_keys: True for `sort_keys=True`: members in the code point
+                order of their names.
+            spaces: True for the default separators: `, ` on one line, `,`
+                with `indent`, and `: `. False for `separators=(",", ":")`.
 
         Returns:
             The text, without a final newline.
@@ -975,11 +1066,17 @@ struct JsonTree(Movable):
                 refuses it.
         """
         var out = List[UInt8]()
-        self._write(out, node, 0, indent)
+        self._write(out, node, 0, indent, sort_keys, spaces)
         return ascii_text(out)
 
     def _write(
-        mut self, mut out: List[UInt8], node: Int, depth: Int, indent: Bool
+        mut self,
+        mut out: List[UInt8],
+        node: Int,
+        depth: Int,
+        indent: Bool,
+        sort_keys: Bool,
+        spaces: Bool,
     ) raises:
         """Append one value's text."""
         var kind = self.kind(node)
@@ -990,7 +1087,9 @@ struct JsonTree(Movable):
                 out, "true" if self.values[node].integer != 0 else "false"
             )
         elif kind == NUMBER:
-            if self.values[node].integral:
+            if self.values[node].text.byte_length() > 0:
+                append_ascii(out, self.values[node].text)
+            elif self.values[node].integral:
                 append_ascii(out, String(self.values[node].integer))
             else:
                 var number = self.values[node].number
@@ -1010,18 +1109,23 @@ struct JsonTree(Movable):
                 append_ascii(out, opener + closer)
                 return
             append_ascii(out, opener)
-            for index in range(count):
-                if index > 0:
-                    append_ascii(out, "," if indent else ", ")
+            var order = List[Int]()
+            if kind == OBJECT and sort_keys:
+                order = sorted_order(self.values[node].names)
+            for position in range(count):
+                var index = order[position] if len(order) > 0 else position
+                if position > 0:
+                    append_ascii(out, ", " if spaces and not indent else ",")
                 if indent:
                     append_ascii(out, "\n" + "  " * (depth + 1))
                 if kind == OBJECT:
                     append_ascii(
                         out,
-                        quote_ascii(self.values[node].names[index]) + ": ",
+                        quote_ascii(self.values[node].names[index])
+                        + (": " if spaces else ":"),
                     )
                 var child = self.values[node].items[index]
-                self._write(out, child, depth + 1, indent)
+                self._write(out, child, depth + 1, indent, sort_keys, spaces)
             if indent:
                 append_ascii(out, "\n" + "  " * depth)
             append_ascii(out, closer)
@@ -1053,7 +1157,11 @@ def equal(left: JsonTree, a: Int, right: JsonTree, b: Int) raises -> Bool:
         if (ka != NUMBER or left.values[a].integral) and (
             kb != NUMBER or right.values[b].integral
         ):
-            return left.values[a].integer == right.values[b].integer
+            # An int outside 64 bits has its digits as text, and 0.
+            return (
+                left.values[a].integer == right.values[b].integer
+                and left.values[a].text == right.values[b].text
+            )
         return left.value(a) == right.value(b)
     if ka != kb:
         return False
@@ -1296,7 +1404,7 @@ struct _Reader(Movable):
         self.position = index
         if integral:
             if token.byte_length() > 18:
-                raise Error("integer too large for this tool: " + token)
+                return tree.integer_text(token)
             return tree.integer(Int(token))
         return tree.number(parse_number(token))
 

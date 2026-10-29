@@ -51,7 +51,7 @@ not fit in an integer is refused before allocation. three.js reads past
 most of these and yields `NaN`, or throws a `RangeError`.
 """
 
-from std.math import isfinite
+from std.math import isfinite, floor
 
 from core.binary import copy_byte_range, copy_bytes
 from core.buffer_attribute import BufferAttribute
@@ -60,7 +60,6 @@ from loaders.bytes import ascii_space
 from loaders.js_text import split_fields
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from render.srgb import srgb_to_linear
-from std.math import floor
 from std.memory import bitcast
 from std.pathlib import Path
 from core.ordinal import require_valid, require_non_negative

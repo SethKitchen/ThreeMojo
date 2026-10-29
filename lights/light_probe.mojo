@@ -28,7 +28,6 @@ from math.spherical_harmonics3 import (
     SphericalHarmonics3,
     sh_basis,
 )
-from math.vector3 import Vector3
 from render.cube_texture import FACE_COUNT, CubeTexture, face_direction
 from std.math import pi, sqrt
 
@@ -44,6 +43,9 @@ def sh_from_cube(cube: CubeTexture) raises -> SphericalHarmonics3:
     The sums are then scaled so the weights total the whole sphere, four
     pi, as three.js normalizes them. Alpha is not light and is not read.
 
+    The weights and the sums are `Float64`, as three.js's numbers are.
+    A `Float32` sum of a face 512 texels wide drifts by a part in 5,000.
+
     Args:
         cube: The environment. Its faces are read as they are held.
 
@@ -54,8 +56,8 @@ def sh_from_cube(cube: CubeTexture) raises -> SphericalHarmonics3:
         Error: If the cube is refused by `CubeTexture.validate`.
     """
     cube.validate()
-    var sh = SphericalHarmonics3()
-    var total_weight = Float32(0)
+    var sums = SIMD[DType.float64, 32](0)
+    var total_weight = Float64(0)
     var size = cube.size
     # Six faces, each at least one texel, so no loop here runs zero times.
     for face in range(FACE_COUNT):  # pragma: no branch
@@ -64,18 +66,23 @@ def sh_from_cube(cube: CubeTexture) raises -> SphericalHarmonics3:
             for x in range(size):  # pragma: no branch
                 var color = image.wrapped_texel(x, y, 0)
                 var coord = face_direction(face, x, y, size)
-                var length_sq = coord.dot(coord)
+                var length_sq = (
+                    Float64(coord.x) * Float64(coord.x)
+                    + Float64(coord.y) * Float64(coord.y)
+                    + Float64(coord.z) * Float64(coord.z)
+                )
                 var weight = 4 / (sqrt(length_sq) * length_sq)
                 total_weight += weight
                 var direction = coord
                 direction.normalize()
                 for index in range(SH_COUNT):  # pragma: no branch
-                    var basis = sh_basis(index, direction)
+                    var basis = Float64(sh_basis(index, direction))
                     var at = index * 3
-                    sh.lanes[at] += basis * color.r * weight
-                    sh.lanes[at + 1] += basis * color.g * weight
-                    sh.lanes[at + 2] += basis * color.b * weight
-    sh.scale(4 * Float32(pi) / total_weight)
+                    sums[at] += basis * Float64(color.r) * weight
+                    sums[at + 1] += basis * Float64(color.g) * weight
+                    sums[at + 2] += basis * Float64(color.b) * weight
+    var sh = SphericalHarmonics3()
+    sh.lanes = (sums * (4 * pi / total_weight)).cast[DType.float32]()
     return sh
 
 

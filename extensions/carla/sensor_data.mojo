@@ -53,7 +53,7 @@ a network handle; it is written empty.
 """
 
 from extensions.carla.quantity_boundary import _nonnegative_si
-from units.si import DEGREE, Duration64
+from units.si import DEGREE, Duration64, RADIAN, Angle
 
 from extensions.carla.actor import (
     Actor,
@@ -90,10 +90,6 @@ from extensions.carla.world import World
 from math.vector3 import Vector3
 from render.framebuffer import Framebuffer
 from std.memory import bitcast
-from units.si import (
-    RADIAN,
-    Angle,
-)
 
 
 @fieldwise_init

@@ -68,7 +68,7 @@ from controls.transform_controls import (
 from core.buffer_geometry import COLOR, POSITION
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from math.matrix4 import Matrix4, scaling
+from math.matrix4 import scaling
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from std.math import nan

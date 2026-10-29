@@ -87,7 +87,6 @@ from extensions.gamepad.ids import (
     BUTTON_WEST,
     JOYSTICK_AXIS_MAX,
     JOYSTICK_AXIS_MIN,
-    GamepadAxis,
     GamepadButton,
 )
 from extensions.gamepad.joystick import (
@@ -107,7 +106,6 @@ from extensions.gamepad.mapping import (
     MAPPING_HAT,
     AutoMapping,
     InputMapping,
-    MappingKind,
 )
 from std.math import floor
 from units.si import Duration64, SECOND

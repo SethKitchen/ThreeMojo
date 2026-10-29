@@ -29,7 +29,6 @@ from materials.nodes import (
     NODE_VEC4,
     NodeGraph,
     NodeRef,
-    ValueType,
 )
 from std.math import pi
 

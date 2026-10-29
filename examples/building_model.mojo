@@ -24,7 +24,7 @@ from core.object3d import NodeId
 from core.scene import Scene
 from math.vector3 import Vector3
 from render.framebuffer import Color
-from units.si import DEGREE, DEGREE64, METER, Angle, Length
+from units.si import DEGREE, DEGREE64, METER, Angle, Length, Angle64, Length64
 from extensions.building.construction import Construction, Layer, double_glazing
 from extensions.building.ids import (
     ConstructionId,
@@ -52,7 +52,6 @@ from extensions.building.model import (
 )
 from extensions.building.views.render import FULL, RenderOptions, add_building
 from extensions.topology.arrangement import Point2
-from units.si import Angle64, Length64
 
 comptime DEFAULT_OUTPUT = "out/building-model.png"
 comptime WIDTH = 240

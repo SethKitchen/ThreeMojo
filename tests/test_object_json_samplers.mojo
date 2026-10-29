@@ -11,11 +11,7 @@ settings of a scene, as `ObjectLoader` reads them and `toJSON` writes them.
 """
 
 from core.assets import Assets
-from core.background import (
-    CUBE_BACKGROUND,
-    TEXTURE_BACKGROUND,
-    cube_background,
-)
+from core.background import CUBE_BACKGROUND, TEXTURE_BACKGROUND
 from core.object3d import Object3D
 from core.scene import Scene
 from exporters.gltf import encode_base64
@@ -28,9 +24,7 @@ from loaders.object_loader import (
     read_object_json,
 )
 from materials.material import (
-    BASIC,
     DEFAULT_REFRACTION_RATIO,
-    LAMBERT,
     OBJECT_SPACE_NORMAL_MAP,
     PHONG,
     TANGENT_SPACE_NORMAL_MAP,
@@ -47,7 +41,6 @@ from render.srgb import LINEAR
 from render.texture import (
     BILINEAR,
     CLAMP,
-    CUBE_REFRACTION_MAPPING,
     EQUIRECTANGULAR_REFLECTION_MAPPING,
     EQUIRECTANGULAR_REFRACTION_MAPPING,
     IGNORED,

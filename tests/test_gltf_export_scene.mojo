@@ -16,9 +16,7 @@ rest walks every choice the writer makes and every refusal.
 
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import (
-    CUBIC_SPLINE,
     MATERIAL_OPACITY,
-    MORPH_INFLUENCE,
     POSITION as MOVE,
     QUATERNION,
     SCALE,
@@ -51,9 +49,6 @@ from exporters.gltf import (
     target_name,
 )
 from lights.light import (
-    DIRECTIONAL,
-    POINT,
-    SPOT,
     LightKind,
     ambient_light,
     directional_light,
@@ -73,7 +68,6 @@ from materials.material import (
     standard_material,
 )
 from math.matrix4 import Matrix4, translation
-from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
 from objects.line import LOOP, SEGMENTS, STRIP, Line
@@ -84,14 +78,12 @@ from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
 from render.framebuffer import Color
 from render.srgb import SRGB
 from render.texture import Texture
-from std.math import sqrt
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
     assert_false,
-    assert_raises,
     assert_true,
 )
 from units.si import Angle, DEGREE, Duration, Length, METER, RADIAN, SECOND
@@ -1536,7 +1528,7 @@ def test_a_skin_glTF_cannot_hold_is_refused() raises:
     nowhere.scene.skinned_meshes[0].skeleton.bones[1].node = NodeId(40)
     nowhere.refuses("a bone names a node")
     # Skin indices and weights glTF cannot hold.
-    for trial in range(6):
+    for trial in range(7):
         var small = Small()
         var shape = skinned_triangle()
         if trial == 0:
@@ -1570,6 +1562,11 @@ def test_a_skin_glTF_cannot_hold_is_refused() raises:
                 String(SKIN_WEIGHT),
                 BufferAttribute([Float32(1), 0, 0, 1, 0, 0, 1, 0, 0], 3),
             )
+        elif trial == 6:
+            shape.set_attribute(
+                String(SKIN_WEIGHT),
+                BufferAttribute([Float32(1), 0, 0, 0, 1, 0, 0, 0], 4),
+            )
         var id = small.assets.geometries.add(shape^)
         var mesh = SkinnedMesh(id, small.white, small.first, two_bones(small))
         small.scene.add_skinned_mesh(mesh^)
@@ -1590,10 +1587,37 @@ def test_a_skin_glTF_cannot_hold_is_refused() raises:
                 0
             ].geometry = small.assets.geometries.add(empty^)
             small.refuses("needs skinIndex and skinWeight")
+        elif trial == 6:
+            small.refuses("cover different vertices")
         elif trial >= 3:
             small.refuses("four bones a vertex")
         else:
             small.refuses("whole number that names a bone")
+
+
+def test_a_slot_without_a_weight_names_no_bone() raises:
+    # three.js's `applyBoneTransform` skips a slot whose weight is zero, so
+    # an exporter can leave any number there. Such a slot is written, and
+    # one that names no bone is written as zero, as glTF asks for an
+    # unused slot. A whole index that names a bone stays.
+    var small = Small()
+    var shape = skinned_triangle()
+    shape.set_attribute(
+        String(SKIN_INDEX),
+        BufferAttribute([Float32(0), 7, 0, 0, 1, -1, 0, 0, 1, 0.5, 1, 0], 4),
+    )
+    var id = small.assets.geometries.add(shape^)
+    small.scene.add_skinned_mesh(
+        SkinnedMesh(id, small.white, small.first, two_bones(small))
+    )
+    var files = export_gltf(small.scene, small.assets)
+    var back = Loaded(String(unsafe_from_utf8=files.document))
+    ref read = back.assets.geometries.get(back.scene.skinned_meshes[0].geometry)
+    var joints = read.attribute_view(String(SKIN_INDEX)).packed()
+    assert_equal(joints[1], 0)
+    assert_equal(joints[5], 0)
+    assert_equal(joints[9], 0)
+    assert_equal(joints[10], 1)
 
 
 def test_lines_and_points_write_their_modes() raises:

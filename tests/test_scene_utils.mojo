@@ -29,7 +29,7 @@ from core.scene_utils import (
     sort_instanced_mesh,
     visible_nodes,
 )
-from materials.material import Color, Material, MaterialId
+from materials.material import Color, MaterialId
 from math.matrix4 import Matrix4, translation
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
@@ -40,13 +40,7 @@ from objects.points import Points
 from objects.skeleton import Bone, Skeleton
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
 from render.framebuffer import Color as PixelColor
-from std.testing import (
-    TestSuite,
-    assert_equal,
-    assert_false,
-    assert_raises,
-    assert_true,
-)
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from units.si import Angle, DEGREE
 
 

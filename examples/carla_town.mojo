@@ -39,7 +39,6 @@ from extensions.carla.transform import CarlaRotation, CarlaTransform
 from extensions.carla.vehicle import LIGHT_BRAKE, LIGHT_LOW_BEAM, LIGHT_POSITION
 from extensions.carla.weather import weather_preset
 from extensions.carla.world import EpisodeSettings, World
-from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
 from render.png import encode
 from renderers.renderer import available_workers

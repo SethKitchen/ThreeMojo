@@ -9,8 +9,13 @@ the split of a long triangle."""
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, POSITION, UV, UV1
-from core.buffer_geometry import MaterialIndex
+from core.buffer_geometry import (
+    BufferGeometry,
+    POSITION,
+    UV,
+    UV1,
+    MaterialIndex,
+)
 from core.layers import Layers
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -32,7 +37,6 @@ from materials.material import (
     LAMBERT,
     MATCAP,
     Material,
-    MaterialId,
     MaterialKind,
     NORMALS,
     PHONG,
@@ -58,15 +62,8 @@ from render.texture import (
     UV_CHANNEL_1,
     Wrap,
 )
-from render.texture_store import TextureId
 from std.math import inf, nan
-from std.testing import (
-    TestSuite,
-    assert_almost_equal,
-    assert_equal,
-    assert_true,
-)
-from units.si import Length, METER
+from std.testing import TestSuite, assert_equal, assert_true
 
 
 comptime WHITE = Color(255, 255, 255)

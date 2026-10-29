@@ -18,7 +18,7 @@ from math.polyline import (
     scale_to_length,
 )
 from math.utils import SeededRandom, clamp, js_round
-from math.norm import dot2, length2, normalized2
+from math.norm import dot2, length2, normalized2, rounded_difference
 from std.math import (
     atan2,
     ceil,
@@ -56,8 +56,9 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
     def cross(self, other: Self) -> Float32:
         """Return the z component of the cross product, which is the only
         one two vectors in a plane have. It is positive when `other` lies
-        to the left of `self`, and zero when the two are parallel."""
-        return self.x * other.y - self.y * other.x
+        to the left of `self`, and exactly zero when the two are parallel:
+        each product is rounded on its own, as in JavaScript."""
+        return rounded_difference(self.x, other.y, self.y, other.x)
 
     def length(self) -> Float32:
         """Return the Euclidean length of the vector."""

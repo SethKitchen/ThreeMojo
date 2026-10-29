@@ -60,7 +60,7 @@ from materials.material import PHONG, Material, MaterialId
 from objects.mesh import Mesh
 from render.framebuffer import Color, opaque_from_linear
 from math.vector3 import append_float64_xyz
-from std.math import floor, isfinite, sqrt
+from std.math import floor, isfinite
 from std.pathlib import Path
 
 

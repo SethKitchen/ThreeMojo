@@ -72,7 +72,7 @@ attachments), `Carla/Sensor/CollisionSensor.cpp` (collisions) and
 """
 
 from extensions.carla.quantity_boundary import _nonnegative_si
-from units.si import Duration64
+from units.si import Duration64, DEGREE, METER, SECOND, METER_PER_SECOND
 
 from extensions.carla.actor import (
     ActorId,
@@ -152,7 +152,6 @@ from std.collections import Dict
 from std.ffi import external_call
 from std.pathlib import Path
 from std.time import perf_counter_ns
-from units.si import DEGREE, METER, SECOND, METER_PER_SECOND
 
 # The version CARLA writes in the header.
 comptime RECORDER_VERSION = 1

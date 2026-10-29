@@ -210,6 +210,8 @@ A latitude and longitude sphere, three.js's `SphereGeometry`. Each normal points
 
 `phi_start` and `phi_length` say where the surface starts around the y axis and how far it runs, a whole turn by default. `theta_start` and `theta_length` say where it starts down from the north pole and how far it runs, pole to pole by default. As in three.js, a part that reaches a pole ends in a point there. A part that stops short of a pole has a full ring of triangles at its edge. An angle that is not finite is refused.
 
+The arithmetic is three.js's, in doubles, and each number is rounded to `Float32` once when it is stored. The same `Float32` angles give three.js's numbers. The default `theta_length` is a `Float32` half turn, a little more than `Math.PI`. three.js's `thetaEnd` clamps it, so the part still ends at the south pole.
+
 ## Plane
 
 ```mojo
@@ -234,6 +236,8 @@ The third argument is where the rim starts, counter-clockwise from +x. The fourt
 
 The texture coordinates map the square around the disk onto the image. The center is `(0.5, 0.5)`. A pie slice shows its part of the image.
 
+The arithmetic is three.js's, in doubles, and each number is rounded to `Float32` once when it is stored. The same `Float32` angles give three.js's numbers.
+
 ## Ring
 
 ```mojo
@@ -246,6 +250,8 @@ A flat ring in the xy plane, facing +z, centered on the origin. The first radius
 The texture coordinates map the square around the outer edge onto the image, as the circle's do. A grid of more than 16777216 cells is refused.
 
 An inner radius of zero makes a disk, as in three.js. The inner row is then every vertex at the center.
+
+The radius grows by one step a row, added up in doubles as three.js adds it.
 
 ## Cylinder
 
@@ -260,6 +266,8 @@ A cylinder stands on the y axis, centered on the origin. The first radius is at 
 The side's triangles come column by column, in three.js's order. The caps are the only closing faces. A partial sweep leaves its two cut faces open, as in three.js. A grid of more than 16777216 cells is refused.
 
 Side normals lean with the side, so a frustum shades smoothly. Cap normals point along the axis. `u` runs once around the side. `v` runs from one at the top to zero at the bottom. Each cap maps the square around it onto the image.
+
+The arithmetic is three.js's, in doubles, and each number is rounded to `Float32` once when it is stored. The same `Float32` angles give three.js's numbers. No slope of `Float32` radii and height overflows a double, so a very flat cone keeps unit normals.
 
 The sweep starts at +z and runs toward +x, as in three.js. The circle starts at +x instead. A shorter sweep makes a section with open sides.
 
@@ -282,6 +290,8 @@ A tube bent around a circle in the xy plane, centered on the origin. The first r
 
 The arc runs from +x toward +y. A full turn is the default. A shorter arc makes a bent pipe with open ends. A grid of more than 16777216 cells is refused.
 
+The arithmetic is three.js's, in doubles, and each number is rounded to `Float32` once when it is stored. So a thin tube keeps its normals. The default arc is a `Float32` full turn, which is 1.7e-7 more than three.js's `Math.PI * 2`. So a vertex of a full torus can be up to 1.7e-7 of its distance from the center away from three.js's.
+
 ## Torus knot
 
 ```mojo
@@ -289,6 +299,8 @@ var trefoil = torus_knot(Length(2.0, METER), Length(0.4, METER), 64, 8, 2, 3)   
 ```
 
 A tube bent around a knot that winds `p` times around the axis and `q` times through the hole. The curve is three.js's. It lies between half and one and a half of the radius from the axis. Vertices run in rings along the curve, one vertex per step around the tube and one more for the seam. Each ring is built in three.js's frame, so a texture lands as it does there. A grid of more than 16777216 cells is refused.
+
+The knot is built in doubles, as three.js builds it, and each number is rounded to `Float32` once when it is stored. The frame subtracts two points 0.01 apart along the curve, and `Float32` arithmetic there moved the vertices by about 1e-5 meters.
 
 ## Polyhedra
 
@@ -305,6 +317,8 @@ A polyhedron is a list of vertices and a list of triangles over them. Every vert
 The geometry is not indexed. Each triangle owns its three vertices. At a detail of zero the normals are flat, one per face. At a detail of one or more each normal points away from the center.
 
 Texture coordinates are longitude and latitude, with the seam repaired per face as three.js repairs it. `v` is one at the top pole and zero at the bottom, as on the sphere. A coordinate can exceed one on a face that straddles the seam.
+
+The arithmetic is three.js's, in doubles, and each number is rounded to `Float32` once when it is stored. The icosahedron and the dodecahedron use three.js's golden ratio in doubles. At a detail of one or more, each normal is the stored position made unit length, as three.js's `normalizeNormals` makes it.
 
 ## Capsule
 
@@ -333,7 +347,9 @@ The normals come from the profile's segments, as in three.js. A corner faces the
 
 The last point faces the way its own segment does, and its normal is as long as that segment. three.js does not make it unit length, and this keeps that. The builder refuses a final segment normal whose components cannot fit in `Float32`.
 
-Cylinder and lathe unit normals use a scaled calculation when a direct norm overflows or underflows. Lathe corner normals use the outer endpoint difference when rounded segment differences lose the direction. Ordinary profiles keep their existing arithmetic and order.
+The arithmetic is three.js's, in doubles, and each number is rounded to `Float32` once when it is stored. No difference of `Float32` points overflows a double. three.js clamps the sweep to `Math.PI * 2`, and so does this, so a `Float32` full turn gives three.js's full turn.
+
+Two segment normals can cancel at a corner, in doubles, while the outer points differ. three.js then leaves the corner with a zero normal. This port gives it the normal of the outer endpoint difference instead.
 
 A point on the axis is a pole. The half of each cell against it has no area, and three.js keeps it, as this does. `u` runs around and `v` up the profile, one point per equal step. The sweep starts at +z, as the cylinder's does.
 
@@ -407,7 +423,7 @@ The vertices are built in layers, each holding every contour point once at one h
 
 ### The bevel
 
-A bevel rounds the two edges off. It adds `bevel_segments` layers at each end. They reach `bevel_thickness` past the end face, and stand `bevel_size` out from the outline, by the sine and the cosine of a quarter turn.
+A bevel rounds the two edges off. It is off unless `bevel_enabled` is true. In three.js, `bevelEnabled` is true by default. It adds `bevel_segments` layers at each end. They reach `bevel_thickness` past the end face, and stand `bevel_size` out from the outline, by the sine and the cosine of a quarter turn.
 
 three.js measures a bevel *out* from the shape drawn, and so does this. The two end faces are the outline itself, and the body between them stands proud of it all the way round. `bevel_offset` moves every layer out before the bevel is measured, the end faces included, which makes a lip rather than rounding an edge.
 
@@ -655,19 +671,25 @@ scene.add_line(Line(outline, ink, node, mode=SEGMENTS))
 
 `edges_geometry` keeps an edge when the two faces meeting at it turn by at least `threshold`, and when it has one face and no neighbor. A cube keeps its twelve edges and drops the diagonal across each face. `threshold` is one degree unless said otherwise, as three.js defaults `thresholdAngle`.
 
-`triangle_edges` is what a [wireframe material](Materials#wireframe) draws. It pairs by vertex index rather than by welded position, as three.js pairs the two rules. A wireframe is drawn from the mesh's own vertices, and two indices that stand at one place are still two vertices with their own colors. A cube has thirty edges by index and eighteen by position.
+`triangle_edges` is what a [wireframe material](Materials#wireframe) draws. It pairs by vertex index rather than by position, as three.js pairs the two rules. A wireframe is drawn from the mesh's own vertices, and two indices that stand at one place are still two vertices with their own colors. A cube has thirty edges by index and eighteen by position.
 
 `edges_geometry` finds creases and boundaries, not silhouettes. It is given no camera, and its answer does not move when one does. What it keeps of a sphere depends on how finely the sphere is divided. Twenty-four segments turn fifteen degrees a facet, so the default threshold keeps most of those edges rather than none.
 
 The comparison is inclusive. An edge turning exactly as far as the threshold is kept. `ANGLE_SLACK` is what makes that true in practice. An `Angle` holds radians as a `Float32`, so an authored 90 degrees has a cosine of −4.37e−8 rather than zero. Two perpendicular faces give a dot product of exactly zero. Without the slack a cube asked for its right angles lost all twelve.
 
-### Welding first
+### Positions, not indices
 
-Both weld by position before they pair. Two triangles that meet along an edge often hold two copies of each of its ends. A corner carries a normal and a texture coordinate as well as a position, and the two faces disagree about those. Pairing by vertex index would then find no shared edge anywhere.
+Both builders pair edges by the positions of their ends. Two triangles that meet along an edge often hold two copies of each of its ends. A corner carries a normal and a texture coordinate as well as a position, and the two faces disagree about those. Pairing by vertex index would then find no shared edge anywhere.
 
-`WELD` is the tolerance: a tenth of a millimeter, in meters. It is a distance and not a fraction, which is the bargain three.js makes with its four-decimal position hash. A geometry built at a scale far from one meter has to be welded at its own scale, and neither library does that for you.
+`wireframe_geometry` compares the positions exactly, as three.js's `WireframeGeometry` does. Zero and minus zero are one number. An indexed geometry with groups gives the edges of its groups only. A triangle with two corners at one place keeps its edge of no length, once.
 
-A welded cube has eighteen unique edges, not thirty-six: twelve around the shape and one diagonal in each face.
+`edges_geometry` rounds each coordinate first, as three.js's `EdgesGeometry` does. The key is `Math.round` of the coordinate times ten thousand. A geometry built at a scale far from one meter rounds at that scale, in both libraries. A triangle with two corners on one key has no area, and it is skipped.
+
+An edge pairs only with the same edge in the other direction. Two faces that run an edge in the same direction do not pair, and the edge is drawn as an edge with one face. The result is in three.js's order. A pair comes when its second face is met, in that face's direction. The unpaired edges follow, in the order they were met.
+
+`welded_points` welds by a distance, `WELD`: a tenth of a millimeter, in meters. Neither builder uses it.
+
+A cube has eighteen unique edges by position, not thirty-six: twelve around the shape and one diagonal in each face.
 
 ## Merge, weld and tangents
 
@@ -743,6 +765,8 @@ Welding keeps the draw range and groups because each triangle keeps its place in
 ### Creased normals
 
 `to_creased_normals` makes the geometry non-indexed first. Many triangles can meet at the position of a corner. The corner's normal is the sum of the normals of those that turn from its own triangle by less than the crease angle. The crease angle is sixty degrees unless you give another, as in three.js.
+
+The default is `DEFAULT_CREASE`, an `Angle64` that holds three.js's `Math.PI / 3`. The angle, the turns and the normals are in doubles, as in three.js. This is important where two faces turn by the crease angle itself, as the sides of a six-sided prism do. You can give an `Angle64` or an `Angle`. An `Angle` is widened to an `Angle64`. A `Float32` sixty degrees is a little wider than three.js's, so it can join such faces.
 
 Positions are matched by key, not by distance. The key is each coordinate times one hundred, truncated, as in three.js. Points closer than about a centimeter share a key, whatever the scale of the geometry.
 

@@ -49,7 +49,7 @@ from math.matrix_inverse import (
     _inverse_wide,
 )
 from math.finite import require_finite_group
-from std.math import cos, fma, isfinite, sin, sqrt
+from std.math import cos, isfinite, sin, sqrt
 from units.si import Angle
 
 # How far a frame can be from a rotation before `is_rotation` says it is not
@@ -67,19 +67,6 @@ def _unit_direction(vector: Vector3) -> Vector3:
     var result = vector
     result.normalize()
     return result
-
-
-def _cross_direction(first: Vector3, second: Vector3) -> Vector3:
-    """Round both products before subtraction so parallel axes cancel.
-
-    Contracting only one product into the subtraction can leave a false
-    cross direction when the two input directions are exactly equal.
-    """
-    return Vector3(
-        fma(first.y, second.z, Float32(0)) - fma(first.z, second.y, Float32(0)),
-        fma(first.z, second.x, Float32(0)) - fma(first.x, second.z, Float32(0)),
-        fma(first.x, second.y, Float32(0)) - fma(first.y, second.x, Float32(0)),
-    )
 
 
 def _determinant4[dtype: DType](e: Array[SIMD[dtype, 1], 16]) -> SIMD[dtype, 1]:
@@ -666,7 +653,8 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         x.normalize()
         y.normalize()
         z.normalize()
-        var cross = _cross_direction(x, y)
+        var cross = x
+        cross.cross(y)
         return (
             abs(x.dot(y)) <= tolerance
             and abs(y.dot(z)) <= tolerance
@@ -893,7 +881,8 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             z = Vector3(0, 0, 1)
         z = _unit_direction(z)
         var above = _unit_direction(up)
-        var x = _cross_direction(above, z)
+        var x = above
+        x.cross(z)
         if x == Vector3(0, 0, 0):
             # three.js nudges x when up is the z axis and z otherwise. The
             # unit up makes that test hold for an up of any length.
@@ -902,9 +891,11 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             else:
                 z.z += _LOOK_AT_NUDGE
             z = _unit_direction(z)
-            x = _cross_direction(above, z)
+            x = above
+            x.cross(z)
         x = _unit_direction(x)
-        var y = _cross_direction(z, x)
+        var y = z
+        y.cross(x)
         self.elements[0] = x.x
         self.elements[1] = x.y
         self.elements[2] = x.z

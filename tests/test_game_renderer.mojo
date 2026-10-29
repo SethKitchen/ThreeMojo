@@ -65,13 +65,7 @@ from renderers.game_renderer import (
 )
 from renderers.renderer import Renderer
 from std.math import inf
-from std.testing import (
-    TestSuite,
-    assert_equal,
-    assert_false,
-    assert_raises,
-    assert_true,
-)
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from units.si import (
     DEGREE,
     METER,
@@ -205,6 +199,24 @@ def test_a_lit_floor_matches_the_general_renderer() raises:
         assert_equal(len(fast.timings), 8)
 
 
+def test_a_hidden_material_or_another_layer_draws_nothing() raises:
+    # As in three.js and the general renderer: a part whose material is
+    # hidden is not drawn, nor a node on no layer the camera sees.
+    var assets = Assets()
+    var hidden = Material(Color(180, 160, 140))
+    hidden.visible = False
+    var scene = _floor_scene(assets, hidden)
+    var fast = GameRenderer(WIDTH, HEIGHT)
+    _ = fast.render(scene, assets, _above(), NOW)
+    assert_equal(fast.drawn, 0)
+    var away = _floor_scene(assets, Material(Color(180, 160, 140)))
+    var floor = away.meshes[0].node
+    away.node(floor).layers.set(1)
+    away.update()
+    _ = fast.render(away, assets, _above(), NOW)
+    assert_equal(fast.drawn, 0)
+
+
 def test_a_phong_floor_shines_and_an_emissive_one_glows() raises:
     var assets = Assets()
     var camera = _camera(Vector3(2, 3, 3), Vector3(0, 0, 0))
@@ -295,6 +307,25 @@ def test_the_sun_casts_shadows_in_each_mode() raises:
     scene.meshes[1].receive_shadow = False
     var bare = fast.render(scene, assets, camera, NOW)
     assert_true(_shadowed(bare, lit) < 5)
+
+
+def test_only_what_the_camera_sees_casts_a_shadow() raises:
+    # As three.js's shadow map tests the camera's layers: a block on a
+    # layer the camera does not see casts nothing. The kept map is drawn
+    # again when the camera's layers change.
+    var assets = Assets()
+    var scene = _blocked_scene(assets)
+    var camera = _above()
+    var fast = GameRenderer(WIDTH, HEIGHT)
+    fast.shadow_reach = 8
+    var lit = fast.render(scene, assets, camera, NOW)
+    fast.set_shadows(STILL_SHADOWS, 256)
+    var block = scene.meshes[1].node
+    scene.node(block).layers.set(1)
+    scene.update()
+    assert_true(_shadowed(fast.render(scene, assets, camera, NOW), lit) < 5)
+    camera.layers.enable(1)
+    assert_true(_shadowed(fast.render(scene, assets, camera, NOW), lit) > 20)
 
 
 def test_a_frame_of_an_odd_width_shows_the_sky_to_its_edge() raises:
@@ -729,6 +760,34 @@ def test_a_skinned_mesh_follows_its_bones() raises:
     )
     with assert_raises(contains="weight"):
         _ = fast.render(heavy, assets, _facing(), NOW)
+
+
+def test_a_slot_with_no_weight_is_drawn_whatever_bone_it_names() raises:
+    # An exporter can leave any number in an unused slot. three.js's
+    # shader multiplies that slot's bone by zero, so it changes nothing.
+    var assets = Assets()
+    var fast = GameRenderer(WIDTH, HEIGHT)
+    var weights = List[Float32]()
+    var halves = List[Float32]()
+    for _ in range(6):
+        weights.extend([Float32(1), 0, 0, 0])
+        halves.extend([Float32(0.5), 0.5, 0, 0])
+    var plain = _skinned_scene(
+        assets, List[Float32](length=24, fill=0), weights
+    )
+    var expected = fast.render(plain, assets, _facing(), NOW)
+    for unused in [Float32(7), Float32(0.5)]:
+        var bones = List[Float32]()
+        for _ in range(6):
+            bones.extend([Float32(0), unused, unused, unused])
+        var scene = _skinned_scene(assets, bones, weights)
+        var image = fast.render(scene, assets, _facing(), NOW)
+        for i in range(WIDTH * HEIGHT):
+            assert_equal(image.depth[i], expected.depth[i])
+        # A slot with weight behind it must still name a bone.
+        var weighted = _skinned_scene(assets, bones, halves)
+        with assert_raises(contains="bone"):
+            _ = fast.render(weighted, assets, _facing(), NOW)
 
 
 def test_the_sky_the_fog_and_a_cube_background_are_drawn() raises:

@@ -16,7 +16,7 @@ for. `MotionVectorSpace` is this port's alone: it only picks `mvecScale`.
 
 **Checked against the running plugins.** `sl.dlss` and `sl.dlss_d` of
 Streamline 2.14.16 were run on an NVIDIA TITAN RTX with driver 610.88. See
-`docs/validation/streamline/`. `slDLSSGetOptimalSettings` and
+the Streamline page. `slDLSSGetOptimalSettings` and
 `slDLSSDGetOptimalSettings` answer for five modes only. For `eOff` and for
 `eUltraQuality` they return `eErrorInvalidParameter`, although the headers
 list both. `UpscaleMode.has_optimal_settings` says which modes answer.

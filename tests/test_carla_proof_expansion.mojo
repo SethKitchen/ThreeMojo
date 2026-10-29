@@ -23,7 +23,7 @@ from extensions.carla.map import Map
 from extensions.carla.opendrive import load_opendrive_file
 from math.vector3 import Vector3
 from std.math import isfinite
-from std.testing import TestSuite, assert_equal, assert_false, assert_true
+from std.testing import TestSuite, assert_false, assert_true
 
 
 def _assert_exact_lower(

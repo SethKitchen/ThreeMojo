@@ -23,7 +23,6 @@ from loaders.font import (
     parse_outline,
     read_font,
 )
-from math.path import Shape
 from math.shape_path import (
     ShapePath,
     is_clockwise,

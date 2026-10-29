@@ -227,7 +227,6 @@ from extensions.anatomy.soft_tissue import (
     hair_tissue,
     ligament_tissue,
     lymph_tissue,
-    muscle_tissue,
     nerve_tissue,
     skin_tissue,
     tendon_tissue,
@@ -252,15 +251,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import (
-    FOOT,
-    GRAM,
-    Length,
-    METER,
-    MILLIMETER,
-    NEWTON,
-    STANDARD_GRAVITY,
-)
+from units.si import FOOT, GRAM, Length, METER, MILLIMETER, STANDARD_GRAVITY
 
 comptime TOLERANCE = Float64(1e-5)
 

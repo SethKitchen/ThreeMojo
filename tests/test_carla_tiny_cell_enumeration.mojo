@@ -9,7 +9,6 @@ use the canonical checked scalar graph and the existing exact distance order.
 """
 
 from extensions.carla.curve_distance import _wide_point_order
-from extensions.carla.curve_interval import _next_up
 from extensions.carla.geometry import PARAM_POLY3, RoadGeometry, _Sample
 from extensions.carla.lane_distance import _normalized_square
 from extensions.carla.lane_refinement import (

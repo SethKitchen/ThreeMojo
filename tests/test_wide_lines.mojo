@@ -47,7 +47,6 @@ from objects.line_segments2 import (
 from render.cube_texture_store import SCENE_ENVIRONMENT
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.texture import checkerboard
-from render.texture_store import NO_TEXTURE
 from renderers.renderer import Renderer
 from std.math import inf, nan
 from std.testing import (

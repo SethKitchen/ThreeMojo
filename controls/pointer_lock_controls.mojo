@@ -29,6 +29,20 @@ until a `KEY_UP`. See `controls.held_keys`.
 
 As in three.js, the camera's up must be +y. The camera keeps its up and
 its distance to its target.
+
+The controls keep the camera's turn themselves, as three.js keeps it in
+`camera.quaternion`. A camera that looks straight down cannot hold its
+heading in its target: the target lies straight below it, and `Float32`
+rounds the rest away. The kept turn holds the heading, so a look back up
+faces the same way, and a walk goes the way the camera faced. The turn is
+read again from the camera only when the camera was moved from outside:
+when its position, its target or its up is not what the controls last
+placed.
+
+A camera that looks exactly straight down is drawn through `look_at`. Its
+view has no right, so `look_at` nudges it, and the image turns about the
+view to that nudge. three.js's image keeps the heading's turn. That is the
+one difference left.
 """
 
 from cameras.orthographic_camera import OrthographicCamera
@@ -96,6 +110,14 @@ struct PointerLockControls(Copyable, Movable):
     var _seen: Bool
     var _last_x: Int
     var _last_y: Int
+    # The camera's turn as the controls last left it, three.js's
+    # `camera.quaternion` read as a `YXZ` Euler: the pitch, the heading and
+    # the roll. It holds the heading where the camera's target cannot.
+    var _turn: Euler
+    # The position, the target and the up that the controls last placed
+    # the camera at. Empty until they first place it. A camera with other
+    # values was moved from outside, and its turn is read again.
+    var _placed: List[Vector3]
 
     def __init__(out self):
         """Create unlocked controls with three.js's defaults."""
@@ -110,6 +132,10 @@ struct PointerLockControls(Copyable, Movable):
         self._seen = False
         self._last_x = 0
         self._last_y = 0
+        self._turn = Euler(
+            Angle(0.0, RADIAN), Angle(0.0, RADIAN), Angle(0.0, RADIAN), YXZ
+        )
+        self._placed = List[Vector3]()
 
     def lock(mut self):
         """Lock the pointer, so that its movement turns the camera."""
@@ -150,7 +176,7 @@ struct PointerLockControls(Copyable, Movable):
         return CameraFrame.of(camera).forward()
 
     def move_forward(
-        self, mut camera: PerspectiveCamera, distance: Length
+        mut self, mut camera: PerspectiveCamera, distance: Length
     ) raises:
         """Move a perspective camera forward along the level ground.
 
@@ -161,11 +187,13 @@ struct PointerLockControls(Copyable, Movable):
         Raises:
             Error: If the camera's placement is refused.
         """
-        var step = self._forward_step(CameraFrame.of(camera), camera.up)
+        var turn = self._turn_of(CameraFrame.of(camera), camera)
+        var step = self._forward_step(turn, camera.up)
         _shift(camera, step * distance.to(METER))
+        self._remember(turn, camera)
 
     def move_forward(
-        self, mut camera: OrthographicCamera, distance: Length
+        mut self, mut camera: OrthographicCamera, distance: Length
     ) raises:
         """Move an orthographic camera forward along the level ground.
 
@@ -176,11 +204,13 @@ struct PointerLockControls(Copyable, Movable):
         Raises:
             Error: If the camera's placement is refused.
         """
-        var step = self._forward_step(CameraFrame.of(camera), camera.up)
+        var turn = self._turn_of(CameraFrame.of(camera), camera)
+        var step = self._forward_step(turn, camera.up)
         _shift(camera, step * distance.to(METER))
+        self._remember(turn, camera)
 
     def move_right(
-        self, mut camera: PerspectiveCamera, distance: Length
+        mut self, mut camera: PerspectiveCamera, distance: Length
     ) raises:
         """Move a perspective camera along its right.
 
@@ -191,11 +221,13 @@ struct PointerLockControls(Copyable, Movable):
         Raises:
             Error: If the camera's placement is refused.
         """
-        var step = self._right_step(CameraFrame.of(camera))
+        var turn = self._turn_of(CameraFrame.of(camera), camera)
+        var step = self._right_step(turn)
         _shift(camera, step * distance.to(METER))
+        self._remember(turn, camera)
 
     def move_right(
-        self, mut camera: OrthographicCamera, distance: Length
+        mut self, mut camera: OrthographicCamera, distance: Length
     ) raises:
         """Move an orthographic camera along its right.
 
@@ -206,38 +238,128 @@ struct PointerLockControls(Copyable, Movable):
         Raises:
             Error: If the camera's placement is refused.
         """
-        var step = self._right_step(CameraFrame.of(camera))
+        var turn = self._turn_of(CameraFrame.of(camera), camera)
+        var step = self._right_step(turn)
         _shift(camera, step * distance.to(METER))
+        self._remember(turn, camera)
 
-    def _forward_step(self, frame: CameraFrame, up: Vector3) -> Vector3:
+    def _forward_step(self, turn: Euler, up: Vector3) raises -> Vector3:
         """Return the move of one meter forward, or none when disabled.
         three.js: the camera's up crossed with its right.
 
         Args:
-            frame: The camera's frame.
+            turn: The camera's turn.
             up: The camera's up.
 
         Returns:
             The move.
+
+        Raises:
+            Error: Never: the Euler order is fixed.
         """
         if not self.enabled:
             return Vector3(0, 0, 0)
         var ahead = up
-        ahead.cross(frame.right)
+        ahead.cross(_right(turn))
         return ahead
 
-    def _right_step(self, frame: CameraFrame) -> Vector3:
+    def _right_step(self, turn: Euler) raises -> Vector3:
         """Return the move of one meter right, or none when disabled.
 
         Args:
-            frame: The camera's frame.
+            turn: The camera's turn.
 
         Returns:
             The move.
+
+        Raises:
+            Error: Never: the Euler order is fixed.
         """
         if not self.enabled:
             return Vector3(0, 0, 0)
-        return frame.right
+        return _right(turn)
+
+    def _turn_of(
+        self, frame: CameraFrame, camera: PerspectiveCamera
+    ) raises -> Euler:
+        """Return a perspective camera's turn: the one the controls keep,
+        unless the camera was moved from outside.
+
+        Args:
+            frame: The camera's frame, read for a camera moved from outside.
+            camera: The camera.
+
+        Returns:
+            The turn, as a `YXZ` Euler.
+
+        Raises:
+            Error: Never: the Euler order is fixed.
+        """
+        return self._kept_or_read(
+            frame, [camera.position, camera.target, camera.up]
+        )
+
+    def _turn_of(
+        self, frame: CameraFrame, camera: OrthographicCamera
+    ) raises -> Euler:
+        """Return an orthographic camera's turn: the one the controls keep,
+        unless the camera was moved from outside.
+
+        Args:
+            frame: The camera's frame, read for a camera moved from outside.
+            camera: The camera.
+
+        Returns:
+            The turn, as a `YXZ` Euler.
+
+        Raises:
+            Error: Never: the Euler order is fixed.
+        """
+        return self._kept_or_read(
+            frame, [camera.position, camera.target, camera.up]
+        )
+
+    def _kept_or_read(
+        self, frame: CameraFrame, placed: List[Vector3]
+    ) raises -> Euler:
+        """Return the turn the controls keep if the camera holds what they
+        last placed, else the turn read from its frame.
+
+        Args:
+            frame: The camera's frame.
+            placed: The camera's position, target and up.
+
+        Returns:
+            The turn, as a `YXZ` Euler.
+
+        Raises:
+            Error: Never: the Euler order is fixed.
+        """
+        if self._placed == placed:
+            return self._turn
+        return Euler.from_matrix(frame.rotation(), YXZ)
+
+    def _remember(mut self, turn: Euler, camera: PerspectiveCamera):
+        """Keep a turn, and what the controls placed a perspective camera
+        at.
+
+        Args:
+            turn: The camera's turn.
+            camera: The camera, as the controls placed it.
+        """
+        self._turn = turn
+        self._placed = [camera.position, camera.target, camera.up]
+
+    def _remember(mut self, turn: Euler, camera: OrthographicCamera):
+        """Keep a turn, and what the controls placed an orthographic camera
+        at.
+
+        Args:
+            turn: The camera's turn.
+            camera: The camera, as the controls placed it.
+        """
+        self._turn = turn
+        self._placed = [camera.position, camera.target, camera.up]
 
     def handle(
         mut self, event: InputEvent, mut camera: PerspectiveCamera
@@ -253,8 +375,10 @@ struct PointerLockControls(Copyable, Movable):
                 range is empty, or the camera's placement is refused.
         """
         var frame = CameraFrame.of(camera)
-        if self._handle(event, frame):
+        var turn = self._turn_of(frame, camera)
+        if self._handle(event, frame, turn):
             camera.place(frame.position, frame.target())
+            self._remember(turn, camera)
 
     def handle(
         mut self, event: InputEvent, mut camera: OrthographicCamera
@@ -270,17 +394,20 @@ struct PointerLockControls(Copyable, Movable):
                 range is empty, or the camera's placement is refused.
         """
         var frame = CameraFrame.of(camera)
-        if self._handle(event, frame):
+        var turn = self._turn_of(frame, camera)
+        if self._handle(event, frame, turn):
             camera.place(frame.position, frame.target())
+            self._remember(turn, camera)
 
     def _handle(
-        mut self, event: InputEvent, mut frame: CameraFrame
+        mut self, event: InputEvent, mut frame: CameraFrame, mut turn: Euler
     ) raises -> Bool:
         """Take one event, turning a frame by a pointer move.
 
         Args:
             event: The event.
             frame: The camera's frame.
+            turn: The camera's turn. A pointer move changes it.
 
         Returns:
             True if the frame turned.
@@ -312,32 +439,38 @@ struct PointerLockControls(Copyable, Movable):
             self._last_x = event.x
             self._last_y = event.y
             if seen and self.is_locked:
-                self._look(dx, dy, frame)
+                self._look(dx, dy, frame, turn)
                 return True
         return False
 
-    def _look(self, dx: Float32, dy: Float32, mut frame: CameraFrame) raises:
+    def _look(
+        self,
+        dx: Float32,
+        dy: Float32,
+        mut frame: CameraFrame,
+        mut turn: Euler,
+    ) raises:
         """Turn a frame by a pointer's movement. three.js: `onMouseMove`.
 
         Args:
             dx: Pixels right.
             dy: Pixels down.
             frame: The camera's frame. Its direction changes.
+            turn: The camera's turn. Its heading and pitch change.
 
         Raises:
             Error: Never: the Euler order is fixed.
         """
-        var euler = Euler.from_matrix(frame.rotation(), YXZ)
         var scale = MOUSE_SENSITIVITY * self.pointer_speed
-        var yaw = euler.y.to(RADIAN) - dx * scale
-        var pitch = euler.x.to(RADIAN) - dy * scale
+        var yaw = turn.y.to(RADIAN) - dx * scale
+        var pitch = turn.x.to(RADIAN) - dy * scale
         pitch = max(
             QUARTER_TURN - self.max_polar_angle.to(RADIAN),
             min(QUARTER_TURN - self.min_polar_angle.to(RADIAN), pitch),
         )
-        euler.x = Angle(pitch, RADIAN)
-        euler.y = Angle(yaw, RADIAN)
-        var turned = euler.to_matrix()
+        turn.x = Angle(pitch, RADIAN)
+        turn.y = Angle(yaw, RADIAN)
+        var turned = turn.to_matrix()
         var back = turned.transform_direction(Vector3(0, 0, 1))
         back.normalize()
         frame.back = back
@@ -423,6 +556,22 @@ struct PointerLockControls(Copyable, Movable):
         """
         self._held.timeout = self.key_timeout
         _ = self._held.advance(delta)
+
+
+def _right(turn: Euler) raises -> Vector3:
+    """Return a camera's right from its turn, three.js's column 0 of
+    `camera.matrix`.
+
+    Args:
+        turn: The camera's turn.
+
+    Returns:
+        The unit right: (cos yaw, 0, -sin yaw) for a camera with no roll.
+
+    Raises:
+        Error: Never: the Euler order is fixed.
+    """
+    return turn.to_matrix().transform_direction(Vector3(1, 0, 0))
 
 
 def _shift(mut camera: PerspectiveCamera, move: Vector3):

@@ -137,9 +137,8 @@ the list does not have, or that holds no whole triangle, writes nothing,
 as nothing is drawn for it. three.js writes it with no material.
 """
 
-from core.ordinal import index_in_count
-
 from core.ordinal import (
+    index_in_count,
     ordinal_valid,
     require_index_in_count,
     require_valid,
@@ -243,7 +242,6 @@ from math.utils import (
     INT16_COMPONENT,
     INT32_COMPONENT,
     INT8_COMPONENT,
-    UINT16_COMPONENT,
     UINT32_COMPONENT,
     UINT8_COMPONENT,
 )
@@ -339,21 +337,39 @@ def binary_name_for(path: String) -> String:
     return stem + ".bin"
 
 
+def percent_encoded(name: String) -> String:
+    """Return a file name as a relative URI, as the glTF specification
+    asks: every byte but a letter, a digit, `-`, `.`, `_` and `~` becomes
+    `%` and two capital hexadecimal digits.
+
+    `read_gltf` decodes the escapes, so a name with a space, a `%` or a
+    non-ASCII letter reads back.
+
+    Args:
+        name: The file name.
+
+    Returns:
+        The URI.
+    """
+    var unreserved = String(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+    )
+    comptime digits = "0123456789ABCDEF"
+    var out = String()
+    for byte in name.as_bytes():
+        if byte < 128 and unreserved.find(chr(Int(byte))) >= 0:
+            out += chr(Int(byte))
+        else:
+            out += "%"
+            out += digits[byte=Int(byte >> 4)]
+            out += digits[byte=Int(byte & 15)]
+    return out^
+
+
 def _is_relative_name(name: String) -> Bool:
     """Return True if a buffer URI is a name `read_gltf` reads beside the
     file: not empty, and with no scheme."""
     return name != "" and name.find(":") < 0
-
-
-def _is_written_upside_down(texture: Texture) -> Bool:
-    """Return True if a texture's image is written upside down: one with
-    `flip_y`, whose `v` counts up from its bottom row, where glTF's counts
-    down from the top, as three.js's `GLTFExporter` flips a `flipY`
-    texture's image. `read_gltf` turns `flip_y` off, and such a texture's
-    image is written as it is. Either way the texture's own transform
-    samples the written image where the texture samples its own.
-    """
-    return texture.flip_y
 
 
 @fieldwise_init
@@ -460,7 +476,13 @@ def gltf_pixels(texture: Texture) raises -> List[UInt8]:
     if texture.texel_type == FLOAT_TYPE:
         raise Error("glTF: a float texture has no eight-bit image to write")
     texture.validate()
-    var flip = _is_written_upside_down(texture)
+    # A `flip_y` texture's `v` counts up from its bottom row, where glTF's
+    # counts down from the top, so its image is written upside down, as
+    # three.js's `GLTFExporter` flips a `flipY` texture's image. `read_gltf`
+    # turns `flip_y` off, and such an image is written as it is. Either way
+    # the texture's own transform samples the written image where the
+    # texture samples its own.
+    var flip = texture.flip_y
     var row = texture.width * Texture.CHANNELS
     var out = List[UInt8](capacity=row * texture.height)
     var pixels = Span(texture.pixels.values())
@@ -889,14 +911,20 @@ struct _Exporter(Movable):
             self.require(MESH_QUANTIZATION)
         return len(self.accessors) - 1
 
-    def joint_accessor(mut self, joints: List[Float32]) raises -> Int:
+    def joint_accessor(
+        mut self, joints: List[Float32], bones: Int
+    ) raises -> Int:
         """Write a `JOINTS_0` of unsigned shorts, as three.js's
         `GLTFExporter` converts a `skinIndex` to them, and return its
-        accessor. `primitive` has checked every index."""
+        accessor. `primitive` has checked every index of a slot with a
+        weight. An index of a slot without one that names no bone is
+        written as zero, as glTF asks for an unused slot."""
         var bytes = List[UInt8](capacity=len(joints) * 2)
         # A skinned geometry has at least one vertex.
         for value in joints:  # pragma: no branch
-            push_word(bytes, Int(value), 2, True)
+            push_word(
+                bytes, Int(value) if _names_bone(value, bones) else 0, 2, True
+            )
         var view = self.view(bytes, ARRAY_BUFFER, 8)
         var writer = JsonWriter()
         writer.begin_object()
@@ -940,12 +968,13 @@ struct _Exporter(Movable):
         id: GeometryId,
         colored: Bool,
         assets: Assets,
-        skinned: Bool = False,
+        bones: Int = 0,
         triangles: Bool = True,
     ) raises -> Int:
         """Write a geometry's accessors and its morph targets, once, and
         its colors and its skin once they are asked for; return its slot in
-        the geometry lists."""
+        the geometry lists. `bones` is the skeleton's size for a skinned
+        mesh, and zero otherwise."""
         ref geometry = assets.geometries.get(id)
         # Checked each time, since a line's geometry need not hold whole
         # triangles and a mesh's must.
@@ -989,9 +1018,9 @@ struct _Exporter(Movable):
             self.joints.append(-1)
             self.skin_weights.append(-1)
             slot = len(self.geometry_keys) - 1
-        if skinned and self.joints[slot] < 0:
+        if bones > 0 and self.joints[slot] < 0:
             self.joints[slot] = self.joint_accessor(
-                geometry.attribute_view(SKIN_INDEX).packed()
+                geometry.attribute_view(SKIN_INDEX).packed(), bones
             )
             self.skin_weights[slot] = self.attribute_accessor(
                 geometry.attribute_view(SKIN_WEIGHT), "VEC4", False, "WEIGHTS"
@@ -1709,7 +1738,7 @@ struct _Exporter(Movable):
             _check_skin(shape, bones)
         var colored = material.vertex_colors and shape.has_attribute(COLOR)
         var slot = self.geometry(
-            id, colored, assets, bones > 0, mode == MODE_TRIANGLES
+            id, colored, assets, bones, mode == MODE_TRIANGLES
         )
         var indices = -1
         if len(slice) > 0:
@@ -2557,23 +2586,32 @@ def _light_type(kind: LightKind) -> String:
     return "spot"
 
 
+def _names_bone(value: Float32, bones: Int) -> Bool:
+    """Return True if a skin index is a whole number that names one of
+    `bones` bones."""
+    return value >= 0 and value < Float32(bones) and value == floor(value)
+
+
 def _check_skin(shape: BufferGeometry, bones: Int) raises:
     """Refuse a skinned geometry whose `skinIndex` and `skinWeight` glTF
-    cannot hold: four of each a vertex, and every index a whole number
-    that names a bone."""
+    cannot hold: four of each a vertex, and the index of every slot with a
+    weight a whole number that names a bone. A slot whose weight is zero
+    names no bone, as three.js's `applyBoneTransform` reads it."""
     if not shape.has_attribute(String(SKIN_INDEX)) or not shape.has_attribute(
         String(SKIN_WEIGHT)
     ):
         raise Error("glTF: a skinned geometry needs skinIndex and skinWeight")
     ref joints = shape.attribute_view(String(SKIN_INDEX))
-    if (
-        joints.item_size != 4
-        or shape.attribute_view(String(SKIN_WEIGHT)).item_size != 4
-    ):
+    ref weights = shape.attribute_view(String(SKIN_WEIGHT))
+    if joints.item_size != 4 or weights.item_size != 4:
         raise Error("glTF: a skinned geometry has four bones a vertex")
+    var indices = joints.packed()
+    var shares = weights.packed()
+    if len(shares) != len(indices):
+        raise Error("glTF: skinIndex and skinWeight cover different vertices")
     # A skinned geometry has at least one vertex.
-    for value in joints.packed():  # pragma: no branch
-        if value < 0 or value >= Float32(bones) or value != floor(value):
+    for at in range(len(indices)):  # pragma: no branch
+        if shares[at] != 0 and not _names_bone(indices[at], bones):
             raise Error(
                 "glTF: a skin index must be a whole number that names a bone"
             )
@@ -2589,19 +2627,9 @@ def _same_instances(first: InstancedMesh, other: InstancedMesh) raises -> Bool:
         same = (
             same
             and first.matrices[at] == other.matrices[at]
-            and _same_color(first.color_at(at), other.color_at(at))
+            and first.color_at(at) == other.color_at(at)
         )
     return same
-
-
-def _same_color(first: Color, other: Color) -> Bool:
-    """Return True if two colors are one."""
-    return (
-        first.r == other.r
-        and first.g == other.g
-        and first.b == other.b
-        and first.a == other.a
-    )
 
 
 def _same_skin(first: SkinnedMesh, other: SkinnedMesh) -> Bool:
@@ -2989,7 +3017,7 @@ def export_gltf(
             exporter.document(roots, nodes, "", top), exporter.bin
         )
         return files^
-    var uri = binary_name
+    var uri = percent_encoded(binary_name)
     if container == GLTF_SEPARATE:
         files.binary = exporter.bin.copy()
     else:

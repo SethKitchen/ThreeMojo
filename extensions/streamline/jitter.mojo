@@ -17,8 +17,8 @@ the offset and the picture moves the other way.
 **What this port decides.** `jitter_phase_count` is eight samples for every
 output pixel that one render pixel covers. Streamline does not require a
 count. And Streamline's `jitterOffset` is the negative of these offsets.
-`sl.dlss` 2.14.16 needed that sign on an NVIDIA TITAN RTX, see
-`docs/validation/streamline/`. `frame_constants` negates the offset it is
+`sl.dlss` 2.14.16 needed that sign on an NVIDIA TITAN RTX, see the
+Streamline page. `frame_constants` negates the offset it is
 given.
 """
 

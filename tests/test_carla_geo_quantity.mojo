@@ -34,7 +34,6 @@ from std.testing import (
     assert_equal,
     assert_almost_equal,
     assert_raises,
-    assert_true,
 )
 from units.si import (
     Angle64,
@@ -45,9 +44,7 @@ from units.si import (
     Acceleration,
     Velocity,
     Frequency,
-    DEGREE,
     KILOMETER,
-    METER,
 )
 
 

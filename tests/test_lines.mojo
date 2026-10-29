@@ -52,7 +52,7 @@ from render.texture_store import NO_TEXTURE, TextureStore
 from render.tonemap import NO_TONE_MAPPING
 from render.transmission import TransmissionTarget
 from render.tasks import TaskGroup
-from std.math import inf, nan
+from std.math import nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,

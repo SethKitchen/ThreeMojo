@@ -38,7 +38,7 @@ from math.vector3 import Vector3, mix_delta3
 from render.tasks import TaskGroup
 from std.collections import Dict
 from std.sys import num_logical_cores
-from std.math import atan2, ceil, isfinite, max, min, pi, sqrt
+from std.math import atan2, ceil, isfinite, max, min, pi
 
 # Fine cells per unit of `detail` along the long axis.
 comptime REFINE = 4

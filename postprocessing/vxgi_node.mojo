@@ -43,8 +43,8 @@ from core.ordinal import ordinal_valid, require_valid, require_positive
 from core.assets import Assets
 from core.scene import Scene
 from lights.vxgi_cone_tracer import (
+    GOLDEN_STEP,
     Lanes,
-    UNBOUNDED,
     Untracked,
     VxgiGrid,
     cosine_direction,
@@ -365,7 +365,7 @@ def vxgi_pixel(
     var occlusion = Float32(0)
     for cone in range(count):  # pragma: no branch
         var u1 = (Float32(cone) + elevation) / Float32(count)
-        var u2 = fract(Float32(cone) * Float32(0.618034) + rotation)
+        var u2 = fract(Float32(cone) * GOLDEN_STEP + rotation)
         var direction = cosine_direction(frame[0], frame[1], turned, u1, u2)
         var gathered = trace_cone(
             grid,

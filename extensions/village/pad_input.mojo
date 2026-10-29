@@ -14,6 +14,7 @@ a PlayStation controller play alike:
 | Look | Right stick | The arrows |
 | Run | Hold the right trigger, the east button or the left stick | Hold Shift, or `R` |
 | Jump | The south button | Space |
+| Use | The west button | `E` |
 
 A stick reads nothing within `DEAD_ZONE` of its middle, and the rest of
 its throw is stretched to the whole range, so a worn stick does not
@@ -47,6 +48,7 @@ from extensions.gamepad.ids import (
     BUTTON_EAST,
     BUTTON_LEFT_STICK,
     BUTTON_SOUTH,
+    BUTTON_WEST,
 )
 from extensions.village.character import MoveInput
 from math.utils import clamp
@@ -60,6 +62,8 @@ comptime AXIS_HIGH = Float32(32767)
 """The value of an axis leaned all the way, as SDL reads it."""
 comptime KEY_SPACE = Key(32)
 """The space bar."""
+comptime KEY_E = Key(101)
+"""The `E` key, which uses the thing nearby."""
 
 
 def stick(
@@ -127,6 +131,7 @@ def gamepad_input(pad: Gamepad, dead_zone: Float32 = DEAD_ZONE) -> MoveInput:
         -look[1],
         run,
         pad.get_button(BUTTON_SOUTH),
+        pad.get_button(BUTTON_WEST),
     )
 
 
@@ -167,6 +172,7 @@ def keyboard_input(keys: HeldKeys, shift: Bool) -> MoveInput:
         look_up,
         shift or keys.is_held(KEY_R),
         keys.is_held(KEY_SPACE),
+        keys.is_held(KEY_E),
     )
 
 
@@ -188,4 +194,5 @@ def combined(first: MoveInput, second: MoveInput) -> MoveInput:
         clamp(first.look_up + second.look_up, -1, 1),
         first.run or second.run,
         first.jump or second.jump,
+        first.use or second.use,
     )

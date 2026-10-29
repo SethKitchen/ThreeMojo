@@ -102,6 +102,36 @@ def _node(mut scene: Scene) raises -> NodeId:
     return scene.add(Object3D())
 
 
+def test_a_material_list_is_projected_whatever_its_first_says() raises:
+    # three.js tests `object.material.visible`, which a list does not
+    # have, so a hidden first material does not hide the whole mesh.
+    var assets = Assets()
+    var geometry = _through(
+        [
+            Vector3(-1, -1, 0),
+            Vector3(1, -1, 0),
+            Vector3(1, 1, 0),
+            Vector3(-1, -1, 0),
+            Vector3(1, 1, 0),
+            Vector3(-1, 1, 0),
+        ]
+    )
+    geometry.add_group(0, 3, MaterialIndex(0))
+    geometry.add_group(3, 3, MaterialIndex(1))
+    var shape = assets.geometries.add(geometry^)
+    var hidden = Material(Color(255, 0, 0), kind=BASIC)
+    hidden.visible = False
+    var off = assets.materials.add(hidden)
+    var on = _plain(assets)
+    for flip in range(2):
+        var scene = Scene()
+        var wearing: List[MaterialId] = [off, on]
+        if flip == 1:
+            wearing = [on, off]
+        scene.add_mesh(Mesh(shape, wearing, _node(scene)))
+        assert_equal(len(_project(scene, assets).elements), 2)
+
+
 def test_a_face_turned_away_is_culled_unless_double_sided() raises:
     var scene = Scene()
     var assets = Assets()

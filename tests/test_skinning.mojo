@@ -19,7 +19,7 @@ from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from materials.material import Color, DOUBLE_SIDE, Material, MaterialId
-from math.matrix4 import Matrix4, rotation_z, scaling, translation
+from math.matrix4 import Matrix4, scaling, translation
 from math.vector3 import Vector3
 from objects.skeleton import Bone, Skeleton, bind_skeleton, blend_bones
 from objects.skinned_mesh import (
@@ -824,6 +824,53 @@ def test_a_fractional_bone_index_is_refused_in_a_frame() raises:
     var second: List[Float32] = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]
     with assert_raises():
         _ = rigged(assets, skinned_triangle(first, second), Vector3(0, 0, 0))
+
+
+def test_a_slot_with_no_weight_is_drawn_whatever_bone_it_names() raises:
+    # An exporter can leave any number in an unused slot. three.js's
+    # shader multiplies that slot's bone by zero, so it changes nothing.
+    for unused in [Float32(7), Float32(0.5)]:
+        var assets = Assets()
+        var first: List[Float32] = [
+            0,
+            unused,
+            0,
+            0,
+            0,
+            unused,
+            0,
+            0,
+            0,
+            unused,
+            0,
+            0,
+        ]
+        var second: List[Float32] = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]
+        var corners = rigged(
+            assets, skinned_triangle(first, second), Vector3(1, 0, 0)
+        )
+        assert_equal(len(corners), 3)
+        assert_almost_equal(corners[0].world.x, Float32(1), atol=TOLERANCE)
+        assert_almost_equal(corners[1].world.x, Float32(2), atol=TOLERANCE)
+        # A slot with weight behind it must still name a bone.
+        var halves: List[Float32] = [
+            0.5,
+            0.5,
+            0,
+            0,
+            0.5,
+            0.5,
+            0,
+            0,
+            0.5,
+            0.5,
+            0,
+            0,
+        ]
+        with assert_raises(contains="bone"):
+            _ = rigged(
+                assets, skinned_triangle(first, halves), Vector3(1, 0, 0)
+            )
 
 
 def test_bone_weights_must_be_numbers_that_are_not_negative() raises:

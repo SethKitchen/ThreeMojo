@@ -17,7 +17,6 @@ from extensions.carla.navigation_search import (
 )
 from extensions.carla.opendrive import load_opendrive, load_opendrive_file
 from extensions.carla.map import Map
-from math.vector3 import Vector3
 from std.testing import assert_true
 from units.si import Length, METER
 from tests.test_carla_agents import TWO_LANE

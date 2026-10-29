@@ -14,7 +14,6 @@ from postprocessing.composer import (
     FSR1,
     SHARPEN,
     EffectComposer,
-    Pass,
     fsr1_pass,
     render_pass,
     sharpen_pass,

@@ -12,7 +12,7 @@ Universal fixtures under `assets/ktx2/`, carried in data URIs.
 """
 
 from core.assets import Assets
-from core.buffer_geometry import COLOR, POSITION
+from core.buffer_geometry import POSITION
 from core.scene import Scene
 from exporters.gltf import encode_base64
 from loaders.gltf import (
@@ -24,7 +24,6 @@ from loaders.gltf import (
 from loaders.image_batch import decode_batch_size
 from materials.material import BASIC, NO_TEXTURE, PHYSICAL, STANDARD
 from objects.line import LOOP, SEGMENTS, STRIP
-from render.framebuffer import Color
 from render import ktx2
 from render.srgb import LINEAR, SRGB
 from render.texture import FLOAT_TYPE, UNSIGNED_BYTE_TYPE, Texture
@@ -170,6 +169,9 @@ def test_points_and_lines_are_drawn_as_three_js_draws_them() raises:
     assert_equal(dots.opacity, 0.5)
     assert_true(dots.transparent)
     assert_false(dots.vertex_colors)
+    # A blended material writes no depth, and a point or a line made from
+    # it writes none either, as three.js's `Material.copy` copies it.
+    assert_false(dots.depth_write)
     # Each kind of line, and a line material that is basic.
     assert_equal(scene.lines[0].mode, SEGMENTS)
     assert_equal(scene.lines[1].mode, LOOP)
@@ -177,10 +179,14 @@ def test_points_and_lines_are_drawn_as_three_js_draws_them() raises:
     var tinted = assets.materials.get(scene.lines[0].material)
     assert_equal(tinted.kind, BASIC)
     assert_true(tinted.vertex_colors)
+    # The default material is opaque and writes its depth.
+    assert_true(tinted.depth_write)
     assert_equal(tinted.color.g, 255)
     var red = assets.materials.get(scene.lines[2].material)
     assert_equal(red.color.g, 0)
     assert_true(red.transparent)
+    assert_false(red.depth_write)
+    assert_false(assets.materials.get(model.materials[0]).depth_write)
     # An indexed loop is read out in index order: an index here is a
     # triangle index.
     ref loop = assets.geometries.get(scene.lines[1].geometry)

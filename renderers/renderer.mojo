@@ -108,12 +108,7 @@ from render.color_spaces import (
 from cameras.array_camera import ArrayCamera
 from cameras.camera import Camera
 from cameras.cube_camera import CubeCamera
-from core.background import (
-    COLOR_BACKGROUND,
-    CUBE_BACKGROUND,
-    TEXTURE_BACKGROUND,
-    Background,
-)
+from core.background import COLOR_BACKGROUND, TEXTURE_BACKGROUND, Background
 from core.deform import (
     SkinPose,
     displaced_positions,
@@ -145,7 +140,6 @@ from lights.light import (
     IES_SPOT,
     POINT,
     PROJECTOR_SPOT,
-    SPOT,
     Light,
     LightMask,
 )
@@ -181,7 +175,39 @@ from math.matrix3 import Matrix3
 from render.rect import Rect
 from render.splatrule import ProjectedSplat
 from render.splat_raster import prepare_gaussian_splat
-from render.rasterizer import DRAW_SPLATS
+from render.rasterizer import (
+    DRAW_SPLATS,
+    Corner,
+    _raise_band_errors,
+    Surface,
+    corner_of,
+    joined,
+    surface_of,
+    DRAW_POINTS,
+    DRAW_SEGMENTS,
+    SHADE_LIT,
+    SHADE_SHADOW,
+    SHADE_TEXTURE,
+    SHADE_UV,
+    DRAW_TRIANGLES,
+    Draw,
+    DrawKind,
+    LayerFactors,
+    RasterVertex,
+    ShadeMode,
+    require_shade_mode,
+    TextureFrames,
+    check_alpha_data_map,
+    check_alpha_map,
+    check_channel,
+    check_color_map,
+    check_data_map,
+    check_gradient_map,
+    check_light_map,
+    check_output_kinds,
+    edge,
+    rasterize_frame,
+)
 from math.matrix4 import Matrix4, translation
 from math.vector3 import Vector3, mix_delta3
 from math.utils import (
@@ -214,14 +240,7 @@ from objects.line_segments2 import (
     dash_spans,
     drawn_segments,
 )
-from objects.lod import Lod
 from objects.sprite import SPRITE_RADIUS, Sprite, sprite_place, sprite_span
-from objects.skinned_mesh import (
-    ATTACHED,
-    BONES_PER_VERTEX,
-    SKIN_INDEX,
-    SKIN_WEIGHT,
-)
 from materials.material import (
     BACK_SIDE,
     BASIC,
@@ -332,38 +351,6 @@ from renderers.draw_filter import (
     oit_capable,
     snap_to_pixels,
 )
-from render.rasterizer import (
-    Corner,
-    _raise_band_errors,
-    Surface,
-    corner_of,
-    joined,
-    surface_of,
-    DRAW_POINTS,
-    DRAW_SEGMENTS,
-    SHADE_LIT,
-    SHADE_SHADOW,
-    SHADE_TEXTURE,
-    SHADE_UV,
-    DRAW_TRIANGLES,
-    Draw,
-    DrawKind,
-    LayerFactors,
-    RasterVertex,
-    ShadeMode,
-    require_shade_mode,
-    TextureFrames,
-    check_alpha_data_map,
-    check_alpha_map,
-    check_channel,
-    check_color_map,
-    check_data_map,
-    check_gradient_map,
-    check_light_map,
-    check_output_kinds,
-    edge,
-    rasterize_frame,
-)
 from renderers.clip import (
     ClipVertex,
     clip_depth,
@@ -376,7 +363,7 @@ from renderers.clip import (
 from render.tasks import TaskGroup
 from math.curve_checks import require_at_least_one
 from math.finite import require_positive_finite
-from std.math import cos, floor, isfinite, max, min, pi, sin
+from std.math import cos, max, min, nextafter, pi, sin
 from std.memory import ArcPointer, unsafe_memcpy
 from std.sys import num_logical_cores
 from core.ordinal import require_valid, require_positive
@@ -4967,12 +4954,19 @@ def _spot_camera(
     `at` looking at `aimed`. The aspect is one but for a projector; see
     `lights.projector_light.projector_aspect`.
 
+    A cone of a quarter turn, or a focus above one, can ask for a half turn
+    or more, which no camera sees. three.js builds the degenerate camera
+    such a field gives. The widest camera there is stands in for it.
+
     Raises:
-        Error: If `PerspectiveCamera` refuses the planes, the angle or the
-            aspect.
+        Error: If `PerspectiveCamera` refuses the planes or the aspect.
     """
+    var field = light.shadow.spot_field_of_view(light.angle)
+    var widest = nextafter(Float32(pi), Float32(0))
+    if not (field.value < widest):
+        field = Angle(widest, RADIAN)
     var camera = PerspectiveCamera(
-        light.shadow.spot_field_of_view(light.angle),
+        field,
         aspect,
         light.shadow.near,
         light.shadow_far(),

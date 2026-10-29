@@ -32,7 +32,6 @@ from materials.node_program_id import NodeProgramId
 from math.finite import require_non_negative_finite
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
-from math.vector3 import Vector3
 from math.vector4 import Vector4
 from objects.mesh import Mesh
 from objects.reflector import (

@@ -20,6 +20,7 @@ from math.euler import (
 from math.matrix4 import Matrix4, rotation_x, rotation_y, rotation_z
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
+from std.benchmark import black_box
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -28,7 +29,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle, DEGREE
+from units.si import Angle, DEGREE, RADIAN
 
 comptime TOLERANCE = Float64(1e-5)
 
@@ -251,6 +252,32 @@ def test_slerp_between_nearly_identical_rotations_blends_straight() raises:
     var between = a.slerp(b, 0.5)
     assert_almost_equal(between.length(), Float32(1), atol=TOLERANCE)
     assert_same_matrix(between.to_matrix(), rotation_x(Angle(20.05, DEGREE)))
+
+
+def _small_turn() -> Quaternion:
+    """Return a turn of 2e-4 radians about y, whose cosine with the
+    identity rounds to one in Float32."""
+    return Quaternion.from_axis_angle(
+        Vector3(0, 1, 0), Angle(black_box(Float32(2e-4)), RADIAN)
+    )
+
+
+def test_slerp_moves_through_a_turn_too_small_for_a_float32_cosine() raises:
+    var start = Quaternion.identity()
+    assert_almost_equal(
+        start.slerp(_small_turn(), 0.5).y, Float32(5e-5), rtol=1e-3
+    )
+    assert_almost_equal(
+        start.slerp(_small_turn(), 0.999).y, Float32(9.99e-5), rtol=1e-3
+    )
+
+
+def test_a_small_turn_has_its_angle_and_is_reached() raises:
+    var start = Quaternion.identity()
+    var turn = _small_turn()
+    assert_almost_equal(start.angle_to(turn).value, Float32(2e-4), rtol=1e-3)
+    start.rotate_towards(turn, Angle(1.0, RADIAN))
+    assert_true(start == turn)
 
 
 # --- euler -------------------------------------------------------------------

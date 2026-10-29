@@ -23,16 +23,9 @@ CARLA's rules, with a tolerance for the physics:
   between 20 m and 45 m of the hero along x: x = 110, 0.5 m up.
 """
 
-from extensions.carla.actor import (
-    ACTOR_DORMANT,
-    ActorId,
-    GREEN,
-    NO_ACTOR,
-    RED,
-)
+from extensions.carla.actor import ACTOR_DORMANT, ActorId, GREEN, RED
 from extensions.carla.opendrive import load_opendrive
-from extensions.carla.physics.body import DYNAMIC, KINEMATIC
-from extensions.carla.physics.quantities import KILOMETER_PER_HOUR
+from extensions.carla.physics.body import KINEMATIC
 from extensions.carla.physics.vehicle_control import VehicleControl
 from extensions.carla.traffic_manager import (
     ALSM,
@@ -51,7 +44,6 @@ from extensions.carla.traffic_manager_map import (
 )
 from extensions.carla.traffic_manager_shared import (
     CommandKind,
-    TrafficCommand,
     apply_transform,
     apply_vehicle_control,
     no_command,

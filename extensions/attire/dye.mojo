@@ -36,7 +36,7 @@ This is not a three.js port. See Extensions.
     paint(piece, garment.dyes)
 """
 
-from std.math import floor, pi, sin
+from std.math import pi, sin
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry

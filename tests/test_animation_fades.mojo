@@ -559,6 +559,8 @@ def test_a_once_action_says_when_it_finishes_and_which_way() raises:
 def test_a_move_of_nothing_finishes_nothing() raises:
     # A held `ONCE` action played again at its end does not finish again
     # until it moves, as three.js's `_updateTime` returns early on zero.
+    # Its clamped finish paused it, and `play` does not unpause it, as
+    # three.js's `play` changes neither `enabled` nor `paused`.
     var action = AnimationAction(
         AnimationClip(
             "slide",
@@ -577,7 +579,7 @@ def test_a_move_of_nothing_finishes_nothing() raises:
     action.play()
     action.advance(0)
     assert_false(action.just_finished)
-    assert_true(action.is_playing())
+    assert_false(action.is_playing())
 
 
 def main() raises:

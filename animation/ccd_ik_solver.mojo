@@ -43,10 +43,9 @@ from core.object3d import NodeId
 from core.ordinal import require_index_in_count, require_non_negative
 from core.scene import Scene, require_skinned_mesh
 from math.euler import Euler
-from math.utils import clamp_unit
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import acos, sqrt
+from std.math import sqrt
 from units.si import Angle, RADIAN
 
 # A turn smaller than this, in radians, is skipped, so that a link already
@@ -269,9 +268,10 @@ struct CCDIKSolver(Movable):
                 var to_target = aim - at
                 to_target.apply_quaternion(facing)
                 to_target.normalize()
-                # Rounding can carry the dot of two unit vectors past one.
-                var cosine = clamp_unit(to_target.dot(to_effector))
-                var angle = acos(cosine)
+                # three.js takes `acos` of the dot product. In Float32 that
+                # reads every turn below about 2.4e-4 radians as zero, and
+                # `angle_to` keeps them.
+                var angle = to_target.angle_to(to_effector).to(RADIAN)
                 if angle < SMALLEST_TURN:
                     continue
                 if Bool(ik.min_angle):

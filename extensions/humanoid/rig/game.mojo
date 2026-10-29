@@ -63,14 +63,14 @@ from extensions.humanoid.skeleton.head.skin.mouth import mouth_mesh
 from extensions.humanoid.skeleton.isosurface import check_detail
 from extensions.humanoid.rig.weights import part_legs, skin_weights
 from extensions.humanoid.side import LEFT, RIGHT
-from extensions.humanoid.skeleton.arm.assembly import UNSET_PAINT
+from extensions.humanoid.skeleton.arm.assembly import (
+    UNSET_PAINT,
+    place_mesh_node,
+    resolved_paint,
+)
 from extensions.humanoid.skeleton.arm.frame import arm_muscle_dimensions
 from extensions.humanoid.skeleton.hand.skin.geometry import (
     hand_skin_from_dimensions,
-)
-from extensions.humanoid.skeleton.arm.assembly import (
-    place_mesh_node,
-    resolved_paint,
 )
 from extensions.humanoid.skeleton.complexion import iris_albedo
 from extensions.humanoid.skeleton.head.eyes import eyeball_mesh

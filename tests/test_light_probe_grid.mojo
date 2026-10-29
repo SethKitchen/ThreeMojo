@@ -19,7 +19,7 @@ direction.
 
 from cameras.orthographic_camera import OrthographicCamera
 from core.assets import Assets
-from core.object3d import NO_PARENT, NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from environments.color_environment import color_environment
 from geometries.box import cube

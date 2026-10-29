@@ -20,14 +20,14 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from extensions.building.material import BuildingMaterial, concrete, steel
+from extensions.building.material import concrete, steel
 from extensions.numerics.dense import DenseMatrix, solve
 from extensions.structure.ids import LoadCaseId, NodeId, ShellId
 from extensions.structure.kinds import RX, RY, RZ, UX, UY, UZ
 from extensions.structure.modal import solve_modes
 from extensions.structure.model import StructuralModel
 from extensions.structure.shell import ShellElement
-from extensions.structure.static import StaticSolver, solve_static
+from extensions.structure.static import solve_static
 from generators.utils import Vec3d
 from units.si import (
     Acceleration64,

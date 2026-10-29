@@ -48,8 +48,7 @@ from core.buffer_geometry import POSITION, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from extensions.attire.dye import paint
-from extensions.attire.dye import DYE
+from extensions.attire.dye import paint, DYE
 from extensions.attire.fabric import fabric_material
 from extensions.attire.kinds import FabricKind, WOOL, require_fabric_kind
 from extensions.attire.springs import SpringCollider, body_colliders, push_out
@@ -60,7 +59,6 @@ from extensions.humanoid.rig.joints import (
     RIGHT_UPPER_ARM,
 )
 from materials.material import DOUBLE_SIDE
-from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color

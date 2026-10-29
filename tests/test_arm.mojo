@@ -10,7 +10,7 @@ from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.humanoid.athleticism import TONED, Athleticism
-from extensions.humanoid.sex import FEMALE, MALE, Sex
+from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.arm.assembly import (
@@ -110,10 +110,7 @@ from extensions.humanoid.skeleton.arm.lymph.dimensions import (
     arm_lymph_paths,
     named_arm_lymph,
 )
-from extensions.humanoid.skeleton.arm.lymph.geometry import (
-    arm_lymph,
-    arm_lymph_from_dimensions,
-)
+from extensions.humanoid.skeleton.arm.lymph.geometry import arm_lymph
 from extensions.humanoid.skeleton.arm.lymph.mass import (
     arm_lymph_mass,
     arm_lymph_mass_from_dimensions,
@@ -156,10 +153,7 @@ from extensions.humanoid.skeleton.arm.nerves.dimensions import (
     arm_nerve_paths,
     named_arm_nerves,
 )
-from extensions.humanoid.skeleton.arm.nerves.geometry import (
-    arm_nerve,
-    arm_nerve_from_dimensions,
-)
+from extensions.humanoid.skeleton.arm.nerves.geometry import arm_nerve
 from extensions.humanoid.skeleton.arm.nerves.mass import (
     arm_nerve_mass,
     arm_nerve_mass_from_dimensions,
@@ -193,10 +187,7 @@ from extensions.humanoid.skeleton.arm.vessels.dimensions import (
     is_arm_artery,
     named_arm_vessels,
 )
-from extensions.humanoid.skeleton.arm.vessels.geometry import (
-    arm_vessel,
-    arm_vessel_from_dimensions,
-)
+from extensions.humanoid.skeleton.arm.vessels.geometry import arm_vessel
 from extensions.humanoid.skeleton.arm.vessels.mass import (
     arm_vessel_mass,
     arm_vessel_mass_from_dimensions,
@@ -227,7 +218,6 @@ from extensions.anatomy.soft_tissue import (
     MENISCUS,
     arterial_tissue,
     hair_tissue,
-    ligament_tissue,
     lymph_tissue,
     muscle_tissue,
     nerve_tissue,
@@ -249,7 +239,7 @@ from extensions.humanoid.skeleton.torso.nerves.dimensions import (
     BRACHIAL_PLEXUS,
     torso_nerve_field,
 )
-from extensions.humanoid.skeleton.torso.sweep import Sweep, SweepField, floats
+from extensions.humanoid.skeleton.torso.sweep import floats
 from extensions.humanoid.skeleton.torso.vessels.dimensions import (
     SUBCLAVIAN_ARTERY,
     torso_vessel_field,

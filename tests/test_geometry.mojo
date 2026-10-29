@@ -37,7 +37,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle, DEGREE, FOOT, Length, METER, TURN
+from units.si import Angle, DEGREE, FOOT, Length, METER, RADIAN, TURN
 
 comptime TOLERANCE = Float64(1e-6)
 
@@ -175,6 +175,14 @@ def assert_xyz(got: Vector3, x: Float32, y: Float32, z: Float32) raises:
     assert_almost_equal(got.x, x, atol=Float64(1e-5))
     assert_almost_equal(got.y, y, atol=Float64(1e-5))
     assert_almost_equal(got.z, z, atol=Float64(1e-5))
+
+
+def assert_js_number(got: Float32, expected: Float64) raises:
+    """Assert a stored number is three.js's, within about one unit in the
+    last place."""
+    assert_almost_equal(
+        got, Float32(expected), atol=Float64(1e-30), rtol=Float64(1.5e-7)
+    )
 
 
 def triangle_attribute() raises -> BufferAttribute:
@@ -749,6 +757,38 @@ def test_sphere_quads_split_on_three_js_diagonal() raises:
     assert_equal(geometry.index[first + 5], d)
 
 
+def test_a_sphere_has_three_js_s_numbers() raises:
+    """A sphere is computed in doubles, as three.js computes it, and each
+    number is rounded once when it is stored. In Float32, a vertex by the
+    south pole of the default sphere had an x of -1.10e-8, where three.js
+    has -1.21e-7. The expected values are three.js r180's, given the same
+    Float32 angles."""
+    var ball = sphere(Length(1, METER), 32, 16)
+    assert_js_number(
+        ball.attribute_view(String(POSITION)).component(222, 0),
+        -1.2115218339658895e-07,
+    )
+    var band = sphere(
+        Length(1.5, METER),
+        7,
+        5,
+        Angle(0.3, RADIAN),
+        Angle(4.0, RADIAN),
+        Angle(0.2, RADIAN),
+        Angle(2.0, RADIAN),
+    )
+    assert_js_number(
+        band.attribute_view(String(POSITION)).component(10, 0),
+        -0.10806446522474289,
+    )
+    assert_js_number(
+        band.attribute_view(String(NORMAL)).component(34, 0),
+        -0.12425363808870316,
+    )
+    # One less three fifths, in doubles, then rounded: Float32 0.4.
+    assert_equal(band.attribute_view(String(UV)).component(24, 1), Float32(0.4))
+
+
 # --- plane -------------------------------------------------------------------
 
 
@@ -1140,6 +1180,45 @@ def test_a_ring_needs_enough_segments() raises:
         _ = ring(Length(1.0, METER), Length(2.0, METER), Int.MAX, 1)
 
 
+def test_a_circle_and_a_ring_have_three_js_s_numbers() raises:
+    """A circle and a ring are computed in doubles, as three.js computes
+    them, and each number is rounded once when it is stored. In Float32,
+    vertex 25 of a disk of 32 segments had an x of 1.19e-8, where three.js
+    has 1.31e-7. The expected values are three.js r180's, given the same
+    Float32 angles."""
+    var disk = circle(Length(1, METER), 32)
+    assert_js_number(
+        disk.attribute_view(String(POSITION)).component(25, 0),
+        1.3113417196564114e-07,
+    )
+    var slice = circle(
+        Length(2, METER), 7, Angle(0.5, RADIAN), Angle(2.0, RADIAN)
+    )
+    assert_js_number(
+        slice.attribute_view(String(POSITION)).component(5, 0),
+        -0.1439969390630722,
+    )
+    assert_js_number(
+        slice.attribute_view(String(UV)).component(7, 0), 0.2000046819448471
+    )
+    var arc = ring(
+        Length(0.3, METER),
+        Length(1.7, METER),
+        9,
+        4,
+        Angle(0.2, RADIAN),
+        Angle(3.0, RADIAN),
+    )
+    assert_js_number(
+        arc.attribute_view(String(POSITION)).component(34, 0),
+        0.050563208758831024,
+    )
+    assert_js_number(
+        arc.attribute_view(String(UV)).component(49, 0),
+        0.0008526121964678168,
+    )
+
+
 # --- cylinder ---------------------------------------------------------------
 
 
@@ -1459,6 +1538,51 @@ def test_a_cone_needs_a_radius_and_a_height() raises:
         _ = cone(Length(1.0, METER), Length(1.0, METER), 2)
 
 
+def test_a_cylinder_and_a_cone_have_three_js_s_numbers() raises:
+    """A cylinder is computed in doubles, as three.js computes it, and each
+    number is rounded once when it is stored. In Float32, a frustum's
+    texture coordinate near the seam was off by 2e-4 of itself. The
+    expected values are three.js r180's, given the same Float32 angles."""
+    var can = cylinder(
+        Length(1, METER), Length(1, METER), Length(1, METER), 32, 1
+    )
+    assert_js_number(
+        can.attribute_view(String(POSITION)).component(24, 2),
+        1.3113417196564114e-07,
+    )
+    var frustum = cylinder(
+        Length(0.5, METER),
+        Length(1.5, METER),
+        Length(2, METER),
+        7,
+        3,
+        False,
+        Angle(0.3, RADIAN),
+        Angle(4.0, RADIAN),
+    )
+    assert_js_number(
+        frustum.attribute_view(String(POSITION)).component(10, 2),
+        0.10632535815238953,
+    )
+    assert_js_number(
+        frustum.attribute_view(String(NORMAL)).component(2, 2),
+        0.11412034928798676,
+    )
+    assert_js_number(
+        frustum.attribute_view(String(UV)).component(44, 0),
+        6.045108239050023e-05,
+    )
+    var spike = cone(Length(1, METER), Length(2, METER), 9, 2)
+    assert_js_number(
+        spike.attribute_view(String(POSITION)).component(17, 2),
+        0.08682415634393692,
+    )
+    assert_js_number(
+        spike.attribute_view(String(NORMAL)).component(7, 2),
+        0.15531577169895172,
+    )
+
+
 # --- torus ------------------------------------------------------------------
 
 
@@ -1609,6 +1733,36 @@ def test_a_torus_needs_radii_and_segments_and_an_arc() raises:
         _ = torus(two, half, 3, 5592406)
 
 
+def assert_three_js(got: Vector3, x: Float32, y: Float32, z: Float32) raises:
+    """Assert a vector is three.js's, within about one unit in the last
+    place of a number near one."""
+    assert_almost_equal(got.x, x, atol=Float64(2.5e-7))
+    assert_almost_equal(got.y, y, atol=Float64(2.5e-7))
+    assert_almost_equal(got.z, z, atol=Float64(2.5e-7))
+
+
+def test_a_thin_torus_has_three_js_s_normals() raises:
+    """A torus is computed in doubles, as three.js computes it. A normal is
+    the point less the center of the tube, and a thin tube lost digits there
+    in Float32: the normal of vertex 500 was off by 5.6e-5. The expected values are three.js
+    r180's `TorusGeometry` arithmetic in Python doubles, with the arc a
+    Float32 full turn, stored to Float32."""
+    var ring = torus(Length(10, METER), Length(0.01, METER), 12, 48)
+    ref normals = ring.attribute_view(String(NORMAL))
+    assert_three_js(normals.vector3(1), 0.9914448857, 0.1305261999, 0)
+    assert_three_js(normals.vector3(60), 0.1130389646, 0.8586164117, 0.5)
+    assert_three_js(
+        normals.vector3(333), -0.3826835752, 0.9238795042, 1.2246468526e-16
+    )
+    assert_three_js(
+        normals.vector3(500), 0.1294095069, 0.4829629064, -0.8660253882
+    )
+    ref positions = ring.attribute_view(String(POSITION))
+    assert_three_js(
+        positions.vector3(500), 2.5894842148, 9.6640882492, -0.0086602541
+    )
+
+
 # --- torus knot -------------------------------------------------------------
 
 
@@ -1705,6 +1859,33 @@ def test_a_knot_maps_u_along_and_v_around() raises:
     assert_equal(uvs.component(48 * 9, 1), Float32(0))
     assert_equal(uvs.component(knot.vertex_count() - 1, 1), Float32(1))
     assert_texture_coordinates_in_range(knot)
+
+
+def test_a_torus_knot_has_three_js_s_vertices() raises:
+    """The knot's frame is built in doubles from two points 0.01 apart, as
+    three.js builds it. In Float32 that difference kept two or three digits, and vertex
+    300 of the default knot moved 1.1e-5 meters. The expected values are
+    three.js r180's `TorusKnotGeometry` arithmetic in Python doubles, stored
+    to Float32. The seam closes exactly, as it does there."""
+    var knot = torus_knot(Length(1, METER), Length(0.4, METER), 64, 8, 2, 3)
+    ref positions = knot.attribute_view(String(POSITION))
+    ref normals = knot.attribute_view(String(NORMAL))
+    assert_three_js(
+        positions.vector3(9), 1.0698007345, 0.1776716113, 0.0891696289
+    )
+    assert_three_js(
+        normals.vector3(9), -0.9506526589, -0.2769090235, -0.1399317831
+    )
+    assert_three_js(
+        positions.vector3(300), 0.7870314717, -0.1468099952, -0.2944990993
+    )
+    assert_three_js(
+        normals.vector3(300), 0.6888067722, -0.6213885546, -0.3733918667
+    )
+    var first = positions.vector3(0)
+    assert_three_js(first, 1.1000123024, -0.0027999515, -0.0013999990)
+    var last = positions.vector3(584)
+    assert_three_js(last, first.x, first.y, first.z)
 
 
 def test_a_torus_knot_can_be_measured_in_feet() raises:
@@ -2021,6 +2202,36 @@ def test_a_polyhedron_can_be_measured_in_feet() raises:
     )
 
 
+def test_the_solids_have_three_js_s_numbers() raises:
+    """A polyhedron is cut and pushed out in doubles, as three.js does it,
+    with three.js's golden ratio in doubles. In Float32 a vertex of a
+    detail two icosahedron had a z of 1.97e-8 where three.js has
+    -3.67e-17. The expected values are three.js r180's."""
+    var gem = tetrahedron(Length(1, METER), 2)
+    assert_js_number(
+        gem.attribute_view(String(POSITION)).component(4, 1),
+        0.5773502588272095,
+    )
+    var ball = icosahedron(Length(1, METER), 2)
+    assert_js_number(
+        ball.attribute_view(String(POSITION)).component(112, 2),
+        -3.672532034608448e-17,
+    )
+    assert_js_number(
+        ball.attribute_view(String(NORMAL)).component(112, 2),
+        -3.672532034608448e-17,
+    )
+    var die = dodecahedron(Length(1, METER), 1)
+    assert_js_number(
+        die.attribute_view(String(UV)).component(383, 0),
+        0.023057708516716957,
+    )
+    var finer = dodecahedron(Length(1, METER), 2)
+    assert_js_number(
+        finer.attribute_view(String(POSITION)).component(193, 1), 0.0
+    )
+
+
 def test_a_polyhedron_needs_a_radius_a_detail_and_whole_faces() raises:
     var one = Length(1.0, METER)
     var vertices: List[Float32] = [1, 0, 0, 0, 1, 0, 0, 0, 1]
@@ -2307,6 +2518,37 @@ def test_a_lathe_sweep_makes_a_section() raises:
     # The last column is half a turn round from +z, at -z.
     assert_xyz(half.attribute_view(String(POSITION)).vector3(8), 0, 0, -1)
     assert_faces_wind_with_their_normals(half)
+
+
+def test_a_lathe_has_three_js_s_numbers() raises:
+    """A lathe is computed in doubles, as three.js computes it, and its
+    sweep is clamped to `Math.PI * 2`. So the last column of a full turn
+    has three.js's x of -1.22e-16 at a radius of a half, and not 8.74e-8.
+    The expected values are three.js r180's, given the same Float32
+    numbers."""
+    var dome = lathe(profile([0, -0.5, 0.5, 0, 0, 0.5]), 12)
+    assert_js_number(
+        dome.attribute_view(String(POSITION)).component(37, 0),
+        -1.2246468525851679e-16,
+    )
+    assert_js_number(
+        dome.attribute_view(String(NORMAL)).component(37, 0),
+        -2.4492937051703357e-16,
+    )
+    var vase = lathe(
+        profile([0.1, -1, 0.6, -0.7, 0.3, 0.2, 0.45, 0.9, 0.2, 1.3]),
+        5,
+        Angle(0.3, RADIAN),
+        Angle(4.0, RADIAN),
+    )
+    assert_js_number(
+        vase.attribute_view(String(POSITION)).component(26, 2),
+        -0.2404794991016388,
+    )
+    assert_js_number(
+        vase.attribute_view(String(NORMAL)).component(28, 2),
+        -0.3991531729698181,
+    )
 
 
 def test_a_lathe_needs_a_profile_a_segment_and_a_sweep() raises:

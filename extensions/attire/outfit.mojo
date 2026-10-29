@@ -32,7 +32,6 @@ This is not a three.js port. See Extensions.
 """
 
 from core.assets import Assets
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry
 from core.scene import Scene
 from extensions.attire.cover import cover_values

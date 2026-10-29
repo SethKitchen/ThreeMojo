@@ -13,13 +13,7 @@ on one side must light the surfaces facing that side more.
 
 from core.layers import Layers
 from core.scene import Scene
-from lights.light import (
-    AMBIENT,
-    LIGHT_PROBE,
-    LightKind,
-    ambient_light,
-    light_probe,
-)
+from lights.light import LIGHT_PROBE, ambient_light, light_probe
 from lights.light_probe import light_probe_from_cube, sh_from_cube
 from lights.lighting import RECIPROCAL_PI, Lighting
 from math.spherical_harmonics3 import SphericalHarmonics3
@@ -57,6 +51,25 @@ def a_float_cube(
             data.append(values[face])
             data.append(values[face])
             data.append(alpha)
+        faces.append(
+            float_texture(size, size, data^, CLAMP, BILINEAR, False, IGNORED)
+        )
+    return CubeTexture(faces^)
+
+
+def a_ramp_cube(size: Int) raises -> CubeTexture:
+    """Return a cube whose face `f` is gray at `(f + 1) * (1 + x / size)`,
+    brighter to the right of each face."""
+    var faces = List[Texture]()
+    for face in range(6):
+        var data = List[Float32]()
+        for _ in range(size):
+            for x in range(size):
+                var value = Float32(face + 1) * (1 + Float32(x) / Float32(size))
+                data.append(value)
+                data.append(value)
+                data.append(value)
+                data.append(1)
         faces.append(
             float_texture(size, size, data^, CLAMP, BILINEAR, False, IGNORED)
         )
@@ -194,6 +207,32 @@ def test_a_sky_bright_above_lights_the_top_more() raises:
     # Alpha is not light: a translucent cube projects the same.
     var faint = sh_from_cube(a_float_cube(8, values, 0.25))
     assert_true(faint == sh)
+
+
+def test_a_large_cube_sums_in_doubles_as_three_js_does() raises:
+    # three.js's `fromCubeTexture` sums 98,304 texels in doubles. Summed
+    # in Float32, the coefficients drifted by a part in 30,000 here and by
+    # a part in 5,000 for faces of 512. The expected values are that loop
+    # in Python doubles, over this port's `face_direction`.
+    var sh = sh_from_cube(a_ramp_cube(128))
+    var expected: List[Float64] = [
+        18.562313601,
+        -1.272547947,
+        -1.372368683,
+        -1.871472360,
+        0.171109816,
+        0,
+        6.538241589,
+        -1.368878528,
+        -3.774848850,
+    ]
+    for index in range(9):
+        var want = expected[index]
+        var got = Float64(sh.coefficient(index).x)
+        assert_true(
+            abs(got - want) <= 1e-6 * max(abs(want), 1.0),
+            String("coefficient ", index, ": ", got, " is not ", want),
+        )
 
 
 def test_a_byte_cube_is_read_in_linear_light() raises:

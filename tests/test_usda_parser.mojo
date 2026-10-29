@@ -20,7 +20,6 @@ from loaders.usd_specs import (
     USD_OBJECT,
     USD_SAMPLES,
     USD_STRING,
-    USD_STRINGS,
     USD_UNDEFINED,
     UsdLayer,
 )

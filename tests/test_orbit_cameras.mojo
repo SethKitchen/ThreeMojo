@@ -6,7 +6,6 @@
 """Tests for `OrbitControls` on an orthographic camera, on a camera whose
 up is not +y, and zooming toward the cursor."""
 
-from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.input import (
     InputEvent,

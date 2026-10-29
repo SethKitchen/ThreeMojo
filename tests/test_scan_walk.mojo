@@ -15,7 +15,6 @@ from extensions.physics.shape import PhysicsMaterial
 from extensions.scan.occupancy import OccupancyGrid
 from extensions.scan.walk import (
     Walker,
-    WalkOptions,
     default_walk_options,
     is_clear,
     is_walkable,

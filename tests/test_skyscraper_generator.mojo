@@ -12,16 +12,14 @@ three.js's modules: 54 vertices a window, 6 a pane, 36 a box, 72 a pier,
 192 a pinnacle, and a slab or an arcade by its outline.
 """
 
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import NORMAL
 from generators.skyscraper import (
     _Baked,
     ARCADE,
-    AWNING,
     Affine,
     BaseStyle,
     FRAME,
     GLASS,
-    ROOM_CENTER,
     ROOM_SIZE,
     STOREFRONT,
     SkyscraperGenerator,

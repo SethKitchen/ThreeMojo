@@ -11,7 +11,7 @@ tokens under zlib.
 """
 
 from std.pathlib import Path
-from std.testing import TestSuite, assert_equal, assert_true
+from std.testing import TestSuite, assert_true
 
 from tools.exr_variants import (
     Block,

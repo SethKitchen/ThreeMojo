@@ -16,7 +16,7 @@ from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.plane import plane
-from loaders.json import JsonDocument, parse_json
+from loaders.json import parse_json
 from materials.material import BASIC, Material, normal_material
 from math.vector3 import Vector3
 from objects.mesh import Mesh

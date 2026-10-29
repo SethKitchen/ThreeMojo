@@ -80,7 +80,7 @@ have no place for them.
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.background import color_background, cube_background
-from core.fog import exp2_fog, no_fog
+from core.fog import exp2_fog
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.carla.actor import ActorId
@@ -137,7 +137,6 @@ from extensions.carla.sensor_attributes import (
     attribute_string,
 )
 from extensions.carla.render_weather import (
-    HeightFog,
     NITS_PER_UNIT,
     daylight,
     height_fog,
@@ -158,15 +157,13 @@ from extensions.carla.transform import CarlaTransform
 from extensions.carla.weather import WeatherParameters
 from extensions.carla.world import World
 from lights.light import directional_light
-from materials.material import BASIC, DOUBLE_SIDE, Material, MaterialId
-from objects.mesh import Mesh
-from lights.shadow import PCF_SOFT_SHADOW_MAP
+from materials.material import BASIC, Material, MaterialId
+from lights.shadow import PCF_SOFT_SHADOW_MAP, ShadowMap
 from lights.sun_light import SunLight
 from math.vector3 import Vector3
-from lights.shadow import ShadowMap
 from math.noise import ImprovedNoise
 from postprocessing.screen_space import DepthView
-from render.target import OUTPUT_NORMAL
+from render.target import OUTPUT_NORMAL, RenderTarget
 from postprocessing.composer import (
     BLOOM,
     EffectComposer,
@@ -188,7 +185,6 @@ from render.antialias import SUPERSAMPLE
 from render.cube_texture import CubeTexture
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.srgb import srgb_to_linear
-from render.target import RenderTarget
 from render.texture import Texture
 from render.texture_store import NO_TEXTURE, TextureId
 from render.tonemap import ACES_FILMIC_TONE_MAPPING, NO_TONE_MAPPING

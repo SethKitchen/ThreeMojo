@@ -58,7 +58,6 @@ shorter than its header says.
 """
 
 from core.gaussian_splat_utils import (
-    GaussianSplatGeometry,
     clamped_byte,
     create_gaussian_splat_geometry,
     packed_band,

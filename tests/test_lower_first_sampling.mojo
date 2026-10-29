@@ -12,19 +12,18 @@ from postprocessing.effects import (
     HALFTONE_LINEAR,
     HALFTONE_MULTIPLY,
     HalftoneBlending,
+    halftone_blend,
+    _smoothstep,
 )
 
-from postprocessing.effects import halftone_blend, HALFTONE_LINEAR
 from postprocessing.shaders import _bleach
 from math.vector3 import Vector3
 from postprocessing.gtao import _unit
 from postprocessing.denoise import _normal
 from postprocessing.ssr_node import _normal_at
-from postprocessing.sampling import LightView
+from postprocessing.sampling import LightView, clamped_texel, u_of, v_of
 from render.framebuffer import FloatColor
-from postprocessing.effects import _smoothstep
 from postprocessing.filter_nodes import circle
-from postprocessing.sampling import clamped_texel, u_of, v_of
 from postprocessing.traa import sample_motion
 from postprocessing.upscaling import _clamp4
 from extensions.humanoid.skeleton.head.hair.shading import _saturate

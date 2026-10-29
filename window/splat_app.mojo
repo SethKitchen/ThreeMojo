@@ -70,7 +70,6 @@ from window.capi_abi import (
     SPLAT_COLORS,
     SPLAT_COVARIANCES,
     SPLAT_INFO_COUNT,
-    SPLAT_INFO_DEGREE,
     SPLAT_INFO_ORDER,
     SPLAT_INFO_SCAN,
     SPLAT_ORDER,

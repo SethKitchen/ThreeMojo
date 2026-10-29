@@ -13,7 +13,7 @@ and every way a file can be wrong is given to the parser and refused.
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from loaders.obj import ObjModel, parse_obj, read_obj
 from materials.material import BASIC, Material
@@ -21,6 +21,7 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
 from renderers.renderer import Renderer
+from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -29,6 +30,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+from tests.test_scratch import TestScratch, temporary_path
 from units.si import Angle, DEGREE, Length, METER
 
 comptime TOLERANCE = Float64(1e-6)
@@ -272,7 +274,8 @@ def test_material_libraries_are_kept_in_file_order() raises:
     var model = parse_obj(String("mtllib first.mtl\nmtllib my  second.mtl\n"))
     assert_equal(len(model.material_libraries), 2)
     assert_equal(model.material_libraries[0], String("first.mtl"))
-    assert_equal(model.material_libraries[1], String("my second.mtl"))
+    # The rest of the line, as three.js's `substring( 7 ).trim()` reads it.
+    assert_equal(model.material_libraries[1], String("my  second.mtl"))
     assert_equal(len(read_obj("assets/cube.obj").material_libraries), 1)
     with assert_raises(contains="OBJ line 2: mtllib names no file"):
         _ = parse_obj(String("v 0 0 0\nmtllib\n"))
@@ -337,6 +340,20 @@ def test_a_hash_inside_a_word_is_not_a_comment() raises:
     assert_equal(len(model.objects), 1)
     assert_equal(model.objects[0].materials[0], "Material#1")
     assert_equal(model.objects[0].materials[1], "Material#2")
+
+
+def test_a_name_is_the_rest_of_its_line() raises:
+    # three.js takes the rest of an `o`, `g`, `usemtl` or `mtllib` line,
+    # trimmed, as the name: a `#` and two spaces are kept, so the names
+    # match the material library's. A face's comment is still cut.
+    var model = parse_obj(
+        "mtllib my lib.mtl #2\no Brick  Wall #3\nv 0 0 0\nv 1 0 0\nv 0 1 0"
+        "\nusemtl Mat #1\nf 1 2 3 # done\n"
+    )
+    assert_equal(model.material_libraries[0], "my lib.mtl #2")
+    assert_equal(model.objects[0].name, "Brick  Wall #3")
+    assert_equal(model.objects[0].material, "Mat #1")
+    assert_equal(model.objects[0].geometry.triangle_count(), 1)
 
 
 def test_a_corner_with_too_many_parts_is_refused() raises:
@@ -562,5 +579,56 @@ def test_polygon_convexity_is_independent_of_finite_scale() raises:
     assert_equal(translated.objects[0].geometry.triangle_count(), 2)
 
 
+def t_junction(x: String, y: String) -> String:
+    """Return a pentagon whose second corner is at `x y`, between the first
+    and the third, near x = 5000."""
+    return (
+        "v 5000.1 0.1 0\nv "
+        + x
+        + " "
+        + y
+        + " 0\nv 5000.7 0.5 0\nv 5000.7 1.5 0\nv 5000.1 1.1 0\nf 1 2 3 4 5\n"
+    )
+
+
+def test_a_corner_straight_in_the_file_is_not_refused_far_away() raises:
+    # The second corner is on the line from the first to the third in the
+    # file, but `Float32` rounding near 5000 moves it off. three.js draws
+    # the fan, and so must this.
+    var straight = parse_obj(t_junction("5000.4", "0.3"))
+    assert_equal(straight.objects[0].geometry.triangle_count(), 3)
+    # A notch of a centimeter is more than rounding, and is refused.
+    with assert_raises(contains="not convex"):
+        _ = parse_obj(t_junction("5000.4", "0.31"))
+
+
+def test_a_file_that_is_not_utf8_reads_as_replacement_characters() raises:
+    # A comment and a name in Windows-1252. three.js's `FileLoader` reads
+    # each byte that is not UTF-8 as U+FFFD and keeps going.
+    var bytes = List[UInt8]("# Export".as_bytes())
+    bytes.append(0xE9)
+    bytes += List[UInt8]("\no Pi".as_bytes())
+    bytes.append(0xE8)
+    bytes += List[UInt8]("ce\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n".as_bytes())
+    var path = temporary_path("latin.obj")
+    Path(path).write_bytes(bytes)
+    var model = read_obj(path)
+    assert_equal(model.count(), 1)
+    assert_equal(model.objects[0].name, "Pi" + chr(0xFFFD) + "ce")
+    assert_equal(model.objects[0].geometry.triangle_count(), 1)
+
+
+def test_a_leading_byte_order_mark_is_dropped() raises:
+    # three.js's `TextDecoder` and `trimStart` drop a U+FEFF at the start.
+    # So the first vertex is read, and the face names three vertices.
+    var model = parse_obj(chr(0xFEFF) + "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n")
+    assert_equal(model.count(), 1)
+    assert_equal(model.objects[0].geometry.triangle_count(), 1)
+    var path = temporary_path("marked.obj")
+    Path(path).write_text(chr(0xFEFF) + "mtllib a.mtl\n")
+    assert_equal(read_obj(path).material_libraries[0], "a.mtl")
+
+
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

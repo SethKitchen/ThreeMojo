@@ -21,8 +21,6 @@ from extensions.carla.navigation_mesh import (
     AREA_CROSSWALK,
     AREA_ROAD,
     AREA_SIDEWALK,
-    NavMesh,
-    NavPolygonId,
     build_navigation_mesh,
     crosswalk_outlines,
     walker_filter,

@@ -44,16 +44,7 @@ refuses a value outside them.
 from core.assets import Assets
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
-from extensions.carla.mesh_factory import (
-    CROSSWALK_SURFACE,
-    CURB_SURFACE,
-    ROAD_SURFACE,
-    SIDEWALK_SURFACE,
-    SurfaceKind,
-    WALL_SURFACE,
-    WHITE_MARK_SURFACE,
-    YELLOW_MARK_SURFACE,
-)
+from extensions.carla.mesh_factory import SurfaceKind
 from extensions.carla.render_textures import SurfaceMaps
 from loaders.gltf import read_gltf
 from loaders.image_file import decode_image
@@ -84,7 +75,6 @@ from render.texture import (
     float_texture_from,
     texture_from,
 )
-from render.texture_store import NO_TEXTURE
 from std.math import isfinite
 from std.pathlib import Path
 from units.si import DEGREE, METER, Angle, Length

@@ -16,7 +16,6 @@ from std.math import inf, isinf, nan, pi, sqrt, tan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
-    assert_equal,
     assert_false,
     assert_raises,
     assert_true,
@@ -28,7 +27,6 @@ from extensions.geotech.concrete import (
     shear_resistance,
 )
 from extensions.geotech.failure import (
-    RigidMotion,
     bearing,
     failure_motion,
     overturning,
@@ -53,7 +51,6 @@ from extensions.geotech.kinds import (
     LS_V,
     LoadKind,
     OVERTURNING,
-    PW,
     SERVICE_PRESSURE,
     SLIDING,
     STEM_FLEXURE,

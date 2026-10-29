@@ -59,14 +59,9 @@ from tools._carla_assets import (
     sha256_bytes,
     verify,
 )
-from tools._carla_files import (
-    path_exists,
-    read_file,
-    write_all,
-    write_file,
-)
+from tools._carla_files import read_file, write_all, write_file
 from tools._carla_zip import DosTime, ZipMember, python_zip
-from tools._python_json import MISSING, PY_STR, PyJson
+from tools._python_json import MISSING, PyJson
 from tools.carla_assets import (
     NoHooks,
     Outcome,

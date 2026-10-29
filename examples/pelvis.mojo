@@ -34,7 +34,6 @@ from tools._example_studio import (
 
 from core.assets import Assets
 from core.object3d import Object3D
-from core.scene import Scene
 from extensions.humanoid.quality import (
     anatomy_detail,
     quality_named,

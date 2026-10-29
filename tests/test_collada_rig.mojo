@@ -21,7 +21,6 @@ from animation.keyframe_track import (
 )
 from core.assets import Assets
 from core.deform import morphed_positions, skin_carriers, skin_pose
-from core.object3d import NodeId
 from core.scene import Scene
 from loaders.collada import ColladaModel, load_collada, read_collada
 from math.matrix4 import Matrix4

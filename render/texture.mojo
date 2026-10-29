@@ -103,7 +103,7 @@ from core.ordinal import ordinal_valid, require_valid, require_positive
 
 from math.finite import require_finite, require_finite_group
 from math.utils import clamp, edge_index
-from std.math import exp2
+from std.math import exp2, ceil, floor, fma, isfinite, log2, sqrt
 from math.norm import length2, _ordinary_squared, squared_length2
 from math.sine import fraction
 from math.matrix3 import Matrix3
@@ -135,7 +135,6 @@ from render.raster_state import (
     require_depth_mode,
     window_depth,
 )
-from std.math import ceil, floor, fma, isfinite, log2, sqrt
 from std.memory import bitcast
 from std.sys import is_gpu
 from units.si import Angle, RADIAN

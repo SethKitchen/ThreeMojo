@@ -11,7 +11,6 @@ builds Mojo.
 
 from std.os import getenv, setenv, unsetenv
 from std.os.path import realpath
-from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_equal,

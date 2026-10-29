@@ -62,6 +62,7 @@ from objects.skinned_mesh import (
 )
 from core.fog import EXP2_FOG, NO_FOG, exp2_veil
 from core.geometry_store import GeometryId
+from core.layers import Layers
 from core.object3d import NodeId
 from core.ordinal import ordinal_valid
 from core.scene import Scene
@@ -74,7 +75,6 @@ from materials.material import (
     PHONG,
     PHYSICAL,
     STANDARD,
-    Material,
     MaterialId,
     NO_TEXTURE,
 )
@@ -83,7 +83,7 @@ from math.matrix4 import Matrix4
 from math.bounds import Sphere
 from math.cross import cross_vectors
 from math.vector3 import Vector3
-from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
+from render.framebuffer import FloatColor, Framebuffer, SrgbBytes
 from render.game_math import (
     GAME_LANES,
     fast_sin,
@@ -93,11 +93,12 @@ from render.game_math import (
 from render.tasks import TaskGroup
 from render.tonemap import aces_tone
 from render.texture import MIRROR, REPEAT, Texture
+from render.cube_texture import CubeTexture
 from render.texture_store import TextureId
-from std.math import ceil, exp2, floor, inf, log2, max, min, sin, sqrt
+from std.math import ceil, exp2, floor, inf, log2, max, min, sqrt
 from std.memory import unsafe_memcpy
 from std.time import perf_counter_ns
-from units.si import METER, PER_METER, SECOND, Duration
+from units.si import PER_METER, SECOND, Duration
 
 comptime TILE = 64
 """The side of a tile, in pixels."""
@@ -119,6 +120,8 @@ comptime _FRESNEL_OFFSET = Float32(-6.98316)
 comptime BLINN_PHONG_G = Float32(0.25)
 comptime MIP_LEVELS = 16
 """The most levels of a map read at each pixel."""
+comptime SKY_TASKS = 16
+"""The most tasks that share the sampling of the sky."""
 comptime LEVEL_CODE = Float32(32)
 """A triangle's map code is its map's slot times this, plus the level its
 pixels read. A triangle with no map read at each pixel has the code -1."""
@@ -480,14 +483,17 @@ struct _Shape(Movable):
         """Read each part's bones and weights, the first time a skinned
         mesh draws the shape.
 
+        A slot whose weight is zero is read as bone zero, whatever index
+        it holds, as `core.deform.skin_carriers` reads it.
+
         Args:
             geometry: The geometry the shape was read from.
 
         Raises:
             Error: If the geometry has no skin attributes, either is not
                 four numbers a vertex or does not cover every vertex, a
-                bone is not a whole number from zero, or a weight is not a
-                number or is negative.
+                slot with a weight names a bone that is not a whole number
+                from zero, or a weight is not a number or is negative.
         """
         if self.parts[0].top_bone >= 0:
             return
@@ -510,13 +516,17 @@ struct _Shape(Movable):
             for k in range(n):
                 var vertex = Int(part.vertices[k])
                 for slot in range(BONES_PER_VERTEX):  # pragma: no branch
-                    var bone = whole_bone(
-                        bones.component(vertex, slot), 1 << 30
-                    )
                     var weight = weights.component(vertex, slot)
                     if not (weight >= 0):
                         raise Error(
                             "A skin weight must be a number, not negative"
+                        )
+                    # An unused slot reads bone zero, which its weight
+                    # of zero then cancels. Its own index is never read.
+                    var bone = 0
+                    if weight != 0:
+                        bone = whole_bone(
+                            bones.component(vertex, slot), 1 << 30
                         )
                     part.bones[k * 4 + slot] = Int32(bone)
                     part.weights[k * 4 + slot] = weight
@@ -699,6 +709,8 @@ struct _SunMap(Movable):
     # The depth one meter spans, in the map's NDC.
     var per_meter: Float32
     var ready: Bool
+    # The camera's layers when the map was drawn: only they cast.
+    var layers: Layers
 
     def __init__(out self, size: Int):
         """Create an empty map.
@@ -716,6 +728,7 @@ struct _SunMap(Movable):
         )
         self.per_meter = 0
         self.ready = False
+        self.layers = Layers.all()
 
 
 def _sun_matrices(
@@ -930,22 +943,28 @@ struct GameRenderer(Movable):
             raise Error("A shadow mode must be one of the four")
         var shadowing = self.shadows != NO_SHADOWS and frame.has_sun
         if shadowing:
+            # As three.js's shadow map, only what the camera's layers show
+            # casts a shadow.
+            var layers = camera.visible_layers()
             var still = self._still_map.size != self.shadow_size
             if (
                 self.shadows == FULL_SHADOWS
                 or still
                 or not self._still_map.ready
+                or self._still_map.layers != layers
             ):
                 self._still_map = _SunMap(self.shadow_size)
                 var center = self.shadow_center
                 var reach = self.shadow_reach
-                self._draw_map(scene, assets, frame, False, center, reach)
+                self._draw_map(
+                    scene, assets, frame, False, center, reach, layers
+                )
             if self.shadows != STILL_SHADOWS:
                 if self._moving_map.size != self.moving_size:
                     self._moving_map = _SunMap(self.moving_size)
                 var focus = self.focus
                 var reach = self.moving_reach
-                self._draw_map(scene, assets, frame, True, focus, reach)
+                self._draw_map(scene, assets, frame, True, focus, reach, layers)
         var mapped = perf_counter_ns()
         var view = camera.view_matrix()
         var clip = camera.projection_matrix()
@@ -958,6 +977,7 @@ struct GameRenderer(Movable):
             camera.near_distance(),
             camera.far_distance(),
             0,
+            camera.visible_layers(),
         )
         self.vertex_count = self._vertex_total(draws)
         self.draw_count = len(draws)
@@ -1077,9 +1097,10 @@ struct GameRenderer(Movable):
         moving: Bool,
         center: Vector3,
         reach: Float32,
+        layers: Layers,
     ) raises:
         """Draw one of the sun's depth maps: the still casters' or the
-        moving casters'."""
+        moving casters', of the meshes on `layers`."""
         var made = _sun_matrices(frame.sun_toward, center, reach)
         var pass_frame = frame
         pass_frame.view_projection = made[1]
@@ -1090,7 +1111,14 @@ struct GameRenderer(Movable):
         pass_frame.width = size
         pass_frame.height = size
         var draws = self._gather(
-            scene, assets, made[0], made[1], 0, made[3], 2 if moving else 1
+            scene,
+            assets,
+            made[0],
+            made[1],
+            0,
+            made[3],
+            2 if moving else 1,
+            layers,
         )
         self._light_vertices(draws, assets, scene, pass_frame)
         self._setup(draws, pass_frame)
@@ -1129,6 +1157,7 @@ struct GameRenderer(Movable):
                 ](),
             )
             self._still_map.ready = True
+            self._still_map.layers = layers
 
     def _frame(
         self,
@@ -1268,9 +1297,12 @@ struct GameRenderer(Movable):
         near: Float32,
         far: Float32,
         kind: Int,
+        layers: Layers,
     ) raises -> List[_Draw]:
         """List the parts of every shown mesh in a view: for the frame when
         `kind` is 0, the still casters for 1, and the moving casters for 2.
+        A mesh is shown when its node is and it shares one of `layers`, as
+        three.js's `projectObject` asks.
         """
         var frustum = Frustum.from_camera(clip, view, near, far)
         var draws = List[_Draw]()
@@ -1289,7 +1321,7 @@ struct GameRenderer(Movable):
                 not mesh.cast_shadow or self._moves(mesh.node) != (kind == 2)
             ):
                 continue
-            if not scene.is_shown(mesh.node):
+            if not scene.shows(mesh.node, layers):
                 continue
             var world = scene.world_matrix(mesh.node)
             var shape = self._shape(assets, mesh.geometry)
@@ -1314,7 +1346,7 @@ struct GameRenderer(Movable):
                 or self._moves(skinned.node) != (kind == 2)
             ):
                 continue
-            if not scene.is_shown(skinned.node):
+            if not scene.shows(skinned.node, layers):
                 continue
             var world = scene.world_matrix(skinned.node)
             var shape = self._shape(assets, skinned.geometry)
@@ -1359,6 +1391,10 @@ struct GameRenderer(Movable):
                 if UInt(slot) >= UInt(len(materials)):
                     continue
                 id = materials[slot]
+            # three.js draws, and casts the shadow of, no part whose
+            # material is hidden.
+            if not assets.materials.get(id).visible:
+                continue
             if id.value not in self._looks:
                 self._looks[id.value] = self._look(assets, id)
             var looked = self._looks[id.value]
@@ -1729,23 +1765,35 @@ struct GameRenderer(Movable):
         var view = camera.view_matrix()
         inverse.multiply(view)
         inverse.invert()
-        var scale = scene.background_intensity
-        for row in range(rows):  # pragma: no branch
-            var y = min(Float32(row * step), Float32(self.height)) / Float32(
-                self.height
+        # The far plane's points are an affine map of the NDC, so a
+        # sample's direction is mixed from those through three corners.
+        var eye = camera.position
+        var d00 = inverse.transform_point(Vector3(-1, 1, 1)) - eye
+        var across = inverse.transform_point(Vector3(1, 1, 1)) - eye - d00
+        var down = inverse.transform_point(Vector3(-1, -1, 1)) - eye - d00
+        # Each task takes a band of rows: there are two rows or more.
+        var tasks = min(rows, SKY_TASKS)
+        var group = TaskGroup()
+        for t in range(tasks):  # pragma: no branch
+            group.create_task(
+                _sky_task(
+                    Pointer(to=cube)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    out.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    d00,
+                    across,
+                    down,
+                    scene.background_intensity,
+                    columns,
+                    step,
+                    self.width,
+                    self.height,
+                    t * rows // tasks,
+                    (t + 1) * rows // tasks,
+                )
             )
-            for column in range(columns):  # pragma: no branch
-                var x = min(
-                    Float32(column * step), Float32(self.width)
-                ) / Float32(self.width)
-                var ndc = Vector3(x * 2 - 1, 1 - y * 2, 1)
-                var far = inverse.transform_point(ndc)
-                var direction = far - camera.position
-                var c = cube.sample(direction)
-                var i = (row * columns + column) * 3
-                out[i] = c.r * scale
-                out[i + 1] = c.g * scale
-                out[i + 2] = c.b * scale
+        group.wait()
         return out^
 
     def _resolve(
@@ -2820,6 +2868,34 @@ def _wrap_texel(x: F, size: F, mode: I) -> I:
         wrapped, mode.eq(Int32(MIRROR.value)).select(mirrored, held)
     )
     return index.cast[DType.int32]()
+
+
+__async def _sky_task(
+    cube: Pointer[CubeTexture, ImmutAnyOrigin],
+    samples: MutPointer[Float32, MutAnyOrigin],
+    d00: Vector3,
+    across: Vector3,
+    down: Vector3,
+    scale: Float32,
+    columns: Int,
+    step: Int,
+    width: Int,
+    height: Int,
+    first: Int,
+    past: Int,
+):
+    """Sample the background cube on rows `first` to `past` of the sky's
+    grid. A sample's direction is `d00`, through the window's top left
+    corner, plus `across` and `down` times its share of the window."""
+    for row in range(first, past):  # pragma: no branch
+        var y = min(Float32(row * step), Float32(height)) / Float32(height)
+        for column in range(columns):  # pragma: no branch
+            var x = min(Float32(column * step), Float32(width)) / Float32(width)
+            var c = cube[].sample(d00 + across * x + down * y)
+            var i = (row * columns + column) * 3
+            samples[unsafe_offset=i] = c.r * scale
+            samples[unsafe_offset=i + 1] = c.g * scale
+            samples[unsafe_offset=i + 2] = c.b * scale
 
 
 __async def _resolve_task(

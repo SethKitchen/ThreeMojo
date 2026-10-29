@@ -36,14 +36,9 @@ from loaders.gltf import load_gltf
 from loaders.draco import (
     DRACO_COMPRESSED,
     DRACO_CORNER,
-    DRACO_INTEGER,
     DRACO_NORMALS,
     DRACO_POINT_CLOUD,
-    DRACO_QUANTIZED,
-    DRACO_RAW,
-    DRACO_SEQUENTIAL,
     DRACO_TRIANGULAR_MESH,
-    DRACO_VERTEX,
     DracoAttributeCoding,
     DracoElement,
     DracoEncoding,
@@ -57,11 +52,9 @@ from loaders.draco import (
 )
 from loaders.draco_attributes import (
     DRACO_BOOL,
-    DRACO_DIFFERENCE,
     DRACO_FLOAT32,
     DRACO_GENERIC,
     DRACO_INT8,
-    DRACO_OCTAHEDRON,
     DRACO_PREDICTION_NONE,
     DRACO_TEX_COORDS_PORTABLE,
     DRACO_WRAP,
@@ -92,7 +85,6 @@ from loaders.draco_buffer import (
     truncated_divide,
 )
 from loaders.draco_mesh import (
-    DRACO_DEPTH_FIRST,
     DRACO_PREDICTION_DEGREE,
     DRACO_STANDARD_TRAVERSAL,
     DRACO_VALENCE_TRAVERSAL,

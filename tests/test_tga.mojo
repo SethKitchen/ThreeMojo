@@ -11,8 +11,7 @@ is lossless, so the two must agree to the bit. Everything else is a file
 assembled by hand, a header and a few pixels.
 """
 
-from render.png import DecodedImage
-from render.png import decode as decode_png
+from render.png import DecodedImage, decode as decode_png
 from render.srgb import SRGB
 from render.texture import BILINEAR, REPEAT, texture_from
 from render.tga import (

@@ -159,7 +159,7 @@ The tracking issue is [#771](https://github.com/SethKitchen/ThreeMojo/issues/771
 
 ## Checked against DLSS
 
-`docs/validation/streamline/probe.cpp` runs `sl.dlss` and `sl.dlss_d` of Streamline 2.14.16 through Direct3D 12. It ran on an NVIDIA TITAN RTX with driver 610.88. The README in that folder says how to run it again.
+The [Streamline harness](https://github.com/SethKitchen/ThreeMojo/tree/d58766390fa97aadc6addf7782a2378373fcb080/docs/validation/streamline) runs `sl.dlss` and `sl.dlss_d` of Streamline 2.14.16 through Direct3D 12. It ran on an NVIDIA TITAN RTX with driver 610.88. Its README says how to run it again.
 
 | Claim | Result |
 |---|---|

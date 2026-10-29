@@ -38,14 +38,12 @@ The expected numbers come from outside this port:
 from extensions.carla.actor import (
     ActorId,
     GREEN,
-    NO_ACTOR,
     OFF,
     RED,
     TrafficLightState,
     UNKNOWN,
     YELLOW,
 )
-from extensions.carla.map import Waypoint
 from extensions.carla.opendrive import load_opendrive
 from extensions.carla.physics.quantities import KILOMETER_PER_HOUR
 from extensions.carla.road_info import JuncId, LaneId, RoadId, SignalId

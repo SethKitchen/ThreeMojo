@@ -16,12 +16,8 @@ on the sacrum.
 """
 
 from core.assets import Assets
-from extensions.humanoid.skeleton.look import resolved_paint as _resolved_paint
-from core.object3d import NodeId
-from core.scene import Scene
-from extensions.humanoid.side import LEFT, RIGHT, BodySide
-from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.look import (
+    resolved_paint as _resolved_paint,
     UNSET_PAINT,
     artery_phong,
     lymph_phong,
@@ -29,6 +25,10 @@ from extensions.humanoid.skeleton.look import (
     skin_phong,
     vein_phong,
 )
+from core.object3d import NodeId
+from core.scene import Scene
+from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     is_paired_bone,
     named_torso_bones,

@@ -40,7 +40,6 @@ from window.capi_abi import (
     GPU_SAMPLES,
     GPU_SURFACE,
     GPU_SURFACE_TABLE,
-    GPU_VALUES,
     GpuInfo,
     GpuPart,
     KEY_DOWN,

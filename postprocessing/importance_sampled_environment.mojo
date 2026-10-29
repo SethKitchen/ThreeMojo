@@ -42,7 +42,7 @@ from math.vector3 import Vector3
 from postprocessing.sampling import clamped_texel
 from render.color_math import rgb_channels
 from render.framebuffer import FloatColor
-from std.math import asin, atan2, cos, floor, isfinite, max, min, pi, pow, sin
+from std.math import asin, atan2, cos, floor, max, min, pi, pow, sin
 
 
 def half(value: Float32) -> Float32:

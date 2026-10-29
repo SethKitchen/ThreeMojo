@@ -59,7 +59,7 @@ from extensions.humanoid.quality import (
     quality_named,
     skin_detail,
 )
-from extensions.humanoid.sex import FEMALE, MALE, Sex
+from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.skeleton.head.assembly import add_head
 from extensions.humanoid.skeleton.head.contents import EYES, HAIR, SKIN
 from extensions.humanoid.skeleton.head.frame import (
@@ -74,10 +74,8 @@ from extensions.humanoid.skeleton.head.hair.strands import (
 from extensions.humanoid.skeleton.look import add_complexion
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.athleticism import UNTONED
-from geometries.plane import plane
 from lights.light import directional_light
 from lights.shadow import PCF_SOFT_SHADOW_MAP
-from materials.material import standard_material
 from math.bounds import Plane
 from math.vector3 import Vector3
 from render.apng import encode

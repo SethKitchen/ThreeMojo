@@ -29,7 +29,7 @@ from extensions.sdf.vector import (
 from math.norm import squared_length3
 from math.utils import clamp, max3, min3
 from render.tasks import TaskGroup
-from std.math import ceil, isfinite, sqrt
+from std.math import ceil, sqrt
 from std.sys import num_logical_cores, size_of
 from units.si import METER, Length
 

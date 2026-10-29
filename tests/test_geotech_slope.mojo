@@ -11,7 +11,7 @@ it. A purely cohesive layer has the closed form of a circle through a
 level ground with a surcharge, which bounds the search from above.
 """
 
-from std.math import atan, inf, isinf, nan, pi, sqrt, tan
+from std.math import inf, isinf, nan, pi, tan
 from std.testing import (
     TestSuite,
     assert_almost_equal,

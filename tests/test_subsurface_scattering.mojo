@@ -23,7 +23,7 @@ from materials.material import (
 )
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color
 from render.rasterizer import SHADE_LIT
 from render.srgb import LINEAR
 from render.texture import IGNORED, NEAREST, REPEAT, Texture

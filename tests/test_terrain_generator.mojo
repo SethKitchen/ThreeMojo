@@ -25,7 +25,7 @@ from std.testing import (
     assert_equal,
     assert_raises,
 )
-from units.si import InverseLength, Length, METER, PER_METER
+from units.si import Length, METER, PER_METER
 
 
 def _terrain(segments: Int = 12) -> TerrainParameters:

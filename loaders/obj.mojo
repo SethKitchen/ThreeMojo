@@ -25,7 +25,9 @@ What is read is what three.js's loader reads and this renderer can draw:
   from one, and a negative one counts back from the last entry so far,
   as the format allows.
 - `o name` and `g name` start a new object. An object with no faces is
-  left out, as three.js leaves it out.
+  left out, as three.js leaves it out. A name, here and in `usemtl` and
+  `mtllib`, is the rest of the line, trimmed: a `#` and the spaces in it
+  are kept, as three.js keeps them.
 - `usemtl name` starts a new run of faces under that material, in the
   same object. An object that uses more than one material gets a group
   per run, and run `i` wears material `i` of `ObjObject.materials`, as
@@ -52,6 +54,10 @@ a corner black without a word.
 A number that cannot be read or is not finite once it is a `Float32`, a
 face with fewer than three corners or that is not convex, and an index
 that names nothing are refused, with the line they were found on.
+
+`read_obj` reads the file as UTF-8. A byte that is not UTF-8 becomes
+U+FFFD, as three.js's `FileLoader` decodes the text, so a comment or a
+name in another encoding does not refuse the file.
 """
 
 from std.math import isfinite, isnan
@@ -68,7 +74,8 @@ from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
 )
-from loaders.js_text import comment_start, split_fields
+from loaders.fan import fan_problem
+from loaders.js_text import comment_start, split_fields, without_bom
 from loaders.text_number import file_line
 from math.vector3 import Vector3
 from render.srgb import srgb_to_linear
@@ -379,23 +386,21 @@ def _index(field: String, pool: Int, line: Int) raises -> Int:
     return value
 
 
-def _rest(fields: List[String]) -> String:
-    """Return a line's fields after the first, joined by single spaces:
-    the name an `o`, `g` or `usemtl` line gives, which can hold spaces.
+def _rest(line: String, keyword: String) -> String:
+    """Return the name an `o`, `g`, `usemtl` or `mtllib` line gives: the
+    rest of the line after its keyword, trimmed, as three.js reads it. A
+    `#` and the spaces inside the name are kept.
 
     Args:
-        fields: The line, split on whitespace.
+        line: The line, with any comment still on it.
+        keyword: Its first field.
 
     Returns:
         The name, or an empty string for a line with nothing after the
         keyword.
     """
-    var name = String()
-    for index in range(1, len(fields)):
-        if index > 1:
-            name += " "
-        name += fields[index]
-    return name^
+    var trimmed = String(line.strip())
+    return String(trimmed[byte = keyword.byte_length() :].strip())
 
 
 def _read_coordinates(
@@ -518,71 +523,6 @@ def _corner_position(
     )
 
 
-def _check_convex(points: List[Vector3], line: Int) raises:
-    """Refuse a polygon of four or more corners that a fan from its first
-    corner would not cover: one that is not convex, or has no area.
-
-    The polygon's normal is Newell's sum over its edges, which is twice
-    its area as a vector and is zero for corners on one line. Each corner
-    then turns the same way about that normal in a convex polygon, and
-    the other way somewhere in a concave one, where a fan triangle would
-    cover the cutout. A corner within a millionth of straight is let
-    through, since a sliver of a triangle draws nothing and a rounded
-    corner should not refuse a file.
-
-    Args:
-        points: The corners, in order.
-        line: Which line, for the error.
-
-    Raises:
-        Error: If the polygon has no area, or a corner turns the wrong
-            way.
-    """
-    var count = len(points)
-    # Widen before subtracting or multiplying. Any product of four finite
-    # Float32 coordinates fits in Float64, including subnormal-scale faces.
-    # Translate first so the normal sum does not depend on world position.
-    var origin = points[0]
-    var wide = List[SIMD[DType.float64, 4]]()
-    for point in points:  # pragma: no branch
-        wide.append(
-            SIMD[DType.float64, 4](
-                Float64(point.x) - Float64(origin.x),
-                Float64(point.y) - Float64(origin.y),
-                Float64(point.z) - Float64(origin.z),
-                0,
-            )
-        )
-    var normal = SIMD[DType.float64, 4](0)
-    for index in range(count):  # pragma: no branch
-        var a = wide[index]
-        var b = wide[(index + 1) % count]
-        normal[0] += (a[1] - b[1]) * (a[2] + b[2])
-        normal[1] += (a[2] - b[2]) * (a[0] + b[0])
-        normal[2] += (a[0] - b[0]) * (a[1] + b[1])
-    var area_squared = (normal * normal).reduce_add()
-    if area_squared == 0:
-        raise Error(_where(line) + "a face has no area")
-    for index in range(count):  # pragma: no branch
-        var a = wide[index]
-        var b = wide[(index + 1) % count]
-        var c = wide[(index + 2) % count]
-        var first = b - a
-        var second = c - b
-        var turn = SIMD[DType.float64, 4](
-            first[1] * second[2] - first[2] * second[1],
-            first[2] * second[0] - first[0] * second[2],
-            first[0] * second[1] - first[1] * second[0],
-            0,
-        )
-        if (turn * normal).reduce_add() < -1e-6 * area_squared:
-            raise Error(
-                _where(line)
-                + "a face is not convex, and only a convex face cuts into a"
-                " fan of triangles"
-            )
-
-
 def _read_face(
     mut part: _Part,
     fields: List[String],
@@ -615,7 +555,9 @@ def _read_face(
         var points = List[Vector3]()
         for which in range(corners):  # pragma: no branch
             points.append(_corner_position(fields[which + 1], vertices, line))
-        _check_convex(points, line)
+        var problem = fan_problem(points)
+        if problem:
+            raise Error(_where(line) + problem)
     # Three corners or more: the loop always runs.
     for triangle in range(corners - 2):  # pragma: no branch
         for which in [0, triangle + 1, triangle + 2]:  # pragma: no branch
@@ -632,6 +574,9 @@ def _read_face(
 
 def parse_obj(text: String) raises -> ObjModel:
     """Read an OBJ file's text into a model.
+
+    A byte order mark at the start is dropped, as three.js's `trimStart`
+    drops it from the first line.
 
     Args:
         text: The whole file.
@@ -661,7 +606,7 @@ def parse_obj(text: String) raises -> ObjModel:
     var lines = List[String]()
     # A split yields at least one piece, even of an empty file: the loops
     # always run.
-    for raw in text.split("\n"):  # pragma: no branch
+    for raw in without_bom(text).split("\n"):  # pragma: no branch
         lines.append(String(raw))
     # A line that ends in a backslash goes on into the next, three.js's
     # `replace( /\\\n/g, '' )`, so a statement is read, and named in an
@@ -684,7 +629,8 @@ def parse_obj(text: String) raises -> ObjModel:
         var stripped = String(joined.strip())
         # A comment runs from a `#` that starts a word to the end of the
         # line; the format allows one after the data, and three.js reads a
-        # trailing one as a corner. A `#` inside a name is kept.
+        # trailing one as a corner. A name keeps the whole rest of its
+        # line, a `#` too, as three.js's does: see `_rest`.
         var comment = comment_start(stripped)
         if comment >= 0:
             var data = String(stripped[byte=0:comment].strip())
@@ -718,22 +664,22 @@ def parse_obj(text: String) raises -> ObjModel:
                 # cube's. No part is finished before it: only an `o` or
                 # a `g` finishes one.
                 declared = True
-                part.name = _rest(fields)
+                part.name = _rest(joined, keyword)
                 continue
             # A new object, under the material in force, as three.js
             # carries it over. One with no faces is dropped.
             var material = part.material()
             if part.corners > 0:
                 model.objects.append(part.finish())
-            part = _Part(_rest(fields), material^)
+            part = _Part(_rest(joined, keyword), material^)
         elif keyword == "mtllib":
-            var library = _rest(fields)
+            var library = _rest(joined, keyword)
             if library == "":
                 raise Error(_where(line) + "mtllib names no file")
             model.material_libraries.append(library^)
         elif keyword == "usemtl":
             # A new material starts a new run of the same object.
-            part.use_material(_rest(fields))
+            part.use_material(_rest(joined, keyword))
     if part.corners > 0:
         model.objects.append(part.finish())
     return model^
@@ -741,6 +687,8 @@ def parse_obj(text: String) raises -> ObjModel:
 
 def read_obj(path: String) raises -> ObjModel:
     """Read an OBJ file into a model.
+
+    A byte that is not UTF-8 becomes U+FFFD, as three.js decodes it.
 
     Args:
         path: The file to read.
@@ -752,4 +700,4 @@ def read_obj(path: String) raises -> ObjModel:
         Error: If the file cannot be read, or for anything `parse_obj`
             refuses.
     """
-    return parse_obj(Path(path).read_text())
+    return parse_obj(String(from_utf8_lossy=Path(path).read_bytes()))

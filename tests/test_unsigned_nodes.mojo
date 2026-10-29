@@ -35,7 +35,6 @@ from materials.nodes import (
     NodeInputs,
     NodeKind,
     NodeRef,
-    NodeVar,
     ProgramSource,
     ValueType,
     run_code,

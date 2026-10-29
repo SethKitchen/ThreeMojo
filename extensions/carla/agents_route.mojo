@@ -84,7 +84,7 @@ from extensions.carla.navigation_search import (
 from math.vector3 import Vector3
 from std.ffi import external_call
 from std.math import floor, isfinite, sqrt
-from units.si import DEGREE, METER, RADIAN, Angle, Length
+from units.si import DEGREE, RADIAN, Angle, Length
 
 # `math.radians(35)`.
 comptime _THRESHOLD = 35.0 * 3.14159265358979323846 / 180.0

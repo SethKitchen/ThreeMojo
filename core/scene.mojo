@@ -94,7 +94,6 @@ from math.euler import XYZ, Euler
 from math.vector3 import Vector3
 from render.cube_texture import check_rotation
 from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
-from std.math import isfinite
 from units.si import RADIAN, Angle, Length, METER
 from objects.clipping_group import Clipping, ClippingGroup
 from objects.instanced_mesh import BatchedMesh, InstancedMesh

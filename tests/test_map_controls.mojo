@@ -25,7 +25,7 @@ from controls.input import (
     WHEEL,
 )
 from controls.map_controls import MapControls
-from controls.orbit_controls import DOLLY, PAN, ROTATE
+from controls.orbit_controls import DOLLY, OrbitControls, PAN, ROTATE
 from math.vector3 import Vector3
 from std.testing import (
     TestSuite,
@@ -149,6 +149,75 @@ def test_a_drag_and_an_arrow_pan_over_the_ground() raises:
     )
     _ = controls.update(camera, _frame())
     assert_true(camera.position.x < 0)
+
+
+def _drag_up_and_right(
+    mut controls: OrbitControls, camera: PerspectiveCamera
+) raises:
+    """Drag the primary button 10 pixels right and 10 pixels up.
+
+    Args:
+        controls: The controls.
+        camera: The camera.
+
+    Raises:
+        Error: If an event is refused.
+    """
+    controls.handle(
+        InputEvent(POINTER_DOWN, button=PRIMARY, x=50, y=50), camera, SIZE
+    )
+    controls.handle(
+        InputEvent(POINTER_MOVE, button=PRIMARY, x=60, y=40), camera, SIZE
+    )
+    controls.handle(
+        InputEvent(POINTER_UP, button=PRIMARY, x=60, y=40), camera, SIZE
+    )
+
+
+def _drag_up_and_right(
+    mut controls: OrbitControls, camera: OrthographicCamera
+) raises:
+    """Drag the primary button 10 pixels right and 10 pixels up.
+
+    Args:
+        controls: The controls.
+        camera: The camera.
+
+    Raises:
+        Error: If an event is refused.
+    """
+    controls.handle(
+        InputEvent(POINTER_DOWN, button=PRIMARY, x=50, y=50), camera, SIZE, SIZE
+    )
+    controls.handle(
+        InputEvent(POINTER_MOVE, button=PRIMARY, x=60, y=40), camera, SIZE, SIZE
+    )
+    controls.handle(
+        InputEvent(POINTER_UP, button=PRIMARY, x=60, y=40), camera, SIZE, SIZE
+    )
+
+
+def test_a_pan_from_straight_above_far_out_moves_over_the_ground() raises:
+    # Five meters above a point 200 meters out, the millionth of a radian
+    # that keeps the camera off the pole rounds away in `Float32`. three.js
+    # reads the camera's axes from its matrix, where `lookAt` nudged them.
+    var center = Vector3(200, 0, 200)
+    var camera = _camera(5)
+    camera.place(center + Vector3(0, 5, 0), center)
+    var controls = MapControls(center)
+    _ = controls.update(camera, _frame())
+    assert_true(camera.position.z == 200)
+    _drag_up_and_right(controls, camera)
+    assert_true(controls.update(camera, _frame()))
+    _near(controls.target - center, -1, 0, 1)
+    var ortho = _ortho(5)
+    ortho.place(center + Vector3(0, 5, 0), center)
+    controls = MapControls(center)
+    _ = controls.update(ortho, _frame())
+    assert_true(ortho.position.z == 200)
+    _drag_up_and_right(controls, ortho)
+    assert_true(controls.update(ortho, _frame()))
+    _near(controls.target - center, -1, 0, 1)
 
 
 def test_a_zoom_to_the_cursor_looking_down_keeps_the_target_on_the_ground() raises:

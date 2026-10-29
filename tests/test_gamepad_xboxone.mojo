@@ -20,12 +20,7 @@ and the serial number.
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
 from extensions.gamepad.gamepad import Gamepad
 from extensions.gamepad.guid import ProductId, VendorId
-from extensions.gamepad.hid import (
-    HID_BUS_BLUETOOTH,
-    HID_BUS_USB,
-    HidDeviceInfo,
-    HidSource,
-)
+from extensions.gamepad.hid import HID_BUS_USB, HidDeviceInfo, HidSource
 from extensions.gamepad.hid_device import HidapiDevice
 from extensions.gamepad.hid_xboxone import XboxOneDriver, serial_from_packet
 from extensions.gamepad.ids import GAMEPAD_TYPE_PS4, GAMEPAD_TYPE_XBOXONE

@@ -63,7 +63,6 @@ from extensions.topology.arrangement import Point2
 from extensions.topology.ids import FaceId
 from units.si import (
     Angle64,
-    DEGREE,
     DEGREE64,
     Duration64,
     HOUR,

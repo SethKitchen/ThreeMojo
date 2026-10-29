@@ -15,7 +15,6 @@ A structure that can move without strain is a mechanism. Its stiffness is
 singular, and `StaticSolver` refuses it.
 """
 
-from std.math import isfinite
 from extensions.numerics.dense import DenseMatrix
 from extensions.numerics.skyline import SkylineFactor, reverse_cuthill_mckee
 from extensions.numerics.sparse import CsrMatrix, SparseBuilder
@@ -37,7 +36,6 @@ from units.si import (
     KILOGRAM_PER_CUBIC_METER,
     Length64,
     LineLoad64,
-    METER,
     Moment64,
     SQUARE_METER,
 )

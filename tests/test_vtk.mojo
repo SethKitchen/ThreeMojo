@@ -8,7 +8,7 @@
 
 from core.binary import append_big_endian
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
-from loaders.json import JsonDocument, NULL, parse_json
+from loaders.json import NULL, parse_json
 from loaders.vtk import (
     _index_length,
     parse_vtk,

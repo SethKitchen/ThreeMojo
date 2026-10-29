@@ -10,7 +10,7 @@ The runner tests use a fake compiler: a shell script that prints the file
 NAME is the base name of the file it builds. Each call is logged.
 """
 
-from std.os import listdir, remove, rmdir
+from std.os import listdir, remove
 from std.os.path import realpath
 from std.pathlib import Path
 from std.tempfile import mkdtemp

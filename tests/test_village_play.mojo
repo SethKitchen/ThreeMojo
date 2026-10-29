@@ -23,6 +23,8 @@ from extensions.village.character import (
     MoveInput,
     no_input,
 )
+from extensions.village.day import DayCycle
+from extensions.village.gathering import HERBS, Spot
 from extensions.village.house import HouseParameters, house_lot
 from extensions.village.play import (
     FOCUS_HEIGHT,
@@ -32,6 +34,7 @@ from extensions.village.play import (
     default_residents,
     tree_obstacles,
 )
+from extensions.village.skills import FORAGING
 from extensions.village.quality import LOW, ULTRA, game_quality
 from extensions.village.residents import (
     Herd,
@@ -132,6 +135,7 @@ def _game_parameters() raises -> PlayParameters:
     p.player = HumanoidSpec(Length(60.0, INCH), FEMALE)
     p.start_x = -4
     p.start_z = -2
+    p.gathering.spots = [Spot(HERBS, -4, -3, Angle(0.0, RADIAN))]
     return p^
 
 
@@ -282,6 +286,94 @@ def test_a_player_walks_into_a_house_through_its_door() raises:
     assert_equal(game.window.width, 32)
 
 
+def test_a_player_gathers_and_the_display_says_so() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var game = VillageGame(
+        scene,
+        assets,
+        Renderer(16, 16),
+        _game_parameters(),
+        pebble_bed(_bed()),
+        None,
+        64,
+        36,
+    )
+    assert_equal(len(game.gathering.spots), 1)
+    var step = Duration(0.1, SECOND)
+    # Herbs a meter ahead: the prompt says how to gather them.
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_equal(game.prompt(), "E  GATHER HERBS")
+    game.render(scene, assets)
+    var plain = game.window.pixels.copy()
+    var use = no_input()
+    use.use = True
+    _ = game.tick(scene, assets, use, step)
+    assert_equal(game.gathering.satchel.count(HERBS), 1)
+    assert_equal(game.note, "+1 herbs")
+    # The herb trained foraging, which the display lists.
+    assert_equal(game.skills.lines()[0], "FORAGING 1  10/50")
+    assert_equal(game.prompt(), "")
+    game.render(scene, assets)
+    # The display drew the satchel and the note, so the frame changed.
+    var changed = 0
+    for k in range(len(plain)):
+        if plain[k] != game.window.pixels[k]:
+            changed += 1
+    assert_true(changed > 0)
+    # The note ages with the frames.
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_almost_equal(game.note_age, 0.1, atol=1e-5)
+    # The herbs come back, and a herb that lifts foraging a level says so.
+    game.skills.experience[FORAGING.value] = 45
+    game.gathering.spots[0].wait = 0
+    _ = game.tick(scene, assets, use, step)
+    assert_equal(game.note, "FORAGING LEVEL 2!")
+    # Facing away from the pond, the camera does not see it, and its water
+    # is not composed. Facing it, the camera sees it.
+    var x = Float32(-6)
+    var z = Float32(-6)
+    var ground = game.terrain.ground.height_at(x, z)
+    game.player.position = Vector3(x, ground, z)
+    game.view.yaw = Angle(0.0, DEGREE)
+    for _ in range(3):
+        _ = game.tick(scene, assets, no_input(), step)
+    assert_false(game.village.pond_seen(game.camera))
+    game.render(scene, assets)
+    game.view.yaw = Angle(180.0, DEGREE)
+    for _ in range(3):
+        _ = game.tick(scene, assets, no_input(), step)
+    assert_true(game.village.pond_seen(game.camera))
+    game.render(scene, assets)
+
+
+def test_at_night_the_lamps_are_lit_and_the_pond_darkens() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var parameters = _game_parameters()
+    parameters.day = DayCycle(23)
+    var game = VillageGame(
+        scene,
+        assets,
+        Renderer(16, 16),
+        parameters,
+        pebble_bed(_bed()),
+        None,
+        32,
+        18,
+    )
+    # Face the pond, at (0, 4).
+    game.view.yaw = Angle(180.0, DEGREE)
+    var step = Duration(0.1, SECOND)
+    for _ in range(3):
+        _ = game.tick(scene, assets, no_input(), step)
+    assert_true(game.village.pond_seen(game.camera))
+    game.render(scene, assets)
+    assert_equal(game.window.width, 32)
+    assert_true(scene.node(game.village.houses[0].lit).visible)
+    assert_false(scene.node(game.village.houses[0].daylit).visible)
+
+
 def test_a_full_size_frame_is_not_stretched() raises:
     var assets = Assets()
     var scene = Scene()
@@ -290,6 +382,8 @@ def test_a_full_size_frame_is_not_stretched() raises:
     # A village with no house and no prop.
     parameters.village.houses = []
     parameters.village.props = []
+    # And no display over the frame.
+    parameters.hud = False
     var game = VillageGame(
         scene,
         assets,
@@ -353,6 +447,15 @@ def test_a_villager_moves_and_a_frame_one_row_short_is_stretched() raises:
     assert_equal(game.window.height, 20)
     assert_true(game.upscale_ms > 0)
     assert_equal(game.smooth_ms, 0)
+    # A press beside her speaks, and she stops and turns to the player.
+    game.player.position = game.residents.people[0].position + Vector3(
+        0.8, 0, 0
+    )
+    var use = no_input()
+    use.use = True
+    _ = game.tick(scene, assets, use, Duration(0.1, SECOND))
+    assert_true(game.talk.speech != "")
+    assert_true(game.residents.holds[0] > 0)
 
 
 def main() raises:

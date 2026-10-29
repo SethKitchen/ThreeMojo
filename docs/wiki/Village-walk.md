@@ -23,11 +23,14 @@ The window is 1920 by 1080 pixels by default. Give a width and a height for a di
 | Look | Right stick | The arrows |
 | Run | Hold the right trigger, the east button or the left stick | Hold Shift, or `R` |
 | Jump | The south button | Space |
+| Use | The west button | `E` |
+| Weather | | `1` clear, `2` overcast, `3` rain, `4` fog |
+| Time | | `5` moves the day on three hours |
 | Quit | The start button | Escape or `q` |
 
 The buttons are named by position, as SDL names them. The south button is A on an Xbox controller and the cross on a PlayStation controller.
 
-The game builds for about 15 seconds before the window opens. On a four-core Linux host, the `low` quality draws about 41 frames a second at 1920 by 1080 on the CPU. The game moves by the time each frame takes. So a slow frame moves the player as far as many quick frames do.
+The game builds for about 15 seconds before the window opens. On a four-core Linux host, the `low` quality draws about 34 frames a second at 1920 by 1080 on the CPU. The game moves by the time each frame takes. So a slow frame moves the player as far as many quick frames do.
 
 The game prints the frames a second to the standard error.
 
@@ -79,8 +82,10 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 4. The player's `Body` stands where the character stands, and plays the clip of its stance.
 5. Each resident steps along its route, and its body or its mesh is posed.
 6. Each door swings open while someone stands near it, and shut after.
-7. The camera's focus follows the player. The eye comes in before a wall, and stays below a ceiling and above the ground.
-8. The village grows the grass for the camera, and moves the water's clock on.
+7. The use button uses the spot in reach: see [Village gathering](Village-gathering). With no spot in reach, it talks to the villager in reach: see [Village errands](Village-errands).
+8. The camera's focus follows the player. The eye comes in before a wall, and stays below a ceiling and above the ground. The inside of each house hides while the eye is more than `INSIDE_REACH`, 18 meters, past the house's edge. The fireflies and the butterflies fly on: see [Village critters](Village-critters).
+9. The village grows the grass for the camera, and moves the water's clock on.
+10. The weather moves on, and scales the lights and the fog. See [Village weather](Village-weather). The day moves on, and dims and tints them for the hour. See [Village day and night](Village-day).
 
 ## The parts
 
@@ -91,6 +96,12 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 | `terrain.mojo` | `WallSpan`, `Floor`, `Terrain`, `wall_push` and `view_entry`. See [Village houses](Village-houses#where-a-character-can-walk). |
 | `clothes.mojo` | The natural dyes, `natural_dye`, `village_outfit` and `dyed_outfit`. |
 | `pad_input.mojo` | `stick`, `gamepad_input`, `keyboard_input` and `combined`. |
+| `gathering.mojo`, `hud.mojo` | What the player gathers, and the heads-up display. See [Village gathering](Village-gathering). |
+| `talk.mojo` | The villagers who talk, and their errands. See [Village errands](Village-errands). |
+| `weather.mojo` | The clouds, the rain and the fog. See [Village weather](Village-weather). |
+| `day.mojo` | The hour, the night's light and its sky. See [Village day and night](Village-day). |
+| `skills.mojo` | The player's foraging, mining and fishing levels. See [Village skills](Village-skills). |
+| `critters.mojo` | The fireflies and the butterflies. See [Village critters](Village-critters). |
 | `residents.mojo` | `Body`, `Route`, `wander_route`, `visit`, `Villager`, `Herd`, `ResidentsParameters`, `Flipbook` and `Residents`. |
 | `play.mojo` | `default_residents`, `PlayParameters`, `tree_obstacles` and `VillageGame`. |
 | `quality.mojo` | `QualityPreset`, `PlantDetail`, `GameQuality`, `game_quality` and `planted`. See [Game renderer](Game-renderer). |

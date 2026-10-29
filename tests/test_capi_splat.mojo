@@ -19,7 +19,6 @@ from core.gaussian_splat_utils import (
     write_color_bytes,
     write_covariance,
 )
-from std.math import abs, inf, sqrt
 from std.memory import Layout
 from std.pathlib import Path
 from std.testing import (

@@ -11,7 +11,7 @@ back."""
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, UV, UV1, BufferGeometry
-from core.object3d import GROUP_TYPE, NO_PARENT, OBJECT3D_TYPE, Object3D
+from core.object3d import GROUP_TYPE, Object3D
 from core.scene import Scene
 from exporters.usdz import export_usdz
 from geometries.box import box
@@ -20,7 +20,6 @@ from loaders.json import (
     BOOLEAN,
     NULL,
     NUMBER,
-    OBJECT,
     STRING,
     JsonDocument,
     parse_json,
@@ -37,7 +36,6 @@ from loaders.usd import (
 )
 from loaders.usd_composer import UsdModel, UsdTexture
 from loaders.usd_specs import (
-    USD_ARRAY,
     USD_BOOLEAN,
     USD_NULL,
     USD_NUMBER,

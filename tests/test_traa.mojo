@@ -16,7 +16,7 @@ from materials.material import BASIC, Material
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from postprocessing.composer import TRAA, EffectComposer, render_pass, traa_pass
+from postprocessing.composer import TRAA, EffectComposer, traa_pass
 from postprocessing.sampling import LightView
 from postprocessing.traa import (
     TRAA_JITTERS,

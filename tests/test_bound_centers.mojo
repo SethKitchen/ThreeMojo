@@ -8,7 +8,7 @@
 from core.gaussian_splat_utils import create_gaussian_splat_geometry
 from core.object3d import NodeId
 from core.raycaster import Raycaster
-from math.bounds import Box3, Sphere
+from math.bounds import Box3
 from math.matrix4 import Matrix4
 from objects.gaussian_splat import GaussianSplat
 from math.matrix2 import Box2

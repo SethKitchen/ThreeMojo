@@ -36,6 +36,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._process import run_program
+from tools._text import split_lines
 
 comptime TRIPLE = "wasm32-unknown-unknown"
 """The triple clang and wasm-ld expect."""
@@ -78,42 +79,6 @@ comptime FAST_MATH = [
 """The fast-math flags an instruction may carry before its type."""
 
 
-def _ends_with_newline(text: String) -> Bool:
-    """Return whether `text` ends in a newline."""
-    var bytes = text.as_bytes()
-    return len(bytes) > 0 and bytes[len(bytes) - 1] == 10
-
-
-def _split_lines(text: String) -> List[String]:
-    """Split on newlines the way Python's `str.splitlines` does for `\\n`.
-
-    Args:
-        text: The text.
-
-    Returns:
-        The lines, without their terminators. A final newline does not add
-        an empty line. Two newlines in a row do.
-    """
-    var lines = List[String]()
-    var current = List[UInt8]()
-    var bytes = text.as_bytes()
-    var index = 0
-    while index < len(bytes):
-        var byte = bytes[index]
-        if byte == 13 or byte == 10:
-            lines.append(String(from_utf8_lossy=current))
-            current = List[UInt8]()
-            index += 1
-            if byte == 13 and index < len(bytes) and bytes[index] == 10:
-                index += 1
-            continue
-        current.append(byte)
-        index += 1
-    if len(current) > 0:
-        lines.append(String(from_utf8_lossy=current))
-    return lines^
-
-
 def _join_lines(original: String, lines: List[String]) -> String:
     """Join lines with newlines and keep a trailing newline of `original`.
 
@@ -125,7 +90,7 @@ def _join_lines(original: String, lines: List[String]) -> String:
         The joined text.
     """
     var joined = "\n".join(lines)
-    if not _ends_with_newline(original):
+    if not original.endswith("\n"):
         return joined
     if joined.byte_length() == 0:
         return "\n"
@@ -726,29 +691,29 @@ def retarget_ir(text: String, layout: String) raises -> String:
     Raises:
         Error: Never for IR that LLVM wrote. The rewrites do not fail.
     """
-    var lines = _split_lines(text)
+    var lines = split_lines(text)
     var laid = List[String]()
     for line in lines:
         laid.append(_replace_layout(line, layout))
     var current = _join_lines(text, laid)
-    lines = _split_lines(current)
+    lines = split_lines(current)
     var tripled = List[String]()
     for line in lines:
         tripled.append(_replace_triple(line))
     current = _join_lines(current, tripled)
     current = _strip_attribute(current, "target-cpu")
     current = _strip_attribute(current, "target-features")
-    lines = _split_lines(current)
+    lines = split_lines(current)
     var slots = List[String]()
     for line in lines:
         slots.append(_retarget_alloca(line))
     current = _join_lines(current, slots)
-    lines = _split_lines(current)
+    lines = split_lines(current)
     var floats = List[String]()
     for line in lines:
         floats.append(exact_floats(line))
     current = replace_shuffle(_join_lines(current, floats))
-    lines = _split_lines(current)
+    lines = split_lines(current)
     var groups = List[String]()
     for line in lines:
         groups.append(_fill_empty_attributes(line))
@@ -788,7 +753,7 @@ def wasm_layout(clang: String) raises -> String:
         )
         raise Error("clang failed: " + detail)
     var marker = 'target datalayout = "'
-    for line in _split_lines(result.output):
+    for line in split_lines(result.output):
         if line.startswith(marker) and line.endswith('"'):
             var end = line.byte_length() - 1
             return String(line[byte = marker.byte_length() : end])

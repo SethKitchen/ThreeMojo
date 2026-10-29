@@ -6,7 +6,7 @@
 """Leaves: the grid that shades them, the light through a crown, leaf
 meshes and the foliage program."""
 
-from core.buffer_geometry import COLOR, NORMAL, POSITION
+from core.buffer_geometry import COLOR, NORMAL
 from extensions.vegetation.foliage import (
     SKYLIT,
     SKY_RAYS,

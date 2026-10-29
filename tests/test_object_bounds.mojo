@@ -43,11 +43,9 @@ from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
 from objects.sprite import Sprite
 from render.rect import Rect
-from std.math import sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
-    assert_equal,
     assert_false,
     assert_raises,
     assert_true,

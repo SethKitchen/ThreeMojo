@@ -25,6 +25,8 @@ clock and runs the animations, and then does what three.js's `update`
 does: it follows a changed `target`, keeps the camera within its limits,
 and turns it to the center. Call it once a frame. Every time the controls
 read is the clock's: an event happens at the time of the last `update`.
+So the speed of a turn let go is measured over whole frames, and two
+moves in one frame count as one move.
 
 The camera is read at each call and written back, with its own y axis as
 its `up`. `update` turns it to the center with three.js's `up`: the
@@ -92,7 +94,7 @@ from math.utils import clamp
 from math.vector2 import Vector2
 from math.vector3 import Vector3, radians_between
 from render.framebuffer import Color, FloatColor
-from std.math import acos, atan, atan2, cos, inf, pi, sin, sqrt, tan
+from std.math import atan, atan2, cos, inf, pi, sin, sqrt, tan
 from units.si import (
     Angle,
     AngularAcceleration,
@@ -1434,13 +1436,18 @@ struct ArcballControls(Copyable, Movable):
             lens, self._rotate(self._rotation_axis(start, current), amount)
         )
         if self.enable_animations:
-            self._time_prev = self._time_current
-            self._time_current = self._now
-            self._angle_prev = self._angle_current
+            # Every move of one frame reads the frame's time. three.js
+            # reads a new time for each move. So only the first move of a
+            # frame starts a new sample, and the speed is measured over a
+            # frame. Else two moves in a frame measure no time and no speed.
+            if self._now != self._time_current:
+                self._time_prev = self._time_current
+                self._time_current = self._now
+                self._angle_prev = self._angle_current
+                self._cursor_pos_prev = self._cursor_pos_curr
+                self._w_prev = self._w_curr
             self._angle_current = amount
-            self._cursor_pos_prev = self._cursor_pos_curr
             self._cursor_pos_curr = current
-            self._w_prev = self._w_curr
             self._w_curr = _angular_speed(
                 self._angle_prev,
                 self._angle_current,
