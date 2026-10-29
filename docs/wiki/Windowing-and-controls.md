@@ -280,6 +280,8 @@ A turn is three.js's quaternion `(x, y, z, 1)`, normalized. Here `x`, `y` and `z
 
 A roll changes the camera's `up`. The target stays ahead of the camera at the same distance. `update` returns `True` when the camera moved or turned past three.js's threshold.
 
+The controls keep the camera's turn as a quaternion, as three.js keeps `object.quaternion`. The target only shows the turn. Far from the origin, a `Float32` target rounds a small turn away. A turn read back from the target would then stay where it was. The controls read the turn from the camera again only when the camera was moved from outside. That is when its position, its target or its `up` is not what the controls last placed.
+
 three.js sets a speed multiplier on Shift and never reads it. The port leaves it out.
 
 ## FirstPersonControls
