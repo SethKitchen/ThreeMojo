@@ -33,6 +33,7 @@ from exporters.gltf import (
     export_gltf,
     gltf_pixels,
     index_component,
+    percent_encoded,
     write_gltf,
 )
 from loaders.bytes import encode_base64
@@ -566,6 +567,20 @@ def test_a_file_written_to_disk_reads_back() raises:
     _ = empty.add(Object3D())
     write_gltf("out/export_empty.gltf", empty, Assets(), GLTF_SEPARATE)
     assert_false(Path("out/export_empty.bin").exists())
+
+
+def test_a_buffer_name_is_written_as_a_uri() raises:
+    # The specification asks for a URI, and `read_gltf` decodes one: a
+    # raw `%` was a malformed escape, and `%41` named another file.
+    assert_equal(percent_encoded("Plain-Name_1.~bin"), "Plain-Name_1.~bin")
+    assert_equal(percent_encoded("100% a/é.bin"), "100%25%20a%2F%C3%A9.bin")
+    var built = Built()
+    for name in [String("100%"), String("x%41")]:
+        var path = "out/export_" + name + ".gltf"
+        write_gltf(path, built.scene, built.assets, GLTF_SEPARATE)
+        var scene = Scene()
+        var assets = Assets()
+        assert_equal(read_gltf(path, scene, assets).mesh_count, 4)
 
 
 def test_an_empty_scene_writes_a_file_that_reads() raises:

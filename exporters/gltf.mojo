@@ -137,9 +137,8 @@ the list does not have, or that holds no whole triangle, writes nothing,
 as nothing is drawn for it. three.js writes it with no material.
 """
 
-from core.ordinal import index_in_count
-
 from core.ordinal import (
+    index_in_count,
     ordinal_valid,
     require_index_in_count,
     require_valid,
@@ -338,21 +337,39 @@ def binary_name_for(path: String) -> String:
     return stem + ".bin"
 
 
+def percent_encoded(name: String) -> String:
+    """Return a file name as a relative URI, as the glTF specification
+    asks: every byte but a letter, a digit, `-`, `.`, `_` and `~` becomes
+    `%` and two capital hexadecimal digits.
+
+    `read_gltf` decodes the escapes, so a name with a space, a `%` or a
+    non-ASCII letter reads back.
+
+    Args:
+        name: The file name.
+
+    Returns:
+        The URI.
+    """
+    var unreserved = String(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+    )
+    comptime digits = "0123456789ABCDEF"
+    var out = String()
+    for byte in name.as_bytes():
+        if byte < 128 and unreserved.find(chr(Int(byte))) >= 0:
+            out += chr(Int(byte))
+        else:
+            out += "%"
+            out += digits[byte=Int(byte >> 4)]
+            out += digits[byte=Int(byte & 15)]
+    return out^
+
+
 def _is_relative_name(name: String) -> Bool:
     """Return True if a buffer URI is a name `read_gltf` reads beside the
     file: not empty, and with no scheme."""
     return name != "" and name.find(":") < 0
-
-
-def _is_written_upside_down(texture: Texture) -> Bool:
-    """Return True if a texture's image is written upside down: one with
-    `flip_y`, whose `v` counts up from its bottom row, where glTF's counts
-    down from the top, as three.js's `GLTFExporter` flips a `flipY`
-    texture's image. `read_gltf` turns `flip_y` off, and such a texture's
-    image is written as it is. Either way the texture's own transform
-    samples the written image where the texture samples its own.
-    """
-    return texture.flip_y
 
 
 @fieldwise_init
@@ -459,7 +476,13 @@ def gltf_pixels(texture: Texture) raises -> List[UInt8]:
     if texture.texel_type == FLOAT_TYPE:
         raise Error("glTF: a float texture has no eight-bit image to write")
     texture.validate()
-    var flip = _is_written_upside_down(texture)
+    # A `flip_y` texture's `v` counts up from its bottom row, where glTF's
+    # counts down from the top, so its image is written upside down, as
+    # three.js's `GLTFExporter` flips a `flipY` texture's image. `read_gltf`
+    # turns `flip_y` off, and such an image is written as it is. Either way
+    # the texture's own transform samples the written image where the
+    # texture samples its own.
+    var flip = texture.flip_y
     var row = texture.width * Texture.CHANNELS
     var out = List[UInt8](capacity=row * texture.height)
     var pixels = Span(texture.pixels.values())
@@ -2588,19 +2611,9 @@ def _same_instances(first: InstancedMesh, other: InstancedMesh) raises -> Bool:
         same = (
             same
             and first.matrices[at] == other.matrices[at]
-            and _same_color(first.color_at(at), other.color_at(at))
+            and first.color_at(at) == other.color_at(at)
         )
     return same
-
-
-def _same_color(first: Color, other: Color) -> Bool:
-    """Return True if two colors are one."""
-    return (
-        first.r == other.r
-        and first.g == other.g
-        and first.b == other.b
-        and first.a == other.a
-    )
 
 
 def _same_skin(first: SkinnedMesh, other: SkinnedMesh) -> Bool:
@@ -2988,7 +3001,7 @@ def export_gltf(
             exporter.document(roots, nodes, "", top), exporter.bin
         )
         return files^
-    var uri = binary_name
+    var uri = percent_encoded(binary_name)
     if container == GLTF_SEPARATE:
         files.binary = exporter.bin.copy()
     else:
