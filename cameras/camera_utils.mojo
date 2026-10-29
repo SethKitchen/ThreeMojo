@@ -20,6 +20,7 @@ edge.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
+from math.cross import wide_cross, widen_vector
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from std.math import atan
@@ -58,8 +59,12 @@ def frame_corners(
         raise Error("A frame needs three corners that are not on one line")
     right.normalize()
     up.normalize()
-    var normal = right
-    normal.cross(up)
+    # three.js rounds each product of the cross before it subtracts, so
+    # two edges of one direction give a normal of exactly zero. A fused
+    # multiply-add would leave a remainder of about 1e-8 there. The
+    # products of two `Float32`s are exact in `Float64`, so none is left.
+    var wide = wide_cross(widen_vector(right), widen_vector(up))
+    var normal = Vector3(Float32(wide[0]), Float32(wide[1]), Float32(wide[2]))
     if normal.length() == 0:
         raise Error("A frame needs three corners that are not on one line")
     normal.normalize()

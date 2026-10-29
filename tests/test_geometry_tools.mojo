@@ -59,6 +59,7 @@ from std.testing import (
 )
 from math.bounds import Plane
 from math.quaternion import Quaternion
+from std.benchmark import black_box
 from units.si import Angle, DEGREE, KILOGRAM, Length, METER, Mass, RADIAN
 
 comptime TOLERANCE = Float64(1e-4)
@@ -252,6 +253,23 @@ def test_a_frame_refuses_corners_it_cannot_frame() raises:
         frame_corners(
             camera, Vector3(0, 0, 10), Vector3(1, 0, 10), Vector3(0, 1, 10)
         )
+    assert_false(Bool(camera.projection_override))
+
+
+def test_a_frame_refuses_corners_on_a_slanted_line() raises:
+    # The top left corner lies twice as far along the bottom edge's line,
+    # so the two edges have one direction. three.js rounds each product
+    # of the cross before it subtracts, and gets a normal of exactly zero.
+    # A fused multiply-add left a normal of about 1e-8, which was
+    # normalized into a plane the corners do not define.
+    var camera = _camera()
+    var step = Vector3(
+        black_box(Float32(0.1)),
+        black_box(Float32(0.2)),
+        black_box(Float32(0.3)),
+    )
+    with assert_raises(contains="not on one line"):
+        frame_corners(camera, Vector3(0, 0, 0), step, step * 2)
     assert_false(Bool(camera.projection_override))
 
 
