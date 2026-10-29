@@ -17,6 +17,7 @@ from std.sys import argv, exit, stderr
 
 from tools._json_tools import quote_ascii
 from tools._json_tree import NOTHING, JsonTree
+from tools.carla_town_budget import object_fields
 
 
 struct _Slot(Movable):
@@ -76,7 +77,7 @@ def choose_text(text: String) raises -> String:
             slots.append(_Slot(False, String(""), String("")))
             names.append(_Own(False, String("")))
         else:
-            var parsed = _object_path(tree.text(item))
+            var parsed = object_fields(tree.text(item))
             var cls = parsed[0]
             var object_name = parsed[2]
             names.append(_Own(True, object_name))
@@ -131,58 +132,6 @@ def _same(left: _Own, right: _Own) -> Bool:
     if not left.present:
         return True
     return left.text == right.text
-
-
-def _object_path(full_name: String) raises -> List[String]:
-    """Return the class, package, and object name.
-
-    Raises:
-        Error: If `full_name` has no class and path.
-    """
-    var space = full_name.find(" ")
-    if space < 0:
-        raise Error("object path has no class")
-    var cls = String(full_name[byte=0:space])
-    var path = String(full_name[byte = space + 1 :])
-    var dot = _rfind(path, ".")
-    var package = String("")
-    var name = String(path)
-    if dot >= 0:
-        package = String(path[byte=0:dot])
-        var after = String(path[byte = dot + 1 :])
-        name = after
-    var colon = _rfind(name, ":")
-    if colon >= 0:
-        var after_colon = String(name[byte = colon + 1 :])
-        name = after_colon
-    var nested = _rfind(name, ".")
-    if nested >= 0:
-        var after_dot = String(name[byte = nested + 1 :])
-        name = after_dot
-    var out = List[String]()
-    out.append(cls)
-    out.append(package)
-    out.append(name)
-    return out^
-
-
-def _rfind(text: String, needle: String) -> Int:
-    """Return the last byte index of `needle`, or -1."""
-    var raw = text.as_bytes()
-    var head = needle.as_bytes()
-    if len(head) == 0 or len(raw) < len(head):
-        return -1
-    var index = len(raw) - len(head)
-    while index >= 0:
-        var same = True
-        for offset in range(len(head)):
-            if raw[index + offset] != head[offset]:
-                same = False
-                break
-        if same:
-            return index
-        index -= 1
-    return -1
 
 
 def main() raises:
