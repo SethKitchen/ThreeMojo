@@ -9,7 +9,7 @@
 A USDZ file is a ZIP archive that is not compressed, with each file's
 data at a multiple of 64 bytes. It holds `model.usda`, one
 `geometries/Geometry_<id>.usda` for each geometry, and one
-`textures/Texture_<id>_true.png` for each texture. `usdz_files` gives
+`textures/Texture_<id>_<flip_y>.png` for each texture. `usdz_files` gives
 those files, and `export_usdz` gives the archive.
 
 **The scene.** `model.usda` has a `Root` with a `Scenes` scope and a
@@ -102,7 +102,7 @@ from render.framebuffer import Color, Framebuffer
 from exporters.common import resized_image
 from render.png import encode as encode_png
 from render.srgb import SRGB
-from render.texture import CLAMP, MIRROR, REPEAT, Wrap
+from render.texture import CLAMP, MIRROR, REPEAT, Texture, Wrap
 from render.texture_store import TextureId
 from std.math import cos, pi, sin, tan
 from units.si import DEGREE, METER
@@ -479,12 +479,21 @@ struct _Exporter(Movable):
         self.options = options^
 
     def name(mut self, node: NodeId, name: String, fallback: String) -> String:
-        """Return three.js's `getName`, and keep it as used."""
+        """Return three.js's `getName`, and keep it as used.
+
+        A name in use takes the node's id, as three.js's takes the
+        object's. Here one node can carry several meshes and cameras, so
+        a name still in use then takes a count as well: sibling prims must
+        have different names.
+        """
         var out = usd_name(name, fallback)
-        for used in self.names:
-            if used == out:
-                out = out + "_" + String(node.value)
-                break
+        if first_match(self.names, out) >= 0:
+            var base = out + "_" + String(node.value)
+            out = base
+            var count = 0
+            while first_match(self.names, out) >= 0:
+                count += 1
+                out = base + "_" + String(count)
         self.names.append(out)
         return out
 
@@ -700,9 +709,7 @@ struct _Exporter(Movable):
         )
         node.add_property('uniform token info:id = "UsdUVTexture"')
         node.add_property(
-            "asset inputs:file = @textures/Texture_"
-            + String(id.value)
-            + "_true.png@"
+            "asset inputs:file = @" + _texture_file(id.value, texture) + "@"
         )
         node.add_property(
             "float2 inputs:st.connect = "
@@ -1151,10 +1158,17 @@ def usdz_files(
                 pixels, texture.width, texture.height, wide, high
             )
         files.add(
-            "textures/Texture_" + String(id) + "_true.png",
+            _texture_file(id, texture),
             encode_png(Framebuffer(wide, high, pixels^)),
         )
     return files^
+
+
+def _texture_file(id: Int, texture: Texture) -> String:
+    """Return a texture's file in the archive, named by its id and its
+    `flip_y`, as three.js names it by its `flipY`."""
+    var flip = "true" if texture.flip_y else "false"
+    return "textures/Texture_" + String(id) + "_" + flip + ".png"
 
 
 def export_usdz(

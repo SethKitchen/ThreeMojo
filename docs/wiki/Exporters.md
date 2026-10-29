@@ -382,7 +382,7 @@ The archive is a ZIP file that is not compressed. Each file's data starts at a m
 
 - `model.usda`: a `Root` `Xform`, a `Scenes` scope and a `Scene` `Xform` that holds the nodes, then a `Materials` scope.
 - `geometries/Geometry_<id>.usda`: one `Mesh` for each geometry, with its triangles, normals, points, texture coordinates and colors.
-- `textures/Texture_<id>_true.png`: one PNG for each texture.
+- `textures/Texture_<id>_<flip_y>.png`: one PNG for each texture, named `true` or `false` by its `flip_y`, as three.js names it by its `flipY`.
 
 | Node | USD |
 |---|---|
