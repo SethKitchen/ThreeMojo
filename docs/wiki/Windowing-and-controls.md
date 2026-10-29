@@ -343,7 +343,7 @@ three.js leaves the keys to its example. Here `update(camera, delta)` walks by t
 | Left drag | Rotate. The camera's `up` turns too. |
 | Middle drag, or the wheel | Zoom. |
 | Right drag | Pan. |
-| Hold `A`, `S` or `D` | Any button rotates, zooms or pans. |
+| Hold `A`, `S` or `D` | Any button rotates, zooms or pans. A move with no button held does nothing, as in three.js. |
 
 | Member | Default | Meaning |
 |---|---|---|

@@ -387,6 +387,25 @@ def test_an_action_turned_off_does_nothing() raises:
     assert_false(controls.update(camera))
 
 
+def test_a_key_held_does_nothing_until_a_press() raises:
+    # three.js listens for `pointermove` only from a press to its release.
+    var camera = _camera()
+    var controls = TrackballControls(camera)
+    controls.static_moving = True
+    _key(controls, 97)
+    controls.handle(InputEvent(POINTER_MOVE, x=50, y=50), SIZE, SIZE)
+    controls.handle(InputEvent(POINTER_MOVE, x=80, y=50), SIZE, SIZE)
+    assert_false(controls.update(camera))
+    _near(camera.position, 0, 0, 5)
+    # After a release, a move does nothing again.
+    _drag(controls, PRIMARY, 60, 50, release=True)
+    _ = controls.update(camera)
+    var after = camera.position
+    controls.handle(InputEvent(POINTER_MOVE, x=90, y=50), SIZE, SIZE)
+    assert_false(controls.update(camera))
+    _near(camera.position, after.x, after.y, after.z)
+
+
 def test_disabled_controls_ignore_input() raises:
     var camera = _camera()
     var controls = TrackballControls(camera)
