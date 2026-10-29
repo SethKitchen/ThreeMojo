@@ -27,7 +27,7 @@ status as the Python tool, with these differences:
 from std.ffi import OwnedDLHandle, external_call
 from std.math import isinf, isnan
 from std.os import listdir, makedirs, remove, rmdir
-from std.os.path import exists, isdir, isfile, islink
+from std.os.path import basename, exists, isdir, isfile, islink
 from std.pathlib import Path, cwd
 from std.sys import CompilationTarget, argv, exit, stderr
 from std.tempfile import mkdtemp
@@ -250,12 +250,6 @@ def _parent(path: String) -> String:
     if cut == 0:
         return "/"
     return String(path[byte=:cut])
-
-
-def _basename(path: String) -> String:
-    """Return a path's last part."""
-    var cut = path.rfind("/")
-    return String(path[byte = cut + 1 :])
 
 
 def _relative(root: String, path: String) -> String:
@@ -1829,12 +1823,12 @@ def gles_dir[M: Machine](mut machine: M, mut state: State) raises -> String:
     if len(found) == 0:
         return String()
     var library = found[0]
-    var stored = dest + "/" + _basename(library)
+    var stored = dest + "/" + basename(library)
     if not exists(stored):
         Path(stored).write_bytes(Span(Path(library).read_bytes()))
     var link = dest + "/libGLESv2.so.2"
     if not exists(link):
-        if not _symlink(_basename(stored), link):
+        if not _symlink(basename(stored), link):
             raise Error(
                 "FileExistsError: [Errno 17] File exists: " + py_repr(link)
             )
@@ -4997,7 +4991,7 @@ def main() raises:
         arguments.append(String(given[index]))
     var program = String(PROGRAM)
     if len(given) > 0:
-        var name = _basename(String(given[0]))
+        var name = basename(String(given[0]))
         if name.byte_length() > 0:
             program = name
     var machine = System()

@@ -79,12 +79,6 @@ comptime FAST_MATH = [
 """The fast-math flags an instruction may carry before its type."""
 
 
-def _ends_with_newline(text: String) -> Bool:
-    """Return whether `text` ends in a newline."""
-    var bytes = text.as_bytes()
-    return len(bytes) > 0 and bytes[len(bytes) - 1] == 10
-
-
 def _join_lines(original: String, lines: List[String]) -> String:
     """Join lines with newlines and keep a trailing newline of `original`.
 
@@ -96,7 +90,7 @@ def _join_lines(original: String, lines: List[String]) -> String:
         The joined text.
     """
     var joined = "\n".join(lines)
-    if not _ends_with_newline(original):
+    if not original.endswith("\n"):
         return joined
     if joined.byte_length() == 0:
         return "\n"

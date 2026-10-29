@@ -58,7 +58,7 @@ def pick_text(text: String) raises -> String:
             var item = extras[index]
             if item.kind != "SkeletalMesh":
                 continue
-            if not _ends_exact(item.label, ".uasset"):
+            if not item.label.endswith(".uasset"):
                 continue
             if _contains(item.label, "skeleton") or _contains(
                 item.label, "physics"
@@ -158,19 +158,6 @@ def _path_at(mark: Int, refs: List[_Entry], extras: List[_Entry]) -> String:
     if mark < 0:
         return extras[-mark - 1].path
     return refs[mark].path
-
-
-def _ends_exact(text: String, needle: String) -> Bool:
-    """Return whether `text` ends with `needle`."""
-    var raw = text.as_bytes()
-    var pat = needle.as_bytes()
-    if len(raw) < len(pat):
-        return False
-    var start = len(raw) - len(pat)
-    for index in range(len(pat)):
-        if raw[start + index] != pat[index]:
-            return False
-    return True
 
 
 def _contains(text: String, needle: String) -> Bool:
