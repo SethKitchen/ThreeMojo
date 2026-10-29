@@ -334,6 +334,14 @@ A browser reports how far a locked pointer moved. A terminal reports where the p
 
 three.js leaves the keys to its example. Here `update(camera, delta)` walks by the keys held: `W`, `A`, `S`, `D` and the arrows. As in three.js, the camera's `up` must be +y.
 
+### The camera's turn
+
+The controls keep the camera's turn, as three.js keeps `camera.quaternion`. Straight down, the target lies straight below the camera, and `Float32` rounds the heading away. The kept turn still holds it. So a look back up faces the same way, and a walk goes the way the camera faced. The walk reads the camera's right from the kept turn, as three.js reads column 0 of `camera.matrix`.
+
+The controls read the turn from the camera again when the camera was moved from outside. That is when its position, its target or its `up` is not what the controls last placed.
+
+A camera that looks exactly straight down is drawn through `look_at`. That view has no right, so `look_at` nudges it, and the image turns about the view to the nudge. three.js's image keeps the heading's turn. This is a difference from three.js.
+
 ## TrackballControls
 
 `controls/trackball_controls.mojo`. The camera turns about `target` like a trackball. It has no poles, and it can roll over the top. `TrackballControls(camera, target)` records the camera for `reset`. `handle(event, width, height)` records where the pointer went. `update(camera)` applies it and places the camera.
