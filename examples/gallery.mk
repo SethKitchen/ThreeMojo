@@ -173,6 +173,9 @@ $(call gallery,village_walk,village_walk,assets/pebbles.jpg)
 # The village's houses as the game draws them: the street, a framed house,
 # the brick house, and a player inside the stone cottage.
 $(call gallery,village_houses,village_houses,assets/pebbles.jpg)
+# The village from the trail in four weathers: clear, overcast, rain and
+# fog.
+$(call gallery,village_weather,village_weather,assets/pebbles.jpg)
 # Every procedural animal, one to a tile, turning.
 $(call gallery,animals,animals)
 # A wolf walks one stride, re-meshed in each pose.

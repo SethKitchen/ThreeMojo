@@ -28,6 +28,8 @@ and its animals, seen by a third-person camera.
    eye stays below it. It stays above the ground or the floor.
 9. The village prepares the frame: the grass for the camera, and the
    water's clock.
+10. The weather moves on, and scales the lights and the fog: see
+    `extensions.village.weather`.
 
 `VillageGame.render` then draws the frame with `GameRenderer` at the
 quality's size, composes the pond's water into it, and stretches it to the
@@ -67,6 +69,7 @@ from extensions.village.character import (
 )
 from extensions.village.gathering import GatherParameters, Gathering
 from extensions.village.hud import draw_hud, note_text, use_prompt
+from extensions.village.weather import CLEAR, Weather, WeatherKind
 from extensions.village.residents import (
     Body,
     Herd,
@@ -93,7 +96,7 @@ from extensions.village.quality import (
     planted,
 )
 from extensions.village.scanned import CutBuilding
-from extensions.village.terrain import Terrain
+from extensions.village.terrain import OPEN_SKY, Terrain
 from extensions.village.interior import Doorway
 from extensions.village.village import Village, VillageParameters
 from extensions.water.pebbles import PebbleBed
@@ -240,6 +243,10 @@ struct PlayParameters(Copyable, Movable):
     # Whether `VillageGame.render` writes the satchel, the prompt and the
     # last note over the frame: see `extensions.village.hud`.
     var hud: Bool
+    # The weather the game begins in, and whether it turns from weather to
+    # weather by itself: see `extensions.village.weather`.
+    var weather: WeatherKind
+    var weather_cycle: Bool
 
     def __init__(out self, quality: GameQuality) raises:
         """Create the default game at a quality: the village with the
@@ -247,7 +254,7 @@ struct PlayParameters(Copyable, Movable):
         trail who looks toward the houses. He wears a madder-red tunic
         trimmed in weld yellow over a linen shirt, walnut hose and
         leather boots. The village has its default spots to gather, and
-        the heads-up display is on.
+        the heads-up display is on. The weather is clear, and stays so.
 
         Args:
             quality: How finely each part of a frame is drawn.
@@ -268,6 +275,8 @@ struct PlayParameters(Copyable, Movable):
         self.field_of_view = Angle(55.0, DEGREE)
         self.gathering = GatherParameters()
         self.hud = True
+        self.weather = CLEAR
+        self.weather_cycle = False
 
 
 def tree_obstacles(
@@ -339,6 +348,10 @@ struct VillageGame(Movable):
     var hud: Bool
     var note: String
     var note_age: Float32
+    # The weather, and how long its clouds, fog and rain took to draw in
+    # the last frame, in milliseconds.
+    var weather: Weather
+    var weather_ms: Float64
 
     def __init__(
         out self,
@@ -453,6 +466,9 @@ struct VillageGame(Movable):
         self.hud = parameters.hud
         self.note = String()
         self.note_age = 0
+        self.weather = Weather(scene, parameters.weather)
+        self.weather.cycle = parameters.weather_cycle
+        self.weather_ms = 0
         self.clock = 0
         self.village.meadow.register_shadings(self.fast, assets)
         self.fast.set_shadows(self.quality.shadows, self.quality.shadow_size)
@@ -552,9 +568,13 @@ struct VillageGame(Movable):
         )
         scene.update()
         self.clock += delta.to(SECOND)
-        return self.village.update(
+        var stats = self.village.update(
             scene, assets, self.camera, Duration(self.clock, SECOND)
         )
+        # The meadow's sun sets its lights again as it fits its shadows to
+        # the camera, so the weather scales them after.
+        self.weather.update(scene, delta, self.view.yaw)
+        return stats
 
     def render(mut self, scene: Scene, assets: Assets) raises:
         """Draw the frame that `tick` prepared into `window`.
@@ -563,7 +583,10 @@ struct VillageGame(Movable):
         water is composed into it. Its edges are smoothed if the quality's
         `smooth_edges` asks, and it is stretched over `window`. The window's
         frame is kept from frame to frame, so it is not allocated again.
-        If `hud` is set, the satchel, the prompt and the last note are
+        The weather's clouds and fog cover the frame's sky before the
+        stretch, and its rain falls over the window's frame after it,
+        unless the camera's eye is under a roof. If
+        `hud` is set, the satchel, the prompt and the last note are
         written over the window's frame.
 
         Args:
@@ -582,12 +605,14 @@ struct VillageGame(Movable):
             image, scene, self.camera, self.village.level, self.village.bed
         )
         var watered = perf_counter_ns()
+        self.weather.cover(image, self.camera)
+        var covered = perf_counter_ns()
         self.render_ms = Float64(drawn - began) / 1.0e6
         self.water_ms = Float64(watered - drawn) / 1.0e6
         self.smooth_ms = 0
         if self.quality.smooth_edges:
             smooth_edges(image, available_workers())
-            self.smooth_ms = Float64(perf_counter_ns() - watered) / 1.0e6
+            self.smooth_ms = Float64(perf_counter_ns() - covered) / 1.0e6
         self.upscale_ms = 0
         if image.width == self.width and image.height == self.height:
             self.window = image^
@@ -595,6 +620,15 @@ struct VillageGame(Movable):
             var smoothed = perf_counter_ns()
             upscale_into(image, self.window, available_workers())
             self.upscale_ms = Float64(perf_counter_ns() - smoothed) / 1.0e6
+        var raining = perf_counter_ns()
+        # No rain falls before an eye under a roof.
+        ref eye = self.camera.position
+        var feet = self.player.position.y
+        if self.terrain.ceiling_over(eye.x, eye.z, feet) >= OPEN_SKY:
+            self.weather.rain(self.window)
+        self.weather_ms = (
+            Float64(perf_counter_ns() - raining + covered - watered) / 1.0e6
+        )
         if self.hud:
             draw_hud(
                 self.window,

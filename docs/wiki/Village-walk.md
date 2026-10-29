@@ -24,6 +24,7 @@ The window is 1920 by 1080 pixels by default. Give a width and a height for a di
 | Run | Hold the right trigger, the east button or the left stick | Hold Shift, or `R` |
 | Jump | The south button | Space |
 | Use | The west button | `E` |
+| Weather | | `1` clear, `2` overcast, `3` rain, `4` fog |
 | Quit | The start button | Escape or `q` |
 
 The buttons are named by position, as SDL names them. The south button is A on an Xbox controller and the cross on a PlayStation controller.
@@ -83,6 +84,7 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 7. The use button uses the spot in reach: see [Village gathering](Village-gathering).
 8. The camera's focus follows the player. The eye comes in before a wall, and stays below a ceiling and above the ground.
 9. The village grows the grass for the camera, and moves the water's clock on.
+10. The weather moves on, and scales the lights and the fog. See [Village weather](Village-weather).
 
 ## The parts
 
@@ -94,6 +96,7 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 | `clothes.mojo` | The natural dyes, `natural_dye`, `village_outfit` and `dyed_outfit`. |
 | `pad_input.mojo` | `stick`, `gamepad_input`, `keyboard_input` and `combined`. |
 | `gathering.mojo`, `hud.mojo` | What the player gathers, and the heads-up display. See [Village gathering](Village-gathering). |
+| `weather.mojo` | The clouds, the rain and the fog. See [Village weather](Village-weather). |
 | `residents.mojo` | `Body`, `Route`, `wander_route`, `visit`, `Villager`, `Herd`, `ResidentsParameters`, `Flipbook` and `Residents`. |
 | `play.mojo` | `default_residents`, `PlayParameters`, `tree_obstacles` and `VillageGame`. |
 | `quality.mojo` | `QualityPreset`, `PlantDetail`, `GameQuality`, `game_quality` and `planted`. See [Game renderer](Game-renderer). |
