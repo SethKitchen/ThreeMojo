@@ -223,10 +223,14 @@ def test_a_stereo_pair_puts_the_eyes_side_by_side() raises:
 
 
 def test_the_brightness_and_the_character_it_picks() raises:
-    near(ascii_brightness(BLACK), 0)
-    near(ascii_brightness(WHITE), 1, 1e-4)
-    near(ascii_brightness(Color(255, 0, 0)), 0.3)
-    near(ascii_brightness(Color(0, 0, 0, 0)), 1)
+    near(Float32(ascii_brightness(BLACK)), 0)
+    near(Float32(ascii_brightness(WHITE)), 1, 1e-4)
+    near(Float32(ascii_brightness(Color(255, 0, 0))), 0.3)
+    near(Float32(ascii_brightness(Color(0, 0, 0, 0))), 1)
+    # rgb(1, 110, 180): a `Float32` sum picks `*`, three.js's `=`.
+    assert_equal(
+        ascii_index(ascii_brightness(Color(1, 110, 180)), 10, False), 6
+    )
     assert_equal(ascii_index(0, 10, False), 9)
     assert_equal(ascii_index(1, 10, False), 0)
     assert_equal(ascii_index(0.5, 10, False), 4)
@@ -238,9 +242,9 @@ def test_the_brightness_and_the_character_it_picks() raises:
     with assert_raises(contains="does not fit"):
         _ = ascii_index(0, Int.MAX, False)
     with assert_raises(contains="does not fit"):
-        _ = ascii_index(Float32(1e20), 10, False)
+        _ = ascii_index(1e20, 10, False)
     with assert_raises(contains="does not fit"):
-        _ = ascii_index(nan[DType.float32](), 10, False)
+        _ = ascii_index(nan[DType.float64](), 10, False)
 
 
 def test_a_character_set_splits_and_falls_back() raises:
@@ -323,7 +327,7 @@ def test_the_html_colors_blocks_and_fades_each_character() raises:
     assert_equal(
         block.html(),
         "<span style='color:rgb(255,0,0);background-color:rgb(255,0,0);"
-        + "opacity:1.0;'>a</span><br/>",
+        + "opacity:1;'>a</span><br/>",
     )
     var cells = AsciiImage(1, 1, ["x"], [BLACK])
     assert_false(cells.color)
