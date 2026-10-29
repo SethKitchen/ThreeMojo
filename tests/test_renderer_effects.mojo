@@ -46,6 +46,7 @@ from renderers.stereo_effects import (
     dubois_left,
     dubois_right,
 )
+from std.benchmark import black_box
 from std.math import inf, nan
 from std.testing import (
     TestSuite,
@@ -227,10 +228,26 @@ def test_the_brightness_and_the_character_it_picks() raises:
     near(Float32(ascii_brightness(WHITE)), 1, 1e-4)
     near(Float32(ascii_brightness(Color(255, 0, 0))), 0.3)
     near(Float32(ascii_brightness(Color(0, 0, 0, 0))), 1)
-    # rgb(1, 110, 180): a `Float32` sum picks `*`, three.js's `=`.
+    # rgb(1, 110, 180): a `Float32` sum picks the character next to
+    # three.js's.
     assert_equal(
         ascii_index(ascii_brightness(Color(1, 110, 180)), 10, False), 6
     )
+    # JavaScript rounds each product. For rgb(36, 251, 101) it reads
+    # 0.6666666666666666 and picks the fourth of ten characters; a fused
+    # sum reads 0.6666666666666667 and picks the third. For
+    # rgb(190, 163, 153) it is the other way round. `black_box` keeps the
+    # compiler from working the sums out ahead.
+    var level = ascii_brightness(
+        Color(black_box(UInt8(36)), black_box(UInt8(251)), 101)
+    )
+    assert_equal(level, 0.6666666666666666)
+    assert_equal(ascii_index(level, 10, False), 3)
+    var other = ascii_brightness(
+        Color(black_box(UInt8(190)), black_box(UInt8(163)), 153)
+    )
+    assert_equal(other, 0.6666666666666667)
+    assert_equal(ascii_index(other, 10, False), 2)
     assert_equal(ascii_index(0, 10, False), 9)
     assert_equal(ascii_index(1, 10, False), 0)
     assert_equal(ascii_index(0.5, 10, False), 4)
@@ -248,9 +265,10 @@ def test_the_brightness_and_the_character_it_picks() raises:
 
 
 def test_a_character_set_splits_and_falls_back() raises:
+    # three.js r180's default set.
     var set = ascii_characters(ASCII_CHARACTERS, False)
     assert_equal(len(set), 10)
-    assert_equal(set[9], "#")
+    assert_equal(String(" ").join(set), "  . : - = + * # % @")
     assert_equal(len(ascii_characters("", False)), 15)
     assert_equal(ascii_characters("", False)[14], "@")
     assert_equal(len(ascii_characters("", True)), 7)

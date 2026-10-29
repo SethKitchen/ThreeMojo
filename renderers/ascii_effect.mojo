@@ -31,10 +31,11 @@ from loaders.js_number import js_number_text
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer
 from std.math import floor, isfinite
+from math.norm import rounded_product
 from math.utils import scaled_side
 
 # The character set three.js's constructor takes by default.
-comptime ASCII_CHARACTERS = " .:-+*=%@#"
+comptime ASCII_CHARACTERS = " .:-=+*#%@"
 # The set three.js falls back to when it is given an empty one.
 comptime ASCII_FALLBACK = " .,:;i1tfLCG08@"
 # The fallback when the color option is on.
@@ -45,7 +46,9 @@ def ascii_brightness(color: Color) -> Float64:
     """Return the brightness three.js's `AsciiEffect` reads from a pixel.
 
     The sum is a `Float64`, as JavaScript's number is: in `Float32` some
-    pixels pick the character next to three.js's.
+    pixels pick the character next to three.js's. Each product is rounded
+    on its own, as JavaScript rounds it, where Mojo would fuse them into
+    multiply-adds and pick the next character for a few colors.
 
     Args:
         color: The pixel, in sRGB bytes.
@@ -58,9 +61,9 @@ def ascii_brightness(color: Color) -> Float64:
     if color.a == 0:
         return 1
     return (
-        0.3 * Float64(color.r)
-        + 0.59 * Float64(color.g)
-        + 0.11 * Float64(color.b)
+        rounded_product(Float64(0.3), Float64(color.r))
+        + rounded_product(Float64(0.59), Float64(color.g))
+        + rounded_product(Float64(0.11), Float64(color.b))
     ) / 255
 
 
