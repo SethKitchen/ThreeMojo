@@ -16,9 +16,7 @@ rest walks every choice the writer makes and every refusal.
 
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import (
-    CUBIC_SPLINE,
     MATERIAL_OPACITY,
-    MORPH_INFLUENCE,
     POSITION as MOVE,
     QUATERNION,
     SCALE,
@@ -51,9 +49,6 @@ from exporters.gltf import (
     target_name,
 )
 from lights.light import (
-    DIRECTIONAL,
-    POINT,
-    SPOT,
     LightKind,
     ambient_light,
     directional_light,
@@ -73,7 +68,6 @@ from materials.material import (
     standard_material,
 )
 from math.matrix4 import Matrix4, translation
-from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
 from objects.line import LOOP, SEGMENTS, STRIP, Line
@@ -84,14 +78,12 @@ from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
 from render.framebuffer import Color
 from render.srgb import SRGB
 from render.texture import Texture
-from std.math import sqrt
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
     assert_false,
-    assert_raises,
     assert_true,
 )
 from units.si import Angle, DEGREE, Duration, Length, METER, RADIAN, SECOND

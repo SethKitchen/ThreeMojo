@@ -18,19 +18,12 @@ from extensions.carla.lane_refinement import (
     _ClosedInterval,
     _ClosedIntervals,
     _run_lane_search,
-    _resume_lane_certificate,
 )
 from extensions.carla.road import Road
 from math.vector3 import Vector3
 from std.math import inf
 from std.memory import bitcast
-from std.testing import (
-    TestSuite,
-    assert_equal,
-    assert_false,
-    assert_true,
-    assert_raises,
-)
+from std.testing import TestSuite, assert_equal, assert_false, assert_true
 from tests._sample_dispatch_controls import _dispatch_road
 from tests._lazy_taylor_controls import _whole_certificate
 

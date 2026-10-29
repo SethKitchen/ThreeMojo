@@ -12,9 +12,9 @@ from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.plane import plane
-from lights.light import ALL_LIGHTS, LightMask, directional_light, lights_of
+from lights.light import ALL_LIGHTS, directional_light, lights_of
 from lights.lighting import Lighting
-from materials.material import BASIC, LAMBERT, PHYSICAL, Material
+from materials.material import BASIC, PHYSICAL, Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor

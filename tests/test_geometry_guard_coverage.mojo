@@ -29,7 +29,7 @@ from geometries.torus import torus_knot
 from core.buffer_geometry import MaterialIndex
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
-from std.math import inf, nan, isnan, isfinite, ldexp, sqrt
+from std.math import inf, nan, isnan, ldexp
 from std.testing import (
     TestSuite,
     assert_equal,

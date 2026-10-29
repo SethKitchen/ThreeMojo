@@ -72,7 +72,7 @@ from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
-from materials.material import DOUBLE_SIDE, Material, MaterialId
+from materials.material import DOUBLE_SIDE, MaterialId
 from math.matrix4 import Matrix4
 from math.matrix_inverse import adjugate3
 from math.vector3 import Vector3

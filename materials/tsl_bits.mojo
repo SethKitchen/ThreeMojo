@@ -29,14 +29,7 @@ whole numbers, which a float holds exactly up to 2 ** 24. A word is one
 """
 
 from materials.tsl_check import _expect
-from materials.nodes import (
-    NODE_FLOAT,
-    NODE_VEC2,
-    NODE_VEC4,
-    NodeGraph,
-    NodeRef,
-    ValueType,
-)
+from materials.nodes import NODE_FLOAT, NODE_VEC2, NODE_VEC4, NodeGraph, NodeRef
 
 # The smallest normal float, 2 ** -126, and the largest finite one.
 comptime _SMALLEST_NORMAL = Float32(1.1754943508222875e-38)

@@ -14,7 +14,7 @@ each output lands in the shading: what it replaces, and what reads it.
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import BufferGeometry, POSITION, UV
 from core.fog import FogView, linear_fog
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -38,9 +38,7 @@ from materials.material import (
     FRONT_SIDE,
     Material,
     Side,
-    points_material,
     shader_material,
-    sprite_material,
 )
 from render.transmission import TransmissionTarget
 from math.matrix4 import Matrix4
@@ -68,7 +66,6 @@ from materials.nodes import (
     PROGRAM_VIEW,
     NodeGraph,
     NodeInputs,
-    NodeProgram,
     NodeProgramId,
     NodeProgramStore,
     point_size_of,
@@ -106,9 +103,9 @@ from render.cube_texture import CubeTexture
 from render.cube_texture_store import CubeTextureId
 from render.volume_texture import Data3DTexture, DataArrayTexture, VolumeImage
 from render.volume_texture_store import Data3DTextureId, DataArrayTextureId
-from render.texture_store import NO_TEXTURE, TextureId, TextureStore
+from render.texture_store import TextureId, TextureStore
 from renderers.renderer import Renderer
-from std.math import sin, sqrt
+from std.math import sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,

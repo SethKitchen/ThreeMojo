@@ -6,7 +6,7 @@
 """Tests for garments, the wardrobe, and how plate follows the bones."""
 
 from core.buffer_geometry import BufferGeometry
-from extensions.attire.cover import Cover, cover_of
+from extensions.attire.cover import cover_of
 from extensions.attire.garment import (
     MAX_LAMES,
     NO_ANCHOR,

@@ -20,7 +20,7 @@ from loaders.lwo_iff import (
 )
 from core.assets import Assets
 from core.scene import Scene
-from loaders.json import BOOLEAN, JsonDocument, NULL, NUMBER, STRING, parse_json
+from loaders.json import JsonDocument, NULL, STRING, parse_json
 from loaders.lwo import (
     _MaterialParser,
     _Params,
@@ -28,7 +28,6 @@ from loaders.lwo import (
     _split_material_indices,
     LwoMap,
     LwoMaterial,
-    LwoMesh,
     LwoModel,
     load_lwo,
     lwo_model_name,
@@ -36,8 +35,7 @@ from loaders.lwo import (
     lwo_resource_path,
     parse_lwo,
 )
-from materials.material import ADD_OPERATION
-from render.texture import CLAMP, MIRROR, REPEAT, Wrap
+from render.texture import MIRROR, REPEAT, Wrap
 from std.math import isnan
 from std.pathlib import Path
 from std.testing import (

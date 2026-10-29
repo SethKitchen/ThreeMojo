@@ -9,7 +9,6 @@ Existing CARLA imports keep the same types and functions. New simulations
 can import the shared module directly.
 """
 
-from extensions.physics.ccd import CollisionDetection, DISCRETE, SPHERE_MESH_CCD
 
 from extensions.physics.world import (
     RaycastHit,

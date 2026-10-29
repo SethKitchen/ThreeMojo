@@ -31,14 +31,13 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.building.construction import Construction
 from extensions.building.fingerprint import fingerprint
-from extensions.building.ids import ElementId, StoreyId
+from extensions.building.ids import ElementId
 from extensions.building.kinds import (
     BEAM,
     BED,
     CHAIR,
     CIRCLE,
     COFFEE_TABLE,
-    COLUMN,
     COUNTER,
     DESK,
     DOOR,

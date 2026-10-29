@@ -43,7 +43,7 @@ from extensions.water.pebbles import pebble_bed
 from render.jpeg import decode
 from renderers.renderer import Renderer
 from std.pathlib import Path
-from std.sys import argv, stderr
+from std.sys import argv
 from std.time import perf_counter_ns
 from units.si import SECOND, Duration
 

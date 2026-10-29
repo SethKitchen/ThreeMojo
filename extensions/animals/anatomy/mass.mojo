@@ -44,7 +44,6 @@ from extensions.sdf.field import FAR, SdfModel, smin
 from extensions.sdf.ids import (
     CONE,
     ELLIPSOID,
-    FIN,
     LENS,
     SURFACE_PART_COUNT,
     SurfacePart,
@@ -56,7 +55,7 @@ from math.finite import (
     require_positive_finite,
 )
 from math.utils import clamp, min3
-from math.vector3 import Vector3, vector3_from_float64
+from math.vector3 import vector3_from_float64
 from render.tasks import TaskGroup
 from std.math import ceil, isfinite, sqrt
 from std.sys import num_logical_cores

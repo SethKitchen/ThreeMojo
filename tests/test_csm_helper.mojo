@@ -14,7 +14,7 @@ meters deep and a margin of 50 meters.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
-from core.buffer_geometry import BufferGeometry, COLOR, POSITION
+from core.buffer_geometry import COLOR, POSITION
 from core.scene import Scene
 from helpers.csm import (
     CSMHelper,

@@ -18,7 +18,7 @@ from render.css_color import (
     parse_style,
 )
 from render.framebuffer import FloatColor
-from render.srgb import LINEAR, SRGB, ColorSpace
+from render.srgb import LINEAR, ColorSpace
 from std.math import inf
 from std.testing import (
     TestSuite,
@@ -26,7 +26,6 @@ from std.testing import (
     assert_equal,
     assert_false,
     assert_raises,
-    assert_true,
 )
 
 comptime TOLERANCE = Float64(2e-6)

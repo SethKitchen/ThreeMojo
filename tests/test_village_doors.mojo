@@ -24,7 +24,6 @@ from std.testing import (
     assert_almost_equal,
     assert_equal,
     assert_raises,
-    assert_true,
 )
 from units.si import SECOND, Duration
 

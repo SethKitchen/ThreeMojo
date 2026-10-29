@@ -63,7 +63,7 @@ from loaders.js_text import (
 from math.matrix4 import Matrix4
 from objects.volume import Volume, volume_values
 from render.inflate import inflate
-from std.math import floor, isinf, isnan, nan, sqrt, trunc
+from std.math import floor, isinf, isnan, nan, trunc
 from std.pathlib import Path
 
 # The longest data this port makes. three.js makes any length the browser

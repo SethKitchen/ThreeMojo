@@ -24,7 +24,7 @@ from render.target import FLOAT_TARGET
 from render.tonemap import NO_TONE_MAPPING, REINHARD_TONE_MAPPING
 from renderers.environment import scene_cube
 from renderers.renderer import Renderer
-from std.testing import TestSuite, assert_equal, assert_true
+from std.testing import TestSuite, assert_equal
 from tests.test_environment import a_room
 from units.si import Duration, Length, METER, SECOND
 

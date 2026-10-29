@@ -18,7 +18,7 @@ from extensions.carla.lane_refinement import _midpoint
 from extensions.carla.opendrive import load_opendrive_file
 from math.vector3 import Vector3
 from std.memory import bitcast
-from std.testing import TestSuite, assert_equal, assert_false, assert_true
+from std.testing import TestSuite, assert_equal, assert_false
 from tests.test_carla_sampled_box_cover import _boxes
 from tests.test_carla_scaled_lane_refinement import _scaled_road
 

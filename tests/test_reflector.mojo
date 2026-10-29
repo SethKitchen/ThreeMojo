@@ -43,7 +43,6 @@ from objects.water import Water
 from objects.water2 import Water2, water2_fragment
 from render.framebuffer import Color, Framebuffer
 from render.raster_state import REVERSED_DEPTH
-from render.target import RenderTarget
 from render.rasterizer import SHADE_LIT
 from render.texture import CLAMP, REPEAT, Texture, data_texture
 from render.texture_store import NO_TEXTURE, TextureId

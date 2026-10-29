@@ -68,7 +68,6 @@ from extensions.carla.road_info import (
     RoadId,
     RoadInfoSignal,
     SignalId,
-    _info_at_si as info_at,
 )
 from extensions.carla.transform import CarlaTransform
 from math.matrix3 import Matrix3

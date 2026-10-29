@@ -10,7 +10,7 @@ The expected numbers were computed from three.js r186's
 on three.js's default terrain baked twelve cells a side.
 """
 
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from core.buffer_geometry import NORMAL, POSITION
 from generators.forest import (
     AO,
     ForestGenerator,

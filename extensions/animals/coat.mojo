@@ -15,12 +15,7 @@ from core.ordinal import ordinal_valid
 from extensions.animals.parts import JAW
 from extensions.sdf.ids import SurfacePart
 from extensions.animals.noise import fbm3
-from extensions.sdf.vector import (
-    V3,
-    clamp,
-    mix,
-    smoothstep,
-)
+from extensions.sdf.vector import V3, clamp, smoothstep
 from math.norm import squared_length2
 from math.utils import mix_delta
 from render.srgb import srgb_to_linear

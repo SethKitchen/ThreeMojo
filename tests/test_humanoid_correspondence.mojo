@@ -21,7 +21,6 @@ from extensions.humanoid.canonical import (
     RIGHT_FOOT_REGION,
     RIGHT_FOREARM_REGION,
     RIGHT_HAND_REGION,
-    RIGHT_SHANK_REGION,
     RIGHT_THIGH_REGION,
     RIGHT_UPPER_ARM_REGION,
     TRUNK_REGION,
@@ -114,7 +113,7 @@ from extensions.humanoid.spec import HumanoidSpec
 from loaders.json import parse_json
 from math.vector3 import Vector3
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
-from std.math import cos, nan, sin
+from std.math import nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,

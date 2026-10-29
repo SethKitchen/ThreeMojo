@@ -50,8 +50,6 @@ from extensions.carla.physics.quantities import (
     Torque,
 )
 from extensions.carla.physics.shape import (
-    BOX,
-    CAPSULE,
     CONVEX,
     MESH,
     PhysicsMaterial,
@@ -64,7 +62,6 @@ from extensions.carla.physics.shape import (
     cross,
     unit_or,
 )
-from extensions.carla.physics.world import PhysicsWorld
 from extensions.physics.collide import _supporting
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
@@ -83,13 +80,10 @@ from units.si import (
     Angle,
     AngularVelocity,
     DEGREE,
-    Duration,
     KILOGRAM,
     Length,
     METER,
     Mass,
-    RADIAN,
-    SECOND,
     Velocity,
 )
 

@@ -17,7 +17,6 @@ from extensions.attire.kinds import (
     WOOL,
 )
 from extensions.attire.outfit import Outfit
-from core.object3d import Object3D
 from core.scene import Scene
 from extensions.animals.registry import CHICKEN, RABBIT, SpeciesId
 from extensions.humanoid.rig.joints import CHEST, HIPS, SPINE
@@ -31,7 +30,6 @@ from extensions.village.character import (
     WALKING,
     Character,
     CharacterParameters,
-    MoveInput,
     Obstacle,
 )
 from extensions.village.clothes import dyed_outfit
@@ -65,7 +63,6 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
-    assert_false,
     assert_raises,
     assert_true,
 )

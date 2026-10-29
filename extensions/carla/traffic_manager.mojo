@@ -69,7 +69,6 @@ from extensions.carla.actor import (
     TrafficLightState,
 )
 from extensions.carla.physics.body import DYNAMIC, KINEMATIC
-from extensions.carla.physics.vehicle_control import VehicleControl
 from extensions.carla.traffic_manager_collision import CollisionStage
 from extensions.carla.traffic_manager_constants import (
     BLOCKED_TIME_THRESHOLD,
@@ -98,7 +97,6 @@ from extensions.carla.traffic_manager_shared import (
     APPLY_TRANSFORM,
     APPLY_VEHICLE_CONTROL,
     LargeVehicle,
-    NO_COMMAND,
     SET_VEHICLE_LIGHT_STATE,
     TrafficAction,
     TrafficCommand,
@@ -108,7 +106,6 @@ from extensions.carla.traffic_manager_state import (
     _check_actor_id,
     KinematicState,
     StaticAttributes,
-    TRAFFIC_ANY,
     TRAFFIC_PEDESTRIAN,
     TRAFFIC_VEHICLE,
     TrafficLightInfo,
@@ -119,7 +116,7 @@ from math.vector3 import Vector3
 from std.collections import Dict, Optional
 from std.math import isnan
 from std.time import perf_counter_ns
-from units.si import Duration, Length, METER, Velocity
+from units.si import Duration, Length, Velocity
 from extensions.carla.physics.quantities import KILOMETER_PER_HOUR
 
 

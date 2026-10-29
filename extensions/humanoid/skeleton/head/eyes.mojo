@@ -28,7 +28,7 @@ from extensions.humanoid.skeleton.head.frame import (
 )
 from extensions.humanoid.skeleton.morph import EYE_X, EYE_Y, EYE_Z
 from math.vector3 import Vector3, append_vector3
-from std.math import cos, max, min, pi, sin, sqrt
+from std.math import cos, min, pi, sin, sqrt
 
 # The eyeball's radius on the template, in centimeters.
 comptime EYEBALL_RADIUS = Float32(1.2)

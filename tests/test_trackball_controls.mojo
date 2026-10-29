@@ -10,7 +10,6 @@ run headless in Node with the same camera, a view 100 pixels square, and
 the same input. A wheel notch is a `deltaY` of 100 pixels.
 """
 
-from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.input import (
     InputEvent,

@@ -99,7 +99,6 @@ from render.texture import (
     MIRROR,
     NEAREST,
     REPEAT,
-    Filter,
     Wrap,
     texture_from,
 )

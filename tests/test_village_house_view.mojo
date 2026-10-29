@@ -25,7 +25,7 @@ from extensions.building.construction import double_glazing
 from extensions.building.material import brick, timber
 from extensions.building.model import Element, Furnishing, Opening, Space
 from extensions.topology.arrangement import Point2
-from extensions.vegetation.ground import Canyon, Ground, Lot
+from extensions.vegetation.ground import Canyon, Ground
 from extensions.village.house import (
     BARN,
     BOARDED,
@@ -36,13 +36,11 @@ from extensions.village.house import (
     STAIR_RISE,
     STONE_FACADE,
     TIMBER_FRAMED,
-    fieldstone,
     front_wall,
     house_breast,
     house_lot,
     house_model,
     house_stair,
-    lime_plaster,
 )
 from extensions.village.house_view import (
     CREAM,

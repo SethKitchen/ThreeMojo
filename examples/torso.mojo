@@ -37,7 +37,6 @@ from tools._example_preview import turn_about_vertical
 
 from core.assets import Assets
 from core.object3d import Object3D
-from core.scene import Scene
 from extensions.humanoid.quality import (
     anatomy_detail,
     hand_skin_detail,

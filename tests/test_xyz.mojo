@@ -13,13 +13,7 @@ from core.buffer_geometry import COLOR, POSITION
 from loaders.json import parse_json
 from loaders.xyz import parse_xyz, read_xyz
 from std.pathlib import Path
-from std.testing import (
-    TestSuite,
-    assert_equal,
-    assert_false,
-    assert_raises,
-    assert_true,
-)
+from std.testing import TestSuite, assert_equal, assert_false, assert_raises
 
 
 def near(got: Float64, want: Float64) raises:

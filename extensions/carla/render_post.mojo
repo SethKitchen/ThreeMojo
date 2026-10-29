@@ -37,8 +37,8 @@ from math.vector3 import Vector3
 from render.cube_texture import CubeTexture
 from render.framebuffer import FloatColor
 from render.target import RenderTarget
-from std.math import atan, asin, cos, exp, isfinite, log2, pow, sin, sqrt, tan
-from units.si import METER, PER_METER, Angle, Length, RADIAN
+from std.math import cos, exp, isfinite, log2, pow, sin, sqrt
+from units.si import METER, PER_METER, Length, RADIAN
 
 # How far a ray that meets nothing runs through the fog.
 comptime SKY_DISTANCE = Length(3000, METER)

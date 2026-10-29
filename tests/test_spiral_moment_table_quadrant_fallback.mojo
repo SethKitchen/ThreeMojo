@@ -12,7 +12,7 @@ from extensions.carla.curve_bounds import (
     _reference_jet,
 )
 from extensions.carla.curve_interval import _Interval, _Jet
-from extensions.carla.geometry import RoadGeometry, SPIRAL, LINE, _GL_NODES
+from extensions.carla.geometry import RoadGeometry, SPIRAL, _GL_NODES
 from extensions.carla.curve_trig import _INV_HALF_PI, _PHASE_LIMIT
 from extensions.carla.spiral_moment_table import (
     _SpiralMomentProof,
@@ -21,7 +21,7 @@ from extensions.carla.spiral_moment_table import (
     _all_spiral_nodes_quadrant_zero,
 )
 from math.vector3 import Vector3
-from std.math import floor, inf, isfinite
+from std.math import floor, isfinite
 from std.memory import bitcast
 from std.testing import TestSuite, assert_true, assert_false, assert_equal
 

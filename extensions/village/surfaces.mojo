@@ -36,7 +36,6 @@ from math.vector3 import Vector3
 from render.framebuffer import Color
 from render.srgb import SRGB
 from render.texture import BILINEAR, REPEAT, Texture
-from render.texture_store import TextureId
 from std.math import floor, sin, sqrt
 
 comptime BRICK_TILE = Float32(0.9)

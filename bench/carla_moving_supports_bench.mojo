@@ -15,7 +15,6 @@ from extensions.carla.physics.body import (
     BodyId,
     BodyKind,
     DYNAMIC,
-    KINEMATIC,
     STATIC,
     RigidBody,
 )

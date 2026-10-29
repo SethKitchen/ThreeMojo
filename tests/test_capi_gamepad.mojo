@@ -9,7 +9,6 @@ The functions are the ones a host calls, called here from Mojo with the same
 scalars and the same opaque handle.
 """
 
-from std.memory import Layout
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
 from window.capi_abi import ABI_VERSION, KEY_DOWN, MAX_SIDE
 from window.capi_gamepad import (

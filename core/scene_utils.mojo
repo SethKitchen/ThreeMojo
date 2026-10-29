@@ -30,7 +30,6 @@ one that is not in a scene yet.
 """
 
 from core.assets import Assets
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
 from core.deform import morphed_positions, skin_carriers, skin_pose
 from core.morph import MorphInfluences
@@ -44,7 +43,6 @@ from geometries.attribute_utils import (
 )
 from materials.material import MaterialId
 from core.geometry_store import GeometryId
-from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color

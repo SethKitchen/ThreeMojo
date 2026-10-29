@@ -20,7 +20,6 @@ from controls.arcball_controls import (
     ArcballModifier,
     ArcballMouse,
     ArcballOperation,
-    ArcballSnapshot,
     ArcballState,
     CTRL_MODIFIER,
     FOV_OPERATION,
@@ -28,7 +27,6 @@ from controls.arcball_controls import (
     MOUSE_PRIMARY,
     MOUSE_SECONDARY,
     MOUSE_WHEEL,
-    NO_MODIFIER,
     NO_OPERATION,
     PAN_OPERATION,
     ROTATE_OPERATION,
@@ -80,8 +78,6 @@ from std.testing import (
 )
 from units.si import (
     Angle,
-    AngularAcceleration,
-    AngularVelocity,
     DEGREE,
     Duration,
     Length,

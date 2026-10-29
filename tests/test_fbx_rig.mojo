@@ -25,20 +25,17 @@ from animation.keyframe_track import (
 from core.assets import Assets
 from core.buffer_geometry import POSITION
 from core.deform import morphed_positions, skin_carriers, skin_pose
-from core.object3d import NodeId
 from core.scene import Scene
 from loaders.fbx import FbxModel, load_fbx, read_fbx
 from loaders.js_object import js_id_places
 from loaders.fbx_tree import parse_fbx_text
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
-    assert_false,
     assert_raises,
     assert_true,
 )

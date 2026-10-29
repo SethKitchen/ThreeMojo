@@ -35,7 +35,7 @@ from math.utils import (
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.benchmark import black_box
-from std.math import nan, pi, sqrt
+from std.math import nan, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,

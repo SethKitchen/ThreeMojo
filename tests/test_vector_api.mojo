@@ -17,7 +17,7 @@ from math.quaternion import Quaternion
 from math.utils import SeededRandom
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from std.math import inf, isnan
+from std.math import inf
 from std.testing import (
     TestSuite,
     assert_almost_equal,

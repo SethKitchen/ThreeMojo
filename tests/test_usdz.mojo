@@ -44,13 +44,7 @@ from exporters.usdz import (
 from loaders.json import parse_json
 from loaders.object_loader import ObjectCameras
 from loaders.zip import unzip
-from materials.material import (
-    BASIC,
-    PHYSICAL,
-    STANDARD,
-    Material,
-    MaterialId,
-)
+from materials.material import BASIC, PHYSICAL, STANDARD, Material
 from math.matrix4 import translation
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
@@ -59,7 +53,6 @@ from render.framebuffer import Color
 from render.png import decode as decode_png
 from render.srgb import LINEAR, SRGB
 from render.texture import BILINEAR, CLAMP, MIRROR, REPEAT, Texture, Wrap
-from render.texture_store import TextureId
 from units.si import DEGREE, METER, Angle, Length
 
 

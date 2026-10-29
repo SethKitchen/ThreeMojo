@@ -22,7 +22,7 @@ from extensions.humanoid.skeleton.leg.nerves.dimensions import NerveField
 from extensions.humanoid.skeleton.foot.nerves.dimensions import FootNerveField
 from extensions.humanoid.skeleton.leg.lymph.dimensions import LymphField
 from extensions.humanoid.skeleton.foot.lymph.dimensions import FootLymphField
-from tools._anatomy_pairs import _components, _Component, _batch, _work, _refine
+from tools._anatomy_pairs import _components, _batch, _work, _refine
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT, LEFT
 from extensions.humanoid.spec import HumanoidSpec
@@ -30,9 +30,6 @@ from extensions.humanoid.skeleton.field import DistanceField
 from extensions.humanoid.skeleton.leg.assembly import assemble_leg
 from extensions.humanoid.skeleton.leg.femur.dimensions import FemurField
 from extensions.humanoid.skeleton.foot.bones.dimensions import FootBoneField
-from extensions.humanoid.skeleton.foot.muscles.dimensions import (
-    foot_muscle_dimensions,
-)
 from math.vector3 import Vector3, midpoint
 from std.math import max
 from std.testing import (

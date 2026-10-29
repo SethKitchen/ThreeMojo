@@ -43,7 +43,7 @@ from extensions.humanoid.fidelity import (
     humanoid_provenance,
 )
 from extensions.humanoid.rig.game import game_build_settings
-from extensions.humanoid.rig.joints import RIGHT_SHIN, named_joints, joint_label
+from extensions.humanoid.rig.joints import named_joints, joint_label
 from extensions.humanoid.sex import FEMALE
 from extensions.humanoid.spec import HumanoidSpec
 from loaders.gltf import read_gltf

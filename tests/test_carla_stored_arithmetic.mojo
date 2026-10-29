@@ -13,7 +13,6 @@ This suite does not use ideal trigonometry to validate canonical arithmetic.
 from extensions.carla.curve_interval import (
     _Interval,
     _Jet,
-    _ValueJet,
     _stored_difference,
     _stored_blend_error,
     _without_derivatives,

@@ -52,7 +52,6 @@ from math.space_curve import (
     frames_of,
     length_of,
     lengths_of,
-    point3,
     point_at,
     points_of,
     spaced_points_of,
@@ -63,7 +62,6 @@ from math.vector3 import Vector3
 from math.vector4 import Vector4
 from std.math import inf, nan
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
-from units.si import METER
 
 
 def near(actual: Float64, expected: Float64, tolerance: Float64) raises:

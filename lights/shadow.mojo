@@ -93,7 +93,7 @@ from math.finite import (
     require_positive_finite,
     require_unit_finite,
 )
-from std.math import floor, isfinite, max, min, sqrt
+from std.math import isfinite, max, min, sqrt
 from units.si import Angle, Length, METER
 
 

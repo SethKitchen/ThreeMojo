@@ -6,11 +6,6 @@
 """Nonallocating regressions for curve parameter and count boundaries."""
 
 from math.curve import (
-    CUBIC,
-    ELLIPSE,
-    LINE,
-    QUADRATIC,
-    SPLINE,
     Curve,
     CurveKind,
     arc,
@@ -21,10 +16,6 @@ from math.curve import (
     u_to_t,
 )
 from math.curve3 import (
-    CATMULL_ROM3,
-    CUBIC3,
-    LINE3,
-    QUADRATIC3,
     CatmullRomType,
     Curve3,
     Curve3Kind,

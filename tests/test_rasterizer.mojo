@@ -20,8 +20,6 @@ from materials.material import (
     TOON,
     Blending,
     MaterialKind,
-    depth_material,
-    normal_material,
 )
 from math.vector2 import Vector2
 from std.math import inf, isfinite, pi

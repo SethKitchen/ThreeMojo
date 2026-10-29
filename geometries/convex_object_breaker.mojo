@@ -51,8 +51,8 @@ from math.rounded_product import rounded_product
 from math.utils import SeededRandom
 from math.vector3 import Vector3, vector3_from_float64
 from std.collections import Set
-from std.math import cos, pi, sin, sqrt
-from units.si import Angle, KILOGRAM, Length, METER, Mass, RADIAN
+from std.math import cos, pi, sin
+from units.si import KILOGRAM, Length, METER, Mass
 
 
 struct BreakableObject(Copyable, Movable):

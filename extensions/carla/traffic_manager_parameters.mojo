@@ -44,7 +44,6 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/Parameters.cpp`.
 """
 
 from extensions.carla.actor import ActorId
-from extensions.carla.physics.quantities import KILOMETER_PER_HOUR
 from extensions.carla.traffic_manager_map import RoadOption
 from math.vector3 import Vector3
 from std.collections import Dict, Set

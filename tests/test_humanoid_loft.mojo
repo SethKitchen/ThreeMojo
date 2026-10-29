@@ -37,13 +37,11 @@ from extensions.humanoid.skeleton.look import (
 )
 from materials.material import PHYSICAL
 from math.vector3 import Vector3
-from render.framebuffer import Color
 from render.texture_store import NO_TEXTURE, TextureId
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
-    assert_false,
     assert_raises,
     assert_true,
 )

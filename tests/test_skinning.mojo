@@ -19,7 +19,7 @@ from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from materials.material import Color, DOUBLE_SIDE, Material, MaterialId
-from math.matrix4 import Matrix4, rotation_z, scaling, translation
+from math.matrix4 import Matrix4, scaling, translation
 from math.vector3 import Vector3
 from objects.skeleton import Bone, Skeleton, bind_skeleton, blend_bones
 from objects.skinned_mesh import (

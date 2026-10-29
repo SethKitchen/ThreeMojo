@@ -103,17 +103,7 @@ from extensions.humanoid.skeleton.limb.regions import (
     require_limb_region,
 )
 from math.vector3 import Vector3
-from std.math import isfinite, sqrt
-from units.si import (
-    KILOGRAM,
-    KILOGRAM_SQUARE_METER,
-    Length,
-    METER,
-    MILLIMETER,
-    Mass,
-    MomentOfInertia,
-    Volume,
-)
+from units.si import KILOGRAM, Length, MILLIMETER, Mass, Volume
 
 # Default maximum grid-cell width. Convergence depends on the spec and
 # reported quantity; no universal sampling-error claim is made.

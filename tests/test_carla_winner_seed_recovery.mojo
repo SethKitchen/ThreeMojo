@@ -5,7 +5,6 @@
 
 from extensions.carla.map import (
     _try_winner_seed,
-    _winner_seed_room,
     _query_node_step_cost,
     _seed_exact_interval,
     _seed_reference_domain,

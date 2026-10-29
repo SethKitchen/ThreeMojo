@@ -13,7 +13,6 @@ from core.buffer_geometry import (
     POSITION,
     UV,
     BufferGeometry,
-    GeometryGroup,
     MaterialIndex,
 )
 from core.geometry_store import GeometryId
@@ -48,7 +47,7 @@ from extensions.humanoid.sex import MALE
 from extensions.humanoid.spec import HumanoidSpec
 from loaders.gltf import read_gltf
 from loaders.json import parse_json
-from materials.material import BASIC, Material, MaterialId
+from materials.material import BASIC, Material
 from math.matrix4 import Matrix4
 from objects.mesh import Mesh
 from objects.skeleton import Bone, Skeleton
@@ -56,13 +55,7 @@ from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
 from render.framebuffer import Color
 from std.memory import bitcast
 from std.pathlib import Path
-from std.testing import (
-    TestSuite,
-    assert_equal,
-    assert_false,
-    assert_raises,
-    assert_true,
-)
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from tests.test_scratch import TestScratch, temporary_path
 from units.si import Length, METER
 

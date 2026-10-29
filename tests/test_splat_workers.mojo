@@ -23,7 +23,7 @@ from core.object3d import Object3D
 from core.scene import Scene
 from math.vector3 import Vector3
 from objects.gaussian_splat import SORT_RUN, GaussianSplat
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color
 from render.raster_state import DepthMode
 from render.splat_raster import (
     SPLAT_RUN,

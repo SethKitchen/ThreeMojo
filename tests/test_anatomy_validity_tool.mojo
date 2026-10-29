@@ -10,7 +10,6 @@ the compiler, and a fixture prober answers the probe requests.
 """
 
 from std.math import sqrt
-from std.os import makedirs
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -30,7 +29,6 @@ from tests._anatomy_fixtures import (
 from tests._tree import Tree
 from tools._json_tree import NOTHING, JsonTree, equal
 from tools._process import run_program
-from tools._sha256 import sha256_hex
 from tools.anatomy_validity import (
     Num,
     Options,

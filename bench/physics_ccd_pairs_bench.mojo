@@ -25,9 +25,9 @@ Run it with `mojo run -I . bench/physics_ccd_pairs_bench.mojo`.
 """
 
 from extensions.physics.body import DYNAMIC, STATIC, RigidBody
-from extensions.physics.ccd import DISCRETE, SPHERE_MESH_CCD
+from extensions.physics.ccd import SPHERE_MESH_CCD
 from extensions.physics.shape import Shape, PhysicsMaterial
-from extensions.physics.world import CollisionEvent, PhysicsWorld, _StepState
+from extensions.physics.world import PhysicsWorld, _StepState
 from math.norm import squared_length3
 from math.quaternion import Quaternion
 from math.triangle import Triangle

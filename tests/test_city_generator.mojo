@@ -12,10 +12,7 @@ edge by edge. The default city is planned without building its towers;
 a one-lot city of seed 35, whose tower is 38 meters tall, is built.
 """
 
-from generators.car import CarPlacement
 from generators.city import (
-    BlockEdge,
-    City,
     CityGenerator,
     CityParameters,
     CityPlan,

@@ -59,7 +59,7 @@ from math.vector3 import Vector3
 from max.gpu import global_idx
 from max.gpu.host import DeviceBuffer, DeviceContext
 from max.gpu.memory import AddressSpace
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import FloatColor, Framebuffer
 from std.math import ceildiv
 from std.sys import has_accelerator
 from units.si import SECOND, Angle, Duration, Length

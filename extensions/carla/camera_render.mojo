@@ -80,7 +80,7 @@ have no place for them.
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.background import color_background, cube_background
-from core.fog import exp2_fog, no_fog
+from core.fog import exp2_fog
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.carla.actor import ActorId
@@ -137,7 +137,6 @@ from extensions.carla.sensor_attributes import (
     attribute_string,
 )
 from extensions.carla.render_weather import (
-    HeightFog,
     NITS_PER_UNIT,
     daylight,
     height_fog,
@@ -158,8 +157,7 @@ from extensions.carla.transform import CarlaTransform
 from extensions.carla.weather import WeatherParameters
 from extensions.carla.world import World
 from lights.light import directional_light
-from materials.material import BASIC, DOUBLE_SIDE, Material, MaterialId
-from objects.mesh import Mesh
+from materials.material import BASIC, Material, MaterialId
 from lights.shadow import PCF_SOFT_SHADOW_MAP
 from lights.sun_light import SunLight
 from math.vector3 import Vector3

@@ -47,7 +47,6 @@ from extensions.energy.solar import (
 )
 from units.si import (
     Angle64,
-    DEGREE,
     DEGREE64,
     Duration64,
     HOUR,

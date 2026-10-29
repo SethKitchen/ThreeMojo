@@ -6,7 +6,7 @@
 """A reviewed import root refuses a competing module, package, or link."""
 
 from std.os import listdir
-from std.testing import TestSuite, assert_equal, assert_true
+from std.testing import TestSuite, assert_equal
 
 from tests._carla_tool_files import put, remove_tree, scratch, symlink
 from tools._carla_files import lstat_id, stat_id

@@ -22,7 +22,7 @@ from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.triangle import Triangle
 from math.vector3 import Vector3
-from std.math import inf, nan
+from std.math import nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,

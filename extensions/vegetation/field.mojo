@@ -35,7 +35,7 @@ blade stays wider than a pixel, so it does not flicker in and out.
 """
 
 from core.buffer_geometry import BufferGeometry
-from extensions.vegetation.blade import Blade, BladeMesh, blade_triangles
+from extensions.vegetation.blade import Blade, BladeMesh
 from extensions.vegetation.checks import (
     require_between,
     require_count_between,
@@ -58,7 +58,6 @@ from extensions.vegetation.kinds import (
     BROADLEAF,
     BUTTERCUP,
     ClusterFate,
-    PlantKind,
 )
 from extensions.vegetation.noise import hash01, value_noise
 from extensions.vegetation.wind import Wind

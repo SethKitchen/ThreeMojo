@@ -12,7 +12,7 @@ default colors, and loaded with a file map. Each group, object, attribute,
 material group and material must match.
 """
 
-from loaders.json import BOOLEAN, JsonDocument, NULL, NUMBER, STRING, parse_json
+from loaders.json import JsonDocument, NULL, STRING, parse_json
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.scene import Scene
@@ -21,7 +21,6 @@ from loaders.ldraw import (
     _stored_face_normal,
     _from_code,
     LDrawModel,
-    LDrawNode,
     TO_THE_END,
     load_ldraw,
     parse_ldraw,

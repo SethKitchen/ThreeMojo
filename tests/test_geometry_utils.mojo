@@ -9,7 +9,6 @@
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
-    GeometryGroup,
     MaterialIndex,
     NORMAL,
     POSITION,

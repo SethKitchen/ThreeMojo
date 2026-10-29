@@ -35,7 +35,6 @@ from std.testing import (
     assert_true,
 )
 from tests.test_physics_ccd_index import (
-    _assert_body,
     _assert_world,
     _failure_pair,
     _step_pair,

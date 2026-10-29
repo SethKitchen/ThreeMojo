@@ -44,7 +44,7 @@ from geometries.utils import merge_geometries, merge_vertices
 from math.matrix4 import Matrix4
 from math.vector3 import append_float64_xyz
 from math.sine import fraction
-from std.math import pi, sin, sqrt
+from std.math import pi, sin
 from units.si import Length, METER
 
 # A streetlight's parts.

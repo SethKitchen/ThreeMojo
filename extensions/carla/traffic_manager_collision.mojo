@@ -46,7 +46,6 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/CollisionStage.cpp`
 """
 
 from extensions.carla.quantity_boundary import _finite_si, _nonnegative_si
-from std.math import isfinite
 from std.collections import Optional
 
 from extensions.carla.actor import ActorId, GREEN, NO_ACTOR, OFF

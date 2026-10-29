@@ -29,7 +29,6 @@ from extensions.carla.actor import ActorId, GREEN, NO_ACTOR, TrafficLightState
 from extensions.carla.bounding_box import BoundingBox
 from extensions.carla.physics.simulation import VehicleId
 from extensions.carla.physics.vehicle_control import (
-    NO_FAILURE,
     VehicleControl,
     VehicleFailureState,
 )

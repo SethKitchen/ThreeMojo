@@ -30,11 +30,7 @@ from extensions.humanoid.skeleton.complexion import hair_tone
 from extensions.humanoid.skeleton.field import DistanceField
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.head.hair.collider import HairCollider
-from extensions.humanoid.skeleton.head.hair.groom import (
-    GroomSpec,
-    HairGroom,
-    groom_hair,
-)
+from extensions.humanoid.skeleton.head.hair.groom import GroomSpec, groom_hair
 from extensions.humanoid.skeleton.head.hair.shading import (
     HairLight,
     HairLook,

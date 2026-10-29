@@ -44,7 +44,7 @@ from math.scaled_products import (
 )
 
 from math.cross import cross_vectors
-from math.norm import length2, normalized3, _ordinary_squared
+from math.norm import length2, _ordinary_squared
 from math.vector2 import Vector2, weighted_sum2
 from math.utils import clamp, max3, min3, mix_delta
 from math.vector3 import Vector3, weighted_sum3
@@ -162,7 +162,6 @@ from materials.nodes import (
     ProgramShape,
     NodeContext,
     NodeInputs,
-    NodeProgram,
     NodeProgramId,
     NodeProgramStore,
     NodeSource,
@@ -183,7 +182,6 @@ from lights.lighting import (
     PERSPECTIVE_VIEW,
     RECIPROCAL_PI,
     Lighting,
-    Reflected,
     ambient_occlusion,
     floored_roughness,
     geometry_roughness,
@@ -243,7 +241,7 @@ from math.finite import (
     require_non_negative_finite,
     require_unit_finite,
 )
-from std.math import ceil, floor, inf, isfinite, log2, max, min, sqrt
+from std.math import floor, inf, isfinite, log2, max, min, sqrt
 
 from render.tasks import TaskGroup
 from render.splatrule import ProjectedSplat

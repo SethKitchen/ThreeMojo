@@ -15,7 +15,6 @@ from materials.material import (
     OPAQUE,
 )
 from math.vector2 import Vector2
-from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from render.pointrule import (
     attenuated_size,
@@ -48,7 +47,6 @@ from render.rasterizer import (
 from render.srgb import LINEAR, SRGB
 from render.target import RenderTarget
 from render.texture import (
-    Alpha,
     COVERAGE,
     IGNORED,
     NEAREST,

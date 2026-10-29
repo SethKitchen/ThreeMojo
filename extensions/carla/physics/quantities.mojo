@@ -16,11 +16,6 @@ from extensions.physics.quantities import (
     Stiffness,
     DampingRate,
     CorneringStiffness,
-    TorqueUnit,
-    MomentumUnit,
-    StiffnessUnit,
-    DampingRateUnit,
-    CorneringStiffnessUnit,
     NEWTON_METER,
     JOULE,
     NEWTON_SECOND,
@@ -33,6 +28,4 @@ from extensions.physics.quantities import (
     KILOMETER_PER_HOUR,
     MILE_PER_HOUR,
     Jerk,
-    JerkUnit,
-    METER_PER_SECOND_CUBED,
 )

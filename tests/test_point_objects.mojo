@@ -36,7 +36,6 @@ from objects.sprite import SPRITE_RADIUS, Sprite
 from render.framebuffer import Color, Framebuffer
 from render.rasterizer import (
     DRAW_POINTS,
-    DRAW_SEGMENTS,
     DRAW_TRIANGLES,
     RasterVertex,
     SHADE_LIT,
@@ -44,14 +43,7 @@ from render.rasterizer import (
     SHADE_UV,
 )
 from render.srgb import LINEAR, SRGB
-from render.texture import (
-    COVERAGE,
-    IGNORED,
-    NEAREST,
-    REPEAT,
-    Texture,
-    checkerboard,
-)
+from render.texture import IGNORED, NEAREST, REPEAT, Texture, checkerboard
 from render.texture_store import NO_TEXTURE, TextureId
 from renderers.renderer import Renderer
 from std.math import nan

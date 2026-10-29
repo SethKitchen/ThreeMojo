@@ -38,7 +38,7 @@ from extensions.streamline.kinds import (
     SUPER_RESOLUTION,
 )
 from extensions.streamline.sizing import FrameSize, estimated_render_size
-from extensions.streamline.upscaler import SpatialUpscaler, Upscaler
+from extensions.streamline.upscaler import SpatialUpscaler
 from extensions.visual.overlay import CENTER, LEFT, Overlay, fill_rect
 from geometries.plane import plane
 from geometries.torus import torus_knot

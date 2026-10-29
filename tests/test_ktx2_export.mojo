@@ -12,7 +12,7 @@ four, two and one channels. Texel `t`, channel `c` holds
 `((t * 37 + c * 71) % 200 - 100) / 8` as a float.
 """
 
-from std.testing import TestSuite, assert_equal, assert_raises, assert_true
+from std.testing import TestSuite, assert_equal, assert_raises
 
 from exporters.ktx2 import export_ktx2, export_ktx2_volume
 from loaders.bytes import decode_base64

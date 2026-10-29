@@ -24,7 +24,6 @@ from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
-    mix_point,
     uniform_bend,
     uniform_tube,
 )

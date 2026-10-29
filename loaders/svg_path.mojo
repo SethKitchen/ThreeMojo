@@ -40,7 +40,7 @@ from math.matrix_inverse import adjugate3
 from math.norm import length2, _ordinary_squared
 from math.curve import CUBIC, ELLIPSE, LINE, QUADRATIC, Curve, CurveKind
 from math.curve_checks import MAX_CURVE_DIVISIONS, require_at_least_one
-from math.path import Path, Shape
+from math.path import Path
 from math.vector2 import Vector2, vector2_from_float64
 from render.framebuffer import FloatColor
 from std.math import atan2, cos, nan, pi, sin, sqrt

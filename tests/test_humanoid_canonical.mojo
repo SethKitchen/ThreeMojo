@@ -23,7 +23,6 @@ from extensions.humanoid.canonical import (
     LEFT_HAND_REGION,
     LEFT_SHANK_REGION,
     LEFT_THIGH_REGION,
-    LEFT_UPPER_ARM_REGION,
     MAX_CANONICAL_STEP,
     MIN_CANONICAL_STEP,
     ORBIT_CLEARANCE,
@@ -57,7 +56,6 @@ from extensions.humanoid.canonical import (
 from extensions.humanoid.fidelity import (
     CANONICAL_PARTS_REVISION,
     CANONICAL_RECIPE,
-    FIDELITY_KEY,
     GAME_RECIPE,
     canonical_inputs,
     humanoid_provenance,
@@ -73,7 +71,6 @@ from extensions.humanoid.genome import (
 )
 from extensions.humanoid.rig.game import add_game_humanoid, game_build_settings
 from extensions.humanoid.sex import MALE, Sex
-from extensions.humanoid.side import LEFT, RIGHT
 from extensions.humanoid.skeleton.torso.body import BodySkinField
 from extensions.humanoid.spec import HumanoidSpec
 from loaders.gltf import read_gltf

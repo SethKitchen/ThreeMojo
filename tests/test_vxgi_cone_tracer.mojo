@@ -30,12 +30,11 @@ from lights.vxgi_cone_tracer import (
     voxel_at,
 )
 from math.vector3 import Vector3
-from std.math import inf, isinf, isnan, nan, sqrt
+from std.math import inf, isinf, isnan, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
-    assert_false,
     assert_true,
 )
 

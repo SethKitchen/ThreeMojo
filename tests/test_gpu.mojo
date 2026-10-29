@@ -60,12 +60,7 @@ from lights.shadow import (
     BASIC_SHADOW_MAP,
     PCF_SHADOW_MAP,
     PCF_SOFT_SHADOW_MAP,
-    SHADOW_HEADER,
-    SHADOW_INTENSITY_AT,
-    SHADOW_TYPE_AT,
-    SPOT_MAP_FLOATS,
     VSM_SHADOW_MAP,
-    ShadowCascade,
 )
 from lights.csm import CSM
 from geometries.box import cube
@@ -109,13 +104,9 @@ from render.texture import (
     CLAMP,
     MIRROR,
     REPEAT,
-    FLOAT_TYPE,
-    UNSIGNED_BYTE_TYPE,
-    UV_CHANNEL_0,
     UV_CHANNEL_1,
     Texture,
     checkerboard,
-    float_from_bytes,
     float_texture,
 )
 from std.memory import bitcast
@@ -135,8 +126,8 @@ from lights.projector_light import projector_light
 from lights.sun_light import SunLight
 from math.spherical_harmonics3 import SphericalHarmonics3
 from render.pmrem import pmrem_from_cube
-from lights.lighting import PERSPECTIVE_VIEW, Lighting
-from lights.ltc import LTC_FLOATS, load_ltc_tables
+from lights.lighting import Lighting
+from lights.ltc import load_ltc_tables
 from core.fog import Fog, FogView, exp2_fog, linear_fog, no_fog
 from render.tonemap import (
     ACES_FILMIC_TONE_MAPPING,
@@ -176,105 +167,11 @@ from render.packing import (
     unpack_rgba_to_depth,
 )
 from render.gpu import (
-    FLOATS_PER_VERTEX,
-    LANE_AO_INTENSITY,
-    LANE_ANISOTROPY_X,
-    LANE_ANISOTROPY_Y,
-    LANE_IRIDESCENCE,
-    LANE_IRIDESCENCE_IOR,
-    LANE_SHEEN_B,
-    LANE_SHEEN_G,
-    LANE_SHEEN_R,
-    LANE_SHEEN_ROUGHNESS,
-    LANE_THICKNESS_MAXIMUM,
-    LANE_THICKNESS_MINIMUM,
-    STATE_ANISOTROPY_MAP,
-    STATE_IRIDESCENCE_MAP,
-    STATE_SHEEN_COLOR_MAP,
-    STATE_SHEEN_ROUGHNESS_MAP,
-    STATE_FILM_THICKNESS_MAP,
-    LANE_BUMP_SCALE,
-    LANE_LIGHT_MAP_INTENSITY,
-    LANE_U1,
-    LANE_V1,
-    STATE_AO_MAP,
-    STATE_LIGHT_MAP,
-    LANE_FAR_DISTANCE,
-    LANE_NEAR_DISTANCE,
-    LANE_REFERENCE_X,
-    LANE_REFERENCE_Y,
-    LANE_REFERENCE_Z,
-    LINE_STATE_FOG,
-    STATE_PER_LINE,
-    POINT_STATE_FOG,
-    STATE_DEPTH_PACKING,
-    STATE_FOG,
-    LANE_CLEARCOAT,
-    LANE_CLEARCOAT_ROUGHNESS,
-    LANE_ENV_INTENSITY,
-    LANE_METALNESS,
-    LANE_NORMAL_SCALE_X,
-    LANE_NORMAL_SCALE_Y,
-    LANE_REFLECTIVITY,
-    LANE_ROUGHNESS,
-    LANE_SPECULAR_INTENSITY,
-    STATE_BUMP_MAP,
-    STATE_SPECULAR_MAP,
-    STATE_COMBINE,
-    STATE_ENV_MAP,
-    STATE_METALNESS_MAP,
-    STATE_NORMAL_MAP,
-    STATE_ROUGHNESS_MAP,
-    LANE_DASH,
-    LANE_GAP,
-    LANE_LINE_DISTANCE,
-    LANE_LOG_DEPTH,
-    LANE_POINT_SIZE,
-    STATE_PER_POINT,
-    POINT_STATE_ALPHA_MAP,
-    POINT_STATE_BLEND,
-    POINT_STATE_TEXTURE,
-    point_state,
-    LINE_STATE_OPS,
-    LINE_STATE_STENCIL,
-    POINT_STATE_OPS,
-    POINT_STATE_STENCIL,
-    STATE_OPS,
-    STATE_STENCIL,
-    line_state,
     FOG_FLOATS,
-    LIGHTS_AMBIENT,
-    CASCADE_AT,
-    DIRECTIONAL_FLOATS,
-    LIGHTS_BACK,
-    LIGHTS_EYE,
-    LIGHTS_FIRST,
-    LIGHTS_PROBE,
-    LIGHTS_RECT_COUNT,
-    LIGHTS_TOWARD,
-    LIGHTS_UP,
-    RECT_FLOATS,
-    STATE_PER_TRIANGLE,
-    STATE_RECEIVES_SHADOW,
-    NO_SHADOW,
-    POINT_FLOATS,
-    SPOT_FLOATS,
-    TABLE_COLUMNS,
-    TABLE_PLACEMENT,
-    PLANE_COLOR,
-    PLANE_DATA,
-    PLANE_FLOATS,
-    PLANE_NORMAL,
     GpuRenderer,
     available,
-    flatten,
-    flatten_fog,
-    flatten_lights,
-    flatten_textures,
-    pack,
     render,
     render_triangles,
-    triangle_state,
 )
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.raster_state import (
@@ -282,14 +179,13 @@ from render.raster_state import (
     GREATER_DEPTH,
     INCREMENT_STENCIL_OP,
     LOGARITHMIC_DEPTH,
-    NOT_EQUAL_STENCIL_FUNC,
     RasterState,
     REPLACE_STENCIL_OP,
     REVERSED_DEPTH,
     STANDARD_DEPTH,
 )
 from render.texture import Alpha
-from render.cube_texture import CubeTexture, face_forward
+from render.cube_texture import CubeTexture
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
     SCENE_ENVIRONMENT,
@@ -369,24 +265,11 @@ from std.testing import (
     assert_true,
 )
 from postprocessing.composer import (
-    BOKEH,
-    COPY,
     CUBE_TEXTURE,
-    GOD_RAYS,
-    GTAO,
     LUT,
-    MASK,
-    RENDER,
-    RENDER_PIXELATED,
-    RENDER_TRANSITION,
-    SAVE,
-    SHADER,
-    SHADER_EFFECT,
-    SMAA,
     TEXTURE,
     EffectComposer,
     Pass,
-    PassKind,
     cube_texture_pass,
     effect_pass,
     god_rays_pass,
@@ -431,12 +314,7 @@ from postprocessing.shaders import MIRROR as MIRROR_SHADER
 from materials.glsl import compile_shader_material
 from materials.nodes import NodeProgram, NodeProgramId
 from render.computation import GPUComputationRenderer
-from render.gpu import (
-    GpuCompute,
-    GpuComposer,
-    GpuComputation,
-    runs_on_device,
-)
+from render.gpu import GpuCompute, GpuComposer, GpuComputation
 from materials.compute_ids import StorageBufferId
 from materials.compute_nodes import (
     ComputeKernel,
@@ -9792,22 +9670,6 @@ def test_both_backends_agree_on_a_flat_shaded_scene() raises:
 # --- transmission -----------------------------------------------------------
 
 from math.matrix4 import Matrix4
-from render.gpu import (
-    LANE_ATTENUATION_B,
-    LANE_ATTENUATION_DISTANCE,
-    LANE_ATTENUATION_R,
-    LANE_DISPERSION,
-    LANE_IOR,
-    LANE_THICKNESS_X,
-    LANE_THICKNESS_Z,
-    LANE_TRANSMISSION,
-    STATE_THICKNESS_MAP,
-    STATE_TRANSMISSION_MAP,
-    TRANSMISSION_HEADER,
-    TRANSMISSION_LEVELS,
-    TRANSMISSION_WIDTH,
-    flatten_transmission,
-)
 
 from render.transmission import TransmissionTarget
 from materials.material import physical_material
@@ -11524,12 +11386,7 @@ from materials.nodes import (
     NodeProgramStore,
 )
 from materials.material import shader_material
-from render.gpu import (
-    FOG_FLOATS,
-    STATE_NODES,
-    flatten_programs,
-    program_starts,
-)
+from render.gpu import FOG_FLOATS
 from units.si import Duration, SECOND
 
 
@@ -13219,19 +13076,6 @@ def test_the_gpu_refuses_a_texture_uniform_that_names_none() raises:
 
 # --- specular and clearcoat maps --------------------------------------------
 
-from render.gpu import (
-    LANE_CLEARCOAT_NORMAL_SCALE_X,
-    LANE_CLEARCOAT_NORMAL_SCALE_Y,
-    LANE_SPECULAR_COLOR_B,
-    LANE_SPECULAR_COLOR_G,
-    LANE_SPECULAR_COLOR_R,
-    STATE_CLEARCOAT_MAP,
-    STATE_CLEARCOAT_NORMAL_MAP,
-    STATE_CLEARCOAT_ROUGHNESS_MAP,
-    STATE_SPECULAR_COLOR_MAP,
-    STATE_SPECULAR_INTENSITY_MAP,
-)
-
 
 def a_gpu_tint_map() raises -> Texture:
     """Return a 2x2 sRGB map of four colors whose alpha is ignored, as a
@@ -13566,18 +13410,8 @@ def test_both_backends_agree_on_geometric_roughness() raises:
 # --- samplers, panoramas, refraction and the environment's turn ---------------
 
 from render.cube_texture import Basis3, cube_of_panorama, env_rotation
-from render.gpu import (
-    CUBE_PANORAMA,
-    CUBE_ROWS,
-    TABLE_FLIP_Y,
-    TABLE_MAPPING,
-    TABLE_MIN_FILTER,
-    TABLE_WRAP_T,
-)
 from render.texture import (
-    CUBE_REFLECTION_MAPPING,
     CUBE_REFRACTION_MAPPING,
-    CUBE_UV_REFLECTION_MAPPING,
     EQUIRECTANGULAR_REFLECTION_MAPPING,
     EQUIRECTANGULAR_REFRACTION_MAPPING,
     LINEAR_MIPMAP_LINEAR,
@@ -13942,7 +13776,6 @@ from materials.nodes import NO_NODES as _NO_NODES
 from materials.nodes import OUTPUT_NODE as _OUTPUT_NODE
 from render.blend import CONSTANT_COLOR_FACTOR as _CONSTANT_COLOR
 from render.blend import ZERO_FACTOR as _ZERO_FACTOR
-from render.gpu import LANE_BLEND_CONSTANT
 from render.tonemap import CUSTOM_TONE_MAPPING as _CUSTOM
 
 

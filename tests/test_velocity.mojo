@@ -12,7 +12,7 @@ from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.plane import plane
-from materials.material import BASIC, BLEND, Material
+from materials.material import BASIC, Material
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh

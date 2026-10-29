@@ -10,11 +10,7 @@ page's formulae. `bed_color` repeats the pebble photograph the way the
 shader does, then mixes sand, cobble and weed on top.
 """
 
-from extensions.water.pebbles import (
-    PebbleSample,
-    PebbleTexels,
-    sample_pebble_grad,
-)
+from extensions.water.pebbles import PebbleTexels, sample_pebble_grad
 from math.arc_tangent import atan2_float32
 from math.smoothstep import hermite_fade
 from math.sine import fraction
@@ -22,7 +18,7 @@ from math.utils import mix_bilinear, mix_delta
 from math.norm import squared_length2, squared_length3
 from math.sine import sin_float32
 from math.vector3 import Vector3, mix_delta3
-from std.math import cos, exp, floor, fma, log, max, pow, sin, sqrt
+from std.math import cos, exp, floor, fma, max, pow, sin, sqrt
 from units.si import DEGREE, Angle
 
 

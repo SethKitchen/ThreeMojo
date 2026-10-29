@@ -17,7 +17,6 @@ may widen a thin sweep. That widening is not this volume.
 
 from extensions.humanoid.side import LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
-    Bounds,
     DistanceField,
     empty_bounds,
     field_gradient,

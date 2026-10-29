@@ -26,7 +26,6 @@ from postprocessing.composer import (
     SSAO,
     SSR,
     EffectComposer,
-    Pass,
     PassKind,
     check_pass,
     outline_pass,

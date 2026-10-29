@@ -32,7 +32,7 @@ from extensions.animals.build import Animal
 from extensions.sdf.field import Primitive
 from extensions.sdf.ids import CONE, ELLIPSOID, FIN
 from extensions.sdf.vector import V3, dot
-from std.math import isfinite, sqrt
+from std.math import sqrt
 from units.measure import length_meters
 from units.si import Length
 

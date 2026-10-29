@@ -72,7 +72,7 @@ from extensions.carla.recorder_packets import (
     RecordedWalkerBones,
     RecordedWeather,
 )
-from extensions.carla.transform import CarlaRotation, CarlaTransform
+from extensions.carla.transform import CarlaTransform
 from extensions.carla.walker import BoneTransformDataIn, WalkerBoneControlIn
 from extensions.carla.weather import WeatherParameters
 from extensions.carla.world import World

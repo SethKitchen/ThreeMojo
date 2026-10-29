@@ -45,7 +45,7 @@ box of 2 m across and 4 m up are CARLA's, from
 of the numbers are this port's own choices.
 """
 
-from extensions.carla.quantity_boundary import _finite_si, _positive_si
+from extensions.carla.quantity_boundary import _finite_si
 
 from extensions.carla.agents import point_in_polygon
 from extensions.carla.map import EPSILON, Map

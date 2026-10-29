@@ -43,7 +43,7 @@ number, and a file that ends early. An empty line is zero, as
 
 from std.math import isfinite
 
-from math.rounded_product import rounded_lerp, rounded_product
+from math.rounded_product import rounded_lerp
 from loaders.bytes import ascii_space_at
 from loaders.js_number import js_string_to_number
 from render.exr import half_to_float

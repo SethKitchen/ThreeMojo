@@ -245,7 +245,6 @@ from loaders.meshopt import (
 from loaders.json import (
     ARRAY,
     NO_NODE,
-    NUMBER,
     OBJECT,
     STRING,
     JsonDocument,
@@ -280,7 +279,6 @@ from objects.skinned_mesh import (
 )
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
-from math.vector3 import Vector3
 from objects.mesh import Mesh
 from objects.line import LOOP, SEGMENTS, STRIP, Line, LineMode
 from objects.points import Points
@@ -342,9 +340,6 @@ from render.texture import (
     NEAREST,
     REPEAT,
     LINEAR_MIPMAP_LINEAR,
-    LINEAR_MIPMAP_NEAREST,
-    NEAREST_MIPMAP_LINEAR,
-    NEAREST_MIPMAP_NEAREST,
     UV_CHANNEL_1,
     Filter,
     Texture,

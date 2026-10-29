@@ -52,7 +52,6 @@ scene's scale; the test suite pins the baseline at a thousand meters.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.scene import Scene
-from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from math.finite import require_positive_finite, require_non_negative_finite
 from units.si import Angle, DEGREE, Length, METER

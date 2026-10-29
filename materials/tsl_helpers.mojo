@@ -40,7 +40,6 @@ from materials.nodes import (
     NodeGraph,
     NodeRef,
     NodeVar,
-    ValueType,
 )
 from materials.tsl_utils import equirect_uv
 from std.math import ceil, pi

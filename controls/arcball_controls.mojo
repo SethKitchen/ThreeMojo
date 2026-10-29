@@ -92,7 +92,7 @@ from math.utils import clamp
 from math.vector2 import Vector2
 from math.vector3 import Vector3, radians_between
 from render.framebuffer import Color, FloatColor
-from std.math import acos, atan, atan2, cos, inf, pi, sin, sqrt, tan
+from std.math import atan, atan2, cos, inf, pi, sin, sqrt, tan
 from units.si import (
     Angle,
     AngularAcceleration,

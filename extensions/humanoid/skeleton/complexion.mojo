@@ -37,7 +37,7 @@ from math.utils import clamp, mix_bilinear, mix_delta
 from render.framebuffer import Color, rounded_byte
 from render.srgb import LINEAR, SRGB
 from render.texture import IGNORED, REPEAT, Texture
-from std.math import cos, floor, max, min, sin, sqrt
+from std.math import cos, floor, max, min, sqrt
 
 comptime MIN_MAP = 8
 comptime MAX_MAP = 512

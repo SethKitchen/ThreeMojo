@@ -12,8 +12,8 @@ Refusals remain distinct from the captured full GLSL results.
 """
 
 from materials.glsl import compile_shader_material
-from tests.test_glsl import VERTEX, run
-from std.testing import TestSuite, assert_equal, assert_raises
+from tests.test_glsl import VERTEX
+from std.testing import TestSuite, assert_raises
 
 
 def test_reference_while_runtime_bound_63() raises:

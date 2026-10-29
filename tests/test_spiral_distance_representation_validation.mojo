@@ -23,7 +23,7 @@ from tests._spiral_domain_controls import (
 )
 from std.math import inf
 from std.memory import bitcast
-from std.testing import TestSuite, assert_equal, assert_true, assert_false
+from std.testing import TestSuite, assert_equal, assert_false
 
 
 def _same_proof(one: _SpiralDomainProof, two: _SpiralDomainProof) raises:

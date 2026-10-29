@@ -32,7 +32,6 @@ from extensions.carla.road import Road
 from extensions.carla.road_info import RoadInfoGeometry
 from extensions.carla.spiral_domain_proof import (
     _SpiralDomainProof,
-    _SpiralRootCapture,
     _find_spiral_proof,
     _spiral_proof_matches,
     _try_pack_spiral_proof,

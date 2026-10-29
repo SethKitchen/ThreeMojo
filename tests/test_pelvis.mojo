@@ -219,7 +219,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import FOOT, KILOGRAM, Length, METER, MILLIMETER
+from units.si import FOOT, Length, METER, MILLIMETER
 
 comptime TOLERANCE = 1.0e-5
 # Coarse grids keep the suite quick.

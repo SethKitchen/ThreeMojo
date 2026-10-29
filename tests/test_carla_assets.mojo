@@ -14,7 +14,7 @@ is checked against the rules it keeps rather than a size.
 """
 
 from core.assets import Assets
-from core.object3d import NO_PARENT, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from extensions.carla.assets import (
     ALBEDO_ROLE,
@@ -31,9 +31,7 @@ from extensions.carla.assets import (
     HDRI_ASSET,
     HDRI_ROLE,
     MODEL_ASSET,
-    MODEL_ROLE,
     NORMAL_ROLE,
-    ROUGHNESS_ROLE,
     SUPPORT_ROLE,
     TEXTURE_SET_ASSET,
     TOWN_ASSET,

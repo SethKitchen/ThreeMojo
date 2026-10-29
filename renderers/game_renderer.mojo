@@ -74,7 +74,6 @@ from materials.material import (
     PHONG,
     PHYSICAL,
     STANDARD,
-    Material,
     MaterialId,
     NO_TEXTURE,
 )
@@ -83,7 +82,7 @@ from math.matrix4 import Matrix4
 from math.bounds import Sphere
 from math.cross import cross_vectors
 from math.vector3 import Vector3
-from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
+from render.framebuffer import FloatColor, Framebuffer, SrgbBytes
 from render.game_math import (
     GAME_LANES,
     fast_sin,
@@ -94,10 +93,10 @@ from render.tasks import TaskGroup
 from render.tonemap import aces_tone
 from render.texture import MIRROR, REPEAT, Texture
 from render.texture_store import TextureId
-from std.math import ceil, exp2, floor, inf, log2, max, min, sin, sqrt
+from std.math import ceil, exp2, floor, inf, log2, max, min, sqrt
 from std.memory import unsafe_memcpy
 from std.time import perf_counter_ns
-from units.si import METER, PER_METER, SECOND, Duration
+from units.si import PER_METER, SECOND, Duration
 
 comptime TILE = 64
 """The side of a tile, in pixels."""

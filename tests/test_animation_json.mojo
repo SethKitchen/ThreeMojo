@@ -24,7 +24,6 @@ from animation.animation_json import (
     property_kind,
     property_path,
     read_clip,
-    read_track,
     track_names,
     write_clip,
     write_track,
@@ -49,7 +48,6 @@ from animation.keyframe_track import (
     PerspectiveCameraIndex,
     QUATERNION,
     SCALE,
-    SKINNED_MORPH_INFLUENCE,
     SMOOTH,
     STEP,
     SkinnedMeshIndex,
@@ -68,7 +66,6 @@ from cameras.camera_list import CameraList
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from exporters.json_writer import JsonWriter

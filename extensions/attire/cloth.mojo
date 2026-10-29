@@ -60,7 +60,6 @@ from extensions.humanoid.rig.joints import (
     RIGHT_UPPER_ARM,
 )
 from materials.material import DOUBLE_SIDE
-from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color

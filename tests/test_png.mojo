@@ -13,7 +13,7 @@ blocks back to the original scanlines.
 from core.binary import big_endian_u32
 from render.framebuffer import Color, Framebuffer
 from render.png import encode, zlib_stream
-from std.testing import TestSuite, assert_equal, assert_true
+from std.testing import TestSuite, assert_equal
 
 comptime SIGNATURE_LENGTH = 8
 

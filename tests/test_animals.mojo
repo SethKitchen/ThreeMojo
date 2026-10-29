@@ -6,22 +6,7 @@
 """The animals extension's core: the rig and poses, proportion warps,
 options, traits, noise and the eye and head helpers."""
 
-from extensions.sdf.ids import (
-    BoneId,
-    CONE,
-    ELLIPSOID,
-    FIN,
-    LENS,
-    PrimitiveKind,
-    SurfacePart,
-    TagId,
-    require_kind,
-    require_part,
-)
-from extensions.animals.parts import (
-    BODY,
-    JAW,
-)
+from extensions.sdf.ids import BoneId, PrimitiveKind, SurfacePart, TagId
 from extensions.sdf.sculpt import (
     ell_y,
     tube,
@@ -36,16 +21,6 @@ from extensions.animals.kit import (
     pick_cumulative,
     pick_weighted,
     sculpt_eye_socket,
-)
-from extensions.sdf.mesher import (
-    Lattice,
-    SurfaceMesh,
-    UNSAMPLED,
-    _Grid,
-    _faces,
-    check_cell,
-    merge,
-    mesh_part,
 )
 from extensions.animals.noise import cells3, fbm3, ihash, vnoise3
 from extensions.animals.options import (
@@ -80,42 +55,15 @@ from extensions.animals.rig import (
     quadruped_bones,
     tail_chain,
 )
-from extensions.sdf.field import (
-    FAR,
-    SdfModel,
-    outline_distance,
-    smin,
-)
+from extensions.sdf.field import SdfModel, outline_distance
 from extensions.animals.traits import (
     Traits,
     pick_age,
     pick_sex,
     pick_variant,
 )
-from extensions.sdf.vector import (
-    Rigid,
-    V3,
-    clamp,
-    cross,
-    distance,
-    dot,
-    frame_zy,
-    identity,
-    length,
-    lerp,
-    mirror,
-    mix,
-    normalize,
-    rotate_about,
-    rotation_about,
-    smoothstep,
-    v3,
-)
+from extensions.sdf.vector import V3, distance, identity, length
 from extensions.animals.warp import (
-    GIRTH,
-    LEGS,
-    SCALE_ABOUT,
-    SHIFT,
     Warp,
     WarpKind,
     Warps,
@@ -137,7 +85,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import METER, Length
+from units.si import Length
 
 
 def _near(a: V3, b: V3, tolerance: Float64 = 1e-9) raises:

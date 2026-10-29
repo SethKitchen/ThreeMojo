@@ -21,12 +21,9 @@ from extensions.carla.actor import ActorId, GREEN, RED, YELLOW
 from extensions.carla.bounding_box import BoundingBox
 from extensions.carla.navigation import (
     AGENT_HEIGHT,
-    EVENT_CONTINUE,
-    EVENT_END,
     EVENT_IGNORE,
     EVENT_STOP_AND_CHECK,
     EVENT_TIME_OUT,
-    EVENT_WAIT,
     EventResult,
     MAX_AGENTS,
     Navigation,
@@ -42,7 +39,6 @@ from extensions.carla.navigation import (
     WalkerTrafficLight,
     ignore_event,
     route_points,
-    stop_and_check_event,
     vehicle_box,
     wait_event,
 )

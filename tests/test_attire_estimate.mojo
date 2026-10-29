@@ -55,13 +55,11 @@ from extensions.attire.kinds import (
 from extensions.attire.outfit import Dressed, Outfit, dress
 from extensions.humanoid.canonical import (
     HEAD_NECK_REGION,
-    LEFT_FOOT_REGION,
     REGION_COUNT,
     TRUNK_REGION,
 )
 from extensions.humanoid.rig.joints import (
     CHEST,
-    HEAD,
     JOINT_COUNT,
     LEFT_SHIN,
     RIGHT_FOREARM,
@@ -69,7 +67,6 @@ from extensions.humanoid.rig.joints import (
     Joint,
 )
 from math.vector3 import Vector3
-from render.framebuffer import Color
 from std.testing import (
     TestSuite,
     assert_almost_equal,

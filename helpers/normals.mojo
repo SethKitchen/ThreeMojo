@@ -30,7 +30,6 @@ from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from core.ordinal import require_positive
 from helpers.segments import Segments
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from units.si import Length, METER
 

@@ -25,11 +25,8 @@ from materials.compute_ids import (
     ATOMIC_SUB,
     ATOMIC_XOR,
     INSTANCE_INDEX,
-    INVOCATION_LOCAL_INDEX,
     INVOCATION_SUBGROUP_INDEX,
     NUM_WORKGROUPS,
-    SUBGROUP_INDEX,
-    SUBGROUP_SIZE,
     WORKGROUP_ID,
     AtomicOp,
     ComputeBuiltin,
@@ -62,11 +59,9 @@ from materials.nodes import (
     NODE_VEC3,
     NODE_VEC4,
     NodeGraph,
-    NodeProgram,
     NodeRef,
     OPACITY_NODE,
     ProgramSource,
-    ValueType,
 )
 from math.matrix3 import Matrix3
 from postprocessing.sampling import Untracked

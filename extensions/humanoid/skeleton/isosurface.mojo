@@ -19,7 +19,7 @@ from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import DistanceField
 from math.utils import clamp, max3
 from math.vector3 import Vector3, centroid, midpoint, mix_delta3, append_vector3
-from std.math import atan2, max, min, pi
+from std.math import atan2, min, pi
 
 comptime MIN_DETAIL = 8
 comptime MAX_DETAIL = 64

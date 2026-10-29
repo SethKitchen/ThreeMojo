@@ -9,7 +9,6 @@ from extensions.carla.actor import ActorId, no_rotation
 from extensions.carla.blueprint import (
     ATTRIBUTE_BOOL,
     ATTRIBUTE_FLOAT,
-    ATTRIBUTE_INT,
     ATTRIBUTE_STRING,
     ActorAttributeValue,
     make_imu_definition,
@@ -54,15 +53,7 @@ from std.testing import (
 )
 from tests.test_carla_world import _world, _pose
 from tests.test_carla_spawn_atomicity import _counts, _check_counts
-from units.si import (
-    DEGREE,
-    METER,
-    SECOND,
-    Angle,
-    Length,
-    Duration,
-    Acceleration,
-)
+from units.si import DEGREE, SECOND, Angle, Duration, Acceleration
 
 
 def _attributes(name: String, value: String) -> List[ActorAttributeValue]:

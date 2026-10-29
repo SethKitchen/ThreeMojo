@@ -65,13 +65,7 @@ from renderers.game_renderer import (
 )
 from renderers.renderer import Renderer
 from std.math import inf
-from std.testing import (
-    TestSuite,
-    assert_equal,
-    assert_false,
-    assert_raises,
-    assert_true,
-)
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from units.si import (
     DEGREE,
     METER,

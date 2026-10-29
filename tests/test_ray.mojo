@@ -13,7 +13,7 @@ a direction of zero along an axis with the origin on that axis's face.
 """
 
 from math.bounds import Box3, Plane, Sphere
-from math.matrix4 import Matrix4, rotation_z, scaling, translation
+from math.matrix4 import rotation_z, scaling, translation
 from math.projection import perspective
 from math.ray import Ray, SegmentApproach
 from math.vector3 import Vector3

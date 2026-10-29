@@ -39,7 +39,7 @@ from core.scene import Scene
 from loaders.js_number import js_parse_float, js_parse_int
 from loaders.js_text import split_fields, text_lines
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3, vector3_from_float64
+from math.vector3 import vector3_from_float64
 from objects.skeleton import Bone, Skeleton
 from std.math import cos, isnan, pi, sin
 from std.pathlib import Path

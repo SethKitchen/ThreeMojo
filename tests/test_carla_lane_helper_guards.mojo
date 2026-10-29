@@ -11,7 +11,6 @@ from extensions.carla.lane_refinement import (
     _admission_roundoff,
     _axis_lane_minimum,
     _checked_center,
-    _exact_lane_certificate,
     _finish_lane_certificate,
     _global_lower,
     _lane_certificate_contains,

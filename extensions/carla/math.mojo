@@ -37,7 +37,7 @@ CARLA passes bare floats: an arc length is a `Length`, a heading an
 number, which reads as the opposite.
 """
 
-from extensions.carla.quantity_boundary import _finite_si, _positive_si
+from extensions.carla.quantity_boundary import _finite_si
 from units.si import Area
 
 from extensions.carla.transform import (

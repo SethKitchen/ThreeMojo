@@ -42,7 +42,6 @@ from materials.glsl import compile_shader_material
 from materials.material import shader_material
 from materials.node_program_id import NodeProgramId
 from math.bounds import Plane
-from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh

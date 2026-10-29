@@ -28,7 +28,6 @@ from math.spherical_harmonics3 import (
     SphericalHarmonics3,
     sh_basis,
 )
-from math.vector3 import Vector3
 from render.cube_texture import FACE_COUNT, CubeTexture, face_direction
 from std.math import pi, sqrt
 

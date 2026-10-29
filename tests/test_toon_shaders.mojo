@@ -24,7 +24,7 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer
-from std.testing import TestSuite, assert_equal, assert_true
+from std.testing import TestSuite, assert_equal
 from units.si import Angle, DEGREE, Length, METER
 
 comptime SIZE = 16

@@ -17,7 +17,6 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.rig.joints import (
     CHEST,
-    HEAD,
     HIPS,
     JOINT_COUNT,
     LEFT_FOOT,

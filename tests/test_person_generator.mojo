@@ -13,7 +13,7 @@ once their two legs and waist are welded. A standing figure adds a bag of
 24 and a handle of 20.
 """
 
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import BufferGeometry
 from generators.person import (
     Joint,
     PERSON_BAG,

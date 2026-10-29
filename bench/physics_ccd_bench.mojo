@@ -10,7 +10,7 @@ All rows use the same triangles, moving probes, rays and repeat counts.
 """
 
 from extensions.physics.body import BodyId, DYNAMIC, STATIC, RigidBody
-from extensions.physics.ccd import DISCRETE, SPHERE_MESH_CCD
+from extensions.physics.ccd import SPHERE_MESH_CCD
 from extensions.physics.shape import Shape, PhysicsMaterial
 from extensions.physics.world import PhysicsWorld
 from math.quaternion import Quaternion

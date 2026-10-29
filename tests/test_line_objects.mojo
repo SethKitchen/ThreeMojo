@@ -42,7 +42,7 @@ from objects.line import (
 )
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor
-from render.rasterizer import DRAW_SEGMENTS, DRAW_TRIANGLES, RasterVertex
+from render.rasterizer import DRAW_SEGMENTS, DRAW_TRIANGLES
 from render.texture import checkerboard
 from render.texture_store import NO_TEXTURE
 from renderers.clip import ClipVertex, clip_segment

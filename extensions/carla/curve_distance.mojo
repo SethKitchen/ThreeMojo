@@ -11,7 +11,7 @@ square. This is point-distance arithmetic, not a global curve certificate.
 """
 
 from extensions.carla.curve_interval import _Interval
-from std.math import inf, isfinite, isnan, sqrt
+from std.math import isfinite, sqrt
 from std.memory import bitcast
 
 

@@ -53,12 +53,7 @@ limits, and explicit zero and nonfinite rules.
 from math.finite import unit_finite
 from core.ordinal import ordinal_valid, require_index_in_count
 
-from math.norm import (
-    length2,
-    length3,
-    reciprocal_normalized3,
-    squared_length3,
-)
+from math.norm import length2, reciprocal_normalized3, squared_length3
 from cameras.camera import Camera, project_point, unproject_point
 from controls.input import PRIMARY, PointerButton, require_named
 from core.assets import Assets

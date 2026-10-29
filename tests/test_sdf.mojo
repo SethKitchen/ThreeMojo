@@ -11,7 +11,6 @@ from extensions.sdf.ids import (
     CONE,
     ELLIPSOID,
     FIN,
-    LENS,
     PrimitiveKind,
     SurfacePart,
     TagId,
@@ -22,11 +21,7 @@ from extensions.animals.parts import (
     BODY,
     JAW,
 )
-from extensions.sdf.sculpt import (
-    cone_or_ball,
-    ell_y,
-    tube,
-)
+from extensions.sdf.sculpt import cone_or_ball, tube
 from extensions.sdf.distance import (
     almond_distance,
     ellipsoid_estimate,
@@ -35,12 +30,6 @@ from extensions.sdf.distance import (
     round_cone_estimate,
     segment_distance,
     segment_param,
-)
-from extensions.animals.kit import (
-    EyeSpec,
-    eye_frame_of,
-    head_local,
-    sculpt_eye_socket,
 )
 from extensions.sdf.mesher import (
     Lattice,
@@ -61,50 +50,11 @@ from extensions.sdf.mesher import (
     merge,
     mesh_part,
 )
-from extensions.animals.noise import cells3, fbm3, ihash, vnoise3
-from extensions.animals.options import (
-    ADULT,
-    ANY_AGE,
-    ANY_SEX,
-    ANY_VARIANT,
-    CROWD,
-    FEMALE,
-    HERO,
-    HIGH,
-    JUVENILE,
-    LOW,
-    MALE,
-    MEDIUM,
-    Age,
-    AnimalOptions,
-    Quality,
-    Sex,
-    Variant,
-    animal_options,
-    body_random,
-    check_options,
-    coat_random,
-)
-from extensions.animals.rig import (
-    NO_BONE,
-    Bone,
-    Pose,
-    Rig,
-    add_sided,
-    quadruped_bones,
-    tail_chain,
-)
 from extensions.sdf.field import (
     FAR,
     SdfModel,
     outline_distance,
     smin,
-)
-from extensions.animals.traits import (
-    Traits,
-    pick_age,
-    pick_sex,
-    pick_variant,
 )
 from extensions.sdf.vector import (
     Rigid,
@@ -127,23 +77,6 @@ from extensions.sdf.vector import (
     rotation_about,
     smoothstep,
     v3,
-)
-from extensions.animals.warp import (
-    GIRTH,
-    LEGS,
-    SCALE_ABOUT,
-    SHIFT,
-    Warp,
-    WarpKind,
-    Warps,
-    apply_warp,
-    check_warp,
-    girth_warp,
-    legs_warp,
-    length_warp,
-    scale_about_warp,
-    scale_warp,
-    shift_warp,
 )
 from std.math import inf, nan, pi, sqrt
 from std.testing import (

@@ -50,7 +50,6 @@ from extensions.building.kinds import (
     I_SHAPE,
     OFFICE,
     OpeningKind,
-    RECTANGLE,
     ROOF,
     SLAB,
     SectionShape,
@@ -86,13 +85,11 @@ from extensions.topology.storeys import build_storeys
 from extensions.topology.ids import CellId, FaceId, VertexId
 from units.si import (
     Angle64,
-    DEGREE,
     DEGREE64,
     GIGAPASCAL,
     JOULE_PER_KELVIN,
     Length64,
     METER,
-    MILLIMETER,
     SQUARE_METER,
     WATT_PER_SQUARE_METER_KELVIN,
     CUBIC_METER,

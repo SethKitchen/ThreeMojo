@@ -18,7 +18,7 @@ from environments.room_environment import (
 )
 from geometries.box import cube
 from lights.light import POINT
-from materials.material import BACK_SIDE, LAMBERT, STANDARD, Material
+from materials.material import BACK_SIDE, LAMBERT, STANDARD
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.cube_texture import CubeTexture
@@ -32,7 +32,6 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
-    assert_false,
     assert_raises,
     assert_true,
 )

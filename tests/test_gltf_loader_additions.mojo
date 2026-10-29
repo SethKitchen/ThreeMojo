@@ -12,7 +12,7 @@ Universal fixtures under `assets/ktx2/`, carried in data URIs.
 """
 
 from core.assets import Assets
-from core.buffer_geometry import COLOR, POSITION
+from core.buffer_geometry import POSITION
 from core.scene import Scene
 from exporters.gltf import encode_base64
 from loaders.gltf import (
@@ -24,7 +24,6 @@ from loaders.gltf import (
 from loaders.image_batch import decode_batch_size
 from materials.material import BASIC, NO_TEXTURE, PHYSICAL, STANDARD
 from objects.line import LOOP, SEGMENTS, STRIP
-from render.framebuffer import Color
 from render import ktx2
 from render.srgb import LINEAR, SRGB
 from render.texture import FLOAT_TYPE, UNSIGNED_BYTE_TYPE, Texture

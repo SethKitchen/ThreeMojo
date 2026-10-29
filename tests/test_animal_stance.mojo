@@ -14,8 +14,6 @@ from extensions.animals.anatomy.axial import (
 from extensions.animals.anatomy.body import (
     ARACHNID,
     MAMMAL,
-    SERPENT,
-    SHARK_PLAN,
     TELEOST,
     BodyPlan,
     species_body,

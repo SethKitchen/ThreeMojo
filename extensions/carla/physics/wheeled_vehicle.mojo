@@ -103,12 +103,9 @@ from std.math import atan2, inf, sqrt
 from units.si import (
     Angle,
     AngularVelocity,
-    DEGREE,
     Duration,
-    KILOGRAM,
     Length,
     METER,
-    Mass,
     RADIAN,
     Velocity,
 )

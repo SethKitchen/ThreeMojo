@@ -13,7 +13,6 @@ of them, and how many are NaN.
 
 from loaders.ies import (
     IES_FLOAT,
-    IES_HALF_FLOAT,
     IES_UNSIGNED_BYTE,
     IesLamp,
     IesType,
@@ -24,7 +23,7 @@ from loaders.ies import (
     read_ies,
     to_half_float,
 )
-from loaders.json import JsonDocument, parse_json
+from loaders.json import parse_json
 from render.exr import half_to_float
 from std.math import inf, isnan, nan
 from std.pathlib import Path

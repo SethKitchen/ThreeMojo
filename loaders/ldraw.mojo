@@ -61,13 +61,7 @@ from loaders.ldraw_parse import (
     is_part_type,
     is_primitive_type,
 )
-from materials.material import (
-    BASIC,
-    DOUBLE_SIDE,
-    Material,
-    MaterialId,
-    STANDARD,
-)
+from materials.material import BASIC, Material, MaterialId, STANDARD
 from math.matrix4 import _determinant4
 from math.quaternion import quaternion_from_float64
 from math.vector3 import vector3_from_float64

@@ -15,7 +15,6 @@ from render.texture import (
     NEAREST,
     TexelType,
     Texture,
-    UNSIGNED_BYTE_TYPE,
     float_texture,
 )
 from render.texture_copy import (

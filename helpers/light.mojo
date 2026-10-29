@@ -38,7 +38,7 @@ each face that holds it, as three.js's wireframe draws it.
 """
 
 from core.buffer_geometry import BufferGeometry
-from core.object3d import NO_PARENT, facing
+from core.object3d import facing
 from core.scene import Scene
 from helpers.segments import Segments
 from lights.aim import light_target_position

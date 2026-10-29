@@ -30,7 +30,6 @@ from extensions.animals.coat import (
     shade_swatch,
     srgb,
 )
-from extensions.sdf.ids import BoneId
 from extensions.animals.parts import (
     LIMB,
     TEETH,

@@ -33,12 +33,8 @@ from extensions.building.ids import (
 from extensions.building.ifc.ifc4 import ifc_guid, read_ifc, write_ifc
 from extensions.building.ifc.step import (
     DERIVED,
-    ENUMERATION,
     INTEGER,
     LIST,
-    REAL,
-    REFERENCE,
-    STRING,
     StepFile,
     StepKind,
     TYPED,
@@ -79,7 +75,7 @@ from extensions.building.generate.tower import TowerOptions, generate_tower
 from generators.skyscraper import SkyscraperParameters
 from extensions.topology.arrangement import Point2, Region
 from extensions.topology.storeys import build_storeys
-from units.si import Angle64, DEGREE, DEGREE64, Length, Length64, METER
+from units.si import Angle64, DEGREE64, Length, Length64, METER
 
 
 def _m(v: Float64) -> Length64:

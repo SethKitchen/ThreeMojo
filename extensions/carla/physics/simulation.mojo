@@ -41,7 +41,6 @@ from math.vector3 import Vector3
 from std.math import asin, atan2
 from units.si import (
     Angle,
-    AngularVelocity,
     Duration,
     KILOGRAM,
     Length,
@@ -49,7 +48,6 @@ from units.si import (
     Mass,
     RADIAN,
     SECOND,
-    Velocity,
 )
 
 # The most substeps one tick walks. `range` of `Int.MAX` never ends, and

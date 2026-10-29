@@ -47,13 +47,11 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/TrafficLightStage.c
 
 from extensions.carla.quantity_boundary import _finite_si, _nonnegative_si
 
-from extensions.carla.actor import ActorId, GREEN, OFF, TrafficLightState
+from extensions.carla.actor import ActorId, GREEN, OFF
 from extensions.carla.map import Map
 from extensions.carla.speed_limits import simulation_speed
 from extensions.carla.math import make_unit_vector
-from extensions.carla.physics.quantities import KILOMETER_PER_HOUR
 from extensions.carla.physics.vehicle_control import VehicleControl
-from extensions.carla.road_info import JuncId, NO_JUNCTION
 from extensions.carla.traffic_manager_constants import (
     AFTER_JUNCTION_MIN_SPEED,
     ATTEMPTS_TO_TELEPORT,

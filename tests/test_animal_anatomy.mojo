@@ -21,8 +21,6 @@ from extensions.animals.anatomy.body import (
     BIRD,
     BODY_LENGTH,
     MAMMAL,
-    SERPENT,
-    SHARK_PLAN,
     SHOULDER_HEIGHT,
     TELEOST,
     TOTAL_LENGTH,
@@ -41,7 +39,6 @@ from extensions.animals.anatomy.density import (
     whole_body_density,
 )
 from extensions.animals.anatomy.engineering import (
-    Calibration,
     calibrate,
     calibrated_animal,
     calibrated_mass,
@@ -80,7 +77,6 @@ from extensions.animals.build import create_animal
 from extensions.animals.options import (
     ADULT,
     CROWD,
-    FEMALE,
     JUVENILE,
     MALE,
     Variant,

@@ -137,7 +137,7 @@ from render.tonemap import (
     check_tone_mapping,
     tone_map_with,
 )
-from std.math import inf, isfinite, max, min
+from std.math import inf, min
 
 from render.tasks import TaskGroup
 

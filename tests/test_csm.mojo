@@ -9,7 +9,7 @@ depth picks its cascade."""
 
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
-from core.object3d import NO_PARENT, NodeId, Object3D
+from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from lights.csm import (
     CSM,

@@ -39,7 +39,7 @@ from math.octree import triangle_capsule_intersect, triangle_sphere_intersect
 from math.triangle import Line3, Triangle
 from math.utils import mix_delta
 from math.vector3 import Vector3
-from std.math import inf, sqrt
+from std.math import inf
 
 # A face contact beats a better edge contact unless the edge is better by
 # this ratio and this distance. Gregorius's tolerances.

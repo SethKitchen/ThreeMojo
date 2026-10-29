@@ -52,7 +52,7 @@ from core.buffer_geometry import (
 )
 from core.user_data import json_number_text
 from math.vector3 import Vector3, append_vector3, centroid, mix_delta3
-from std.math import atan2, pi, sqrt
+from std.math import atan2, pi
 from units.si import Length
 
 # The golden ratio, (1 + root 5) / 2, which the icosahedron and the

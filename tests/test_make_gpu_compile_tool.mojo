@@ -12,7 +12,7 @@ into a temporary project. A shell script stands in for the compiler.
 from std.collections import Set
 from std.pathlib import Path
 from std.tempfile import mkdtemp
-from std.testing import TestSuite, assert_equal, assert_false, assert_true
+from std.testing import TestSuite, assert_equal, assert_true
 
 from tests._make_recipe import (
     LOG_ARGUMENTS,

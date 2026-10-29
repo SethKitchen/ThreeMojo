@@ -14,7 +14,7 @@ compares all of it. Files built inline reach every refusal.
 from core.assets import Assets
 from core.binary import append_little_endian_u16, append_little_endian_u32
 from core.buffer_geometry import NORMAL, POSITION, UV
-from core.object3d import NO_PARENT, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from loaders.json import JsonDocument, parse_json
 from loaders.tds import TdsMaterial, TdsModel, parse_3ds, read_3ds
@@ -23,13 +23,7 @@ from render.framebuffer import Color
 from render.texture_store import NO_TEXTURE
 from std.memory import bitcast
 from std.pathlib import Path
-from std.testing import (
-    TestSuite,
-    assert_equal,
-    assert_false,
-    assert_raises,
-    assert_true,
-)
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
 def near(got: Float64, want: Float64, tolerance: Float64 = 1e-5) raises:

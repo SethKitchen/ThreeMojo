@@ -19,7 +19,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, UV, UV1, BufferGeometry
 from core.object3d import Object3D
 from core.scene import Scene
-from exporters.gltf import GLB, GLTF_EMBEDDED, GltfPlacement, export_gltf
+from exporters.gltf import GLB, GltfPlacement, export_gltf
 from loaders.gltf import load_gltf, split_glb
 from loaders.json import JsonDocument, NO_NODE, parse_json
 from materials.material import (
@@ -28,7 +28,6 @@ from materials.material import (
     PHYSICAL,
     STANDARD,
     Material,
-    MaterialId,
     physical_material,
     standard_material,
 )

@@ -39,7 +39,6 @@ from extensions.gamepad.hidapi import (
     HID_DRIVER_NONE,
     HID_DRIVER_PS4,
     HID_DRIVER_PS5,
-    HID_DRIVER_SWITCH,
     HID_DRIVER_XBOXONE,
     HidDriverKind,
     HidGamepad,

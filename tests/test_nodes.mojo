@@ -29,7 +29,6 @@ from materials.nodes import (
     EMISSIVE_NODE,
     INSTRUCTION_FLOATS,
     MASK_NODE,
-    MAX_GRAPH_NODES,
     MAX_INSTRUCTIONS,
     MAX_LOOP_COUNT,
     MAX_REGISTERS,

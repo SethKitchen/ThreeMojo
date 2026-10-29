@@ -25,7 +25,7 @@ from animation.keyframe_track import (
 from core.assets import Assets
 from core.binary import append_little_endian, append_little_endian_u32
 from core.buffer_geometry import POSITION
-from core.object3d import NO_PARENT, NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from lights.light import directional_light
 from loaders.bytes import encode_base64
@@ -48,7 +48,7 @@ from std.testing import (
     assert_false,
     assert_true,
 )
-from units.si import DEGREE, METER, RADIAN, SECOND, Duration
+from units.si import METER, RADIAN, SECOND, Duration
 
 comptime TOLERANCE = Float64(1e-5)
 comptime FLOAT = 5126

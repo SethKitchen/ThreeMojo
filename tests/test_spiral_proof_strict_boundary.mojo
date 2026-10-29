@@ -7,7 +7,7 @@ from extensions.carla.lane_distance import _wide_plan_contains
 from extensions.carla.lane_refinement import _lane_certificate_contains
 from math.vector3 import Vector3
 from std.memory import bitcast
-from std.testing import TestSuite, assert_equal, assert_true, assert_false
+from std.testing import TestSuite, assert_equal, assert_true
 from tests._spiral_domain_controls import _bits
 from tests._spiral_acceptance_controls import (
     _acceptance_road,

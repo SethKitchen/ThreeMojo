@@ -13,7 +13,7 @@ and every way a file can be wrong is given to the parser and refused.
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from loaders.obj import ObjModel, parse_obj, read_obj
 from materials.material import BASIC, Material

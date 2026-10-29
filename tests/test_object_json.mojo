@@ -60,7 +60,6 @@ from lights.light import (
     spot_light,
 )
 from math.spherical_harmonics3 import SphericalHarmonics3
-from loaders.json import parse_json
 from loaders.object_loader import (
     ObjectCameras,
     ObjectModel,
@@ -104,8 +103,7 @@ from materials.material import (
     distance_material,
 )
 from math.euler import XYZ, YXZ, ZYX
-from math.matrix4 import Matrix4, translation
-from math.quaternion import Quaternion
+from math.matrix4 import translation
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
@@ -126,7 +124,6 @@ from render.texture import (
     Wrap,
 )
 from render.texture_store import TextureId
-from std.math import pi
 from test_scratch import TestScratch, temporary_path
 from std.pathlib import Path
 from std.testing import (

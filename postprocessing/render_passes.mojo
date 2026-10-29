@@ -34,7 +34,6 @@ from postprocessing.screen_space import DepthView
 from render.cube_texture import CubeTexture
 from render.framebuffer import TRANSPARENT_BLACK, FloatColor
 from render.target import RenderTarget
-from render.texture import Texture
 from std.math import floor, isfinite
 
 # --- pixelated ----------------------------------------------------------------

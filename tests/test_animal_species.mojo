@@ -12,7 +12,6 @@ cheetah. The other species are in `test_animal_species_*`, which import
 
 from extensions.animals.build import Animal, _unwarp, create_animal
 from extensions.animals.coat import CoatSample
-from extensions.sdf.ids import BoneId
 from extensions.animals.options import (
     ADULT,
     AnimalOptions,
@@ -52,12 +51,7 @@ from extensions.animals.registry import (
     species_traits,
     species_variants,
 )
-from extensions.sdf.vector import (
-    V3,
-    dot,
-    length,
-    normalize,
-)
+from extensions.sdf.vector import V3, dot, normalize
 from std.collections import Dict
 from std.math import floor
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true

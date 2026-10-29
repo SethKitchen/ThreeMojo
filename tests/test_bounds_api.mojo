@@ -22,7 +22,7 @@ from math.frustum import (
 )
 from math.matrix2 import Box2
 from math.matrix3 import Matrix3
-from math.matrix4 import Matrix4, compose, scaling, translation
+from math.matrix4 import Matrix4, compose, scaling
 from math.projection import perspective
 from math.quaternion import Quaternion
 from math.triangle import Line3, Triangle

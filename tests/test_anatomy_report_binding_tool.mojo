@@ -10,8 +10,6 @@ The committed template report must match the current source binding.
 Small source trees separately check changed inputs and refusal behavior.
 """
 
-from std.collections import Set
-from std.os import makedirs
 from std.pathlib import Path
 from std.testing import (
     TestSuite,

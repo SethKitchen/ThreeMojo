@@ -29,7 +29,7 @@ from materials.nodes import (
 )
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import FloatColor
 from render.srgb import LINEAR, SRGB
 from render.texture import (
     BILINEAR,
@@ -46,7 +46,6 @@ from render.texture import (
     Wrap,
     Texture,
     float_texture,
-    checkerboard,
     anisotropic_footprint,
     gradient_sample_coordinate,
 )
@@ -59,7 +58,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from tests.test_glsl import VERTEX, RAW_VERTEX, Corners, run, refused, value
+from tests.test_glsl import VERTEX, RAW_VERTEX, Corners, refused, value
 
 comptime Lanes = SIMD[DType.float32, 4]
 

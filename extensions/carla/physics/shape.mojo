@@ -21,7 +21,6 @@ from extensions.physics.shape import (
     unit_or,
     any_perpendicular,
     Polyhedron,
-    MassProperties,
     Shape,
     component,
 )

@@ -22,8 +22,6 @@ from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor, Framebuffer, rgb_is_black
 from renderers.ascii_effect import (
     ASCII_CHARACTERS,
-    ASCII_COLOR_FALLBACK,
-    ASCII_FALLBACK,
     AsciiEffect,
     AsciiImage,
     ascii_brightness,

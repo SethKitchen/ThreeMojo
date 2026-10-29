@@ -10,13 +10,7 @@ from core.object3d import NO_PARENT, Object3D
 from core.buffer_geometry import POSITION
 from core.scene import Scene
 from core.user_data import UserData
-from exporters.gltf import (
-    GLB,
-    GLTF_EMBEDDED,
-    GltfExportOptions,
-    export_gltf,
-    write_gltf,
-)
+from exporters.gltf import GLB, GLTF_EMBEDDED, GltfExportOptions, export_gltf
 from extensions.humanoid.athleticism import Athleticism
 from extensions.humanoid.fidelity import (
     CANONICAL_RECIPE,

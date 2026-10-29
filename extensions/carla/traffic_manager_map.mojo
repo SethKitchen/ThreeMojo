@@ -67,9 +67,7 @@ from extensions.carla.road_info import (
     JuncId,
     LANE_DRIVING,
     LaneId,
-    NO_JUNCTION,
     RoadId,
-    SectionId,
 )
 from extensions.carla.rtree import SegmentCloudRtree
 from extensions.carla.traffic_manager_constants import (

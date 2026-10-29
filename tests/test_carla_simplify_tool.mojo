@@ -10,7 +10,7 @@ edge, as version 0.2.0 does with `preserve_border`. Replay matches
 `replay_simplification` from version 0.1.11.
 """
 
-from std.testing import TestSuite, assert_equal, assert_raises, assert_true
+from std.testing import TestSuite, assert_equal, assert_raises
 
 from tests._tree import tool_mojo
 from tools._process import run_program

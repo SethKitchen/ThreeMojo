@@ -42,7 +42,6 @@ from materials.nodes import (
     NODE_MAT3,
     NODE_OUTPUT_COUNT,
     NODE_VEC2,
-    NODE_VEC3,
     NORMAL_NODE,
     OPACITY_NODE,
     OUTPUT_NODE,

@@ -29,12 +29,9 @@ from extensions.building.kinds import (
     DOOR,
     KITCHEN,
     OFFICE,
-    SLAB,
-    WALL,
     WINDOW,
 )
-from extensions.building.ids import ElementId
-from units.si import DEGREE, DEGREE64, Length64, METER
+from units.si import DEGREE64, Length64, METER
 
 
 def _foreign() -> String:

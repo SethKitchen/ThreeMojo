@@ -30,13 +30,7 @@ from extensions.carla.road_info import RoadId
 from tests.test_carla_cross_candidate_certificates import _road
 from math.vector3 import Vector3
 from std.memory import bitcast
-from std.testing import (
-    TestSuite,
-    assert_equal,
-    assert_true,
-    assert_false,
-    assert_raises,
-)
+from std.testing import TestSuite, assert_equal, assert_true, assert_raises
 
 
 def _spiral_road(id: Int = 1, width: Float64 = 2.0) raises -> Road:

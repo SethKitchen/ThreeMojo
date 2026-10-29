@@ -62,7 +62,7 @@ from core.extent import require_positive_extent
 from render.inflate import inflate
 from render.srgb import LINEAR
 from render.texture import BILINEAR, CLAMP, COVERAGE, Texture
-from std.math import floor, isfinite, isnan, trunc
+from std.math import isfinite, isnan, trunc
 from std.memory import bitcast
 
 # The largest image this port decodes, in pixels.

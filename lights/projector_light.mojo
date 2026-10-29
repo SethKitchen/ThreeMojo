@@ -55,7 +55,7 @@ from math.vector3 import Vector3
 from render.framebuffer import Color
 from render.texture_store import NO_TEXTURE, TextureStore
 from math.utils import saturate
-from std.math import acos, max, min, sqrt
+from std.math import acos, max, min
 from units.si import Angle
 
 # three.js's cap on a projector's penumbra cosine, so that the arc in the

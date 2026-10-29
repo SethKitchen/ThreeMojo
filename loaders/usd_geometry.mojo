@@ -42,7 +42,6 @@ from math.finite import stored_float32
 from math.scaled_products import (
     _grow_products,
     _Scaled,
-    _sum_products as _scaled_products,
     _common_scale,
     _grow_sum,
     _estimate,

@@ -56,7 +56,7 @@ from math.matrix4 import Matrix4
 from math.norm import squared_length2
 from math.path import Path, Shape
 from math.sine import fraction
-from math.utils import SeededRandom, js_round, min3
+from math.utils import js_round, min3
 from math.vector2 import Vector2, vector2_from_float64
 from std.math import floor, isfinite, pi, sin, sqrt
 from units.si import Length, METER

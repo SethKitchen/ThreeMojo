@@ -17,7 +17,7 @@ from core.raycaster import Raycaster
 from core.scene import Scene
 from geometries.box import cube
 from materials.material import Color, Material, MaterialId
-from math.matrix4 import Matrix4, translation
+from math.matrix4 import translation
 from math.vector3 import Vector3
 from objects.instanced_mesh import (
     BatchedDrawItem,

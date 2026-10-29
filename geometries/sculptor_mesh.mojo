@@ -50,7 +50,6 @@ from math.triangle_normal import (
 
 from math.norm import (
     _ordinary_squared,
-    length2,
     length3,
     reciprocal_normalized3,
     squared_length3,
@@ -65,7 +64,7 @@ from geometries.sculptor_utils import (
     js_min,
     point_of,
 )
-from std.math import floor, inf, isfinite, sqrt
+from std.math import floor, inf, isfinite
 
 # A cell with more faces than this splits, unless it is this deep already.
 comptime OCTREE_MAX_FACES = 100

@@ -13,14 +13,13 @@ from materials.material import (
     BLEND,
     DEPTH,
     DOUBLE_SIDE,
-    FRONT_SIDE,
     Material,
     OPAQUE,
     Side,
     custom_blending,
 )
 from math.vector3 import Vector3
-from render.blend import CONSTANT_COLOR_FACTOR, ZERO_FACTOR, Rgba
+from render.blend import CONSTANT_COLOR_FACTOR, ZERO_FACTOR
 from render.fragment_flags import (
     MIN_HASH_THRESHOLD,
     alpha_covers,

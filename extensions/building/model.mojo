@@ -78,7 +78,6 @@ from std.math import cos, pi, sin
 from units.si import (
     Angle64,
     Area64,
-    DEGREE,
     DEGREE64,
     Length64,
     METER,
@@ -87,7 +86,6 @@ from units.si import (
     SecondMomentOfArea64,
     Volume64,
     CUBIC_METER,
-    METER_TO_THE_FOURTH,
 )
 from core.ordinal import require_valid
 

@@ -38,7 +38,6 @@ from materials.material import (
 )
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.cube_texture import (
     FACE_COUNT,
     CubeTexture,

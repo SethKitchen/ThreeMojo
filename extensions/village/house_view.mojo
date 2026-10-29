@@ -59,7 +59,6 @@ from core.scene import Scene
 from extensions.building.ids import ElementId
 from extensions.building.kinds import (
     BED,
-    CABINET,
     CHAIR,
     COFFEE_TABLE,
     COUNTER,

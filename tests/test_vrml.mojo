@@ -14,7 +14,6 @@ node loads no images, so its texture has none there.
 
 from core.assets import Assets
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV
-from core.object3d import NodeId
 from core.scene import Scene
 from loaders.json import JsonDocument, parse_json
 from loaders.vrml import (

@@ -57,7 +57,7 @@ from objects.mesh import Mesh
 from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
 from render.framebuffer import Framebuffer
-from render.texture import COVERAGE, IGNORED, NEAREST, Texture, data_texture
+from render.texture import COVERAGE, IGNORED, Texture, data_texture
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from renderers.renderer import Renderer
 from std.math import inf, nan

@@ -318,7 +318,6 @@ from geometries.box import cube
 from geometries.plane import plane
 from materials.material import (
     BASIC,
-    BLEND,
     DOUBLE_SIDE,
     FRONT_SIDE,
     Material,
@@ -332,7 +331,7 @@ from objects.line_segments2 import LineSegments2, line_segments_geometry
 from objects.mesh import Mesh
 from objects.points import Points
 from objects.sprite import Sprite
-from render.rasterizer import DRAW_TRIANGLES, SHADE_LIT, SHADE_TEXTURE
+from render.rasterizer import DRAW_TRIANGLES, SHADE_LIT
 from render.rect import Rect
 from render.texture import IGNORED, NEAREST, REPEAT, Texture
 from render.srgb import LINEAR

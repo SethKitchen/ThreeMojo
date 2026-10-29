@@ -74,7 +74,6 @@ from units.si import (
     Acceleration64,
     Angle64,
     CUBIC_METER,
-    DEGREE,
     Density64,
     KILOGRAM,
     KILOGRAM_PER_CUBIC_METER,

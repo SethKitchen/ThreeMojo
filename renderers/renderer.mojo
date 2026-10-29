@@ -108,12 +108,7 @@ from render.color_spaces import (
 from cameras.array_camera import ArrayCamera
 from cameras.camera import Camera
 from cameras.cube_camera import CubeCamera
-from core.background import (
-    COLOR_BACKGROUND,
-    CUBE_BACKGROUND,
-    TEXTURE_BACKGROUND,
-    Background,
-)
+from core.background import COLOR_BACKGROUND, TEXTURE_BACKGROUND, Background
 from core.deform import (
     SkinPose,
     displaced_positions,
@@ -145,7 +140,6 @@ from lights.light import (
     IES_SPOT,
     POINT,
     PROJECTOR_SPOT,
-    SPOT,
     Light,
     LightMask,
 )
@@ -214,14 +208,7 @@ from objects.line_segments2 import (
     dash_spans,
     drawn_segments,
 )
-from objects.lod import Lod
 from objects.sprite import SPRITE_RADIUS, Sprite, sprite_place, sprite_span
-from objects.skinned_mesh import (
-    ATTACHED,
-    BONES_PER_VERTEX,
-    SKIN_INDEX,
-    SKIN_WEIGHT,
-)
 from materials.material import (
     BACK_SIDE,
     BASIC,
@@ -376,7 +363,7 @@ from renderers.clip import (
 from render.tasks import TaskGroup
 from math.curve_checks import require_at_least_one
 from math.finite import require_positive_finite
-from std.math import cos, floor, isfinite, max, min, pi, sin
+from std.math import cos, max, min, pi, sin
 from std.memory import ArcPointer, unsafe_memcpy
 from std.sys import num_logical_cores
 from core.ordinal import require_valid, require_positive

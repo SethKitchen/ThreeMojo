@@ -64,7 +64,7 @@ from render.rasterizer import (
     env_direction,
     object_space_normal,
 )
-from render.srgb import LINEAR, SRGB
+from render.srgb import SRGB
 from render.texture import (
     CLAMP,
     CUBE_REFLECTION_MAPPING,
@@ -84,7 +84,7 @@ from render.texture import (
 from render.texture_store import TextureId
 from renderers.environment import prefilter_environments
 from renderers.renderer import Renderer
-from std.math import nan, pi, sqrt
+from std.math import nan, pi
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -94,16 +94,7 @@ from std.testing import (
     assert_true,
 )
 from units.si import Angle, DEGREE, Length, METER, RADIAN
-from tests._cube_faces import (
-    BLUE,
-    CYAN,
-    GREEN,
-    MAGENTA,
-    RED,
-    YELLOW,
-    a_cube,
-    solid,
-)
+from tests._cube_faces import BLUE, CYAN, GREEN, MAGENTA, RED, a_cube, solid
 
 comptime WIDTH = 32
 comptime HEIGHT = 24

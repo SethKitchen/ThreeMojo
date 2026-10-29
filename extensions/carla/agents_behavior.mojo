@@ -62,7 +62,7 @@ from extensions.carla.agents import (
     BasicAgentOptions,
     ObstacleDetectionResult,
 )
-from extensions.carla.agents_local_planner import PlanItem, plan_item
+from extensions.carla.agents_local_planner import PlanItem
 from extensions.carla.agents_misc import (
     BehaviorParameters,
     BehaviorType,
@@ -89,7 +89,6 @@ from extensions.carla.road_info import (
     CHANGE_NONE,
     CHANGE_RIGHT,
     LANE_DRIVING,
-    LaneChange,
 )
 from extensions.carla.world import World
 from math.vector3 import Vector3

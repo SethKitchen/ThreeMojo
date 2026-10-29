@@ -16,7 +16,7 @@ A projector's beam is `saturate(-2 * sdBox(uv - 0.5, 0.5) / acos(pc))`.
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.layers import Layers
-from core.object3d import NO_PARENT, NodeId, Object3D
+from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.plane import plane
 from lights.ies_spot_light import ies_coordinate, ies_spot_light

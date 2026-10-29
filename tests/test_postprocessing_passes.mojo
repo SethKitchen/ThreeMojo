@@ -88,7 +88,7 @@ from postprocessing.render_passes import (
     transition_light,
     transition_pixel,
 )
-from postprocessing.sampling import LightView, Untracked, u_of, v_of
+from postprocessing.sampling import LightView, Untracked
 from postprocessing.screen_space import (
     BEAUTY_OUTPUT,
     BLUR_OUTPUT,
@@ -113,12 +113,12 @@ from postprocessing.shader_pass import (
     shader_light,
 )
 from render.cube_texture import CubeTexture
-from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
+from render.cube_texture_store import NO_CUBE_TEXTURE
 from render.framebuffer import Color, FloatColor
 from render.srgb import SRGB
 from render.target import OUTPUT_COLOR, OUTPUT_NORMAL, RenderTarget
 from render.texture import CLAMP, NEAREST, Texture, checkerboard
-from render.texture_store import NO_TEXTURE, TextureId, TextureStore
+from render.texture_store import TextureId, TextureStore
 from renderers.renderer import Renderer
 from std.math import inf, nan, sqrt
 from std.testing import (

@@ -40,7 +40,6 @@ from extensions.animals.options import (
     animal_options,
 )
 from extensions.animals.registry import SpeciesId, species_variants
-from std.math import isfinite
 from extensions.animals.warp import Warps, scale_warp
 from units.measure import length_meters
 from units.si import KILOGRAM, METER, Length, Mass

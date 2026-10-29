@@ -48,7 +48,6 @@ from extensions.humanoid.rig.joints import (
     JOINT_COUNT,
     LEFT_FOOT,
     LEFT_FOREARM,
-    LEFT_HAND,
     LEFT_SHIN,
     LEFT_THIGH,
     LEFT_TOES,

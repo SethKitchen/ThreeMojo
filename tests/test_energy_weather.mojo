@@ -55,7 +55,6 @@ from generators.utils import Vec3d
 from std.pathlib import Path
 from units.si import (
     Angle64,
-    DEGREE,
     DEGREE64,
     Duration64,
     HOUR,

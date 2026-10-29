@@ -54,7 +54,7 @@ from geometries.sculptor import (
     SculptorEventKind,
     _stamp_count,
 )
-from geometries.sculptor_mesh import NO_CELL, OCTREE_MAX_DEPTH, SculptorMesh
+from geometries.sculptor_mesh import OCTREE_MAX_DEPTH, SculptorMesh
 from geometries.sculptor_tools import (
     _DecData,
     _SubData,

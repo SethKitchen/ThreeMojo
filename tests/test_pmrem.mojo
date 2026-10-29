@@ -26,7 +26,6 @@ from render.cube_texture import (
     validate_cube_uv,
 )
 from render.cube_uv import (
-    CubeUvTaps,
     cube_uv_coordinate,
     cube_uv_direction,
     cube_uv_face,
@@ -53,7 +52,6 @@ from render.texture import (
     Texture,
     float_texture,
 )
-from render.framebuffer import Color
 from render.srgb import SRGB
 from std.math import inf, log2
 from std.testing import (

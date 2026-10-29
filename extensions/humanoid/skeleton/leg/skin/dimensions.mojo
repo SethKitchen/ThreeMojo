@@ -126,7 +126,6 @@ from extensions.humanoid.skeleton.loft import (
 )
 from extensions.humanoid.sex import MALE
 from math.vector3 import Vector3
-from std.math import max, min
 
 
 # Sections from the ankle to the iliac crest: about a centimeter and a half

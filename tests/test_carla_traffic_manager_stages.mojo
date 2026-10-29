@@ -16,11 +16,11 @@ about (100, 10);
 the junction's length along the path, 17.955 m.
 """
 
-from extensions.carla.actor import ActorId, GREEN, NO_ACTOR, RED
+from extensions.carla.actor import ActorId, GREEN, RED
 from extensions.carla.map import Map, Waypoint
 from extensions.carla.opendrive import load_opendrive
 from extensions.carla.physics.quantities import KILOMETER_PER_HOUR
-from extensions.carla.road_info import JuncId, LaneId, RoadId, SectionId
+from extensions.carla.road_info import LaneId, RoadId, SectionId
 from extensions.carla.traffic_manager_collision import (
     CollisionLock,
     CollisionStage,
@@ -34,28 +34,18 @@ from extensions.carla.traffic_manager_localization import (
 )
 from extensions.carla.traffic_manager_map import (
     InMemoryMap,
-    NO_SIMPLE_WAYPOINT,
     ROAD_OPTION_CHANGE_LANE_LEFT,
     ROAD_OPTION_CHANGE_LANE_RIGHT,
     ROAD_OPTION_LANE_FOLLOW,
     ROAD_OPTION_LEFT,
     ROAD_OPTION_RIGHT,
-    ROAD_OPTION_ROAD_END,
     ROAD_OPTION_STRAIGHT,
     ROAD_OPTION_VOID,
     SimpleWaypointIndex,
 )
 from extensions.carla.traffic_manager_shared import (
-    APPLY_TRANSFORM,
-    APPLY_VEHICLE_CONTROL,
-    CommandKind,
     LargeVehicle,
-    NO_COMMAND,
-    SET_VEHICLE_LIGHT_STATE,
     TrafficManagerShared,
-    apply_transform,
-    no_command,
-    no_localization,
 )
 from extensions.carla.traffic_manager_state import (
     KinematicState,

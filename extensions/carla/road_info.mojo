@@ -48,7 +48,6 @@ from extensions.carla.quantity_boundary import (
     _RawSI,
     _finite_si,
     _nonnegative_si,
-    _positive_si,
 )
 from units.si import Velocity64
 

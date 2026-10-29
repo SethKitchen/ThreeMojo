@@ -9,13 +9,12 @@ own: see `test_village_house.mojo` and `test_village_house_view.mojo`."""
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.buffer_geometry import POSITION
 from core.gaussian_splat_utils import (
     GaussianSplatGeometry,
     create_gaussian_splat_geometry,
 )
 from core.scene import Scene
-from extensions.building.material import brick, timber
+from extensions.building.material import brick
 from extensions.scan.frame import supersplat_frame
 from extensions.vegetation.field import LodBand
 from extensions.vegetation.ground import Ground, Lot, Pond, lot_openness
@@ -66,7 +65,7 @@ from math.vector3 import Vector3
 from render.srgb import SRGB
 from render.png import DecodedImage
 from renderers.renderer import Renderer
-from std.math import cos, sin, tan
+from std.math import cos, sin
 from std.testing import (
     TestSuite,
     assert_almost_equal,

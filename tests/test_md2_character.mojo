@@ -17,7 +17,7 @@ from animation.keyframe_track import MeshIndex
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from loaders.json import JsonDocument, parse_json
 from loaders.md2 import Md2Animation, Md2Model, md2_clip, read_md2

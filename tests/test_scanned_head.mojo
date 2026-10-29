@@ -25,7 +25,6 @@ from extensions.humanoid.skeleton.head.skin.scan import (
     SCAN_Y,
     SCAN_Z,
     SINK_TOP,
-    ScannedHead,
     _walk,
     cap_hole,
     carry,

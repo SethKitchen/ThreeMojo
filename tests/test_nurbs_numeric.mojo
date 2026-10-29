@@ -17,7 +17,6 @@ from math.nurbs import (
     basis_functions,
     basis_function_derivatives,
     bspline_derivatives,
-    find_span,
     k_over_i,
     rational_curve_derivatives,
     surface_point,

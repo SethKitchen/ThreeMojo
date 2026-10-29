@@ -40,7 +40,6 @@ paying for that by asking `Mesh.is_morphed` first, which is why this does
 not try to be clever about it.
 """
 
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
     NORMAL,

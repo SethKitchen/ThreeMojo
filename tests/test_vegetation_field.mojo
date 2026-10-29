@@ -9,7 +9,6 @@ and the blades each cluster grows."""
 from cameras.perspective_camera import PerspectiveCamera
 from extensions.vegetation.field import (
     FieldParameters,
-    FieldStats,
     GrassField,
     LodBand,
     cluster_triangles,

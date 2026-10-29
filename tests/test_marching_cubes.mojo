@@ -12,7 +12,7 @@ same float.
 """
 
 from core.assets import Assets
-from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
+from core.buffer_geometry import COLOR, NORMAL, POSITION, UV
 from geometries.box import cube
 from loaders.json import JsonDocument, parse_json
 from objects.marching_cubes import MarchingCubes

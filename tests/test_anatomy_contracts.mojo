@@ -4,12 +4,7 @@
 """Adversarial SI contracts and independent physical admissibility checks."""
 
 from extensions.anatomy.inertia import InertiaTally
-from extensions.anatomy.locomotion import (
-    froude,
-    speed_at,
-    stride_length,
-    stride_frequency,
-)
+from extensions.anatomy.locomotion import froude, speed_at, stride_length
 from extensions.anatomy.muscle import (
     MuscleArchitecture,
     active_force_length,

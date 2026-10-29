@@ -26,12 +26,7 @@ This module imports `max`, so it is in `GPU_LIB_SOURCES`, beside
 
 from core.assets import Assets
 from core.scene import Scene
-from lights.vxgi_cone_tracer import (
-    Untracked,
-    VOXEL_FLOATS,
-    VxgiGrid,
-    floats_of,
-)
+from lights.vxgi_cone_tracer import Untracked, VOXEL_FLOATS, VxgiGrid
 from lights.vxgi_volume import (
     VXGIVolume,
     bounce_voxel,

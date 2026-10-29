@@ -47,7 +47,6 @@ binds it anyway.
 
 from animation.animation_clip import (
     ADDITIVE_BLEND_MODE,
-    AnimationBlendMode,
     AnimationClip,
     NORMAL_BLEND_MODE,
     require_blend_mode,
@@ -109,7 +108,6 @@ from loaders.json import (
     ARRAY,
     BOOLEAN,
     JsonDocument,
-    NUMBER,
     OBJECT,
     parse_json,
 )

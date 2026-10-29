@@ -59,7 +59,7 @@ from materials.nodes import (
 from math.utils import saturate
 from math.vector3 import Vector3
 from render.framebuffer import Color
-from std.math import exp, inf, max, min
+from std.math import exp, inf
 from units.si import Length, METER
 
 

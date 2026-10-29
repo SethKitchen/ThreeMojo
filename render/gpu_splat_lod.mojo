@@ -69,7 +69,7 @@ from render.splatrule import (
     stored_splat_depth,
 )
 from math.norm import squared_length2
-from std.math import ceildiv, copysign, floor, fma, max, min, sqrt
+from std.math import ceildiv, copysign, floor, max, min, sqrt
 from std.memory import stack_allocation, unsafe_memcpy
 from std.sys import has_accelerator
 from std.time import perf_counter_ns

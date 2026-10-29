@@ -32,7 +32,6 @@ from materials.material import (
     LAMBERT,
     MATCAP,
     Material,
-    MaterialId,
     MaterialKind,
     NORMALS,
     PHONG,
@@ -58,15 +57,8 @@ from render.texture import (
     UV_CHANNEL_1,
     Wrap,
 )
-from render.texture_store import TextureId
 from std.math import inf, nan
-from std.testing import (
-    TestSuite,
-    assert_almost_equal,
-    assert_equal,
-    assert_true,
-)
-from units.si import Length, METER
+from std.testing import TestSuite, assert_equal, assert_true
 
 
 comptime WHITE = Color(255, 255, 255)

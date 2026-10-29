@@ -56,7 +56,7 @@ from math.matrix_determinant import _sum_products
 from math.vector3 import Vector3
 from std.collections import Dict
 from std.math import cos, sqrt
-from units.si import Length, METER, Velocity
+from units.si import Length, Velocity
 
 # `std::numeric_limits<float>::max()`.
 comptime FLOAT_MAX = Float32(3.4028234663852886e38)

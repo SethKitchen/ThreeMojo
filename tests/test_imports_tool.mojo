@@ -42,7 +42,6 @@ from tools._imports import (
     entry_directories,
     imported_names,
     is_documentation,
-    mojo_files,
     quoted_assets,
     resolve,
     sorted_set,

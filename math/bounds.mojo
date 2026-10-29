@@ -68,7 +68,7 @@ from math.triangle_normal import (
 from math.utils import max3, min3
 from math.vector3 import Vector3, component_max, component_min
 from math.norm import length3, _ordinary_squared
-from std.math import inf, isfinite, sqrt
+from std.math import inf, sqrt
 from std.memory import bitcast
 from std.sys.intrinsics import unlikely
 

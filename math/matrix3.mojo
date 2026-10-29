@@ -45,7 +45,7 @@ from math.matrix_inverse import (
     adjugate3,
 )
 from math.finite import require_finite
-from std.math import cos, sin, isfinite
+from std.math import cos, sin
 from units.si import Angle
 
 

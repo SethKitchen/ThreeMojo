@@ -22,17 +22,12 @@ from extensions.carla.physics.simulation import (
     carla_rotation,
     carla_transform,
 )
-from extensions.carla.physics.walker import (
-    Walker,
-    WalkerControl,
-    WalkerParameters,
-)
+from extensions.carla.physics.walker import WalkerControl, WalkerParameters
 from extensions.carla.transform import CarlaRotation, CarlaTransform
-from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.triangle import Triangle
 from math.vector3 import Vector3
-from std.math import cos, inf, nan, pi, sin, sqrt, tan
+from std.math import cos, inf, nan, pi, sqrt, tan
 from std.testing import (
     TestSuite,
     assert_almost_equal,

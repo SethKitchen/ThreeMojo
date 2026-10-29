@@ -17,7 +17,6 @@ from extensions.humanoid.skeleton.surface_nets import (
     surface_gradient,
 )
 from math.vector3 import Vector3
-from std.math import sqrt
 from std.testing import (
     TestSuite,
     assert_equal,

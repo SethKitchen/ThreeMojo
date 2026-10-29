@@ -13,7 +13,7 @@ Captured expectations are independent of the node interpreter.
 
 from materials.glsl import compile_shader_material
 from tests.test_glsl import VERTEX, run
-from std.testing import TestSuite, assert_equal, assert_raises
+from std.testing import TestSuite, assert_equal
 
 from materials.nodes import (
     AT_FRAGMENT,

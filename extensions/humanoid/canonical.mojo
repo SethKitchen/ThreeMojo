@@ -33,7 +33,6 @@ Coordinates are meters in the pelvis frame: right-handed, plus y up,
 plus x body-right, plus z anterior, origin between the hip centers.
 """
 
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, BufferGeometry
 from core.user_data import UserData, user_data_of
 from extensions.anatomy.inertia import InertiaTally, SegmentInertia
@@ -134,16 +133,7 @@ from loaders.json import parse_json
 from math.vector3 import Vector3
 from std.math import ceil, isfinite, max, min
 from std.memory import bitcast
-from units.si import (
-    CUBIC_METER,
-    KILOGRAM,
-    KILOGRAM_SQUARE_METER,
-    METER,
-    MILLIMETER,
-    Density,
-    Length,
-    Volume,
-)
+from units.si import CUBIC_METER, METER, MILLIMETER, Density, Length, Volume
 
 comptime CANONICAL_PARTS_KEY = "threemojo_canonical_parts"
 comptime CANONICAL_PARTS_SCHEMA = 1

@@ -22,7 +22,7 @@ output to minus one to one, as CARLA's `PID` does. The measured
 acceleration is smoothed: four parts the last value to one part the new.
 """
 
-from extensions.carla.quantity_boundary import _finite_si, _positive_si
+from extensions.carla.quantity_boundary import _positive_si
 
 from extensions.carla.physics.quantities import Jerk
 from units.si import (

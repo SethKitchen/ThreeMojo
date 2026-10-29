@@ -21,14 +21,13 @@ from tools._example_output import (
 
 from core.assets import Assets
 from core.clock import Clock
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
 from lights.light import ambient_light, point_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.float_image import FloatImage
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import (

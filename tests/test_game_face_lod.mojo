@@ -6,36 +6,16 @@
 """Strict facial LOD preserves original vertex and named-target correspondence."""
 
 from core.assets import Assets
-from core.buffer_geometry import POSITION, BufferGeometry
-from core.deform import morphed_positions
-from core.object3d import NodeId, Object3D, NO_PARENT
+from core.buffer_geometry import POSITION
+from core.object3d import Object3D
 from core.scene import Scene
 from extensions.humanoid.rig.game import add_game_humanoid, game_build_settings
-from extensions.humanoid.rig.game_face import (
-    GAME_FACE_KEY,
-    bind_game_face,
-    facial_correspondence,
-)
+from extensions.humanoid.rig.game_face import facial_correspondence
 from extensions.humanoid.rig.joints import HEAD
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.head.aligned_speech import (
-    AlignedSpeech,
-    TimedViseme,
-    AudioSpeechPlayback,
-)
-from extensions.humanoid.skeleton.head.expression import (
-    AA,
-    PP,
-    SILENT,
-    FaceWeights,
-)
-from extensions.humanoid.skeleton.simplify import (
-    simplify,
-    fit_triangle_budget_result,
-)
 from std.testing import TestSuite, assert_equal, assert_true, assert_raises
-from units.si import Length, FOOT, Duration, Angle, DEGREE
+from units.si import Length, FOOT
 
 
 def _count(scene: Scene, assets: Assets) raises -> Int:

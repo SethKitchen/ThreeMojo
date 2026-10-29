@@ -37,7 +37,6 @@ from materials.material import (
 from lights.light import point_light
 from materials.material import (
     BASIC,
-    DEPTH,
     LAMBERT,
     MATCAP,
     NORMALS,
@@ -125,7 +124,6 @@ from render.texture_store import NO_TEXTURE, TextureId
 from renderers.renderer import (
     Renderer,
     available_workers,
-    camera_position,
     camera_up,
     face_normal,
     toward_camera,

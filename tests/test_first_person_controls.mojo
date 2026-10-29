@@ -9,7 +9,6 @@ The expected numbers come from three.js r180's own `FirstPersonControls`,
 run headless in Node with the same camera and input.
 """
 
-from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.camera_frame import CameraFrame
 from controls.first_person_controls import FirstPersonControls

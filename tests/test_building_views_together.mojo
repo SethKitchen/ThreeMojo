@@ -42,7 +42,6 @@ from extensions.structure.static import solve_static
 from generators.skyscraper import SkyscraperParameters
 from units.si import (
     Angle64,
-    DEGREE,
     DEGREE64,
     Duration64,
     HOUR,

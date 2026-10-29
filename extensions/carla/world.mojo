@@ -53,7 +53,6 @@ The sources are CARLA's `LibCarla/source/carla/client/World.cpp`,
 """
 
 from extensions.carla.actor import (
-    ACTOR_ACTIVE,
     ACTOR_INVALID,
     Actor,
     ActorId,
@@ -101,7 +100,6 @@ from extensions.carla.physics.vehicle_physics import VehiclePhysicsControl
 from extensions.carla.physics.walker import WalkerControl, WalkerParameters
 from extensions.carla.road_info import JuncId, SignalId
 from extensions.carla.sensor import (
-    CAR,
     PEDESTRIAN,
     ROAD,
     ROAD_LINE,
@@ -121,7 +119,6 @@ from extensions.carla.traffic_light import (
 )
 from extensions.carla.traffic_sign import (
     SPEED_LIMIT_SIGN,
-    STOP_SIGN,
     SignalUpdate,
     TrafficSign,
     TriggerBox,
@@ -132,8 +129,6 @@ from extensions.carla.traffic_sign import (
 )
 from extensions.carla.transform import CarlaTransform
 from extensions.carla.vehicle import (
-    DOOR_ALL,
-    LIGHTS_NONE,
     VehicleData,
     VehicleDoor,
     VehicleLightState,

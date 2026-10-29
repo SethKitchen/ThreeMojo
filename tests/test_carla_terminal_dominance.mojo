@@ -5,7 +5,7 @@
 
 """Exact terminal ordering strengthens unchanged segment dominance."""
 
-from extensions.carla.curve_interval import _next_down, _next_up
+from extensions.carla.curve_interval import _next_up
 from extensions.carla.lane_refinement import (
     _ClosedInterval,
     _exact_lane_certificate,

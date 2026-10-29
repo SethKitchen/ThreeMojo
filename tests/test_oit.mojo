@@ -21,7 +21,6 @@ from postprocessing.composer import (
     EffectComposer,
     oit_pass,
     reads_frame_as_light,
-    render_pass,
 )
 from postprocessing.oit import (
     OitAccumulation,

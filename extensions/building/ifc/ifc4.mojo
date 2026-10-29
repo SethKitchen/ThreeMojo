@@ -32,7 +32,7 @@ published as ISO 16739-1:2018.
 """
 
 from core.ordinal import require_non_negative
-from std.math import atan2, cos, isfinite, pi, sin, sqrt
+from std.math import atan2, cos, sin
 from extensions.building.construction import (
     Construction,
     Glazing,
@@ -46,24 +46,13 @@ from extensions.building.ids import (
     SpaceId,
     StoreyId,
 )
-from extensions.building.ifc.step import (
-    StepFile,
-    DERIVED,
-    INTEGER,
-    LIST,
-    REAL,
-    REFERENCE,
-    STRING,
-    UNSET,
-    parse,
-)
+from extensions.building.ifc.step import StepFile, DERIVED, UNSET, parse
 from extensions.building.kinds import (
     BEAM,
     FurnitureKind,
     CIRCLE,
     COLUMN,
     DOOR,
-    ElementKind,
     I_SHAPE,
     OFFICE,
     RECTANGLE,
@@ -75,7 +64,6 @@ from extensions.building.kinds import (
 )
 from extensions.building.material import (
     BuildingMaterial,
-    Look,
     aluminum,
     brick,
     concrete,
@@ -95,28 +83,20 @@ from extensions.building.model import (
     assemble,
 )
 from extensions.topology.arrangement import Point2
-from extensions.topology.loops import split_bridged, vector_area
+from extensions.topology.loops import split_bridged
 from generators.utils import Vec3d
 from units.si import (
     Angle64,
-    DEGREE,
     DEGREE64,
     Density64,
-    GIGAPASCAL,
-    JOULE_PER_KILOGRAM_KELVIN,
-    KILOGRAM_PER_CUBIC_METER,
     Length64,
     METER,
-    PASCAL,
-    PER_KELVIN,
     Pressure64,
     RADIAN,
     SpecificHeatCapacity64,
     ThermalConductivity64,
     ThermalExpansion64,
     ThermalTransmittance64,
-    WATT_PER_METER_KELVIN,
-    WATT_PER_SQUARE_METER_KELVIN,
 )
 
 comptime _GUID_ALPHABET = (

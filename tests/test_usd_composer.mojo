@@ -43,8 +43,7 @@ from loaders.usd_specs import (
 from loaders.usda_parser import parse_usda_layer
 from materials.material import Material
 from math.quaternion import Quaternion
-from render.framebuffer import Color
-from render.srgb import LINEAR, SRGB
+from render.srgb import LINEAR
 from render.texture import CLAMP, MIRROR, REPEAT
 from render.texture_store import NO_TEXTURE
 from std.math import isnan

@@ -36,7 +36,6 @@ from math.vector3 import vector3_from_float64
 from render.framebuffer import Color, FloatColor
 from render.srgb import ColorSpace
 from render.texture import Alpha, BILINEAR, Texture, Wrap, texture_from
-from std.math import isfinite, sqrt
 from std.pathlib import Path
 
 

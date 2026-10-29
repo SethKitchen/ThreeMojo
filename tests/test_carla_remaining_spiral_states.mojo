@@ -4,36 +4,22 @@
 """Positive and adjacent-boundary pairs from unchanged valid arithmetic graphs."""
 
 from extensions.carla.curve_bounds import (
-    _sample_jet,
     _geometry_distance,
     _lane_jet,
     _spiral_counts,
 )
-from extensions.carla.curve_interval import (
-    _Jet,
-    _ValueJet,
-    _next_down,
-    _next_up,
-)
+from extensions.carla.curve_interval import _Jet, _ValueJet
 from extensions.carla.curve_trig import _curve_atan2
 from extensions.carla.geometry import (
     RoadGeometry,
-    PARAM_POLY3,
     POLY3,
     LINE,
     SPIRAL,
-    NORMALIZED,
-    with_param_poly3_from_coefficients as with_param_poly3,
     with_poly3_si as with_poly3,
     with_spiral_si as with_spiral,
 )
-from extensions.carla.junction_bounds import (
-    _certify_junction_span,
-    _centered_elevation_enclosure,
-)
 from extensions.carla.lane_value_bounds import (
     _lane_value_bound,
-    _sample_value,
     _atan2_value,
     _reference_sampled_value,
 )
@@ -42,14 +28,12 @@ from extensions.carla.spiral_grouped_lane import _try_grouped_lane_jet
 from extensions.carla.spiral_grouped_roundoff_proof import (
     _try_spiral_grouped_roundoff_envelope,
 )
-from extensions.carla.map_search import MapBuildBudget, _MapBuildWork
 from extensions.carla.polynomial import CubicPolynomial
-from math.bounds import Box3
 from math.vector3 import Vector3
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
 from std.memory import bitcast
 from tests._spiral_domain_controls import _road
-from tests.test_carla_junction_arithmetic_states import _line, _valid, _point
+from tests.test_carla_junction_arithmetic_states import _line, _valid
 
 
 def test_valid_record_and_tangent_domains_keep_conservative_fallbacks() raises:

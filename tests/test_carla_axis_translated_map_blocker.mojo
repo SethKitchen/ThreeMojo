@@ -7,22 +7,13 @@ The original five-ULP Map input cannot meet the parameter-matched target.
 The line and direct-Road stored-point minima remain representable.
 """
 
-from extensions.carla.curve_distance import _wide_point_order
-from extensions.carla.lane_refinement import _axis_lane_minimum
 from extensions.carla.map import Controller, Junction, Map, Signal
 from extensions.carla.opendrive import load_opendrive
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road_info import LaneId
 from math.vector3 import Vector3
-from std.math import inf
 from std.memory import bitcast
-from std.testing import (
-    TestSuite,
-    assert_equal,
-    assert_false,
-    assert_raises,
-    assert_true,
-)
+from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
 def _flat_map(

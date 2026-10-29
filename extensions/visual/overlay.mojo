@@ -18,7 +18,6 @@ point at the part of the scene it names.
 """
 
 from std.math import cos, floor, isfinite, pi, sin, sqrt
-from math.vector2 import Vector2
 from loaders.font import Font
 from loaders.ttf import read_ttf
 from render.framebuffer import Color, Framebuffer

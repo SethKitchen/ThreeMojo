@@ -72,7 +72,7 @@ from core.buffer_geometry import (
     TANGENT,
     UV,
 )
-from std.math import acos, cos, isfinite, isnan, sqrt
+from std.math import acos, cos, isfinite, isnan
 from units.si import Angle, DEGREE
 
 comptime Vec = SIMD[DType.float32, 4]

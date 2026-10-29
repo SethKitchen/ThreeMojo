@@ -15,7 +15,6 @@ gray file by hand.
 """
 
 from core.search import first_match
-from render.framebuffer import Color
 from render.jpeg import (
     BLOCK_SAMPLES,
     BitReader,

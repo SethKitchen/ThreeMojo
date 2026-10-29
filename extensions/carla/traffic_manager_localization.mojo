@@ -83,7 +83,7 @@ from extensions.carla.traffic_manager_state import (
     three_point_circle_radius,
 )
 from math.vector3 import Vector3
-from std.collections import Dict, Optional, Set
+from std.collections import Dict, Set
 from units.si import Length
 
 comptime _DEAD_END = (

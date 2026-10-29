@@ -62,7 +62,7 @@ from render.texture import (
     Texture,
     float_texture,
 )
-from std.math import cos, exp, floor, log2, pi, sin, sqrt
+from std.math import cos, exp, floor, pi, sin, sqrt
 from units.si import Angle, RADIAN
 
 # The most taps either side of the center a blur takes: three.js's

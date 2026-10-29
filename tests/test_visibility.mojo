@@ -11,7 +11,7 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
 from core.layers import Layers
-from core.object3d import NO_PARENT, NodeId, Object3D
+from core.object3d import NodeId, Object3D
 from core.raycaster import Raycaster
 from core.scene import Scene
 from geometries.plane import plane

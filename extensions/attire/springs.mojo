@@ -39,7 +39,6 @@ This is not a three.js port. See Extensions.
     chain.step(scene, Duration(1.0 / 30, SECOND))
 """
 
-from std.math import sqrt
 
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -59,10 +58,8 @@ from extensions.humanoid.rig.joints import (
     RIGHT_UPPER_ARM,
     SPINE,
     Joint,
-    joint_label,
 )
 from loaders.json import parse_json
-from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from units.si import Duration, SECOND

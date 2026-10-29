@@ -35,7 +35,6 @@ house at its door: see `extensions.village.terrain`.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.object3d import NodeId
 from core.scene import Scene
 from extensions.building.material import brick, timber
 from extensions.building.model import Building
@@ -86,7 +85,7 @@ from extensions.village.props import (
     stand_props,
 )
 from extensions.village.surfaces import house_looks
-from extensions.village.terrain import Floor, Terrain, WallSpan
+from extensions.village.terrain import Floor, Terrain
 from extensions.village.scanned import CutBuilding, scan_lot, stand_scan
 from extensions.water.frame import WaterScene
 from extensions.water.pebbles import PebbleBed

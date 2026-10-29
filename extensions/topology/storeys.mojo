@@ -32,7 +32,7 @@ from extensions.topology.complex import (
     HORIZONTAL,
     VERTICAL,
 )
-from extensions.topology.ids import CellId, FaceId, RegionId, VertexId
+from extensions.topology.ids import CellId, RegionId, VertexId
 from generators.utils import Vec3d
 from units.si import Length64, METER
 

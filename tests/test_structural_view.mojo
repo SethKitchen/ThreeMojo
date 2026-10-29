@@ -16,7 +16,6 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
-    assert_false,
     assert_raises,
     assert_true,
 )
@@ -28,7 +27,6 @@ from extensions.building.ids import (
     StoreyId,
 )
 from extensions.building.kinds import (
-    BEAM,
     CORRIDOR,
     MECHANICAL,
     OFFICE,
@@ -55,22 +53,18 @@ from extensions.building.model import (
     i_shape,
 )
 from extensions.building.views.structural import (
-    StructuralViewOptions,
     default_options,
     live_load,
     roof_live_load,
     structural_view,
 )
 from extensions.structure.ids import LoadCaseId
-from extensions.structure.kinds import UZ
 from extensions.structure.static import StaticSolver
 from extensions.topology.arrangement import Point2
 from extensions.topology.ids import FaceId
-from generators.utils import Vec3d
 from units.si import (
     Acceleration64,
     Angle64,
-    DEGREE,
     DEGREE64,
     KILOPASCAL,
     Length64,

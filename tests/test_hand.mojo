@@ -201,10 +201,7 @@ from extensions.humanoid.skeleton.hand.vessels.dimensions import (
     is_hand_artery,
     named_hand_vessels,
 )
-from extensions.humanoid.skeleton.hand.vessels.geometry import (
-    hand_vessel,
-    hand_vessel_from_dimensions,
-)
+from extensions.humanoid.skeleton.hand.vessels.geometry import hand_vessel
 from extensions.humanoid.skeleton.hand.vessels.mass import (
     hand_vessel_mass,
     hand_vessel_mass_from_dimensions,
@@ -234,7 +231,6 @@ from extensions.anatomy.soft_tissue import (
     lymph_tissue,
     nerve_tissue,
     skin_tissue,
-    tendon_tissue,
 )
 from extensions.humanoid.skeleton.soft_tissue import SOFT_EMPTY, SOFT_FILL
 from extensions.anatomy.tissue import (
@@ -244,7 +240,6 @@ from extensions.anatomy.tissue import (
 from math.vector3 import Vector3, midpoint
 from std.testing import (
     TestSuite,
-    assert_almost_equal,
     assert_equal,
     assert_false,
     assert_raises,

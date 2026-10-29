@@ -93,7 +93,6 @@ from materials.material import MaterialId
 from math.matrix4 import Matrix4
 from math.utils import glsl_sign
 from math.vector3 import Vector3
-from std.math import sqrt
 
 # The attributes a conditional line reads at each vertex: its two control
 # points, and the direction of its segment, as three.js's LDraw loader

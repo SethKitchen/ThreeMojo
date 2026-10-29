@@ -11,7 +11,6 @@ from extensions.carla.curve_bounds import _spiral_counts, _spiral_expression
 from extensions.carla.curve_interval import (
     _Interval,
     _Jet,
-    _ValueJet,
     _without_derivatives,
     _next_up,
     _next_down,

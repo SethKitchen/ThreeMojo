@@ -31,7 +31,6 @@ from materials.nodes import (
     NODE_VEC3,
     NodeGraph,
     NodeRef,
-    ValueType,
 )
 from math.euler import AXIS_X, AXIS_Y, EulerOrder, XYZ
 from std.math import pi

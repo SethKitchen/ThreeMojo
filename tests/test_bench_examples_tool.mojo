@@ -26,7 +26,6 @@ from std.testing import (
 from tools._json_tree import NOTHING, JsonTree, equal
 from tools.bench_examples import (
     Finished,
-    HOST_MISMATCH,
     Machine,
     State,
     bsd_peak,

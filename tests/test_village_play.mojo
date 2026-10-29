@@ -53,20 +53,10 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
-    assert_false,
     assert_true,
 )
 from math.vector3 import Vector3
-from units.si import (
-    DEGREE,
-    INCH,
-    METER,
-    RADIAN,
-    SECOND,
-    Angle,
-    Duration,
-    Length,
-)
+from units.si import DEGREE, INCH, METER, SECOND, Angle, Duration, Length
 
 
 def _village() raises -> VillageParameters:

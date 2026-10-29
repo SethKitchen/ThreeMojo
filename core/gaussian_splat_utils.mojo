@@ -59,7 +59,7 @@ from math.norm import (
 )
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
-from math.utils import FLOAT32_COMPONENT, UINT32_COMPONENT, UINT8_COMPONENT
+from math.utils import UINT32_COMPONENT, UINT8_COMPONENT
 from std.math import exp, floor, isnan, sqrt
 
 # The zeroth-band spherical harmonics constant, `1 / (2 sqrt(pi))`.

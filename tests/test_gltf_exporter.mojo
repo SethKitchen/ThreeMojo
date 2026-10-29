@@ -51,18 +51,16 @@ from loaders.json import parse_json
 from materials.material import (
     BASIC,
     DOUBLE_SIDE,
-    NO_TEXTURE,
     PHONG,
     Material,
     MaterialId,
     standard_material,
 )
-from math.euler import XYZ
 from math.matrix4 import Matrix4, translation
 from math.vector2 import Vector2
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from render.srgb import LINEAR, SRGB
+from render.srgb import SRGB
 from render.texture import (
     BILINEAR,
     CLAMP,
@@ -75,7 +73,6 @@ from render.texture import (
     float_texture,
 )
 from render.texture_store import TextureId
-from std.math import sqrt
 from std.pathlib import Path
 from std.testing import (
     TestSuite,

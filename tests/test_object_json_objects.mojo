@@ -57,7 +57,7 @@ from materials.material import (
     points_material,
     sprite_material,
 )
-from math.matrix4 import Matrix4, translation
+from math.matrix4 import translation
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.instanced_mesh import BatchedMesh

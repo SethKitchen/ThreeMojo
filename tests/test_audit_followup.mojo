@@ -5,7 +5,7 @@
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.object3d import Object3D, NodeId, NO_PARENT
+from core.object3d import Object3D, NO_PARENT
 from core.scene import Scene
 from core.scene_optimizer import _carries
 from exporters.gltf import export_gltf
@@ -28,7 +28,7 @@ from render.rasterizer import DRAW_SPLATS, DRAW_TRIANGLES, Draw, check_draws
 from render.rasterizer import check_output_kinds
 from render.rasterizer import Corner, RasterVertex, Surface, rasterize_frame
 from render.rect import Rect
-from render.splat_raster import prepare_gaussian_splat, draw_gaussian_splat
+from render.splat_raster import prepare_gaussian_splat
 from render.target import RenderTarget
 from renderers.draw_filter import snap_to_pixels
 from renderers.renderer import Renderer

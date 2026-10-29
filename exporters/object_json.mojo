@@ -144,7 +144,6 @@ from lights.light import (
 )
 from loaders.object_loader import (
     CLAMP_TO_EDGE_WRAPPING,
-    CUBE_REFLECTION_MAPPING,
     CUSTOM_BLENDING,
     FLOAT_TYPE,
     FORMAT_VERSION,
@@ -190,7 +189,6 @@ from materials.material import (
 from math.euler import Euler, EulerOrder
 from math.matrix4 import Matrix4
 from math.square_matrix import append_elements, copy_elements
-from math.vector2 import Vector2
 from objects.skeleton import Skeleton
 from render.cube_texture import cube_image_index
 from materials.node_json import write_node_program
@@ -200,7 +198,7 @@ from render.cube_texture_store import (
     SCENE_ENVIRONMENT,
     CubeTextureId,
 )
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import FloatColor, Framebuffer
 from render.png import encode as encode_png
 from render.raster_state import (
     ALWAYS_STENCIL_FUNC,

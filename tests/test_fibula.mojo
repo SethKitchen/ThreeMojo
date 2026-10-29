@@ -5,7 +5,7 @@
 
 """Tests for the stature-scaled fibula."""
 
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import NORMAL, POSITION, UV
 from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE, HumanoidSpec

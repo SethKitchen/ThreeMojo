@@ -15,7 +15,6 @@ from extensions.physics.collide import (
     flipped,
     collide,
     round_round,
-    SignedDistance,
     signed_distance,
     round_polyhedron,
     polyhedron_polyhedron,

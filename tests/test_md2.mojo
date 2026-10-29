@@ -15,15 +15,8 @@ from animation.keyframe_track import MeshIndex
 from core.binary import append_little_endian_u32, copy_bytes
 from core.buffer_geometry import NORMAL, POSITION, UV
 from loaders.json import JsonDocument, parse_json
-from loaders.md2 import (
-    Md2Animation,
-    md2_animation_name,
-    md2_clip,
-    parse_md2,
-    read_md2,
-)
+from loaders.md2 import md2_animation_name, md2_clip, parse_md2, read_md2
 from std.math import isfinite
-from std.memory import bitcast
 from std.pathlib import Path
 from std.testing import (
     TestSuite,

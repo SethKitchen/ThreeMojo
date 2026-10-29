@@ -50,7 +50,6 @@ from extensions.gamepad.ids import (
     AXIS_COUNT,
     AXIS_LEFTX,
     AXIS_LEFT_TRIGGER,
-    AXIS_RIGHT_TRIGGER,
     BUTTON_COUNT,
     BUTTON_DPAD_DOWN,
     BUTTON_DPAD_UP,
@@ -65,11 +64,9 @@ from extensions.gamepad.ids import (
     GAMEPAD_TYPE_PS4,
     GAMEPAD_TYPE_PS5,
     GAMEPAD_TYPE_STANDARD,
-    GAMEPAD_TYPE_XBOX360,
     GamepadAxis,
     GamepadButton,
     LABEL_A,
-    LABEL_B,
     LABEL_CROSS,
 )
 from extensions.gamepad.joystick import (

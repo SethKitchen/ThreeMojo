@@ -129,7 +129,7 @@ from extensions.animals.registry import (
     RAT,
     SpeciesId,
 )
-from extensions.animals.rig import Pose, Rig
+from extensions.animals.rig import Rig
 from extensions.sdf.vector import V3, Rigid, length, lerp
 from std.math import cos, pow
 from units.measure import angle_degrees, length_meters

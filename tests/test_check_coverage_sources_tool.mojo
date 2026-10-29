@@ -9,9 +9,7 @@ The expectations are the Python tool's values. A shell script stands in for
 the compiler, so no test builds Mojo.
 """
 
-from std.os import listdir
-from std.os.path import exists, isdir, realpath
-from std.pathlib import Path
+from std.os.path import exists, isdir
 from std.testing import (
     TestSuite,
     assert_equal,

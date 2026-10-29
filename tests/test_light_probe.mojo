@@ -13,13 +13,7 @@ on one side must light the surfaces facing that side more.
 
 from core.layers import Layers
 from core.scene import Scene
-from lights.light import (
-    AMBIENT,
-    LIGHT_PROBE,
-    LightKind,
-    ambient_light,
-    light_probe,
-)
+from lights.light import LIGHT_PROBE, ambient_light, light_probe
 from lights.light_probe import light_probe_from_cube, sh_from_cube
 from lights.lighting import RECIPROCAL_PI, Lighting
 from math.spherical_harmonics3 import SphericalHarmonics3

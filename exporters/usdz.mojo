@@ -102,7 +102,7 @@ from render.framebuffer import Color, Framebuffer
 from exporters.common import resized_image
 from render.png import encode as encode_png
 from render.srgb import SRGB
-from render.texture import CLAMP, MIRROR, REPEAT, Texture, Wrap
+from render.texture import CLAMP, MIRROR, REPEAT, Wrap
 from render.texture_store import TextureId
 from std.math import cos, pi, sin, tan
 from units.si import DEGREE, METER

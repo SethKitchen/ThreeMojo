@@ -76,7 +76,7 @@ from generators.utils import Vec3d
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from render.framebuffer import Color
-from std.math import cos, sin, sqrt
+from std.math import sqrt
 from std.sys import argv, stderr
 from units.si import (
     Angle,

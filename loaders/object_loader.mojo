@@ -222,7 +222,6 @@ from lights.light import (
     DIRECTIONAL,
     HEMISPHERE,
     POINT,
-    RECT_AREA,
     LIGHT_PROBE,
     SPOT,
     Light,
@@ -246,7 +245,6 @@ from loaders.json import (
     ARRAY,
     NO_NODE,
     NULL,
-    NUMBER,
     OBJECT,
     STRING,
     JsonDocument,
@@ -271,8 +269,6 @@ from materials.material import (
     DEFAULT_LINE_WIDTH,
     DEFAULT_POINT_SIZE,
     DISTANCE,
-    DEFAULT_FAR_DISTANCE,
-    DEFAULT_NEAR_DISTANCE,
     LAMBERT,
     NO_DASH,
     NO_ROTATION,
@@ -351,7 +347,7 @@ from render.texture import (
 from render.texture_store import TextureId
 from std.collections import Dict
 from math.finite import require_finite
-from std.math import inf, pi, sqrt
+from std.math import inf, pi
 from std.memory import bitcast
 from std.pathlib import Path
 from units.si import Angle, DEGREE, InverseLength, Length, METER, NANOMETER

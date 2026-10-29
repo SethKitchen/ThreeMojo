@@ -59,7 +59,6 @@ from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from loaders.draco_attributes import (
     DRACO_BOOL,
     DRACO_COLOR,
-    DRACO_CONSTRAINED_MULTI_PARALLELOGRAM,
     DRACO_DIFFERENCE,
     DRACO_FLOAT32,
     DRACO_GEOMETRIC_NORMAL,
@@ -73,7 +72,6 @@ from loaders.draco_attributes import (
     DRACO_PREDICTION_NONE,
     DRACO_TEX_COORD,
     DRACO_TEX_COORDS_DEPRECATED,
-    DRACO_TEX_COORDS_PORTABLE,
     DRACO_UINT16,
     DRACO_UINT32,
     DRACO_UINT8,
@@ -89,7 +87,6 @@ from loaders.draco_attributes import (
     PredictionTransform,
     dequantize,
     octahedron_to_normals,
-    product32,
 )
 from loaders.draco_buffer import (
     DracoBuffer,

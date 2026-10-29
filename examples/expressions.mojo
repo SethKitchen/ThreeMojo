@@ -65,7 +65,7 @@ from renderers.environment import pmrem_from_scene
 from renderers.renderer import available_workers
 from std.pathlib import Path
 from std.sys import argv
-from units.si import FOOT, Length, METER
+from units.si import FOOT, Length
 
 comptime DEFAULT_OUTPUT = "out/expressions.png"
 comptime DEFAULT_QUALITY = "high"

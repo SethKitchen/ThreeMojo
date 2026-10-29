@@ -4,7 +4,6 @@
 """Independent direction and length oracles for the remaining norm consumers."""
 
 from geometries.torus import torus_knot
-from geometries.utils import to_creased_normals
 from loaders.fbx import _triangulate as fbx_triangulate
 from loaders.ply import _check_convex as ply_convex
 from loaders.lwo import _vertex_normals as lwo_normals
@@ -39,7 +38,7 @@ from loaders.svg_shapes import (
 )
 from loaders.vrml_geometry import _Vector, normal_attribute
 from math.matrix3 import Matrix3
-from math.matrix4 import Matrix4, scaling
+from math.matrix4 import scaling
 from math.norm import (
     length2,
     normalized_cross3,
@@ -59,14 +58,13 @@ from render.texture import (
     _major_direction,
 )
 from renderers.projector import apply_normal, Vec
-from std.math import inf, isfinite, isnan, nan, pi, sqrt
+from std.math import inf, isfinite, isnan, nan, pi
 from std.memory import bitcast
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
     assert_true,
-    assert_raises,
 )
 
 

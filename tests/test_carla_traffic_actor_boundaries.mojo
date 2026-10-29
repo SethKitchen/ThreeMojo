@@ -19,26 +19,17 @@ from extensions.carla.traffic_manager import (
     is_physics_enabled,
     set_simulate_physics,
 )
-from extensions.carla.traffic_manager_collision import (
-    CollisionStage,
-    GeometryComparison,
-)
-from extensions.carla.traffic_manager_localization import LocalizationStage
+from extensions.carla.traffic_manager_collision import GeometryComparison
 from extensions.carla.traffic_manager_map import (
     ROAD_OPTION_LEFT,
     ROAD_OPTION_VOID,
     SimpleWaypointIndex,
-    WaypointId,
 )
 from extensions.carla.traffic_manager_parameters import (
     Parameters,
     ChangeLaneInfo,
 )
-from extensions.carla.traffic_manager_planning import (
-    MotionPlanStage,
-    TrafficLightStage,
-    VehicleLightStage,
-)
+from extensions.carla.traffic_manager_planning import VehicleLightStage
 from extensions.carla.traffic_manager_shared import (
     CommandKind,
     TrafficCommand,
@@ -49,8 +40,6 @@ from extensions.carla.traffic_manager_shared import (
     set_vehicle_light_state,
 )
 from extensions.carla.traffic_manager_state import (
-    SimulationState,
-    TrackTraffic,
     TrafficLightInfo,
     push_waypoint,
     pop_waypoint,

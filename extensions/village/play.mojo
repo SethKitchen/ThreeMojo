@@ -54,7 +54,7 @@ from extensions.humanoid.genome import random_genome
 from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.field import FieldStats
-from extensions.vegetation.ground import Ground, Lot, lot_openness
+from extensions.vegetation.ground import Lot, lot_openness
 from extensions.vegetation.meadow import EXPOSURE, FARTHEST
 from extensions.village.character import (
     Character,
@@ -81,12 +81,7 @@ from extensions.village.clothes import (
     WOAD,
     village_outfit,
 )
-from extensions.village.quality import (
-    GameQuality,
-    LOW,
-    game_quality,
-    planted,
-)
+from extensions.village.quality import GameQuality, planted
 from extensions.village.scanned import CutBuilding
 from extensions.village.terrain import Terrain
 from extensions.village.interior import Doorway

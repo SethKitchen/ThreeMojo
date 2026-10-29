@@ -53,13 +53,7 @@ limits, and explicit zero and nonfinite rules.
 
 from math.norm import normalized_difference2
 
-from math.norm import (
-    length3,
-    normalized2,
-    normalized3,
-    _ordinary_squared,
-    squared_length2,
-)
+from math.norm import length3, normalized3, _ordinary_squared, squared_length2
 from cameras.camera import Camera
 from core.assets import Assets
 from core.background import COLOR_BACKGROUND

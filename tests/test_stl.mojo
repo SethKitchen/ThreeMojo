@@ -16,13 +16,7 @@ from core.binary import append_little_endian_u32
 from core.buffer_geometry import COLOR, NORMAL, POSITION
 from core.object3d import Object3D
 from core.scene import Scene
-from loaders.stl import (
-    StlModel,
-    is_binary_stl,
-    parse_stl,
-    parse_stl_text,
-    read_stl,
-)
+from loaders.stl import is_binary_stl, parse_stl, parse_stl_text, read_stl
 from materials.material import BASIC, Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh

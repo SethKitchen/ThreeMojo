@@ -85,8 +85,6 @@ from extensions.carla.road_info import (
     LaneId,
     LaneType,
     LaneValidity,
-    MarkLaneChange,
-    ORIENTATION_BOTH,
     ORIENTATION_NEGATIVE,
     ORIENTATION_POSITIVE,
     RoadId,

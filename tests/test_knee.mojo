@@ -79,7 +79,6 @@ from extensions.anatomy.soft_tissue import (
     SKIN as SKIN_KIND,
     TENDON,
     VENOUS,
-    SoftTissue,
     SoftTissueKind,
     cartilage_tissue,
     ligament_tissue,

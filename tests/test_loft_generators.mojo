@@ -10,15 +10,10 @@ The expected numbers follow from three.js r186's
 hand: a square prism, a ribbon and a tapered ring.
 """
 
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import BufferGeometry, NORMAL, UV
 from geometries.loft import loft
 from math.vector3 import Vector3
-from std.testing import (
-    TestSuite,
-    assert_almost_equal,
-    assert_equal,
-    assert_raises,
-)
+from std.testing import TestSuite, assert_almost_equal, assert_equal
 
 
 def _square(y: Float32, half: Float32 = 1) -> List[Vector3]:

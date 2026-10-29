@@ -7,12 +7,7 @@
 
 from extensions.carla.geometry import (
     LINE,
-    ARC,
-    SPIRAL,
-    POLY3,
     PARAM_POLY3,
-    NORMALIZED,
-    ARC_LENGTH,
     DirectedPoint,
     RoadGeometry,
     RoadGeometryKind,
@@ -25,7 +20,6 @@ from extensions.carla.geometry import (
     with_param_poly3,
 )
 from extensions.carla.map import (
-    Map,
     Waypoint,
     Signal,
     SignalSearchData,
@@ -112,7 +106,6 @@ from units.si import (
     InverseLength64,
     InverseArea64,
     Velocity64,
-    METER,
     KILOMETER,
     DEGREE,
     Duration,

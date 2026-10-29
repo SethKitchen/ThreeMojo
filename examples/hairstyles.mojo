@@ -59,7 +59,7 @@ from renderers.environment import pmrem_from_scene
 from renderers.renderer import available_workers
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, FOOT, Length, METER, RADIAN
+from units.si import Angle, FOOT, Length, RADIAN
 
 comptime DEFAULT_OUTPUT = "out/hairstyles.png"
 comptime DEFAULT_QUALITY = "high"

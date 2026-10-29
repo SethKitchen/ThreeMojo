@@ -15,7 +15,6 @@ from core.gaussian_splat_utils import GaussianSplatGeometry
 from extensions.scan.frame import supersplat_frame
 from extensions.scan.occupancy import (
     OccupancyGrid,
-    OccupancyOptions,
     ScanRegion,
     _trimmed,
     default_occupancy_options,

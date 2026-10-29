@@ -45,7 +45,6 @@ from core.scene import Scene
 from lights.vxgi_cone_tracer import (
     GOLDEN_STEP,
     Lanes,
-    UNBOUNDED,
     Untracked,
     VxgiGrid,
     cosine_direction,

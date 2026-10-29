@@ -12,7 +12,7 @@ from extensions.carla.curve_bounds import (
     _reference_jet,
 )
 from extensions.carla.curve_interval import _Interval, _Jet
-from extensions.carla.geometry import RoadGeometry, SPIRAL, LINE, _GL_NODES
+from extensions.carla.geometry import RoadGeometry, SPIRAL, _GL_NODES
 from extensions.carla.curve_trig import _INV_HALF_PI, _PHASE_LIMIT
 from extensions.carla.spiral_moment_table import (
     _SpiralMomentProof,

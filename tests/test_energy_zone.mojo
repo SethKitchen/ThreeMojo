@@ -66,7 +66,6 @@ from generators.utils import Vec3d
 from units.si import (
     Angle64,
     Area64,
-    DEGREE,
     DEGREE64,
     Frequency64,
     HeatCapacity64,

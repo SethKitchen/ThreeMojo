@@ -24,13 +24,7 @@ from geometries.edge_split import edge_split
 from geometries.simplify import simplify
 from geometries.tessellate import tessellate
 from std.math import inf, nan
-from std.testing import (
-    TestSuite,
-    assert_equal,
-    assert_false,
-    assert_raises,
-    assert_true,
-)
+from std.testing import TestSuite, assert_equal, assert_false, assert_raises
 from units.si import Angle, Length, METER, RADIAN
 
 

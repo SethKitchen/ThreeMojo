@@ -9,7 +9,7 @@ from extensions.carla.junction_bounds import (
     _lane_section_box,
     _polynomial_bounds,
 )
-from extensions.carla.map import Map, Waypoint
+from extensions.carla.map import Map
 from extensions.carla.map_builder import MapBuilder, junction_box
 from extensions.carla.mesh_factory import junctions_bounding_boxes
 from extensions.carla.polynomial import CubicPolynomial

@@ -6,7 +6,7 @@
 """Tests for the arrow, polar grid, plane, skeleton, light and vertex
 helpers, and the segment list they are built with."""
 
-from cameras.orthographic_camera import OrthographicCamera, centered
+from cameras.orthographic_camera import centered
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION

@@ -18,7 +18,7 @@ from geometries.plane import plane
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
 from objects.line import Line, STRIP
-from materials.material import BASIC, BLEND, Material
+from materials.material import BASIC, Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor, Framebuffer

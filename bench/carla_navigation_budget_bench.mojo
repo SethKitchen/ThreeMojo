@@ -11,7 +11,7 @@ Graph construction is outside each measurement. Assertions check work bounds.
 The allocation hook excludes allocator metadata and other threads.
 """
 
-from extensions.carla.agents_route import GlobalRoutePlanner, RouteNodeId
+from extensions.carla.agents_route import RouteNodeId
 from extensions.carla.navigation_mesh import NavPolygonId, NavQueryFilter
 from extensions.carla.navigation_search import (
     NavigationSearchBudget,

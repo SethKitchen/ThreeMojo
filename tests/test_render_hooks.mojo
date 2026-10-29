@@ -14,7 +14,6 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, BufferGeometry
-from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import cube
@@ -27,7 +26,6 @@ from materials.material import (
     FRONT_SIDE,
     Material,
     MaterialId,
-    NORMALS,
     PointSize,
     line_dashed_material,
     line_material,
@@ -43,7 +41,7 @@ from objects.line_segments2 import LineSegments2, line_segments_geometry
 from objects.mesh import Mesh
 from objects.points import Points
 from objects.sprite import Sprite
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import Color
 from render.raster_state import REPLACE_STENCIL_OP
 from render.rasterizer import (
     DRAW_POINTS,

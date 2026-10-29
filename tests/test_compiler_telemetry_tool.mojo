@@ -11,7 +11,6 @@ lifecycle tests run small shell programs as the compiler. Two tests run the
 built tool through `tools/tool.sh`, as the Makefile does.
 """
 
-from std.ffi import c_int, external_call
 from std.os import makedirs, remove
 from std.pathlib import Path
 from std.sys import CompilationTarget
@@ -24,12 +23,11 @@ from std.testing import (
 )
 
 from tests._tree import tool_mojo
-from tools._owned_process import close_fd, monotonic_seconds, open_at, at_cwd
+from tools._owned_process import close_fd, open_at, at_cwd
 from tools._process import run_program, shell_quote
 from tools._python_json import PyJson, dumps_canonical
 from tools.compiler_telemetry import (
     CompilerSampler,
-    HeldSignals,
     MAX_LINE,
     MAX_PROCESSES,
     MAX_THREADS,
@@ -44,7 +42,7 @@ from tools.compiler_telemetry import (
     run_compiler,
     safe_suite,
 )
-from tools._owned_process import SignalHold, c_bytes
+from tools._owned_process import c_bytes
 
 
 def stat_text(

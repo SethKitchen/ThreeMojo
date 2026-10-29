@@ -28,10 +28,9 @@ from controls.input import (
     PRIMARY,
     RESIZE,
     SECONDARY,
-    WHEEL,
 )
 from render.framebuffer import Color, Framebuffer
-from std.ffi import OwnedDLHandle, c_int, external_call
+from std.ffi import OwnedDLHandle, c_int
 from std.math import inf, nan
 from std.subprocess import run
 from test_scratch import TestScratch, temporary_path

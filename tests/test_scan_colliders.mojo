@@ -11,7 +11,7 @@ sphere dropped in the scanned room of `tests/_scan_room.mojo` must come to
 rest on the top face of the floor's voxels.
 """
 
-from extensions.physics.body import BodyId, DYNAMIC, RigidBody
+from extensions.physics.body import DYNAMIC, RigidBody
 from extensions.physics.shape import PhysicsMaterial, Shape
 from extensions.physics.world import PhysicsWorld
 from extensions.scan.colliders import (

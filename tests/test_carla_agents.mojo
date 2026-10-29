@@ -55,7 +55,6 @@ from extensions.carla.agents_misc import (
     distance_vehicle,
     from_kmh_float32 as from_kmh,
     get_speed,
-    get_trafficlight_trigger_location,
     is_within_distance,
     kmh,
     positive,
@@ -73,7 +72,6 @@ from extensions.carla.agents_route import (
 from extensions.carla.bounding_box import BoundingBox
 from extensions.carla.map import Map, Waypoint
 from extensions.carla.opendrive import load_opendrive, load_opendrive_file
-from extensions.carla.physics.quantities import KILOMETER_PER_HOUR
 from extensions.carla.road_info import LaneId, RoadId, SectionId
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from extensions.carla.world import EpisodeSettings, World

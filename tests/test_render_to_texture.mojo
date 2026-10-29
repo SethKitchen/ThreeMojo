@@ -8,7 +8,7 @@
 
 from cameras.orthographic_camera import OrthographicCamera, centered
 from core.assets import Assets
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from geometries.plane import plane
 from lights.light import directional_light
@@ -16,8 +16,6 @@ from materials.material import BASIC, Material, toon_material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from render.rasterizer import SHADE_TEXTURE
-from render.target import RenderTarget
 from render.framebuffer import Framebuffer
 from render.texture import (
     IGNORED,

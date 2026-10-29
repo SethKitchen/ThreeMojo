@@ -8,7 +8,6 @@
 from coverage.mcdc import (
     DecisionTrace,
     TraceParser,
-    Evaluation,
     MASKED,
     find_trace,
     is_mcdc_covered,

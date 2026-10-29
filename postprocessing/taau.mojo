@@ -47,7 +47,6 @@ from math.matrix4 import Matrix4
 from math.utils import edge_index, rec709_luminance
 from math.norm import squared_length2
 from math.smoothstep import smoothstep
-from math.vector3 import Vector3
 from postprocessing.antialiasing import JitteredCamera
 from postprocessing.display_nodes import exp_f, scaled_size
 from postprocessing.sampling import LightView
