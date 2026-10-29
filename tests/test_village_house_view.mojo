@@ -62,7 +62,7 @@ from extensions.village.dressing import FLAME
 from extensions.village.surfaces import HouseLooks, house_looks
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from std.math import pi, sin
+from std.math import pi, sin, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -170,9 +170,23 @@ def test_every_facade_stands_with_its_doors_on_hinges() raises:
         var standing = stand_house(
             scene, assets, looks, house, model, lot, _flat()
         )
-        # Nine sheets, and a leaf for each of the two doors.
-        assert_equal(standing.meshes, 11)
-        assert_equal(len(scene.meshes), 11)
+        # Seven sheets of the shell, six of the inside, and a leaf for
+        # each of the two doors.
+        assert_equal(standing.meshes, 15)
+        assert_equal(len(scene.meshes), 15)
+        # The inside hangs from a node of its own, and casts no shadow.
+        assert_equal(
+            scene.node(standing.inside).parent.value, standing.root.value
+        )
+        var hidden = 0
+        for mesh in scene.meshes:
+            if mesh.node.value == standing.inside.value:
+                hidden += 1
+                assert_false(mesh.cast_shadow)
+        assert_equal(hidden, 6)
+        assert_almost_equal(
+            standing.radius, sqrt(Float32(3.5 * 3.5 + 2.5 * 2.5)), atol=1e-5
+        )
         assert_equal(len(standing.hinges), 2)
         assert_equal(len(standing.interior.doorways), 2)
         assert_true(standing.triangles > 2000)
@@ -325,7 +339,7 @@ def test_a_wide_window_on_a_framed_wall_and_doors_upstairs() raises:
     var standing = stand_house(scene, assets, looks, house, model, lot, _flat())
     assert_equal(len(standing.hinges), 2)
     # The upstairs door has a leaf too.
-    assert_equal(standing.meshes, 12)
+    assert_equal(standing.meshes, 16)
 
 
 def test_a_boarded_house_with_no_openings() raises:
@@ -338,9 +352,11 @@ def test_a_boarded_house_with_no_openings() raises:
     var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
     var standing = stand_house(scene, assets, looks, house, model, lot, _flat())
     assert_equal(len(standing.hinges), 0)
-    # No window: no pane, and so no glass. The daylight sheet holds the
-    # lantern's glow, and the cloth its rug.
-    assert_equal(standing.meshes, 8)
+    # No window: no pane, and so no glass. Of the shell, the facade, the
+    # plaster of the gutters, the wood, the stone and the roof; of the
+    # inside, the plaster, the wood, the stone, the planks, the lantern's
+    # glow and the rug's cloth.
+    assert_equal(standing.meshes, 11)
 
 
 def test_a_model_with_no_walls_or_rooms_stands_its_roof() raises:

@@ -82,7 +82,7 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 5. Each resident steps along its route, and its body or its mesh is posed.
 6. Each door swings open while someone stands near it, and shut after.
 7. The use button uses the spot in reach: see [Village gathering](Village-gathering).
-8. The camera's focus follows the player. The eye comes in before a wall, and stays below a ceiling and above the ground.
+8. The camera's focus follows the player. The eye comes in before a wall, and stays below a ceiling and above the ground. The inside of each house hides while the eye is more than `INSIDE_REACH`, 18 meters, past the house's edge.
 9. The village grows the grass for the camera, and moves the water's clock on.
 10. The weather moves on, and scales the lights and the fog. See [Village weather](Village-weather).
 

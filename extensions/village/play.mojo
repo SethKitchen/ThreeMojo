@@ -25,7 +25,8 @@ and its animals, seen by a third-person camera.
 8. The camera follows the player. Where a wall stands between the
    player and the eye, the eye comes in to stand before the wall, and it
    goes back out slowly when the wall is passed. Under a ceiling, the
-   eye stays below it. It stays above the ground or the floor.
+   eye stays below it. It stays above the ground or the floor. The
+   inside of each house further than `INSIDE_REACH` from the eye hides.
 9. The village prepares the frame: the grass for the camera, and the
    water's clock.
 10. The weather moves on, and scales the lights and the fog: see
@@ -129,6 +130,9 @@ comptime CALM = Float32(0.1)
 """A look stick that leans less than this lets the camera trail."""
 comptime SIGHT_POINTS = 4
 """How many points along the camera's sight hold a door open."""
+comptime INSIDE_REACH = Float32(18)
+"""How far past a house's edge a camera can be and still see its inside
+drawn, in meters."""
 comptime ARM_MARGIN = Float32(0.3)
 """How far before a wall the camera's eye stops, in meters."""
 comptime ARM_EASE = Float32(3)
@@ -566,6 +570,16 @@ struct VillageGame(Movable):
             Length(self.terrain.view_ceiling(focus, eye, feet.y), METER),
             self.reach,
         )
+        # A house's inside shows only to a camera near it: from further
+        # away, its windows show little of it.
+        ref eye_at = self.camera.position
+        for index in range(len(self.village.houses)):
+            ref house = self.village.houses[index]
+            ref middle = scene.node(house.root).position
+            var dx = eye_at.x - middle.x
+            var dz = eye_at.z - middle.z
+            var near = house.radius + INSIDE_REACH
+            scene.node(house.inside).visible = dx * dx + dz * dz < near * near
         scene.update()
         self.clock += delta.to(SECOND)
         var stats = self.village.update(

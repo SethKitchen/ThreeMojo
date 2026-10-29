@@ -75,7 +75,9 @@ The front door is 1 meter wide and 2.1 meters tall. A barn is different: see [Th
 5. **The roof.** Two slopes of tiles or slates, 16 centimeters thick, reach 35 centimeters past the long walls. Boards line the underside of the eaves. A fascia, barge boards and a ridge close the edges. A chimney stack rises over the chimney breast. Each gable is cut into cells no more than 1 meter across, as a wall is. A zinc gutter runs along each eave. A downpipe runs from each end of each gutter down the wall to the ground.
 6. **The plinth and the steps.** A stone plinth reaches 40 centimeters below the lowest ground under the house. Stone steps lead up to the front door.
 
-The house hangs from one node at its lot's middle, at the floor's height. Each material is one mesh. So a house is nine meshes, and one more for each door leaf. A barn has no cloth, so it is eight.
+The house hangs from one node at its lot's middle, at the floor's height. Its shell shows from outside: its outside walls, its windows and doors, its roof, its plinth and its steps. Its inside hangs from a node of its own, `StandingHouse.inside`. The inside holds the rooms, the stair, the hearth, the furniture, the dressing and the inside faces of the walls. A game can hide the inside from far away. The inside casts no shadow, because a still shadow map is drawn only once.
+
+Each material of the shell is one mesh, and so is each material of the inside. A dwelling with windows is fifteen meshes with its two door leaves.
 
 ## Surfaces
 

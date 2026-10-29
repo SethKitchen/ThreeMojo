@@ -49,8 +49,12 @@ it. It draws more of what an eye sees from close by:
 
 The house hangs from one node at its lot's middle, at the floor's height,
 turned by the lot's turn. Each sheet of `extensions.village.sheet` is one
-mesh of one material of `HouseLooks`. Each door leaf is a mesh of its own
-under a hinge node, so `extensions.village.doors` can swing it.
+mesh of one material of `HouseLooks`. The shell's sheets hang from the
+house's node. What shows only inside, the rooms, the stair, the hearth,
+the furniture and the inside faces of the walls, hangs from a node of
+its own, so a game can hide it from far away. Each door leaf is a mesh
+of its own under a hinge node, so `extensions.village.doors` can swing
+it.
 """
 
 from core.assets import Assets
@@ -438,6 +442,7 @@ def _inside_face(
 
 def _wall_faces(
     mut sheets: _Sheets,
+    mut inside: _Sheets,
     face: _Face,
     openings: List[_Opening],
     half: Float32,
@@ -447,7 +452,8 @@ def _wall_faces(
     seed: Int,
     boards: Bool,
 ):
-    """Add a wall's two faces, cut into cells round its openings.
+    """Add a wall's two faces, cut into cells round its openings: an
+    outside face to `sheets`, and an inside face to `inside`.
 
     `out_sign` is +1 when the outside is along the normal, and -1 when it
     is against it. The inside faces are plaster, or bare boards when
@@ -512,7 +518,7 @@ def _wall_faces(
                     # Oak paneling to the dado, and a rail along its top.
                     var oak = PANELING
                     _inside_face(
-                        sheets.wood,
+                        inside.wood,
                         a,
                         b,
                         c,
@@ -529,7 +535,7 @@ def _wall_faces(
                     )
                     if v1 >= DADO - 1.0e-4:
                         var outward = Vector3(-face.along.z, 0, face.along.x)
-                        sheets.wood.box(
+                        inside.wood.box(
                             face.at((u0 + u1) / 2, v1, sign * (half + 0.015)),
                             face.along * ((u1 - u0) / 2),
                             Vector3(0, 0.035, 0),
@@ -538,7 +544,7 @@ def _wall_faces(
                         )
                 elif boards:
                     _inside_face(
-                        sheets.facade,
+                        inside.facade,
                         a,
                         b,
                         c,
@@ -555,7 +561,7 @@ def _wall_faces(
                     )
                 else:
                     _inside_face(
-                        sheets.plaster,
+                        inside.plaster,
                         a,
                         b,
                         c,
@@ -1244,11 +1250,13 @@ def _timbers(
 
 def _walls(
     mut sheets: _Sheets,
+    mut inside: _Sheets,
     building: Building,
     parameters: HouseParameters,
     eaves: Float32,
 ) raises:
-    """Add every wall, its openings and its dressings."""
+    """Add every wall, its openings and its dressings: what shows inside
+    the house only to `inside`, and the rest to `sheets`."""
     for e in range(len(building.elements)):
         ref element = building.elements[e]
         if element.kind != WALL:
@@ -1269,6 +1277,7 @@ def _walls(
         var openings = _openings(building, id)
         _wall_faces(
             sheets,
+            inside,
             face,
             openings,
             half,
@@ -2673,6 +2682,12 @@ struct StandingHouse(Movable):
     walk in it, and its doors' hinges."""
 
     var root: NodeId
+    # The node of what shows only inside the house: its rooms, its stair,
+    # its hearth, its furniture and the inside faces of its walls.
+    var inside: NodeId
+    # How far the house reaches from its middle, across its plan, in
+    # meters.
+    var radius: Float32
     var meshes: Int
     var triangles: Int
     var interior: HouseInterior
@@ -2683,6 +2698,8 @@ struct StandingHouse(Movable):
     def __init__(
         out self,
         root: NodeId,
+        inside: NodeId,
+        radius: Float32,
         meshes: Int,
         triangles: Int,
         var interior: HouseInterior,
@@ -2692,12 +2709,16 @@ struct StandingHouse(Movable):
 
         Args:
             root: The house's node.
+            inside: The node of what shows only inside it.
+            radius: How far it reaches from its middle, across its plan.
             meshes: How many meshes it added.
             triangles: How many triangles they hold.
             interior: Where a character can walk in it.
             hinges: The hinge of each door leaf of the ground storey.
         """
         self.root = root
+        self.inside = inside
+        self.radius = radius
         self.meshes = meshes
         self.triangles = triangles
         self.interior = interior^
@@ -2725,6 +2746,61 @@ def _add(
         )
     )
     return sheet.triangles()
+
+
+def _warm_all(
+    mut sheets: _Sheets,
+    glows: List[Glow],
+    half_x: Float32,
+    half_z: Float32,
+    fill: Vector3,
+):
+    """Bake the light inside a house into each sheet a flame can reach."""
+    warm(sheets.plaster, glows, half_x, half_z, fill)
+    warm(sheets.wood, glows, half_x, half_z, fill)
+    warm(sheets.ashlar, glows, half_x, half_z, fill)
+    warm(sheets.planks, glows, half_x, half_z, fill)
+    warm(sheets.cloth, glows, half_x, half_z, fill)
+    warm(sheets.facade, glows, half_x, half_z, fill)
+
+
+def _add_all(
+    mut scene: Scene,
+    mut assets: Assets,
+    sheets: _Sheets,
+    looks: HouseLooks,
+    parameters: HouseParameters,
+    parent: NodeId,
+    casts: Bool,
+) raises -> Int:
+    """Add each sheet of a house as a mesh of its material under a node,
+    and return their triangles. The planks, the glass, the panes' light
+    and the cloth never cast."""
+    var roof = (
+        looks.slates if parameters.facade == STONE_FACADE else looks.tiles
+    )
+    var triangles = 0
+    triangles += _add(
+        scene,
+        assets,
+        sheets.facade,
+        facade_look(looks, parameters.facade),
+        parent,
+        casts,
+    )
+    triangles += _add(
+        scene, assets, sheets.plaster, looks.plaster, parent, casts
+    )
+    triangles += _add(scene, assets, sheets.wood, looks.wood, parent, casts)
+    triangles += _add(scene, assets, sheets.ashlar, looks.ashlar, parent, casts)
+    triangles += _add(scene, assets, sheets.roof, roof, parent, casts)
+    triangles += _add(scene, assets, sheets.planks, looks.planks, parent, False)
+    triangles += _add(scene, assets, sheets.glass, looks.glass, parent, False)
+    triangles += _add(
+        scene, assets, sheets.daylight, looks.daylight, parent, False
+    )
+    triangles += _add(scene, assets, sheets.cloth, looks.cloth, parent, False)
+    return triangles
 
 
 def facade_look(looks: HouseLooks, facade: Facade) -> MaterialId:
@@ -2772,7 +2848,8 @@ def stand_house(
         ground: The ground it stands on.
 
     Returns:
-        The house's node, what it draws, its interior and its doors.
+        The house's node and the node of its inside, what it draws, its
+        interior and its doors. The inside casts no shadow.
 
     Raises:
         Error: If the house cannot be drawn.
@@ -2785,22 +2862,25 @@ def stand_house(
     stand.set_position(lot.x, floor, lot.z)
     stand.rotate_y(Angle(lot.turn, RADIAN))
     var root = scene.add(stand^)
+    # The shell shows from outside; what shows only inside the house hangs
+    # from a node of its own, which a game can hide from far away.
     var sheets = _Sheets(parameters.facade)
+    var inside = _Sheets(parameters.facade)
     var half_x = parameters.width.to(METER) / 2
     var half_z = parameters.depth.to(METER) / 2
     var top = parameters.storey_height.to(METER) * Float32(parameters.storeys)
-    _walls(sheets, building, parameters, top)
+    _walls(sheets, inside, building, parameters, top)
     var stair = house_stair(building)
     var barn = parameters.use == BARN
-    _rooms(sheets, building, stair, barn)
+    _rooms(inside, building, stair, barn)
     var glows = List[Glow]()
     if not barn:
-        _dress_rooms(sheets, building, stair, parameters.seed, glows)
+        _dress_rooms(inside, building, stair, parameters.seed, glows)
     if stair:
-        _stair_view(sheets, stair.value())
+        _stair_view(inside, stair.value())
     var breast = house_breast(building)
     if breast:
-        _breast_view(sheets, building, breast.value(), glows)
+        _breast_view(inside, building, breast.value(), glows)
     var half_t = Float32(building.constructions[0].thickness().value) / 2
     if parameters.pitch.to(RADIAN) > 0:
         _roof(sheets, parameters, half_t, breast)
@@ -2811,40 +2891,26 @@ def stand_house(
         _quoins(sheets, half_x + half_t, half_z + half_t, top)
     if parameters.facade == BRICK_FACADE:
         _string_courses(sheets, half_x + half_t, half_z + half_t, parameters)
-    _furniture(sheets, building, barn, glows)
+    _furniture(inside, building, barn, glows)
     if barn and parameters.pitch.to(RADIAN) > 0:
         _loft(sheets, parameters, half_t)
     # Light bounces round a dwelling's rooms, and the fire, the candles
     # and the lanterns warm what faces them. A barn's rooms stay dim.
     var fill = Vector3(1, 1, 1) if barn else FILL
-    warm(sheets.plaster, glows, half_x, half_z, fill)
-    warm(sheets.wood, glows, half_x, half_z, fill)
-    warm(sheets.ashlar, glows, half_x, half_z, fill)
-    warm(sheets.planks, glows, half_x, half_z, fill)
-    warm(sheets.cloth, glows, half_x, half_z, fill)
-    var roof = (
-        looks.slates if parameters.facade == STONE_FACADE else looks.tiles
-    )
+    _warm_all(sheets, glows, half_x, half_z, fill)
+    _warm_all(inside, glows, half_x, half_z, fill)
     var before = len(scene.meshes)
-    var triangles = 0
-    triangles += _add(
-        scene,
-        assets,
-        sheets.facade,
-        facade_look(looks, parameters.facade),
-        root,
-        True,
+    var triangles = _add_all(
+        scene, assets, sheets, looks, parameters, root, True
     )
-    triangles += _add(scene, assets, sheets.plaster, looks.plaster, root, True)
-    triangles += _add(scene, assets, sheets.wood, looks.wood, root, True)
-    triangles += _add(scene, assets, sheets.ashlar, looks.ashlar, root, True)
-    triangles += _add(scene, assets, sheets.roof, roof, root, True)
-    triangles += _add(scene, assets, sheets.planks, looks.planks, root, False)
-    triangles += _add(scene, assets, sheets.glass, looks.glass, root, False)
-    triangles += _add(
-        scene, assets, sheets.daylight, looks.daylight, root, False
+    # The inside casts no shadow: a game hides it from far away, and a
+    # still shadow map is drawn once.
+    var room = Object3D()
+    room.parent = root
+    var inner = scene.add(room^)
+    triangles += _add_all(
+        scene, assets, inside, looks, parameters, inner, False
     )
-    triangles += _add(scene, assets, sheets.cloth, looks.cloth, root, False)
     # A leaf on a hinge for each door of the ground storey, two for a
     # wide one, in the order of the interior's doorways.
     var hinges = List[Hinge]()
@@ -2900,4 +2966,7 @@ def stand_house(
         if host.storey.value == 0:
             doorway += 1
     var meshes = len(scene.meshes) - before
-    return StandingHouse(root, meshes, triangles, interior^, hinges^)
+    var radius = sqrt(half_x * half_x + half_z * half_z)
+    return StandingHouse(
+        root, inner, radius, meshes, triangles, interior^, hinges^
+    )
