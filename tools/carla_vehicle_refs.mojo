@@ -63,25 +63,10 @@ def _add(mut found: List[String], var text: String):
     while index < len(found):
         if found[index] == text:
             return
-        if _before(text, found[index]):
+        if text < found[index]:
             break
         index += 1
     found.insert(index, text^)
-
-
-def _before(left: String, right: String) -> Bool:
-    """Return whether `left` sorts before `right`."""
-    var a = left.as_bytes()
-    var b = right.as_bytes()
-    var count = len(a)
-    if len(b) < count:
-        count = len(b)
-    for index in range(count):
-        if a[index] < b[index]:
-            return True
-        if a[index] > b[index]:
-            return False
-    return len(a) < len(b)
 
 
 def _at(data: List[UInt8], index: Int, prefix: Span[UInt8, _]) -> Bool:
