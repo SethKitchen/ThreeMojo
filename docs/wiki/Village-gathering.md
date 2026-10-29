@@ -67,13 +67,16 @@ var gathering = Gathering(scene, assets, looks, parameters, ground, lots)
 | The satchel | The bottom left | A swatch and a count for each kind the player holds |
 | The prompt | The bottom middle | What the use button does at the focus, such as `E  MINE ORE 1/3` |
 | The note | Over the prompt | What the player gathered, such as `+3 BERRIES`, for 2 seconds. It fades over its last half second. |
+| The speech | Over the note | What a villager said, for 5 seconds. See [Village errands](Village-errands). |
+| The errands | The top right | Each errand taken and not done |
 
-The font has 5 by 7 dots and needs no font file. It draws capitals, digits, `+`, `/` and `:`. A dot is `hud_scale` pixels on a side: one pixel for each 270 pixels of the frame's height. So the text keeps its size on the screen. Each line has a dark shadow, so it reads over the sky and the grass.
+The font has 5 by 7 dots and needs no font file. It draws capitals, digits, and `+ / : . , ! ? ' -`. A dot is `hud_scale` pixels on a side: one pixel for each 270 pixels of the frame's height. So the text keeps its size on the screen. Each line has a dark shadow, so it reads over the sky and the grass.
 
 Set `PlayParameters.hud` to False for a frame with no display.
 
 ## Limits
 
 - A spot does not stop the camera.
-- The satchel counts things. It does not hold items with their own state, and nothing spends them.
+- The satchel counts things. It does not hold items with their own state. An errand takes things out of it: see [Village errands](Village-errands).
 - The note shows the last thing gathered only.
+- Coins are spent nowhere yet.

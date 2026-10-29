@@ -173,5 +173,41 @@ def test_the_hud_shows_the_satchel_the_prompt_and_the_note() raises:
     assert_false(_changed(prompted) == _changed(noted))
 
 
+def test_the_hud_shows_what_was_said_and_the_errands() raises:
+    var satchel = Satchel()
+    # Speech that has faded draws nothing.
+    var quiet = _frame(480, 270)
+    draw_hud(quiet, satchel, "", "", 0, "ANN: HELLO.", 9)
+    assert_equal(_changed(quiet), 0)
+    var said = _frame(480, 270)
+    draw_hud(said, satchel, "", "", 0, "ANN: HELLO.", 0)
+    assert_true(_changed(said) > 0)
+    # The errands are listed in the top right.
+    var listed = _frame(480, 270)
+    var errands: List[String] = ["herbs for Ann 1/3", "ore for Bo 0/2"]
+    draw_hud(listed, satchel, "", "", 0, "", 0, errands)
+    var top_right = 0
+    var elsewhere = 0
+    for y in range(270):
+        for x in range(480):
+            if listed.pixels[4 * (y * 480 + x)] != 100:
+                if x > 240 and y < 40:
+                    top_right += 1
+                else:
+                    elsewhere += 1
+    assert_true(top_right > 0)
+    assert_equal(elsewhere, 0)
+    # A note lasts as long as it is given.
+    assert_equal(note_alpha(4, 5), 1)
+    assert_equal(note_alpha(5, 5), 0)
+
+
+def test_punctuation_is_drawn() raises:
+    for mark in [".", ",", "!", "?", "'", "-"]:
+        var frame = _frame(12, 12)
+        draw_text(frame, 1, 1, mark, 1, WHITE_TEXT, 1)
+        assert_true(_changed(frame) > 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

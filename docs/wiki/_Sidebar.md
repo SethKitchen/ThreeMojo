@@ -82,6 +82,7 @@
   - [Village houses](Village-houses)
   - [Village walk](Village-walk)
   - [Village gathering](Village-gathering)
+  - [Village errands](Village-errands)
   - [Village weather](Village-weather)
   - [Game renderer](Game-renderer)
 - [Streamline](Streamline)

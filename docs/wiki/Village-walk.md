@@ -81,7 +81,7 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 4. The player's `Body` stands where the character stands, and plays the clip of its stance.
 5. Each resident steps along its route, and its body or its mesh is posed.
 6. Each door swings open while someone stands near it, and shut after.
-7. The use button uses the spot in reach: see [Village gathering](Village-gathering).
+7. The use button uses the spot in reach: see [Village gathering](Village-gathering). With no spot in reach, it talks to the villager in reach: see [Village errands](Village-errands).
 8. The camera's focus follows the player. The eye comes in before a wall, and stays below a ceiling and above the ground. The inside of each house hides while the eye is more than `INSIDE_REACH`, 18 meters, past the house's edge.
 9. The village grows the grass for the camera, and moves the water's clock on.
 10. The weather moves on, and scales the lights and the fog. See [Village weather](Village-weather).
@@ -96,6 +96,7 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 | `clothes.mojo` | The natural dyes, `natural_dye`, `village_outfit` and `dyed_outfit`. |
 | `pad_input.mojo` | `stick`, `gamepad_input`, `keyboard_input` and `combined`. |
 | `gathering.mojo`, `hud.mojo` | What the player gathers, and the heads-up display. See [Village gathering](Village-gathering). |
+| `talk.mojo` | The villagers who talk, and their errands. See [Village errands](Village-errands). |
 | `weather.mojo` | The clouds, the rain and the fog. See [Village weather](Village-weather). |
 | `residents.mojo` | `Body`, `Route`, `wander_route`, `visit`, `Villager`, `Herd`, `ResidentsParameters`, `Flipbook` and `Residents`. |
 | `play.mojo` | `default_residents`, `PlayParameters`, `tree_obstacles` and `VillageGame`. |

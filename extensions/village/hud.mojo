@@ -4,19 +4,24 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """What the village game writes over its frame: the satchel, what the
-player can use, and what the player just gathered.
+player can use, what the player just gathered, what a villager said,
+and the errands the player has taken.
 
-`draw_hud` draws three things on a frame, in pixels, with a font of 5 by 7
+`draw_hud` draws five things on a frame, in pixels, with a font of 5 by 7
 dots that needs no font file:
 
 1. **The satchel.** A panel in the bottom left lists each kind the player
    holds, with a swatch of its color and its count.
-2. **The prompt.** When the player can use a spot, a line in the bottom
-   middle says which button uses it and what it does, such as
-   `E  GATHER HERBS`.
+2. **The prompt.** When the player can use a spot or talk to a villager,
+   a line in the bottom middle says which button uses it and what it
+   does, such as `E  GATHER HERBS`, or `E  TALK TO MAUD`.
 3. **The note.** For two seconds after the player gathers something, a
    line over the prompt says what, such as `+3 BERRIES`. It fades over
    its last half second.
+4. **The speech.** For `SPEECH_SECONDS` after a villager speaks, a panel
+   over the note shows their name and their words.
+5. **The errands.** Each errand taken and not yet done is a line in the
+   top right, such as `HERBS FOR MAUD 2/5`.
 
 Each dot is a square of `hud_scale` pixels, so the text keeps its size
 on the screen at every window's size. Each line has a dark shadow, so it
@@ -36,9 +41,10 @@ from extensions.village.gathering import (
     TRINKET,
     kind_name,
 )
+from extensions.village.talk import SPEECH_SECONDS
 from render.framebuffer import Framebuffer
 
-comptime GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/:"
+comptime GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/:.,!?'-"
 """The characters the font draws, in the order of its rows. Any other
 character is a space."""
 comptime NOTE_SECONDS = Float32(2.0)
@@ -54,7 +60,8 @@ comptime _FONT = (
     + "72222IC HIKOKIH GGGGGGV HRLLHHH HHPLJHH EHHHHHE UHHUGGG EHHHLID UHHUKIH "
     + "FGGE11U V444444 HHHHHHE HHHHHA4 HHHLLLA HHA4AHH HHA4444 V1248GV EHJLPHE "
     + "4C4444E EH1248V V2421HE 26AIV22 VGU11HE 68GUHHE V124888 EHHEHHE EHHF12C "
-    + "044V440 01248G0 0CC0CC0"
+    + "044V440 01248G0 0CC0CC0 00000CC 0000C48 4444404 EH12404 4480000 "
+    + "000V000"
 )
 """The font, a group of seven rows a glyph in the order of `GLYPHS`, each
 row one character of `_DIGITS`: its value's bit 4 is the left dot."""
@@ -258,17 +265,18 @@ def note_text(kind: GatherKind, gives: Int) raises -> String:
     return String("+", gives, " ", kind_name(kind))
 
 
-def note_alpha(age: Float32) -> Float32:
+def note_alpha(age: Float32, seconds: Float32 = NOTE_SECONDS) -> Float32:
     """Return how strongly a note shows, by how long it has shown.
 
     Args:
         age: How long the note has shown, in seconds.
+        seconds: How long the note shows.
 
     Returns:
-        One until the fade begins, then less, to zero at `NOTE_SECONDS`
-        and after.
+        One until the fade begins, `NOTE_FADE` before the end, then less,
+        to zero at `seconds` and after.
     """
-    var left = NOTE_SECONDS - age
+    var left = seconds - age
     if left <= 0:
         return 0
     return min(Float32(1), left / NOTE_FADE)
@@ -280,8 +288,12 @@ def draw_hud(
     prompt: String,
     note: String,
     note_age: Float32,
+    speech: String = String(),
+    speech_age: Float32 = SPEECH_SECONDS,
+    errands: List[String] = List[String](),
 ) raises:
-    """Draw the satchel, the prompt and the note over a frame.
+    """Draw the satchel, the prompt, the note, what a villager said and the
+    errands taken over a frame.
 
     Args:
         frame: The frame, the window's size.
@@ -290,6 +302,10 @@ def draw_hud(
         prompt: What the use button does, or empty for no prompt.
         note: What was just gathered, or empty for no note.
         note_age: How long the note has shown, in seconds.
+        speech: What a villager last said, or empty for nothing. It shows
+            in a panel over the note for `SPEECH_SECONDS`.
+        speech_age: How long it has shown, in seconds.
+        errands: A line for each errand taken, listed in the top right.
 
     Raises:
         Error: Never: each kind's name is known.
@@ -363,4 +379,30 @@ def draw_hud(
             scale,
             GOLD_TEXT,
             alpha,
+        )
+    var said = note_alpha(speech_age, SPEECH_SECONDS)
+    if speech.byte_length() > 0 and said > 0:
+        var width = text_width(speech, scale)
+        var x = (frame.width - width) // 2
+        var y = bottom - 4 * line
+        fill_box(
+            frame,
+            x - 5 * scale,
+            y - 4 * scale,
+            x + width + 5 * scale,
+            y + 11 * scale,
+            SHADOW,
+            0.55 * said,
+        )
+        draw_text(frame, x, y, speech, scale, WHITE_TEXT, said)
+    for row in range(len(errands)):
+        var width = text_width(errands[row], scale)
+        draw_text(
+            frame,
+            frame.width - margin - width,
+            margin + row * line,
+            errands[row],
+            scale,
+            GOLD_TEXT,
+            1,
         )

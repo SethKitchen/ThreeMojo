@@ -21,7 +21,8 @@ and its animals, seen by a third-person camera.
 5. Each resident steps along its route and is posed: see `Residents`.
 6. Each door swings open while someone stands near it, and shut after.
 7. A new press of the use button uses the spot of `Gathering` in reach:
-   see `extensions.village.gathering`.
+   see `extensions.village.gathering`. With no spot in reach, it talks
+   to the villager in reach: see `extensions.village.talk`.
 8. The camera follows the player. Where a wall stands between the
    player and the eye, the eye comes in to stand before the wall, and it
    goes back out slowly when the wall is passed. Under a ceiling, the
@@ -70,6 +71,7 @@ from extensions.village.character import (
 )
 from extensions.village.gathering import GatherParameters, Gathering
 from extensions.village.hud import draw_hud, note_text, use_prompt
+from extensions.village.talk import Speaker, Talk, default_speakers
 from extensions.village.weather import CLEAR, Weather, WeatherKind
 from extensions.village.residents import (
     Body,
@@ -242,8 +244,10 @@ struct PlayParameters(Copyable, Movable):
     var heading: Angle
     # The camera's field of view.
     var field_of_view: Angle
-    # What the player can gather about the village.
+    # What the player can gather about the village, and the villagers
+    # who talk and give errands.
     var gathering: GatherParameters
+    var speakers: List[Speaker]
     # Whether `VillageGame.render` writes the satchel, the prompt and the
     # last note over the frame: see `extensions.village.hud`.
     var hud: Bool
@@ -258,7 +262,8 @@ struct PlayParameters(Copyable, Movable):
         trail who looks toward the houses. He wears a madder-red tunic
         trimmed in weld yellow over a linen shirt, walnut hose and
         leather boots. The village has its default spots to gather, and
-        the heads-up display is on. The weather is clear, and stays so.
+        the heads-up display is on. Its villagers talk and give errands. The
+        weather is clear, and stays so.
 
         Args:
             quality: How finely each part of a frame is drawn.
@@ -278,6 +283,7 @@ struct PlayParameters(Copyable, Movable):
         self.heading = Angle(0.0, RADIAN)
         self.field_of_view = Angle(55.0, DEGREE)
         self.gathering = GatherParameters()
+        self.speakers = default_speakers()
         self.hud = True
         self.weather = CLEAR
         self.weather_cycle = False
@@ -352,6 +358,9 @@ struct VillageGame(Movable):
     var hud: Bool
     var note: String
     var note_age: Float32
+    # The villagers who talk, and how tall each villager is, in meters.
+    var talk: Talk
+    var heads: List[Float32]
     # The weather, and how long its clouds, fog and rain took to draw in
     # the last frame, in milliseconds.
     var weather: Weather
@@ -467,6 +476,16 @@ struct VillageGame(Movable):
             keep_off,
         )
         self.trees.extend(self.gathering.obstacles())
+        self.talk = Talk(
+            scene,
+            assets,
+            self.village.looks,
+            parameters.speakers.copy(),
+            len(parameters.residents.villagers),
+        )
+        self.heads = List[Float32]()
+        for villager in parameters.residents.villagers:
+            self.heads.append(villager.spec.stature.to(METER))
         self.hud = parameters.hud
         self.note = String()
         self.note_age = 0
@@ -548,6 +567,20 @@ struct VillageGame(Movable):
             var kind = gathered.value()
             self.note = note_text(kind, self.gathering.satchel.last)
             self.note_age = 0
+        # The use button talks only where no spot is in reach.
+        var places = List[Vector3]()
+        for index in range(len(self.residents.people)):
+            places.append(self.residents.people[index].position)
+        var free = input.use and self.gathering.focus < 0 and not gathered
+        _ = self.talk.update(
+            scene,
+            feet,
+            places,
+            self.heads,
+            free,
+            self.gathering.satchel,
+            delta,
+        )
         self.view.follow_target(
             Vector3(feet.x, feet.y + FOCUS_HEIGHT, feet.z), delta
         )
@@ -653,17 +686,21 @@ struct VillageGame(Movable):
                 self.prompt(),
                 self.note,
                 self.note_age,
+                self.talk.speech,
+                self.talk.age,
+                self.talk.errands(self.gathering.satchel),
             )
 
     def prompt(self) -> String:
         """Return what the use button does now, for the heads-up display.
 
         Returns:
-            The prompt for the spot the player can use, or an empty
-            string if there is none.
+            The prompt for the spot the player can use, or else for the
+            villager the player can talk to, or an empty string if there
+            is neither.
         """
         var focus = self.gathering.focus
         if focus < 0:
-            return String()
+            return self.talk.prompt()
         ref g = self.gathering.spots[focus]
         return use_prompt(g.spot.kind, g.strikes)
