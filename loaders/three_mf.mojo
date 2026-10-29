@@ -66,9 +66,9 @@ mesh nor components, where three.js reads `undefined` or recurses without
 end.
 """
 
-from std.math import isfinite
+from std.math import isfinite, isnan
 
-from core.ordinal import index_in_count
+from core.ordinal import index_in_count, require_non_negative
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -103,8 +103,6 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from core.ordinal import require_non_negative
-from std.math import isnan
 from std.pathlib import Path
 from units.si import CENTIMETER, FOOT, INCH, METER, MILLIMETER, Length
 

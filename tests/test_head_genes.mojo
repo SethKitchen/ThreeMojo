@@ -74,7 +74,11 @@ from extensions.humanoid.skeleton.head.skin.dimensions import (
     EyeLids,
     HeadSkinField,
 )
-from extensions.humanoid.skeleton.head.skin.scan import ear_weight, warp_ear
+from extensions.humanoid.skeleton.head.skin.scan import (
+    ear_weight,
+    warp_ear,
+    scan_to_template,
+)
 from extensions.humanoid.skeleton.head.skin.geometry import (
     head_skin_from_dimensions,
 )
@@ -89,7 +93,6 @@ from extensions.humanoid.skeleton.head.face_model import (
     LEFT_EYEBALL,
     RIGHT_EYEBALL,
 )
-from extensions.humanoid.skeleton.head.skin.scan import scan_to_template
 from extensions.humanoid.skeleton.morph import (
     IDENTITY_SPREAD,
     HeadMorph,

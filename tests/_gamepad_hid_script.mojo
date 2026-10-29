@@ -44,8 +44,8 @@ from extensions.gamepad.hid_device import (
     CAP_RGB_LED,
     CAP_RUMBLE,
     CAP_TRIGGER_RUMBLE,
+    HidapiDevice,
 )
-from extensions.gamepad.hid_device import HidapiDevice
 from extensions.gamepad.hidapi import HID_DRIVER_NONE, HidGamepad, device_driver
 from extensions.gamepad.joystick import SENSOR_ACCEL, SENSOR_GYRO_R, SensorType
 from extensions.gamepad.linux import default_mapping_database

@@ -48,7 +48,7 @@ again 0.5 s after a failed check.
   the existing 40 m/s fallback. This correction can change trigger extents.
 """
 
-from units.si import Duration
+from units.si import Duration, Length, METER, Velocity
 
 from extensions.carla.quantity_boundary import _nonnegative_si
 
@@ -73,7 +73,6 @@ from extensions.carla.transform import CarlaTransform
 from math.matrix3 import Matrix3
 from math.obb import OBB
 from math.vector3 import Vector3
-from units.si import Length, METER, Velocity
 
 # The clamp margin CARLA keeps from a lane section's ends, in meters.
 comptime _EPSILON = 0.00001

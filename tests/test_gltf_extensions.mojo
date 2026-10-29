@@ -16,7 +16,7 @@ writes the buffer as a base64 data URI.
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.binary import append_little_endian, append_little_endian_u32
-from core.buffer_geometry import POSITION, UV
+from core.buffer_geometry import POSITION, UV, UV1
 from core.object3d import NO_PARENT, Object3D
 from core.scene import Scene
 from lights.light import DIRECTIONAL, POINT, SPOT, directional_light
@@ -32,7 +32,7 @@ from materials.material import (
 from math.vector3 import Vector3
 from render.framebuffer import Color
 from renderers.renderer import Renderer
-from std.math import cos, pi, sin
+from std.math import cos, pi, sin, inf
 from std.memory import bitcast
 from std.testing import (
     TestSuite,
@@ -42,7 +42,7 @@ from std.testing import (
     assert_true,
 )
 from render.srgb import LINEAR, SRGB
-from render.texture import COVERAGE, IGNORED
+from render.texture import COVERAGE, IGNORED, UV_CHANNEL_0, UV_CHANNEL_1
 from units.si import Angle, DEGREE, Length, METER, NANOMETER, RADIAN
 
 comptime TOLERANCE = Float64(1e-5)
@@ -1286,8 +1286,6 @@ def main() raises:
 
 # --- transmission, volume and dispersion ------------------------------------
 
-from std.math import inf
-
 
 def test_transmission_volume_and_dispersion_make_a_glass() raises:
     var assets = Assets()
@@ -1367,9 +1365,6 @@ def test_the_volume_maps_are_read_as_data() raises:
 
 
 # --- occlusion --------------------------------------------------------------
-
-from core.buffer_geometry import UV1
-from render.texture import UV_CHANNEL_0, UV_CHANNEL_1
 
 
 def occluded(material: String, second: String = "VEC2") -> String:

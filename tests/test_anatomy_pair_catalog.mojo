@@ -8,9 +8,11 @@
 from extensions.humanoid.skeleton.leg.tibia.dimensions import TibiaField
 from extensions.humanoid.skeleton.leg.fibula.dimensions import FibulaField
 from extensions.humanoid.skeleton.leg.patella.dimensions import PatellaField
-from extensions.humanoid.skeleton.leg.knee.dimensions import CartilageField
-from extensions.humanoid.skeleton.leg.knee.dimensions import MeniscusField
-from extensions.humanoid.skeleton.leg.knee.dimensions import CollateralField
+from extensions.humanoid.skeleton.leg.knee.dimensions import (
+    CartilageField,
+    MeniscusField,
+    CollateralField,
+)
 from extensions.humanoid.skeleton.leg.muscles.dimensions import MuscleField
 from extensions.humanoid.skeleton.foot.muscles.dimensions import FootMuscleField
 from extensions.humanoid.skeleton.foot.ligaments.dimensions import (

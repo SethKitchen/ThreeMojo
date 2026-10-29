@@ -33,9 +33,8 @@ width and height about its center, and a view offset cuts one tile of a
 larger image out of the zoomed box, as `updateProjectionMatrix` cuts it.
 """
 
-from math.finite import positive_finite
+from math.finite import positive_finite, require_positive_finite
 
-from math.finite import require_positive_finite
 from std.math import isfinite
 from cameras.camera import (
     Camera,

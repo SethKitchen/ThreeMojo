@@ -25,7 +25,7 @@ from math.finite import (
     require_positive_finite,
 )
 from math.utils import clamp
-from std.math import isfinite
+from std.math import isfinite, cos, pi, sin
 from extensions.building.construction import Construction, Glazing
 from extensions.building.ids import (
     ConstructionId,
@@ -74,7 +74,6 @@ from extensions.topology.ids import (
 from extensions.topology.storeys import StoreyComplex, build_storeys
 from extensions.energy.solar import require_latitude, require_longitude
 from generators.utils import Vec3d
-from std.math import cos, pi, sin
 from units.si import (
     Angle64,
     Area64,

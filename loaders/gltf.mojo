@@ -168,18 +168,18 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from std.math import isfinite
+from std.math import isfinite, inf, pi, sqrt
 
-from core.ordinal import index_in_count
-
-from core.extent import require_closed_count
 from core.ordinal import (
+    index_in_count,
     ordinal_valid,
     require_index_in_count,
     require_valid,
     require_non_negative,
     require_positive,
 )
+
+from core.extent import require_closed_count
 
 from core.binary import copy_bytes, little_endian_u16, little_endian_u32
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
@@ -348,7 +348,6 @@ from render.texture import (
 )
 from loaders.image_batch import TextureDecodeSource, decode_textures
 from render.texture_store import TextureId
-from std.math import inf, pi, sqrt
 from std.memory import bitcast
 from std.pathlib import Path
 from units.si import Angle, Duration, Length, METER, NANOMETER, RADIAN, SECOND

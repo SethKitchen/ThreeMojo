@@ -31,6 +31,7 @@ from controls.input import (
     PointerButton,
     SECONDARY,
     WHEEL,
+    pixel_center_ndc,
 )
 from controls.orbit_controls import (
     DOLLY,
@@ -42,7 +43,6 @@ from controls.orbit_controls import (
     _orthographic_view,
     _perspective_view,
 )
-from controls.input import pixel_center_ndc
 from math.vector3 import Vector3
 from std.math import cos, inf, nan, pi, sin, sqrt, tan
 from std.testing import (

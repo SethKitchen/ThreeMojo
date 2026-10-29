@@ -34,7 +34,16 @@ from extensions.carla.quantity_boundary import (
     _finite_si,
     _nonnegative_si,
 )
-from units.si import Velocity
+from units.si import (
+    Velocity,
+    DEGREE,
+    RADIAN,
+    SECOND,
+    Angle,
+    Duration,
+    Length,
+    METER,
+)
 
 from extensions.carla.blueprint import ActorAttributeValue
 from extensions.carla.sensor_attributes import (
@@ -48,7 +57,6 @@ from extensions.carla.sensor_rays import RayScene
 from extensions.carla.transform import CarlaTransform
 from math.vector3 import Vector3
 from std.math import atan2, cos, isfinite, sin, sqrt, tan
-from units.si import DEGREE, RADIAN, SECOND, Angle, Duration, Length, METER
 
 # CARLA's `Math::Pi2<float>()`.
 comptime _TWO_PI = Float32(2.0) * Float32(3.14159265358979323846)

@@ -56,14 +56,13 @@ from controls.input import (
     WHEEL,
 )
 from math.matrix4 import Matrix4
-from math.utils import clamp
+from math.utils import clamp, scaled_side
 from math.quaternion import Quaternion
 from math.spherical import Spherical
 from math.vector3 import Vector3
 from std.math import inf, isfinite, pi, tan
 from units.measure import angle_radians
 from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
-from math.utils import scaled_side
 
 # A change smaller than this, squared, is no change. three.js: `_EPS`.
 comptime EPSILON = Float32(1e-6)

@@ -21,7 +21,7 @@ The expected numbers come from outside this port:
   are real junction roads.
 """
 
-from extensions.carla.actor import ActorId, GREEN, RED, YELLOW
+from extensions.carla.actor import ActorId, GREEN, RED, YELLOW, no_rotation
 from extensions.carla.map import Map, Waypoint
 from extensions.carla.opendrive import load_opendrive
 from extensions.carla.road_info import JuncId, LaneId, RoadId, SectionId
@@ -96,7 +96,6 @@ from extensions.carla.traffic_manager_state import (
     push_waypoint,
     three_point_circle_radius,
 )
-from extensions.carla.actor import no_rotation
 from extensions.carla.physics.quantities import KILOMETER_PER_HOUR
 from math.vector3 import Vector3
 from std.math import isnan, nan, sqrt

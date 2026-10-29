@@ -53,14 +53,16 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.finite import require_finite
-from std.math import atan2
-from math.triangle_normal import _triangle_cross_wide, _finite_triangle
+from std.math import atan2, acos, cos, isfinite, isnan
+from math.triangle_normal import (
+    _triangle_cross_wide,
+    _finite_triangle,
+    _difference_product_wide,
+)
 from math.vector3 import Vector3
 
 
 from math.matrix_determinant import _sum_products as _exact_products
-
-from math.triangle_normal import _difference_product_wide
 
 from math.norm import length3, normalized3, _ordinary_squared
 from math.utils import clamp_unit
@@ -72,7 +74,6 @@ from core.buffer_geometry import (
     TANGENT,
     UV,
 )
-from std.math import acos, cos, isfinite, isnan
 from units.si import Angle, DEGREE
 
 comptime Vec = SIMD[DType.float32, 4]

@@ -26,7 +26,7 @@ from math.polyline import (
     scale_to_length,
 )
 
-from std.math import isfinite
+from std.math import isfinite, ceil, cos, floor, pi, sin, sqrt, trunc
 from math.euler import Euler
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
@@ -41,7 +41,6 @@ from math.norm import (
     rounded_difference,
     _ordinary_squared,
 )
-from std.math import ceil, cos, floor, pi, sin, sqrt, trunc
 from units.si import Angle, RADIAN
 
 

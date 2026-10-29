@@ -30,8 +30,13 @@ format's compression trick, and nothing here compresses.
 from core.binary import append_big_endian
 from core.ordinal import require_positive
 from render.framebuffer import Framebuffer
-from render.png import frame_data, push_be32, push_chunk, push_ihdr
-from render.png import push_signature
+from render.png import (
+    frame_data,
+    push_be32,
+    push_chunk,
+    push_ihdr,
+    push_signature,
+)
 
 # Leave the canvas alone after the frame; the next frame overwrites it.
 comptime DISPOSE_NONE = UInt8(0)

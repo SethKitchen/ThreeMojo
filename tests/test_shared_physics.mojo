@@ -5,8 +5,10 @@
 
 """Shared mechanics, legacy type identity and an anatomy tensor handoff."""
 
-from extensions.carla.physics.body import BodyId as CarlaBodyId
-from extensions.carla.physics.body import RigidBody as CarlaRigidBody
+from extensions.carla.physics.body import (
+    BodyId as CarlaBodyId,
+    RigidBody as CarlaRigidBody,
+)
 from extensions.carla.physics.quantities import Torque as CarlaTorque
 from extensions.carla.physics.shape import Shape as CarlaShape
 from extensions.carla.physics.world import PhysicsWorld as CarlaPhysicsWorld

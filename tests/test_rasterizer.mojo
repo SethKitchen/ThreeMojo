@@ -20,15 +20,21 @@ from materials.material import (
     TOON,
     Blending,
     MaterialKind,
+    BLEND,
+    NO_TEXTURE,
+    OPAQUE,
+    ADD_OPERATION,
+    MIX_OPERATION,
+    MULTIPLY_OPERATION,
+    Combine,
 )
 from math.vector2 import Vector2
-from std.math import inf, isfinite, pi
+from std.math import inf, isfinite, pi, atan2, nan, sqrt
 
 # The intensity that lights a white surface square on to full white: three.js
 # divides every lit term by pi, and so does `Lighting`. See tests/test_light.
 comptime FULL = Float32(pi)
 from render.framebuffer import Color, FloatColor, Framebuffer
-from materials.material import BLEND, NO_TEXTURE, OPAQUE
 from render.texture import (
     CLAMP,
     COVERAGE,
@@ -51,23 +57,17 @@ from render.cube_texture_store import (
     CubeTextureId,
     CubeTextureStore,
 )
-from materials.material import (
-    ADD_OPERATION,
-    MIX_OPERATION,
-    MULTIPLY_OPERATION,
-    Combine,
-)
 from lights.light import ambient_light, directional_light
 from lights.lighting import (
     ROUGHNESS_FLOOR,
     Lighting,
     floored_roughness,
     specular_occlusion,
+    environment_brdf,
 )
 from lights.shadow import ShadowMap
 from core.fog import LINEAR_FOG, FogKind, FogView, exp2_fog, linear_fog
 from render.tonemap import REINHARD_TONE_MAPPING, tone_map
-from std.math import atan2, nan, sqrt
 from units.si import Angle, DEGREE, InverseLength, Length, METER, PER_METER
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -125,6 +125,8 @@ from render.rasterizer import (
     _rows_of,
     rasterize_all,
     rasterize_shaded,
+    check_transmission,
+    check_triangle_maps,
 )
 from std.testing import (
     TestSuite,
@@ -6048,9 +6050,7 @@ def main() raises:
 
 # --- transmission -----------------------------------------------------------
 
-from lights.lighting import environment_brdf
 from math.matrix4 import Matrix4
-from render.rasterizer import check_transmission, check_triangle_maps
 from render.transmission import TransmissionTarget
 
 

@@ -46,7 +46,7 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/CollisionStage.cpp`
 """
 
 from extensions.carla.quantity_boundary import _finite_si, _nonnegative_si
-from std.collections import Optional
+from std.collections import Optional, Dict
 
 from extensions.carla.actor import ActorId, GREEN, NO_ACTOR, OFF
 from extensions.carla.map import _segment_distance_2d_si as segment_distance_2d
@@ -82,7 +82,6 @@ from extensions.carla.traffic_manager_state import (
     get_target_waypoint,
 )
 from math.vector3 import Vector3
-from std.collections import Dict
 from std.math import inf
 from units.si import Length, Length64
 

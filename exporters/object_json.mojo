@@ -207,9 +207,7 @@ from render.raster_state import (
     STENCIL_MAX,
 )
 from render.srgb import SRGB
-from render.texture import FLOAT_TYPE as FLOAT_TEXELS
-from render.texture import Mapping
-from render.texture import Texture
+from render.texture import FLOAT_TYPE as FLOAT_TEXELS, Mapping, Texture
 from render.texture_store import TextureId
 from std.math import ceil, isfinite, sqrt
 from std.pathlib import Path

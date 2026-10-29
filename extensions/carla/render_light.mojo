@@ -37,7 +37,7 @@ The constants are this port's own choices.
 """
 
 from extensions.carla.quantity_boundary import _finite_si, _nonnegative_si
-from units.si import InverseLength
+from units.si import InverseLength, METER, PER_METER, Length
 
 from extensions.carla.render_post import ViewRays
 from extensions.carla.render_sky import cloud_shadow_density
@@ -59,7 +59,6 @@ from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor
 from render.target import RenderTarget
 from std.math import exp, floor, max, min
-from units.si import METER, PER_METER, Length
 
 # The ground's albedo, for the light it bounces up.
 comptime GROUND_ALBEDO = Float32(0.12)

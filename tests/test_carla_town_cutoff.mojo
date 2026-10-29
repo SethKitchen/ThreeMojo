@@ -13,8 +13,7 @@ from tools._process import run_program
 from tools.carla_town_bake import bake_text
 from tools.carla_town_tree import tree_text
 from render.jpeg import decode as decode_jpeg
-from render.png import DecodedImage
-from render.png import decode as decode_png
+from render.png import DecodedImage, decode as decode_png
 
 
 def test_a_higher_cutoff_clears_the_masked_picture() raises:

@@ -46,7 +46,7 @@ from math.scaled_products import (
     _grow_sum,
     _estimate,
 )
-from std.math import isfinite
+from std.math import isfinite, nan, sqrt
 
 
 from math.triangle_normal import _difference_product_wide
@@ -63,7 +63,6 @@ from core.buffer_geometry import (
     UV1,
 )
 from geometries.earcut import triangulate_shape
-from std.math import nan, sqrt
 
 # The most corners a face may have before the reader refuses it.
 comptime MAX_CORNERS = 1 << 24

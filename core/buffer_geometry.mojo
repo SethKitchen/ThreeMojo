@@ -93,11 +93,16 @@ from core.ordinal import (
 
 from math.matrix_determinant import _sum_products as _exact_products
 
-from math.vector3 import _ordinary_transform, _wide_linear_transform
-
-from math.triangle_normal import _difference_product_wide
+from math.vector3 import (
+    _ordinary_transform,
+    _wide_linear_transform,
+    Vector3,
+    append_vector3,
+    vector3_from_float64,
+)
 
 from math.triangle_normal import (
+    _difference_product_wide,
     _ordinary_triangle_cross,
     _triangle_cross_wide,
     _finite_triangle,
@@ -121,7 +126,6 @@ from math.matrix4 import (
 )
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
-from math.vector3 import Vector3, append_vector3, vector3_from_float64
 from std.math import isfinite
 from units.si import Angle, Length, METER
 

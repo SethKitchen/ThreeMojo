@@ -5,12 +5,11 @@
 
 from core.assets import Assets
 from core.object3d import Object3D
-from geometries.sculptor import Sculptor
+from geometries.sculptor import Sculptor, _apply_matrix
 from math.convex_hull import ConvexHull, _Point
 from math.vector3 import Vector3
 from std.math import ldexp, isnan, isfinite
 from std.memory import bitcast
-from geometries.sculptor import _apply_matrix
 from std.testing import TestSuite, assert_equal, assert_true, assert_false
 from tests.test_sculptor import _scene, _bumpy, _camera
 

@@ -102,7 +102,7 @@ from lights.light import (
     point_light,
     spot_light,
 )
-from loaders.bytes import space_tab_line
+from loaders.bytes import space_tab_line, decode_base64
 from loaders.file_path import path_directory
 from loaders.fbx_tree import (
     FBX_BYTES,
@@ -120,7 +120,6 @@ from loaders.fbx_animation import (
     _connections,
     read_fbx_animations,
 )
-from loaders.bytes import decode_base64
 from loaders.model_nodes import (
     authored_color,
     compose,

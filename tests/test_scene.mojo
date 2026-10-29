@@ -6,8 +6,7 @@
 """Tests for `core.object3d` and `core.scene`."""
 
 from core.geometry_store import GeometryId
-from core.object3d import NodeId
-from core.object3d import DEFAULT_UP, NO_PARENT, Object3D, facing
+from core.object3d import NodeId, DEFAULT_UP, NO_PARENT, Object3D, facing
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.projection import look_at
 from math.quaternion import Quaternion

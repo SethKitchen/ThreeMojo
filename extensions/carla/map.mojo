@@ -195,8 +195,7 @@ from extensions.carla.quantity_boundary import (
     _finite_si,
     _nonnegative_si,
 )
-from units.si import DEGREE, Angle, Length, Length64, METER, Velocity64
-from units.si import Angle64
+from units.si import DEGREE, Angle, Length, Length64, METER, Velocity64, Angle64
 
 # CARLA's `EPSILON`: waypoints sit this far inside a section's edges.
 comptime EPSILON = 10.0 * 2.220446049250313e-16

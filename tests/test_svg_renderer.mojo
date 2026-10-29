@@ -51,6 +51,7 @@ from renderers.projector import (
     RENDERABLE_LINE,
     RENDERABLE_SPRITE,
     RenderableKind,
+    Vec,
 )
 from renderers.svg_renderer import (
     HIGH_QUALITY,
@@ -61,7 +62,6 @@ from renderers.svg_renderer import (
     _unit,
     color_style,
 )
-from renderers.projector import Vec
 from std.pathlib import Path
 from std.testing import (
     TestSuite,

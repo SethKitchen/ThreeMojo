@@ -7,8 +7,17 @@
 mapping, and from the keyboard."""
 
 from controls.held_keys import HeldKeys
-from controls.input import ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT, ARROW_UP
-from controls.input import KEY_A, KEY_D, KEY_R, KEY_S, KEY_W
+from controls.input import (
+    ARROW_DOWN,
+    ARROW_LEFT,
+    ARROW_RIGHT,
+    ARROW_UP,
+    KEY_A,
+    KEY_D,
+    KEY_R,
+    KEY_S,
+    KEY_W,
+)
 from extensions.gamepad.web import WebGamepadState, WebHub
 from extensions.village.character import MoveInput, no_input
 from extensions.village.pad_input import (

@@ -52,7 +52,7 @@ from objects.line import LOOP, Line
 from objects.mesh import Mesh
 from objects.points import Points
 from objects.sprite import Sprite
-from render.cube_texture import FACE_COUNT, face_forward
+from render.cube_texture import FACE_COUNT, face_forward, env_rotation
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
     SCENE_ENVIRONMENT,
@@ -68,8 +68,6 @@ from renderers.renderer import Renderer, _BackdropRays, _backdrop_band
 from render.rect import Rect
 from render.tasks import TaskGroup
 from math.matrix4 import Matrix4
-from render.cube_texture import env_rotation
-from render.rect import Rect
 from std.math import pi
 from std.testing import (
     TestSuite,

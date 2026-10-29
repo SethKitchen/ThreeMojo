@@ -17,8 +17,7 @@ from tools.carla_png import png_bytes
 from tools.carla_town_build import build_town
 from tools.carla_town_cube import cube_text
 from render.jpeg import decode as decode_jpeg
-from render.png import DecodedImage
-from render.png import decode as decode_png
+from render.png import DecodedImage, decode as decode_png
 
 
 def test_two_colors_stay_apart_and_share_a_repeated_cell() raises:

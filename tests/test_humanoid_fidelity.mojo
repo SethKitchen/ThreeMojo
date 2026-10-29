@@ -9,7 +9,7 @@ from core.assets import Assets
 from core.object3d import NO_PARENT, Object3D
 from core.buffer_geometry import POSITION
 from core.scene import Scene
-from core.user_data import UserData
+from core.user_data import UserData, user_data_of
 from exporters.gltf import GLB, GLTF_EMBEDDED, GltfExportOptions, export_gltf
 from extensions.humanoid.athleticism import Athleticism
 from extensions.humanoid.fidelity import (
@@ -50,7 +50,6 @@ from extensions.humanoid.rig.game import add_game_humanoid, game_build_settings
 from extensions.humanoid.skeleton.head.hair.styles import HairStyle
 from extensions.humanoid.sex import MALE, Sex
 from extensions.humanoid.spec import HumanoidSpec
-from core.user_data import user_data_of
 from loaders.gltf import load_gltf, read_gltf
 from loaders.json import parse_json
 from tests.test_scratch import TestScratch, temporary_path

@@ -15,8 +15,7 @@ from lights.light import directional_light
 from materials.material import BASIC, Material, toon_material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.framebuffer import Color
-from render.framebuffer import Framebuffer
+from render.framebuffer import Color, Framebuffer
 from render.texture import (
     IGNORED,
     NEAREST,

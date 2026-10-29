@@ -78,7 +78,11 @@ from extensions.carla.traffic_manager_constants import (
     STOPPED_VELOCITY_THRESHOLD,
 )
 from extensions.carla.traffic_manager_localization import LocalizationStage
-from extensions.carla.traffic_manager_map import InMemoryMap, RoadOption
+from extensions.carla.traffic_manager_map import (
+    InMemoryMap,
+    RoadOption,
+    SimpleWaypointIndex,
+)
 from extensions.carla.traffic_manager_parameters import Parameters
 from extensions.carla.traffic_manager_pid import (
     LATERAL_HIGHWAY_PARAM,
@@ -110,7 +114,6 @@ from extensions.carla.traffic_manager_state import (
     TRAFFIC_VEHICLE,
     TrafficLightInfo,
 )
-from extensions.carla.traffic_manager_map import SimpleWaypointIndex
 from extensions.carla.world import World
 from math.vector3 import Vector3
 from std.collections import Dict, Optional

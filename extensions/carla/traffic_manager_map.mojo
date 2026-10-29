@@ -56,7 +56,7 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/InMemoryMap.cpp`,
 """
 
 from extensions.carla.quantity_boundary import _finite_si, _nonnegative_si
-from units.si import Area
+from units.si import Area, DEGREE, Length, METER
 
 from extensions.carla.map import Map, Waypoint
 from extensions.carla.math import vector_angle
@@ -87,7 +87,6 @@ from std.collections import Dict, Optional, Set
 from std.math import isnan
 from std.memory import bitcast
 from std.pathlib import Path
-from units.si import DEGREE, Length, METER
 
 
 # --- ids ------------------------------------------------------------------

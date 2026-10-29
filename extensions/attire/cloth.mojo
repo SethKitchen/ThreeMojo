@@ -48,8 +48,7 @@ from core.buffer_geometry import POSITION, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from extensions.attire.dye import paint
-from extensions.attire.dye import DYE
+from extensions.attire.dye import paint, DYE
 from extensions.attire.fabric import fabric_material
 from extensions.attire.kinds import FabricKind, WOOL, require_fabric_kind
 from extensions.attire.springs import SpringCollider, body_colliders, push_out

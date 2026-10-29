@@ -41,7 +41,7 @@ number, and a file that ends early. An empty line is zero, as
 `Number("")` is in JavaScript.
 """
 
-from std.math import isfinite
+from std.math import isfinite, floor, isnan, nan
 
 from math.rounded_product import rounded_lerp
 from loaders.bytes import ascii_space_at
@@ -49,7 +49,6 @@ from loaders.js_number import js_string_to_number
 from render.exr import half_to_float
 from render.srgb import LINEAR
 from render.texture import BILINEAR, IGNORED, Texture, float_texture
-from std.math import floor, isnan, nan
 from std.memory import bitcast
 from std.pathlib import Path
 from core.ordinal import require_valid, require_positive

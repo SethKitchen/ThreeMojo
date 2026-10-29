@@ -22,8 +22,16 @@ from render.srgb import SRGB
 from render.texture import CLAMP, MIRROR, NEAREST, REPEAT, Texture, Wrap
 from renderers.game_renderer import GameRenderer, STILL_SHADOWS
 from std.testing import TestSuite, assert_true
-from units.si import DEGREE, METER, SECOND, Angle, Duration, Length, PER_METER
-from units.si import InverseLength
+from units.si import (
+    DEGREE,
+    METER,
+    SECOND,
+    Angle,
+    Duration,
+    Length,
+    PER_METER,
+    InverseLength,
+)
 
 comptime WIDTH = 64
 comptime HEIGHT = 48

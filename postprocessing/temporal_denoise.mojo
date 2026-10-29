@@ -54,8 +54,7 @@ from postprocessing.traa import variance_gamma
 from postprocessing.sampling import LightView, nearest_held_index
 from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor
-from std.math import atan, cos, floor, isfinite, max, min, pi, pow, sin
-from std.math import sqrt
+from std.math import atan, cos, floor, isfinite, max, min, pi, pow, sin, sqrt
 
 
 # three.js's `EPSILON`.

@@ -13,12 +13,10 @@ the implementation happens to do.
 
 from math.matrix3 import Matrix3
 from math.vector2 import Vector2
-from render.srgb import UNKNOWN_SPACE, ColorSpace
-from render.texture import Filter, Wrap
-from units.si import Angle, DEGREE
-from render.framebuffer import Color, FloatColor, Framebuffer
-from render.srgb import LINEAR, SRGB, srgb_to_linear
+from render.srgb import UNKNOWN_SPACE, ColorSpace, LINEAR, SRGB, srgb_to_linear
 from render.texture import (
+    Filter,
+    Wrap,
     BILINEAR,
     CLAMP,
     COVERAGE,
@@ -44,6 +42,8 @@ from render.texture import (
     UvPlacement,
     anisotropic_footprint,
 )
+from units.si import Angle, DEGREE
+from render.framebuffer import Color, FloatColor, Framebuffer
 from std.math import inf, nan
 from std.testing import (
     TestSuite,

@@ -23,7 +23,7 @@ from std.testing import (
 )
 
 from tests._tree import tool_mojo
-from tools._owned_process import close_fd, open_at, at_cwd
+from tools._owned_process import close_fd, open_at, at_cwd, c_bytes
 from tools._process import run_program, shell_quote
 from tools._python_json import PyJson, dumps_canonical
 from tools.compiler_telemetry import (
@@ -42,7 +42,6 @@ from tools.compiler_telemetry import (
     run_compiler,
     safe_suite,
 )
-from tools._owned_process import c_bytes
 
 
 def stat_text(

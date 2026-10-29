@@ -35,7 +35,7 @@ a number that is not one, where three.js reads `NaN`, and a table whose
 largest number is not above zero, which three.js divides by zero.
 """
 
-from std.math import isfinite
+from std.math import isfinite, ceil, log2
 
 from loaders.bytes import ascii_digit, js_float_byte_at
 from loaders.js_number import js_string_to_number
@@ -49,7 +49,6 @@ from render.texture import (
     TexelType,
 )
 from render.volume_texture import Data3DTexture, VolumeImage, _check_extent
-from std.math import ceil, log2
 from std.pathlib import Path
 from core.ordinal import require_valid, require_positive
 

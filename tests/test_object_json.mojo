@@ -134,8 +134,15 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle, DEGREE, InverseLength, Length, METER, PER_METER
-from units.si import MILLIMETER
+from units.si import (
+    Angle,
+    DEGREE,
+    InverseLength,
+    Length,
+    METER,
+    PER_METER,
+    MILLIMETER,
+)
 
 comptime TOLERANCE = Float64(1e-5)
 comptime WHITE = Color(255, 255, 255)

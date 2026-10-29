@@ -38,12 +38,11 @@ from core.buffer_geometry import POSITION, BufferGeometry
 from core.scene import Scene
 from extensions.humanoid.rig.game import GameHumanoid
 from materials.material import MaterialId
-from objects.skinned_mesh import SkinnedMesh
+from objects.skinned_mesh import SkinnedMesh, SKIN_INDEX, SKIN_WEIGHT
 from extensions.attire.shell import SkinFrame
 from extensions.humanoid.rig.joints import JOINT_COUNT, HumanoidRig, Joint
 from math.triangle import Triangle
 from math.vector3 import Vector3
-from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
 
 comptime SKIN_CELL = Float32(0.05)
 """The side of one cell of the grid the skin's triangles are filed in, in

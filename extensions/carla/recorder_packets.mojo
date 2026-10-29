@@ -63,7 +63,7 @@ CarlaRecorder.h`, `CarlaRecorderHelpers.cpp`, `CarlaRecorderInfo.h`,
 """
 
 from extensions.carla.quantity_boundary import _nonnegative_si
-from units.si import Duration64
+from units.si import Duration64, DEGREE, Angle
 
 from extensions.carla.actor import ActorId, ActorKind, TrafficLightState
 from extensions.carla.blueprint import ActorAttributeType
@@ -79,7 +79,6 @@ from math.vector3 import Vector3
 from math.vector4 import Vector4
 from std.math import sqrt
 from std.memory import bitcast
-from units.si import DEGREE, Angle
 
 comptime _INT32_MIN = -2147483648
 comptime _INT32_MAX = 2147483647

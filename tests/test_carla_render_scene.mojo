@@ -150,14 +150,13 @@ from extensions.carla.town import (
     wet_color,
     _clear_of_roads,
 )
-from extensions.carla.render_weather import WetSurface
+from extensions.carla.render_weather import WetSurface, SkySettings
 from extensions.carla.render_sky import (
     GROUND,
     NIGHT_ZENITH,
     cloud_density,
     sky_texel,
 )
-from extensions.carla.render_weather import SkySettings
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from extensions.carla.vehicle import (
     LIGHT_BRAKE,

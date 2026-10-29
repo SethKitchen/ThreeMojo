@@ -42,13 +42,9 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import index_in_count
+from core.ordinal import index_in_count, require_non_negative, require_positive
 
 from core.binary import append_little_endian_u32, little_endian_u32
-from core.ordinal import (
-    require_non_negative,
-    require_positive,
-)
 from math.quaternion import quaternion_terms
 from math.norm import (
     dot3,

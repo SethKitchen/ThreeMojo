@@ -13,7 +13,7 @@ its `RollerCoaster.js` builds, run in Node by `three_tools.mjs` beside them.
 from cameras.camera_utils import frame_corners
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.buffer_geometry import BufferGeometry
+from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import box
@@ -32,7 +32,6 @@ from helpers.uvs_debug import (
     uvs_debug,
 )
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import NORMAL, POSITION, UV
 from geometries.roller_coaster import (
     roller_coaster_geometry,
     roller_coaster_lifters_geometry,

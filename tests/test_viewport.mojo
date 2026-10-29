@@ -11,14 +11,13 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
-from materials.material import MaterialId
+from materials.material import MaterialId, BASIC, Material
 from core.scene import Scene
 from geometries.box import cube
 from geometries.plane import plane
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
 from objects.line import Line, STRIP
-from materials.material import BASIC, Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor, Framebuffer

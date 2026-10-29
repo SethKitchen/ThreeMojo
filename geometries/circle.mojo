@@ -56,7 +56,6 @@ from geometries.surface import (
     require_three_segments,
 )
 from math.curve_checks import require_at_least_one
-from math.finite import require_finite
 from std.math import cos, sin
 from units.si import Angle, Length, RADIAN, TURN
 

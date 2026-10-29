@@ -23,7 +23,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.quaternion import Quaternion
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 
 from math.finite import unit_finite
 
@@ -32,7 +32,6 @@ from core.object3d import Object3D
 from materials.material import Material, MaterialId
 from loaders.image_file import decode_image
 from math.matrix4 import Matrix4
-from math.vector3 import vector3_from_float64
 from render.framebuffer import Color, FloatColor
 from render.srgb import ColorSpace
 from render.texture import Alpha, BILINEAR, Texture, Wrap, texture_from

@@ -50,8 +50,6 @@ from extensions.humanoid.skeleton.foot.muscles.dimensions import (
     FootMuscleField,
     foot_muscle_dimensions,
     named_foot_muscles,
-)
-from extensions.humanoid.skeleton.foot.muscles.dimensions import (
     is_tendon as is_foot_tendon,
 )
 from extensions.humanoid.skeleton.leg.assembly import LegAssembly, assemble_leg

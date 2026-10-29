@@ -11,7 +11,7 @@ cheetah. The other species are in `test_animal_species_*`, which import
 `_species` from here, so that the coverage run measures them side by side."""
 
 from extensions.animals.build import Animal, _unwarp, create_animal
-from extensions.animals.coat import CoatSample
+from extensions.animals.coat import CoatSample, Palette
 from extensions.animals.options import (
     ADULT,
     AnimalOptions,
@@ -25,7 +25,6 @@ from extensions.animals.options import (
     animal_options,
     body_random,
 )
-from extensions.animals.coat import Palette
 from extensions.animals.rig import Bone
 from extensions.animals.species.bear import _arc_for, _pick
 from extensions.animals.species.boar import _tusk_paint

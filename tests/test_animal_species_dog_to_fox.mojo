@@ -9,9 +9,14 @@ The dog, eagle, fish and fox are drawn in each morph, sex and age. They
 share `test_animal_species`'s check, and live in a suite of their own so
 that the coverage run measures them beside the others."""
 
-from extensions.animals.options import ADULT, MALE
+from extensions.animals.options import (
+    ADULT,
+    MALE,
+    CROWD,
+    Variant,
+    animal_options,
+)
 from extensions.animals.build import create_animal
-from extensions.animals.options import CROWD, Variant, animal_options
 from extensions.animals.registry import (
     EAGLE,
     FISH,

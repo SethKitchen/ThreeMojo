@@ -46,7 +46,7 @@ The sizes, colors and spacings here are this port's own choices.
 """
 
 from extensions.carla.quantity_boundary import _finite_si
-from units.si import Length64
+from units.si import Length64, DEGREE, METER, RADIAN, Angle, Length
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -148,7 +148,6 @@ from render.srgb import linear_to_srgb
 from render.texture import Texture
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import atan2, cos, isfinite, pow, sin, sqrt
-from units.si import DEGREE, METER, RADIAN, Angle, Length
 from units.temperature import KELVIN, Temperature
 
 # How many procedural trees share a mesh.

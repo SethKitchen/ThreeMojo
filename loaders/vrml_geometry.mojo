@@ -24,10 +24,9 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.finite import stored_float32
-from std.math import isfinite
+from std.math import isfinite, acos, cos, floor, isnan, pi, sin, sqrt
 from math.norm import _ordinary_squared, normalized3, normalized_cross3
 from geometries.earcut import triangulate_shape
-from std.math import acos, cos, floor, isnan, pi, sin, sqrt
 from std.utils.numerics import nan
 
 

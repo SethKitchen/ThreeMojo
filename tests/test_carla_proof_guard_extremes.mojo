@@ -9,8 +9,7 @@ from extensions.carla.curve_rounded_arc import (
 )
 from extensions.carla.curve_rounded_line import _rounded_line_axis_context
 from extensions.carla.curve_sample_dispatch import _try_sample_dispatch_cuts
-from extensions.carla.curve_interval import _next_up
-from extensions.carla.curve_interval import _Interval, _Jet
+from extensions.carla.curve_interval import _next_up, _Interval, _Jet
 from extensions.carla.curve_minimizer_support import _minimizer_support
 from extensions.carla.geometry import _Sample
 from extensions.carla.polynomial import CubicPolynomial

@@ -19,7 +19,7 @@ from extensions.carla.sensor import (
 )
 from extensions.carla.weather import weather_preset
 from geometries.box import box
-from materials.material import BACK_SIDE, Material
+from materials.material import BACK_SIDE, Material, MaterialId
 from math.bounds import Plane
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -34,7 +34,6 @@ from render.texture import (
     float_texture,
 )
 from render.texture_store import TextureId
-from materials.material import MaterialId
 from math.vector2 import Vector2
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from test_carla_render_scene import _renderer, _world

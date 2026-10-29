@@ -29,13 +29,20 @@ from generators.utils import Vec3d
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
 from std.math import cos, pi
-from units.si import DEGREE, METER, Angle, Length
+from units.si import (
+    DEGREE,
+    METER,
+    Angle,
+    Length,
+    KILOPASCAL,
+    Length64,
+    Pressure64,
+)
 from extensions.building.material import concrete
 from extensions.structure.ids import NodeId as StructureNode
 from extensions.structure.kinds import UX, UY, UZ
 from extensions.structure.model import StructuralModel
 from extensions.structure.static import solve_static
-from units.si import KILOPASCAL, Length64, Pressure64
 
 comptime DEFAULT_OUTPUT = "out/shell-analysis.png"
 comptime WIDTH = 240

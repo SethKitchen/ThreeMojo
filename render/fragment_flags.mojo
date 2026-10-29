@@ -31,8 +31,13 @@ sample where the alpha is above a four-by-four ordered threshold. After
 the supersampled frame is averaged, a pixel's coverage follows its alpha.
 """
 
-from materials.nodes import AT_HERE, AT_RIGHT, AT_UP, NodeSource
-from materials.nodes import node_attributes
+from materials.nodes import (
+    AT_HERE,
+    AT_RIGHT,
+    AT_UP,
+    NodeSource,
+    node_attributes,
+)
 from math.sine import fraction
 from math.vector3 import Vector3
 from std.memory import bitcast

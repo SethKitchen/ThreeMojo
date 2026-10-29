@@ -115,11 +115,10 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.ordinal import require_index_in_count, require_non_negative
-from math.norm import length2, squared_length2
+from math.norm import length2, squared_length2, _ordinary_squared
 
 from math.triangle_normal import normal_or_zero
 
-from math.norm import _ordinary_squared
 from cameras.camera import Camera
 from core.assets import Assets
 from core.deform import (

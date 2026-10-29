@@ -61,8 +61,7 @@ three.js finds no target for UASTC HDR with alpha, so this reader
 refuses them too.
 """
 
-from core.ordinal import index_in_count
-from core.ordinal import ordinal_valid
+from core.ordinal import index_in_count, ordinal_valid
 
 from core.binary import copy_bytes, little_endian_u32
 from render.compressed_texture import (

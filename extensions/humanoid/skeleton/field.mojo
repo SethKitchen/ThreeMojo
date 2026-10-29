@@ -10,7 +10,7 @@ builder takes the zero set. The mass sampler classifies the interior.
 This file holds the arithmetic those solids share.
 """
 
-from std.math import isfinite
+from std.math import isfinite, max, min, pi, sqrt
 
 from extensions.humanoid.sex import Sex
 from extensions.humanoid.side import BodySide
@@ -25,7 +25,6 @@ from math.vector3 import (
     midpoint,
     mix_delta3,
 )
-from std.math import max, min, pi, sqrt
 from units.si import Angle, Length
 
 

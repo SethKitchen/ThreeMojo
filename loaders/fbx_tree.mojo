@@ -40,14 +40,14 @@ storage limit per file. Raw and zlib arrays both count at eight bytes per
 value. Source bytes and temporary decompression buffers are additional.
 """
 
-from core.ordinal import index_in_count
-
-from core.binary import copy_bytes, little_endian_uint
 from core.ordinal import (
+    index_in_count,
     ordinal_valid,
     require_valid,
     require_non_negative,
 )
+
+from core.binary import copy_bytes, little_endian_uint
 
 from loaders.js_text import is_js_word
 from loaders.text_number import file_line

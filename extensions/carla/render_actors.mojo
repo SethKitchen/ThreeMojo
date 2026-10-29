@@ -37,7 +37,7 @@ from extensions.carla.quantity_boundary import (
     _positive_si,
     _nonnegative_si,
 )
-from units.si import Velocity
+from units.si import Velocity, DEGREE, METER, Angle, Length
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -84,7 +84,6 @@ from objects.mesh import Mesh
 from render.framebuffer import Color
 from std.collections import Set
 from std.math import cos, pow, sin, sqrt
-from units.si import DEGREE, METER, Angle, Length
 
 # How brightly a lamp glows for each light.
 comptime POSITION_GLOW = Float32(0.6)

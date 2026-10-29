@@ -12,6 +12,7 @@ from core.buffer_geometry import (
     UV,
     TANGENT,
     _wide_tangents,
+    MaterialIndex,
 )
 from core.gaussian_splat_utils import write_covariance
 from geometries.convex import convex
@@ -26,7 +27,6 @@ from geometries.mikktspace import (
     _v,
 )
 from geometries.torus import torus_knot
-from core.buffer_geometry import MaterialIndex
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from std.math import inf, nan, isnan, ldexp

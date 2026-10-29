@@ -8,7 +8,13 @@ from loaders.fbx import _triangulate as fbx_triangulate
 from loaders.ply import _check_convex as ply_convex
 from loaders.lwo import _vertex_normals as lwo_normals
 from loaders.usd_geometry import compute_vertex_normals as usd_normals
-from loaders.svg_path import eigen_decomposition
+from loaders.svg_path import (
+    eigen_decomposition,
+    SvgVector,
+    svg_scale,
+    transform_scale_x,
+    transform_scale_y,
+)
 from math.triangle_normal import normal_or_zero, polygon_normal
 from renderers.renderer import face_normal
 from units.si import Length, METER
@@ -25,12 +31,6 @@ from loaders.ldraw import _face_normal, Vec as LDrawVec
 from loaders.model_nodes import decompose_onto
 from loaders.object_loader import decompose as object_decompose
 from loaders.svg import _svg_angle
-from loaders.svg_path import (
-    SvgVector,
-    svg_scale,
-    transform_scale_x,
-    transform_scale_y,
-)
 from loaders.svg_shapes import (
     _normalize as svg_unit,
     _normal as svg_normal,

@@ -170,15 +170,15 @@ from materials.node_program import (
     require_node_output,
     require_unsigned_width,
 )
-from core.ordinal import index_in_count
-from core.extent import require_closed_count
 from core.ordinal import (
+    index_in_count,
     ordinal_valid,
     require_index_in_count,
     require_valid,
     require_non_negative,
     require_positive,
 )
+from core.extent import require_closed_count
 from core.search import first_match
 
 from lights.shadow import ShadowShape

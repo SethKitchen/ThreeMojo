@@ -66,9 +66,8 @@ coordinates, and the specular and ambient maps. `<polygons>` is read,
 which three.js does not read.
 """
 
-from core.ordinal import index_in_count
-
 from core.ordinal import (
+    index_in_count,
     ordinal_valid,
     require_index_in_count,
     require_valid,

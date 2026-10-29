@@ -46,7 +46,7 @@ CarlaReplayerHelper.cpp`.
 from std.math import isfinite
 
 from extensions.carla.quantity_boundary import _finite_si
-from units.si import Angle64
+from units.si import Angle64, SECOND, Duration, Length, Velocity
 from std.ffi import external_call
 
 from extensions.carla.actor import (
@@ -77,7 +77,6 @@ from extensions.carla.walker import BoneTransformDataIn, WalkerBoneControlIn
 from extensions.carla.weather import WeatherParameters
 from extensions.carla.world import World
 from math.vector3 import Vector3
-from units.si import SECOND, Duration, Length, Velocity
 
 # What `process_event_add` did.
 comptime NOT_CREATED = 0

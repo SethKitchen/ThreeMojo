@@ -19,7 +19,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from extensions.building.construction import Construction, Layer
+from extensions.building.construction import Construction, Layer, double_glazing
 from extensions.building.ids import (
     ConstructionId,
     ElementId,
@@ -34,7 +34,6 @@ from extensions.building.kinds import (
     STORAGE,
     WINDOW,
 )
-from extensions.building.construction import double_glazing
 from extensions.building.material import (
     BuildingMaterial,
     brick,

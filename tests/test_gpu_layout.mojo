@@ -89,8 +89,9 @@ from materials.material import (
     OPAQUE,
     PHYSICAL,
     TOON,
+    DOUBLE_SIDE,
+    Material,
 )
-from materials.material import DOUBLE_SIDE, Material
 from objects.mesh import Mesh
 from materials.nodes import (
     COLOR_NODE as NODES_COLOR,

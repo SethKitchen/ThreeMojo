@@ -158,13 +158,12 @@ from extensions.carla.weather import WeatherParameters
 from extensions.carla.world import World
 from lights.light import directional_light
 from materials.material import BASIC, Material, MaterialId
-from lights.shadow import PCF_SOFT_SHADOW_MAP
+from lights.shadow import PCF_SOFT_SHADOW_MAP, ShadowMap
 from lights.sun_light import SunLight
 from math.vector3 import Vector3
-from lights.shadow import ShadowMap
 from math.noise import ImprovedNoise
 from postprocessing.screen_space import DepthView
-from render.target import OUTPUT_NORMAL
+from render.target import OUTPUT_NORMAL, RenderTarget
 from postprocessing.composer import (
     BLOOM,
     EffectComposer,
@@ -186,7 +185,6 @@ from render.antialias import SUPERSAMPLE
 from render.cube_texture import CubeTexture
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.srgb import srgb_to_linear
-from render.target import RenderTarget
 from render.texture import Texture
 from render.texture_store import NO_TEXTURE, TextureId
 from render.tonemap import ACES_FILMIC_TONE_MAPPING, NO_TONE_MAPPING

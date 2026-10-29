@@ -67,14 +67,14 @@ limits, and explicit zero and nonfinite rules.
 
 from std.math import isfinite
 
-from core.ordinal import index_in_count
-
-from core.binary import copy_byte_range
 from core.ordinal import (
+    index_in_count,
     ordinal_valid,
     require_valid,
     require_non_negative,
 )
+
+from core.binary import copy_byte_range
 from loaders.bytes import bytes_match
 from loaders.text_number import file_line
 from loaders.js_text import split_fields

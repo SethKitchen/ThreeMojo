@@ -5,8 +5,12 @@
 
 """Tests for `materials.material`, `render.texture_store` and `core.assets`."""
 
-from materials.material import BLEND, OPAQUE, Blending, MaterialKind, Side
 from materials.material import (
+    BLEND,
+    OPAQUE,
+    Blending,
+    MaterialKind,
+    Side,
     BASIC,
     DEPTH,
     DISTANCE,
@@ -18,8 +22,6 @@ from materials.material import (
     SHADOW,
     STANDARD,
     TOON,
-)
-from materials.material import (
     DEFAULT_DASH_SIZE,
     DEFAULT_GAP_SIZE,
     DEFAULT_POINT_SIZE,
@@ -38,30 +40,23 @@ from materials.material import (
     sprite_material,
     standard_material,
     toon_material,
-)
-from materials.material import (
     DEFAULT_IRIDESCENCE_IOR,
     DEFAULT_THICKNESS_MAXIMUM,
     DEFAULT_THICKNESS_MINIMUM,
     MaterialId,
-)
-from core.assets import Assets
-from geometries.box import cube
-from materials.material import (
     BACK_SIDE,
-    MaterialId,
     DOUBLE_SIDE,
     FRONT_SIDE,
     Material,
     MaterialStore,
-)
-from materials.material import (
     ADD_OPERATION,
     MIX_OPERATION,
     MULTIPLY_OPERATION,
     Combine,
     combine_light,
 )
+from core.assets import Assets
+from geometries.box import cube
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
     SCENE_ENVIRONMENT,

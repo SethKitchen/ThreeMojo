@@ -12,9 +12,8 @@ fraction is metadata. It is not applied again.
     var report = pelvis_muscle_mass(person, ILIACUS)
 """
 
-from extensions.humanoid.side import BodySide
+from extensions.humanoid.side import BodySide, RIGHT
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.side import RIGHT
 from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     PelvisMuscle,
     PelvisMuscleDimensions,

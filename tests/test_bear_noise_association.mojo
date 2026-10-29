@@ -49,14 +49,14 @@ from extensions.animals.species.bear import (
     smoothstep,
     srgb,
     vnoise3,
-)
-from extensions.animals.species.bear import (
     bear_paint as actual_bear_paint,
     _paint_ear as actual_paint_ear,
     _paint_head as actual_paint_head,
     bear_palette,
+    bear_eye,
+    eye_frame_of,
+    HEAD_O,
 )
-from extensions.animals.species.bear import bear_eye, eye_frame_of, HEAD_O
 from extensions.animals.kit import aperture_local
 from extensions.sdf.distance import almond_distance
 from extensions.animals.options import FEMALE, ADULT
