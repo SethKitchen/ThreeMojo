@@ -579,6 +579,29 @@ def test_polygon_convexity_is_independent_of_finite_scale() raises:
     assert_equal(translated.objects[0].geometry.triangle_count(), 2)
 
 
+def t_junction(x: String, y: String) -> String:
+    """Return a pentagon whose second corner is at `x y`, between the first
+    and the third, near x = 5000."""
+    return (
+        "v 5000.1 0.1 0\nv "
+        + x
+        + " "
+        + y
+        + " 0\nv 5000.7 0.5 0\nv 5000.7 1.5 0\nv 5000.1 1.1 0\nf 1 2 3 4 5\n"
+    )
+
+
+def test_a_corner_straight_in_the_file_is_not_refused_far_away() raises:
+    # The second corner is on the line from the first to the third in the
+    # file, but `Float32` rounding near 5000 moves it off. three.js draws
+    # the fan, and so must this.
+    var straight = parse_obj(t_junction("5000.4", "0.3"))
+    assert_equal(straight.objects[0].geometry.triangle_count(), 3)
+    # A notch of a centimeter is more than rounding, and is refused.
+    with assert_raises(contains="not convex"):
+        _ = parse_obj(t_junction("5000.4", "0.31"))
+
+
 def test_a_file_that_is_not_utf8_reads_as_replacement_characters() raises:
     # A comment and a name in Windows-1252. three.js's `FileLoader` reads
     # each byte that is not UTF-8 as U+FFFD and keeps going.

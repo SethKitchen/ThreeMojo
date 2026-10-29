@@ -83,7 +83,7 @@ from loaders.bytes import bytes_match
 from loaders.text_number import file_line
 from loaders.js_text import split_fields
 
-from math.triangle_normal import _polygon_cross_wide, _triangle_cross_wide
+from loaders.fan import fan_problem
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
@@ -688,42 +688,6 @@ def _names(*names: String) -> List[String]:
     return out^
 
 
-def _check_convex(points: List[Vector3], face: Int) raises:
-    """Refuse a face of four or more corners that a fan from its first
-    corner would not cover: one that is not convex, or has no area.
-
-    The same test as `loaders.obj`'s: the face's normal is Newell's sum
-    over its edges, and each corner of a convex face turns the same way
-    about it, within a millionth of straight.
-
-    Args:
-        points: The corners, in order.
-        face: Which face, for the error.
-
-    Raises:
-        Error: If the face has no area, or a corner turns the wrong way.
-    """
-    var count = len(points)
-    var normal = _polygon_cross_wide(points)
-    var area_squared = (normal * normal).reduce_add()
-    if area_squared == 0:
-        raise Error("PLY face " + String(face) + ": " + "a face has no area")
-    for index in range(count):  # pragma: no branch
-        var turn = _triangle_cross_wide(
-            points[index],
-            points[(index + 1) % count],
-            points[(index + 2) % count],
-        )
-        if (turn * normal).reduce_add() < -1e-6 * area_squared:
-            raise Error(
-                "PLY face "
-                + String(face)
-                + ": "
-                + "a face is not convex, and only a convex face cuts into a"
-                " fan of triangles"
-            )
-
-
 def parse_ply(
     bytes: List[UInt8], options: PlyOptions = PlyOptions()
 ) raises -> BufferGeometry:
@@ -923,7 +887,9 @@ def parse_ply(
                 points.append(
                     Vector3(positions[at], positions[at + 1], positions[at + 2])
                 )
-            _check_convex(points, face)
+            var problem = fan_problem(points)
+            if problem:
+                raise Error("PLY face " + String(face) + ": " + problem)
         for triangle in range(count - 2):  # pragma: no branch
             index.append(corners[first])
             index.append(corners[first + triangle + 1])

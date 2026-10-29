@@ -41,7 +41,7 @@ var shape = assets.geometries.add(model.objects[0].take_geometry())
 | `read_obj(path) -> ObjModel` | Read a file. |
 | `parse_obj(text) -> ObjModel` | Read the text of one. |
 
-OBJ polygon convexity is checked in translated, widened coordinates so small or large finite model scales do not change whether a face is accepted.
+OBJ and PLY check polygon convexity on the exact products of the stored `Float32` corners. Thus the scale of a finite model does not change whether a face is accepted. A corner that turns the wrong way by no more than `Float32` rounding of the file's numbers can explain is accepted. So a corner that is straight in the file, such as a T-junction far from the origin, does not refuse the face.
 
 ## ObjModel and ObjObject
 

@@ -696,6 +696,16 @@ def test_a_polygon_must_be_convex_and_have_area() raises:
     assert_true(
         "no area" in refusal(header + "0 0 0\n1 0 0\n2 0 0\n3 0 0\n4 0 1 2 3\n")
     )
+    # A corner straight in the file, which `Float32` rounding near 5000
+    # moves off the line, is drawn, as three.js draws it.
+    var straight = parse_ply(
+        text_bytes(
+            header.replace("vertex 4", "vertex 5")
+            + "5000.1 0.1 0\n5000.4 0.3 0\n5000.7 0.5 0\n5000.7 1.5 0\n"
+            + "5000.1 1.1 0\n5 0 1 2 3 4\n"
+        )
+    )
+    assert_equal(straight.triangle_count(), 3)
 
 
 # --- a file on disk ----------------------------------------------------------

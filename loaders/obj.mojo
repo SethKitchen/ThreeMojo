@@ -74,6 +74,7 @@ from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
 )
+from loaders.fan import fan_problem
 from loaders.js_text import comment_start, split_fields
 from loaders.text_number import file_line
 from math.vector3 import Vector3
@@ -522,71 +523,6 @@ def _corner_position(
     )
 
 
-def _check_convex(points: List[Vector3], line: Int) raises:
-    """Refuse a polygon of four or more corners that a fan from its first
-    corner would not cover: one that is not convex, or has no area.
-
-    The polygon's normal is Newell's sum over its edges, which is twice
-    its area as a vector and is zero for corners on one line. Each corner
-    then turns the same way about that normal in a convex polygon, and
-    the other way somewhere in a concave one, where a fan triangle would
-    cover the cutout. A corner within a millionth of straight is let
-    through, since a sliver of a triangle draws nothing and a rounded
-    corner should not refuse a file.
-
-    Args:
-        points: The corners, in order.
-        line: Which line, for the error.
-
-    Raises:
-        Error: If the polygon has no area, or a corner turns the wrong
-            way.
-    """
-    var count = len(points)
-    # Widen before subtracting or multiplying. Any product of four finite
-    # Float32 coordinates fits in Float64, including subnormal-scale faces.
-    # Translate first so the normal sum does not depend on world position.
-    var origin = points[0]
-    var wide = List[SIMD[DType.float64, 4]]()
-    for point in points:  # pragma: no branch
-        wide.append(
-            SIMD[DType.float64, 4](
-                Float64(point.x) - Float64(origin.x),
-                Float64(point.y) - Float64(origin.y),
-                Float64(point.z) - Float64(origin.z),
-                0,
-            )
-        )
-    var normal = SIMD[DType.float64, 4](0)
-    for index in range(count):  # pragma: no branch
-        var a = wide[index]
-        var b = wide[(index + 1) % count]
-        normal[0] += (a[1] - b[1]) * (a[2] + b[2])
-        normal[1] += (a[2] - b[2]) * (a[0] + b[0])
-        normal[2] += (a[0] - b[0]) * (a[1] + b[1])
-    var area_squared = (normal * normal).reduce_add()
-    if area_squared == 0:
-        raise Error(_where(line) + "a face has no area")
-    for index in range(count):  # pragma: no branch
-        var a = wide[index]
-        var b = wide[(index + 1) % count]
-        var c = wide[(index + 2) % count]
-        var first = b - a
-        var second = c - b
-        var turn = SIMD[DType.float64, 4](
-            first[1] * second[2] - first[2] * second[1],
-            first[2] * second[0] - first[0] * second[2],
-            first[0] * second[1] - first[1] * second[0],
-            0,
-        )
-        if (turn * normal).reduce_add() < -1e-6 * area_squared:
-            raise Error(
-                _where(line)
-                + "a face is not convex, and only a convex face cuts into a"
-                " fan of triangles"
-            )
-
-
 def _read_face(
     mut part: _Part,
     fields: List[String],
@@ -619,7 +555,9 @@ def _read_face(
         var points = List[Vector3]()
         for which in range(corners):  # pragma: no branch
             points.append(_corner_position(fields[which + 1], vertices, line))
-        _check_convex(points, line)
+        var problem = fan_problem(points)
+        if problem:
+            raise Error(_where(line) + problem)
     # Three corners or more: the loop always runs.
     for triangle in range(corners - 2):  # pragma: no branch
         for which in [0, triangle + 1, triangle + 2]:  # pragma: no branch

@@ -5,7 +5,7 @@
 
 from geometries.torus import torus_knot
 from loaders.fbx import _triangulate as fbx_triangulate
-from loaders.ply import _check_convex as ply_convex
+from loaders.fan import fan_problem
 from loaders.lwo import _vertex_normals as lwo_normals
 from loaders.usd_geometry import compute_vertex_normals as usd_normals
 from loaders.svg_path import (
@@ -409,7 +409,7 @@ def test_loader_and_polygon_normal_builders_keep_small_faces() raises:
             Vector3(0, scale, 0),
         ]
         near3(polygon_normal(points), 0, 0, 1)
-        ply_convex(points, 1)
+        assert_equal(fan_problem(points), "")
         var cut = fbx_triangulate(points)
         assert_equal(len(cut), 6)
         var knot = torus_knot(
