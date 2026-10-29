@@ -1609,6 +1609,36 @@ def test_a_torus_needs_radii_and_segments_and_an_arc() raises:
         _ = torus(two, half, 3, 5592406)
 
 
+def assert_three_js(got: Vector3, x: Float32, y: Float32, z: Float32) raises:
+    """Assert a vector is three.js's, within about one unit in the last
+    place of a number near one."""
+    assert_almost_equal(got.x, x, atol=Float64(2.5e-7))
+    assert_almost_equal(got.y, y, atol=Float64(2.5e-7))
+    assert_almost_equal(got.z, z, atol=Float64(2.5e-7))
+
+
+def test_a_thin_torus_has_three_js_s_normals() raises:
+    """A torus is computed in doubles, as three.js computes it. A normal is
+    the point less the center of the tube, and a thin tube lost digits there
+    in Float32: the normal of vertex 500 was off by 5.6e-5. The expected values are three.js
+    r180's `TorusGeometry` arithmetic in Python doubles, with the arc a
+    Float32 full turn, stored to Float32."""
+    var ring = torus(Length(10, METER), Length(0.01, METER), 12, 48)
+    ref normals = ring.attribute_view(String(NORMAL))
+    assert_three_js(normals.vector3(1), 0.9914448857, 0.1305261999, 0)
+    assert_three_js(normals.vector3(60), 0.1130389646, 0.8586164117, 0.5)
+    assert_three_js(
+        normals.vector3(333), -0.3826835752, 0.9238795042, 1.2246468526e-16
+    )
+    assert_three_js(
+        normals.vector3(500), 0.1294095069, 0.4829629064, -0.8660253882
+    )
+    ref positions = ring.attribute_view(String(POSITION))
+    assert_three_js(
+        positions.vector3(500), 2.5894842148, 9.6640882492, -0.0086602541
+    )
+
+
 # --- torus knot -------------------------------------------------------------
 
 
@@ -1705,6 +1735,33 @@ def test_a_knot_maps_u_along_and_v_around() raises:
     assert_equal(uvs.component(48 * 9, 1), Float32(0))
     assert_equal(uvs.component(knot.vertex_count() - 1, 1), Float32(1))
     assert_texture_coordinates_in_range(knot)
+
+
+def test_a_torus_knot_has_three_js_s_vertices() raises:
+    """The knot's frame is built in doubles from two points 0.01 apart, as
+    three.js builds it. In Float32 that difference kept two or three digits, and vertex
+    300 of the default knot moved 1.1e-5 meters. The expected values are
+    three.js r180's `TorusKnotGeometry` arithmetic in Python doubles, stored
+    to Float32. The seam closes exactly, as it does there."""
+    var knot = torus_knot(Length(1, METER), Length(0.4, METER), 64, 8, 2, 3)
+    ref positions = knot.attribute_view(String(POSITION))
+    ref normals = knot.attribute_view(String(NORMAL))
+    assert_three_js(
+        positions.vector3(9), 1.0698007345, 0.1776716113, 0.0891696289
+    )
+    assert_three_js(
+        normals.vector3(9), -0.9506526589, -0.2769090235, -0.1399317831
+    )
+    assert_three_js(
+        positions.vector3(300), 0.7870314717, -0.1468099952, -0.2944990993
+    )
+    assert_three_js(
+        normals.vector3(300), 0.6888067722, -0.6213885546, -0.3733918667
+    )
+    var first = positions.vector3(0)
+    assert_three_js(first, 1.1000123024, -0.0027999515, -0.0013999990)
+    var last = positions.vector3(584)
+    assert_three_js(last, first.x, first.y, first.z)
 
 
 def test_a_torus_knot_can_be_measured_in_feet() raises:

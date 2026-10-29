@@ -24,6 +24,20 @@ Both close on themselves. `u` runs once along the tube's path and `v` once
 around the tube, and each seam has a vertex on each side for the reason the
 sphere's does: one carries zero and the other one.
 
+## Doubles, as in three.js
+
+Both builders compute in `Float64`, as three.js computes in JavaScript
+numbers. Each product is rounded on its own, as JavaScript rounds it. A
+position, a normal and a texture coordinate is rounded to `Float32` once,
+when it is stored. The knot's frame subtracts two points 0.01 apart along
+the curve. In `Float32` that difference kept about two digits, and the
+vertices moved by about 1e-5 meters. A torus normal subtracts the tube's
+center from a point on it, and a thin tube lost digits the same way.
+
+The arc is an `Angle`, which holds a `Float32`. A full turn is then
+1.7e-7 more than three.js's `Math.PI * 2`, so a full torus can differ
+from three.js's by that fraction of a vertex's distance from the center.
+
 ## Numerical range correction
 
 Finite norm-dependent directions and lengths use scale-safe arithmetic.
@@ -37,8 +51,6 @@ Shape dimensions must be finite before vertices are generated. NaN and
 either infinity raise an error. This differs from the unchecked three.js
 r186 input path. Finite supported inputs keep their existing behavior.
 """
-
-from math.norm import normalized_cross3, _ordinary_squared
 
 from core.buffer_geometry import (
     BufferGeometry,
@@ -54,33 +66,57 @@ from geometries.surface import (
 )
 from geometries.circle import FULL_TURN, check_sweep
 from geometries.grid import grid_index
-from math.vector3 import Vector3, append_vector3, vector3_from_float64
-from std.math import cos, pi, sin
 from math.finite import require_finite
+from math.norm import rounded_dot3, rounded_product
+from std.math import cos, pi, sin, sqrt
 from units.si import Angle, Length
 
 # How far along the knot's parameter the second point is taken, to give the
 # frame a tangent. three.js's step, so the frames and therefore the vertices
 # match.
-comptime KNOT_STEP = Float32(0.01)
+comptime KNOT_STEP = Float64(0.01)
+
+comptime _Vector = SIMD[DType.float64, 4]
+
+
+def _normalized(vector: _Vector) -> _Vector:
+    """Return three.js's `Vector3.normalize`: the vector times one over its
+    length, or the vector itself when its length is zero."""
+    var length = sqrt(
+        rounded_dot3(
+            vector[0], vector[1], vector[2], vector[0], vector[1], vector[2]
+        )
+    )
+    return vector * (1 / (length if length != 0 else 1))
+
+
+def _cross(a: _Vector, b: _Vector) -> _Vector:
+    """Return three.js's `crossVectors(a, b)`, each product rounded."""
+    return _Vector(
+        rounded_product(a[1], b[2]) - rounded_product(a[2], b[1]),
+        rounded_product(a[2], b[0]) - rounded_product(a[0], b[2]),
+        rounded_product(a[0], b[1]) - rounded_product(a[1], b[0]),
+        0,
+    )
 
 
 def _append_tube_vertex(
     mut data: List[Float32],
     mut normals: List[Float32],
     mut uvs: List[Float32],
-    vertex: Vector3,
-    center: Vector3,
-    u: Float32,
-    v: Float32,
+    vertex: _Vector,
+    center: _Vector,
+    u: Float64,
+    v: Float64,
 ):
-    """Append a vertex on a tube, its normal pointing away from `center`."""
-    append_vector3(data, vertex)
-    var normal = vertex - center
-    normal.normalize()
-    append_vector3(normals, normal)
-    uvs.append(u)
-    uvs.append(v)
+    """Append a vertex on a tube, its normal pointing away from `center`.
+    The numbers are rounded to `Float32` here, once each."""
+    var normal = _normalized(vertex - center)
+    for axis in range(3):  # pragma: no branch
+        data.append(Float32(vertex[axis]))
+        normals.append(Float32(normal[axis]))
+    uvs.append(Float32(u))
+    uvs.append(Float32(v))
 
 
 def _require_tube_radii(radius: Float32, tube: Float32, name: String) raises:
@@ -148,30 +184,31 @@ def torus(
     )
     check_sweep(arc)
 
-    var big = radius.value
-    var small = tube.value
+    var big = Float64(radius.value)
+    var small = Float64(tube.value)
+    var sweep = Float64(arc.value)
     var data = List[Float32]()
     var normals = List[Float32]()
     var uvs = List[Float32]()
     # The segment counts were checked above, so every loop runs.
     for row in range(radial_segments + 1):  # pragma: no branch
-        var v = Float32(row) / Float32(radial_segments)
-        var around = v * 2 * Float32(pi)
+        var around = Float64(row) / Float64(radial_segments) * pi * 2
+        var reach = big + rounded_product(small, cos(around))
         for column in range(tubular_segments + 1):  # pragma: no branch
-            var u = Float32(column) / Float32(tubular_segments)
-            var along = u * arc.value
-            var center = Vector3(big * cos(along), big * sin(along), 0)
-            var reach = big + small * cos(around)
+            var along = Float64(column) / Float64(tubular_segments) * sweep
             _append_tube_vertex(
                 data,
                 normals,
                 uvs,
-                Vector3(
-                    reach * cos(along), reach * sin(along), small * sin(around)
+                _Vector(
+                    reach * cos(along),
+                    reach * sin(along),
+                    small * sin(around),
+                    0,
                 ),
-                center,
-                u,
-                v,
+                _Vector(big * cos(along), big * sin(along), 0, 0),
+                Float64(column) / Float64(tubular_segments),
+                Float64(row) / Float64(radial_segments),
             )
 
     var geometry = BufferGeometry()
@@ -190,16 +227,18 @@ def torus(
     return geometry^
 
 
-def _knot_point(u: Float32, p: Int, q: Int, radius: Float32) -> Vector3:
-    """Return the point of three.js's torus knot at parameter `u`."""
+def _knot_point(u: Float64, p: Int, q: Int, radius: Float64) -> _Vector:
+    """Return the point of three.js's torus knot at parameter `u`, three.js's
+    `calculatePositionOnCurve`."""
     var cu = cos(u)
     var su = sin(u)
-    var through = Float32(q) / Float32(p) * u
+    var through = Float64(q) / Float64(p) * u
     var cs = cos(through)
-    return Vector3(
+    return _Vector(
         radius * (2 + cs) * 0.5 * cu,
         radius * (2 + cs) * su * 0.5,
         radius * sin(through) * 0.5,
+        0,
     )
 
 
@@ -248,60 +287,39 @@ def torus_knot(
     if p < 1 or q < 1:
         raise Error("A torus knot's p and q must be at least one")
 
-    var big = radius.value
-    var small = tube.value
+    var big = Float64(radius.value)
+    var small = Float64(tube.value)
     var data = List[Float32]()
     var normals = List[Float32]()
     var uvs = List[Float32]()
     # The segment counts were checked above, so every loop runs.
     for ring in range(tubular_segments + 1):  # pragma: no branch
-        var u = Float32(ring) / Float32(tubular_segments)
-        var along = u * Float32(p) * 2 * Float32(pi)
+        var u = Float64(ring) / Float64(tubular_segments)
+        var along = u * Float64(p) * pi * 2
         var here = _knot_point(along, p, q, big)
         var ahead = _knot_point(along + KNOT_STEP, p, q, big)
         # three.js's frame: the tangent, a direction across the curve taken
         # as the sum of the two points, which works because the knot goes
         # around the origin, and the two cross products, made unit length.
         var tangent = ahead - here
-        var across = ahead + here
-        var binormal = tangent
-        binormal.cross(across)
-        var normal = binormal
-        normal.cross(tangent)
-        if _ordinary_squared(binormal.length_sq()) and _ordinary_squared(
-            normal.length_sq()
-        ):
-            binormal.normalize()
-            normal.normalize()
-        else:
-            var tx = Float64(ahead.x) - Float64(here.x)
-            var ty = Float64(ahead.y) - Float64(here.y)
-            var tz = Float64(ahead.z) - Float64(here.z)
-            var bx = normalized_cross3(
-                tx,
-                ty,
-                tz,
-                Float64(ahead.x) + Float64(here.x),
-                Float64(ahead.y) + Float64(here.y),
-                Float64(ahead.z) + Float64(here.z),
-            )
-            var nx = normalized_cross3(bx[0], bx[1], bx[2], tx, ty, tz)
-            binormal = vector3_from_float64(bx[0], bx[1], bx[2])
-            normal = vector3_from_float64(nx[0], nx[1], nx[2])
+        var binormal = _cross(tangent, ahead + here)
+        var normal = _normalized(_cross(binormal, tangent))
+        binormal = _normalized(binormal)
         for step in range(radial_segments + 1):  # pragma: no branch
-            var v = Float32(step) / Float32(radial_segments)
-            var around = v * 2 * Float32(pi)
+            var v = Float64(step) / Float64(radial_segments)
+            var around = v * pi * 2
             var cx = -small * cos(around)
             var cy = small * sin(around)
-            _append_tube_vertex(
-                data,
-                normals,
-                uvs,
-                here + normal * cx + binormal * cy,
-                here,
-                u,
-                v,
+            var offset = _Vector(
+                rounded_product(cx, normal[0])
+                + rounded_product(cy, binormal[0]),
+                rounded_product(cx, normal[1])
+                + rounded_product(cy, binormal[1]),
+                rounded_product(cx, normal[2])
+                + rounded_product(cy, binormal[2]),
+                0,
             )
+            _append_tube_vertex(data, normals, uvs, here + offset, here, u, v)
 
     var geometry = BufferGeometry()
     indexed_surface(

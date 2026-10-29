@@ -42,7 +42,7 @@ normal products and area weights without narrowing or early product rounding.
 | `core.raycaster` | Geometric face normals use the shared triangle helper. The projected-segment parameter widens its squared-length fallback. |
 | `core.gaussian_splat_utils` | A finite quaternion normalizes before covariance construction. A zero quaternion still means identity. |
 | `geometries.edges`, `geometries.utils`, `geometries.parametric`, `geometries.surface_sampler` | Unit face normals retain original coordinates until the safe cross is computed. Degenerate normals remain zero. |
-| `geometries.loft`, `geometries.torus` | Cap normals and physical-scale knot frames avoid overflow in products before normalization. |
+| `geometries.loft`, `geometries.torus` | Cap normals avoid overflow in products before normalization. Torus normals and knot frames use `Float64`, where no product of `Float32` inputs overflows. |
 | `geometries.mikktspace` | Lengths and unit tangents use shared norms. Extreme edge and UV products widen before multiplication. Nonzero subnormals participate in frame construction. Thin-corner angle weights use original-coordinate crosses when a cosine rounds to one. Invalid faces retain the existing default-frame behavior. |
 | `geometries.simplify`, `geometries.convex_object_breaker` | Vector and tangent normalizers use shared scalar helpers. Simplification edge lengths use the shared length. |
 | `geometries.polyhedron` | Latitude uses a scale-safe horizontal length. |

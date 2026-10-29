@@ -282,6 +282,8 @@ A tube bent around a circle in the xy plane, centered on the origin. The first r
 
 The arc runs from +x toward +y. A full turn is the default. A shorter arc makes a bent pipe with open ends. A grid of more than 16777216 cells is refused.
 
+The arithmetic is three.js's, in doubles, and each number is rounded to `Float32` once when it is stored. So a thin tube keeps its normals. The default arc is a `Float32` full turn, which is 1.7e-7 more than three.js's `Math.PI * 2`. So a vertex of a full torus can be up to 1.7e-7 of its distance from the center away from three.js's.
+
 ## Torus knot
 
 ```mojo
@@ -289,6 +291,8 @@ var trefoil = torus_knot(Length(2.0, METER), Length(0.4, METER), 64, 8, 2, 3)   
 ```
 
 A tube bent around a knot that winds `p` times around the axis and `q` times through the hole. The curve is three.js's. It lies between half and one and a half of the radius from the axis. Vertices run in rings along the curve, one vertex per step around the tube and one more for the seam. Each ring is built in three.js's frame, so a texture lands as it does there. A grid of more than 16777216 cells is refused.
+
+The knot is built in doubles, as three.js builds it, and each number is rounded to `Float32` once when it is stored. The frame subtracts two points 0.01 apart along the curve, and `Float32` arithmetic there moved the vertices by about 1e-5 meters.
 
 ## Polyhedra
 
