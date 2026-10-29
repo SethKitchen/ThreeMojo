@@ -206,7 +206,7 @@ scene.update_lods(camera_position)                  # before each frame
 | `remove_level(distance) -> Optional[NodeId]` | Remove the first level at a distance, and return its node. |
 | `count() -> Int`, `level_at(index) -> LodLevel` | The levels, nearest first. |
 | `current_level() -> Int` | The level last chosen. three.js's `getCurrentLevel`. |
-| `level_for(distance) -> Int` | Which level shows from `distance` with no memory, or -1 with no levels. three.js's `getObjectForDistance`. |
+| `level_for(distance) -> Int` | Which level shows from `distance`, or -1 with no levels. The shown level keeps its hysteresis. three.js's `getObjectForDistance`. |
 | `level_from(distance, shown) -> Int` | Which level shows from `distance` when `shown` shows now. Hysteresis applies. |
 | `update(distance) -> Int` | Choose the level from `distance` and remember it in `shown`. |
 | `shown` | The level last chosen. Zero at first. |

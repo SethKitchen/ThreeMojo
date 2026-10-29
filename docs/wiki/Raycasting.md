@@ -106,7 +106,7 @@ The mesh as it is drawn, not as it was modelled. A mesh wearing a [morph target]
 
 They did not always. Rendering wore the targets and picking did not. The drawn shape could not be hit, and the modelled one could be hit where nothing was.
 
-An [instanced mesh](Meshes-and-assets#instancedmesh) is picked instance by instance. Each instance is tested at the node's transform times its own. A [batched mesh](Meshes-and-assets#batchedmesh) is picked the same way, with each instance's own geometry. An [LOD](Meshes-and-assets#lod) is picked on one level. That level is the one the distance from the ray's origin to the node picks with no memory, as three.js's `LOD.raycast` does.
+An [instanced mesh](Meshes-and-assets#instancedmesh) is picked instance by instance. Each instance is tested at the node's transform times its own. A [batched mesh](Meshes-and-assets#batchedmesh) is picked the same way, with each instance's own geometry. An [LOD](Meshes-and-assets#lod) is picked on one level. That level is the one the distance from the ray's origin to the node picks. The level shown now keeps its hysteresis, as three.js's `LOD.raycast` does.
 
 A [skinned mesh](Skinning) is picked where its bones carry it, after its morph targets. The renderer and the raycaster both ask `core/deform.mojo` for the posed bones and the matrix that carries each vertex.
 

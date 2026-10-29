@@ -60,9 +60,9 @@ not be hit and the modelled one could be hit where nothing was.
 each at the node's transform times its own, and the hit says which in
 `instance`, three.js's `instanceId`; a batched mesh the same, with each
 instance's own geometry, three.js's `batchId`. An LOD is picked on the
-level its distance from the ray's origin picks with no memory, three.js's
-`LOD.raycast` through `getObjectForDistance`, and `instance` says which
-level. A hit's `kind` says which of the scene's lists `index` counts in,
+level its distance from the ray's origin picks, with the shown level's
+hysteresis, three.js's `LOD.raycast` through `getObjectForDistance`, and
+`instance` says which level. A hit's `kind` says which of the scene's lists `index` counts in,
 and `mesh` is the shape struck as a `Mesh`: its node, geometry and
 material, whatever list it came from.
 
@@ -694,7 +694,8 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             index: Which, as its position in `scene.instanced_meshes`.
 
         Returns:
-            The hits, nearest first, across every instance.
+            The hits, nearest first, across every instance. An instance
+            whose transform projects or scales an axis to nothing has none.
 
         Raises:
             Error: If no instanced mesh has that index, or for anything
@@ -709,6 +710,8 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             mesh.morph_influences = group.morph_at(instance)
             var placed = Matrix4(copy=world)
             placed.multiply(group.matrix_at(instance))
+            if not _pickable(placed):
+                continue
             hits.extend(
                 self._intersect_shape(
                     scene, assets, mesh, placed, INSTANCED_HIT, index, instance
@@ -731,7 +734,8 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             index: Which, as its position in `scene.batched_meshes`.
 
         Returns:
-            The hits, nearest first, across every instance.
+            The hits, nearest first, across every instance. An instance
+            whose transform projects or scales an axis to nothing has none.
 
         Raises:
             Error: If no batched mesh has that index, or for anything
@@ -755,6 +759,8 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             )
             var placed = Matrix4(copy=world)
             placed.multiply(batch.matrix_at(instance))
+            if not _pickable(placed):
+                continue
             hits.extend(
                 self._intersect_shape(
                     scene, assets, mesh, placed, BATCHED_HIT, index, instance
@@ -767,9 +773,9 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         self, scene: Scene, assets: Assets, index: Int
     ) raises -> List[Hit]:
         """Return every place this ray meets one LOD, nearest first,
-        three.js's `LOD.raycast`: the level tested is the one the distance
-        from the ray's origin to the node picks with no memory, and a
-        hit's `instance` says which level that was.
+        three.js's `LOD.raycast`: the level tested is the one
+        `Lod.level_for` picks from the distance between the ray's origin
+        and the node, and a hit's `instance` says which level that was.
 
         three.js calls the level object's own `raycast`, so the meshes on
         the level's node are tested and its descendants are not. A level
@@ -1535,17 +1541,17 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             The hits, nearest first, across every object on a layer this
             raycaster tests.
 
-        A mesh whose world transform projects, as a shadow mesh's does, or
-        scales an axis to nothing has no hit, as in three.js, where its
-        inverse is the zero matrix. `intersect_mesh` refuses such a mesh.
+        A mesh, a skinned mesh or an instance whose world transform
+        projects, as a shadow mesh's does, or scales an axis to nothing has
+        no hit, as in three.js, where its inverse is the zero matrix.
+        `intersect_mesh` and `intersect_skinned_mesh` refuse such a mesh.
 
         Raises:
             Error: For anything the pickers above raise for.
         """
         var hits = List[Hit]()
         for index in range(len(scene.meshes)):
-            var world = scene.world_matrix(scene.meshes[index].node)
-            if not world.is_affine() or not world.has_extent():
+            if not _pickable(scene.world_matrix(scene.meshes[index].node)):
                 continue
             hits.extend(self.intersect_mesh(scene, assets, index))
         for index in range(len(scene.instanced_meshes)):
@@ -1555,6 +1561,9 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         # An LOD's levels are nodes whose meshes are in `scene.meshes`:
         # the shown level is picked there, once.
         for index in range(len(scene.skinned_meshes)):
+            ref node = scene.skinned_meshes[index].node
+            if not _pickable(scene.world_matrix(node)):
+                continue
             hits.extend(self.intersect_skinned_mesh(scene, assets, index))
         for index in range(len(scene.lines)):
             hits.extend(self.intersect_line(scene, assets, index))
@@ -1648,6 +1657,16 @@ def _within_on_image(
     var closest = from_point + span * share
     var depth = mix_delta(near_end.z, far_end.z, share)
     return depth >= -1 and depth <= 1 and (target - closest).length() < reach
+
+
+def _pickable(world: Matrix4) -> Bool:
+    """Return whether a shape at `world` can be struck at all.
+
+    A transform that projects, as a shadow mesh's does, or that scales an
+    axis to nothing has no hit, as in three.js, where its inverse is the
+    zero matrix. Scaling an instance to nothing is how three.js hides one.
+    """
+    return world.is_affine() and world.has_extent()
 
 
 def _sort_by_distance(mut hits: List[Hit]) raises:

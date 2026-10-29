@@ -336,8 +336,7 @@ def skin_pose(scene: Scene, index: Int) raises -> SkinPose:
 
     Raises:
         Error: If no skinned mesh has that index, a bone's node is not
-            there, the scene is stale, or the matrix the bones' result is
-            carried back out of has no inverse.
+            there, or the scene is stale.
     """
     require_skinned_mesh(index, len(scene.skinned_meshes))
     ref skinned = scene.skinned_meshes[index]
@@ -354,8 +353,9 @@ def skin_pose(scene: Scene, index: Int) raises -> SkinPose:
     var undo = Matrix4(copy=skinned.bind_matrix)
     if skinned.bind_mode == ATTACHED:
         undo = scene.world_matrix(skinned.node)
-    if undo.determinant() == 0:
-        raise Error("A skinned mesh has no inverse to undo its bind")
+    # A singular matrix inverts to zeros, as three.js's `bindMatrixInverse`
+    # does: a node scaled to nothing collapses its mesh, and the rest of
+    # the scene is still drawn and picked.
     undo.invert()
     return SkinPose(skinned.skeleton.pose(placed), skinned.bind_matrix, undo)
 

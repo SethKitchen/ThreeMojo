@@ -192,10 +192,11 @@ struct Lod(Copyable, Movable):
         return self.levels[index]
 
     def level_for(self, distance: Length) -> Int:
-        """Return which level shows from `distance` away with no memory,
-        three.js's `getObjectForDistance` when no level has been hidden:
-        the last whose distance has been reached, or the first when none
-        has.
+        """Return which level shows from `distance` away, three.js's
+        `getObjectForDistance`: the last whose distance has been reached,
+        or the first when none has. The level shown now is reached at its
+        distance less its hysteresis's share, as three.js takes it off a
+        visible level's distance. Nothing is recorded.
 
         Args:
             distance: How far the camera is from the node.
@@ -203,7 +204,7 @@ struct Lod(Copyable, Movable):
         Returns:
             The level's index, or -1 when there are no levels.
         """
-        return self.level_from(distance, -1)
+        return self.level_from(distance, self.shown)
 
     def level_from(self, distance: Length, shown: Int) -> Int:
         """Return which level shows from `distance` away when `shown` is

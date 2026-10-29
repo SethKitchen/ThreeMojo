@@ -11,6 +11,7 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
+from core.deform import skin_pose
 from core.object3d import NodeId, Object3D
 from core.raycaster import (
     LINE_HIT,
@@ -147,6 +148,22 @@ def test_a_skinned_mesh_is_picked_where_its_bones_carry_it() raises:
         _ = _down(0, 0).intersect_skinned_mesh(scene, assets, 1)
     with assert_raises(contains="No skinned mesh"):
         _ = _down(0, 0).intersect_skinned_mesh(scene, assets, -1)
+
+
+def test_a_skinned_mesh_scaled_to_nothing_is_hidden() raises:
+    # three.js hides a character by scaling its node to zero. Its bind
+    # inverse is then the zero matrix: the mesh collapses and has no hit,
+    # and nothing that draws or picks the scene raises.
+    var rig = _rigged()
+    ref scene = rig[0]
+    ref assets = rig[1]
+    var body = scene.skinned_meshes[0].node
+    scene.node(body).set_scale(0, 0, 0)
+    scene.update()
+    var pose = skin_pose(scene, 0)
+    for element in range(16):
+        assert_equal(pose.bind_inverse.elements[element], Float32(0))
+    assert_equal(len(_down(5.2, 0.2).intersect_scene(scene, assets)), 0)
 
 
 # --- lines ------------------------------------------------------------------
