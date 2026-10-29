@@ -389,6 +389,8 @@ def test_an_unlit_material_is_basic() raises:
     assert_equal(flat.roughness_map, NO_TEXTURE)
     assert_almost_equal(flat.opacity, Float32(0.5), atol=TOLERANCE)
     assert_true(flat.transparent)
+    # Blended, it writes no depth, as three.js's `loadMaterial` sets it.
+    assert_false(flat.depth_write)
     assert_equal(model.data_textures[1], NO_TEXTURE)
     # Unlit, it shows its texture with no light in the scene at all.
     assert_true(lit_pixels(scene, assets) > 20)

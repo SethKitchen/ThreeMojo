@@ -33,6 +33,12 @@ metallic-roughness texture is one image read twice, as glTF stores it and
 as the standard material reads it: roughness from green, metalness from
 blue.
 
+**Blending.** `alphaMode` `BLEND` sets `transparent` and turns
+`depth_write` off, as three.js's `loadMaterial` does, so a blended surface
+does not hide the blended surfaces behind it. A point or a line takes the
+`depth_write` of the material it is made from, as three.js's
+`Material.copy` copies `depthWrite`.
+
 **Occlusion.** A material's `occlusionTexture` becomes its `ao_map`, and
 its `strength` the `ao_map_intensity`, as three.js reads them. Its red
 channel dims the indirect light. An unlit material reads no occlusion,
@@ -2049,6 +2055,8 @@ struct _Loader(Movable):
                 )
             elif mode != "" and mode != "OPAQUE" and mode != "BLEND":
                 raise Error("glTF: alphaMode must be OPAQUE, MASK or BLEND")
+            # three.js's `loadMaterial` sets `depthWrite = false` for BLEND.
+            built.depth_write = not transparent
             self.model.materials.append(assets.materials.add(built))
             self.model.material_extras.append(self.extras(material))
             self.tinted_materials.append(MaterialId(0))
@@ -3012,31 +3020,33 @@ struct _Loader(Movable):
         """Return the material a primitive of points or lines draws with,
         as three.js's `GLTFLoader` makes a `PointsMaterial` or a
         `LineBasicMaterial` from the file's: its color, opacity and
-        transparency, vertex colors when the primitive carries them, and
-        for points its map and alpha test, at a size of one pixel that
-        does not shrink with distance. A line here carries no map."""
+        transparency and its depth writes, vertex colors when the
+        primitive carries them, and for points its map and alpha test, at
+        a size of one pixel that does not shrink with distance. A line
+        here carries no map."""
         var base = assets.materials.get(self.material_for(index, False, assets))
+        var built: Material
         if mode == MODE_POINTS:
-            return assets.materials.add(
-                points_material(
-                    base.color,
-                    size_attenuation=False,
-                    map=base.map,
-                    alpha_test=base.alpha_test,
-                    opacity=base.opacity,
-                    transparent=base.transparent,
-                    vertex_colors=tinted,
-                )
+            built = points_material(
+                base.color,
+                size_attenuation=False,
+                map=base.map,
+                alpha_test=base.alpha_test,
+                opacity=base.opacity,
+                transparent=base.transparent,
+                vertex_colors=tinted,
             )
-        return assets.materials.add(
-            Material(
+        else:
+            built = Material(
                 base.color,
                 kind=BASIC,
                 opacity=base.opacity,
                 transparent=base.transparent,
                 vertex_colors=tinted,
             )
-        )
+        # three.js's `Material.copy` copies `depthWrite` too.
+        built.depth_write = base.depth_write
+        return assets.materials.add(built)
 
     def _drawn_primitive(
         self, primitives: Int, mesh: Int, slot: Int, refusal: String

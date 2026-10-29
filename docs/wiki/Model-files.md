@@ -407,7 +407,7 @@ To write the user data back, give it to `GltfExportOptions`. See [Exporters](Exp
 |---|---|
 | A primitive of triangles | A `BufferGeometry` with `position`, and `normal`, `uv`, `uv1` and `color` when present, indexed when it is. `TEXCOORD_1` becomes `uv1`. |
 | A primitive of points or lines | A `Points` or a `Line`. See [Points and lines](#points-and-lines). |
-| A material | A `STANDARD` material, or a `BASIC` or `PHYSICAL` one when an [extension](#gltf-extensions) asks. It reads base color and alpha, base color texture, metallic and roughness factors, the metallic-roughness texture as both `roughness_map` and `metalness_map`, normal texture and scale (see [normal maps](#normal-maps)), the [occlusion texture](#occlusion), emissive factor and texture, `doubleSided`. `BLEND` sets `transparent`. `MASK` sets `alpha_test` to `alphaCutoff`. |
+| A material | A `STANDARD` material, or a `BASIC` or `PHYSICAL` one when an [extension](#gltf-extensions) asks. It reads base color and alpha, base color texture, metallic and roughness factors, the metallic-roughness texture as both `roughness_map` and `metalness_map`, normal texture and scale (see [normal maps](#normal-maps)), the [occlusion texture](#occlusion), emissive factor and texture, `doubleSided`. `BLEND` sets `transparent` and turns `depth_write` off, as three.js does. `MASK` sets `alpha_test` to `alphaCutoff`. |
 | A texture | A `Texture` at its sampler's wrap and filters. A base color or emissive map is read as sRGB. A metallic-roughness, normal or occlusion map is read as linear, with its alpha ignored. One glTF texture read both ways is two textures. |
 | A node | An `Object3D` at its translation, rotation and scale, or at its matrix decomposed, with the node's `name`. Each primitive of its mesh is a `Mesh`. |
 | A node with a `skin` | Each primitive of its mesh is a `SkinnedMesh`. See [Skins, morph targets and animations](#skins-morph-targets-and-animations). |
@@ -433,7 +433,7 @@ A primitive of points or lines draws as three.js's `GLTFLoader.loadMesh` draws i
 | `LINE_STRIP`, 3 | `Line` with `STRIP`. |
 | `TRIANGLES`, 4 | `Mesh`. This is the default. |
 
-A point or a line gets a `BASIC` material of its own, as three.js makes a `PointsMaterial` or a `LineBasicMaterial`. It takes the color, the opacity and the transparency of the file's material. It has `vertex_colors` on when the primitive has `COLOR_0`. Points also take the base color texture and the alpha test, at a size of one pixel that does not shrink with distance. A line takes no texture, because a line here has none.
+A point or a line gets a `BASIC` material of its own, as three.js makes a `PointsMaterial` or a `LineBasicMaterial`. It takes the color, the opacity, the transparency and the `depth_write` of the file's material. It has `vertex_colors` on when the primitive has `COLOR_0`. Points also take the base color texture and the alpha test, at a size of one pixel that does not shrink with distance. A line takes no texture, because a line here has none.
 
 An index here holds triangles. Thus the loader copies the vertices of an indexed point or line primitive out in index order, as three.js's `toNonIndexed` does. The morph targets are copied with them.
 

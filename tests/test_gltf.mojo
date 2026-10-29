@@ -1167,6 +1167,9 @@ def test_a_malformed_material_or_texture_is_refused() raises:
     assert_almost_equal(first.normal_scale.y, Float32(-0.5), atol=TOLERANCE)
     assert_equal(first.emissive_map, model.color_textures[1])
     assert_almost_equal(first.alpha_test, Float32(0.5), atol=TOLERANCE)
+    # A masked material is not blended, and writes its depth.
+    assert_false(first.transparent)
+    assert_true(first.depth_write)
     assert_true(model.color_textures[0] != model.data_textures[0])
     assert_equal(model.data_textures[1], NO_TEXTURE)
     var second = assets.materials.get(model.materials[1])
