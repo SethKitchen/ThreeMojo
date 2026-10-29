@@ -70,11 +70,10 @@ comptime TREE_TRUNK = PartId(0)
 comptime TREE_LEAF = PartId(1)
 comptime TREE_GRATE = PartId(2)
 
-# The crown sphere the street tree's clump normals blend toward, in
-# meters.
+# The center of the crown sphere the street tree's clump normals blend
+# toward, in meters.
 comptime CROWN_CENTER_Y = 3.9
 comptime CROWN_CENTER_Z = 0.1
-comptime CROWN_RADIUS = 3.1
 
 
 def _moved(

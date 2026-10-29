@@ -62,8 +62,6 @@ from tools._host import (
     uname_fields,
 )
 
-comptime BASELINE_REVISION = "51b4424ceef57fef1f8a5e787c583126f999baf5"
-"""The baseline commit of the recorded #505 comparison."""
 comptime RUSAGE_MARKER = "THREEMOJO_RUSAGE_V1 "
 """The prefix of the supervisor's one usage line on standard error."""
 comptime MIN_AVAILABLE_BYTES = 3 * 1024 * 1024 * 1024

@@ -250,19 +250,6 @@ def value_str(doc: PyJson, node: Int) raises -> String:
     return value_repr(doc, node)
 
 
-def is_str(doc: PyJson, node: Int) -> Bool:
-    """Return `isinstance(value, str)`.
-
-    Args:
-        doc: The document.
-        node: The value.
-
-    Returns:
-        True for a str.
-    """
-    return doc.kind(node) == PY_STR
-
-
 def is_text(doc: PyJson, node: Int, text: String) -> Bool:
     """Return `value == text` for a str `text`.
 

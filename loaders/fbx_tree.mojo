@@ -64,7 +64,6 @@ comptime MAX_FBX_DEPTH = 256
 comptime BINARY_MAGIC = "Kaydara FBX Binary  \x00"
 # Where a binary file's version is: after the magic and two more bytes.
 comptime BINARY_VERSION_AT = 23
-comptime BINARY_HEADER_BYTES = 27
 # The oldest versions three.js reads.
 comptime MIN_ASCII_VERSION = 7000
 comptime MIN_BINARY_VERSION = 6400

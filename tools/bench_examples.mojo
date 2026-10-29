@@ -4620,11 +4620,6 @@ def _load_catalog(mut tree: JsonTree, root: String) raises -> Int:
     return _parse_json(tree, _read_text(root + "/bench/catalog.json"))
 
 
-def _name_text(tree: JsonTree, item: Int) raises -> String:
-    """Return an entry's name."""
-    return py_str(tree, tree.item(item, "name"))
-
-
 def _write_results(tree: JsonTree, path: String, node: Int) raises:
     """Write results as `json.dumps(value, indent=2) + "\\n"`."""
     Path(path).write_text(dumps(tree, node) + "\n")

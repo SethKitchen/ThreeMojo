@@ -778,26 +778,6 @@ struct JsonTree(Movable):
             raise Error("pop from empty list")
         return self.values[node].items.pop()
 
-    def remove_at(mut self, node: Int, index: Int) raises -> Int:
-        """Remove an array item, as `list.pop(index)` does.
-
-        Args:
-            node: An array.
-            index: The position.
-
-        Returns:
-            The removed item.
-
-        Raises:
-            Error: If the value is not an array or the position is out of
-                range.
-        """
-        if self.kind(node) != ARRAY:
-            raise Error("'" + type_name(self, node) + "' object is not a list")
-        if index < 0 or index >= len(self.values[node].items):
-            raise Error("pop index out of range")
-        return self.values[node].items.pop(index)
-
     def insert(mut self, node: Int, index: Int, child: Int) raises:
         """Insert an array item, as `list.insert(index, child)` does.
 

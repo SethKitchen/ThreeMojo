@@ -122,21 +122,6 @@ def py_split(text: String) -> List[String]:
     return out^
 
 
-def py_strip_empty(text: String) -> Bool:
-    """Return whether `text.strip()` is empty.
-
-    Args:
-        text: The text.
-
-    Returns:
-        True when every byte is whitespace.
-    """
-    for byte in text.as_bytes():
-        if not _is_space(byte):
-            return False
-    return True
-
-
 def is_decimal(text: String) -> Bool:
     """Return `text.isdecimal()` for text whose only digits are ASCII.
 

@@ -382,16 +382,6 @@ def _set_corner(mut face: _T, index: Int, value: Int):
         face.v2 = value
 
 
-def _set_err(mut face: _T, index: Int, value: Float64):
-    """Write one edge error."""
-    if index == 0:
-        face.e0 = value
-    elif index == 1:
-        face.e1 = value
-    else:
-        face.e2 = value
-
-
 def _dot(
     ax: Float64, ay: Float64, az: Float64, bx: Float64, by: Float64, bz: Float64
 ) -> Float64:
