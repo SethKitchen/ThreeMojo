@@ -766,6 +766,8 @@ Welding keeps the draw range and groups because each triangle keeps its place in
 
 `to_creased_normals` makes the geometry non-indexed first. Many triangles can meet at the position of a corner. The corner's normal is the sum of the normals of those that turn from its own triangle by less than the crease angle. The crease angle is sixty degrees unless you give another, as in three.js.
 
+The default is `DEFAULT_CREASE`, an `Angle64` that holds three.js's `Math.PI / 3`. The angle, the turns and the normals are in doubles, as in three.js. This is important where two faces turn by the crease angle itself, as the sides of a six-sided prism do. You can give an `Angle64` or an `Angle`. An `Angle` is widened to an `Angle64`. A `Float32` sixty degrees is a little wider than three.js's, so it can join such faces.
+
 Positions are matched by key, not by distance. The key is each coordinate times one hundred, truncated, as in three.js. Points closer than about a centimeter share a key, whatever the scale of the geometry.
 
 The triangles are summed one by one, and a face of two triangles can count once or twice at a corner. So a rounded cube corner leans toward some faces more than others. three.js gives the same result.

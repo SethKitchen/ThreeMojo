@@ -16,6 +16,7 @@ from core.buffer_geometry import (
     UV,
 )
 from geometries.box import cube
+from geometries.cylinder import cylinder
 from geometries.plane import plane
 from geometries.sphere import sphere
 from geometries.utils import (
@@ -773,6 +774,42 @@ def test_a_sphere_shades_smoothly() raises:
         if abs(place.y) > 0.99:
             continue
         assert_true(place.dot(normals.vector3(vertex)) > 0.99)
+
+
+def test_a_hexagonal_prism_creases_as_three_js_does() raises:
+    """Sides that turn by sixty degrees are joined or kept apart as in
+    three.js.
+
+    Each side of a six-sided prism turns from the next by sixty degrees,
+    within a rounding. three.js's default crease is `Math.PI / 3` in
+    doubles, and its turns are in doubles. The port's crease was a
+    `Float32` sixty degrees, a little wider, and its cosine was rounded.
+    So corner 8 leaned into the next side, to (0.9449, 0, -0.3273). The
+    numbers are three.js r180's `toCreasedNormals` of a
+    `CylinderGeometry( 1, 1, 1, 6, 1, false, 0, Math.fround( 2 * Math.PI ) )`.
+    """
+    var one = Length(1, METER)
+    var creased = to_creased_normals(cylinder(one, one, one, 6, 1))
+    ref normals = creased.attribute_view(String(NORMAL))
+    # three.js joins the two sides at corner 0, and keeps them apart at
+    # corners 8 and 14.
+    var expected: List[Float64] = [
+        -0.18898212909698486,
+        0,
+        0.9819805026054382,
+        1,
+        0,
+        -5.9604641222676946e-8,
+        0.49999991059303284,
+        0,
+        -0.866025447845459,
+    ]
+    var corners: List[Int] = [0, 8, 14]
+    for i in range(3):
+        var normal = normals.vector3(corners[i])
+        assert_almost_equal(Float64(normal.x), expected[i * 3], atol=1e-7)
+        assert_almost_equal(Float64(normal.y), expected[i * 3 + 1], atol=1e-7)
+        assert_almost_equal(Float64(normal.z), expected[i * 3 + 2], atol=1e-7)
 
 
 def test_a_loose_geometry_is_left_alone() raises:

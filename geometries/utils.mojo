@@ -34,7 +34,7 @@ limits, and explicit zero and nonfinite rules.
 
 from core.ordinal import require_positive
 from math.finite import require_non_negative_finite
-from math.triangle_normal import normal_or_zero
+from math.norm import rounded_dot3, rounded_product
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -47,8 +47,8 @@ from core.buffer_geometry import (
 from geometries.attribute_utils import merge_attributes
 from math.vector3 import Vector3
 from std.collections import Dict
-from std.math import cos, isnan, log10
-from units.si import Angle, DEGREE
+from std.math import cos, isnan, log10, sqrt
+from units.si import Angle, Angle64, DEGREE64
 
 # The tolerance three.js's `mergeVertices` defaults to. A plain number and
 # not a `Length`, because it is applied to every attribute in that
@@ -59,8 +59,10 @@ comptime DEFAULT_TOLERANCE = Float64(1e-4)
 # `Number.EPSILON`, which three.js raises a smaller one to.
 comptime EPSILON = Float64(2.220446049250313e-16)
 # The angle three.js's `toCreasedNormals` defaults `creaseAngle` to: a
-# third of a half turn.
-comptime DEFAULT_CREASE = Angle(60.0, DEGREE)
+# third of a half turn, `Math.PI / 3`. It is held in doubles, as three.js
+# holds it. In `Float32` it is a little wider, and the sides of a
+# hexagonal prism, which turn by sixty degrees, come out smooth.
+comptime DEFAULT_CREASE = Angle64(60.0, DEGREE64)
 # What `to_creased_normals` scales a position by before it truncates it:
 # three.js's `(1 + 1e-10) * 1e2`. Points closer than a centimeter or so
 # share a key, whatever the scale of the geometry.
@@ -281,6 +283,42 @@ def merge_vertices(
     return welded^
 
 
+comptime _Vector = SIMD[DType.float64, 4]
+
+
+def _unit(v: _Vector) -> _Vector:
+    """Return three.js's `Vector3.normalize`: the vector times one over its
+    length, or the vector itself when its length is zero."""
+    var length = sqrt(rounded_dot3(v[0], v[1], v[2], v[0], v[1], v[2]))
+    return v * (1 / (length if length != 0 else 1))
+
+
+def _crease_normal(a: Vector3, b: Vector3, c: Vector3) -> _Vector:
+    """Return a face's unit normal as `toCreasedNormals` makes it: the
+    cross product of `c - b` and `a - b`, in doubles, each product rounded,
+    made unit length. A face with no area has a zero normal."""
+    var cb = _Vector(
+        Float64(c.x) - Float64(b.x),
+        Float64(c.y) - Float64(b.y),
+        Float64(c.z) - Float64(b.z),
+        0,
+    )
+    var ab = _Vector(
+        Float64(a.x) - Float64(b.x),
+        Float64(a.y) - Float64(b.y),
+        Float64(a.z) - Float64(b.z),
+        0,
+    )
+    return _unit(
+        _Vector(
+            rounded_product(cb[1], ab[2]) - rounded_product(cb[2], ab[1]),
+            rounded_product(cb[2], ab[0]) - rounded_product(cb[0], ab[2]),
+            rounded_product(cb[0], ab[1]) - rounded_product(cb[1], ab[0]),
+            0,
+        )
+    )
+
+
 def _crease_key(point: Vector3) -> String:
     """Return the key a position is found by in `to_creased_normals`.
 
@@ -300,7 +338,7 @@ def _crease_key(point: Vector3) -> String:
 
 
 def to_creased_normals(
-    geometry: BufferGeometry, crease_angle: Angle = DEFAULT_CREASE
+    geometry: BufferGeometry, crease_angle: Angle64 = DEFAULT_CREASE
 ) raises -> BufferGeometry:
     """Return a geometry with normals smooth across gentle edges and sharp
     across creases, three.js's `toCreasedNormals`.
@@ -312,14 +350,19 @@ def to_creased_normals(
     faces; a sphere shades smoothly; a cylinder does both.
 
     Positions are matched by key, not by distance: see `CREASE_HASH`.
+    The angle, its cosine and the normals are in doubles, as in three.js.
+    Each normal is rounded to `Float32` once, when it is stored. So two
+    faces that turn by about the crease angle are joined or kept apart as
+    three.js does it.
 
     three.js changes a geometry without an index in place and returns it.
     This leaves the geometry given alone and returns a new one.
 
     Args:
         geometry: The surface, which must carry positions.
-        crease_angle: The turn at and past which an edge is a crease. Sixty
-            degrees unless said otherwise, as three.js defaults it.
+        crease_angle: The turn at and past which an edge is a crease.
+            `DEFAULT_CREASE`, sixty degrees, unless said otherwise, as
+            three.js defaults it.
 
     Returns:
         A geometry without an index, with a `normal` for every corner.
@@ -330,14 +373,14 @@ def to_creased_normals(
             if an index entry points past an attribute's last item.
     """
     require_non_negative_finite(
-        Float64(crease_angle.value),
+        crease_angle.value,
         "A crease angle must be a finite angle, zero or more",
     )
     var crease = cos(crease_angle.value)
     var result = geometry.to_non_indexed()
     var count = result.vertex_count()
     var faces = count // 3
-    var normals = List[Vector3]()
+    var normals = List[_Vector]()
     var keys = List[String]()
     var sharing = Dict[String, List[Int]]()
     ref positions = result.attribute_view(String(POSITION))
@@ -347,7 +390,7 @@ def to_creased_normals(
         var c = positions.vector3(face * 3 + 2)
         # three.js's order: from the second corner to the third, crossed
         # with from the second to the first.
-        var normal = normal_or_zero(a, b, c)
+        var normal = _crease_normal(a, b, c)
         normals.append(normal)
         for corner in [a, b, c]:  # pragma: no branch
             var key = _crease_key(corner)
@@ -362,16 +405,41 @@ def to_creased_normals(
         var own = normals[face]
         for corner in range(3):  # pragma: no branch
             var vertex = face * 3 + corner
-            var sum = Vector3(0, 0, 0)
+            var sum = _Vector(0)
             ref others = sharing[keys[vertex]]
             # The corner's own face is in the list, so it is never empty.
             for other in range(len(others)):  # pragma: no branch
                 var normal = normals[others[other]]
-                if own.dot(normal) > crease:
-                    sum.add(normal)
-            sum.normalize()
-            data[vertex * 3] = sum.x
-            data[vertex * 3 + 1] = sum.y
-            data[vertex * 3 + 2] = sum.z
+                var turn = rounded_dot3(
+                    own[0], own[1], own[2], normal[0], normal[1], normal[2]
+                )
+                if turn > crease:
+                    sum += normal
+            sum = _unit(sum)
+            data[vertex * 3] = Float32(sum[0])
+            data[vertex * 3 + 1] = Float32(sum[1])
+            data[vertex * 3 + 2] = Float32(sum[2])
     result.set_attribute(String(NORMAL), BufferAttribute(data^, 3))
     return result^
+
+
+def to_creased_normals(
+    geometry: BufferGeometry, crease_angle: Angle
+) raises -> BufferGeometry:
+    """Return a geometry with normals smooth across gentle edges and sharp
+    across creases, for a crease angle in `Float32`.
+
+    The angle is widened to a double, which is exact, and the work is the
+    work of the `Angle64` form.
+
+    Args:
+        geometry: The surface, which must carry positions.
+        crease_angle: The turn at and past which an edge is a crease.
+
+    Returns:
+        A geometry without an index, with a `normal` for every corner.
+
+    Raises:
+        Error: As the `Angle64` form raises.
+    """
+    return to_creased_normals(geometry, crease_angle.cast[DType.float64]())
