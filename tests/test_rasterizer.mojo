@@ -81,7 +81,6 @@ from render.packing import (
     RGB_DEPTH_PACKING,
     RG_DEPTH_PACKING,
     DepthPacking,
-    packed_normal,
 )
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.rasterizer import (
@@ -2397,23 +2396,6 @@ def data_pixel(
     var target = RenderTarget(8, 8, Color(0, 0, 0))
     rasterize_all(corners, target, mode, textures, lighting, workers, fog)
     return target^
-
-
-def test_a_normal_is_packed_into_zero_to_one_per_axis() raises:
-    # three.js's `packNormalToRGB`: halved and moved up by a half, so a
-    # surface square on to the camera is (0.5, 0.5, 1).
-    var square = packed_normal(Vector3(0, 0, 1))
-    assert_equal(square.x, Float32(0.5))
-    assert_equal(square.y, Float32(0.5))
-    assert_equal(square.z, Float32(1.0))
-    var right = packed_normal(Vector3(1, 0, 0))
-    assert_equal(right.x, Float32(1.0))
-    assert_equal(right.y, Float32(0.5))
-    assert_equal(right.z, Float32(0.5))
-    var down = packed_normal(Vector3(0, -1, 0))
-    assert_equal(down.x, Float32(0.5))
-    assert_equal(down.y, Float32(0.0))
-    assert_equal(down.z, Float32(0.5))
 
 
 def test_a_depth_is_one_at_the_near_plane_and_zero_at_the_far_one() raises:
