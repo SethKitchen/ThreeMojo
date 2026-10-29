@@ -318,6 +318,29 @@ def test_a_disabled_action_does_nothing() raises:
     assert_false(controls.update(camera, _frame()))
 
 
+def test_a_release_while_disabled_ends_the_drag() raises:
+    # three.js's `onPointerUp` does not read `enabled`. An app turns the
+    # controls off while a gizmo drags, and on again after the release.
+    var camera = _camera()
+    var controls = OrbitControls()
+    controls.handle(
+        InputEvent(POINTER_DOWN, button=PRIMARY, x=50, y=50), camera, HEIGHT
+    )
+    controls.enabled = False
+    controls.handle(
+        InputEvent(POINTER_MOVE, button=PRIMARY, x=60, y=50), camera, HEIGHT
+    )
+    controls.handle(
+        InputEvent(POINTER_UP, button=PRIMARY, x=60, y=50), camera, HEIGHT
+    )
+    controls.enabled = True
+    controls.handle(
+        InputEvent(POINTER_MOVE, button=NO_BUTTON, x=85, y=50), camera, HEIGHT
+    )
+    assert_false(controls.update(camera, _frame()))
+    _at(camera, 0, 0, 5)
+
+
 def test_a_move_with_no_button_held_does_nothing() raises:
     var camera = _camera()
     var controls = OrbitControls()

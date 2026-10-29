@@ -122,7 +122,8 @@ struct OrbitControls(Copyable, Movable):
 
     # The point the camera orbits and looks at.
     var target: Vector3
-    # False to ignore all input. `update` still applies what is pending.
+    # False to ignore all input but a release, which ends a drag, as in
+    # three.js. `update` still applies what is pending.
     var enabled: Bool
     # How near the camera can dolly to the target, and how far from it.
     var min_distance: Length
@@ -402,7 +403,8 @@ struct OrbitControls(Copyable, Movable):
         pointer went. Shift or Ctrl swaps a rotation for a pan and a pan
         for a rotation, as in three.js. A wheel notch dollies. An arrow
         pans by `key_pan_speed` pixels, or with Shift or Ctrl rotates. A
-        resize changes nothing here.
+        resize changes nothing here. A release ends a drag also while
+        `enabled` is False, as three.js's `onPointerUp` does.
 
         Args:
             event: The event, with its position in pixels.
@@ -458,14 +460,17 @@ struct OrbitControls(Copyable, Movable):
                 action is invalid.
         """
         require_input(event)
+        if event.kind == POINTER_UP:
+            # three.js's `onPointerUp` does not read `enabled`. So a drag
+            # that the controls were turned off during ends at its release.
+            self._action = NO_ACTION
+            return
         if not self.enabled:
             return
         if event.kind == POINTER_DOWN:
             self._press(event, view)
         elif event.kind == POINTER_MOVE:
             self._move(event, view)
-        elif event.kind == POINTER_UP:
-            self._action = NO_ACTION
         elif event.kind == WHEEL:
             self._wheel(event, view)
         elif event.kind == KEY_DOWN:

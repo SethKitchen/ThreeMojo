@@ -170,7 +170,7 @@ Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y`
 | Member | Default | Meaning |
 |---|---|---|
 | `target` | the origin | The point the camera orbits and looks at. |
-| `enabled` | `True` | False ignores all input. |
+| `enabled` | `True` | False ignores all input but a release. A release ends a drag, as three.js's `onPointerUp` does. |
 | `min_distance`, `max_distance` | 0, infinity | How near and how far the camera can be, as a `Length`. |
 | `min_polar_angle`, `max_polar_angle` | 0, a half turn | How far down from straight above, as an `Angle`. |
 | `min_azimuth_angle`, `max_azimuth_angle` | minus and plus infinity | The limits about y, as an `Angle`. |
