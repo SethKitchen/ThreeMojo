@@ -7,6 +7,7 @@
 
 from math.vector3 import Vector3
 from std.benchmark import black_box
+from std.math import copysign
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -101,6 +102,15 @@ def test_a_vector_and_its_double_cross_to_exactly_zero() raises:
     assert_equal(product.x, Float32(0))
     assert_equal(product.y, Float32(0))
     assert_equal(product.z, Float32(0))
+
+
+def test_a_cross_product_keeps_the_sign_of_a_zero() raises:
+    # In JavaScript, -1 * 0 - 0 * 1 is -0. A binary STL writes that sign.
+    var product = Vector3(1, black_box(Float32(-1)), 0)
+    product.cross(Vector3(1, 1, 0))
+    assert_equal(copysign(Float32(1), product.x), Float32(-1))
+    assert_equal(copysign(Float32(1), product.y), Float32(1))
+    assert_equal(product.z, Float32(2))
 
 
 def test_an_angle_below_what_a_float32_cosine_holds_is_kept() raises:

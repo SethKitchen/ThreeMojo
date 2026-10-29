@@ -53,18 +53,21 @@ def rounded_product[
     Mojo contracts `a * b - c * d` into a fused multiply-add, which rounds
     only one of the two products. JavaScript rounds both, so three.js gets
     an exact zero for two parallel vectors. `fma(a, b, 0)` rounds one
-    product, and nothing can fuse it into the next operation. A zero
-    product is `+0`: adding a `-0` instead would let the compiler drop the
-    addition and fuse the product again.
+    product, and nothing can fuse it into the next operation. Adding a
+    `-0` instead would let the compiler drop the addition and fuse the
+    product again. The sum is `+0` for a zero product, so a zero product
+    is taken from `a * b`, which keeps the sign JavaScript gives it:
+    `-1 * 0` is `-0`.
 
     Args:
         a: The first factor.
         b: The second factor.
 
     Returns:
-        The rounded product.
+        The rounded product, with the sign of a zero kept.
     """
-    return fma(a, b, SIMD[dtype, 1](0))
+    var product = fma(a, b, SIMD[dtype, 1](0))
+    return product if product != 0 else a * b
 
 
 def rounded_difference[
