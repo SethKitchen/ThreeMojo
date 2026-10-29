@@ -23,6 +23,7 @@ from extensions.village.character import (
     MoveInput,
     no_input,
 )
+from extensions.village.day import DayCycle
 from extensions.village.gathering import HERBS, Spot
 from extensions.village.house import HouseParameters, house_lot
 from extensions.village.play import (
@@ -336,6 +337,33 @@ def test_a_player_gathers_and_the_display_says_so() raises:
         _ = game.tick(scene, assets, no_input(), step)
     assert_true(game.village.pond_seen(game.camera))
     game.render(scene, assets)
+
+
+def test_at_night_the_lamps_are_lit_and_the_pond_darkens() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var parameters = _game_parameters()
+    parameters.day = DayCycle(23)
+    var game = VillageGame(
+        scene,
+        assets,
+        Renderer(16, 16),
+        parameters,
+        pebble_bed(_bed()),
+        None,
+        32,
+        18,
+    )
+    # Face the pond, at (0, 4).
+    game.view.yaw = Angle(180.0, DEGREE)
+    var step = Duration(0.1, SECOND)
+    for _ in range(3):
+        _ = game.tick(scene, assets, no_input(), step)
+    assert_true(game.village.pond_seen(game.camera))
+    game.render(scene, assets)
+    assert_equal(game.window.width, 32)
+    assert_true(scene.node(game.village.houses[0].lit).visible)
+    assert_false(scene.node(game.village.houses[0].daylit).visible)
 
 
 def test_a_full_size_frame_is_not_stretched() raises:

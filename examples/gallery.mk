@@ -176,6 +176,9 @@ $(call gallery,village_houses,village_houses,assets/pebbles.jpg)
 # The village from the trail in four weathers: clear, overcast, rain and
 # fog.
 $(call gallery,village_weather,village_weather,assets/pebbles.jpg)
+# The village at five in the afternoon, at sunset, and at night, outside a
+# lit house and in its hall.
+$(call gallery,village_day,village_day,assets/pebbles.jpg)
 # Every procedural animal, one to a tile, turning.
 $(call gallery,animals,animals)
 # A wolf walks one stride, re-meshed in each pose.

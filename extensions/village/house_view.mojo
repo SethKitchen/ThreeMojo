@@ -199,6 +199,10 @@ comptime DADO = Float32(0.95)
 """How high the oak paneling reaches up a room's walls, in meters."""
 comptime PANELING = Vector3(0.95, 1.0, 1.05)
 """The vertex color of the paneling over the wood texture: honey oak."""
+comptime NIGHT_GLASS = Vector3(0.02, 0.03, 0.07)
+"""The color of a pane seen from inside at night, drawn unlit."""
+comptime LAMPLIGHT = Vector3(1.0, 0.66, 0.3)
+"""The color of a window lit from inside at night, drawn unlit."""
 comptime HOOD_REACH = Float32(0.75)
 """How far a door's hood reaches out from its wall, in meters."""
 comptime BRACED_LEAF = Float32(1.2)
@@ -334,6 +338,9 @@ struct _Sheets(Movable):
     var glass: Sheet
     var daylight: Sheet
     var cloth: Sheet
+    var lamplight: Sheet
+    var day_panes: Sheet
+    var night_panes: Sheet
 
     def __init__(out self, facade: Facade):
         var tile = BRICK_TILE
@@ -352,6 +359,9 @@ struct _Sheets(Movable):
         self.glass = Sheet(1)
         self.daylight = Sheet(1)
         self.cloth = Sheet(CLOTH_TILE)
+        self.lamplight = Sheet(1)
+        self.day_panes = Sheet(1)
+        self.night_panes = Sheet(1)
 
 
 def _local(p: Vec3d) -> Vector3:
@@ -797,9 +807,30 @@ def _window(
         2 * across.length(),
         (high - low).length(),
     )
-    sheets.daylight.quad(
+    # From inside, a pane shows the day, or the night.
+    sheets.day_panes.quad(
         low + across, low - across, high - across, high + across, DAYLIGHT
     )
+    sheets.night_panes.quad(
+        low + across, low - across, high - across, high + across, NIGHT_GLASS
+    )
+    # A dwelling's window glows with its lamps at night, from outside.
+    if parameters.use != BARN:
+        var lit = n * 0.01
+        sheets.lamplight.painted_quad(
+            low - across + lit,
+            low + across + lit,
+            high + across + lit,
+            high - across + lit,
+            LAMPLIGHT,
+            LAMPLIGHT,
+            LAMPLIGHT * 0.65,
+            LAMPLIGHT * 0.65,
+            0,
+            0,
+            1,
+            1,
+        )
     var outer = out_sign * half
     # A sill of stone, or of oak on a boarded house.
     var sill_from = face.at(o.u0 - 0.06, o.v0 - 0.025, plane)
@@ -2858,6 +2889,11 @@ struct StandingHouse(Movable):
     # The node of what shows only inside the house: its rooms, its stair,
     # its hearth, its furniture and the inside faces of its walls.
     var inside: NodeId
+    # The node of the windows' lamplight and of the night in their panes,
+    # which shows at night, and the node of the day in their panes, which
+    # shows by day.
+    var lit: NodeId
+    var daylit: NodeId
     # How far the house reaches from its middle, across its plan, in
     # meters.
     var radius: Float32
@@ -2872,6 +2908,8 @@ struct StandingHouse(Movable):
         out self,
         root: NodeId,
         inside: NodeId,
+        lit: NodeId,
+        daylit: NodeId,
         radius: Float32,
         meshes: Int,
         triangles: Int,
@@ -2883,6 +2921,9 @@ struct StandingHouse(Movable):
         Args:
             root: The house's node.
             inside: The node of what shows only inside it.
+            lit: The node of its windows' lamplight, and of the night in
+                their panes, hidden by day.
+            daylit: The node of the day in its windows' panes.
             radius: How far it reaches from its middle, across its plan.
             meshes: How many meshes it added.
             triangles: How many triangles they hold.
@@ -2891,6 +2932,8 @@ struct StandingHouse(Movable):
         """
         self.root = root
         self.inside = inside
+        self.lit = lit
+        self.daylit = daylit
         self.radius = radius
         self.meshes = meshes
         self.triangles = triangles
@@ -3021,8 +3064,9 @@ def stand_house(
         ground: The ground it stands on.
 
     Returns:
-        The house's node and the node of its inside, what it draws, its
-        interior and its doors. The inside casts no shadow.
+        The house's node, the node of its inside, and the nodes of its
+        windows by night and by day, what it draws, its interior and its
+        doors. The inside casts no shadow. The night is hidden.
 
     Raises:
         Error: If the house cannot be drawn.
@@ -3078,6 +3122,25 @@ def stand_house(
     )
     # The inside casts no shadow: a game hides it from far away, and a
     # still shadow map is drawn once.
+    # The windows' lamplight, and the night in the panes seen from inside,
+    # hang from a node of their own, hidden by day. The day in the panes
+    # hangs from another, shown by day.
+    var lamps = Object3D()
+    lamps.parent = root
+    lamps.visible = False
+    var lit = scene.add(lamps^)
+    triangles += _add(
+        scene, assets, sheets.lamplight, looks.daylight, lit, False
+    )
+    triangles += _add(
+        scene, assets, sheets.night_panes, looks.daylight, lit, False
+    )
+    var sun = Object3D()
+    sun.parent = root
+    var daylit = scene.add(sun^)
+    triangles += _add(
+        scene, assets, sheets.day_panes, looks.daylight, daylit, False
+    )
     var room = Object3D()
     room.parent = root
     var inner = scene.add(room^)
@@ -3141,5 +3204,13 @@ def stand_house(
     var meshes = len(scene.meshes) - before
     var radius = sqrt(half_x * half_x + half_z * half_z)
     return StandingHouse(
-        root, inner, radius, meshes, triangles, interior^, hinges^
+        root,
+        inner,
+        lit,
+        daylit,
+        radius,
+        meshes,
+        triangles,
+        interior^,
+        hinges^,
     )

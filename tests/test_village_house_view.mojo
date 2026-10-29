@@ -192,10 +192,15 @@ def test_every_facade_stands_with_its_doors_on_hinges() raises:
         var standing = stand_house(
             scene, assets, looks, house, model, lot, _flat()
         )
-        # Seven sheets of the shell, six of the inside, and a leaf for
-        # each of the two doors.
-        assert_equal(standing.meshes, 15)
-        assert_equal(len(scene.meshes), 15)
+        # Seven sheets of the shell, six of the inside, the windows'
+        # lamplight, their panes by night and by day, and a leaf for each
+        # of the two doors.
+        assert_equal(standing.meshes, 18)
+        assert_equal(len(scene.meshes), 18)
+        assert_true(scene.node(standing.daylit).visible)
+        # The lamplight hangs hidden from a node of its own.
+        assert_false(scene.node(standing.lit).visible)
+        assert_equal(scene.node(standing.lit).parent.value, standing.root.value)
         # The inside hangs from a node of its own, and casts no shadow.
         assert_equal(
             scene.node(standing.inside).parent.value, standing.root.value
@@ -361,7 +366,7 @@ def test_a_wide_window_on_a_framed_wall_and_doors_upstairs() raises:
     var standing = stand_house(scene, assets, looks, house, model, lot, _flat())
     assert_equal(len(standing.hinges), 2)
     # The upstairs door has a leaf too.
-    assert_equal(standing.meshes, 16)
+    assert_equal(standing.meshes, 19)
 
 
 def test_a_boarded_house_with_no_openings() raises:

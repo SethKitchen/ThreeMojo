@@ -31,7 +31,9 @@ and its animals, seen by a third-person camera.
 9. The village prepares the frame: the grass for the camera, and the
    water's clock.
 10. The weather moves on, and scales the lights and the fog: see
-    `extensions.village.weather`.
+    `extensions.village.weather`. The day moves on, and dims and tints
+    them for the hour; the houses' windows glow from dusk to dawn: see
+    `extensions.village.day`.
 
 `VillageGame.render` then draws the frame with `GameRenderer` at the
 quality's size, composes the pond's water into it, and stretches it to the
@@ -71,6 +73,7 @@ from extensions.village.character import (
 )
 from extensions.village.gathering import GatherParameters, Gathering
 from extensions.village.hud import draw_hud, note_text, use_prompt
+from extensions.village.day import DayCycle, dim_water
 from extensions.village.talk import Speaker, Talk, default_speakers
 from extensions.village.weather import CLEAR, Weather, WeatherKind
 from extensions.village.residents import (
@@ -255,6 +258,9 @@ struct PlayParameters(Copyable, Movable):
     # weather by itself: see `extensions.village.weather`.
     var weather: WeatherKind
     var weather_cycle: Bool
+    # The hour the game begins at, and how fast the day moves on: see
+    # `extensions.village.day`.
+    var day: DayCycle
 
     def __init__(out self, quality: GameQuality) raises:
         """Create the default game at a quality: the village with the
@@ -263,7 +269,8 @@ struct PlayParameters(Copyable, Movable):
         trimmed in weld yellow over a linen shirt, walnut hose and
         leather boots. The village has its default spots to gather, and
         the heads-up display is on. Its villagers talk and give errands. The
-        weather is clear, and stays so.
+        weather is clear, and stays so. It is two in the afternoon, and
+        stays so.
 
         Args:
             quality: How finely each part of a frame is drawn.
@@ -287,6 +294,7 @@ struct PlayParameters(Copyable, Movable):
         self.hud = True
         self.weather = CLEAR
         self.weather_cycle = False
+        self.day = DayCycle()
 
 
 def tree_obstacles(
@@ -365,6 +373,8 @@ struct VillageGame(Movable):
     # the last frame, in milliseconds.
     var weather: Weather
     var weather_ms: Float64
+    # The hour of the day.
+    var day: DayCycle
 
     def __init__(
         out self,
@@ -491,6 +501,7 @@ struct VillageGame(Movable):
         self.note_age = 0
         self.weather = Weather(scene, parameters.weather)
         self.weather.cycle = parameters.weather_cycle
+        self.day = parameters.day
         self.weather_ms = 0
         self.clock = 0
         self.village.meadow.register_shadings(self.fast, assets)
@@ -605,9 +616,13 @@ struct VillageGame(Movable):
         )
         # A house's inside shows only to a camera near it: from further
         # away, its windows show little of it.
+        # The houses' lamps are lit from dusk to dawn.
+        var lamps = self.day.daylight() < 0.5
         ref eye_at = self.camera.position
         for index in range(len(self.village.houses)):
             ref house = self.village.houses[index]
+            scene.node(house.lit).visible = lamps
+            scene.node(house.daylit).visible = not lamps
             ref middle = scene.node(house.root).position
             var dx = eye_at.x - middle.x
             var dz = eye_at.z - middle.z
@@ -621,6 +636,14 @@ struct VillageGame(Movable):
         # The meadow's sun sets its lights again as it fits its shadows to
         # the camera, so the weather scales them after.
         self.weather.update(scene, delta, self.view.yaw)
+        # The day dims and tints what the weather set.
+        self.day.advance(delta)
+        ref seen_from = self.camera.position
+        var roofed = (
+            self.terrain.ceiling_over(seen_from.x, seen_from.z, feet.y)
+            < OPEN_SKY
+        )
+        self.day.light(scene, roofed)
         return stats
 
     def render(mut self, scene: Scene, assets: Assets) raises:
@@ -630,8 +653,9 @@ struct VillageGame(Movable):
         water is composed into it if the camera sees the pond. Its edges
         are smoothed if the quality's `smooth_edges` asks, and it is
         stretched over `window`. The window's frame is kept from frame to
-        frame, so it is not allocated again. The weather's clouds and fog
-        cover the frame's sky before the stretch, and its rain falls over
+        frame, so it is not allocated again. The weather's clouds and fog,
+        and the night's darkness and stars, cover the frame's sky before
+        the stretch, and the weather's rain falls over
         the window's frame after it, unless the camera's eye is under a
         roof. If `hud` is set, the satchel, the prompt and the last note
         are written over the window's frame.
@@ -651,11 +675,18 @@ struct VillageGame(Movable):
         # Water that the camera cannot see is not composed: its surface
         # and caustics cost most of the composition.
         if self.village.pond_seen(self.camera):
+            # The water is lit by its own sky: it darkens with the night.
+            var share = self.day.water_light()
+            var dark = share < 1
+            var before = image.depth.copy() if dark else List[Float32]()
             _ = self.village.water.compose(
                 image, scene, self.camera, self.village.level, self.village.bed
             )
+            if dark:
+                dim_water(image, before, share)
         var watered = perf_counter_ns()
         self.weather.cover(image, self.camera)
+        self.day.night_sky(image, self.camera, 1 - self.weather.look.clouds)
         var covered = perf_counter_ns()
         self.render_ms = Float64(drawn - began) / 1.0e6
         self.water_ms = Float64(watered - drawn) / 1.0e6

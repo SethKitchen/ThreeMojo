@@ -77,7 +77,7 @@ The front door is 1 meter wide and 2.1 meters tall. A barn is different: see [Th
 
 The house hangs from one node at its lot's middle, at the floor's height. Its shell shows from outside: its outside walls, its windows and doors, its roof, its plinth and its steps. Its inside hangs from a node of its own, `StandingHouse.inside`. The inside holds the rooms, the stair, the hearth, the furniture, the dressing and the inside faces of the walls. A game can hide the inside from far away. The inside casts no shadow, because a still shadow map is drawn only once.
 
-Each material of the shell is one mesh, and so is each material of the inside. A dwelling with windows is fifteen meshes with its two door leaves.
+Each material of the shell is one mesh, and so is each material of the inside. The windows' lamplight and the night in their panes hang from the node `lit`, hidden by day. The day in their panes hangs from the node `daylit`. See [Village day and night](Village-day). A dwelling with windows is eighteen meshes with its two door leaves.
 
 ## Surfaces
 
