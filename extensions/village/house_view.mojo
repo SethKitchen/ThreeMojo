@@ -35,10 +35,11 @@ it. It draws more of what an eye sees from close by:
    above, with oak trimmers round it. A balustrade guards the well
    upstairs.
 5. **The roof.** A gable roof covers the flat roof of the model: two
-   slopes of tiles or slates with a thickness, boards under the eaves, a
-   fascia, barge boards and a ridge. A gable closes each end, cut into
-   cells as a wall is. A chimney stands over a chimney breast. A barn
-   has a loft door in its east gable, and a hoist beam over it.
+   slopes of tiles or slates with a thickness, weathered by
+   `roof_shade` in cells no larger than `ROOF_CELL`, boards under the
+   eaves, a fascia, barge boards and a ridge. A gable closes each end,
+   cut into cells as a wall is. A chimney stands over a chimney breast.
+   A barn has a loft door in its east gable, and a hoist beam over it.
 6. **The plinth and the steps.** A stone plinth reaches from just below
    the floor to below the lowest ground. Each step of the interior's
    floors is a block of stone.
@@ -83,6 +84,7 @@ from extensions.vegetation.noise import hash01
 from extensions.village.dressing import (
     CANDLE,
     FILL,
+    WROUGHT,
     Glow,
     HEARTH,
     LANTERN,
@@ -149,6 +151,9 @@ comptime VERGE = Float32(0.25)
 """How far the roof reaches past the gables, in meters."""
 comptime ROOF_DEPTH = Float32(0.16)
 """How thick the roof is, from its boards to its tiles, in meters."""
+comptime ROOF_CELL = Float32(0.8)
+"""The widest and longest cell of a roof's slope, in meters: each corner
+of a cell is weathered on its own."""
 comptime PLINTH_DEPTH = Float32(0.4)
 """How far the plinth reaches below the lowest ground, in meters."""
 comptime FRAME_INSET = Float64(0.07)
@@ -194,6 +199,8 @@ comptime DADO = Float32(0.95)
 """How high the oak paneling reaches up a room's walls, in meters."""
 comptime PANELING = Vector3(0.95, 1.0, 1.05)
 """The vertex color of the paneling over the wood texture: honey oak."""
+comptime HOOD_REACH = Float32(0.75)
+"""How far a door's hood reaches out from its wall, in meters."""
 comptime BRACED_LEAF = Float32(1.2)
 """The narrowest door leaf that has diagonal braces between its ledges,
 in meters."""
@@ -269,6 +276,37 @@ def inside_shade(
     var floor = Float32(0.75) + 0.25 * _smooth(v / 0.35)
     var ceiling = Float32(0.8) + 0.2 * _smooth((height - v) / 0.35)
     return side * floor * ceiling
+
+
+def roof_shade(
+    tint: Vector3, x: Float32, share: Float32, run: Float32, seed: Int
+) -> Vector3:
+    """Return the vertex color of a roof at a point: its tint, weathered.
+
+    Args:
+        tint: The roof's tint.
+        x: How far along the roof, in meters.
+        share: How far up the slope, from 0 at the eave to 1 at the ridge.
+        run: The slope's length from the eave to the ridge, in meters.
+        seed: Which patches.
+
+    Returns:
+        The tint, darker and damper at the eave and paler at the ridge,
+        each batch of tiles a little lighter or darker, and green with
+        moss in patches, most near the eave, where the rain runs off
+        slowest.
+    """
+    var v = share * run
+    var weather = Float32(0.78) + 0.24 * share
+    var batch = Float32(0.88) + 0.24 * tiled_noise(
+        x / 0.9 + 30, v / 0.7 + 30, 4096, seed + 5
+    )
+    var c = tint * (weather * batch)
+    var patches = tiled_noise(x / 2.2 + 70, v / 1.6 + 70, 4096, seed + 6)
+    var moss = _smooth((patches - 0.58) / 0.2) * (1 - 0.7 * share) * 0.8
+    var gray = (c.x + c.y + c.z) / 3
+    var green = Vector3(0.7, 1.0, 0.45) * gray * 1.1
+    return c + (green - c) * moss
 
 
 @fieldwise_init
@@ -867,6 +905,89 @@ def _flower_box(
         )
 
 
+def _facing_quad(
+    mut sheet: Sheet,
+    a: Vector3,
+    b: Vector3,
+    c: Vector3,
+    d: Vector3,
+    toward: Vector3,
+    color: Vector3,
+):
+    """Add a quad that faces toward a direction, whichever way its corners
+    run."""
+    var e = b - a
+    var f = d - a
+    var n = Vector3(
+        e.y * f.z - e.z * f.y, e.z * f.x - e.x * f.z, e.x * f.y - e.y * f.x
+    )
+    if n.dot(toward) >= 0:
+        sheet.quad(a, b, c, d, color)
+    else:
+        sheet.quad(b, a, d, c, color)
+
+
+def _door_hood(
+    mut sheets: _Sheets,
+    face: _Face,
+    o: _Opening,
+    half: Float32,
+    out_sign: Float32,
+    tint: Vector3,
+):
+    """Add a hood of tiles on two oak brackets over an outside door, and an
+    iron lantern on an arm beside it."""
+    var wall = out_sign * half
+    var reach = wall + out_sign * HOOD_REACH
+    var u0 = o.u0 - 0.3
+    var u1 = o.u1 + 0.3
+    # The hood stays under the eaves of a low wall.
+    var top = min(o.v1 + 0.8, face.height - 0.08)
+    var low = top - 0.55
+    var up = Vector3(0, 1, 0)
+    var n = face.normal * out_sign
+    # The tiles, sloping down and out, and the boards under them.
+    var a = face.at(u0, top, wall)
+    var b = face.at(u1, top, wall)
+    var c = face.at(u1, low, reach)
+    var d = face.at(u0, low, reach)
+    _facing_quad(sheets.roof, a, b, c, d, up + n, tint)
+    var under = Vector3(0, -0.08, 0)
+    _facing_quad(
+        sheets.wood, a + under, b + under, c + under, d + under, -up, OAK * 0.8
+    )
+    # A cheek of boards closes each end, under the tiles.
+    for end in range(2):
+        var u = u0 + (u1 - u0) * Float32(end)
+        var foot = face.at(u, low, wall)
+        var cheek = face.at(u, top, wall) + under
+        var lip = face.at(u, low, reach) + under
+        var side = face.along * Float32(2 * end - 1)
+        var i0 = sheets.wood.vertex(foot, side, OAK * 0.75, 0, 0)
+        var i1 = sheets.wood.vertex(cheek, side, OAK * 0.75, 0, 0.5)
+        var i2 = sheets.wood.vertex(lip, side, OAK * 0.75, 0.6, 0)
+        # Both windings, so the cheek shows from either side.
+        sheets.wood.triangle(i0, i1, i2)
+        sheets.wood.triangle(i0, i2, i1)
+    # The fascia along the front, and a bracket under each end.
+    _facing_quad(sheets.wood, d, c, c + under, d + under, n, OAK)
+    for u in [u0 + 0.08, u1 - 0.08]:
+        _bar(
+            sheets.wood,
+            face.at(u, o.v1 - 0.25, wall),
+            face.at(u, low - 0.08, reach - out_sign * 0.1),
+            face.along,
+            0.09,
+            0.09,
+            OAK * 0.85,
+        )
+    # The lantern hangs from an iron arm beside the door.
+    var arm = face.at(u1 + 0.25, o.v1 + 0.05, wall)
+    var tip = face.at(u1 + 0.25, o.v1 + 0.05, wall + out_sign * 0.32)
+    _bar(sheets.wood, arm, tip, up, 0.025, 0.025, WROUGHT)
+    _ = lantern(sheets.wood, sheets.daylight, tip, 0.33)
+
+
 def _door_frame(
     mut sheets: _Sheets,
     face: _Face,
@@ -874,8 +995,12 @@ def _door_frame(
     half: Float32,
     out_sign: Float32,
     exterior: Bool,
+    hood: Bool,
+    tint: Vector3,
 ):
-    """Add a door's oak frame, and a stone threshold to an outside door."""
+    """Add a door's oak frame, and a stone threshold to an outside door.
+    With `hood`, an outside door also has a hood over it and a lantern
+    beside it."""
     var n = face.normal * out_sign
     var w = Float32(0.08)
     var deep = half * 2 + 0.02
@@ -917,6 +1042,8 @@ def _door_frame(
             deep + 0.1,
             STONE,
         )
+        if hood:
+            _door_hood(sheets, face, o, half, out_sign, tint)
 
 
 def door_leaf(width: Float32, height: Float32, paint: Vector3) raises -> Sheet:
@@ -1290,7 +1417,16 @@ def _walls(
         for o in openings:
             _reveals(sheets, face, o, half, out_sign, exterior)
             if o.door:
-                _door_frame(sheets, face, o, half, out_sign, exterior)
+                _door_frame(
+                    sheets,
+                    face,
+                    o,
+                    half,
+                    out_sign,
+                    exterior,
+                    parameters.use != BARN,
+                    parameters.roof,
+                )
             else:
                 _window(sheets, face, o, half, out_sign, parameters)
         if not exterior:
@@ -1881,18 +2017,55 @@ def _roof(
         # The tiles: from the eave up to the ridge.
         var t0 = Vector3(-hx, eave + lift, sz * hz)
         var t1 = Vector3(hx, eave + lift, sz * hz)
-        var t2 = Vector3(hx, ridge + lift, 0)
         var t3 = Vector3(-hx, ridge + lift, 0)
-        var low = tint * 0.8
-        var high = tint
-        if sz > 0:
-            sheets.roof.painted_quad(
-                t0, t1, t2, t3, low, low, high, high, -hx, 0, hx, run
-            )
-        else:
-            sheets.roof.painted_quad(
-                t1, t0, t3, t2, low, low, high, high, -hx, 0, hx, run
-            )
+        # Cells no wider than `ROOF_CELL`, each corner weathered.
+        var across = Int(ceil(2 * hx / ROOF_CELL))
+        var up = Int(ceil(run / ROOF_CELL))
+        for j in range(up):  # pragma: no branch
+            var s0 = Float32(j) / Float32(up)
+            var s1 = Float32(j + 1) / Float32(up)
+            for i in range(across):  # pragma: no branch
+                var x0 = -hx + 2 * hx * Float32(i) / Float32(across)
+                var x1 = -hx + 2 * hx * Float32(i + 1) / Float32(across)
+                var p0 = Vector3(x0, t0.y + (t3.y - t0.y) * s0, t0.z * (1 - s0))
+                var p1 = Vector3(x1, p0.y, p0.z)
+                var p3 = Vector3(x0, t0.y + (t3.y - t0.y) * s1, t0.z * (1 - s1))
+                var p2 = Vector3(x1, p3.y, p3.z)
+                var seed = parameters.seed + side * 101
+                var k0 = roof_shade(tint, x0, s0, run, seed)
+                var k1 = roof_shade(tint, x1, s0, run, seed)
+                var k2 = roof_shade(tint, x1, s1, run, seed)
+                var k3 = roof_shade(tint, x0, s1, run, seed)
+                if sz > 0:
+                    sheets.roof.painted_quad(
+                        p0,
+                        p1,
+                        p2,
+                        p3,
+                        k0,
+                        k1,
+                        k2,
+                        k3,
+                        x0,
+                        s0 * run,
+                        x1,
+                        s1 * run,
+                    )
+                else:
+                    sheets.roof.painted_quad(
+                        p1,
+                        p0,
+                        p3,
+                        p2,
+                        k1,
+                        k0,
+                        k3,
+                        k2,
+                        -x1,
+                        s0 * run,
+                        -x0,
+                        s1 * run,
+                    )
         # The boards under the eaves, facing down.
         var b0 = Vector3(-hx, eave, sz * hz)
         var b1 = Vector3(hx, eave, sz * hz)

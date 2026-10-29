@@ -9,6 +9,7 @@ and every kind of furniture."""
 
 from core.assets import Assets
 from core.buffer_geometry import COLOR
+from core.object3d import NodeId
 from core.scene import Scene
 from extensions.building.ids import ElementId, SpaceId
 from extensions.building.kinds import (
@@ -56,6 +57,7 @@ from extensions.village.house_view import (
     inside_shade,
     outside_shade,
     painted,
+    roof_shade,
     stand_house,
 )
 from extensions.village.dressing import FLAME
@@ -98,6 +100,26 @@ def _house(
         brick(),
         facade,
     )
+
+
+def test_a_roof_is_weathered() raises:
+    var tint = Vector3(1, 0.5, 0.3)
+    # Over the whole roof, the eave is darker than the ridge.
+    var eave = Float32(0)
+    var ridge = Float32(0)
+    var mossy = 0
+    for k in range(200):
+        var x = Float32(k) * 0.37
+        var low = roof_shade(tint, x, 0, 5, 3)
+        var high = roof_shade(tint, x, 1, 5, 3)
+        eave += low.x
+        ridge += high.x
+        # Moss turns a red tile toward green.
+        if low.y > low.x:
+            mossy += 1
+    assert_true(eave < ridge)
+    assert_true(mossy > 0)
+    assert_true(mossy < 200)
 
 
 def test_paint_and_shade() raises:
@@ -210,8 +232,8 @@ def test_a_flat_roofed_house_draws_no_roof() raises:
     var bare = Scene()
     var level = _stand(bare, assets, looks, flat)
     assert_true(level < pitched)
-    # One door, and no roof sheet.
-    assert_equal(len(bare.meshes), len(scene.meshes) - 1)
+    # One door, and the roof's sheet holds only the hood over it.
+    assert_equal(len(bare.meshes), len(scene.meshes))
 
 
 def test_steps_and_a_deep_plinth_stand_on_a_slope() raises:
@@ -534,11 +556,18 @@ def test_a_wide_door_leaf_is_braced() raises:
 
 
 def _has_color(
-    scene: Scene, assets: Assets, material: MaterialId, color: Vector3
+    scene: Scene,
+    assets: Assets,
+    material: MaterialId,
+    color: Vector3,
+    under: Optional[NodeId] = None,
 ) raises -> Bool:
-    """Return whether a mesh of a material has a vertex of a color."""
+    """Return whether a mesh of a material, under a node if one is given,
+    has a vertex of a color."""
     for mesh in scene.meshes:
         if mesh.material.value != material.value:
+            continue
+        if under and mesh.node.value != under.value().value:
             continue
         ref colors = assets.geometries.get(mesh.geometry).attribute_view(
             String(COLOR)
@@ -564,26 +593,45 @@ def test_a_dwelling_is_dressed_and_lit_by_lanterns() raises:
     # A house of two storeys with a stair and a chamber: a rug and a
     # lantern in each room, clear of the stair.
     var house = Scene()
-    _ = _stand(house, assets, looks, _house(7, 2))
+    var two = _house(7, 2)
+    var lot = house_lot(two, 0, 0, Angle(0.0, RADIAN))
+    var standing = stand_house(
+        house, assets, looks, two, house_model(two), lot, _flat()
+    )
     assert_equal(_cloth_meshes(house, looks), 1)
-    assert_true(_has_color(house, assets, looks.daylight, FLAME * 0.8))
+    assert_true(
+        _has_color(house, assets, looks.daylight, FLAME * 0.8, standing.inside)
+    )
     # A house 3 meters deep, with a stair: the stair's band leaves too
     # little floor for a rug or a lantern in either storey.
     var shallow = Scene()
-    _ = _stand(
+    var low = HouseParameters(
+        "shallow", Length(5.0, METER), Length(3.0, METER), 2, brick()
+    )
+    var narrow = stand_house(
         shallow,
         assets,
         looks,
-        HouseParameters(
-            "shallow", Length(5.0, METER), Length(3.0, METER), 2, brick()
-        ),
+        low,
+        house_model(low),
+        house_lot(low, 0, 0, Angle(0.0, RADIAN)),
+        _flat(),
     )
-    assert_false(_has_color(shallow, assets, looks.daylight, FLAME * 0.8))
+    assert_false(
+        _has_color(shallow, assets, looks.daylight, FLAME * 0.8, narrow.inside)
+    )
+    # Its lantern by the front door hangs outside.
+    assert_true(_has_color(shallow, assets, looks.daylight, FLAME * 0.8))
     # A barn has no rug and no lantern.
     var barn = Scene()
-    var lot = house_lot(_barn(35), 0, 0, Angle(0.0, RADIAN))
     _ = stand_house(
-        barn, assets, looks, _barn(35), house_model(_barn(35)), lot, _flat()
+        barn,
+        assets,
+        looks,
+        _barn(35),
+        house_model(_barn(35)),
+        house_lot(_barn(35), 0, 0, Angle(0.0, RADIAN)),
+        _flat(),
     )
     assert_equal(_cloth_meshes(barn, looks), 0)
     assert_false(_has_color(barn, assets, looks.daylight, FLAME * 0.8))
