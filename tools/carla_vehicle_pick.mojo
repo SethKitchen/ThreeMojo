@@ -46,7 +46,7 @@ def pick_text(text: String) raises -> String:
     var names = List[String]()
     for index in range(len(refs)):
         var path = refs[index].path
-        if _has(path, "/Pedestrian/"):
+        if "/Pedestrian/" in path:
             continue
         names.append(basename(path))
         if refs[index].kind == "SkeletalMesh":
@@ -158,23 +158,6 @@ def _path_at(mark: Int, refs: List[_Entry], extras: List[_Entry]) -> String:
     if mark < 0:
         return extras[-mark - 1].path
     return refs[mark].path
-
-
-def _has(text: String, needle: String) -> Bool:
-    """Return whether `text` contains `needle`."""
-    var raw = text.as_bytes()
-    var pat = needle.as_bytes()
-    if len(pat) == 0 or len(raw) < len(pat):
-        return False
-    for start in range(len(raw) - len(pat) + 1):
-        var matched = True
-        for index in range(len(pat)):
-            if raw[start + index] != pat[index]:
-                matched = False
-                break
-        if matched:
-            return True
-    return False
 
 
 def _ends_exact(text: String, needle: String) -> Bool:

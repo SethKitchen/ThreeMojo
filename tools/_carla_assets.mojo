@@ -1056,15 +1056,6 @@ def _check_carla(doc: PyJson, entry: Int, entry_id: String) raises:
             )
 
 
-def _count(items: List[String], text: String) -> Int:
-    """Return `items.count(text)`."""
-    var count = 0
-    for item in items:
-        if item == text:
-            count += 1
-    return count
-
-
 def _format_is_one(doc: PyJson, node: Int) -> Bool:
     """Return `value == 1` for a value that is not a bool."""
     var kind = doc.kind(node)
@@ -1228,7 +1219,7 @@ def check_manifest(doc: PyJson, manifest: Int) raises:
                     " tile_meters"
                 )
         if kind == "model":
-            if _count(roles, "model") != 1:
+            if roles.count("model") != 1:
                 raise _manifest_error(
                     entry_id + ": a model needs exactly one model file"
                 )
@@ -1240,11 +1231,11 @@ def check_manifest(doc: PyJson, manifest: Int) raises:
                     + ": a model needs forward, one of "
                     + _list_repr(materialize[FORWARDS]())
                 )
-        if kind == "town" and _count(roles, "model") != 1:
+        if kind == "town" and roles.count("model") != 1:
             raise _manifest_error(
                 entry_id + ": a town needs exactly one model file"
             )
-        if kind == "hdri" and _count(roles, "hdri") != 1:
+        if kind == "hdri" and roles.count("hdri") != 1:
             raise _manifest_error(
                 entry_id + ": an HDRI needs exactly one HDRI file"
             )

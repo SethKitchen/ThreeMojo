@@ -162,7 +162,7 @@ def _choice(
     var records = List[_Mesh]()
     for index in range(len(named)):
         var path = named[index]
-        if _has(path, "/Pedestrian/"):
+        if "/Pedestrian/" in path:
             records.append(_Mesh(path, "", 0, ""))
             continue
         var kind = _class(classes, content, umodel, path)
@@ -410,11 +410,6 @@ def _child(root: String, child: String) -> String:
     if child.byte_length() > 0 and child.as_bytes()[0] == 47:
         return root + child
     return root + "/" + child
-
-
-def _has(text: String, needle: String) -> Bool:
-    """Return whether `needle` occurs in `text`."""
-    return text.find(needle) >= 0
 
 
 def _relative(vehicle_id: String) -> String:

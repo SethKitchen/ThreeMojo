@@ -75,11 +75,9 @@ def props_text(path: String) raises -> String:
     tree.set(
         obj,
         "translucent",
-        tree.boolean(_has(text, "BlendMode = BLEND_Translucent")),
+        tree.boolean("BlendMode = BLEND_Translucent" in text),
     )
-    tree.set(
-        obj, "masked", tree.boolean(_has(text, "BlendMode = BLEND_Masked"))
-    )
+    tree.set(obj, "masked", tree.boolean("BlendMode = BLEND_Masked" in text))
     return tree.dumps(obj, False)
 
 
@@ -405,11 +403,6 @@ def _space(raw: Span[UInt8, _], index: Int) -> Int:
     while at < len(raw) and _space_byte(raw[at]):
         at += 1
     return at
-
-
-def _has(text: String, needle: String) -> Bool:
-    """Return whether `needle` occurs in `text`."""
-    return text.find(needle) >= 0
 
 
 def _starts_at(text: String, index: Int, prefix: String) -> Bool:
