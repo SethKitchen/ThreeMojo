@@ -30,7 +30,7 @@ from materials.material import (
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from objects.line import LOOP, Line, LineMode, STRIP
+from objects.line import LOOP, Line, LineMode, SEGMENTS, STRIP
 from objects.points import Points
 from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
@@ -465,6 +465,93 @@ def test_a_points_pick_refuses_what_it_cannot_measure() raises:
     var indexed = _with_points([Float32(0), 0, 0], indexed=True)
     with assert_raises(contains="indexed"):
         _ = _down(0, 0).intersect_points(indexed[0], indexed[1], 0)
+
+
+def _scaled(group: Vector3, own: Vector3) raises -> Tuple[Scene, Assets]:
+    """Return a point at (1, 0, 0) and a stick from it, as `Points` and as a
+    `SEGMENTS` line, on a node of scale `own` under a group of scale
+    `group`.
+
+    Args:
+        group: The parent group's scale.
+        own: The node's own scale.
+
+    Returns:
+        The scene and its assets.
+
+    Raises:
+        Error: Never.
+    """
+    var assets = Assets()
+    var shape = assets.geometries.add(_geometry([Float32(1), 0, 0, 1, 1, 0]))
+    var dots = assets.materials.add(points_material(Color(255, 255, 255)))
+    var ink = assets.materials.add(Material(Color(255, 255, 255)))
+    var scene = Scene()
+    var parent = Object3D()
+    parent.set_scale(group.x, group.y, group.z)
+    var held = Object3D()
+    held.set_scale(own.x, own.y, own.z)
+    var top = scene.add(parent^)
+    var node = scene.attach(held^, top)
+    scene.update()
+    scene.add_points(Points(shape, dots, node))
+    scene.add_line(Line(shape, ink, node, mode=SEGMENTS))
+    return (scene^, assets^)
+
+
+def _met(made: Tuple[Scene, Assets], x: Float32) raises -> Tuple[Int, Int]:
+    """Return how many points and segments a ray down from `x` meets, at a
+    threshold of 0.3 m.
+
+    Args:
+        made: The scene and its assets, from `_scaled`.
+        x: Where the ray starts across.
+
+    Returns:
+        The point hits and the line hits.
+
+    Raises:
+        Error: Never.
+    """
+    var caster = _down(x, 0)
+    caster.points_threshold = Length(0.3, METER)
+    caster.line_threshold = Length(0.3, METER)
+    return (
+        len(caster.intersect_points(made[0], made[1], 0)),
+        len(caster.intersect_line(made[0], made[1], 0)),
+    )
+
+
+def test_a_parents_scale_grows_the_threshold() raises:
+    # three.js divides the threshold by the mean of the object's own scale,
+    # and measures the gap in the object's own space. Under a parent of
+    # scale two, a gap of 0.4 m is 0.2 there, within 0.3; 0.7 m is not.
+    var made = _scaled(Vector3(2, 2, 2), Vector3(1, 1, 1))
+    var near = _met(made, 2.4)
+    assert_equal(near[0], 1)
+    assert_equal(near[1], 1)
+    var far = _met(made, 2.7)
+    assert_equal(far[0], 0)
+    assert_equal(far[1], 0)
+    # The node's own scale divides the threshold and grows the gap alike,
+    # so 0.3 m holds in the world, as it did before.
+    for own in [Float32(1), Float32(2)]:
+        var plain = _scaled(Vector3(1, 1, 1), Vector3(own, own, own))
+        var inside = _met(plain, own + 0.25)
+        assert_equal(inside[0], 1)
+        assert_equal(inside[1], 1)
+        var outside = _met(plain, own + 0.4)
+        assert_equal(outside[0], 0)
+        assert_equal(outside[1], 0)
+    # An own scale whose mean is zero keeps 0.3 m in the world. three.js
+    # divides by zero there.
+    var flat = _scaled(Vector3(1, 1, 1), Vector3(-1, 0.5, 0.5))
+    var close = _met(flat, -1.25)
+    assert_equal(close[0], 1)
+    assert_equal(close[1], 1)
+    var away = _met(flat, -1.4)
+    assert_equal(away[0], 0)
+    assert_equal(away[1], 0)
 
 
 # --- sprites ----------------------------------------------------------------

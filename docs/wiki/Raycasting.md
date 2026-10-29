@@ -120,7 +120,9 @@ A line is met where the ray passes within `line_threshold` of a segment. The hit
 
 Points are met where the ray passes within `points_threshold` of a point. The hit's `point` is the ray's point nearest that point.
 
-The gap is measured in world space. three.js divides the threshold by the object's average scale and measures in the object's own space. The two agree under an even scale. Under an uneven scale, this port is exact and three.js is not.
+three.js measures the gap in the object's own space. It divides the threshold by the mean of the object's own scale. This port measures the gap in world space. It multiplies the threshold by the mean world scale, and divides it by the mean own scale.
+
+The two agree when the world scale is even, and a parent's scale counts in both. Under an uneven world scale, the two can differ. A node whose own scale has a mean of zero keeps the threshold as it is. three.js divides by zero there.
 
 A sprite is met on its two triangles, laid flat to the kept camera with its center, rotation and size, as the renderer lays them.
 

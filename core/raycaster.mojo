@@ -86,14 +86,16 @@ geometry and not the map, so it picks the surface as it was modelled.
 `line_threshold` of one of its segments, three.js's `params.Line.threshold`,
 and points where it passes within `points_threshold` of a point,
 `params.Points.threshold`. Both are a meter by default, as in three.js, so
-set them to what a pointer should reach. The gap is measured in world
-space, where three.js divides the threshold by the object's average scale;
-the two agree under an even scale, and this one is exact under an uneven
-one. A sprite is met on its two triangles, laid flat to the camera as the
-renderer lays them, so a sprite needs the camera that `set_from_camera`
-records. None of the three has a face, so a hit's `normal` is zero, as
-three.js gives no `face`. `triangle` says which segment, point or half of
-the sprite was struck.
+set them to what a pointer should reach. three.js measures the gap in
+the object's own space, against the threshold over the mean of the
+object's own scale. This measures it in world space, against the
+threshold times the mean world scale over that mean own scale. The two
+agree under an even world scale, a parent's scale included. A sprite is
+met on its two triangles, laid flat to the camera as the renderer lays
+them, so a sprite needs the camera that `set_from_camera` records. None
+of the three has a face, so a hit's `normal` is zero, as three.js gives no
+`face`. `triangle` says which segment, point or half of the sprite was
+struck.
 
 **What a mesh hit carries.** three.js's record, field for field. A hit on
 a mesh of any kind has a `face`: the three vertices of the triangle
@@ -901,6 +903,7 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         if geometry.is_indexed():
             raise Error("A line geometry cannot be indexed")
         var world = scene.world_matrix(line.node)
+        reach = _world_reach(reach, scene.get(line.node).scale, world)
         if not self._near_bound(geometry.bounding_sphere(), world, reach):
             return hits^
         var vertices = geometry.vertex_count()
@@ -980,6 +983,7 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         if geometry.is_indexed():
             raise Error("A points geometry cannot be indexed")
         var world = scene.world_matrix(cloud.node)
+        reach = _world_reach(reach, scene.get(cloud.node).scale, world)
         if not self._near_bound(geometry.bounding_sphere(), world, reach):
             return hits^
         ref positions = geometry.attribute_view(String("position"))
@@ -1579,6 +1583,34 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
                 hits.extend(self.intersect_sprite(scene, assets, index))
         _sort_by_distance(hits)
         return hits^
+
+
+def _world_reach(reach: Float32, own: Vector3, world: Matrix4) -> Float32:
+    """Return a line or points threshold as a gap in the world.
+
+    three.js's `Line.raycast` and `Points.raycast` divide the threshold by
+    the mean of the object's own scale, and measure the gap in the
+    object's own space. Under an even world scale, that is the world gap
+    against the threshold times the mean world scale over the mean own
+    scale. So a parent's scale grows the reach, as it does in three.js.
+    Under an uneven world scale the mean world scale stands in for it.
+
+    A mean own scale of zero leaves the threshold as it is, where three.js
+    divides by zero.
+
+    Args:
+        reach: The threshold, in meters.
+        own: The scale the object's node holds, three.js's `scale`.
+        world: The node's world matrix.
+
+    Returns:
+        The gap that counts, in meters.
+    """
+    var mean_own = abs(own.x + own.y + own.z) / 3
+    if not (mean_own > 0):
+        return reach
+    var spread = Vector3.from_matrix_scale(world)
+    return reach * ((spread.x + spread.y + spread.z) / 3) / mean_own
 
 
 def _within_on_image(
