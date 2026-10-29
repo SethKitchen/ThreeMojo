@@ -131,7 +131,7 @@ The still map keeps the casters as they were when it was drawn. So in the villag
 
 ## What it draws
 
-- `scene.meshes` and `scene.skinned_meshes`, opaque.
+- `scene.meshes` and `scene.skinned_meshes`, opaque, on a layer that the camera sees. A part whose material is not `visible` is not drawn. The sun's maps use the camera's layers too, as three.js's shadow map does, and the still map is drawn again when the camera's layers change.
 - `BASIC`, `LAMBERT`, `PHONG`, `STANDARD` and `PHYSICAL` materials. A standard or a physical material is lit as a Lambert one.
 - Vertex colors, a color, an emissive color, and a map read at each vertex or at each pixel.
 - A node program, only as a `GameShading` registered for it says. It can light a back face as its front, read a baked sun and sky, and sway in the wind.

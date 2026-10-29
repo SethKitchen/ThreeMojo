@@ -62,6 +62,7 @@ from objects.skinned_mesh import (
 )
 from core.fog import EXP2_FOG, NO_FOG, exp2_veil
 from core.geometry_store import GeometryId
+from core.layers import Layers
 from core.object3d import NodeId
 from core.ordinal import ordinal_valid
 from core.scene import Scene
@@ -698,6 +699,8 @@ struct _SunMap(Movable):
     # The depth one meter spans, in the map's NDC.
     var per_meter: Float32
     var ready: Bool
+    # The camera's layers when the map was drawn: only they cast.
+    var layers: Layers
 
     def __init__(out self, size: Int):
         """Create an empty map.
@@ -715,6 +718,7 @@ struct _SunMap(Movable):
         )
         self.per_meter = 0
         self.ready = False
+        self.layers = Layers.all()
 
 
 def _sun_matrices(
@@ -929,22 +933,28 @@ struct GameRenderer(Movable):
             raise Error("A shadow mode must be one of the four")
         var shadowing = self.shadows != NO_SHADOWS and frame.has_sun
         if shadowing:
+            # As three.js's shadow map, only what the camera's layers show
+            # casts a shadow.
+            var layers = camera.visible_layers()
             var still = self._still_map.size != self.shadow_size
             if (
                 self.shadows == FULL_SHADOWS
                 or still
                 or not self._still_map.ready
+                or self._still_map.layers != layers
             ):
                 self._still_map = _SunMap(self.shadow_size)
                 var center = self.shadow_center
                 var reach = self.shadow_reach
-                self._draw_map(scene, assets, frame, False, center, reach)
+                self._draw_map(
+                    scene, assets, frame, False, center, reach, layers
+                )
             if self.shadows != STILL_SHADOWS:
                 if self._moving_map.size != self.moving_size:
                     self._moving_map = _SunMap(self.moving_size)
                 var focus = self.focus
                 var reach = self.moving_reach
-                self._draw_map(scene, assets, frame, True, focus, reach)
+                self._draw_map(scene, assets, frame, True, focus, reach, layers)
         var mapped = perf_counter_ns()
         var view = camera.view_matrix()
         var clip = camera.projection_matrix()
@@ -957,6 +967,7 @@ struct GameRenderer(Movable):
             camera.near_distance(),
             camera.far_distance(),
             0,
+            camera.visible_layers(),
         )
         self.vertex_count = self._vertex_total(draws)
         self.draw_count = len(draws)
@@ -1076,9 +1087,10 @@ struct GameRenderer(Movable):
         moving: Bool,
         center: Vector3,
         reach: Float32,
+        layers: Layers,
     ) raises:
         """Draw one of the sun's depth maps: the still casters' or the
-        moving casters'."""
+        moving casters', of the meshes on `layers`."""
         var made = _sun_matrices(frame.sun_toward, center, reach)
         var pass_frame = frame
         pass_frame.view_projection = made[1]
@@ -1089,7 +1101,14 @@ struct GameRenderer(Movable):
         pass_frame.width = size
         pass_frame.height = size
         var draws = self._gather(
-            scene, assets, made[0], made[1], 0, made[3], 2 if moving else 1
+            scene,
+            assets,
+            made[0],
+            made[1],
+            0,
+            made[3],
+            2 if moving else 1,
+            layers,
         )
         self._light_vertices(draws, assets, scene, pass_frame)
         self._setup(draws, pass_frame)
@@ -1128,6 +1147,7 @@ struct GameRenderer(Movable):
                 ](),
             )
             self._still_map.ready = True
+            self._still_map.layers = layers
 
     def _frame(
         self,
@@ -1267,9 +1287,12 @@ struct GameRenderer(Movable):
         near: Float32,
         far: Float32,
         kind: Int,
+        layers: Layers,
     ) raises -> List[_Draw]:
         """List the parts of every shown mesh in a view: for the frame when
         `kind` is 0, the still casters for 1, and the moving casters for 2.
+        A mesh is shown when its node is and it shares one of `layers`, as
+        three.js's `projectObject` asks.
         """
         var frustum = Frustum.from_camera(clip, view, near, far)
         var draws = List[_Draw]()
@@ -1288,7 +1311,7 @@ struct GameRenderer(Movable):
                 not mesh.cast_shadow or self._moves(mesh.node) != (kind == 2)
             ):
                 continue
-            if not scene.is_shown(mesh.node):
+            if not scene.shows(mesh.node, layers):
                 continue
             var world = scene.world_matrix(mesh.node)
             var shape = self._shape(assets, mesh.geometry)
@@ -1313,7 +1336,7 @@ struct GameRenderer(Movable):
                 or self._moves(skinned.node) != (kind == 2)
             ):
                 continue
-            if not scene.is_shown(skinned.node):
+            if not scene.shows(skinned.node, layers):
                 continue
             var world = scene.world_matrix(skinned.node)
             var shape = self._shape(assets, skinned.geometry)
@@ -1358,6 +1381,10 @@ struct GameRenderer(Movable):
                 if UInt(slot) >= UInt(len(materials)):
                     continue
                 id = materials[slot]
+            # three.js draws, and casts the shadow of, no part whose
+            # material is hidden.
+            if not assets.materials.get(id).visible:
+                continue
             if id.value not in self._looks:
                 self._looks[id.value] = self._look(assets, id)
             var looked = self._looks[id.value]
