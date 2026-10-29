@@ -146,14 +146,6 @@ def default_cache() raises -> String:
     return realpath(".") + "/.cache/carla-assets"
 
 
-def _contains(items: List[String], text: String) -> Bool:
-    """Return whether a list holds a string."""
-    for item in items:
-        if item == text:
-            return True
-    return False
-
-
 def _list_repr(items: List[String]) -> String:
     """Return `repr` of a list of str."""
     var out = String("[")
@@ -312,7 +304,7 @@ def in_strings(doc: PyJson, node: Int, items: List[String]) raises -> Bool:
         Error: Python's `TypeError` for an unhashable value.
     """
     _check_hashable(doc, node)
-    return doc.kind(node) == PY_STR and _contains(items, doc.text(node))
+    return doc.kind(node) == PY_STR and doc.text(node) in items
 
 
 def hash_key(doc: PyJson, node: Int) raises -> String:
@@ -944,7 +936,7 @@ def _check_path(doc: PyJson, node: Int, place: String) raises:
         raise _manifest_error(place + ": a path must be a non-empty string")
     var path = doc.text(node)
     var parts = path_parts(path)
-    if path.startswith("/") or _contains(parts, "..") or path.find("\\") >= 0:
+    if path.startswith("/") or ".." in parts or path.find("\\") >= 0:
         raise _manifest_error(
             place
             + ": the path "
@@ -1131,8 +1123,9 @@ def check_manifest(doc: PyJson, manifest: Int) raises:
         var unknown = List[String]()
         for index in range(doc.length(entry)):
             var key = doc.key(entry, index)
-            if not _contains(materialize[ENTRY_KEYS](), key) and not _contains(
-                materialize[OPTIONAL_KEYS](), key
+            if (
+                key not in materialize[ENTRY_KEYS]()
+                and key not in materialize[OPTIONAL_KEYS]()
             ):
                 unknown.append(key)
         if len(unknown) > 0:
@@ -1146,7 +1139,7 @@ def check_manifest(doc: PyJson, manifest: Int) raises:
         if (
             doc.kind(id_node) != PY_STR
             or doc.text(id_node).byte_length() == 0
-            or _contains(seen, doc.text(id_node))
+            or doc.text(id_node) in seen
         ):
             raise _manifest_error(
                 value_repr(doc, id_node)
@@ -1210,7 +1203,7 @@ def check_manifest(doc: PyJson, manifest: Int) raises:
             for one in placed:
                 var path = subscript(doc, one, "path")
                 var key = hash_key(doc, path)
-                if _contains(paths, key):
+                if key in paths:
                     raise _manifest_error(
                         entry_id
                         + ": two files share the path "
@@ -1224,7 +1217,7 @@ def check_manifest(doc: PyJson, manifest: Int) raises:
                         == PY_STR else String("\x00")
                     )
         if kind == "texture_set":
-            if not _contains(roles, "albedo"):
+            if "albedo" not in roles:
                 raise _manifest_error(
                     entry_id + ": a texture set needs an albedo map"
                 )
@@ -1269,7 +1262,7 @@ def check_manifest(doc: PyJson, manifest: Int) raises:
         if doc.is_none(value):
             continue
         _check_hashable(doc, value)
-        if doc.kind(value) != PY_STR or not _contains(seen, doc.text(value)):
+        if doc.kind(value) != PY_STR or doc.text(value) not in seen:
             raise _manifest_error(
                 "the binding "
                 + py_repr(key)
@@ -2057,13 +2050,13 @@ def selected_entries(
     for entry in entries:
         known.append(doc.text(doc.get(entry, "id")))
     for wanted in ids:
-        if not _contains(known, wanted):
+        if wanted not in known:
             raise _manifest_error("no entry " + py_repr(wanted))
     if len(ids) == 0:
         return entries^
     var out = List[Int]()
     for index in range(len(entries)):
-        if _contains(ids, known[index]):
+        if known[index] in ids:
             out.append(entries[index])
     return out^
 
