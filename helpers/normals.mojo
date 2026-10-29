@@ -22,8 +22,9 @@ length gives a stick of no length.
 A geometry here holds any attribute by name, so it can hold the four
 floats per vertex of three.js's `tangent` attribute under `TANGENT`. The
 fourth float, the handedness, is not read, as three.js does not read it.
-Nothing here computes tangents: three.js's `computeTangents` is not
-ported, so the attribute comes from a loader or from the caller.
+This helper computes no tangents. The attribute comes from a loader, from
+`BufferGeometry.compute_tangents`, three.js's `computeTangents`, or from
+`geometries.mikktspace.compute_mikktspace_tangents`.
 """
 
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION

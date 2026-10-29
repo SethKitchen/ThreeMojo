@@ -105,7 +105,7 @@ var outline = assets.geometries.add(camera_helper(watched))
 scene.add_line(Line(outline, paint, perch, mode=SEGMENTS))
 ```
 
-The apex is clip space's origin carried back, which is not the camera's position. Under a perspective projection it is a point between the two planes, at `-2nf / (f + n)`. The cone reaches it from the near corners. That is what three.js draws.
+The apex is the camera's own origin, the eye. three.js never sets the apex point, so it stays at the origin of the camera's frame. The cone runs from the eye to the near corners, for a perspective and an orthographic camera. That is what three.js draws.
 
 The helper reads the camera's projection once, when it is built. A camera whose projection changes needs a new helper, as three.js's needs `update()`.
 
