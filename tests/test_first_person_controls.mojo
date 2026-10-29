@@ -321,7 +321,11 @@ def test_look_at_turns_the_camera() raises:
     var ortho = orthographic_above()
     var flat = FirstPersonControls(ortho)
     flat.look_at(ortho, Vector3(0, 5, 5))
-    assert_almost_equal(flat.latitude().to(DEGREE), Float32(90), atol=1e-3)
+    # Looking along `up`, `look_at` nudges the view by 1e-4, as three.js's
+    # does, so three.js reads a latitude 1e-4 radians short of 90 degrees.
+    assert_almost_equal(
+        flat.latitude().to(DEGREE), Float32(89.994270), atol=1e-4
+    )
 
 
 def test_an_orthographic_camera_walks() raises:
