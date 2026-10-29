@@ -369,6 +369,11 @@ def skin_carriers(
     so do these: the sandwich `bind_inverse * blend * bind` is a linear
     map, so the same matrix moves the position and turns the normal.
 
+    A slot whose weight is zero carries nothing, so its bone index is not
+    read. three.js's `applyBoneTransform` skips such a slot, and its
+    shader multiplies that bone by zero. An exporter can leave any number
+    in an unused slot.
+
     Args:
         geometry: The geometry; it must carry `skinIndex` and
             `skinWeight`.
@@ -381,8 +386,8 @@ def skin_carriers(
     Raises:
         Error: If the geometry has no skin attributes, if either is not
             four numbers a vertex or does not cover every vertex, or if a
-            vertex names a bone that is not a whole number in range or
-            carries weights that are not numbers or are negative.
+            slot with a weight names a bone that is not a whole number in
+            range, or if a weight is not a number or is negative.
     """
     var out = List[Matrix4]()
     if not geometry.has_attribute(String(SKIN_INDEX)) or not (
@@ -403,8 +408,12 @@ def skin_carriers(
     var shares = List[Float32](length=BONES_PER_VERTEX, fill=0)
     for vertex in range(vertex_count):  # pragma: no branch
         for slot in range(BONES_PER_VERTEX):  # pragma: no branch
-            named[slot] = whole_bone(bones.component(vertex, slot), count)
             shares[slot] = weights.component(vertex, slot)
+            # Bone zero stands in for an unused slot. `blend_bones` skips
+            # a weight of zero, so it is never read.
+            named[slot] = 0
+            if shares[slot] != 0:
+                named[slot] = whole_bone(bones.component(vertex, slot), count)
         var blended = blend_bones(pose.palette, named, shares)
         # Into the bones' space, through them, and back out: three.js's
         # `bindMatrixInverse * skinMatrix * bindMatrix`.

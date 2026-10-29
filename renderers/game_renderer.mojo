@@ -480,14 +480,17 @@ struct _Shape(Movable):
         """Read each part's bones and weights, the first time a skinned
         mesh draws the shape.
 
+        A slot whose weight is zero is read as bone zero, whatever index
+        it holds, as `core.deform.skin_carriers` reads it.
+
         Args:
             geometry: The geometry the shape was read from.
 
         Raises:
             Error: If the geometry has no skin attributes, either is not
                 four numbers a vertex or does not cover every vertex, a
-                bone is not a whole number from zero, or a weight is not a
-                number or is negative.
+                slot with a weight names a bone that is not a whole number
+                from zero, or a weight is not a number or is negative.
         """
         if self.parts[0].top_bone >= 0:
             return
@@ -510,13 +513,17 @@ struct _Shape(Movable):
             for k in range(n):
                 var vertex = Int(part.vertices[k])
                 for slot in range(BONES_PER_VERTEX):  # pragma: no branch
-                    var bone = whole_bone(
-                        bones.component(vertex, slot), 1 << 30
-                    )
                     var weight = weights.component(vertex, slot)
                     if not (weight >= 0):
                         raise Error(
                             "A skin weight must be a number, not negative"
+                        )
+                    # An unused slot reads bone zero, which its weight
+                    # of zero then cancels. Its own index is never read.
+                    var bone = 0
+                    if weight != 0:
+                        bone = whole_bone(
+                            bones.component(vertex, slot), 1 << 30
                         )
                     part.bones[k * 4 + slot] = Int32(bone)
                     part.weights[k * 4 + slot] = weight

@@ -13,6 +13,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
 from core.deform import skin_pose
 from core.object3d import NodeId, Object3D
+from core.object_bounds import box_from_object
 from core.raycaster import (
     LINE_HIT,
     POINTS_HIT,
@@ -101,8 +102,15 @@ def _camera() raises -> PerspectiveCamera:
 # --- skinned meshes ---------------------------------------------------------
 
 
-def _rigged() raises -> Tuple[Scene, Assets]:
+def _rigged(
+    unused: Float32 = 0, share: Float32 = 0
+) raises -> Tuple[Scene, Assets]:
     """Return a triangle on one bone that has moved five meters along +x.
+
+    Args:
+        unused: The bone index in each vertex's second slot.
+        share: The weight of that slot. Zero, the default, leaves the
+            slot unused.
 
     Returns:
         The scene and its assets.
@@ -112,8 +120,34 @@ def _rigged() raises -> Tuple[Scene, Assets]:
     """
     var assets = Assets()
     var geometry = _geometry([Float32(0), 0, 0, 1, 0, 0, 0, 1, 0])
-    var bones: List[Float32] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    var weights: List[Float32] = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]
+    var bones: List[Float32] = [
+        0,
+        unused,
+        0,
+        0,
+        0,
+        unused,
+        0,
+        0,
+        0,
+        unused,
+        0,
+        0,
+    ]
+    var weights: List[Float32] = [
+        1,
+        share,
+        0,
+        0,
+        1,
+        share,
+        0,
+        0,
+        1,
+        share,
+        0,
+        0,
+    ]
     geometry.set_attribute(String(SKIN_INDEX), BufferAttribute(bones^, 4))
     geometry.set_attribute(String(SKIN_WEIGHT), BufferAttribute(weights^, 4))
     var shape = assets.geometries.add(geometry^)
@@ -148,6 +182,31 @@ def test_a_skinned_mesh_is_picked_where_its_bones_carry_it() raises:
         _ = _down(0, 0).intersect_skinned_mesh(scene, assets, 1)
     with assert_raises(contains="No skinned mesh"):
         _ = _down(0, 0).intersect_skinned_mesh(scene, assets, -1)
+
+
+def test_a_slot_with_no_weight_may_name_any_bone() raises:
+    # An exporter can leave any number in an unused slot. three.js's
+    # `applyBoneTransform` skips a slot of weight zero, so the triangle is
+    # picked and bounded where bone zero alone carries it.
+    for unused in [Float32(7), Float32(0.5)]:
+        var rig = _rigged(unused)
+        ref scene = rig[0]
+        ref assets = rig[1]
+        var hits = _down(5.2, 0.2).intersect_skinned_mesh(scene, assets, 0)
+        assert_equal(len(hits), 1)
+        assert_almost_equal(hits[0].point.x, Float32(5.2), atol=TOLERANCE)
+        var box = box_from_object(scene, assets, scene.skinned_meshes[0].node)
+        assert_almost_equal(box.min.x, Float32(5), atol=TOLERANCE)
+        assert_almost_equal(box.max.x, Float32(6), atol=TOLERANCE)
+    # A slot with weight behind it must still name a bone.
+    for unused in [Float32(7), Float32(0.5)]:
+        var rig = _rigged(unused, 0.5)
+        ref scene = rig[0]
+        ref assets = rig[1]
+        with assert_raises(contains="bone"):
+            _ = _down(5.2, 0.2).intersect_skinned_mesh(scene, assets, 0)
+        with assert_raises(contains="bone"):
+            _ = box_from_object(scene, assets, scene.skinned_meshes[0].node)
 
 
 def test_a_skinned_mesh_scaled_to_nothing_is_hidden() raises:

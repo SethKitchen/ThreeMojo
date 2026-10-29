@@ -762,6 +762,34 @@ def test_a_skinned_mesh_follows_its_bones() raises:
         _ = fast.render(heavy, assets, _facing(), NOW)
 
 
+def test_a_slot_with_no_weight_is_drawn_whatever_bone_it_names() raises:
+    # An exporter can leave any number in an unused slot. three.js's
+    # shader multiplies that slot's bone by zero, so it changes nothing.
+    var assets = Assets()
+    var fast = GameRenderer(WIDTH, HEIGHT)
+    var weights = List[Float32]()
+    var halves = List[Float32]()
+    for _ in range(6):
+        weights.extend([Float32(1), 0, 0, 0])
+        halves.extend([Float32(0.5), 0.5, 0, 0])
+    var plain = _skinned_scene(
+        assets, List[Float32](length=24, fill=0), weights
+    )
+    var expected = fast.render(plain, assets, _facing(), NOW)
+    for unused in [Float32(7), Float32(0.5)]:
+        var bones = List[Float32]()
+        for _ in range(6):
+            bones.extend([Float32(0), unused, unused, unused])
+        var scene = _skinned_scene(assets, bones, weights)
+        var image = fast.render(scene, assets, _facing(), NOW)
+        for i in range(WIDTH * HEIGHT):
+            assert_equal(image.depth[i], expected.depth[i])
+        # A slot with weight behind it must still name a bone.
+        var weighted = _skinned_scene(assets, bones, halves)
+        with assert_raises(contains="bone"):
+            _ = fast.render(weighted, assets, _facing(), NOW)
+
+
 def test_the_sky_the_fog_and_a_cube_background_are_drawn() raises:
     var assets = Assets()
     var fast = GameRenderer(WIDTH, HEIGHT)
