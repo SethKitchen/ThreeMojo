@@ -160,7 +160,9 @@ eyes.add(stereo.right, Rect(120, 0, 120, 120))
 | `focus` | `camera.focus` | 10 m | How far ahead the two views cross. Positive. three.js reads the camera's `focus`. This port keeps its own. |
 | `aspect` | `aspect` | `1.0` | What the camera's aspect is multiplied by for each eye. A half for a side-by-side pair. |
 
-`update(camera, scene)` places `left` and `right` from the camera as it stands, placed or riding a node of the scene. The eyes take the camera's field of view, zoom, planes and layers. They take the vertical part of its view offset and not the horizontal part or the film offset, as in three.js. The skew is `eye_separation / 2 * near / focus` at the near plane, three.js's own arithmetic, set as each eye's `view_shift`. A point at the focus lands on the same column in both eyes. A nearer point lands further apart, which is the parallax.
+`update(camera, scene)` places `left` and `right` from the camera as it stands, placed or riding a node of the scene. The eyes take the camera's field of view, zoom, planes and layers. three.js's left eye draws layers 0 and 1 and its right eye layers 0 and 2, whatever layers the camera draws. They take the vertical part of its view offset and not the horizontal part or the film offset, as in three.js.
+
+The skew is `eye_separation / 2 * near / focus` at the near plane, three.js's own arithmetic, set as each eye's `view_shift`. A point at the focus lands on the same column in both eyes. A nearer point lands further apart, which is the parallax.
 
 The three settings are open fields. `validate()` refuses a negative or non-finite separation and a focus or aspect that is not positive and finite. `update` calls it before it places an eye. It builds both eyes before it keeps either, so a refused update leaves the pair as it was.
 

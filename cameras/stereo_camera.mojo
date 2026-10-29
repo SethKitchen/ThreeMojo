@@ -25,7 +25,9 @@ eye's edges move right and the right eye's move left. That is the
 `view_shift` a `PerspectiveCamera` carries, and the reason it carries
 one. The field of view, the zoom, the planes and the layers are the camera's own;
 the aspect is the camera's times this camera's `aspect`, which three.js
-keeps at one and a side-by-side image sets to a half.
+keeps at one and a side-by-side image sets to a half. The layers are not
+three.js's: its left eye draws layers 0 and 1 and its right eye layers 0
+and 2, whatever layers the camera draws.
 
 ## Where the eyes look
 
