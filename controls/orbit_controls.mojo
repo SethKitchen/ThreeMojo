@@ -207,6 +207,11 @@ struct OrbitControls(Copyable, Movable):
     # `zoom0`. None before the first save.
     var _saved: Optional[List[Vector3]]
     var _saved_zoom: Float32
+    # Where the camera and the target were when `update` last returned
+    # True, three.js's `_lastPosition` and `_lastTargetPosition`. None
+    # before the first update.
+    var _last_position: Optional[Vector3]
+    var _last_target: Vector3
 
     def __init__(out self, target: Vector3 = Vector3(0, 0, 0)):
         """Create controls about `target`, with three.js's defaults.
@@ -264,6 +269,8 @@ struct OrbitControls(Copyable, Movable):
         self._theta = 0
         self._saved = None
         self._saved_zoom = 1
+        self._last_position = None
+        self._last_target = target
 
     # --- the three changes -------------------------------------------------
 
@@ -741,7 +748,8 @@ struct OrbitControls(Copyable, Movable):
             delta: The time since the last frame, for an automatic rotation.
 
         Returns:
-            True if the camera moved or turned.
+            True if the camera moved, turned or dollied since the last
+            update that returned True, as three.js sends `change`.
         """
         var cursor = self.zoom_to_cursor and self._cursor
         var placed = self._orbit(camera.position, camera.up, delta, not cursor)
@@ -768,11 +776,13 @@ struct OrbitControls(Copyable, Movable):
             ]
             self._cursor = False
         self._scale = 1
-        var changed = self._settle(camera.position, placed[0], placed[1])
-        camera.place(placed[0], placed[1])
         # A dolly smaller than the movement test still counts, as three.js
         # counts `zoomChanged`.
-        return changed or self._zoomed
+        var changed = self._settle(
+            camera.position, placed[0], placed[1], self._zoomed
+        )
+        camera.place(placed[0], placed[1])
+        return changed
 
     def update(
         mut self, mut camera: OrthographicCamera, delta: Duration
@@ -787,12 +797,14 @@ struct OrbitControls(Copyable, Movable):
             delta: The time since the last frame, for an automatic rotation.
 
         Returns:
-            True if the camera moved, turned or zoomed.
+            True if the camera moved, turned or zoomed since the last
+            update that returned True, as three.js sends `change`.
 
         Raises:
             Error: If the camera's zoom or volume is refused.
         """
         var cursor = self.zoom_to_cursor and self._cursor
+        var was = camera.position
         var placed = self._orbit(camera.position, camera.up, delta, False)
         var old_zoom = camera.zoom
         var new_zoom = clamp(
@@ -819,9 +831,11 @@ struct OrbitControls(Copyable, Movable):
             ]
             self._cursor = False
         camera.zoom = new_zoom
-        var changed = self._settle(camera.position, placed[0], placed[1])
+        var changed = self._settle(
+            was, placed[0], placed[1], new_zoom != old_zoom
+        )
         camera.place(placed[0], placed[1])
-        return changed or new_zoom != old_zoom
+        return changed
 
     def _cursor_target(
         self,
@@ -862,22 +876,48 @@ struct OrbitControls(Copyable, Movable):
         return position + forward * along
 
     def _settle(
-        mut self, was: Vector3, position: Vector3, target: Vector3
+        mut self,
+        was: Vector3,
+        position: Vector3,
+        target: Vector3,
+        zoomed: Bool,
     ) -> Bool:
-        """Keep a new target, and say whether anything moved.
+        """Keep a new target, and say whether anything changed since
+        `update` last said so, as three.js's `update` says it.
+
+        three.js compares with where the camera and the target were at the
+        last change it reported, not at the last frame. So a change that
+        dies away over many frames, each one too small to count, still
+        counts once it adds up.
 
         Args:
-            was: Where the camera was.
+            was: Where the camera was before this update.
             position: Where it goes.
             target: What it looks at.
+            zoomed: Whether the distance or the zoom changed, three.js's
+                `zoomChanged`.
 
         Returns:
-            True if the camera or the target moved.
+            True if the camera zoomed, or the camera or the target moved.
         """
-        var moved = position - was
-        var shifted = target - self.target
+        if not self._last_position:
+            # three.js's constructor runs `update` once, and keeps the
+            # camera and the target it finds. These controls get no camera
+            # until the first update.
+            self._last_position = was
+            self._last_target = self.target
+        var moved = position - self._last_position.value()
+        var shifted = target - self._last_target
         self.target = target
-        return moved.dot(moved) > EPSILON or shifted.dot(shifted) > EPSILON
+        var changed = (
+            zoomed
+            or moved.dot(moved) > EPSILON
+            or shifted.dot(shifted) > EPSILON
+        )
+        if changed:
+            self._last_position = position
+            self._last_target = target
+        return changed
 
     def _orbit(
         mut self,

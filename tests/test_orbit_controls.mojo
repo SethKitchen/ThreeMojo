@@ -601,6 +601,23 @@ def test_damping_spreads_a_change_over_frames() raises:
     _at(camera, radius, 0, 0)
 
 
+def test_a_damped_change_counts_until_it_has_added_up() raises:
+    # three.js compares with where the camera was at the last change it
+    # reported. So the last frame it reports is within a millimeter of
+    # where the camera comes to rest, though each late frame moves less.
+    var camera = _camera()
+    var controls = OrbitControls()
+    controls.enable_damping = True
+    controls.rotate_left(Angle(30.0, DEGREE))
+    var reported = camera.position
+    for _ in range(600):
+        if controls.update(camera, _frame()):
+            reported = camera.position
+    var gap = camera.position - reported
+    assert_true(gap.length() < 1e-3)
+    assert_true(camera.position.x < -2.4)
+
+
 def test_auto_rotate_turns_while_no_button_is_held() raises:
     var camera = _camera()
     var controls = OrbitControls()

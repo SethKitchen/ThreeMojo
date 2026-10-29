@@ -187,7 +187,7 @@ Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y`
 | `min_zoom`, `max_zoom` | 0, infinity | How far an orthographic camera can zoom. |
 | `zoom_to_cursor` | `False` | Dolly or zoom toward the point under the pointer. |
 
-`rotate_left`, `rotate_up`, `dolly_in`, `dolly_out` and `pan` make the same changes from code. `update(camera, delta)` returns True when the camera moved. The `delta` is a `Duration`, for the automatic rotation.
+`rotate_left`, `rotate_up`, `dolly_in`, `dolly_out` and `pan` make the same changes from code. `update(camera, delta)` returns True when the camera or the target moved, or the distance changed. It compares with the last update that returned True, as three.js does before it sends `change`. So a damped change counts until it is done to within a millimeter. The `delta` is a `Duration`, for the automatic rotation.
 
 ### State
 
