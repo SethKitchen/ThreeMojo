@@ -210,6 +210,20 @@ def test_an_odd_grid_has_no_center_line() raises:
     assert_vector(point_of(grid, 4), -1.5, 0, -0.5)
 
 
+def test_a_grid_steps_in_doubles_as_three_js_does() raises:
+    # three.js adds a third of a meter to `k` in doubles, -1/2, then
+    # -0.16666666666666669 and 0.16666666666666663, and stores each as
+    # a Float32: plus or minus 0.16666667. Stepped in Float32, the two
+    # inner lines landed at -0.16666666 and 0.16666669.
+    var grid = grid_helper(Length(1.0, METER), 3)
+    var sixth = Float32(1.0 / 6.0)
+    assert_equal(point_of(grid, 4).z, -sixth)
+    assert_equal(point_of(grid, 6).x, -sixth)
+    assert_equal(point_of(grid, 8).z, sixth)
+    assert_equal(point_of(grid, 10).x, sixth)
+    assert_equal(point_of(grid, 12).z, Float32(0.5))
+
+
 def test_the_grid_helper_refuses_a_grid_that_is_not_one() raises:
     with assert_raises(contains="positive size"):
         _ = grid_helper(Length(0.0, METER))

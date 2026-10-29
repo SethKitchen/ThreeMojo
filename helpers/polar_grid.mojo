@@ -34,11 +34,16 @@ comptime DEFAULT_POLAR_COLOR1 = Color(0x44, 0x44, 0x44)
 comptime DEFAULT_POLAR_COLOR2 = Color(0x88, 0x88, 0x88)
 
 
-def _around(radius: Float32, step: Int, steps: Int) -> Vector3:
+def _around(radius: Float64, step: Int, steps: Int) -> Vector3:
     """Return the point `step` of `steps` around a circle in the xz plane,
-    starting on +z and turning toward +x, as three.js places them."""
-    var angle = Float32(step) / Float32(steps) * 2 * pi
-    return Vector3(sin(angle) * radius, 0, cos(angle) * radius)
+    starting on +z and turning toward +x, as three.js places them.
+
+    The angle, its sine and its cosine are `Float64`, as three.js's are.
+    Only the point is stored as a `Float32`, as three.js stores it."""
+    var angle = Float64(step) / Float64(steps) * (2 * pi)
+    return Vector3(
+        Float32(sin(angle) * radius), 0, Float32(cos(angle) * radius)
+    )
 
 
 def polar_grid_helper(
@@ -88,13 +93,15 @@ def polar_grid_helper(
             if sector % 2 == 1:
                 color = odd
             segments.add(
-                Vector3(0, 0, 0), _around(reach, sector, sectors), color
+                Vector3(0, 0, 0),
+                _around(Float64(reach), sector, sectors),
+                color,
             )
     for ring in range(rings):
         var color = even
         if ring % 2 == 1:
             color = odd
-        var r = reach - reach / Float32(rings) * Float32(ring)
+        var r = Float64(reach) - Float64(reach) / Float64(rings) * Float64(ring)
         for step in range(divisions):
             segments.add(
                 _around(r, step, divisions),
