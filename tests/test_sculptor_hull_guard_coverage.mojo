@@ -254,9 +254,9 @@ def test_initial_hull_ranking_keeps_certified_points_after_dot_cancellation() ra
             0,
         ),
         P(
-            bitcast[DType.float64](UInt64(0x3DB5D4C8582D175E)),
-            bitcast[DType.float64](UInt64(0x3DAFAF1419695BE8)),
-            bitcast[DType.float64](UInt64(0x3DB0000000000000)),
+            bitcast[DType.float64](UInt64(0x3DE5D53D94E8F966)),
+            bitcast[DType.float64](UInt64(0x3DDFADC60F3FB772)),
+            bitcast[DType.float64](UInt64(0x3DE0000000000000)),
             0,
         ),
     ]
@@ -269,21 +269,25 @@ def test_initial_hull_ranking_keeps_certified_points_after_dot_cancellation() ra
         )
         var points: List[P] = [P(0), b, c, q, next, q * 0.5]
         # Independent Fraction enumeration supplies these supporting faces
-        # as vertex bit masks. Point 5 is on A-Q. The three cases cover
-        # cross-product contraction orders without assuming an intermediate
-        # rounded score is part of the public geometry contract.
+        # as vertex bit masks. Point 5 is on A-Q. The first three queries
+        # have nonzero rounded distances, and the rounded score ranks them.
+        # They give four faces, six faces, and four faces on the far side.
         var facets: List[Int] = [7, 11, 13, 14]
         if variant == 1:
             facets = [7, 19, 13, 25, 14, 26]
-        elif variant == 2 or variant == 3:
+        elif variant == 2:
             facets = [7, 19, 21, 22]
+        elif variant == 3:
+            facets = [7, 13, 19, 22, 25, 28]
         var hull = ConvexHull(points)
         assert_false(hull._exact_ranking)
         assert_true(hull.tolerance < 1.59e-15)
         # Independent exact squared comparisons place every query strictly
         # beyond the constructor tolerance. The fourth query was solved
-        # from the pinned native/instrumented normal and fused-dot order;
-        # its power-of-two z product permits exact rounded cancellation.
+        # from the hull's own rounded normal, which does not depend on
+        # contraction. Its power-of-two z product is exact. The x and y
+        # products cancel it exactly in each fused or unfused dot order.
+        # Q and its half have a rounded distance of zero; `next` does not.
         for query in [q, next, q * 0.5]:
             if variant == 2:
                 assert_true(_plane_above(P(0), c, b, query, hull.tolerance))
