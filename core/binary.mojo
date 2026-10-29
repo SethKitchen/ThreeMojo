@@ -42,8 +42,6 @@ def little_endian_u16(bytes: List[UInt8], at: Int) -> Int:
 def big_endian_u16(bytes: List[UInt8], at: Int) -> Int:
     """Return the big-endian 16-bit word at `at`.
 
-    Error: Never.
-
     Args:
         bytes: The buffer.
         at: The index of the first byte.
@@ -71,8 +69,6 @@ def little_endian_u32(bytes: List[UInt8], at: Int) -> Int:
 def big_endian_u32(bytes: Span[UInt8, _], at: Int) -> Int:
     """Return the big-endian 32-bit word at `at`.
 
-    Error: Never.
-
     Args:
         bytes: The buffer.
         at: The index of the first byte.
@@ -91,8 +87,6 @@ def big_endian_u32(bytes: Span[UInt8, _], at: Int) -> Int:
 
 def big_endian_u32(bytes: List[UInt8], at: Int) -> Int:
     """Return the big-endian 32-bit word at `at`.
-
-    Error: Never.
 
     Args:
         bytes: The buffer.
@@ -137,8 +131,6 @@ def little_endian_i32(bytes: List[UInt8], at: Int) -> Int:
 def little_endian_uint(bytes: Span[UInt8, _], at: Int, width: Int) -> Int:
     """Return the little-endian unsigned integer of `width` bytes at `at`.
 
-    Error: Never.
-
     Args:
         bytes: The buffer.
         at: The index of the first byte.
@@ -179,8 +171,6 @@ def append_little_endian(mut out: List[UInt8], value: Int, width: Int):
 
     Nothing.
 
-    Error: Never.
-
     Args:
         out: The buffer, extended in place.
         value: The integer.
@@ -196,8 +186,6 @@ def append_little_endian_u16(mut out: List[UInt8], value: Int):
 
     Nothing.
 
-    Error: Never.
-
     Args:
         out: The buffer, extended in place.
         value: The integer. Bits above the low sixteen are not written.
@@ -210,8 +198,6 @@ def append_little_endian_u32(mut out: List[UInt8], value: Int):
     """Append the low thirty-two bits of `value` as four little-endian bytes.
 
     Nothing.
-
-    Error: Never.
 
     Args:
         out: The buffer, extended in place.
@@ -230,8 +216,6 @@ def store_little_endian(
 
     Nothing.
 
-    Error: Never.
-
     Args:
         bytes: The buffer.
         at: The index of the first byte.
@@ -248,8 +232,6 @@ def append_big_endian(mut out: List[UInt8], value: Int, width: Int):
     """Append the low `width` bytes of `value`, most significant byte first.
 
     Nothing.
-
-    Error: Never.
 
     Args:
         out: The buffer, extended in place.
@@ -268,8 +250,6 @@ def store_big_endian(mut bytes: List[UInt8], at: Int, value: Int, width: Int):
 
     Nothing.
 
-    Error: Never.
-
     Args:
         bytes: The buffer.
         at: The index of the first byte.
@@ -285,8 +265,6 @@ def store_big_endian(mut bytes: List[UInt8], at: Int, value: Int, width: Int):
 
 def copy_bytes(bytes: Span[UInt8, _], start: Int, count: Int) -> List[UInt8]:
     """Return `count` bytes beginning at `start`.
-
-    Error: Never.
 
     Args:
         bytes: The buffer.
@@ -318,8 +296,6 @@ def copy_bytes(bytes: List[UInt8], start: Int, count: Int) -> List[UInt8]:
 
 def copy_byte_range(bytes: List[UInt8], start: Int, end: Int) -> List[UInt8]:
     """Return a copy of the bytes from `start` up to `end`.
-
-    Error: Never.
 
     Args:
         bytes: The buffer.

@@ -42,6 +42,7 @@ from tools._python_json import (
     PY_STR,
     PyJson,
 )
+from tools._town_json import json_text
 
 
 def package_of(full_name: String) raises -> String:
@@ -140,7 +141,7 @@ def _read(
 def _keep(mut found: List[String], text: String) raises:
     """Keep a `/Game/` package, once, in sorted order."""
     var package = package_of(text)
-    if not _starts(package, "/Game/"):
+    if not package.startswith("/Game/"):
         return
     _add(found, package^)
 
@@ -212,18 +213,6 @@ def _newlines(text: String) -> String:
         else:
             out += chr(code)
     return out
-
-
-def _starts(text: String, prefix: String) -> Bool:
-    """Return whether `text` begins with `prefix`."""
-    var raw = text.as_bytes()
-    var head = prefix.as_bytes()
-    if len(raw) < len(head):
-        return False
-    for index in range(len(head)):
-        if raw[index] != head[index]:
-            return False
-    return True
 
 
 def export_path(root: String, game_path: String, suffix: String) -> String:
@@ -446,9 +435,13 @@ def command_text(text: String) raises -> String:
     var doc = PyJson.parse(text)
     if doc.kind(doc.root) != PY_DICT:
         raise Error("command request is not an object")
-    var umodel = _text(doc, doc.at(doc.root, "umodel"), "umodel is not text")
-    var content = _text(doc, doc.at(doc.root, "content"), "content is not text")
-    var out = _text(doc, doc.at(doc.root, "out"), "out is not text")
+    var umodel = json_text(
+        doc, doc.at(doc.root, "umodel"), "umodel is not text"
+    )
+    var content = json_text(
+        doc, doc.at(doc.root, "content"), "content is not text"
+    )
+    var out = json_text(doc, doc.at(doc.root, "out"), "out is not text")
     var mesh_node = doc.at(doc.root, "mesh")
     if doc.kind(mesh_node) != PY_BOOL:
         raise Error("mesh is not a bool")
@@ -480,13 +473,6 @@ def command_text(text: String) raises -> String:
         encoded += quote_ascii(args[index])
     encoded += "]"
     return encoded^
-
-
-def _text(doc: PyJson, node: Int, message: String) raises -> String:
-    """Return a JSON string, or raise `message`."""
-    if doc.kind(node) != PY_STR:
-        raise Error(message)
-    return doc.text(node)
 
 
 def drive(root: String, towns: List[String], batch: Int, limit: Float64) raises:
@@ -717,7 +703,7 @@ def _drive_cli(arguments: List[String]) raises:
                 batch = _batch_arg(value)
             index += 2
             continue
-        if _starts(word, "--"):
+        if word.startswith("--"):
             raise Error("unknown argument " + word)
         towns.append(word)
         index += 1

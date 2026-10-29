@@ -108,7 +108,7 @@ from loaders.model_nodes import (
     remember_material,
     texture_from_bytes,
 )
-from loaders.three_mf import js_key_order
+from loaders.js_object import js_key_order
 from loaders.xml import NO_ELEMENT, XmlDocument, parse_xml
 from loaders.zip import ZipEntry
 from materials.material import (
@@ -1796,6 +1796,10 @@ struct _Loader(Movable):
                     counts = _ints(self.document.text(vcount))
                 var sum = 0
                 for count in counts:
+                    if count < 0:
+                        raise Error(
+                            "Collada: a <polylist>'s vcount is negative"
+                        )
                     sum += count
                 if sum != total:
                     raise Error(

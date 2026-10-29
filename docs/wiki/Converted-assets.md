@@ -94,7 +94,7 @@ license evidence. This proves an exact recipe. It does not establish the
 original historical command log.
 
 The
-[verification record](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/converted-assets-303.json)
+[verification record](https://github.com/SethKitchen/ThreeMojo/blob/37ecbc599777ebfe114679c197c27302ee9f5e1b/docs/validation/converted-assets-303.json)
 records output hashes, source counts and focused checks. It is a historical
 record of the run with the Python converters, which the Mojo converters
 replace. Use the Mojo commands below.

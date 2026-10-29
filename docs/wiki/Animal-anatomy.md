@@ -140,7 +140,7 @@ Seven species fall within 5 % of the selected targets. Fish, frog, rabbit and sn
 - Solids of hair, wool and feathers are left out. The furred surfaces are pulled in by the species' coat depth. The coat reaches at most 30 % of a solid's smallest radius, so a thin leg keeps its flesh.
 - Each cell selects the nearest flesh part after that part's coat erosion. It then takes the selected solid's density. It is added to the bone that the solid rides.
 
-`extensions/anatomy/inertia.mojo` sums the cells. Each cell is a cuboid and adds its own inertia, `m w^2 / 12` per axis. The parallel-axis theorem moves the tensor to the center of mass. The humanoid's limb segments use the same tally. The original `extensions.humanoid.skeleton.tissue` and `soft_tissue` import paths re-export the shared types and factories, so existing humanoid callers retain type identity.
+`extensions/anatomy/inertia.mojo` sums the cells. Each cell is a cuboid and adds its own inertia, `m w^2 / 12` per axis. The parallel-axis theorem moves the tensor to the center of mass. The humanoid's limb segments use the same tally.
 
 The sampler checks primitive indexes, finite geometry and bounded grid dimensions before integer conversion or worker writes. A cone has two radii; its unused third radius does not remove coat erosion. Public tally addition rejects negative mass and invalid cell geometry. The result checks finite SI output and a physically admissible central tensor.
 

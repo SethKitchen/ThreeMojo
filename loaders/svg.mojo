@@ -85,6 +85,7 @@ from loaders.svg_path import (
     transform_path,
 )
 from loaders.js_number import js_parse_float
+from loaders.utf8 import byte_slice
 from loaders.xml import XmlDocument, parse_xml
 from render.css_color import parse_style
 from std.math import fma, acos, cos, isnan, pi, sin, sqrt, tan
@@ -1353,7 +1354,7 @@ struct _Parser(Movable):
         elif name == "use":
             style = self.parse_style(node, style)
             var href = self.xlink_href(node)
-            var id = String(href[byte = min(1, href.byte_length()) :])
+            var id = byte_slice(href, 1, href.byte_length())
             var svg = self.viewport(node)
             var used = -1
             var named = svg >= 0 and id != ""

@@ -7,10 +7,10 @@
 
     sh tools/tool.sh .venv/bin/mojo check_build_tools
 
-`make test-coverage-tool` runs these checks. `make test-tools` ran their
-Python version. Each one runs `make` itself: a cache key reads the whole tree, and a coverage
-staging run binds every maintained input. One check takes longer than the
-five seconds that a suite test must keep to.
+`make test-coverage-tool` runs these checks. Each one runs `make` itself: a
+cache key reads the whole tree, and a coverage staging run copies every
+maintained input. One check takes longer than the five seconds that a suite
+test must keep to.
 """
 
 from std.collections import Set
@@ -60,46 +60,18 @@ def _contains(group: Set[String], name: String) -> Bool:
 def _compiler(repo: String) -> String:
     """Return the stand-in compiler for one staging run."""
     return (
-        "def model_generation(root, build, names=('module.mojo',)):\n"
-        "    manifest = (build / 'manifest.txt').read_bytes()\n"
-        "    for name in names:\n"
-        "        module = name.removesuffix('.mojo').encode()\n"
-        "        fragment = b''.join(row for row in"
-        " manifest.splitlines(keepends=True)\n"
-        "            if len(row.split()) >= 2 and row.split()[1] =="
-        " module)\n"
-        "        parts = [name.encode(), (root / name).read_bytes(),\n"
-        "                 (build / name).read_bytes(), fragment]\n"
-        "        record = b'COVORIGIN1 ' + b' '.join(str(len(part)).encode()"
-        " for part in parts) + b'\\n' + b''.join(parts)\n"
-        "        (build / (name + '.cov-origin')).write_bytes(record)\n"
-        "    checkpoint = (build / 'generation-inputs.json').read_bytes()\n"
-        "    index = (b'COVORIGIN_INDEX2 ' + str(len(names)).encode() + b'"
-        " ' + str(len(manifest)).encode()\n"
-        "             + b' ' + str(len(checkpoint)).encode() + b'\\n' +"
-        " manifest + checkpoint)\n"
-        "    for name in names:\n"
-        "        raw = name.encode()\n"
-        "        index += str(len(raw)).encode() + b'\\n' + raw\n"
-        "    (build / 'origins.ready').write_bytes(index)\n"
-        "from pathlib import Path\n"
-        "import shutil, sys\n"
-        "if sys.argv[1:] == ['--version']:\n"
-        "    print('staging fixture compiler')\n"
-        "    raise SystemExit(0)\n"
-        "index = sys.argv.index('coverage/build_cli.mojo')\n"
-        "build = Path(sys.argv[index + 1])\n"
-        "root = Path('"
+        'if [ "$1" = --version ]; then echo "staging fixture compiler"; exit 0;'
+        + " fi\n"
+        + 'while [ "$1" != coverage/build_cli.mojo ]; do shift; done\n'
+        + "shift\nbuild=$1\nshift\n"
+        + ': > "$build/manifest.txt"\n'
+        + "for name; do\n"
+        + '  mkdir -p "$build/$(dirname "$name")"\n'
+        + "  cp '"
         + repo
-        + "')\n"
-        "rows = []\n"
-        "for name in sys.argv[index + 2:]:\n"
-        "    target = build / name\n"
-        "    target.parent.mkdir(parents=True, exist_ok=True)\n"
-        "    shutil.copyfile(root / name, target)\n"
-        "    rows.append('L ' + name.removesuffix('.mojo') + ' 1\\n')\n"
-        "(build / 'manifest.txt').write_text(''.join(rows))\n"
-        "model_generation(root, build, sys.argv[index + 2:])\n"
+        + '\'/"$name" "$build/$name"\n'
+        + '  printf \'L %s 1\\n\' "${name%.mojo}" >> "$build/manifest.txt"\n'
+        + "done\n"
     )
 
 
@@ -214,14 +186,14 @@ def test_import_only_helpers_stay_out_of_the_measured_set() raises:
 
 def _stage(repo: String, destination: String, arguments: List[String]) raises:
     """Run coverage-instrument with the stand-in compiler."""
-    var compiler = destination + ".compiler.py"
+    var compiler = destination + ".compiler.sh"
     Path(compiler).write_text(_compiler(repo))
     var command = List[String]()
     command.append("make")
     command.append("--no-print-directory")
     command.append("-s")
     command.append("coverage-instrument")
-    command.append("MOJO=python3 " + compiler)
+    command.append("MOJO=sh " + compiler)
     command.append("COV_DIR=" + destination)
     for word in arguments:
         command.append(word)

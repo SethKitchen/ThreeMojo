@@ -17,9 +17,9 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._json_tree import JsonTree
-from tools._python_float import parse_float
-from tools._python_json import PY_DICT, PY_FLOAT, PY_INT, PY_LIST, PyJson
+from tools._python_json import PY_DICT, PY_INT, PY_LIST, PyJson
 from tools._python_math import product
+from tools._town_json import json_number
 
 
 def normals_text(path: String) raises -> String:
@@ -103,7 +103,7 @@ def _vectors(doc: PyJson, node: Int) raises -> List[Float64]:
         if doc.kind(point) != PY_LIST or doc.length(point) != 3:
             raise Error("point is not 3 numbers")
         for axis in range(3):
-            out.append(_number(doc, doc.item(point, axis)))
+            out.append(json_number(doc, doc.item(point, axis)))
     return out^
 
 
@@ -133,16 +133,6 @@ def _check_faces(mut faces: List[Int], count: Int) raises:
         if vertex < 0 or vertex >= count:
             raise Error("face index out of range")
         faces[index] = vertex
-
-
-def _number(doc: PyJson, node: Int) raises -> Float64:
-    """Return a JSON number as `float`."""
-    var kind = doc.kind(node)
-    if kind == PY_FLOAT:
-        return doc.number(node)
-    if kind == PY_INT:
-        return parse_float(doc.text(node))
-    raise Error("coordinate is not a number")
 
 
 def _emit(normals: List[Float64], count: Int) raises -> String:

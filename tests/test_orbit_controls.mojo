@@ -259,6 +259,17 @@ def test_a_middle_drag_dollies() raises:
     assert_false(controls.update(camera, _frame()))
 
 
+def test_a_dolly_too_small_to_see_still_counts() raises:
+    # One pixel at one meter moves the camera half a millimeter, under the
+    # movement test, and three.js still reports it through `zoomChanged`.
+    var camera = _camera()
+    camera.place(Vector3(0, 0, 1), Vector3(0, 0, 0))
+    var controls = OrbitControls()
+    _drag(controls, camera, MIDDLE, 0, 1)
+    assert_true(controls.update(camera, _frame()))
+    assert_true(camera.position.z > 1)
+
+
 def test_a_right_drag_pans_the_target_with_the_camera() raises:
     var camera = _camera()
     var controls = OrbitControls()

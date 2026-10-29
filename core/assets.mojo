@@ -25,7 +25,7 @@ directly and ownership never has to be stated. Here it does.
 
 from core.geometry_store import GeometryStore
 from materials.material import MaterialStore
-from materials.nodes import NodeProgramStore
+from materials.node_program import NodeProgramStore
 from render.cube_texture_store import CubeTextureStore
 from render.texture_store import TextureStore
 from render.volume_texture_store import (
@@ -51,7 +51,7 @@ struct Assets(Movable):
     var data_3d_textures: Data3DTextureStore
     var data_array_textures: DataArrayTextureStore
     # The compiled node graphs a node material names by id; see
-    # `materials.nodes`.
+    # `materials.node_program`.
     var programs: NodeProgramStore
 
     def __init__(out self):

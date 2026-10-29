@@ -76,11 +76,11 @@ from geometries.capsule import capsule
 from geometries.cylinder import cone, cylinder
 from geometries.sphere import sphere
 from loaders.file_path import path_name
-from loaders.gltf import decode_image
+from loaders.image_file import decode_image
 from loaders.js_number import js_number_text
 from loaders.js_text import is_js_word
 from loaders.model_nodes import authored_color, decompose_onto
-from loaders.three_mf import js_key_order
+from loaders.js_object import js_key_order
 from loaders.usd_geometry import (
     UsdArray,
     UsdMeshArrays,

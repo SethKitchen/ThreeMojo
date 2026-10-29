@@ -32,15 +32,17 @@ from exporters.common import (
     WORLD_POINTS,
     WorldKind,
     WorldOptions,
-    format_js_float32,
     world_meshes,
 )
+from exporters.numbers import format_js_float32
 from exporters.gltf import GltfExportOptions, export_gltf, write_gltf
-from exporters.obj import export_obj, srgb_channel
+from exporters.obj import export_obj
+from exporters.numbers import js_linear_to_srgb
 from exporters.ply import export_ply, write_ply
 from exporters.stl import STL_BINARY, export_stl
 from exporters.usdz import usdz_files
-from loaders.gltf import decode_base64, load_gltf
+from loaders.bytes import decode_base64
+from loaders.gltf import load_gltf
 from loaders.json import JsonDocument, NO_NODE, parse_json
 from loaders.ply import (
     PLY_BINARY_BIG_ENDIAN,
@@ -446,8 +448,10 @@ def test_a_posed_skin_without_its_attributes_is_refused() raises:
 
 
 def test_an_obj_point_color_is_encoded_as_three_js_encodes_it() raises:
-    assert_equal(srgb_channel(0.001), 0.012920000613667071)
-    assert_equal(srgb_channel(1), 0.9999999999999999)
+    assert_equal(
+        js_linear_to_srgb(Float64(Float32(0.001))), 0.012920000613667071
+    )
+    assert_equal(js_linear_to_srgb(1), 0.9999999999999999)
     assert_equal(format_js_float32(0.5), "0.5")
     assert_equal(format_js_float32(0.1), "0.10000000149011612")
     with assert_raises(contains="finite"):

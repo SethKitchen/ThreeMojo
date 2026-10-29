@@ -216,7 +216,7 @@ struct MapBuilder(Movable):
         successor: RoadId,
         is_rht: Bool,
     ) raises -> Int:
-        """Checked typed boundary. Add a road, `AddRoad`. A second road with the same id resets the
+        """Add a road, `AddRoad`. A second road with the same id resets the
         first's fields, as CARLA's `emplace` and assignments do.
 
         Args:
@@ -305,7 +305,7 @@ struct MapBuilder(Movable):
     def add_road_section(
         mut self, road: Int, id: SectionId, s: Length64
     ) raises -> Int:
-        """Checked typed boundary. Add a lane section, `AddRoadSection`.
+        """Add a lane section, `AddRoadSection`.
 
         Args:
             road: The road's index.
@@ -386,7 +386,7 @@ struct MapBuilder(Movable):
     def lane(
         self, road_id: RoadId, lane_id: LaneId, s: Length64
     ) raises -> Tuple[Int, Int, Int]:
-        """Checked typed boundary. Return the lane with an id at s, `MapBuilder::GetLane`.
+        """Return the lane with an id at s, `MapBuilder::GetLane`.
 
         Args:
             road_id: The road.
@@ -434,7 +434,7 @@ struct MapBuilder(Movable):
         c: InverseLength64,
         d: InverseArea64,
     ) raises:
-        """Checked typed boundary. Add a width record, `CreateLaneWidth`.
+        """Add a width record, `CreateLaneWidth`.
 
         Args:
             lane: The lane, from `lane`.
@@ -493,7 +493,7 @@ struct MapBuilder(Movable):
         c: InverseLength64,
         d: InverseArea64,
     ) raises:
-        """Checked typed boundary. Add a border record, `CreateLaneBorder`.
+        """Add a border record, `CreateLaneBorder`.
 
         Args:
             lane: The lane.
@@ -582,7 +582,7 @@ struct MapBuilder(Movable):
         inner: Length64,
         outer: Length64,
     ) raises:
-        """Checked typed boundary. Add a height record, `CreateLaneHeight`.
+        """Add a height record, `CreateLaneHeight`.
 
         Args:
             lane: The lane.
@@ -631,7 +631,7 @@ struct MapBuilder(Movable):
         friction: Float64,
         roughness: Float64,
     ) raises:
-        """Checked typed boundary. Add a material record, `CreateLaneMaterial`.
+        """Add a material record, `CreateLaneMaterial`.
 
         Args:
             lane: The lane.
@@ -676,7 +676,7 @@ struct MapBuilder(Movable):
     def create_lane_rule(
         mut self, lane: Tuple[Int, Int, Int], s: Length64, value: String
     ) raises:
-        """Checked typed boundary. Add a rule record, `CreateLaneRule`.
+        """Add a rule record, `CreateLaneRule`.
 
         Args:
             lane: The lane.
@@ -714,7 +714,7 @@ struct MapBuilder(Movable):
         left: Length64,
         right: Length64,
     ) raises:
-        """Checked typed boundary. Add a visibility record, `CreateLaneVisibility`.
+        """Add a visibility record, `CreateLaneVisibility`.
 
         Args:
             lane: The lane.
@@ -768,7 +768,7 @@ struct MapBuilder(Movable):
     def create_lane_access(
         mut self, lane: Tuple[Int, Int, Int], s: Length64, restriction: String
     ) raises:
-        """Checked typed boundary. Add an access record, `CreateLaneAccess`.
+        """Add an access record, `CreateLaneAccess`.
 
         Args:
             lane: The lane.
@@ -879,7 +879,7 @@ struct MapBuilder(Movable):
         type_width: Length64,
         is_rht: Bool,
     ) raises:
-        """Checked typed boundary. Add a road mark, `CreateRoadMark`.
+        """Add a road mark, `CreateRoadMark`.
 
         Args:
             lane: The lane.
@@ -988,7 +988,7 @@ struct MapBuilder(Movable):
         rule: String,
         width: Length64,
     ) raises:
-        """Checked typed boundary. Add a line to a road mark's type, `CreateRoadMarkTypeLine`.
+        """Add a line to a road mark's type, `CreateRoadMarkTypeLine`.
 
         The line joins the first mark of the lane with the same id. With
         no such mark it is dropped, as in CARLA.
@@ -1080,7 +1080,7 @@ struct MapBuilder(Movable):
         c: InverseLength64,
         d: InverseArea64,
     ) raises:
-        """Checked typed boundary. Add an elevation record, `AddRoadElevationProfile`.
+        """Add an elevation record, `AddRoadElevationProfile`.
 
         Args:
             road: The road's index.
@@ -1141,7 +1141,7 @@ struct MapBuilder(Movable):
         c: InverseLength64,
         d: InverseArea64,
     ) raises:
-        """Checked typed boundary. Add a lane offset record, `CreateSectionOffset`.
+        """Add a lane offset record, `CreateSectionOffset`.
 
         Args:
             road: The road's index.
@@ -1280,7 +1280,7 @@ struct MapBuilder(Movable):
         length: Length64,
         points: List[CrosswalkPoint],
     ) raises:
-        """Checked typed boundary. Add a crosswalk, `AddRoadObjectCrosswalk`.
+        """Add a crosswalk, `AddRoadObjectCrosswalk`.
 
         Args:
             road: The road's index.
@@ -1412,7 +1412,7 @@ struct MapBuilder(Movable):
         heading: Angle64,
         length: Length64,
     ) raises:
-        """Checked typed boundary. Add a straight geometry, `AddRoadGeometryLine`.
+        """Add a straight geometry, `AddRoadGeometryLine`.
 
         Args:
             road: The road's index.
@@ -1469,7 +1469,7 @@ struct MapBuilder(Movable):
         length: Length64,
         curvature: InverseLength64,
     ) raises:
-        """Checked typed boundary. Add an arc, `AddRoadGeometryArc`.
+        """Add an arc, `AddRoadGeometryArc`.
 
         Args:
             road: The road's index.
@@ -1541,7 +1541,7 @@ struct MapBuilder(Movable):
         curvature_start: InverseLength64,
         curvature_end: InverseLength64,
     ) raises:
-        """Checked typed boundary. Add a clothoid, `AddRoadGeometrySpiral`.
+        """Add a clothoid, `AddRoadGeometrySpiral`.
 
         Args:
             road: The road's index.
@@ -1623,7 +1623,7 @@ struct MapBuilder(Movable):
         c: InverseLength64,
         d: InverseArea64,
     ) raises:
-        """Checked typed boundary. Add a cubic v(u), `AddRoadGeometryPoly3`.
+        """Add a cubic v(u), `AddRoadGeometryPoly3`.
 
         Args:
             road: The road's index.
@@ -1707,7 +1707,7 @@ struct MapBuilder(Movable):
         u: CubicPolynomial,
         v: CubicPolynomial,
     ) raises:
-        """Checked typed boundary. Add a parametric cubic, `AddRoadGeometryParamPoly3`.
+        """Add a parametric cubic, `AddRoadGeometryParamPoly3`.
 
         Args:
             road: The road's index.
@@ -1841,7 +1841,7 @@ struct MapBuilder(Movable):
         roll: Angle64,
         value_present: Bool = True,
     ) raises -> SignalReferenceHandle:
-        """Checked typed boundary. Add a signal and a reference to it on its road, `AddSignal`.
+        """Add a signal and a reference to it on its road, `AddSignal`.
 
         Args:
             road: The road's index.
@@ -2005,7 +2005,7 @@ struct MapBuilder(Movable):
         pitch: Angle64,
         roll: Angle64,
     ) raises:
-        """Checked typed boundary. Place a signal at a point, `AddSignalPositionInertial`.
+        """Place a signal at a point, `AddSignalPositionInertial`.
 
         Args:
             signal_id: The signal.
@@ -2091,7 +2091,7 @@ struct MapBuilder(Movable):
         pitch: Angle64,
         roll: Angle64,
     ) raises:
-        """Checked typed boundary. Move a signal to another place on a road, `AddSignalPositionRoad`.
+        """Move a signal to another place on a road, `AddSignalPositionRoad`.
 
         Args:
             signal_id: The signal.
@@ -2169,7 +2169,7 @@ struct MapBuilder(Movable):
         t: Length64,
         orientation: String,
     ) raises -> SignalReferenceHandle:
-        """Checked typed boundary. Add a reference to a signal, `AddSignalReference`.
+        """Add a reference to a signal, `AddSignalReference`.
 
         CARLA clamps s to 10 micrometers short of the road's end.
 

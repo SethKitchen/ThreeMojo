@@ -44,12 +44,12 @@ from cameras.camera import Camera
 from core.assets import Assets
 from core.scene import Scene
 from math.matrix4 import Matrix4
-from math.utils import edge_index
+from math.utils import edge_index, rec709_luminance
 from math.norm import squared_length2
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from postprocessing.antialiasing import JitteredCamera
-from postprocessing.display_nodes import exp_f, luminance_of, scaled_size
+from postprocessing.display_nodes import exp_f, scaled_size
 from postprocessing.sampling import LightView
 from postprocessing.screen_space import DepthView
 from postprocessing.traa import (
@@ -247,8 +247,6 @@ def previous_window_depth(
     """Return the last frame's depth at a place, moved into this frame's
     view: three.js's `samplePreviousDepth`, reading the nearest texel.
 
-    Error: Never.
-
     Args:
         previous: The last frame's window depth.
         u: Across, zero at the left.
@@ -405,8 +403,8 @@ def taau_pixel(
         history_v * Float32(history.height) - 0.5,
     )
     var clipped = clip_aabb(mean, past, low, high)
-    var current_luma = luminance_of(current.r, current.g, current.b)
-    var mean_luma = luminance_of(mean.r, mean.g, mean.b)
+    var current_luma = rec709_luminance(current.r, current.g, current.b)
+    var mean_luma = rec709_luminance(mean.r, mean.g, mean.b)
     var ratio = Float32(0)
     if mean_luma > 0:
         ratio = abs(current_luma - mean_luma) / mean_luma

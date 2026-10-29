@@ -6,7 +6,17 @@
 """The village's character controller: walking, running and jumping, and
 the houses, trees, water and bounds that stop it."""
 
+from extensions.building.material import brick
+from extensions.building.model import Furnishing
 from extensions.vegetation.ground import Canyon, Ground, Lot, Pond
+from extensions.village.house import (
+    HouseParameters,
+    house_lot,
+    house_model,
+    house_stair,
+)
+from extensions.village.interior import house_interior
+from extensions.village.terrain import Floor, Terrain, WallSpan
 from extensions.village.character import (
     AIRBORNE,
     RUNNING,
@@ -72,13 +82,25 @@ def _run(
     obstacles: List[Obstacle] = List[Obstacle](),
 ) raises:
     """Step a character by frames of a thirtieth of a second."""
+    var terrain = Terrain(ground, lots.copy(), List[WallSpan](), List[Floor]())
+    _walk(walker, input, seconds, terrain, obstacles)
+
+
+def _walk(
+    mut walker: Character,
+    input: MoveInput,
+    seconds: Float32,
+    terrain: Terrain,
+    obstacles: List[Obstacle] = List[Obstacle](),
+) raises:
+    """Step a character on a terrain by frames of a thirtieth of a
+    second."""
     for _ in range(Int(seconds * 30)):
         walker.step(
             input,
             Angle(0.0, RADIAN),
             Duration(1.0 / 30.0, SECOND),
-            ground,
-            lots,
+            terrain,
             obstacles,
         )
 
@@ -121,7 +143,6 @@ def test_a_jump_needs_a_fresh_press_and_lands() raises:
         Angle(0.0, RADIAN),
         Duration(0.1, SECOND),
         ground,
-        List[Lot](),
         List[Obstacle](),
     )
     assert_true(walker.stance == AIRBORNE)
@@ -141,7 +162,6 @@ def test_a_jump_needs_a_fresh_press_and_lands() raises:
         Angle(0.0, RADIAN),
         Duration(0.0, SECOND),
         ground,
-        List[Lot](),
         List[Obstacle](),
     )
     for _ in range(60):
@@ -150,7 +170,6 @@ def test_a_jump_needs_a_fresh_press_and_lands() raises:
             Angle(0.0, RADIAN),
             Duration(1.0 / 60.0, SECOND),
             ground,
-            List[Lot](),
             List[Obstacle](),
         )
         high = max(high, walker.position.y)
@@ -175,7 +194,6 @@ def test_a_character_falls_where_the_ground_drops_away() raises:
             Angle(0.0, RADIAN),
             Duration(1.0 / 30.0, SECOND),
             cliff,
-            List[Lot](),
             List[Obstacle](),
         )
         if walker.stance == AIRBORNE:
@@ -195,6 +213,22 @@ def test_houses_trees_and_bounds_stop_a_character() raises:
     var trunks: List[Obstacle] = [Obstacle(0, -3, 0.5)]
     _run(tree, _ahead(), 4, ground, List[Lot](), trunks)
     assert_true(tree.position.z > -3)
+    # A character passes over the obstacle it is told to skip, such as
+    # its own, and is stopped by the others.
+    var crowd: List[Obstacle] = [Obstacle(0, -3, 0.5), Obstacle(0, -6, 0.5)]
+    var bare = Terrain(ground)
+    var skipping = _walker(ground)
+    for _ in range(120):
+        skipping.step(
+            _ahead(),
+            Angle(0.0, RADIAN),
+            Duration(1.0 / 30.0, SECOND),
+            bare,
+            crowd,
+            0,
+        )
+    assert_true(skipping.position.z < -4)
+    assert_true(skipping.position.z > -6)
     var far = _walker(ground)
     far.parameters.bounds = Length(2.0, METER)
     _run(far, _ahead(), 4, ground)
@@ -342,7 +376,6 @@ def test_a_character_that_cannot_move_is_refused() raises:
             Angle(0.0, RADIAN),
             Duration(-1.0, SECOND),
             ground,
-            List[Lot](),
             List[Obstacle](),
         )
     with assert_raises(contains="endless"):
@@ -351,7 +384,6 @@ def test_a_character_that_cannot_move_is_refused() raises:
             Angle(0.0, RADIAN),
             Duration(1.0e10, SECOND),
             ground,
-            List[Lot](),
             List[Obstacle](),
         )
     with assert_raises(contains="yaw"):
@@ -360,7 +392,6 @@ def test_a_character_that_cannot_move_is_refused() raises:
             Angle(huge, RADIAN),
             Duration(0.1, SECOND),
             ground,
-            List[Lot](),
             List[Obstacle](),
         )
 
@@ -368,18 +399,13 @@ def test_a_character_that_cannot_move_is_refused() raises:
 def test_a_press_in_the_air_does_not_jump_again() raises:
     var ground = _flat()
     var walker = _walker(ground)
-    var still = List[Lot]()
     var none = List[Obstacle]()
     var step = Duration(1.0 / 30.0, SECOND)
     var yaw = Angle(0.0, RADIAN)
-    walker.step(
-        MoveInput(0, 0, 0, 0, False, True), yaw, step, ground, still, none
-    )
-    walker.step(no_input(), yaw, step, ground, still, none)
+    walker.step(MoveInput(0, 0, 0, 0, False, True), yaw, step, ground, none)
+    walker.step(no_input(), yaw, step, ground, none)
     var rising = walker.velocity.y
-    walker.step(
-        MoveInput(0, 0, 0, 0, False, True), yaw, step, ground, still, none
-    )
+    walker.step(MoveInput(0, 0, 0, 0, False, True), yaw, step, ground, none)
     assert_true(walker.velocity.y < rising)
 
 
@@ -419,6 +445,99 @@ def test_a_character_in_deep_water_stays_and_one_at_the_edge_slides() raises:
     _run(edge, MoveInput(-1, 1, 0, 0, False, False), 1, pond)
     assert_true(edge.position.z > 0.3)
     assert_true(edge.position.x >= x - 1.0e-3)
+
+
+def test_a_wall_stops_a_character_and_a_door_lets_it_in() raises:
+    var ground = _flat()
+    # A wall across the way at z = -3, with a gap a meter wide from x =
+    # -0.5 to 0.5, and a lintel over the gap from 2.1 meters.
+    var walls: List[WallSpan] = [
+        WallSpan(-5, -3, -0.5, -3, 0.1, 0, 3),
+        WallSpan(0.5, -3, 5, -3, 0.1, 0, 3),
+        WallSpan(-0.5, -3, 0.5, -3, 0.1, 2.1, 3),
+    ]
+    var terrain = Terrain(ground, List[Lot](), walls.copy(), List[Floor]())
+    var through = _walker(ground)
+    _walk(through, _ahead(), 5, terrain)
+    assert_true(through.position.z < -4)
+    # Beside the gap, the wall stops it a radius and half a thickness
+    # away.
+    var stopped = Character(
+        CharacterParameters(), 2, 0, Angle(0.0, RADIAN), terrain
+    )
+    _walk(stopped, _ahead(), 5, terrain)
+    assert_almost_equal(stopped.position.z, -3 + 0.1 + 0.3, atol=1e-3)
+
+
+def test_a_floor_carries_a_character_and_stands_over_water() raises:
+    var pond = Ground(
+        hill_height=Length(0.0, METER),
+        pond=Pond(
+            Length(0.0, METER),
+            Length(-6.0, METER),
+            Length(4.0, METER),
+            Length(2.0, METER),
+        ),
+    )
+    # A jetty over the pond, 0.3 meters above the ground's edge.
+    var floors: List[Floor] = [Floor(Lot(0, -6, 0.6, 5, 0), 0.3, 1.0e30)]
+    var terrain = Terrain(pond, List[Lot](), List[WallSpan](), floors^)
+    var walker = Character(
+        CharacterParameters(), 0, -1.5, Angle(0.0, RADIAN), terrain
+    )
+    assert_almost_equal(walker.position.y, 0.3, atol=1e-6)
+    _walk(walker, _ahead(), 4, terrain)
+    # It walks out over the deep water on the jetty.
+    assert_true(walker.position.z < -4)
+    assert_almost_equal(walker.position.y, 0.3, atol=1e-6)
+    assert_true(walker.grounded)
+
+
+def test_a_character_climbs_a_stair_and_comes_down() raises:
+    var house = HouseParameters(
+        "stair house", Length(9.0, METER), Length(7.0, METER), 2, brick()
+    )
+    var model = house_model(house)
+    # No furniture stands in the walker's way upstairs.
+    model.furnishings = List[Furnishing]()
+    var stair = house_stair(model).value()
+    var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
+    var ground = _flat()
+    var inside = house_interior(model, lot, 0, ground)
+    var walls = inside.walls.copy()
+    walls.extend(inside.furniture.copy())
+    var terrain = Terrain(ground, List[Lot](), walls^, inside.floors.copy())
+    # On the landing, in the middle of the stair's width. The scene's z is
+    # the plan's -y.
+    var middle = -Float32((stair.y0 + stair.y1) / 2)
+    var walker = Character(
+        CharacterParameters(),
+        Float32(stair.x0) - 0.5,
+        middle,
+        Angle(0.0, RADIAN),
+        terrain,
+    )
+    assert_almost_equal(walker.position.y, 0, atol=1e-5)
+    # Right, along +x: up the stair, tread by tread, onto the floor above.
+    var top = Float32(stair.height())
+    _walk(walker, MoveInput(0, 1, 0, 0, False, False), 4, terrain)
+    assert_true(walker.position.x > Float32(stair.x1))
+    assert_almost_equal(walker.position.y, top, atol=1e-4)
+    assert_true(walker.grounded)
+    # Back toward the front, along over the well, and toward it again:
+    # the railing on its open side holds the walker on the floor above.
+    _walk(walker, MoveInput(-1, 0, 0, 0, False, False), 1, terrain)
+    _walk(walker, MoveInput(0, -1, 0, 0, False, False), 2, terrain)
+    assert_true(walker.position.x < Float32(stair.x1) - 0.5)
+    _walk(walker, MoveInput(1, 0, 0, 0, False, False), 2, terrain)
+    assert_almost_equal(walker.position.y, top, atol=1e-4)
+    assert_true(walker.position.z > -Float32(stair.y0))
+    # Down again, from past the stair's top, left along -x.
+    walker.position = Vector3(Float32(stair.x1) + 1, top, middle)
+    walker.velocity = Vector3(0, 0, 0)
+    _walk(walker, MoveInput(0, -1, 0, 0, False, False), 5, terrain)
+    assert_true(walker.position.x < Float32(stair.x0))
+    assert_almost_equal(walker.position.y, 0, atol=1e-4)
 
 
 def main() raises:

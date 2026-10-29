@@ -220,8 +220,6 @@ def light_cosines(
     of zero. A directional light passes a length of one, which leaves the
     dot unchanged.
 
-    Error: Never.
-
     Args:
         normal: The surface normal.
         toward: The vector toward the light, before it is normalized.
@@ -502,8 +500,10 @@ def ggx(
     half vector -- with one factor of pi dropped from the last, for the
     reason `blinn_phong` drops it. The roughness is squared first, Disney's
     reparameterization, as three.js squares it. A surface turned away from
-    the light or from the eye reflects nothing and returns early, which
-    also keeps the visibility term's denominator off zero.
+    the light reflects nothing and returns early. One turned away from the
+    eye still gives the product, as three.js's does: the visibility term's
+    denominator is held off zero, so the lobe stays continuous to the
+    silhouette.
 
     The roughness is read as given, not floored: at zero and head on the
     distribution divides zero by zero, so the caller floors it first, as
@@ -539,7 +539,7 @@ def ggx(
     var dot_nv = saturate(normal.dot(toward_eye))
     var dot_nh = saturate(normal.dot(half))
     var dot_vh = saturate(toward_eye.dot(half))
-    if dot_nl == 0 or dot_nv == 0:
+    if dot_nl == 0:
         return Vector3(0, 0, 0)
     var fresnel = f_schlick(f0, f90, dot_vh)
     if layers.iridescence > 0:

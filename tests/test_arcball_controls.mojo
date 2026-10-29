@@ -91,6 +91,7 @@ from units.si import (
     RADIAN_PER_SECOND_SQUARED,
     SECOND,
 )
+from tests._cameras import orthographic_above
 
 comptime TOLERANCE = Float64(1e-4)
 comptime SIZE = 100
@@ -117,27 +118,6 @@ def _perspective(fov: Float64 = 90) raises -> PerspectiveCamera:
     )
     camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
     return camera
-
-
-def _orthographic() raises -> OrthographicCamera:
-    """Return an orthographic camera ten meters square, five up +z.
-
-    Returns:
-        The camera.
-
-    Raises:
-        Error: If its volume is refused.
-    """
-    var camera = OrthographicCamera(
-        Length(-5.0, METER),
-        Length(5.0, METER),
-        Length(5.0, METER),
-        Length(-5.0, METER),
-        Length(0.1, METER),
-        Length(100.0, METER),
-    )
-    camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
-    return camera^
 
 
 def _event(
@@ -255,7 +235,7 @@ struct OrthoRig(Movable):
         Raises:
             Error: If anything is refused.
         """
-        self.camera = _orthographic()
+        self.camera = orthographic_above()
         self.controls = ArcballControls(self.camera)
         self.assets = Assets()
         self.scene = _box_scene(self.assets)
@@ -1032,7 +1012,7 @@ def test_the_gizmo_follows_a_zoom_and_a_pan() raises:
 
 
 def test_an_orthographic_gizmo_undoes_the_camera_zoom() raises:
-    var camera = _orthographic()
+    var camera = orthographic_above()
     camera.zoom = 2
     var controls = ArcballControls(camera)
     var positions = _data(controls.gizmo(), POSITION)
@@ -1267,7 +1247,7 @@ def test_a_camera_on_a_node_is_refused() raises:
     camera.attach(NodeId(0))
     with assert_raises(contains="placed camera"):
         _ = ArcballControls(camera)
-    var ortho = _orthographic()
+    var ortho = orthographic_above()
     ortho.attach(NodeId(0))
     with assert_raises(contains="placed camera"):
         _ = ArcballControls(ortho)

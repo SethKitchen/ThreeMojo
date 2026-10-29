@@ -3,7 +3,6 @@
 
 """Canonical scalar and pre-union controls for immutable SPIRAL proofs.
 
-Source-only controls. Keep TestSuite's unchanged five-second per-test gate.
 The hot root and witness words are frozen from town segments 381 and 385.
 """
 

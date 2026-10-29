@@ -24,13 +24,7 @@ from math.matrix4 import (
     shear,
     translation,
 )
-from math.quaternion import Quaternion
-from math.utils import (
-    ComponentType,
-    FLOAT32_COMPONENT,
-    INT16_COMPONENT,
-    INT32_COMPONENT,
-    INT8_COMPONENT,
+from math.quaternion import (
     PROPER_XYX,
     PROPER_XZX,
     PROPER_YXY,
@@ -38,6 +32,15 @@ from math.utils import (
     PROPER_ZXZ,
     PROPER_ZYZ,
     ProperEulerOrder,
+    Quaternion,
+    quaternion_from_proper_euler,
+)
+from math.utils import (
+    ComponentType,
+    FLOAT32_COMPONENT,
+    INT16_COMPONENT,
+    INT32_COMPONENT,
+    INT8_COMPONENT,
     SeededRandom,
     UINT16_COMPONENT,
     UINT32_COMPONENT,
@@ -45,7 +48,6 @@ from math.utils import (
     denormalize,
     generate_uuid,
     normalize,
-    quaternion_from_proper_euler,
 )
 from math.vector3 import Vector3
 from std.testing import (

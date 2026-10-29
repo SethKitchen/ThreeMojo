@@ -432,7 +432,7 @@ struct NavPolygon(Copyable, Movable):
         return True
 
     def height_at(self, point: Vector3) raises -> Length:
-        """Checked typed boundary. Return the polygon's height under a point.
+        """Return the polygon's height under a point.
 
         Args:
             point: A point inside the polygon in the x-y plane.

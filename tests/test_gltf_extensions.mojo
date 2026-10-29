@@ -20,6 +20,7 @@ from core.buffer_geometry import POSITION, UV
 from core.object3d import NO_PARENT, Object3D
 from core.scene import Scene
 from lights.light import DIRECTIONAL, POINT, SPOT, directional_light
+from loaders.bytes import encode_base64
 from loaders.gltf import GltfModel, is_supported_extension, load_gltf
 from materials.material import (
     BASIC,
@@ -45,9 +46,6 @@ from render.texture import COVERAGE, IGNORED
 from units.si import Angle, DEGREE, Length, METER, NANOMETER, RADIAN
 
 comptime TOLERANCE = Float64(1e-5)
-comptime ALPHABET = (
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-)
 comptime FLOAT = 5126
 comptime UBYTE = 5121
 comptime SHORT = 5122
@@ -58,26 +56,6 @@ comptime CHECKER = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR4nGP4
 
 
 # --- building documents -----------------------------------------------------
-
-
-def encode_base64(bytes: List[UInt8]) -> String:
-    """Return the standard, padded base64 text of some bytes."""
-    var table = String(ALPHABET).as_bytes()
-    var out = List[UInt8]()
-    var at = 0
-    while at < len(bytes):
-        var left = len(bytes) - at
-        var n = Int(bytes[at]) << 16
-        if left > 1:
-            n |= Int(bytes[at + 1]) << 8
-        if left > 2:
-            n |= Int(bytes[at + 2])
-        out.append(table[(n >> 18) & 63])
-        out.append(table[(n >> 12) & 63])
-        out.append(table[(n >> 6) & 63] if left > 1 else UInt8(61))
-        out.append(table[n & 63] if left > 2 else UInt8(61))
-        at += 3
-    return String(unsafe_from_utf8=out)
 
 
 def width_of(kind: String) -> Int:

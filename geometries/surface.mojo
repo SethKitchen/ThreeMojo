@@ -113,8 +113,6 @@ def record_kind(mut geometry: BufferGeometry, kind: GeometryType):
 
     Nothing. The kind and an empty parameter record are set.
 
-    Error: Never.
-
     Args:
         geometry: The solid.
         kind: The three.js class, such as `SPHERE_GEOMETRY`.

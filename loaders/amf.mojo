@@ -53,7 +53,7 @@ from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from core.search import first_match, last_match
-from loaders.three_mf import js_key_order
+from loaders.js_object import js_key_order
 from loaders.xml import NO_ELEMENT, XmlDocument, parse_xml
 from loaders.zip import unzip
 from materials.material import PHONG, Material, MaterialId

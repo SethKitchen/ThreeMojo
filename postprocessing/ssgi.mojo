@@ -49,9 +49,8 @@ from math.sine import fraction
 from animation.keyframe_track import LightIndex
 from core.scene import NO_PARENT, Scene
 from math.matrix4 import Matrix4
-from math.utils import glsl_sign, mix_delta
+from math.utils import glsl_sign, mix_delta, rec709_luminance
 from math.vector3 import Vector3
-from postprocessing.display_nodes import luminance_of
 from postprocessing.filter_nodes import interleaved_gradient_noise
 from postprocessing.sampling import LightView
 from postprocessing.screen_space import DepthView, glsl_rand
@@ -434,7 +433,7 @@ def _horizon(
         if covered == 0:
             continue
         var light = inputs.color(su, sv)
-        if luminance_of(light.r, light.g, light.b) <= 0.001:
+        if rec709_luminance(light.r, light.g, light.b) <= 0.001:
             continue
         var facing = min(max(normal.dot(to_tap), 0), 1)
         if facing <= 0.001:
@@ -561,7 +560,7 @@ def ssgi_pixel(
     ao /= slices
     ao = min(max(pow(1 - min(max(ao, 0), 1), settings.ao_intensity), 0), 1)
     color = color * (settings.gi_intensity / slices)
-    var shown = luminance_of(color.x, color.y, color.z)
+    var shown = rec709_luminance(color.x, color.y, color.z)
     if shown > SSGI_MAX_LUMINANCE:
         color = color * (SSGI_MAX_LUMINANCE / shown)
     return FloatColor(

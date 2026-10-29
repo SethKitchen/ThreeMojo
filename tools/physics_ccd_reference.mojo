@@ -27,6 +27,7 @@ from tools._bigint import BigInt
 from tools._fraction import Fraction
 from tools._json_tools import JsonWriter, json_tokens
 from tools._python_random import PythonRandom
+from tools._cli import finish
 
 
 @fieldwise_init
@@ -554,9 +555,4 @@ def main() raises:
     if len(given) != 3 or String(given[1]) != "--check":
         print("usage: physics_ccd_reference --check FIXTURE", file=stderr)
         exit(2)
-    var outcome = check(String(given[2]))
-    if outcome[0] != 0:
-        print(outcome[1], end="", file=stderr)
-    else:
-        print(outcome[1], end="")
-    exit(outcome[0])
+    finish(check(String(given[2])))

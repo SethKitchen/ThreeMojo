@@ -88,42 +88,23 @@ from std.testing import (
     assert_true,
 )
 from units.si import Angle, DEGREE, Length, METER
+from tests._cube_faces import (
+    BLUE,
+    CYAN,
+    GREEN,
+    MAGENTA,
+    RED,
+    YELLOW,
+    a_cube,
+    face_colors,
+    solid,
+)
 
 comptime WIDTH = 32
 comptime HEIGHT = 24
 comptime CLEAR = Color(9, 9, 9)
 
 # One color per face, in face order.
-comptime RED = Color(255, 0, 0)
-comptime GREEN = Color(0, 255, 0)
-comptime BLUE = Color(0, 0, 255)
-comptime YELLOW = Color(255, 255, 0)
-comptime CYAN = Color(0, 255, 255)
-comptime MAGENTA = Color(255, 0, 255)
-
-
-def face_colors() -> List[Color]:
-    """Return the six face colors, in face order."""
-    return [RED, GREEN, BLUE, YELLOW, CYAN, MAGENTA]
-
-
-def solid(size: Int, color: Color) raises -> Texture:
-    """Return a square texture of one color, clamped and nearest."""
-    var pixels = List[UInt8]()
-    for _ in range(size * size):
-        pixels.append(color.r)
-        pixels.append(color.g)
-        pixels.append(color.b)
-        pixels.append(color.a)
-    return Texture(size, size, pixels^, CLAMP, NEAREST, SRGB, False)
-
-
-def a_cube() raises -> CubeTexture:
-    """Return a cube of six flat faces, one color each."""
-    var faces = List[Texture]()
-    for color in face_colors():
-        faces.append(solid(2, color))
-    return CubeTexture(faces^)
 
 
 def assert_color(got: Color, want: Color) raises:

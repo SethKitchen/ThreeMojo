@@ -6,43 +6,13 @@
 """The mass of a soft-tissue solid of the humanoid, sampled on a grid.
 
 The tissues themselves, their wet densities and moduli, live in
-`extensions.anatomy.soft_tissue`, which every anatomy shares. The original
-humanoid path re-exports those same types, kinds and factories for callers
-that used it before the extraction.
+`extensions.anatomy.soft_tissue`, which every anatomy shares.
 """
 
 from core.ordinal import ordinal_valid, require_valid
 
-from extensions.anatomy.soft_tissue import (
-    SoftTissueKind,
-    CARTILAGE,
-    LIGAMENT,
-    MENISCUS,
-    MUSCLE,
-    TENDON,
-    ARTERIAL,
-    VENOUS,
-    LYMPH,
-    NERVE,
-    SKIN,
-    HAIR,
-    ADIPOSE,
-    SoftTissue,
-    SoftMass,
-    cartilage_tissue,
-    ligament_tissue,
-    meniscus_tissue,
-    adipose_tissue,
-    muscle_tissue,
-    tendon_tissue,
-    arterial_tissue,
-    venous_tissue,
-    vessel_tissue,
-    lymph_tissue,
-    nerve_tissue,
-    skin_tissue,
-    hair_tissue,
-)
+from extensions.anatomy.soft_tissue import SoftTissue, SoftMass
+
 from extensions.humanoid.skeleton.occupancy import (
     MIN_STEP,
     check_mass_box,

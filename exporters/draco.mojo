@@ -109,8 +109,7 @@ from loaders.draco_mesh import (
     NONE,
     DracoTraversalMethod,
 )
-from loaders.js_number import js_pow
-from loaders.vrml_geometry import product
+from exporters.numbers import js_linear_to_srgb
 from std.collections import Dict
 from std.memory import bitcast
 from std.pathlib import Path
@@ -238,13 +237,6 @@ struct DracoExportOptions(Copyable, Movable):
         return -1
 
 
-def _linear_to_srgb(c: Float64) -> Float64:
-    """three.js's `LinearToSRGB`, with V8's `Math.pow`."""
-    if c < 0.0031308:
-        return product(c, 12.92)
-    return product(1.055, js_pow(c, 0.41666)) - 0.055
-
-
 def _srgb_colors(values: List[Float32], components: Int) -> List[Float32]:
     """three.js's `createVertexColorSRGBArray`: red, green and blue from
     linear to sRGB, and alpha kept."""
@@ -252,7 +244,7 @@ def _srgb_colors(values: List[Float32], components: Int) -> List[Float32]:
     # A color has a value for each vertex, and there is one.
     for i in range(len(values)):  # pragma: no branch
         if i % components < 3:
-            out[i] = Float32(_linear_to_srgb(Float64(values[i])))
+            out[i] = Float32(js_linear_to_srgb(Float64(values[i])))
     return out^
 
 

@@ -60,7 +60,7 @@ from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from loaders.file_path import path_directory
-from loaders.gltf import decode_image
+from loaders.image_file import decode_image
 from loaders.model_nodes import decompose_onto
 from materials.material import (
     ADDITIVE,

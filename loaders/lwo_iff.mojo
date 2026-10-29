@@ -35,7 +35,7 @@ reads as a mesh with no positions.
 from core.ordinal import require_non_negative
 from core.search import first_match
 from loaders.js_text import js_units
-from loaders.three_mf import js_key_order
+from loaders.js_object import js_key_order
 from std.memory import bitcast
 
 # What a value in the tree is.

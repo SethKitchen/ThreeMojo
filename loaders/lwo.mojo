@@ -74,8 +74,10 @@ from core.buffer_geometry import (
 )
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
-from loaders.gltf import decode_image
+from loaders.image_file import decode_image
+from loaders.js_object import js_key_places
 from loaders.lwo_iff import LwoTree, LwoValue, parse_lwo_tree
+from loaders.utf8 import byte_slice
 from materials.material import (
     ADD_OPERATION,
     BACK_SIDE,
@@ -644,7 +646,7 @@ struct _MaterialParser:
         mut params: _Params,
     ) raises:
         """three.js's `parseTextureNodes`."""
-        var order = js_order(names)
+        var order = js_key_places(names)
         for k in order:
             var name = names[k]
             var node = nodes[k]
@@ -853,26 +855,6 @@ struct _MaterialParser:
                 if params.has("reflectivity"):
                     out.reflectivity = _physical_reflectivity(p.reflectivity)
         return out^
-
-
-def js_order(names: List[String]) -> List[Int]:
-    """Return the places of keys in the order JavaScript walks them.
-
-    Args:
-        names: The keys, each once, in the order they were added.
-
-    Returns:
-        Their places, array indices first.
-    """
-    from loaders.three_mf import js_key_order
-
-    var ordered = js_key_order(names)
-    var out = List[Int]()
-    for name in ordered:
-        for k in range(len(names)):  # pragma: no branch
-            if names[k] == name:
-                out.append(k)
-    return out^
 
 
 def _at(value: LwoValue, i: Int) -> String:
@@ -1395,8 +1377,8 @@ def lwo_model_name(url: String) -> String:
     if path.byte_length() == 0:
         # A path that starts with `Objects`: three.js splits it into its
         # characters and keeps the last.
-        var units = url.as_bytes()
-        rest = String(url[byte = len(units) - 1 :]) if len(units) > 0 else ""
+        var length = url.byte_length()
+        rest = byte_slice(url, length - 1, length)
     else:
         var parts = url.split(path)
         rest = String(parts[len(parts) - 1])

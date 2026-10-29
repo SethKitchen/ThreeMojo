@@ -14,7 +14,6 @@ from core.scene import Scene
 from extensions.vegetation.crown import (
     CrownLevel,
     CrownParameters,
-    _unit,
     birch_tree,
     bush_parameters,
     crown_level_for,
@@ -270,12 +269,6 @@ def test_leaves_hang_near_the_twig_tips() raises:
     assert_equal(
         len(hang_leaves(skeleton, tips_only)), 4 * (skeleton.tips() - 0)
     )
-
-
-def test_a_unit_vector_falls_back_to_up() raises:
-    """A vector near zero has no direction, so it is taken as +y."""
-    assert_almost_equal(_unit(Vector3(0, 0, 0)).y, 1)
-    assert_almost_equal(_unit(Vector3(3, 0, 4)).x, 0.6, atol=1e-6)
 
 
 def test_a_leafy_tree_bakes_its_light() raises:

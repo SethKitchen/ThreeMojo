@@ -5,7 +5,7 @@
 
 """A bare integer must not stand in for a proper Euler order."""
 
-from math.utils import quaternion_from_proper_euler
+from math.quaternion import quaternion_from_proper_euler
 from units.si import Angle, RADIAN
 
 

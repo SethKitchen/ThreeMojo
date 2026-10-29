@@ -59,7 +59,7 @@ var files = export_gltf(
 
 ### Nodes
 
-Each node becomes a glTF node with its name, its translation, its rotation, its scale and its children. A node with `matrix_auto_update` off writes its `matrix` instead. The writer leaves out a transform that moves nothing, as three.js does.
+Each node becomes a glTF node with its name, its translation, its rotation, its scale and its children. A node with `matrix_auto_update` off writes its `matrix` instead. glTF does not let an animated node have a `matrix`. Thus, in a file with animations, that node writes the translation, rotation and scale of its matrix. The writer leaves out a transform that moves nothing, as three.js does.
 
 The nodes keep the scene order. Node `k` of the file is the `k`th node that the writer keeps. With `only_visible`, the default, a hidden node is left out, with its descendants and its meshes. This is three.js's `onlyVisible`.
 

@@ -91,7 +91,7 @@ The new coverage, density grid and procedural scenes add no third-party asset or
 
 ## CPU stage costs
 
-`bench/hair_cost_bench.mojo` times growth, the first upload, the four stages of shading and the simulation step and write at several groom sizes. With the runtime allocation hook it also counts the allocations of each stage on the calling thread. The [cost report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-cost-298.md) records the results of two machines and the decisions they support.
+`bench/hair_cost_bench.mojo` times growth, the first upload, the four stages of shading and the simulation step and write at several groom sizes. With the runtime allocation hook it also counts the allocations of each stage on the calling thread. The [cost report](https://github.com/SethKitchen/ThreeMojo/blob/37ecbc599777ebfe114679c197c27302ee9f5e1b/docs/validation/hair-cost-298.md) records the results of two machines and the decisions they support.
 
 The report decides two things. Guide-only interpolation stays: a laid follower costs about one seventh of a simulated follower. The hair simulation and shading stay on the CPU: strand rasterization costs about 50 to 110 times more than all the hair stages together. The GPU work is strand drawing and its device upload. On the calling thread, no per-frame allocation grows with the groom.
 
@@ -101,7 +101,7 @@ Shading, its self-shadow depths, the simulation step, the follower layout and th
 
 ## Mixed body and strand frames
 
-`bench/hair_strand_raster_bench.mojo` renders body triangles and the default groom at 1920 by 1080 on the CPU. It doubles the worker count from one up to every logical core. It stops with an error when a worker count's warm-up image CRC-32 differs from one worker. It does not compare pixels or depths directly, or checksum the timed frames. The [mixed frame report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-strand-raster-298.md) records the original author's measurements on one machine. It does not qualify the later combined branch.
+`bench/hair_strand_raster_bench.mojo` renders body triangles and the default groom at 1920 by 1080 on the CPU. It doubles the worker count from one up to every logical core. It stops with an error when a worker count's warm-up image CRC-32 differs from one worker. It does not compare pixels or depths directly, or checksum the timed frames. The [mixed frame report](https://github.com/SethKitchen/ThreeMojo/blob/37ecbc599777ebfe114679c197c27302ee9f5e1b/docs/validation/hair-strand-raster-298.md) records the original author's measurements on one machine. It does not qualify the later combined branch.
 
 A one-pixel strand has an inner feather radius of zero. Its middle strip and two of the three triangles in each cap step then have two corners at the same place. Neither rasterizer draws a triangle of zero area. So the renderer does not emit an uncut triangle with two corners at the same pixel coordinates. The image and the depths do not change. The default groom's frame holds 60 percent fewer corners.
 
@@ -111,9 +111,9 @@ On that machine a whole render at 4 workers fell from about 1.8 seconds to about
 
 ## Hardware qualification
 
-`bench/hair_frame_bench.mojo` times a whole 1920 by 1080 frame by stage. The [frame report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-frame-729.md) finds that the simulation and the shading take about 7 milliseconds. Preparing and drawing the strand triangles takes about 0.78 seconds on the CPU.
+`bench/hair_frame_bench.mojo` times a whole 1920 by 1080 frame by stage. The [frame report](https://github.com/SethKitchen/ThreeMojo/blob/37ecbc599777ebfe114679c197c27302ee9f5e1b/docs/validation/hair-frame-729.md) finds that the simulation and the shading take about 7 milliseconds. Preparing and drawing the strand triangles takes about 0.78 seconds on the CPU.
 
-The GPU rasterizer is slower for this scene. Its kernel bins the triangles by tile and takes about 38 milliseconds at 1920 by 1080. Packing 2.1 million corners on the host takes about 1.4 seconds. See [the GPU report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/gpu-strands-298.md).
+The GPU rasterizer is slower for this scene. Its kernel bins the triangles by tile and takes about 38 milliseconds at 1920 by 1080. Packing 2.1 million corners on the host takes about 1.4 seconds. See [the GPU report](https://github.com/SethKitchen/ThreeMojo/blob/37ecbc599777ebfe114679c197c27302ee9f5e1b/docs/validation/gpu-strands-298.md).
 
 A 1920 by 1080 frame at 60 frames per second has a 16.667 millisecond budget. A claim must name the CPU, GPU, driver, compiler, image size, visible strand count, points per strand, coverage width, opacity, density resolution and worker count. It must include warm-up, simulation, density and shading, geometry preparation, GPU submission and transfer, rasterization and readback costs where those stages apply. Count allocations separately from uninstrumented timings.
 

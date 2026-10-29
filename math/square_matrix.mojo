@@ -133,8 +133,6 @@ def append_elements[
 
     Nothing. The list grows by `count` numbers.
 
-    Error: Never.
-
     Args:
         out: The list that receives the elements.
         elements: The matrix storage.
@@ -149,8 +147,6 @@ def copy_elements[count: Int](elements: Array[Float32, count]) -> List[Float32]:
 
     Parameters:
         count: How many elements the matrix stores. Nine or sixteen.
-
-    Error: Never.
 
     Args:
         elements: The matrix storage.
@@ -176,8 +172,6 @@ def fill_elements[
 
     Nothing. The first `count` numbers are stored.
 
-    Error: Never.
-
     Args:
         elements: The matrix storage. The call writes it from the start.
         values: At least `count` numbers, in the same order.
@@ -198,8 +192,6 @@ def store_elements[
         count: How many elements the matrix stores.
 
     Nothing. `count` slots are replaced.
-
-    Error: Never.
 
     Args:
         dest: The list. It already holds the slots.

@@ -229,7 +229,7 @@ from render.raster_state import (
     StencilOp,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from materials.nodes import NO_NODES, NodeProgramId
+from materials.node_program_id import NO_NODES, NodeProgramId
 from lights.light import ALL_LIGHTS, LightMask
 from lights.physical_layers import specular_reflectance
 from math.bounds import Plane

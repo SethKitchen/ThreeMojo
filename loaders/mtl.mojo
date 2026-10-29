@@ -49,7 +49,7 @@ clamps the texture where three.js takes its `wrap` option anyway; `-clamp
 off` takes the `wrap` option, a repeat by default.
 Any other option is refused, where three.js would take it for part of the
 file name and fail to load it. The image is decoded as a PNG, a JPEG or a
-TGA, told by its first bytes; see `loaders.gltf.decode_image`. One image
+TGA, told by its first bytes; see `loaders.image_file.decode_image`. One image
 read the same way twice is one texture.
 
 The defaults are three.js's `MeshPhongMaterial` defaults: a white color, a
@@ -81,7 +81,8 @@ from core.assets import Assets
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from loaders.file_path import path_directory
-from loaders.gltf import decode_image
+from loaders.image_file import decode_image
+from core.buffer_geometry import COLOR
 from loaders.obj import ObjModel, read_obj
 from materials.material import FRONT_SIDE, Material, MaterialId, PHONG, Side
 from math.vector2 import Vector2
@@ -97,7 +98,7 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from loaders.js_text import split_fields
+from loaders.js_text import comment_start, split_fields
 from loaders.text_number import file_line
 from std.pathlib import Path
 from units.si import METER, Length
@@ -179,6 +180,10 @@ struct MtlLibrary(Movable):
     var materials: List[MaterialId]
     # The side a default material draws, from the library's options.
     var side: Side
+    # The default materials built with vertex colors on, by name. They are
+    # kept apart, as three.js keys a default by its vertex colors too.
+    var colored_names: List[String]
+    var colored: List[MaterialId]
 
     def __init__(out self, side: Side = FRONT_SIDE):
         """Start an empty library.
@@ -189,6 +194,8 @@ struct MtlLibrary(Movable):
         self.names = List[String]()
         self.materials = List[MaterialId]()
         self.side = side
+        self.colored_names = List[String]()
+        self.colored = List[MaterialId]()
 
     def count(self) -> Int:
         """Return how many materials the library names.
@@ -254,18 +261,23 @@ struct MtlLibrary(Movable):
         for index in range(other.count()):
             self.add(other.names[index], other.materials[index])
 
-    def create(mut self, name: String, mut assets: Assets) raises -> MaterialId:
+    def create(
+        mut self, name: String, mut assets: Assets, vertex_colors: Bool = False
+    ) raises -> MaterialId:
         """Return the material a name asks for, three.js's
         `MaterialCreator.create`.
 
         A name the library does not have gets a default `PHONG` material,
         built once and then kept under that name, as three.js builds one
         from no parameters. The empty name, of an OBJ object before any
-        `usemtl`, is such a name.
+        `usemtl`, is such a name. A default for a geometry with vertex
+        colors turns `vertex_colors` on, as three.js's `OBJLoader` does,
+        and is kept apart from the default without them.
 
         Args:
             name: The material's name.
             assets: Where a default material is added.
+            vertex_colors: Whether the geometry has vertex colors.
 
         Returns:
             Its id.
@@ -277,10 +289,20 @@ struct MtlLibrary(Movable):
         var index = self.find(name)
         if index >= 0:
             return self.materials[index]
+        if vertex_colors:
+            for at in range(len(self.colored_names)):
+                if self.colored_names[at] == name:
+                    return self.colored[at]
         var surface = _Surface()
         surface.side = self.side
-        var built = assets.materials.add(_phong(surface))
-        self.add(name, built)
+        var material = _phong(surface)
+        material.vertex_colors = vertex_colors
+        var built = assets.materials.add(material)
+        if vertex_colors:
+            self.colored_names.append(name)
+            self.colored.append(built)
+        else:
+            self.add(name, built)
         return built
 
 
@@ -984,7 +1006,7 @@ def _read_infos(text: String) raises -> List[_Info]:
     for raw in text.split("\n"):  # pragma: no branch
         line += 1
         var stripped = String(String(raw).strip())
-        var comment = stripped.find("#")
+        var comment = comment_start(stripped)
         if comment >= 0:
             var data = String(stripped[byte=0:comment].strip())
             stripped = data^
@@ -1085,7 +1107,8 @@ def set_materials(
     three.js's `OBJLoader.setMaterials`.
 
     A `usemtl` name the library does not have, or no name, gets a default
-    `PHONG` material, one per name; see `MtlLibrary.create`.
+    `PHONG` material, one per name, with vertex colors on for an object
+    whose vertices have colors; see `MtlLibrary.create`.
 
     Args:
         model: The OBJ model.
@@ -1105,8 +1128,9 @@ def set_materials(
     for index in range(model.count()):
         var own = List[MaterialId]()
         ref names = model.objects[index].materials
+        var colored = model.objects[index].geometry.has_attribute(COLOR)
         for entry in range(len(names)):  # pragma: no branch
-            own.append(library.create(names[entry], assets))
+            own.append(library.create(names[entry], assets, colored))
         ids.append(own^)
     return ids^
 

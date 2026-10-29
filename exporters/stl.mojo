@@ -29,11 +29,11 @@ from core.assets import Assets
 from core.scene import Scene
 from exporters.common import (
     WorldOptions,
-    format_js_float32,
     push_f32,
     push_word,
     world_meshes,
 )
+from exporters.numbers import format_js_float32
 from math.vector3 import Vector3
 from std.pathlib import Path
 

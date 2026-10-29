@@ -49,8 +49,6 @@ def read_finite_float32(
 def file_line(kind: String, line: Int) -> String:
     """Return the prefix an error names a line with.
 
-    Error: Never.
-
     Args:
         kind: The file kind, such as `OBJ` or `PLY header`.
         line: The line number.

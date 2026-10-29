@@ -33,7 +33,7 @@ from core.object3d import NodeId
 from geometries.box import box
 from materials.glsl import compile_shader_material
 from materials.material import BACK_SIDE, shader_material
-from materials.nodes import NodeProgramId
+from materials.node_program_id import NodeProgramId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from units.si import Length, METER

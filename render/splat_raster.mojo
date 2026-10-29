@@ -58,6 +58,7 @@ from render.splatrule import (
     splat_reach,
 )
 from render.target import RenderTarget
+from render.fillrule import pixel_index
 from render.rect import Rect
 from render.tasks import TaskGroup
 from std.math import ceil, floor, fma, isfinite, max, min, sqrt
@@ -697,31 +698,6 @@ def raise_splat_band_errors(errors: List[String]) raises:
             raise Error(errors[band])
 
 
-def _splat_index(value: Float32, round_up: Bool) -> Int:
-    """Return the pixel index of a splat edge.
-
-    A value that is not finite, or that does not fit in an integer, is
-    past every pixel. `Int` of such a float is not that coordinate.
-
-    Args:
-        value: The edge, in pixels.
-        round_up: True to round toward positive infinity.
-
-    Returns:
-        The index, or `Int.MAX` or `Int.MIN` when `value` does not fit.
-    """
-    # `Float32(Int.MAX)` is 2^63, as `Float64(Int.MAX)` is, and the floor
-    # of a `Float32` is a `Float32`: the same test and index without
-    # `Float64`, which a Metal kernel cannot run.
-    if not isfinite(value) or value >= Float32(Int.MAX):
-        return Int.MAX
-    if value <= -Float32(Int.MAX):
-        return Int.MIN
-    if round_up:
-        return Int(ceil(value))
-    return Int(floor(value))
-
-
 def _splat_low(value: Float32, floor_at: Int) -> Int:
     """Return the first pixel at or before `value`, held at `floor_at`.
 
@@ -732,7 +708,7 @@ def _splat_low(value: Float32, floor_at: Int) -> Int:
     Returns:
         The column or row the walk starts at, or past the image.
     """
-    var index = _splat_index(value, False)
+    var index = pixel_index(value, False)
     if index == Int.MIN:
         return floor_at
     if index == Int.MAX:
@@ -750,7 +726,7 @@ def _splat_high(value: Float32, ceil_at: Int) -> Int:
     Returns:
         The column or row the walk ends at, or before the image.
     """
-    var index = _splat_index(value, True)
+    var index = pixel_index(value, True)
     if index == Int.MAX:
         return ceil_at
     if index == Int.MIN:

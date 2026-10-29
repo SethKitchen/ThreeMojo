@@ -14,7 +14,12 @@ from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.bone import bone_phong
-from extensions.humanoid.skeleton.field import flip_x, mix_point, ud_triangle
+from extensions.humanoid.skeleton.field import (
+    empty_bounds,
+    flip_x,
+    mix_point,
+    ud_triangle,
+)
 from extensions.humanoid.skeleton.leg.assembly import assemble_leg
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     muscle_dimensions,
@@ -123,11 +128,15 @@ from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     ILIACUS,
     PIRIFORMIS,
     PSOAS_MAJOR,
+    PelvisChain,
+    PelvisChainSet,
     PelvisMuscle,
     PelvisMuscleField,
     named_pelvis_muscles,
     pelvis_muscle_dimensions,
     pelvis_muscle_distance,
+    chain_set_bounds,
+    max_f,
     pelvis_muscle_label,
 )
 from extensions.humanoid.skeleton.pelvis.muscles.geometry import (
@@ -200,7 +209,8 @@ from extensions.anatomy.soft_tissue import (
 )
 from extensions.humanoid.skeleton.soft_tissue import SOFT_FILL
 from math.vector3 import Vector3
-from std.math import cos, nan, sin
+from std.math import cos, isnan, nan, sin
+from std.memory import bitcast
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -975,6 +985,40 @@ def test_lower_body_skin_is_one_surface() raises:
     assert_true(field.gradient(Vector3(0, 0.02, 0.4)).z > 0.3)
     with assert_raises():
         _ = lower_body_skin_mesh(person, 7)
+
+
+def test_max_f_keeps_operand_order_for_nan_and_zero() raises:
+    assert_equal(max_f(2, 1), Float32(2))
+    assert_equal(max_f(1, 2), Float32(2))
+    assert_equal(max_f(nan[DType.float32](), 3), Float32(3))
+    assert_true(isnan(max_f(3, nan[DType.float32]())))
+    assert_equal(
+        bitcast[DType.uint32](max_f(0, -Float32(0))), UInt32(0x80000000)
+    )
+    assert_equal(bitcast[DType.uint32](max_f(-Float32(0), 0)), UInt32(0))
+
+
+def test_pelvis_bounds_use_original_radius_operand_order() raises:
+    var origin = Vector3(0, 0, 0)
+    var far = Vector3(10, 0, 0)
+    var missing = nan[DType.float32]()
+    var chain = PelvisChain(
+        origin, far, origin, origin, origin, 1, 2, 1, 1, 1, 1, missing, 1, 1, 1
+    )
+    var got = chain_set_bounds(PelvisChainSet(1, chain, chain, chain), 0)
+    var expected = empty_bounds()
+    expected.include_sphere(origin, max_f(1, 1))
+    expected.include_sphere(far, max_f(2, missing))
+    expected.include_sphere(origin, max_f(1, 1))
+    expected.include_sphere(origin, max_f(1, 1))
+    expected.include_sphere(origin, max_f(1, 1))
+    assert_equal(
+        bitcast[DType.uint32](got.low.x), bitcast[DType.uint32](expected.low.x)
+    )
+    assert_equal(
+        bitcast[DType.uint32](got.high.x),
+        bitcast[DType.uint32](expected.high.x),
+    )
 
 
 def main() raises:

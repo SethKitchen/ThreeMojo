@@ -49,7 +49,7 @@ from units.si import Length, METER
 from render.framebuffer import TRANSPARENT_BLACK, FloatColor
 from render.target import RenderTarget
 from std.math import cos, floor, isfinite, pi, pow, sin, sqrt
-from math.utils import scaled_side
+from math.utils import rec709_luminance, scaled_side
 
 
 # --- the settings ------------------------------------------------------------
@@ -1002,11 +1002,6 @@ comptime ANAMORPHIC_TINT_G = Float32(0.0)
 comptime ANAMORPHIC_TINT_B = Float32(1.0)
 
 
-def luminance_of(r: Float32, g: Float32, b: Float32) -> Float32:
-    """Return three.js's `luminance`, rec. 709's weights."""
-    return 0.2126729 * r + 0.7151522 * g + 0.0721750 * b
-
-
 def anamorphic_light(mut frame: RenderTarget, settings: DisplaySettings) raises:
     """Add three.js's `AnamorphicNode` to the frame: the light above a
     luminance threshold, smeared along the row and tinted blue, at the
@@ -1049,7 +1044,7 @@ def anamorphic_light(mut frame: RenderTarget, settings: DisplaySettings) raises:
                 var tap = view.sample(
                     u + inv_x * Float32(i) * settings.anamorphic_scale, v
                 ).unpremultiplied()
-                var lum = luminance_of(tap.r, tap.g, tap.b)
+                var lum = rec709_luminance(tap.r, tap.g, tap.b)
                 var keep = max(lum - settings.threshold, Float32(0)) * softness
                 r += tap.r * keep
                 g += tap.g * keep

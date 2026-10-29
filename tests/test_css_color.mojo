@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Tests for `render.css_color` and the `FloatColor` members that use it.
+"""Tests for `render.css_color`, three.js's CSS side of `Color`.
 
 The expected numbers come from three.js 0.180's `Color`, run in node on
 the same strings.
@@ -74,11 +74,11 @@ def check(
     Raises:
         Error: If anything differs.
     """
-    var color = FloatColor(style=style)
+    var color = parse_style(style)
     assert_color(color, r, g, b)
-    assert_equal(color.style(), css)
-    assert_equal(color.hex_string(), hex)
-    assert_equal(color.style(LINEAR), linear)
+    assert_equal(format_style(color), css)
+    assert_equal(hex_string(color), hex)
+    assert_equal(format_style(color, LINEAR), linear)
 
 
 def test_rgb() raises:
@@ -130,7 +130,7 @@ def test_rgb_percent() raises:
         "ff8000",
         "color(srgb-linear 1.000 0.214 0.000)",
     )
-    assert_color(FloatColor(style="rgba(200%, 0%, 0%, .25)"), 1, 0, 0)
+    assert_color(parse_style("rgba(200%, 0%, 0%, .25)"), 1, 0, 0)
 
 
 def test_hsl() raises:

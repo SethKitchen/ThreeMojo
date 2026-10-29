@@ -48,7 +48,7 @@ expansion cannot exceed the Unicode code space.
 from core.ordinal import require_non_negative
 from loaders.font import Font, parse_font
 from loaders.json import quote_json
-from loaders.three_mf import js_key_order
+from loaders.js_object import js_key_order
 from std.math import floor, isnan, nan
 from std.pathlib import Path
 

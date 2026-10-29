@@ -47,6 +47,7 @@ from render.texture import (
     plan_levels,
     row_coordinate,
 )
+from std.math import nan
 from std.memory import bitcast
 from std.testing import (
     TestSuite,
@@ -229,6 +230,27 @@ def test_a_mipmap_linear_filter_mixes_the_two_levels_either_side() raises:
     assert_equal(plan.filter, NEAREST)
     assert_equal(plan.lower, 3)
     assert_equal(plan.upper, 3)
+
+
+def test_a_level_that_is_not_a_number_reads_the_full_image() raises:
+    # NaN has no place in the chain, so it reads as level zero would.
+    var filters = [
+        LINEAR_MIPMAP_LINEAR,
+        LINEAR_MIPMAP_NEAREST,
+        NEAREST_MIPMAP_LINEAR,
+        NEAREST_MIPMAP_NEAREST,
+    ]
+    for filter in filters:
+        var plan = plan_levels(nan[DType.float32](), 3, BILINEAR, filter)
+        assert_equal(plan.filter, BILINEAR)
+        assert_equal(plan.lower, 0)
+        assert_equal(plan.upper, 0)
+    var image = ramp()
+    image.min_filter = LINEAR_MIPMAP_LINEAR
+    same(
+        image.sample_level(0.3, 0.3, nan[DType.float32]()),
+        image.sample_level(0.3, 0.3, 0),
+    )
 
 
 def test_a_named_level_is_read_through_the_filter_for_it() raises:

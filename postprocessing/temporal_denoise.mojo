@@ -47,9 +47,9 @@ from math.norm import squared_length2
 from math.sine import fraction
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
-from math.utils import clamped_texel, edge_index, mix_delta
+from math.utils import clamped_texel, edge_index, mix_delta, rec709_luminance
 from math.vector3 import Vector3, mix_delta3
-from postprocessing.display_nodes import exp_f, luminance_of
+from postprocessing.display_nodes import exp_f
 from postprocessing.traa import variance_gamma
 from postprocessing.sampling import LightView, nearest_held_index
 from postprocessing.screen_space import DepthView
@@ -608,7 +608,7 @@ def _dampened(color: FloatColor, flicker: Float32) -> Vector3:
     """Return a color scaled down by its luminance and in YCoCg, as
     `collectNeighborhood` reads each texel."""
     var scale = (
-        luminance_of(color.r, color.g, color.b)
+        rec709_luminance(color.r, color.g, color.b)
         * flicker
         * VARIANCE_CLIP_LUMA_SCALE
         + 1
@@ -694,7 +694,7 @@ def temporal_reproject_pixel(
     var low = mean - deviation * gamma
     var high = mean + deviation * gamma
     var scale = (
-        luminance_of(history.r, history.g, history.b)
+        rec709_luminance(history.r, history.g, history.b)
         * flicker
         * VARIANCE_CLIP_LUMA_SCALE
         + 1
@@ -853,10 +853,11 @@ def karis_blend(
     var noisy = smoothstep(FLICKER_COV_GATE_MIN, FLICKER_COV_GATE_MAX, cov)
     var effective = flicker * ((1 - trust) + (1 - (1 - trust)) * noisy)
     var w_hist = (1 - a_trust) / (
-        luminance_of(denoised.x, denoised.y, denoised.z) * effective * 10 + 1
+        rec709_luminance(denoised.x, denoised.y, denoised.z) * effective * 10
+        + 1
     )
     var w_raw = a_trust / (
-        luminance_of(raw.x, raw.y, raw.z) * effective * 10 + 1
+        rec709_luminance(raw.x, raw.y, raw.z) * effective * 10 + 1
     )
     return (denoised * w_hist + raw * w_raw) / max(w_hist + w_raw, TSL_EPSILON)
 
@@ -1017,7 +1018,7 @@ def _neighborhood(
             rl_sum += rl * w
             rl_weight += w
         if settings.adaptive_trust > 0:
-            var luma = luminance_of(sample.r, sample.g, sample.b)
+            var luma = rec709_luminance(sample.r, sample.g, sample.b)
             count += 1
             var delta = luma - mean
             mean += delta / count
@@ -1103,7 +1104,7 @@ def recurrent_denoise_pixel(
     var bias = Vector2(0, 0)
     var depth_scale = settings.depth_phi * 500 * abs(normal.z) / abs(here.z)
     var falloff = lobe_normal_falloff(1, aggressivity, 1 - settings.normal_phi)
-    var raw_luma = luminance_of(raw.r, raw.g, raw.b)
+    var raw_luma = rec709_luminance(raw.r, raw.g, raw.b)
     for i in range(KERNEL_SAMPLES):  # pragma: no branch
         var base = vogel_disk(i, 1)
         var base_length = base.length()
@@ -1128,7 +1129,7 @@ def recurrent_denoise_pixel(
         var n_view_z = abs(there.z)
         var diff = (
             abs(
-                luminance_of(raw_neighbor.r, raw_neighbor.g, raw_neighbor.b)
+                rec709_luminance(raw_neighbor.r, raw_neighbor.g, raw_neighbor.b)
                 - raw_luma
             )
             * settings.luma_phi
@@ -1162,7 +1163,7 @@ def recurrent_denoise_pixel(
         )
         shrink = mix_delta(shrink, w, settings.adapt)
         bias = bias + (dir * (w - 0.5) - bias) * 0.5
-        var neighbor_luma = luminance_of(
+        var neighbor_luma = rec709_luminance(
             raw_neighbor.r, raw_neighbor.g, raw_neighbor.b
         )
         var boost = 1 / (neighbor_luma * neighbor_luma + 0.01)

@@ -441,6 +441,13 @@ def test_a_bloom_bleeds_light_past_the_threshold_and_none_below() raises:
     thin.write(0, 1, FloatColor(4, 4, 4, 1))
     bloom_light(thin, 1.0, 0.5, 0.0)
     assert_true(thin.color_at(0, 0).r > 0, "a thin frame did not bloom")
+    # three.js passes the threshold after the half-size target filters the
+    # frame: one white pixel of four is a quarter, below a half.
+    var quarter = RenderTarget(2, 2, BLACK)
+    quarter.write(0, 0, FloatColor(1, 1, 1, 1))
+    bloom_light(quarter, 1.0, 0.0, 0.5)
+    assert_equal(quarter.color_at(0, 0).r, Float32(1))
+    assert_equal(quarter.color_at(1, 1).r, Float32(0))
 
 
 def test_film_grain_brightens_by_at_most_the_light_and_holds_at_zero() raises:
@@ -472,7 +479,7 @@ def test_film_grain_brightens_by_at_most_the_light_and_holds_at_zero() raises:
     )
     var gray = flat(1, 1, FloatColor(1, 0, 0, 0.5))
     film_light(gray, 0.0, True, 0.0)
-    assert_almost_equal(straight(gray, 0, 0).g, Float32(0.2126729), atol=1e-6)
+    assert_almost_equal(straight(gray, 0, 0).g, Float32(0.2126), atol=1e-6)
     assert_almost_equal(straight(gray, 0, 0).a, Float32(0.5), atol=1e-6)
     var later = flat(1, 1, FloatColor(0.5, 0.5, 0.5, 1))
     film_light(later, 1.0, False, 0.37)
@@ -606,15 +613,15 @@ def test_luminosity_grays_by_rec_709() raises:
     var frame = flat(1, 1, FloatColor(1, 0, 0, 0.5))
     luminosity_light(frame)
     var gray = straight(frame, 0, 0)
-    assert_almost_equal(gray.r, Float32(0.2126729), atol=1e-6)
+    assert_almost_equal(gray.r, Float32(0.2126), atol=1e-6)
     assert_almost_equal(gray.g, gray.r, atol=1e-7)
     assert_almost_equal(gray.b, gray.r, atol=1e-7)
     assert_almost_equal(gray.a, Float32(0.5), atol=1e-6)
     assert_almost_equal(
-        luminance(FloatColor(0, 1, 0, 1)), Float32(0.7151522), atol=1e-7
+        luminance(FloatColor(0, 1, 0, 1)), Float32(0.7152), atol=1e-7
     )
     assert_almost_equal(
-        luminance(FloatColor(0, 0, 1, 1)), Float32(0.0721750), atol=1e-7
+        luminance(FloatColor(0, 0, 1, 1)), Float32(0.0722), atol=1e-7
     )
 
 

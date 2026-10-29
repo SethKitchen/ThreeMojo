@@ -397,18 +397,21 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         offset moves both side edges, as in three.js. Last the side edges
         are moved by `view_shift`, which keeps the frustum's width and
         skews it: the symmetric frustum is the shift of zero. A
-        `projection_override` is returned in place of all of it.
+        `projection_override` is returned in place of all of it, before
+        the settings it replaces are checked, as three.js returns it:
+        `frame_corners` can estimate a field of view of 180 degrees or
+        more beside its override.
 
         Returns:
             The projection matrix.
 
         Raises:
-            Error: If `validate` refuses the settings, or the frustum works
-                out degenerate.
+            Error: If there is no override and `validate` refuses the
+                settings, or the frustum works out degenerate.
         """
-        self.validate()
         if Bool(self.projection_override):
             return self.projection_override.value()
+        self.validate()
         var near = self.near.value
         var top = near * tan(self.fov.value / 2) / self.zoom
         var height = 2 * top
@@ -440,9 +443,10 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
             The view matrix, from where the camera was placed.
 
         Raises:
-            Error: If the camera sits at its own target, or up is parallel to
-                the view direction, or the camera rides a node -- the scene
-                has that answer, so ask `view_matrix_in`.
+            Error: If a position is not finite, up is zero or not finite,
+                or the camera rides a node -- the scene has that answer, so
+                ask `view_matrix_in`. A camera at its own target, or with up
+                along the view, is turned as `look_at` turns it.
         """
         return placed_view_matrix(
             self.node, self.position, self.target, self.up

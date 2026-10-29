@@ -120,7 +120,6 @@ var model = read_3mf("assets/3mf/fixture.3mf", scene, assets)
 | `three_mf_unit(name) -> Length` | The length of one unit: `micron`, `millimeter`, `centimeter`, `inch`, `foot` or `meter`. |
 | `three_mf_transform(text) -> Matrix4` | The matrix of a `transform` attribute. |
 | `three_mf_wrap(style) -> Wrap` | The wrap of a `tilestyleu` attribute. |
-| `js_key_order(keys) -> List[String]` | The order in which a JavaScript object walks its keys. |
 
 ### ThreeMfModel
 

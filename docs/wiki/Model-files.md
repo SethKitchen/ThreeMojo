@@ -59,13 +59,14 @@ OBJ polygon convexity is checked in translated, widened coordinates so small or 
 | Line | Meaning |
 |---|---|
 | `v x y z` | A position. A fourth number is ignored. |
+| `v x y z r g b` | A position and its sRGB color, as in three.js. An object with a colored vertex gets a linear `color` attribute. A vertex without a color is white in it. |
 | `vt u v` | A texture coordinate. |
 | `vn x y z` | A normal. |
 | `f a b c ...` | A face of three or more corners, cut into a fan of triangles. A polygon must be convex. Each corner is `v`, `v/vt`, `v//vn` or `v/vt/vn`. |
 | `o name`, `g name` | A new object. One with no faces is dropped. |
 | `usemtl name` | A new run of faces under that material, in the same object. A run with no faces is dropped. The first `usemtl` also takes the faces before it, as in three.js. |
 | `mtllib name` | A material library. The rest of the line is one file name. |
-| `#` | A comment, to the end of the line. |
+| `#` | A comment, to the end of the line, when the `#` starts the line or follows a space or a tab. A `#` inside a word is part of it, so `usemtl Material#1` names `Material#1`. |
 
 An index counts from one. A negative index counts back from the last entry so far. `s`, `l`, `p` and unknown lines are skipped.
 
@@ -139,9 +140,9 @@ var library = read_mtl(
 | `get(name) -> MaterialId` | The material of a name. It raises for a name the library does not have. |
 | `add(name, material)` | Add a material. It replaces a material of the same name. |
 | `merge(other)` | Add each material of another library. |
-| `create(name, assets) -> MaterialId` | The material of a name. For a name the library does not have, it adds a default `PHONG` material once and keeps it. This is three.js's `MaterialCreator.create`. |
+| `create(name, assets, vertex_colors=False) -> MaterialId` | The material of a name. For a name the library does not have, it adds a default `PHONG` material once and keeps it. With `vertex_colors`, the default turns vertex colors on and is kept apart. This is three.js's `MaterialCreator.create`. |
 
-An OBJ object with no `usemtl`, or with a name that no library has, gets a default material. Each such name gets its own default, as in three.js.
+An OBJ object with no `usemtl`, or with a name that no library has, gets a default material. Each such name gets its own default, as in three.js. The default of an object with vertex colors turns them on.
 
 ### What is read
 
@@ -164,7 +165,7 @@ A keyword can be in any case. Each key keeps the last value that a material give
 | `norm file` | The normal map, as data. |
 | `map_Ks file` | The specular map, as data. |
 | `disp file` | The displacement map, as data. |
-| `#` | A comment, to the end of the line. |
+| `#` | A comment, to the end of the line, when the `#` starts the line or follows a space or a tab. A `#` inside a word is part of it, so `usemtl Material#1` names `Material#1`. |
 
 The defaults are those of three.js's `MeshPhongMaterial`: a white color, a specular of `0x111111`, a shininess of 30, no emissive color, and opaque. Lines before the first `newmtl` are skipped. A key with no value is skipped. `Ka`, `map_Ka` and unknown keys are skipped, as three.js skips them.
 
@@ -996,7 +997,7 @@ A curve time is in FBX ticks, 46186158000 each second. A key comes at each time 
 
 The angles of an `R` curve node are in degrees and turn in the `RotationOrder` of the model. The pre-rotation turns first, and the post-rotation is undone last, in `ZYX`, as `generateTransform` does. When an angle changes by 180 degrees or more between two keys, three.js adds keys between them by `slerp` and drops the second key. This loader does the same. Every track is `LINEAR`, as in three.js.
 
-The stacks come in the order that three.js meets them. A JavaScript object puts an id from 0 to 2^32 - 2 first, in numeric order. `js_key_order` gives that order.
+The stacks come in the order that three.js meets them. A JavaScript object puts an id from 0 to 2^32 - 2 first, in numeric order. `js_id_places` in `loaders/js_object.mojo` gives that order.
 
 ### Differences from three.js
 

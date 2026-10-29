@@ -31,7 +31,6 @@ from extensions.carla.render_post import (
     henyey_greenstein,
     lens_falloff,
     lens_source,
-    luminance,
     metered_luminance,
 )
 from extensions.carla.render_textures import (
@@ -544,9 +543,7 @@ def _rays(size: Int) raises -> ViewRays:
     return ViewRays(size, size, perspective(-1, 1, 1, -1, 1, 100), Matrix4())
 
 
-def test_luminance_and_phase() raises:
-    assert_almost_equal(luminance(FloatColor(1, 1, 1)), 1, atol=1e-6)
-    assert_almost_equal(luminance(FloatColor(0, 1, 0)), 0.7152, atol=1e-6)
+def test_the_phase_function() raises:
     # g = 0 scatters evenly: 1 / (4 pi).
     assert_almost_equal(henyey_greenstein(0.3, 0), 0.0795774715, atol=1e-6)
     # g = 0.6 straight ahead: 0.64 / (4 pi 0.4^3).

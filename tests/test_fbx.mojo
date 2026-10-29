@@ -60,7 +60,7 @@ from loaders.fbx_tree import (
     require_fbx_whole,
     string_property,
 )
-from loaders.gltf import decode_base64
+from loaders.bytes import decode_base64
 from materials.material import LAMBERT, NO_TEXTURE, PHONG, Material
 from math.euler import YXZ, ZYX
 from math.quaternion import Quaternion

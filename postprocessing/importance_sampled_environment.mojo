@@ -39,7 +39,6 @@ from math.utils import mix_bilinear, mix_delta, rec709_luminance
 from math.norm import squared_length2
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from postprocessing.display_nodes import luminance_of
 from postprocessing.sampling import clamped_texel
 from render.color_math import rgb_channels
 from render.framebuffer import FloatColor
@@ -57,21 +56,6 @@ def half(value: Float32) -> Float32:
         The nearest half float.
     """
     return value.cast[DType.float16]().cast[DType.float32]()
-
-
-def color_to_luminance(r: Float32, g: Float32, b: Float32) -> Float32:
-    """Return three.js's `colorToLuminance`, the rec. 709 weights to four
-    places.
-
-    Args:
-        r: Red.
-        g: Green.
-        b: Blue.
-
-    Returns:
-        The luminance.
-    """
-    return rec709_luminance(r, g, b)
 
 
 def closest_index(
@@ -181,7 +165,7 @@ struct EquirectEnvironment(Copyable, Movable):
             var row_sum = Float32(0)
             for x in range(w):  # pragma: no branch
                 var t = self.texels[y * w + x]
-                var weight = color_to_luminance(t.r, t.g, t.b)
+                var weight = rec709_luminance(t.r, t.g, t.b)
                 row_sum += weight
                 total += weight
                 cdf_row[y * w + x] = row_sum
@@ -513,7 +497,7 @@ def sample_environment_mis(
     var pdf_env1 = max(
         w
         * h
-        * (luminance_of(color1.x, color1.y, color1.z) / env.total)
+        * (rec709_luminance(color1.x, color1.y, color1.z) / env.total)
         * equirect_dir_pdf(l1),
         Float32(1e-8),
     )
@@ -538,7 +522,7 @@ def sample_environment_mis(
             var pdf_env2 = max(
                 w
                 * h
-                * (luminance_of(color.x, color.y, color.z) / env.total)
+                * (rec709_luminance(color.x, color.y, color.z) / env.total)
                 * equirect_dir_pdf(dir),
                 Float32(1e-8),
             )

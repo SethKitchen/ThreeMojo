@@ -86,7 +86,9 @@ moves nothing here, where three.js adds the base positions to it as if
 they were offsets. A target without a `COLOR_0` changes no color, where
 three.js adds the base colors the same way. A channel on a node
 the default scene does not reach is left out, and so is an animation left
-with no channel. A skin joint the scene does not reach is refused. So is a specular
+with no channel. An animation whose keys all lie at time zero holds a still
+pose; its clip lasts one frame at 30 frames a second, where three.js makes
+a clip of no length. A skin joint the scene does not reach is refused. So is a specular
 color factor outside zero to one, which a `Color` cannot hold; any map
 that reads a third set of texture coordinates or past it, since a
 geometry here has only `uv` and `uv1`; and a skinned node that is
@@ -230,7 +232,8 @@ from loaders.draco import (
     DracoGeometry,
     _decode_draco_owned,
 )
-from loaders.bytes import base64_digit
+from loaders.bytes import decode_base64
+from loaders.image_file import decode_image
 from loaders.file_path import path_directory
 from loaders.draco_attributes import DracoDataType
 from loaders.meshopt import (
@@ -282,12 +285,53 @@ from objects.mesh import Mesh
 from objects.line import LOOP, SEGMENTS, STRIP, Line, LineMode
 from objects.points import Points
 from render.framebuffer import Color, FloatColor
-from render.jpeg import decode as decode_jpeg
-from render.png import DecodedImage, decode as decode_png
 from render.srgb import LINEAR, SRGB, ColorSpace
-from render.tga import decode as decode_tga
-from render.webp import decode as decode_webp, is_webp
 from render import ktx2
+from loaders.gltf_format import (
+    COMPONENT_BYTE,
+    COMPONENT_FLOAT,
+    COMPONENT_SHORT,
+    COMPONENT_UNSIGNED_BYTE,
+    COMPONENT_UNSIGNED_INT,
+    COMPONENT_UNSIGNED_SHORT,
+    DRACO_MESH_COMPRESSION,
+    EMISSIVE_STRENGTH,
+    FILTER_LINEAR,
+    FILTER_LINEAR_MIPMAP_LINEAR,
+    GLB_BIN_CHUNK,
+    GLB_CHUNK_HEADER_BYTES,
+    GLB_HEADER_BYTES,
+    GLB_JSON_CHUNK,
+    GLB_MAGIC,
+    GLB_VERSION,
+    GPU_INSTANCING,
+    LIGHTS_PUNCTUAL,
+    MATERIALS_ANISOTROPY,
+    MATERIALS_BUMP,
+    MATERIALS_CLEARCOAT,
+    MATERIALS_DISPERSION,
+    MATERIALS_IOR,
+    MATERIALS_IRIDESCENCE,
+    MATERIALS_SHEEN,
+    MATERIALS_SPECULAR,
+    MATERIALS_TRANSMISSION,
+    MATERIALS_UNLIT,
+    MATERIALS_VARIANTS,
+    MATERIALS_VOLUME,
+    MESHOPT_COMPRESSION,
+    MESH_QUANTIZATION,
+    MODE_LINES,
+    MODE_LINE_LOOP,
+    MODE_POINTS,
+    MODE_TRIANGLES,
+    TEXTURE_BASISU,
+    TEXTURE_TRANSFORM,
+    TEXTURE_WEBP,
+    WRAP_CLAMP,
+    WRAP_MIRROR,
+    WRAP_REPEAT,
+    filter_of_gl,
+)
 from render.texture import (
     Alpha,
     BILINEAR,
@@ -314,22 +358,8 @@ from std.memory import bitcast
 from std.pathlib import Path
 from units.si import Angle, Duration, Length, METER, NANOMETER, RADIAN, SECOND
 
-# The binary container's header: the magic `glTF`, the version, and the
-# two chunk types, as little-endian words.
-comptime GLB_MAGIC = 0x46546C67
-comptime GLB_VERSION = 2
-comptime GLB_HEADER_BYTES = 12
-comptime GLB_CHUNK_HEADER_BYTES = 8
-comptime GLB_JSON_CHUNK = 0x4E4F534A
-comptime GLB_BIN_CHUNK = 0x004E4942
-
-# The accessor component types glTF names, by their GL constants.
-comptime COMPONENT_BYTE = 5120
-comptime COMPONENT_UNSIGNED_BYTE = 5121
-comptime COMPONENT_SHORT = 5122
-comptime COMPONENT_UNSIGNED_SHORT = 5123
-comptime COMPONENT_UNSIGNED_INT = 5125
-comptime COMPONENT_FLOAT = 5126
+# How long a clip of a still pose lasts: one frame at 30 frames a second.
+comptime _STILL_POSE_SECONDS = Float32(1.0 / 30.0)
 
 
 def require_sparse_indices(index_type: Int) raises:
@@ -389,27 +419,6 @@ def require_gltf_mesh(mesh: Int, count: Int) raises:
         raise Error("glTF: a node names a mesh that is not there")
 
 
-# The primitive modes that are read: points, the three kinds of line, and
-# triangles. glTF names them by their GL constants.
-comptime MODE_POINTS = 0
-comptime MODE_LINES = 1
-comptime MODE_LINE_LOOP = 2
-comptime MODE_LINE_STRIP = 3
-comptime MODE_TRIANGLES = 4
-
-# The sampler's wrap and filter constants.
-comptime WRAP_REPEAT = 10497
-comptime WRAP_CLAMP = 33071
-comptime WRAP_MIRROR = 33648
-comptime FILTER_NEAREST = 9728
-comptime FILTER_LINEAR = 9729
-# The four minification filters that read a mipmap chain.
-comptime FILTER_NEAREST_MIPMAP_NEAREST = 9984
-comptime FILTER_LINEAR_MIPMAP_NEAREST = 9985
-comptime FILTER_NEAREST_MIPMAP_LINEAR = 9986
-comptime FILTER_LINEAR_MIPMAP_LINEAR = 9987
-
-
 @fieldwise_init
 struct GltfSampler(ImplicitlyCopyable):
     """A glTF sampler as a texture reads it: its two wraps and its two
@@ -433,55 +442,6 @@ struct GltfSampler(ImplicitlyCopyable):
         self.min_filter = LINEAR_MIPMAP_LINEAR
 
 
-def gl_filter(filter: Filter) -> Int:
-    """Return a filter as glTF's GL constant.
-
-    Args:
-        filter: Any of the six named filters.
-
-    Returns:
-        The constant: `FILTER_NEAREST` for `NEAREST`, and so on.
-    """
-    if filter == NEAREST:
-        return FILTER_NEAREST
-    if filter == BILINEAR:
-        return FILTER_LINEAR
-    if filter == NEAREST_MIPMAP_NEAREST:
-        return FILTER_NEAREST_MIPMAP_NEAREST
-    if filter == LINEAR_MIPMAP_NEAREST:
-        return FILTER_LINEAR_MIPMAP_NEAREST
-    if filter == NEAREST_MIPMAP_LINEAR:
-        return FILTER_NEAREST_MIPMAP_LINEAR
-    return FILTER_LINEAR_MIPMAP_LINEAR
-
-
-def filter_of_gl(code: Int) raises -> Filter:
-    """Return a glTF filter constant as a filter.
-
-    Args:
-        code: One of glTF's six filter constants.
-
-    Returns:
-        The filter.
-
-    Raises:
-        Error: If the constant is none of the six.
-    """
-    if code == FILTER_NEAREST:
-        return NEAREST
-    if code == FILTER_LINEAR:
-        return BILINEAR
-    if code == FILTER_NEAREST_MIPMAP_NEAREST:
-        return NEAREST_MIPMAP_NEAREST
-    if code == FILTER_LINEAR_MIPMAP_NEAREST:
-        return LINEAR_MIPMAP_NEAREST
-    if code == FILTER_NEAREST_MIPMAP_LINEAR:
-        return NEAREST_MIPMAP_LINEAR
-    if code == FILTER_LINEAR_MIPMAP_LINEAR:
-        return LINEAR_MIPMAP_LINEAR
-    raise Error("glTF: a filter that is not known")
-
-
 # What a material's `alphaCutoff` is when `MASK` names none.
 comptime DEFAULT_ALPHA_CUTOFF = Float32(0.5)
 
@@ -490,30 +450,6 @@ comptime DEFAULT_ALPHA_CUTOFF = Float32(0.5)
 # infinite projection, which a `PerspectiveCamera` cannot hold.
 comptime DEFAULT_ASPECT = Float32(1)
 comptime DEFAULT_FAR = Float32(2e6)
-
-# The extensions this loader reads. A file that requires any other is
-# refused, as three.js's `GLTFLoader` refuses one it has no plugin for.
-comptime EMISSIVE_STRENGTH = "KHR_materials_emissive_strength"
-comptime MATERIALS_IOR = "KHR_materials_ior"
-comptime MATERIALS_SPECULAR = "KHR_materials_specular"
-comptime MATERIALS_CLEARCOAT = "KHR_materials_clearcoat"
-comptime MATERIALS_SHEEN = "KHR_materials_sheen"
-comptime MATERIALS_IRIDESCENCE = "KHR_materials_iridescence"
-comptime MATERIALS_ANISOTROPY = "KHR_materials_anisotropy"
-comptime MATERIALS_UNLIT = "KHR_materials_unlit"
-comptime MATERIALS_TRANSMISSION = "KHR_materials_transmission"
-comptime MATERIALS_VOLUME = "KHR_materials_volume"
-comptime MATERIALS_DISPERSION = "KHR_materials_dispersion"
-comptime TEXTURE_TRANSFORM = "KHR_texture_transform"
-comptime LIGHTS_PUNCTUAL = "KHR_lights_punctual"
-comptime MESH_QUANTIZATION = "KHR_mesh_quantization"
-comptime GPU_INSTANCING = "EXT_mesh_gpu_instancing"
-comptime DRACO_MESH_COMPRESSION = "KHR_draco_mesh_compression"
-comptime MATERIALS_BUMP = "EXT_materials_bump"
-comptime TEXTURE_BASISU = "KHR_texture_basisu"
-comptime MESHOPT_COMPRESSION = "EXT_meshopt_compression"
-comptime MATERIALS_VARIANTS = "KHR_materials_variants"
-comptime TEXTURE_WEBP = "EXT_texture_webp"
 
 # A spot light's cone when `KHR_lights_punctual` names none: no inner cone,
 # and an outer one of a quarter of a half turn, the specification's.
@@ -1129,48 +1065,6 @@ def _check_asset(document: JsonDocument, root: Int) raises:
         raise Error("glTF: only version 2 is read")
 
 
-def decode_base64(text: String) raises -> List[UInt8]:
-    """Return the bytes a base64 text encodes.
-
-    Args:
-        text: The text, in the standard alphabet, padded with `=` or
-            not.
-
-    Returns:
-        The bytes.
-
-    Raises:
-        Error: If a character is outside the alphabet or the padding is
-            misplaced.
-    """
-    var out = List[UInt8]()
-    var held = 0
-    var bits = 0
-    var ended = False
-    for byte in text.as_bytes():
-        var value = Int(byte)
-        var digit = base64_digit(value)
-        if digit < 0:
-            if value == 43:
-                digit = 62
-            elif value == 47:
-                digit = 63
-            elif value == 61:
-                ended = True
-                continue
-            else:
-                raise Error("base64: a character outside the alphabet")
-        if ended:
-            raise Error("base64: a digit after the padding")
-        held = (held << 6) | digit
-        bits += 6
-        if bits >= 8:
-            bits -= 8
-            out.append(UInt8((held >> bits) & 0xFF))
-            held &= (1 << bits) - 1
-    return out^
-
-
 def _data_uri_bytes(uri: String) raises -> List[UInt8]:
     """Return the bytes of a `data:` URI, which must be base64."""
     var comma = uri.find(",")
@@ -1190,14 +1084,48 @@ def _slice(text: String, start: Int, end: Int) -> String:
     return String(unsafe_from_utf8=out)
 
 
+def _hex_value(byte: UInt8) -> Int:
+    """Return the value of one hexadecimal digit, or -1."""
+    if byte >= UInt8(ord("0")) and byte <= UInt8(ord("9")):
+        return Int(byte - UInt8(ord("0")))
+    var lower = byte | 0x20
+    if lower >= UInt8(ord("a")) and lower <= UInt8(ord("f")):
+        return Int(lower - UInt8(ord("a"))) + 10
+    return -1
+
+
+def _percent_decoded(uri: String) raises -> String:
+    """Return a relative URI with its `%XX` escapes decoded, as RFC 3986
+    writes a space or a non-ASCII byte in a file name.
+
+    Raises:
+        Error: If a `%` is not followed by two hexadecimal digits.
+    """
+    var raw = uri.as_bytes()
+    var out = List[UInt8](capacity=len(raw))
+    var index = 0
+    while index < len(raw):
+        if raw[index] != UInt8(ord("%")):
+            out.append(raw[index])
+            index += 1
+            continue
+        var high = _hex_value(raw[index + 1]) if index + 2 < len(raw) else -1
+        var low = _hex_value(raw[index + 2]) if index + 2 < len(raw) else -1
+        if high < 0 or low < 0:
+            raise Error("glTF: a URI has a malformed percent escape: " + uri)
+        out.append(UInt8(high * 16 + low))
+        index += 3
+    return String(from_utf8_lossy=out)
+
+
 def _uri_bytes(uri: String, directory: String) raises -> List[UInt8]:
     """Return the bytes a URI names: decoded from a `data:` URI, or read
-    from a file beside the document."""
+    from a file beside the document, its percent escapes decoded."""
     if uri.startswith("data:"):
         return _data_uri_bytes(uri)
     if uri.find(":") >= 0:
         raise Error("glTF: only a data URI or a relative path is read: " + uri)
-    return Path(directory + uri).read_bytes()
+    return Path(directory + _percent_decoded(uri)).read_bytes()
 
 
 struct _DracoPrimitive(Movable):
@@ -2415,8 +2343,12 @@ struct _Loader(Movable):
         the primitive carries them."""
         if index < 0:
             if not self.has_default_material:
+                # glTF's default material, as three.js's
+                # `createDefaultMaterial` makes it: fully metallic and rough.
                 self.default_material = assets.materials.add(
-                    standard_material(Color(255, 255, 255))
+                    standard_material(
+                        Color(255, 255, 255), roughness=1.0, metalness=1.0
+                    )
                 )
                 self.has_default_material = True
             if not tinted:
@@ -3459,7 +3391,19 @@ struct _Loader(Movable):
             var name = self.text(animation, "name")
             if name == "":
                 name = "animation_" + String(index)
-            self.model.animations.append(AnimationClip(name, tracks^))
+            # Keys that all lie at time zero hold a still pose, which glTF
+            # allows. A clip here must last some time, so it gets one frame.
+            var still = True
+            # The clip has a track here: an empty one was skipped above.
+            for track in tracks:  # pragma: no branch
+                if track.duration().to(SECOND) > 0:
+                    still = False
+            var duration = Optional[Duration](None)
+            if still:
+                duration = Duration(_STILL_POSE_SECONDS, SECOND)
+            self.model.animations.append(
+                AnimationClip(name, tracks^, duration=duration)
+            )
 
     def channel_tracks(
         mut self, sampler: Int, target: Int, mut tracks: List[KeyframeTrack]
@@ -3491,9 +3435,20 @@ struct _Loader(Movable):
         for key in range(len(input[0])):  # pragma: no branch
             times.append(Duration(input[0][key], SECOND))
         var how = _interpolation_of(self.text(sampler, "interpolation"))
-        var output = self.accessor_floats(
-            self.required_integer(sampler, "output")
-        )
+        var output_index = self.required_integer(sampler, "output")
+        var output = self.accessor_floats(output_index)
+        if (
+            path == "rotation"
+            and self.required_integer(
+                self.entry("accessors", output_index), "componentType"
+            )
+            != COMPONENT_FLOAT
+        ):
+            # KHR_mesh_quantization rounds a key's components to 1/127 or
+            # 1/32767, which moves its length off one. Rescale each key.
+            _normalize_quaternion_keys(
+                output[0], 3 if how == CUBIC_SPLINE else 1
+            )
         if path != "weights":
             var width = kind.component_count()
             if output[1] != width:
@@ -3585,13 +3540,7 @@ def _gathered(
         out.set_attribute(
             geometry.names[slot], geometry.values[slot].gather(order)
         )
-    for target in range(geometry.morph_count()):
-        out.morph_positions.append(
-            geometry.morph_positions[target].gather(order)
-        )
-    for target in range(len(geometry.morph_normals)):
-        out.morph_normals.append(geometry.morph_normals[target].gather(order))
-    out.morph_relative = geometry.morph_relative
+    geometry.gather_morphs_into(out, order)
     return out^
 
 
@@ -3621,6 +3570,30 @@ def _interpolation_of(name: String) raises -> Interpolation:
     if name == "CUBICSPLINE":
         return CUBIC_SPLINE
     raise Error("glTF: an interpolation must be LINEAR, STEP or CUBICSPLINE")
+
+
+def _normalize_quaternion_keys(mut output: List[Float32], parts: Int):
+    """Scale each key's quaternion to unit length, leaving any tangents.
+
+    Args:
+        output: Four numbers a value, `parts` values a key, the quaternion
+            of a cubic spline key in the middle.
+        parts: One for a plain key, three for a cubic spline key.
+    """
+    var value = 1 if parts == 3 else 0
+    var key = 0
+    while (key * parts + value) * 4 + 3 < len(output):
+        var at = (key * parts + value) * 4
+        var length = sqrt(
+            Float64(output[at]) ** 2
+            + Float64(output[at + 1]) ** 2
+            + Float64(output[at + 2]) ** 2
+            + Float64(output[at + 3]) ** 2
+        )
+        if length > 0:
+            for lane in range(4):
+                output[at + lane] = Float32(Float64(output[at + lane]) / length)
+        key += 1
 
 
 def _track(
@@ -3869,40 +3842,6 @@ def ktx2_texture(
         chain,
         alpha,
     )
-
-
-def decode_image(bytes: List[UInt8]) raises -> DecodedImage:
-    """Return an image decoded by what its first bytes say it is.
-
-    A PNG, a JPEG and a WebP file each begin with a signature. A TGA has
-    none, so bytes that begin as none of those are read as a TGA, whose
-    header check refuses most other files. glTF names PNG and JPEG, and
-    `EXT_texture_webp` WebP; the TGA fallback is this port's, for a model
-    that points at a TGA texture.
-
-    Args:
-        bytes: A PNG, a JPEG, a WebP or a TGA file.
-
-    Returns:
-        The image.
-
-    Raises:
-        Error: If the bytes begin as none of PNG, JPEG and WebP and are not
-            a TGA either, or the decoder refuses them.
-    """
-    if len(bytes) >= 8 and bytes[0] == 0x89 and bytes[1] == 0x50:
-        return decode_png(bytes)
-    if len(bytes) >= 2 and bytes[0] == 0xFF and bytes[1] == 0xD8:
-        return decode_jpeg(bytes)
-    if is_webp(bytes):
-        return decode_webp(bytes)
-    try:
-        return decode_tga(bytes)
-    except error:
-        raise Error(
-            "glTF: an image that is neither PNG nor JPEG, and not a TGA: "
-            + String(error)
-        )
 
 
 # The error when a glTF node matrix has an axis of length zero.

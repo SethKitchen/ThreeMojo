@@ -24,12 +24,12 @@ other byte is written as it is, so text outside ASCII stays UTF-8, which
 JSON allows. `JSON.stringify` does the same.
 
 **Numbers read back to the same `Float32`.** See
-`exporters.common.format_float32`. A number that is not finite is
+`exporters.numbers.format_float32`. A number that is not finite is
 refused, as `JSON.stringify` writes `null` for one and a reader then
 finds no number there.
 """
 
-from exporters.common import format_float32
+from exporters.numbers import format_float32
 from loaders.json import ARRAY, OBJECT, JsonKind, quote_json
 
 

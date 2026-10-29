@@ -236,10 +236,11 @@ from lights.light import (
     spot_light,
 )
 from lights.shadow import MAX_MAP_SIZE
-from loaders.gltf import decode_base64, decode_image
+from loaders.bytes import decode_base64
+from loaders.image_file import decode_image
 from materials.node_json import read_node_program
 from loaders.node_loader import NodeLoader, plain_material_type
-from materials.nodes import NodeProgramId
+from materials.node_program_id import NodeProgramId
 from loaders.js_number import is_decimal_text
 from loaders.json import (
     ARRAY,

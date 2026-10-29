@@ -92,7 +92,7 @@ def _dump(
 ) raises -> String:
     """Run one server and return its result text."""
     var stem = town
-    if _ends(town, "_Opt"):
+    if town.endswith("_Opt"):
         var end = town.byte_length() - 4
         stem = String(town[byte=:end])
     var target = _child(layout, stem + ".jsonl")
@@ -256,19 +256,6 @@ def _child(root: String, child: String) -> String:
     return root + "/" + child
 
 
-def _ends(text: String, suffix: String) -> Bool:
-    """Return whether `text` ends with `suffix`."""
-    var raw = text.as_bytes()
-    var want = suffix.as_bytes()
-    if len(raw) < len(want):
-        return False
-    var start = len(raw) - len(want)
-    for index in range(len(want)):
-        if raw[start + index] != want[index]:
-            return False
-    return True
-
-
 def _absolute(path: String) raises -> String:
     """Return a relative path joined to the working directory."""
     var raw = path.as_bytes()
@@ -320,7 +307,7 @@ def _drive_cli(arguments: List[String]) raises:
                 limit = _number(value)
             index += 2
             continue
-        if _starts(word, "--"):
+        if word.startswith("--"):
             raise Error("unknown argument " + word)
         towns.append(word)
         index += 1
@@ -352,18 +339,6 @@ def _number(text: String) raises -> Float64:
     if not seen:
         raise Error("limit is not a number")
     return value
-
-
-def _starts(text: String, prefix: String) -> Bool:
-    """Return whether `text` starts with `prefix`."""
-    var raw = text.as_bytes()
-    var want = prefix.as_bytes()
-    if len(raw) < len(want):
-        return False
-    for index in range(len(want)):
-        if raw[index] != want[index]:
-            return False
-    return True
 
 
 def main() raises:

@@ -18,8 +18,8 @@ in the package.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float
-from tools._python_json import MISSING, PY_DICT, PY_INT, PY_STR, PyJson
+from tools._python_json import PY_DICT, PyJson
+from tools._town_json import json_member, json_named_int, json_quote, json_text
 
 
 comptime PLAIN = "BasicShapeMaterial"
@@ -47,7 +47,9 @@ def attach_text(text: String) raises -> String:
     var doc = PyJson.parse(text)
     if doc.kind(doc.root) != PY_DICT:
         raise Error("attach request is not an object")
-    var mode = _text(doc, _member(doc, doc.root, "mode"), "mode is not text")
+    var mode = json_text(
+        doc, json_member(doc, doc.root, "mode"), "mode is not text"
+    )
     if mode == "resolve":
         return _resolve(doc)
     if mode == "picture":
@@ -57,8 +59,10 @@ def attach_text(text: String) raises -> String:
 
 def _resolve(doc: PyJson) raises -> String:
     """Return the plain material, or ask for a rebuilt one."""
-    var name = _text(doc, _member(doc, doc.root, "name"), "name is not text")
-    if name == PLAIN or name.byte_length() == 0 or _starts(name, DUMMY):
+    var name = json_text(
+        doc, json_member(doc, doc.root, "name"), "name is not text"
+    )
+    if name == PLAIN or name.byte_length() == 0 or name.startswith(DUMMY):
         return (
             '{"action":"plain","material":{"name":"plain",'
             + '"pbrMetallicRoughness":{"baseColorFactor":[0.5,0.5,0.5,1],'
@@ -69,24 +73,34 @@ def _resolve(doc: PyJson) raises -> String:
 
 def _picture(doc: PyJson) raises -> String:
     """Return one impostor or baked picture material."""
-    var kind = _text(doc, _member(doc, doc.root, "kind"), "kind is not text")
+    var kind = json_text(
+        doc, json_member(doc, doc.root, "kind"), "kind is not text"
+    )
     if kind != "impostor" and kind != "baked":
         raise Error("kind is not impostor or baked")
-    var name = _text(doc, _member(doc, doc.root, "name"), "name is not text")
-    var uri = _text(doc, _member(doc, doc.root, "uri"), "uri is not text")
-    var images = _whole(doc, _member(doc, doc.root, "images"), "images")
-    var textures = _whole(doc, _member(doc, doc.root, "textures"), "textures")
-    var materials = _whole(
-        doc, _member(doc, doc.root, "materials"), "materials"
+    var name = json_text(
+        doc, json_member(doc, doc.root, "name"), "name is not text"
+    )
+    var uri = json_text(
+        doc, json_member(doc, doc.root, "uri"), "uri is not text"
+    )
+    var images = json_named_int(
+        doc, json_member(doc, doc.root, "images"), "images"
+    )
+    var textures = json_named_int(
+        doc, json_member(doc, doc.root, "textures"), "textures"
+    )
+    var materials = json_named_int(
+        doc, json_member(doc, doc.root, "materials"), "materials"
     )
     if images < 0 or textures < 0 or materials < 0:
         raise Error("count is negative")
     var out = String('{"image":{"uri":')
-    out += _quote(uri)
+    out += json_quote(uri)
     out += '},"texture":{"sampler":0,"source":'
     out += String(images)
     out += '},"material":{"name":'
-    out += _quote(name)
+    out += json_quote(name)
     out += ',"pbrMetallicRoughness":{"baseColorTexture":{"index":'
     out += String(textures)
     if kind == "impostor":
@@ -98,55 +112,6 @@ def _picture(doc: PyJson) raises -> String:
     out += ',"index":'
     out += String(materials)
     out += "}"
-    return out
-
-
-def _starts(text: String, prefix: String) -> Bool:
-    """Return whether `text` begins with `prefix`."""
-    var raw = text.as_bytes()
-    var head = prefix.as_bytes()
-    if len(raw) < len(head):
-        return False
-    for index in range(len(head)):
-        if raw[index] != head[index]:
-            return False
-    return True
-
-
-def _member(doc: PyJson, node: Int, key: String) raises -> Int:
-    """Return a member, or raise `KeyError` text when it is absent."""
-    var found = doc.get(node, key)
-    if found == MISSING:
-        raise Error("KeyError: '" + key + "'")
-    return found
-
-
-def _whole(doc: PyJson, node: Int, message: String) raises -> Int:
-    """Return a JSON integer, or raise `message`."""
-    if doc.kind(node) != PY_INT:
-        raise Error(message + " is not an integer")
-    return Int(parse_float(doc.text(node)))
-
-
-def _text(doc: PyJson, node: Int, message: String) raises -> String:
-    """Return a JSON string, or raise `message`."""
-    if doc.kind(node) != PY_STR:
-        raise Error(message)
-    return doc.text(node)
-
-
-def _quote(text: String) -> String:
-    """Return one JSON string."""
-    var out = String('"')
-    var raw = text.as_bytes()
-    for index in range(len(raw)):
-        var byte = raw[index]
-        if byte == 34 or byte == 92:
-            out += "\\"
-            out += chr(Int(byte))
-        else:
-            out += chr(Int(byte))
-    out += '"'
     return out
 
 

@@ -25,13 +25,10 @@ from tools._process import _remove_tree
 from tools._python_float import append_ascii, ascii_text, parse_float
 from tools._python_json import (
     MISSING,
-    PY_BOOL,
     PY_DICT,
     PY_FLOAT,
     PY_INT,
     PY_LIST,
-    PY_NONE,
-    PY_STR,
     PyJson,
 )
 from tools.carla_image_pack import pack_text
@@ -39,6 +36,12 @@ from tools.carla_jpeg import jpeg_text
 from tools.carla_town_atlas import atlas_text
 from tools.carla_town_dilate import dilate_text
 from tools.carla_town_splat import splat_text
+from tools._town_json import (
+    json_compact,
+    json_member,
+    json_named_int,
+    json_text,
+)
 
 
 def bake_text(text: String) raises -> String:
@@ -60,23 +63,25 @@ def bake_text(text: String) raises -> String:
     if doc.kind(doc.root) != PY_DICT:
         raise Error("bake request is not an object")
     var mode = doc.get(doc.root, "mode")
-    if mode != MISSING and _text(doc, mode, "mode is not text") == "flat":
+    if mode != MISSING and json_text(doc, mode, "mode is not text") == "flat":
         return _flat_mesh(doc)
-    var path = _text(doc, _member(doc, doc.root, "out"), "out is not text")
+    var path = json_text(
+        doc, json_member(doc, doc.root, "out"), "out is not text"
+    )
     var density = _number(
-        doc, _member(doc, doc.root, "density"), "density is not a number"
+        doc, json_member(doc, doc.root, "density"), "density is not a number"
     )
     var most = _number(
-        doc, _member(doc, doc.root, "most"), "most is not a number"
+        doc, json_member(doc, doc.root, "most"), "most is not a number"
     )
     if not (density > 0.0) or not (most > 0.0):
         raise Error("density is not positive")
-    var whole = _member(doc, doc.root, "whole")
-    var far = _member(doc, doc.root, "far")
+    var whole = json_member(doc, doc.root, "whole")
+    var far = json_member(doc, doc.root, "far")
     if doc.kind(whole) != PY_DICT or doc.kind(far) != PY_DICT:
         raise Error("mesh is not an object")
-    var parts = _member(doc, doc.root, "parts")
-    var views = _member(doc, doc.root, "views")
+    var parts = json_member(doc, doc.root, "parts")
+    var views = json_member(doc, doc.root, "views")
     if doc.kind(parts) != PY_LIST or doc.length(parts) == 0:
         raise Error("parts are not a list")
     if doc.kind(views) != PY_LIST or doc.length(views) == 0:
@@ -88,7 +93,7 @@ def bake_text(text: String) raises -> String:
     ) != doc.length(views):
         raise Error("span count does not match the views")
     var drawn = List[String]()
-    var parts_json = _compact(doc, parts)
+    var parts_json = json_compact(doc, parts)
     for index in range(doc.length(views)):
         var view = doc.item(views, index)
         var span = spans.item(spans.root, index)
@@ -108,9 +113,9 @@ def _flat_mesh(doc: PyJson) raises -> String:
     """Return one unsimplified mesh as unindexed corners."""
     var flat = atlas_text(
         '{"mode":"flat","positions":'
-        + _compact(doc, _member(doc, doc.root, "positions"))
+        + json_compact(doc, json_member(doc, doc.root, "positions"))
         + ',"triangles":'
-        + _compact(doc, _member(doc, doc.root, "triangles"))
+        + json_compact(doc, json_member(doc, doc.root, "triangles"))
         + "}"
     )
     var out = String('{"positions":')
@@ -126,20 +131,20 @@ def _flat_mesh(doc: PyJson) raises -> String:
 def _spans_request(doc: PyJson, whole: Int, views: Int) raises -> String:
     """Return the atlas span request."""
     var out = String('{"mode":"spans","positions":')
-    out += _compact(doc, _member(doc, whole, "positions"))
+    out += json_compact(doc, json_member(doc, whole, "positions"))
     out += ',"density":'
-    out += _compact(doc, _member(doc, doc.root, "density"))
+    out += json_compact(doc, json_member(doc, doc.root, "density"))
     out += ',"most":'
-    out += _compact(doc, _member(doc, doc.root, "most"))
+    out += json_compact(doc, json_member(doc, doc.root, "most"))
     out += ',"views":['
     for index in range(doc.length(views)):
         if index > 0:
             out += ","
         var view = doc.item(views, index)
         out += '{"right":'
-        out += _compact(doc, _member(doc, view, "right"))
+        out += json_compact(doc, json_member(doc, view, "right"))
         out += ',"up":'
-        out += _compact(doc, _member(doc, view, "up"))
+        out += json_compact(doc, json_member(doc, view, "up"))
         out += "}"
     out += "]}"
     return out
@@ -154,25 +159,25 @@ def _splat_request(
 ) raises -> String:
     """Return one orthographic splat request."""
     var request = String('{"mode":"ortho","columns":')
-    request += _compact(spans, _member(spans, span, "columns"))
+    request += json_compact(spans, json_member(spans, span, "columns"))
     request += ',"rows":'
-    request += _compact(spans, _member(spans, span, "rows"))
+    request += json_compact(spans, json_member(spans, span, "rows"))
     request += ',"samples":3,"cap":8192,"seed":11,"right":'
-    request += _compact(doc, _member(doc, view, "right"))
+    request += json_compact(doc, json_member(doc, view, "right"))
     request += ',"up":'
-    request += _compact(doc, _member(doc, view, "up"))
+    request += json_compact(doc, json_member(doc, view, "up"))
     request += ',"forward":'
-    request += _compact(doc, _member(doc, view, "forward"))
+    request += json_compact(doc, json_member(doc, view, "forward"))
     request += ',"low_r":'
-    request += _compact(spans, _member(spans, span, "low_r"))
+    request += json_compact(spans, json_member(spans, span, "low_r"))
     request += ',"low_u":'
-    request += _compact(spans, _member(spans, span, "low_u"))
+    request += json_compact(spans, json_member(spans, span, "low_u"))
     request += ',"height":'
-    request += _compact(spans, _member(spans, span, "height"))
+    request += json_compact(spans, json_member(spans, span, "height"))
     request += ',"span_u":'
-    request += _compact(spans, _member(spans, span, "width"))
+    request += json_compact(spans, json_member(spans, span, "width"))
     request += ',"span_v":'
-    request += _compact(spans, _member(spans, span, "height"))
+    request += json_compact(spans, json_member(spans, span, "height"))
     request += ',"parts":'
     request += parts_json
     request += "}"
@@ -207,11 +212,11 @@ def _spread(rgba_text: String) raises -> String:
             if image.kind(pixel) != PY_LIST or image.length(pixel) != 4:
                 raise Error("pixel is not RGBA")
             append_ascii(colors, "[")
-            append_ascii(colors, _compact(image, image.item(pixel, 0)))
+            append_ascii(colors, json_compact(image, image.item(pixel, 0)))
             append_ascii(colors, ",")
-            append_ascii(colors, _compact(image, image.item(pixel, 1)))
+            append_ascii(colors, json_compact(image, image.item(pixel, 1)))
             append_ascii(colors, ",")
-            append_ascii(colors, _compact(image, image.item(pixel, 2)))
+            append_ascii(colors, json_compact(image, image.item(pixel, 2)))
             append_ascii(colors, "]")
             if (
                 _number(image, image.item(pixel, 3), "alpha is not a number")
@@ -247,9 +252,9 @@ def _pack_request(
 ) raises -> String:
     """Return the atlas pack request."""
     var out = String('{"mode":"pack","positions":')
-    out += _compact(doc, _member(doc, far, "positions"))
+    out += json_compact(doc, json_member(doc, far, "positions"))
     out += ',"normals":'
-    out += _compact(doc, _member(doc, far, "normals"))
+    out += json_compact(doc, json_member(doc, far, "normals"))
     out += ',"views":['
     for index in range(doc.length(views)):
         if index > 0:
@@ -257,19 +262,19 @@ def _pack_request(
         var view = doc.item(views, index)
         var span = spans.item(spans.root, index)
         out += '{"forward":'
-        out += _compact(doc, _member(doc, view, "forward"))
+        out += json_compact(doc, json_member(doc, view, "forward"))
         out += ',"right":'
-        out += _compact(doc, _member(doc, view, "right"))
+        out += json_compact(doc, json_member(doc, view, "right"))
         out += ',"up":'
-        out += _compact(doc, _member(doc, view, "up"))
+        out += json_compact(doc, json_member(doc, view, "up"))
         out += ',"span_r":['
-        out += _compact(spans, _member(spans, span, "low_r"))
+        out += json_compact(spans, json_member(spans, span, "low_r"))
         out += ","
-        out += _compact(spans, _member(spans, span, "high_r"))
+        out += json_compact(spans, json_member(spans, span, "high_r"))
         out += '],"span_u":['
-        out += _compact(spans, _member(spans, span, "low_u"))
+        out += json_compact(spans, json_member(spans, span, "low_u"))
         out += ","
-        out += _compact(spans, _member(spans, span, "high_u"))
+        out += json_compact(spans, json_member(spans, span, "high_u"))
         out += '],"image":'
         out += drawn[index]
         out += "}"
@@ -284,9 +289,9 @@ def _write_jpeg(path: String, packed: String) raises:
     var doc = PyJson.parse(stored)
     var jpeg = jpeg_text(
         '{"mode":"RGB","width":'
-        + String(_whole(doc, doc.at(doc.root, "width"), "width"))
+        + String(json_named_int(doc, doc.at(doc.root, "width"), "width"))
         + ',"height":'
-        + String(_whole(doc, doc.at(doc.root, "height"), "height"))
+        + String(json_named_int(doc, doc.at(doc.root, "height"), "height"))
         + ',"quality":85,"optimize":false,"pixels":'
         + _array_of(stored, "pixels")
         + "}"
@@ -347,21 +352,6 @@ def _directory(path: String) -> String:
     return String(path[byte=:slash])
 
 
-def _member(doc: PyJson, node: Int, key: String) raises -> Int:
-    """Return a member, or raise `KeyError` text when it is absent."""
-    var found = doc.get(node, key)
-    if found == MISSING:
-        raise Error("KeyError: '" + key + "'")
-    return found
-
-
-def _whole(doc: PyJson, node: Int, message: String) raises -> Int:
-    """Return a JSON integer, or raise `message`."""
-    if doc.kind(node) != PY_INT:
-        raise Error(message + " is not an integer")
-    return Int(parse_float(doc.text(node)))
-
-
 def _number(doc: PyJson, node: Int, message: String) raises -> Float64:
     """Return a JSON number, or raise `message`."""
     var kind = doc.kind(node)
@@ -370,62 +360,6 @@ def _number(doc: PyJson, node: Int, message: String) raises -> Float64:
     if kind == PY_INT:
         return parse_float(doc.text(node))
     raise Error(message)
-
-
-def _text(doc: PyJson, node: Int, message: String) raises -> String:
-    """Return a JSON string, or raise `message`."""
-    if doc.kind(node) != PY_STR:
-        raise Error(message)
-    return doc.text(node)
-
-
-def _compact(doc: PyJson, node: Int) raises -> String:
-    """Return JSON with no spaces, in insertion order."""
-    var kind = doc.kind(node)
-    if kind == PY_DICT:
-        var out = String("{")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ","
-            out += _quote(doc.key(node, index))
-            out += ":"
-            out += _compact(doc, doc.value(node, index))
-        out += "}"
-        return out
-    if kind == PY_LIST:
-        var out = String("[")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ","
-            out += _compact(doc, doc.item(node, index))
-        out += "]"
-        return out
-    if kind == PY_STR:
-        return _quote(doc.text(node))
-    if kind == PY_BOOL:
-        if doc.flag(node):
-            return "true"
-        return "false"
-    if kind == PY_NONE:
-        return "null"
-    return doc.text(node)
-
-
-def _quote(text: String) -> String:
-    """Return one JSON string."""
-    var out = String('"')
-    var raw = text.as_bytes()
-    for index in range(len(raw)):
-        var byte = raw[index]
-        if byte == 34 or byte == 92:
-            out += "\\"
-            out += chr(Int(byte))
-        else:
-            out += chr(Int(byte))
-    out += '"'
-    return out
 
 
 def main() raises:

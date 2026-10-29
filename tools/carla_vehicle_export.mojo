@@ -70,7 +70,7 @@ def _one(
         if relative.byte_length() == 0:
             return _fail(vehicle_id, "KeyError('" + vehicle_id + "')")
         var note = _build(root, vehicle_id, relative, classes)
-        if _starts(note, "OK\t"):
+        if note.startswith("OK\t"):
             return _ok(vehicle_id, String(note[byte=3:]))
         return _fail(vehicle_id, note)
     except error:
@@ -385,9 +385,9 @@ def _pad(text: String) -> String:
 def _under(path: String, root: String) raises -> String:
     """Return `path` relative to `root`."""
     var prefix = root
-    if not _ends(prefix, "/"):
+    if not prefix.endswith("/"):
         prefix += "/"
-    if not _starts(path, prefix):
+    if not path.startswith(prefix):
         raise Error("package is outside the content directory")
     return String(path[byte = prefix.byte_length() :])
 
@@ -395,7 +395,7 @@ def _under(path: String, root: String) raises -> String:
 def _stem(path: String) -> String:
     """Return the file name without `.uasset`."""
     var base = _basename(path)
-    if _ends(base, ".uasset"):
+    if base.endswith(".uasset"):
         var end = base.byte_length() - 7
         return String(base[byte=:end])
     return base
@@ -430,31 +430,6 @@ def _child(root: String, child: String) -> String:
 def _has(text: String, needle: String) -> Bool:
     """Return whether `needle` occurs in `text`."""
     return text.find(needle) >= 0
-
-
-def _starts(text: String, prefix: String) -> Bool:
-    """Return whether `text` starts with `prefix`."""
-    var raw = text.as_bytes()
-    var want = prefix.as_bytes()
-    if len(raw) < len(want):
-        return False
-    for index in range(len(want)):
-        if raw[index] != want[index]:
-            return False
-    return True
-
-
-def _ends(text: String, suffix: String) -> Bool:
-    """Return whether `text` ends with `suffix`."""
-    var raw = text.as_bytes()
-    var want = suffix.as_bytes()
-    if len(raw) < len(want):
-        return False
-    var start = len(raw) - len(want)
-    for index in range(len(want)):
-        if raw[start + index] != want[index]:
-            return False
-    return True
 
 
 def _relative(vehicle_id: String) -> String:
@@ -577,7 +552,7 @@ def _drive(arguments: List[String]) raises:
             root = arguments[index + 1]
             index += 2
             continue
-        if _starts(word, "--"):
+        if word.startswith("--"):
             raise Error("unknown argument " + word)
         ids.append(word)
         index += 1

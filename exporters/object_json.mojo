@@ -127,7 +127,7 @@ from core.morph import MorphInfluences
 from core.object3d import GROUP_TYPE, NO_PARENT, NodeId, Object3D
 from core.ordinal import require_index_in_count, require_valid
 from core.scene import Scene
-from exporters.gltf import encode_base64
+from loaders.bytes import encode_base64
 from exporters.json_writer import JsonWriter
 from core.user_data import json_value_text
 from loaders.json import parse_json

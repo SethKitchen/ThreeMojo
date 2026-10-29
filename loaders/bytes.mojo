@@ -56,8 +56,6 @@ def ascii_space(byte: Int) -> Bool:
 def ascii_space(byte: UInt8) -> Bool:
     """Return True for an ASCII white space byte.
 
-    Error: Never.
-
     Args:
         byte: A byte value.
 
@@ -72,8 +70,6 @@ def ascii_space(byte: UInt8) -> Bool:
 def space_tab_return(byte: UInt8) -> Bool:
     """Return True for a space, a tab, or a carriage return.
 
-    Error: Never.
-
     Args:
         byte: A byte value.
 
@@ -87,8 +83,6 @@ def space_tab_return(byte: UInt8) -> Bool:
 def space_tab_line(byte: Int) -> Bool:
     """Return True for a space, a tab, a line feed, or a carriage return.
 
-    Error: Never.
-
     Args:
         byte: A byte value.
 
@@ -101,8 +95,6 @@ def space_tab_line(byte: Int) -> Bool:
 
 def space_tab_line(byte: UInt8) -> Bool:
     """Return True for a space, a tab, a line feed, or a carriage return.
-
-    Error: Never.
 
     Args:
         byte: A byte value.
@@ -129,8 +121,6 @@ def ascii_digit(byte: Int) -> Bool:
 def ascii_digit(byte: UInt8) -> Bool:
     """Return True for an ASCII decimal digit.
 
-    Error: Never.
-
     Args:
         byte: A byte value.
 
@@ -143,8 +133,6 @@ def ascii_digit(byte: UInt8) -> Bool:
 
 def ascii_space_at(bytes: Span[UInt8, _], at: Int) -> Bool:
     """Return True when `at` names an ASCII white space byte.
-
-    Error: Never.
 
     Args:
         bytes: The bytes to read.
@@ -160,8 +148,6 @@ def ascii_space_at(bytes: Span[UInt8, _], at: Int) -> Bool:
 def ascii_digit_at(bytes: Span[UInt8, _], at: Int) -> Bool:
     """Return True when `at` names an ASCII decimal digit.
 
-    Error: Never.
-
     Args:
         bytes: The bytes to read.
         at: The index to read.
@@ -176,8 +162,6 @@ def ascii_digit_at(bytes: Span[UInt8, _], at: Int) -> Bool:
 def letter_or_underscore(byte: UInt8) -> Bool:
     """Return True for a letter or `_`.
 
-    Error: Never.
-
     Args:
         byte: A byte value.
 
@@ -190,8 +174,6 @@ def letter_or_underscore(byte: UInt8) -> Bool:
 
 def is_sign_mark(byte: Int) -> Bool:
     """Return True for `+` or `-`.
-
-    Error: Never.
 
     Args:
         byte: A byte value.
@@ -206,8 +188,6 @@ def is_sign_mark(byte: Int) -> Bool:
 def is_sign_mark(byte: UInt8) -> Bool:
     """Return True for `+` or `-`.
 
-    Error: Never.
-
     Args:
         byte: A byte value.
 
@@ -221,8 +201,6 @@ def is_sign_mark(byte: UInt8) -> Bool:
 def is_exponent_mark(byte: Int) -> Bool:
     """Return True for `e` or `E`.
 
-    Error: Never.
-
     Args:
         byte: A byte value.
 
@@ -235,8 +213,6 @@ def is_exponent_mark(byte: Int) -> Bool:
 
 def is_exponent_mark(byte: UInt8) -> Bool:
     """Return True for `e` or `E`.
-
-    Error: Never.
 
     Args:
         byte: A byte value.
@@ -252,8 +228,6 @@ def js_float_byte(byte: UInt8) -> Bool:
     """Return True when `byte` can sit inside a JavaScript number.
 
     The bytes are a digit, `.`, `e`, `+`, and `-`.
-
-    Error: Never.
 
     Args:
         byte: The byte.
@@ -273,8 +247,6 @@ def js_float_byte(byte: UInt8) -> Bool:
 
 def js_float_byte_at(bytes: Span[UInt8, _], at: Int) -> Bool:
     """Return True when `at` names a byte a JavaScript number can hold.
-
-    Error: Never.
 
     Args:
         bytes: The bytes to read.
@@ -299,6 +271,11 @@ def ascii_letter(byte: Int) -> Bool:
     return (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
 
 
+comptime _BASE64 = (
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+)
+
+
 def base64_digit(byte: Int) -> Int:
     """Return 0 through 61 for an ASCII letter or digit, or -1.
 
@@ -321,6 +298,81 @@ def base64_digit(byte: Int) -> Int:
     return byte - 71
 
 
+def encode_base64(bytes: List[UInt8]) -> String:
+    """Return bytes as base64, in the standard alphabet, padded with `=`.
+
+    Args:
+        bytes: The bytes.
+
+    Returns:
+        The text, which `decode_base64` reads back.
+    """
+    var alphabet = String(_BASE64).as_bytes()
+    var out = List[UInt8]()
+    var at = 0
+    while at + 3 <= len(bytes):
+        var word = (
+            (Int(bytes[at]) << 16)
+            | (Int(bytes[at + 1]) << 8)
+            | Int(bytes[at + 2])
+        )
+        for shift in [18, 12, 6, 0]:  # pragma: no branch
+            out.append(alphabet[(word >> shift) & 63])
+        at += 3
+    var left = len(bytes) - at
+    if left > 0:
+        var word = Int(bytes[at]) << 16
+        if left == 2:
+            word |= Int(bytes[at + 1]) << 8
+        out.append(alphabet[(word >> 18) & 63])
+        out.append(alphabet[(word >> 12) & 63])
+        out.append(alphabet[(word >> 6) & 63] if left == 2 else UInt8(61))
+        out.append(61)
+    return String(unsafe_from_utf8=out)
+
+
+def decode_base64(text: String) raises -> List[UInt8]:
+    """Return the bytes a base64 text encodes.
+
+    Args:
+        text: The text, in the standard alphabet, padded with `=` or
+            not.
+
+    Returns:
+        The bytes.
+
+    Raises:
+        Error: If a character is outside the alphabet or the padding is
+            misplaced.
+    """
+    var out = List[UInt8]()
+    var held = 0
+    var bits = 0
+    var ended = False
+    for byte in text.as_bytes():
+        var value = Int(byte)
+        var digit = base64_digit(value)
+        if digit < 0:
+            if value == 43:
+                digit = 62
+            elif value == 47:
+                digit = 63
+            elif value == 61:
+                ended = True
+                continue
+            else:
+                raise Error("base64: a character outside the alphabet")
+        if ended:
+            raise Error("base64: a digit after the padding")
+        held = (held << 6) | digit
+        bits += 6
+        if bits >= 8:
+            bits -= 8
+            out.append(UInt8((held >> bits) & 0xFF))
+            held &= (1 << bits) - 1
+    return out^
+
+
 def hex_digit_value(byte: Int) -> Int:
     """Return the value of one ASCII hexadecimal digit, or -1.
 
@@ -341,8 +393,6 @@ def hex_digit_value(byte: Int) -> Int:
 
 def is_hex_digit(byte: Int) -> Bool:
     """Return True for one ASCII hexadecimal digit.
-
-    Error: Never.
 
     Args:
         byte: A byte value. A value outside 0 through 255 is not a digit.

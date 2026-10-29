@@ -21,13 +21,19 @@ things:
 3. **Jump.** A press of `jump` on the ground starts a jump at `jump_speed`.
    Holding the button does not jump again: it must be let go first.
 4. **Collision.** The character is a circle of `radius` on the ground. It
-   is pushed out of each house's `Lot` and each `Obstacle`, such as a
-   tree's trunk. It cannot walk into water deeper than `wade_depth`, or
-   further than `bounds` from the middle. Where a move is refused, the
-   character slides along the edge if it can.
-5. **The ground.** On the ground, the feet follow `Ground.height_at`.
-   Where the ground drops away by more than `step_down`, the character
-   falls. In the air, gravity pulls it down until it lands.
+   is pushed out of each solid `Lot` of the `Terrain`, out of each of its
+   `WallSpan`s that stands between its feet and `HEADROOM` above them,
+   and out of each `Obstacle`, such as a tree's trunk. So it walks into a
+   house only at a door, where the wall has a gap. It cannot walk into
+   water deeper than `wade_depth`, or further than `bounds` from the
+   middle. Where a move is refused, the character slides along the edge
+   if it can.
+5. **The ground.** On the ground, the feet follow `Terrain.height_at`:
+   the highest floor or step that they can reach, and the ground
+   elsewhere. A floor more than `CLIMB` above the feet, such as an upper
+   storey, passes over them, so a character goes up a stair one tread at
+   a time. Where the ground drops away by more than `step_down`, the
+   character falls. In the air, gravity pulls it down until it lands.
 
 The stance says which clip a body plays: see `Stance`.
 """
@@ -38,7 +44,8 @@ from controls.third_person_controls import (
     yaw_of,
 )
 from core.ordinal import ordinal_valid
-from extensions.vegetation.ground import Ground, Lot
+from extensions.vegetation.ground import Lot
+from extensions.village.terrain import Terrain, wall_push
 from math.finite import require_finite, require_positive_finite
 from math.utils import clamp
 from math.vector3 import Vector3
@@ -73,6 +80,9 @@ comptime RUN_SHARE = Float32(1.15)
 runs."""
 comptime LEAN = Float32(0.05)
 """A stick that leans less than this does not turn the character."""
+comptime HEADROOM = Float32(1.5)
+"""A wall stops a character when its foot is lower than this height over
+the character's feet, in meters, and its top is higher than the feet."""
 
 
 @fieldwise_init
@@ -341,16 +351,16 @@ struct Character(Copyable, Movable):
         x: Float32,
         z: Float32,
         heading: Angle,
-        ground: Ground,
+        terrain: Terrain,
     ) raises:
-        """Stand a character on the ground.
+        """Stand a character on the terrain.
 
         Args:
             parameters: How it moves.
             x: Where it stands, in meters.
             z: Where it stands, in meters.
             heading: The way it faces.
-            ground: The ground it stands on.
+            terrain: What it stands on: a floor, or the ground.
 
         Raises:
             Error: If `parameters.check` refuses a value, or the place or
@@ -363,7 +373,9 @@ struct Character(Copyable, Movable):
             Float64(heading.to(RADIAN)), "A character's heading must be finite"
         )
         self.parameters = parameters
-        self.position = Vector3(x, ground.height_at(x, z), z)
+        # It starts on the ground, or on a floor a climb above it.
+        var ground = terrain.ground.height_at(x, z)
+        self.position = Vector3(x, terrain.height_at(x, z, ground), z)
         self.heading = heading
         self.velocity = Vector3(0, 0, 0)
         self.grounded = True
@@ -385,9 +397,9 @@ struct Character(Copyable, Movable):
         input: MoveInput,
         yaw: Angle,
         delta: Duration,
-        ground: Ground,
-        lots: List[Lot],
+        terrain: Terrain,
         obstacles: List[Obstacle],
+        skip: Int = -1,
     ) raises:
         """Move the character by one frame.
 
@@ -395,9 +407,11 @@ struct Character(Copyable, Movable):
             input: The frame's input. Forward is along `yaw`.
             yaw: The way forward points, usually the camera's yaw.
             delta: The frame's time. At most `LONGEST_FRAME` counts.
-            ground: The ground.
-            lots: The buildings' footprints.
+            terrain: The ground, the floors, the walls and the solid
+                buildings.
             obstacles: The round things in the way.
+            skip: The index of an obstacle to pass over, such as the
+                character's own, or -1 for none.
 
         Raises:
             Error: If the time is negative or above a billion seconds, the
@@ -414,7 +428,7 @@ struct Character(Copyable, Movable):
         var pressed = input.jump and not self.jump_held
         self.jump_held = input.jump
         for _ in range(count):  # pragma: no branch
-            self._substep(input, yaw, h, pressed, ground, lots, obstacles)
+            self._substep(input, yaw, h, pressed, terrain, obstacles, skip)
             pressed = False
         self._settle()
 
@@ -424,11 +438,12 @@ struct Character(Copyable, Movable):
         yaw: Angle,
         h: Float32,
         jump: Bool,
-        ground: Ground,
-        lots: List[Lot],
+        terrain: Terrain,
         obstacles: List[Obstacle],
+        skip: Int,
     ):
-        """Move the character by one substep of `h` seconds."""
+        """Move the character by one substep of `h` seconds, passing over
+        the obstacle at `skip`."""
         ref p = self.parameters
         var wish = ground_direction(
             yaw, clamp(input.forward, -1, 1), clamp(input.right, -1, 1)
@@ -464,29 +479,36 @@ struct Character(Copyable, Movable):
         var goal = self._clear(
             start.x + self.velocity.x * h,
             start.z + self.velocity.z * h,
-            ground,
-            lots,
+            start.y,
+            terrain,
             obstacles,
+            skip,
         )
-        if not self._walkable(goal.x, goal.z, ground):
+        if not self._walkable(goal.x, goal.z, start.y, terrain):
             # Slide along the edge, one axis at a time.
             goal = self._clear(
-                start.x + self.velocity.x * h, start.z, ground, lots, obstacles
+                start.x + self.velocity.x * h,
+                start.z,
+                start.y,
+                terrain,
+                obstacles,
+                skip,
             )
-            if not self._walkable(goal.x, goal.z, ground):
+            if not self._walkable(goal.x, goal.z, start.y, terrain):
                 goal = self._clear(
                     start.x,
                     start.z + self.velocity.z * h,
-                    ground,
-                    lots,
+                    start.y,
+                    terrain,
                     obstacles,
+                    skip,
                 )
-            if not self._walkable(goal.x, goal.z, ground):
+            if not self._walkable(goal.x, goal.z, start.y, terrain):
                 goal = Vector3(start.x, 0, start.z)
         if h > 0:
             self.velocity.x = (goal.x - start.x) / h
             self.velocity.z = (goal.z - start.z) / h
-        var floor = ground.height_at(goal.x, goal.z)
+        var floor = terrain.height_at(goal.x, goal.z, start.y)
         var y = start.y
         if self.grounded:
             if start.y - floor > p.step_down.to(METER):
@@ -512,29 +534,40 @@ struct Character(Copyable, Movable):
         self,
         x: Float32,
         z: Float32,
-        ground: Ground,
-        lots: List[Lot],
+        foot: Float32,
+        terrain: Terrain,
         obstacles: List[Obstacle],
+        skip: Int,
     ) -> Vector3:
-        """Return a point pushed out of every lot and obstacle, and back
-        within the bounds."""
+        """Return a point pushed out of every solid lot, every wall that
+        stands in the way of feet at `foot`, and every obstacle but the one
+        at `skip`, and back within the bounds."""
         var radius = self.parameters.radius.to(METER)
         var at = Vector3(x, 0, z)
-        for index in range(len(lots)):
-            at = lot_push(lots[index], at.x, at.z, radius)
+        for index in range(len(terrain.lots)):
+            at = lot_push(terrain.lots[index], at.x, at.z, radius)
+        for index in range(len(terrain.walls)):
+            ref span = terrain.walls[index]
+            if span.blocks(foot, foot + HEADROOM):
+                at = wall_push(span, at.x, at.z, radius)
         for index in range(len(obstacles)):
-            at = obstacle_push(obstacles[index], at.x, at.z, radius)
+            if index != skip:
+                at = obstacle_push(obstacles[index], at.x, at.z, radius)
         var bound = self.parameters.bounds.to(METER)
         var reach = sqrt(at.x * at.x + at.z * at.z)
         if reach > bound:
             at = Vector3(at.x * bound / reach, 0, at.z * bound / reach)
         return at
 
-    def _walkable(self, x: Float32, z: Float32, ground: Ground) -> Bool:
-        """Return whether the water at a point is shallow enough to wade."""
+    def _walkable(
+        self, x: Float32, z: Float32, foot: Float32, terrain: Terrain
+    ) -> Bool:
+        """Return whether the water at a point is shallow enough to wade
+        for feet at `foot`. A floor stands above the water."""
+        ref ground = terrain.ground
         if ground.pond.radius.to(METER) <= 0:
             return True
-        var depth = ground.water_level() - ground.height_at(x, z)
+        var depth = ground.water_level() - terrain.height_at(x, z, foot)
         return depth <= self.parameters.wade_depth.to(METER)
 
     def _settle(mut self):

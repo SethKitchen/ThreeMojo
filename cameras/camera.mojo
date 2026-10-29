@@ -236,7 +236,8 @@ def placed_view_matrix(
         The view matrix from `look_at`.
 
     Raises:
-        Error: If the camera rides a node, or the placement is degenerate.
+        Error: If the camera rides a node, or `look_at` refuses the
+            placement.
     """
     if node != NO_PARENT:
         raise Error(
@@ -283,12 +284,14 @@ def node_view_matrix(scene: Scene, node: NodeId) raises -> Matrix4:
     the camera in the world. Shared by both cameras so that "attached" means
     one thing.
 
-    Scale is left out, as three.js leaves it out before inverting. A camera
-    parented to a scaled group inherits the group's position and turn, but
-    not its size: scale in a view matrix squashes camera space, which is what
-    a field of view and an aspect ratio are for, and along z it changes what
-    the near and far distances mean in meters. The first version inverted the
-    whole world matrix and did all of that silently.
+    Scale is left out. three.js inverts the whole world matrix, scale
+    included; this port does not. A camera parented to a scaled group
+    inherits the group's position and turn, but not its size: scale in a
+    view matrix squashes camera space, which is what a field of view and an
+    aspect ratio are for, and along z it changes what the near and far
+    distances mean in meters. So under a group scaled by two, three.js
+    halves what the camera sees and moves its near and far planes; this
+    port keeps both.
 
     Args:
         scene: The scene the node is in, updated.

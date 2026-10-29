@@ -447,7 +447,7 @@ def _active(records: List[_Cubic], s: Float64) -> _Cubic:
     # section.
     var found = records[0]
     # Every caller's list holds at least one record.
-    for record in records:
+    for record in records:  # pragma: no branch
         if record.start <= s:
             found = record
     return found
@@ -590,7 +590,7 @@ def _border_widths(
     if end <= s:
         raise Error("OpenDRIVE <border> lanes need a lane section of length")
     # At least one lane has borders here, so the lists are not empty.
-    for i in range(len(ids)):
+    for i in range(len(ids)):  # pragma: no branch
         var id = ids[i]
         if len(borders[i]) == 0:
             continue
@@ -598,7 +598,7 @@ def _border_widths(
         var inner: List[_Cubic] = [_Cubic(0, s, 0.0, 0.0, 0.0, 0.0)]
         if abs(id) > 1:
             var found = -1
-            for j in range(len(ids)):
+            for j in range(len(ids)):  # pragma: no branch
                 if ids[j] == id - Int(side) and len(borders[j]) > 0:
                     found = j
             if found < 0:
@@ -612,13 +612,13 @@ def _border_widths(
         # record starts inside the section.
         var cuts: List[Float64] = [s]
         # Both border lists and the cut list hold at least one entry.
-        for record in borders[i]:
+        for record in borders[i]:  # pragma: no branch
             cuts.append(record.start)
-        for record in inner:
+        for record in inner:  # pragma: no branch
             cuts.append(record.start)
         sort(cuts)
         var starts = List[Float64]()
-        for cut in cuts:
+        for cut in cuts:  # pragma: no branch
             if cut >= s and cut < end:
                 if len(starts) == 0 or starts[len(starts) - 1] != cut:
                     starts.append(cut)

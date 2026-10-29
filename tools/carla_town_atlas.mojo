@@ -21,10 +21,10 @@ from tools._python_float import (
     append_ascii,
     ascii_text,
     cached_repr,
-    parse_float,
     python_repr,
 )
-from tools._python_json import PY_DICT, PY_FLOAT, PY_INT, PY_LIST, PyJson
+from tools._python_json import PY_DICT, PY_LIST, PyJson
+from tools._town_json import json_number, json_triangles, json_vec3
 
 
 def atlas_text(text: String) raises -> String:
@@ -59,8 +59,8 @@ def _flat(doc: PyJson, root: Int) raises -> String:
     var px = List[Float64]()
     var py = List[Float64]()
     var pz = List[Float64]()
-    _vec3(doc, doc.at(root, "positions"), px, py, pz)
-    var faces = _triangles(doc, doc.at(root, "triangles"), len(px))
+    json_vec3(doc, doc.at(root, "positions"), px, py, pz)
+    var faces = json_triangles(doc, doc.at(root, "triangles"), len(px))
     var ox = List[Float64]()
     var oy = List[Float64]()
     var oz = List[Float64]()
@@ -127,11 +127,11 @@ def _spans(doc: PyJson, root: Int) raises -> String:
     var px = List[Float64]()
     var py = List[Float64]()
     var pz = List[Float64]()
-    _vec3(doc, doc.at(root, "positions"), px, py, pz)
+    json_vec3(doc, doc.at(root, "positions"), px, py, pz)
     if len(px) == 0:
         raise Error("positions are empty")
-    var density = _number(doc, doc.at(root, "density"))
-    var most = _number(doc, doc.at(root, "most"))
+    var density = json_number(doc, doc.at(root, "density"))
+    var most = json_number(doc, doc.at(root, "most"))
     var views = doc.at(root, "views")
     if doc.kind(views) != PY_LIST:
         raise Error("views are not a list")
@@ -219,8 +219,8 @@ def _pack(doc: PyJson, root: Int) raises -> String:
     var nx = List[Float64]()
     var ny = List[Float64]()
     var nz = List[Float64]()
-    _vec3(doc, doc.at(root, "positions"), px, py, pz)
-    _vec3(doc, doc.at(root, "normals"), nx, ny, nz)
+    json_vec3(doc, doc.at(root, "positions"), px, py, pz)
+    json_vec3(doc, doc.at(root, "normals"), nx, ny, nz)
     if len(px) != len(nx):
         raise Error("normals do not match positions")
     if len(px) % 3 != 0:
@@ -560,32 +560,13 @@ def _atlas(
     return ascii_text(out)
 
 
-def _vec3(
-    doc: PyJson,
-    node: Int,
-    mut xs: List[Float64],
-    mut ys: List[Float64],
-    mut zs: List[Float64],
-) raises:
-    """Read a list of 3-vectors."""
-    if doc.kind(node) != PY_LIST:
-        raise Error("vectors are not a list")
-    for index in range(doc.length(node)):
-        var point = doc.item(node, index)
-        if doc.kind(point) != PY_LIST or doc.length(point) != 3:
-            raise Error("vector is not 3 numbers")
-        xs.append(_number(doc, doc.item(point, 0)))
-        ys.append(_number(doc, doc.item(point, 1)))
-        zs.append(_number(doc, doc.item(point, 2)))
-
-
 def _vec3_one(doc: PyJson, node: Int, mut out: List[Float64]) raises:
     """Read one 3-vector."""
     if doc.kind(node) != PY_LIST or doc.length(node) != 3:
         raise Error("vector is not 3 numbers")
-    out.append(_number(doc, doc.item(node, 0)))
-    out.append(_number(doc, doc.item(node, 1)))
-    out.append(_number(doc, doc.item(node, 2)))
+    out.append(json_number(doc, doc.item(node, 0)))
+    out.append(json_number(doc, doc.item(node, 1)))
+    out.append(json_number(doc, doc.item(node, 2)))
 
 
 def _pair(doc: PyJson, node: Int) raises -> List[Float64]:
@@ -593,8 +574,8 @@ def _pair(doc: PyJson, node: Int) raises -> List[Float64]:
     if doc.kind(node) != PY_LIST or doc.length(node) != 2:
         raise Error("span is not 2 numbers")
     var out = List[Float64]()
-    out.append(_number(doc, doc.item(node, 0)))
-    out.append(_number(doc, doc.item(node, 1)))
+    out.append(json_number(doc, doc.item(node, 0)))
+    out.append(json_number(doc, doc.item(node, 1)))
     return out^
 
 
@@ -623,41 +604,7 @@ def _rgb(
             if doc.kind(pixel) != PY_LIST or doc.length(pixel) != 3:
                 raise Error("pixel is not 3 numbers")
             for channel in range(3):
-                rgb.append(_number(doc, doc.item(pixel, channel)))
-
-
-def _triangles(doc: PyJson, node: Int, count: Int) raises -> List[Int]:
-    """Return triangle indices."""
-    if doc.kind(node) != PY_LIST:
-        raise Error("triangles are not a list")
-    var out = List[Int]()
-    for index in range(doc.length(node)):
-        var triangle = doc.item(node, index)
-        if doc.kind(triangle) != PY_LIST or doc.length(triangle) != 3:
-            raise Error("triangle is not three indices")
-        for corner in range(3):
-            var face = _whole(doc, doc.item(triangle, corner))
-            if face < 0 or face >= count:
-                raise Error("index out of range")
-            out.append(face)
-    return out^
-
-
-def _number(doc: PyJson, node: Int) raises -> Float64:
-    """Return a JSON number as a float."""
-    var kind = doc.kind(node)
-    if kind == PY_FLOAT:
-        return doc.number(node)
-    if kind == PY_INT:
-        return parse_float(doc.text(node))
-    raise Error("coordinate is not a number")
-
-
-def _whole(doc: PyJson, node: Int) raises -> Int:
-    """Return a JSON integer."""
-    if doc.kind(node) != PY_INT:
-        raise Error("index is not an integer")
-    return Int(parse_float(doc.text(node)))
+                rgb.append(json_number(doc, doc.item(pixel, channel)))
 
 
 def main() raises:

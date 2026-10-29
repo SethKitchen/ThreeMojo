@@ -298,9 +298,7 @@ def test_the_crease_is_darkened_and_lit() raises:
     var capped = 0
     for slot in range(SIZE * SIZE):
         var light = held[slot]
-        var luma = (
-            0.2126729 * light.r + 0.7151522 * light.g + 0.0721750 * light.b
-        )
+        var luma = 0.2126 * light.r + 0.7152 * light.g + 0.0722 * light.b
         assert_true(luma <= 7.001)
         if luma > 6.99:
             capped += 1

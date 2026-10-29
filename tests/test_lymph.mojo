@@ -57,10 +57,7 @@ from extensions.anatomy.soft_tissue import (
     SoftTissueKind,
     lymph_tissue,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
-    SOFT_EMPTY,
-    SOFT_FILL,
-)
+from extensions.humanoid.skeleton.soft_tissue import SOFT_EMPTY, SOFT_FILL
 from materials.material import PHONG
 from math.vector3 import Vector3
 from std.testing import (

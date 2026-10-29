@@ -17,22 +17,18 @@ means the mesh stays as it is.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float
-from tools._python_json import (
-    MISSING,
-    PY_BOOL,
-    PY_DICT,
-    PY_FLOAT,
-    PY_INT,
-    PY_LIST,
-    PY_NONE,
-    PY_STR,
-    PyJson,
-)
+from tools._python_json import MISSING, PY_BOOL, PY_DICT, PY_LIST, PyJson
 from tools.carla_simplify_target import target_text
 from tools.carla_town_budget import far_budget, near_budget
 from tools.carla_town_cards import cards_text
 from tools.carla_town_simplify import town_simplify_text
+from tools._town_json import (
+    json_compact,
+    json_member,
+    json_named_int,
+    json_quote,
+    json_text,
+)
 
 
 def lower_text(text: String) raises -> String:
@@ -56,16 +52,24 @@ def lower_text(text: String) raises -> String:
     var doc = PyJson.parse(text)
     if doc.kind(doc.root) != PY_DICT:
         raise Error("lower request is not an object")
-    var kind = _text(doc, _member(doc, doc.root, "kind"), "kind is not text")
-    var mesh = _text(doc, _member(doc, doc.root, "mesh"), "mesh is not text")
-    var index = _whole(doc, _member(doc, doc.root, "index"), "index")
-    var total = _whole(doc, _member(doc, doc.root, "total"), "total")
-    var lod = _whole(doc, _member(doc, doc.root, "lod"), "lod")
-    var keep = _whole(doc, _member(doc, doc.root, "keep"), "keep")
+    var kind = json_text(
+        doc, json_member(doc, doc.root, "kind"), "kind is not text"
+    )
+    var mesh = json_text(
+        doc, json_member(doc, doc.root, "mesh"), "mesh is not text"
+    )
+    var index = json_named_int(
+        doc, json_member(doc, doc.root, "index"), "index"
+    )
+    var total = json_named_int(
+        doc, json_member(doc, doc.root, "total"), "total"
+    )
+    var lod = json_named_int(doc, json_member(doc, doc.root, "lod"), "lod")
+    var keep = json_named_int(doc, json_member(doc, doc.root, "keep"), "keep")
     if index < 0 or total < 0 or lod < 0 or keep < 0:
         raise Error("count is negative")
     var masked = _flag(
-        doc, _member(doc, doc.root, "masked"), "masked is not a bool"
+        doc, json_member(doc, doc.root, "masked"), "masked is not a bool"
     )
     var triangles = _listed(
         doc, doc.root, "triangles", "triangles are not a list"
@@ -75,7 +79,9 @@ def lower_text(text: String) raises -> String:
     )
     var normals = _listed(doc, doc.root, "normals", "normals are not a list")
     var uvs = _listed(doc, doc.root, "uvs", "uvs are not a list")
-    _ = _text(doc, _member(doc, doc.root, "material"), "material is not text")
+    _ = json_text(
+        doc, json_member(doc, doc.root, "material"), "material is not text"
+    )
     var count = doc.length(triangles)
     var budget = far_budget(kind, total, mesh)
     if lod == 0:
@@ -84,7 +90,7 @@ def lower_text(text: String) raises -> String:
         '{"mode":"share","budget":'
         + String(budget)
         + ',"factor":'
-        + _compact(doc, _member(doc, doc.root, "factor"))
+        + json_compact(doc, json_member(doc, doc.root, "factor"))
         + ',"triangles":'
         + String(count)
         + ',"total":'
@@ -96,7 +102,7 @@ def lower_text(text: String) raises -> String:
         + "}"
     )
     var chosen = PyJson.parse(chosen_text)
-    var action = _text(
+    var action = json_text(
         chosen, chosen.at(chosen.root, "action"), "action is not text"
     )
     if action == "none" or action == "whole":
@@ -132,7 +138,7 @@ def _cards(
     """Return thinned leaf cards, or `whole` when the cards stay."""
     var seed_text = cards_text(
         '{"mode":"seed","path":'
-        + _quote(mesh)
+        + json_quote(mesh)
         + ',"index":'
         + String(index)
         + ',"lod":'
@@ -140,18 +146,20 @@ def _cards(
         + "}"
     )
     var seed_doc = PyJson.parse(seed_text)
-    var seed = _whole(seed_doc, seed_doc.at(seed_doc.root, "seed"), "seed")
+    var seed = json_named_int(
+        seed_doc, seed_doc.at(seed_doc.root, "seed"), "seed"
+    )
     var thinned = cards_text(
         '{"positions":'
-        + _compact(doc, positions)
+        + json_compact(doc, positions)
         + ',"normals":'
-        + _compact(doc, normals)
+        + json_compact(doc, normals)
         + ',"uvs":'
-        + _compact(doc, uvs)
+        + json_compact(doc, uvs)
         + ',"triangles":'
-        + _compact(doc, triangles)
+        + json_compact(doc, triangles)
         + ',"keep":'
-        + _compact(chosen, chosen.at(chosen.root, "keep"))
+        + json_compact(chosen, chosen.at(chosen.root, "keep"))
         + ',"seed":'
         + String(seed)
         + "}"
@@ -175,7 +183,9 @@ def _simplify(
     var mode = String("weld")
     if lod == 0:
         mode = "border"
-    var target = _whole(chosen, chosen.at(chosen.root, "target"), "target")
+    var target = json_named_int(
+        chosen, chosen.at(chosen.root, "target"), "target"
+    )
     var small = _flag(
         chosen, chosen.at(chosen.root, "small"), "small is not a bool"
     )
@@ -183,13 +193,13 @@ def _simplify(
         '{"mode":"'
         + mode
         + '","positions":'
-        + _compact(doc, positions)
+        + json_compact(doc, positions)
         + ',"uvs":'
-        + _compact(doc, uvs)
+        + json_compact(doc, uvs)
         + ',"triangles":'
-        + _compact(doc, triangles)
+        + json_compact(doc, triangles)
         + ',"material":'
-        + _compact(doc, _member(doc, doc.root, "material"))
+        + json_compact(doc, json_member(doc, doc.root, "material"))
         + ',"target":'
         + String(target)
         + ',"small":'
@@ -260,34 +270,12 @@ def _array_of(text: String, key: String) raises -> String:
     return String(text[byte=at:end])
 
 
-def _member(doc: PyJson, node: Int, key: String) raises -> Int:
-    """Return a member, or raise `KeyError` text when it is absent."""
-    var found = doc.get(node, key)
-    if found == MISSING:
-        raise Error("KeyError: '" + key + "'")
-    return found
-
-
 def _listed(doc: PyJson, node: Int, key: String, message: String) raises -> Int:
     """Return a member that must be a list."""
-    var found = _member(doc, node, key)
+    var found = json_member(doc, node, key)
     if doc.kind(found) != PY_LIST:
         raise Error(message)
     return found
-
-
-def _whole(doc: PyJson, node: Int, message: String) raises -> Int:
-    """Return a JSON integer, or raise `message`."""
-    if doc.kind(node) != PY_INT:
-        raise Error(message + " is not an integer")
-    return Int(parse_float(doc.text(node)))
-
-
-def _text(doc: PyJson, node: Int, message: String) raises -> String:
-    """Return a JSON string, or raise `message`."""
-    if doc.kind(node) != PY_STR:
-        raise Error(message)
-    return doc.text(node)
 
 
 def _flag(doc: PyJson, node: Int, message: String) raises -> Bool:
@@ -302,55 +290,6 @@ def _json_bool(value: Bool) -> String:
     if value:
         return "true"
     return "false"
-
-
-def _compact(doc: PyJson, node: Int) raises -> String:
-    """Return JSON with no spaces, in insertion order."""
-    var kind = doc.kind(node)
-    if kind == PY_DICT:
-        var out = String("{")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ","
-            out += _quote(doc.key(node, index))
-            out += ":"
-            out += _compact(doc, doc.value(node, index))
-        out += "}"
-        return out
-    if kind == PY_LIST:
-        var out = String("[")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ","
-            out += _compact(doc, doc.item(node, index))
-        out += "]"
-        return out
-    if kind == PY_STR:
-        return _quote(doc.text(node))
-    if kind == PY_BOOL:
-        if doc.flag(node):
-            return "true"
-        return "false"
-    if kind == PY_NONE:
-        return "null"
-    return doc.text(node)
-
-
-def _quote(text: String) -> String:
-    """Return one JSON string."""
-    var out = String('"')
-    var raw = text.as_bytes()
-    for index in range(len(raw)):
-        var byte = raw[index]
-        if byte == 34 or byte == 92:
-            out += "\\"
-            out += chr(Int(byte))
-        else:
-            out += chr(Int(byte))
-    out += '"'
-    return out
 
 
 def main() raises:

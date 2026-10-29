@@ -47,8 +47,7 @@ Thus a skipped candidate cannot win or tie, and every answer and certificate sta
 An unknown or nonfinite E gives a zero radius, so that candidate is not skipped.
 
 On `assets/carla/town.xodr` the skip removes about 44 percent of the candidate certifications.
-See [the #685 measurement](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/certified-query-685.md).
-The source edge has its own reviewed lane-oracle record, `map_deviation_contracts.py`.
+See [the #685 measurement](https://github.com/SethKitchen/ThreeMojo/blob/37ecbc599777ebfe114679c197c27302ee9f5e1b/docs/validation/certified-query-685.md).
 
 ## Separate limits
 

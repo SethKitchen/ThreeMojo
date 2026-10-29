@@ -36,6 +36,7 @@ from core.ordinal import require_non_negative, require_positive
 from math.finite import require_finite_group
 from math.norm import length2, squared_length2
 from math.utils import (
+    rec709_luminance,
     interleaved_gradient_noise as _gradient_noise,
     mix_bilinear,
     mix_delta,
@@ -44,7 +45,6 @@ from math.utils import (
 from postprocessing.display_nodes import (
     exp_f,
     gaussian_coefficients,
-    luminance_of,
     replace_light,
 )
 from postprocessing.sampling import LightView, clamped_texel, u_of
@@ -543,7 +543,7 @@ def bilateral_pixel(
     var u = u_of(x, source.width)
     var v = u_of(y, source.height)
     var center = sample_down(source, u, v)
-    var center_luma = luminance_of(center.r, center.g, center.b)
+    var center_luma = rec709_luminance(center.r, center.g, center.b)
     var total = weights[0]
     var r = center.r * weights[0]
     var g = center.g * weights[0]
@@ -555,8 +555,10 @@ def bilateral_pixel(
         var dv = step_v * Float32(i)
         var ahead = sample_down(source, u + du, v + dv)
         var behind = sample_down(source, u - du, v - dv)
-        var d1 = abs(luminance_of(ahead.r, ahead.g, ahead.b) - center_luma)
-        var d2 = abs(luminance_of(behind.r, behind.g, behind.b) - center_luma)
+        var d1 = abs(rec709_luminance(ahead.r, ahead.g, ahead.b) - center_luma)
+        var d2 = abs(
+            rec709_luminance(behind.r, behind.g, behind.b) - center_luma
+        )
         var w1 = weights[i] * exp_f(d1 * d1 * factor)
         var w2 = weights[i] * exp_f(d2 * d2 * factor)
         r += ahead.r * w1 + behind.r * w2

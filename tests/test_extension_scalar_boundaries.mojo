@@ -6,11 +6,7 @@
 """Bounded scalar controls for inertia, interval division and audio metadata."""
 
 from extensions.anatomy.inertia import InertiaTally, _central_moment
-from extensions.carla.curve_distance import (
-    _DistanceInterval,
-    _next_down,
-    _next_up,
-)
+from extensions.carla.curve_interval import _Interval, _next_down, _next_up
 from extensions.humanoid.skeleton.head.aligned_speech import (
     AlignedSpeech,
     _json_time,
@@ -50,23 +46,23 @@ def test_segment_length_and_underflow_mass_are_refused() raises:
 
 def test_extended_interval_division_encloses_indeterminate_endpoints() raises:
     var infinity = inf[DType.float64]()
-    var whole = _DistanceInterval.whole()
-    var zero = _DistanceInterval.point(0.0)
-    var divided = zero / _DistanceInterval(2.0, infinity)
+    var whole = _Interval.whole()
+    var zero = _Interval.point(0.0)
+    var divided = zero / _Interval(2.0, infinity)
     assert_equal(divided.low, _next_down(0.0))
     assert_equal(divided.high, _next_up(0.0))
     # Each endpoint quotient is independently the first indeterminate one.
-    var numerators: List[_DistanceInterval] = [
-        _DistanceInterval(infinity, infinity),
-        _DistanceInterval(infinity, infinity),
-        _DistanceInterval(2.0, infinity),
-        _DistanceInterval(2.0, infinity),
+    var numerators: List[_Interval] = [
+        _Interval(infinity, infinity),
+        _Interval(infinity, infinity),
+        _Interval(2.0, infinity),
+        _Interval(2.0, infinity),
     ]
-    var denominators: List[_DistanceInterval] = [
-        _DistanceInterval(infinity, infinity),
-        _DistanceInterval(2.0, infinity),
-        _DistanceInterval(infinity, infinity),
-        _DistanceInterval(2.0, infinity),
+    var denominators: List[_Interval] = [
+        _Interval(infinity, infinity),
+        _Interval(2.0, infinity),
+        _Interval(infinity, infinity),
+        _Interval(2.0, infinity),
     ]
     for i in range(4):
         var result = numerators[i] / denominators[i]

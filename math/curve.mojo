@@ -309,11 +309,15 @@ def u_to_t(table: List[Float32], u: Float32) raises -> Float32:
     require_length_table(len(table))
     var last = len(table) - 1
     var target = u * table[last]
+    # The first sample at or past the target, by binary search as three.js.
     var index = 1
-    for step in range(1, last + 1):  # pragma: no branch
-        index = step
-        if table[step] >= target:
-            break
+    var high = last
+    while index < high:
+        var middle = (index + high) // 2
+        if table[middle] >= target:
+            high = middle
+        else:
+            index = middle + 1
     var span = table[index] - table[index - 1]
     var within = Float32(0)
     if span > 0:
@@ -544,36 +548,26 @@ struct Curve(Copyable, Movable):
             return self._ellipse_point(t)
         return self._spline_point(t)
 
-    def _spline_segment(self, t: Float32) -> Int:
-        """Return which of the spline's segments `t` falls in.
+    def _spline_frame(
+        self, t: Float32
+    ) -> Tuple[Float32, Vector2, Vector2, Vector2, Vector2]:
+        """Return the Catmull-Rom weight and the four points around `t`,
+        as three.js's `SplineCurve.getPoint` picks them.
 
-        The last point belongs to the segment before it rather than
-        starting one of its own, which is what keeps `t` of one on the
-        curve instead of one point past its end.
+        The point and the slope both read this frame. The first and last
+        stored points stand in where the spline has nothing beyond them,
+        so `t` of one starts at the last point with a weight of zero and
+        the spline ends exactly on it.
         """
         var last = len(self.points) - 1
         # `Float64`, as JavaScript's number is. A `Float32` product drops
         # whole segments past 2^24, so `t` of one misses the last point.
-        var segment = Int(floor(Float64(last) * Float64(t)))
-        if segment > last - 1:
-            segment = last - 1
-        return segment
-
-    def _spline_frame(
-        self, t: Float32
-    ) -> Tuple[Float32, Vector2, Vector2, Vector2, Vector2]:
-        """Return the Catmull-Rom weight and the four points around `t`.
-
-        The point and the slope both read this frame. The first and last
-        stored points stand in where the spline has nothing beyond them.
-        """
-        var last = len(self.points) - 1
         var span = Float64(last) * Float64(t)
-        var segment = self._spline_segment(t)
+        var segment = Int(floor(span))
         var weight = Float32(span - Float64(segment))
         var before = self.points[max(segment - 1, 0)]
         var start = self.points[segment]
-        var end = self.points[segment + 1]
+        var end = self.points[min(segment + 1, last)]
         var after = self.points[min(segment + 2, last)]
         return (weight, before, start, end, after)
 

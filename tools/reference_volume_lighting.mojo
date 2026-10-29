@@ -32,6 +32,7 @@ from std.sys import argv, exit, stderr
 from tools._json_tools import JsonWriter, json_tokens
 from tools._python_float import parse_float
 from tools._python_math import cos, exp, power, py_sum
+from tools._cli import finish
 
 comptime FIXTURE = "assets/volume_lighting/r186.json"
 """The fixture, relative to the repository root."""
@@ -1260,9 +1261,4 @@ def main() raises:
             "usage: reference_volume_lighting [--check | --write]", file=stderr
         )
         exit(2)
-    var outcome = run(".", write)
-    if outcome[0] != 0:
-        print(outcome[1], end="", file=stderr)
-    else:
-        print(outcome[1], end="")
-    exit(outcome[0])
+    finish(run(".", write))

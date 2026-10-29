@@ -11,15 +11,20 @@ and its animals, seen by a third-person camera.
 1. The look stick turns the camera round the player: see
    `ThirdPersonControls`.
 2. The player's `Character` steps by the move stick, relative to the
-   camera's yaw. The houses, the trees, the pond and every resident stop
-   it.
+   camera's yaw, on the village's `Terrain`. The walls, the furniture,
+   the trees, the pond and every resident stop it. A door's gap lets it
+   into a house, and its floor carries it there.
 3. While the player moves and the look stick rests, the camera comes
    round behind the player.
 4. The player's `Body` stands where the character stands and plays its
    stance's clip.
 5. Each resident steps along its route and is posed: see `Residents`.
-6. The camera follows the player and stays above the ground.
-7. The village prepares the frame: the grass for the camera, and the
+6. Each door swings open while someone stands near it, and shut after.
+7. The camera follows the player. Where a wall stands between the
+   player and the eye, the eye comes in to stand before the wall, and it
+   goes back out slowly when the wall is passed. Under a ceiling, the
+   eye stays below it. It stays above the ground or the floor.
+8. The village prepares the frame: the grass for the camera, and the
    water's clock.
 
 `VillageGame.render` then draws the frame with `GameRenderer` at the
@@ -43,12 +48,13 @@ from extensions.animals.registry import (
     RABBIT,
     SHEEP,
 )
+from extensions.attire.outfit import Outfit
 from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.genome import random_genome
 from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.field import FieldStats
-from extensions.vegetation.ground import Ground, Lot
+from extensions.vegetation.ground import Ground, Lot, lot_openness
 from extensions.vegetation.meadow import EXPOSURE, FARTHEST
 from extensions.village.character import (
     Character,
@@ -59,9 +65,21 @@ from extensions.village.character import (
 from extensions.village.residents import (
     Body,
     Herd,
+    HouseId,
+    NO_HOUSE,
     Residents,
     ResidentsParameters,
     Villager,
+)
+from extensions.village.clothes import (
+    CREAM_WOOL,
+    GRAY_WOOL,
+    MADDER,
+    NETTLE,
+    WALNUT,
+    WELD,
+    WOAD,
+    village_outfit,
 )
 from extensions.village.quality import (
     GameQuality,
@@ -70,13 +88,17 @@ from extensions.village.quality import (
     planted,
 )
 from extensions.village.scanned import CutBuilding
+from extensions.village.terrain import Terrain
+from extensions.village.interior import Doorway
 from extensions.village.village import Village, VillageParameters
 from extensions.water.pebbles import PebbleBed
 from math.vector3 import Vector3
 from render.framebuffer import Framebuffer
+from render.game_smooth import smooth_edges
 from render.game_upscale import upscale_into
 from renderers.game_renderer import FULL_SHADOWS, GameRenderer
 from renderers.renderer import Renderer, available_workers
+from std.math import exp
 from std.time import perf_counter_ns
 from units.si import (
     DEGREE,
@@ -97,16 +119,32 @@ comptime TRUNK = Float32(0.35)
 """A tree's trunk radius for a planting of size 1, in meters."""
 comptime CALM = Float32(0.1)
 """A look stick that leans less than this lets the camera trail."""
+comptime SIGHT_POINTS = 4
+"""How many points along the camera's sight hold a door open."""
+comptime ARM_MARGIN = Float32(0.3)
+"""How far before a wall the camera's eye stops, in meters."""
+comptime ARM_EASE = Float32(3)
+"""How fast the eye goes back out once a wall is passed: each second it
+closes all but `exp(-ARM_EASE)` of its gap."""
 
 
-def default_residents() -> ResidentsParameters:
+def default_residents() raises -> ResidentsParameters:
     """Return the people and the animals of the default village.
 
     Returns:
-        A woman by the brick house, a man on the trail and a child who
-        runs round the pond; four sheep and a goat right of the trail,
-        two cows and a horse left of it, a pig by the barn, a dog near
-        the start, two rabbits by the trail and two deer past the pond.
+        A woman in a hooded green tunic by the brick house, who visits
+        it; a man in a blue tunic on the trail, who visits the stone
+        cottage; a child in a yellow tunic who runs round the pond; an
+        old man in a gray tunic, who visits the framed cottage; and a
+        woman in a red tunic by the framed house, who visits it. Four
+        sheep and a goat right of the trail, two cows and a horse left
+        of it, a pig by the barn, a dog near the start, two rabbits by
+        the trail and two deer past the pond. The deer run from a player
+        12 meters away, the rabbits from 6, the sheep from 3 and the goat
+        from 2.
+
+    Raises:
+        Error: Never: the outfits check.
     """
     var residents = ResidentsParameters()
     residents.villagers = [
@@ -117,6 +155,8 @@ def default_residents() -> ResidentsParameters:
             7,
             41,
             False,
+            village_outfit(NETTLE, WELD, GRAY_WOOL, True),
+            HouseId(0),
         ),
         Villager(
             HumanoidSpec(Length(70.0, INCH), MALE, TONED, random_genome(8)),
@@ -125,6 +165,8 @@ def default_residents() -> ResidentsParameters:
             14,
             42,
             False,
+            village_outfit(WOAD, CREAM_WOOL, WALNUT, False),
+            HouseId(2),
         ),
         Villager(
             HumanoidSpec(
@@ -135,17 +177,39 @@ def default_residents() -> ResidentsParameters:
             5,
             43,
             True,
+            village_outfit(WELD, MADDER, WALNUT, False),
+            NO_HOUSE,
+        ),
+        Villager(
+            HumanoidSpec(Length(67.0, INCH), MALE, UNTONED, random_genome(21)),
+            6,
+            -24,
+            6,
+            44,
+            False,
+            village_outfit(GRAY_WOOL, WALNUT, CREAM_WOOL, True),
+            HouseId(4),
+        ),
+        Villager(
+            HumanoidSpec(Length(64.0, INCH), FEMALE, TONED, random_genome(34)),
+            14,
+            -16,
+            6,
+            45,
+            False,
+            village_outfit(MADDER, CREAM_WOOL, WOAD, False),
+            HouseId(3),
         ),
     ]
     residents.herds = [
-        Herd(SHEEP, 4, 15, 4, 7, 51),
-        Herd(GOAT, 1, 20, -6, 5, 52),
+        Herd(SHEEP, 4, 15, 4, 7, 51, flee=Length(3.0, METER)),
+        Herd(GOAT, 1, 20, -6, 5, 52, flee=Length(2.0, METER)),
         Herd(COW, 2, -18, 6, 8, 53),
         Herd(HORSE, 1, -14, -16, 7, 54),
         Herd(PIG, 1, -12, -48, 4, 55),
         Herd(DOG, 1, 4, 22, 4, 56),
-        Herd(RABBIT, 2, -6, 14, 3, 57),
-        Herd(DEER, 2, 30, -40, 10, 58),
+        Herd(RABBIT, 2, -6, 14, 3, 57, flee=Length(6.0, METER)),
+        Herd(DEER, 2, 30, -40, 10, 58, flee=Length(12.0, METER)),
     ]
     return residents^
 
@@ -156,6 +220,8 @@ struct PlayParameters(Copyable, Movable):
     var village: VillageParameters
     var residents: ResidentsParameters
     var player: HumanoidSpec
+    # What the player wears.
+    var outfit: Outfit
     # How finely each part of a frame is drawn.
     var quality: GameQuality
     # Where the player starts, in meters, and the way they face.
@@ -168,7 +234,9 @@ struct PlayParameters(Copyable, Movable):
     def __init__(out self, quality: GameQuality) raises:
         """Create the default game at a quality: the village with the
         quality's plants, its residents, and a man of six feet on the
-        trail who looks toward the houses.
+        trail who looks toward the houses. He wears a madder-red tunic
+        trimmed in weld yellow over a linen shirt, walnut hose and
+        leather boots.
 
         Args:
             quality: How finely each part of a frame is drawn.
@@ -182,25 +250,39 @@ struct PlayParameters(Copyable, Movable):
         self.residents = default_residents()
         self.residents.animal_coarseness = Float64(quality.animal_coarseness)
         self.player = HumanoidSpec(Length(6.0, FOOT), MALE, TONED)
+        self.outfit = village_outfit(MADDER, WELD, WALNUT, False)
         self.start_x = 0
         self.start_z = 26
         self.heading = Angle(0.0, RADIAN)
         self.field_of_view = Angle(55.0, DEGREE)
 
 
-def tree_obstacles(parameters: VillageParameters) -> List[Obstacle]:
-    """Return a trunk for each planting of a village's meadow.
+def tree_obstacles(
+    parameters: VillageParameters, lots: List[Lot]
+) -> List[Obstacle]:
+    """Return a trunk for each planting that grows in a village's meadow.
+
+    A planting on a lot or its apron, or in the pond, does not grow: the
+    meadow leaves it out, and so does this.
 
     Args:
         parameters: The village.
+        lots: The lots the meadow leaves bare, as `Village` gives them to
+            its meadow: the houses', the scanned building's and the
+            footpaths'.
 
     Returns:
-        One obstacle a planting, `TRUNK` times its size across.
+        One obstacle a planting that grows, `TRUNK` times its size
+        across.
     """
     var out = List[Obstacle]()
     ref plantings = parameters.meadow.plantings
     for index in range(len(plantings)):
         ref planting = plantings[index]
+        if lot_openness(lots, planting.x, planting.z) < 1:
+            continue
+        if parameters.meadow.ground.wet(planting.x, planting.z):
+            continue
         out.append(Obstacle(planting.x, planting.z, TRUNK * planting.size))
     return out^
 
@@ -216,6 +298,11 @@ struct VillageGame(Movable):
     var view: ThirdPersonControls
     var camera: PerspectiveCamera
     var trees: List[Obstacle]
+    # The ground, the houses' walls and floors, and the solid lots.
+    var terrain: Terrain
+    # The share of the camera's distance its eye stands at: less than one
+    # while a wall stands in the way.
+    var reach: Float32
     # The game's clock, in seconds.
     var clock: Float32
     # How finely each part of a frame is drawn, the window's size, and the
@@ -224,10 +311,11 @@ struct VillageGame(Movable):
     var width: Int
     var height: Int
     var fast: GameRenderer
-    # How long the last frame's draw, water and stretch took, in
-    # milliseconds.
+    # How long the last frame's draw, its water, the smoothing of its edges
+    # and its stretch took, in milliseconds.
     var render_ms: Float64
     var water_ms: Float64
+    var smooth_ms: Float64
     var upscale_ms: Float64
     # The last frame, the window's size: `render` draws into it.
     var window: Framebuffer
@@ -265,8 +353,11 @@ struct VillageGame(Movable):
         self.height = height
         self.fast = GameRenderer(size[0], size[1], EXPOSURE)
         self.fast.sky_step = self.quality.sky_step
+        # The houses' brick, plaster, wood and tiles show at each pixel.
+        self.fast.pixel_maps = True
         self.render_ms = 0
         self.water_ms = 0
+        self.smooth_ms = 0
         self.upscale_ms = 0
         self.window = Framebuffer(
             width, height, List[UInt8](length=width * height * 4, fill=0)
@@ -275,13 +366,28 @@ struct VillageGame(Movable):
             scene, assets, renderer, parameters.village, bed^, scan^
         )
         ref field = self.village.meadow.field
+        self.terrain = self.village.terrain()
+        self.reach = 1
+        # Each house's front door: the villagers' homes.
+        var homes = List[Doorway]()
+        for index in range(len(self.village.houses)):
+            homes.append(self.village.houses[index].interior.front_door())
+        # The residents' points keep off the buildings and the props.
+        var keep_off = field.lots.copy()
+        keep_off.extend(self.village.props.lots.copy())
         self.residents = Residents(
-            scene, assets, parameters.residents, field.ground, field.lots
+            scene,
+            assets,
+            parameters.residents,
+            self.terrain,
+            keep_off,
+            homes,
         )
         self.body = Body(
             scene,
             assets,
             parameters.player,
+            parameters.outfit,
             parameters.residents.triangles,
             parameters.residents.detail,
         )
@@ -290,7 +396,7 @@ struct VillageGame(Movable):
             parameters.start_x,
             parameters.start_z,
             parameters.heading,
-            field.ground,
+            self.terrain,
         )
         self.village.meadow.grass_wind_every = self.quality.grass_wind_every
         # A still shadow map is drawn once, and the grass changes as the
@@ -310,7 +416,9 @@ struct VillageGame(Movable):
                 METER,
             ),
         )
-        self.trees = tree_obstacles(parameters.village)
+        self.trees = tree_obstacles(
+            parameters.village, self.village.meadow.field.lots
+        )
         self.clock = 0
         self.village.meadow.register_shadings(self.fast, assets)
         self.fast.set_shadows(self.quality.shadows, self.quality.shadow_size)
@@ -345,13 +453,10 @@ struct VillageGame(Movable):
             Error: If the time is negative, or a part cannot move or
                 prepare the frame.
         """
-        ref field = self.village.meadow.field
         self.view.turn(input.look_right, input.look_up, delta)
         var blocking = self.trees.copy()
         blocking.extend(self.residents.obstacles())
-        self.player.step(
-            input, self.view.yaw, delta, field.ground, field.lots, blocking
-        )
+        self.player.step(input, self.view.yaw, delta, self.terrain, blocking)
         var calm = abs(input.look_right) < CALM and abs(input.look_up) < CALM
         if calm:
             var top = self.player.parameters.run_speed.to(METER_PER_SECOND)
@@ -363,14 +468,47 @@ struct VillageGame(Movable):
         around.append(
             Obstacle(feet.x, feet.z, self.player.parameters.radius.to(METER))
         )
-        self.residents.update(scene, delta, field.ground, field.lots, around)
+        self.residents.update(scene, delta, self.terrain, around, feet)
+        var people = List[Vector3]()
+        people.append(feet)
+        for index in range(len(self.residents.people)):
+            people.append(self.residents.people[index].position)
+        for index in range(len(self.residents.beasts)):
+            people.append(self.residents.beasts[index].character.position)
+        # A door the camera looks through stays open too: points along the
+        # last frame's sight hold it, at the height of the player's feet.
+        var sight = self.camera.position
+        for k in range(SIGHT_POINTS):  # pragma: no branch
+            var t = Float32(k) / Float32(SIGHT_POINTS)
+            people.append(
+                Vector3(
+                    sight.x + (feet.x - sight.x) * t,
+                    feet.y,
+                    sight.z + (feet.z - sight.z) * t,
+                )
+            )
+        self.village.doors.update(scene, people, delta)
         self.view.follow_target(
             Vector3(feet.x, feet.y + FOCUS_HEIGHT, feet.z), delta
         )
         self.fast.focus = feet
-        var eye = self.view.eye()
-        self.view.place(
-            self.camera, Length(field.ground.height_at(eye.x, eye.z), METER)
+        # The eye comes in at once before a wall, and goes back out slowly.
+        var focus = self.view.focus
+        var clear = self.terrain.view_reach(focus, self.view.eye(), ARM_MARGIN)
+        if clear < self.reach:
+            self.reach = clear
+        else:
+            var ease = 1 - exp(-ARM_EASE * delta.to(SECOND))
+            self.reach += (clear - self.reach) * ease
+        var eye = focus + (self.view.eye() - focus) * self.reach
+        # The floors and ceilings that the player's feet reach: the eye
+        # stays over the floor under it, and under the ceilings that
+        # `Terrain.view_ceiling` holds it under.
+        self.view.place_within(
+            self.camera,
+            Length(self.terrain.height_at(eye.x, eye.z, feet.y), METER),
+            Length(self.terrain.view_ceiling(focus, eye, feet.y), METER),
+            self.reach,
         )
         scene.update()
         self.clock += delta.to(SECOND)
@@ -381,8 +519,9 @@ struct VillageGame(Movable):
     def render(mut self, scene: Scene, assets: Assets) raises:
         """Draw the frame that `tick` prepared into `window`.
 
-        The frame is drawn at the quality's smaller size, the pond's water
-        is composed into it, and it is stretched over `window`. The window's
+        The frame is drawn at the quality's smaller size, and the pond's
+        water is composed into it. Its edges are smoothed if the quality's
+        `smooth_edges` asks, and it is stretched over `window`. The window's
         frame is kept from frame to frame, so it is not allocated again.
 
         Args:
@@ -403,9 +542,14 @@ struct VillageGame(Movable):
         var watered = perf_counter_ns()
         self.render_ms = Float64(drawn - began) / 1.0e6
         self.water_ms = Float64(watered - drawn) / 1.0e6
+        self.smooth_ms = 0
+        if self.quality.smooth_edges:
+            smooth_edges(image, available_workers())
+            self.smooth_ms = Float64(perf_counter_ns() - watered) / 1.0e6
         self.upscale_ms = 0
         if image.width == self.width and image.height == self.height:
             self.window = image^
             return
+        var smoothed = perf_counter_ns()
         upscale_into(image, self.window, available_workers())
-        self.upscale_ms = Float64(perf_counter_ns() - watered) / 1.0e6
+        self.upscale_ms = Float64(perf_counter_ns() - smoothed) / 1.0e6

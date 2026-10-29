@@ -59,9 +59,8 @@ from math.norm import length2, squared_length2
 
 from math.arc_tangent import atan2_float32
 from math.matrix4 import Matrix4
-from math.utils import glsl_mod, mix_delta
+from math.utils import glsl_mod, mix_delta, rec709_luminance
 from math.vector3 import Vector3
-from postprocessing.display_nodes import luminance_of
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView, glsl_rand
 from render.framebuffer import TRANSPARENT_BLACK, Color, FloatColor
@@ -453,7 +452,7 @@ def effect_luminance(r: Float32, g: Float32, b: Float32) -> Float32:
     Returns:
         The weighted sum.
     """
-    return luminance_of(r, g, b)
+    return rec709_luminance(r, g, b)
 
 
 def _straight(source: LightView, u: Float32, v: Float32) -> FloatColor:

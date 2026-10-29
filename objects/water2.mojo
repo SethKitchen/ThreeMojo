@@ -28,7 +28,7 @@ from core.object3d import NodeId
 from core.scene import Scene
 from materials.glsl import compile_shader_material
 from materials.material import shader_material
-from materials.nodes import NodeProgramId
+from materials.node_program_id import NodeProgramId
 from math.finite import require_non_negative_finite
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2

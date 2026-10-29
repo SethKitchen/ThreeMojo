@@ -236,10 +236,8 @@ def _turn_towards(
     """Turn toward `target` by at most `step`, three.js's `rotateTowards`,
     and return whether the turn has arrived.
 
-    three.js's `slerp` returns its end exactly at a fraction of one, so
-    its `angleTo` then reads zero. `Quaternion.slerp` here computes that
-    end, and in `Float32` the angle to it need not read zero. So the end is
-    taken exactly here, and arriving is said rather than measured.
+    three.js's `angleTo` from a rotation to itself reads zero in doubles.
+    In `Float32` it need not, so arriving is said rather than measured.
     """
     var angle = turn.angle_to(target).to(RADIAN)
     if angle == 0:

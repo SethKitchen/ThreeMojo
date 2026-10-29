@@ -391,8 +391,6 @@ def _is_byte(value: Int) -> Bool:
 def is_unit_fraction(value: Float32) -> Bool:
     """Return True when a value is finite and from zero to one.
 
-    Error: Never.
-
     Args:
         value: The number.
 

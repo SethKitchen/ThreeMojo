@@ -14,6 +14,9 @@ What is read is what three.js's loader reads and this renderer can draw:
 
 - `v x y z`, `vt u v` and `vn x y z`, into three pools the faces index.
   A fourth coordinate on any of them is ignored, as three.js ignores it.
+  `v x y z r g b` also gives the vertex an sRGB color, as three.js reads
+  it: an object with a colored vertex gets a linear `color` attribute,
+  and a vertex with no color is white in it.
 - `f` with three or more corners, each `v`, `v/vt`, `v//vn` or `v/vt/vn`.
   A polygon is cut into a fan of triangles from its first corner, as
   three.js cuts it, and so it must be convex: a fan covers a convex
@@ -51,21 +54,24 @@ face with fewer than three corners or that is not convex, and an index
 that names nothing are refused, with the line they were found on.
 """
 
-from std.math import isfinite
+from std.math import isfinite, isnan
+from std.utils.numerics import nan
 
 from core.ordinal import index_in_count
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
+    COLOR,
     NORMAL,
     POSITION,
     UV,
     BufferGeometry,
     MaterialIndex,
 )
-from loaders.js_text import split_fields
+from loaders.js_text import comment_start, split_fields
 from loaders.text_number import file_line
 from math.vector3 import Vector3
+from render.srgb import srgb_to_linear
 from std.pathlib import Path
 
 
@@ -164,6 +170,10 @@ struct _Part(Movable):
     var positions: List[Float32]
     var normals: List[Float32]
     var uvs: List[Float32]
+    var colors: List[Float32]
+    # Whether a corner's vertex had a color, which makes the part carry a
+    # `color` attribute.
+    var with_color: Bool
     # Decided by the first corner: whether every corner names a normal, and
     # a texture coordinate. Meaningless until `corners` is positive.
     var with_normal: Bool
@@ -185,6 +195,8 @@ struct _Part(Movable):
         self.positions = List[Float32]()
         self.normals = List[Float32]()
         self.uvs = List[Float32]()
+        self.colors = List[Float32]()
+        self.with_color = False
         self.with_normal = False
         self.with_uv = False
         self.corners = 0
@@ -257,12 +269,17 @@ struct _Part(Movable):
         swap(normals, self.normals)
         var uvs = List[Float32]()
         swap(uvs, self.uvs)
+        var colors = List[Float32]()
+        swap(colors, self.colors)
         var geometry = BufferGeometry()
         geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
         if self.with_normal:
             geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
         if self.with_uv:
             geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
+        if self.with_color:
+            geometry.set_attribute(String(COLOR), BufferAttribute(colors^, 3))
+        self.with_color = False
         var materials = List[String]()
         for index in range(len(kept)):  # pragma: no branch
             materials.append(kept[index].name)
@@ -416,6 +433,7 @@ def _read_corner(
     vertices: List[Float32],
     texcoords: List[Float32],
     normals: List[Float32],
+    colors: List[Float32],
     line: Int,
 ) raises:
     """Add one face corner to the part being read.
@@ -426,6 +444,7 @@ def _read_corner(
         vertices: The position pool so far.
         texcoords: The texture coordinate pool so far.
         normals: The normal pool so far.
+        colors: The linear color of each vertex so far, NaN for none.
         line: Which line, for the error.
 
     Raises:
@@ -456,6 +475,11 @@ def _read_corner(
     var vertex = _index(parts[0], len(vertices) // 3, line)
     for axis in range(3):  # pragma: no branch
         part.positions.append(vertices[vertex * 3 + axis])
+    # A vertex with no color is white beside one with a color.
+    var colored = not isnan(colors[vertex * 3])
+    part.with_color = part.with_color or colored
+    for axis in range(3):  # pragma: no branch
+        part.colors.append(colors[vertex * 3 + axis] if colored else 1.0)
     if has_uv:
         var texcoord = _index(parts[1], len(texcoords) // 2, line)
         part.uvs.append(texcoords[texcoord * 2])
@@ -565,6 +589,7 @@ def _read_face(
     vertices: List[Float32],
     texcoords: List[Float32],
     normals: List[Float32],
+    colors: List[Float32],
     line: Int,
 ) raises:
     """Add a face's triangles to the part being read, as a fan from its
@@ -576,6 +601,7 @@ def _read_face(
         vertices: The position pool so far.
         texcoords: The texture coordinate pool so far.
         normals: The normal pool so far.
+        colors: The vertex color pool so far; see `_read_corner`.
         line: Which line, for the error.
 
     Raises:
@@ -594,7 +620,13 @@ def _read_face(
     for triangle in range(corners - 2):  # pragma: no branch
         for which in [0, triangle + 1, triangle + 2]:  # pragma: no branch
             _read_corner(
-                part, fields[which + 1], vertices, texcoords, normals, line
+                part,
+                fields[which + 1],
+                vertices,
+                texcoords,
+                normals,
+                colors,
+                line,
             )
 
 
@@ -620,6 +652,8 @@ def parse_obj(text: String) raises -> ObjModel:
     var vertices = List[Float32]()
     var texcoords = List[Float32]()
     var normals = List[Float32]()
+    # Three a vertex, linear, or NaN for a vertex that names no color.
+    var colors = List[Float32]()
     var part = _Part(String(), String())
     # Whether an `o` or `g` line has been read yet; see below.
     var declared = False
@@ -648,10 +682,10 @@ def parse_obj(text: String) raises -> ObjModel:
         var joined = pending + physical
         pending = String()
         var stripped = String(joined.strip())
-        # A comment runs from `#` to the end of the line, wherever it
-        # starts; the format allows one after the data, and three.js reads
-        # a trailing one as a corner.
-        var comment = stripped.find("#")
+        # A comment runs from a `#` that starts a word to the end of the
+        # line; the format allows one after the data, and three.js reads a
+        # trailing one as a corner. A `#` inside a name is kept.
+        var comment = comment_start(stripped)
         if comment >= 0:
             var data = String(stripped[byte=0:comment].strip())
             stripped = data^
@@ -662,12 +696,19 @@ def parse_obj(text: String) raises -> ObjModel:
         var keyword = fields[0]
         if keyword == "v":
             _read_coordinates(vertices, fields, 3, line)
+            # Six numbers are a position and an sRGB color, as three.js
+            # reads `v x y z r g b`.
+            for axis in range(4, 7):  # pragma: no branch
+                if len(fields) >= 7:
+                    colors.append(srgb_to_linear(_number(fields[axis], line)))
+                else:
+                    colors.append(nan[DType.float32]())
         elif keyword == "vt":
             _read_coordinates(texcoords, fields, 2, line)
         elif keyword == "vn":
             _read_coordinates(normals, fields, 3, line)
         elif keyword == "f":
-            _read_face(part, fields, vertices, texcoords, normals, line)
+            _read_face(part, fields, vertices, texcoords, normals, colors, line)
         elif keyword == "o" or keyword == "g":
             if not declared:
                 # The first declaration names what was read before it

@@ -33,8 +33,8 @@ things moved, and all are easy to write back the old way by habit:
   `render/tasks.mojo`, which holds the private import.
 - A task function is `__async def`, and an await is `__await`. 1.2 renamed
   the keywords to mark async as unstable. The bare `async def` still parses,
-  but it warns, and `--Werror` makes that an error. The coverage tool, the
-  scanner and `tools/coverage_loop_proofs.py` all read `__async def`.
+  but it warns, and `--Werror` makes that an error. The coverage
+  instrumenter and its scanner read `__async def`.
 - Coverage writes are the second narrow exception for a private import.
   `coverage/runtime.mojo` is the adapter boundary for `std.sys._libc_errno`.
   Keep this import inside that file in production code. It uses the pinned

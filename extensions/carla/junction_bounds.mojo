@@ -687,7 +687,7 @@ def _lane_section_box_with_work(
         raise Error("Junction proposal is not finite in public storage")
     # The old analytic expression is only a proposal. Prove the actual
     # canonical lane graph is covered, including both sides of record jumps.
-    for i in range(len(breaks) - 1):
+    for i in range(len(breaks) - 1):  # pragma: no branch
         work.step()
         var start = breaks[i]
         out.expand_by_point(

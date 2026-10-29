@@ -1,9 +1,6 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Source-only controls for the proposed strict Y-dominance guard cleanup.
-
-No native pass is claimed. Keep original suites and five-second gate intact.
-"""
+"""The atan2 jet keeps its strict Y-dominance guard."""
 
 from extensions.carla.curve_interval import _Interval, _Jet
 from extensions.carla.curve_trig import _atan2_jet, _curve_atan2

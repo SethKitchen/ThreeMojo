@@ -495,7 +495,8 @@ def _wood_rings(
 ) raises -> NodeRef:
     """Return three.js's `woodRings` at a distance `w` from the trunk."""
     var scaled = g.mul(w, variance_scale)
-    var noise = _noise1(g, g.join([scaled, scaled, scaled]))
+    # three.js converts the float to a `vec2`, so the noise is 2-D.
+    var noise = _noise1(g, g.join([scaled, scaled]))
     var rings = g.mul(
         g.fract(g.mul(g.add(g.mul(noise, size_variance), w), thickness)),
         bark,

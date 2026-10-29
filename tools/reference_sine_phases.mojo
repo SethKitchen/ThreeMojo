@@ -22,6 +22,7 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._bigint import BigInt
+from tools._cli import finish
 
 comptime FIXTURE = "tests/test_sine.mojo"
 """The test file that holds the generated block."""
@@ -416,9 +417,4 @@ def main() raises:
     ):
         print("usage: reference_sine_phases (--check | --write)", file=stderr)
         exit(2)
-    var outcome = run(".", String(given[1]) == "--write")
-    if outcome[0] != 0:
-        print(outcome[1], end="", file=stderr)
-    else:
-        print(outcome[1], end="")
-    exit(outcome[0])
+    finish(run(".", String(given[1]) == "--write"))

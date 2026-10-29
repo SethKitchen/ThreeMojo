@@ -895,9 +895,9 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         var above = _unit_direction(up)
         var x = _cross_direction(above, z)
         if x == Vector3(0, 0, 0):
-            # Nudge along an axis that is not the dominant direction.
-            # This keeps the usual y/z-up choice and works at any scale.
-            if abs(z.z) > max(abs(z.x), abs(z.y)):
+            # three.js nudges x when up is the z axis and z otherwise. The
+            # unit up makes that test hold for an up of any length.
+            if abs(above.z) == 1:
                 z.x += _LOOK_AT_NUDGE
             else:
                 z.z += _LOOK_AT_NUDGE
@@ -993,13 +993,28 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         quaternion = result
         scale = Vector3(sx, sy, sz)
 
+    def has_extent(self) -> Bool:
+        """Return True if every axis column has a length above zero.
+
+        A transform without it has no turn to decompose and no inverse to
+        carry a ray or a point back through.
+
+        Returns:
+            Whether no axis is scaled to nothing.
+        """
+        return (
+            min(
+                min(self.column_length(0), self.column_length(1)),
+                self.column_length(2),
+            )
+            > 0
+        )
+
     def column_length(self, axis: Int) -> Float32:
         """Return the length of one axis column.
 
         That length is the scale along the axis. three.js reads it as
         the length of `matrix[axis].xyz`.
-
-        Error: Never.
 
         Args:
             axis: Which column, zero for x through two for z.
@@ -1058,8 +1073,6 @@ def require_axis_extent(
 
 def column_major_matrix(elements: List[Float32]) -> Matrix4:
     """Return a matrix filled from sixteen column-major numbers.
-
-    Error: Never.
 
     Args:
         elements: Sixteen numbers. The first four are the first column.

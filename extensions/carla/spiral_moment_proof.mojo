@@ -3,16 +3,13 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Independent fixed-count SPIRAL polynomial proof helpers.
+"""Fixed-count SPIRAL moment coefficients, built by interval arithmetic.
 
-The standalone dynamic builder and expansion controls remain independent of
-Map. The held immutable-domain integration imports the original phase guard
-and ideal-coefficient helper. It never calls the dynamic builder in a query.
-
-The standalone helpers were qualified separately. The held domain integration
-needs its own native, coverage, and performance gates with these dependencies.
-This module is never a canonical scalar evaluator. Its expansion-only helper
-retains positive-infinity X/Y errors and cannot supply a rounded domain proof.
+`_try_build_spiral_moments` encloses the 22 coefficients for a piece count
+from the stored GL and trigonometric constants. Queries never call it: they
+read the same coefficients from `spiral_moment_table`, and the tests check
+that each table word lies inside the built enclosure. The phase guard and the
+ideal-coefficient helper here are shared with that table.
 
 Coefficients enclose algebraic expressions in the stored GL/trig constants.
 No ideal-sine, fitted-curve, quadrature-exactness, or truncation claim is made.
@@ -20,7 +17,6 @@ No ideal-sine, fitted-curve, quadrature-exactness, or truncation claim is made.
 
 from extensions.carla.curve_sum2 import _sum2_supported_environment
 from extensions.carla.curve_interval import (
-    _stored_half,
     _Interval,
     _Jet,
     _tight_sum_bound,
@@ -35,12 +31,10 @@ from extensions.carla.curve_trig import (
 )
 from extensions.carla.geometry import (
     RoadGeometry,
-    SPIRAL,
     _GL_NODES,
     _GL_WEIGHTS,
 )
-from math.vector3 import Vector3
-from std.math import floor, inf, isfinite
+from std.math import floor
 
 
 @fieldwise_init
@@ -94,7 +88,7 @@ def _try_build_spiral_moments(
     # Exact cancellation of n copies divided by n. Do not substitute 1.0:
     # the actual stored weights, not ideal GL weights, define this polynomial.
     moments[0] = _tight_product_bound(half, weight_sum)
-    for piece in range(pieces):
+    for piece in range(pieces):  # pragma: no branch
         for i in range(5):
             # The scalar-rounded 1.0 + node is deliberately computed BEFORE
             # making the interval constant, exactly as curve_bounds:116-118.
@@ -140,17 +134,6 @@ def _ideal_coefficient(value: _Interval) -> _Jet:
     return _Jet(value, zero, zero, 0.0)
 
 
-def _ideal_moment_polynomial(
-    coefficients: Array[_Interval, 11], z: _Jet
-) -> _Jet:
-    var result = _ideal_coefficient(coefficients[10])
-    var j = 9
-    while j >= 0:
-        result = result * z + _ideal_coefficient(coefficients[j])
-        j -= 1
-    return result
-
-
 def _all_spiral_nodes_quadrant_zero(
     geometry: RoadGeometry, d: _Jet, pieces: Int
 ) -> Bool:
@@ -186,64 +169,3 @@ def _all_spiral_nodes_quadrant_zero(
     if not selection.is_finite():
         return False
     return floor(selection.low) == 0.0 and floor(selection.high) == 0.0
-
-
-def _try_spiral_moment_expansion(
-    proof: _SpiralMomentProof,
-    geometry: RoadGeometry,
-    d: _Jet,
-    counts: Tuple[Int, Int],
-    translation: Vector3,
-) -> Optional[Tuple[_Jet, _Jet, _Jet]]:
-    if not _sum2_supported_environment():
-        return None
-    # `d` and `counts` MUST be the results of the existing clamping/count
-    # helpers for this exact query-specific expansion station. Never pass
-    # cached count selection or manually rounded endpoint estimates.
-    if geometry.kind != SPIRAL:
-        return None
-    if geometry.heading != 0.0 or geometry.curvature_start != 0.0:
-        return None
-    if not isfinite(geometry.length) or geometry.length <= 0.0:
-        return None
-    if not isfinite(geometry.curvature_end):
-        return None
-    if proof.pieces < 1 or proof.pieces > 64:
-        return None
-    if counts[0] != proof.pieces or counts[1] != proof.pieces:
-        return None
-    var domain = d.rounded_value()
-    # Reject every clamped or possibly clamped join. The unchanged evaluator
-    # remains responsible for endpoints, unknowns, and count/quadrant joins.
-    if (
-        not domain.is_finite()
-        or domain.low <= 0.0
-        or domain.high >= geometry.length
-    ):
-        return None
-    if not d.first.is_finite() or not d.second.is_finite():
-        return None
-    if not _all_spiral_nodes_quadrant_zero(geometry, d, proof.pieces):
-        return None
-    var rate = _Jet.constant(
-        (geometry.curvature_end - geometry.curvature_start) / geometry.length
-    )
-    # u = beta*d^2. The simplified graph is used ONLY for real-polynomial
-    # values and derivatives. Its computed error is never a scalar certificate.
-    var u = _Jet.constant(0.5) * rate * d * d
-    var z = u * u
-    var x = d * _ideal_moment_polynomial(proof.cosine, z)
-    var y = d * u * _ideal_moment_polynomial(proof.sine, z)
-    x = (_Jet.constant(geometry.x) - _Jet.constant(Float64(translation.x))) + x
-    y = (_Jet.constant(geometry.y) + _Jet.constant(Float64(translation.y))) + y
-    # Preserve the original heading jet/error graph: lane-offset trigonometry
-    # uses this error for branch selection. Do not replace it with `u`.
-    var heading = _Jet.constant(geometry.heading) + d * (
-        _Jet.constant(geometry.curvature_start) + _stored_half(rate) * d
-    )
-    # This makes accidental use as a standalone actual rounded-value bound
-    # unknown. _lane_jet_model's coordinate addition and the final expansion
-    # distance use the value/derivative fields and keep error separate.
-    x.error = inf[DType.float64]()
-    y.error = inf[DType.float64]()
-    return (x, y, heading)

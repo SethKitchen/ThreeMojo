@@ -30,6 +30,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from loaders.js_number import js_parse_float, js_parse_int
 from loaders.text_number import file_line
+from loaders.utf8 import byte_slice, char_start
 from math.vector3 import append_float64_xyz
 from render.srgb import srgb_to_linear
 from std.math import isnan
@@ -583,17 +584,18 @@ struct PdbModel(Movable):
 def _slice(line: String, start: Int, end: Int) -> String:
     """Return JavaScript's `line.slice( start, end )`, short where the line
     is."""
-    var n = line.byte_length()
-    var a = min(start, n)
-    var b = min(end, n)
-    return String(line[byte=a:b])
+    return byte_slice(line, start, end)
 
 
 def _capitalize(text: String) -> String:
     """Return three.js's `capitalize`: the first letter upper case and the
     rest lower. The element is not empty: an empty one has no CPK color and
     is refused first."""
-    return String(text[byte=0:1]).upper() + String(text[byte=1:]).lower()
+    var cut = char_start(text, 1)
+    return (
+        byte_slice(text, 0, cut).upper()
+        + byte_slice(text, cut, text.byte_length()).lower()
+    )
 
 
 def parse_pdb(text: String) raises -> PdbModel:

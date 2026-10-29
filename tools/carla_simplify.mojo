@@ -20,17 +20,17 @@ from std.ffi import external_call
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float, python_repr
+from tools._python_float import python_repr
 from tools._python_json import (
     MISSING,
     PY_BOOL,
     PY_DICT,
-    PY_FLOAT,
     PY_INT,
     PY_LIST,
     PY_STR,
     PyJson,
 )
+from tools._town_json import json_number
 
 
 @no_inline
@@ -96,7 +96,7 @@ def simplify_text(text: String) raises -> String:
     var agg = 7.0
     var agg_node = doc.get(root, "aggressiveness")
     if agg_node != MISSING:
-        agg = _number(doc, agg_node)
+        agg = json_number(doc, agg_node)
     var border = _flag(doc, doc.at(root, "border"))
     var result = _simplify(points^, tris^, target, agg, border)
     return _emit(result^)
@@ -1119,9 +1119,9 @@ def _points(doc: PyJson, node: Int) raises -> List[_P]:
             raise Error("point is not 3 numbers")
         out.append(
             _P(
-                _number(doc, doc.item(row, 0)),
-                _number(doc, doc.item(row, 1)),
-                _number(doc, doc.item(row, 2)),
+                json_number(doc, doc.item(row, 0)),
+                json_number(doc, doc.item(row, 1)),
+                json_number(doc, doc.item(row, 2)),
                 0,
                 0,
                 _zero(),
@@ -1154,16 +1154,6 @@ def _tris(doc: PyJson, node: Int, count: Int) raises -> List[_T]:
             raise Error("triangle index is out of range")
         out.append(_T(v0, v1, v2, 0, 0, 0, 0, 0, 0, 0, 0, 0))
     return out^
-
-
-def _number(doc: PyJson, node: Int) raises -> Float64:
-    """Return one coordinate."""
-    var kind = doc.kind(node)
-    if kind == PY_FLOAT:
-        return doc.number(node)
-    if kind == PY_INT:
-        return parse_float(doc.text(node))
-    raise Error("coordinate is not a number")
 
 
 def _whole(doc: PyJson, node: Int) raises -> Int:

@@ -94,7 +94,7 @@ and cache state across worker counts.
 
 ## Measurements
 
-The [complete benchmark report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/image-decode-505.md)
+The [complete benchmark report](https://github.com/SethKitchen/ThreeMojo/blob/37ecbc599777ebfe114679c197c27302ee9f5e1b/docs/validation/image-decode-505.md)
 compares batches, fixed-stride workers, and the queue.
 It records both loading APIs, throughput, peak process RSS, and exact output checks.
 The four-worker mixed-image cases improve in these measurements.

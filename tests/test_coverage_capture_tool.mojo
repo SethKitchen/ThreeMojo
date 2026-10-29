@@ -184,45 +184,25 @@ def _words() -> List[String]:
     return command^
 
 
-def test_phase_header_matches_python_json() raises:
-    var digest = String()
-    var index = 0
-    while index < 32:
-        digest += "ab"
-        index += 1
-    var script = (
-        "import hashlib, json, sys\nsuite, proof, *command ="
-        " sys.argv[1:]\nheader = {'schema': 'coverage-exec-phases-v1', 'suite':"
-        " suite,\n 'phase': 'capture_header',\n 'proof_sha256': None if proof"
-        " == '-' else proof,\n 'command_sha256':"
-        " hashlib.sha256(json.dumps(command).encode()).hexdigest(),\n"
-        " 'semantics': 'launch requests only; missing finish means"
-        " incomplete'}\nsys.stdout.write(json.dumps(header) + '\\n')\n"
+def test_phase_header_is_canonical_json() raises:
+    assert_equal(
+        _header_json("test_fixture", _words()),
+        (
+            '{"schema": "coverage-exec-phases-v1", "suite": "test_fixture",'
+            ' "phase": "capture_header", "command_sha256":'
+            ' "d182a524a13e1093b7dbfe83a71155947d4c34ad56d0a39a1938344b2c34e429",'
+            ' "semantics": "launch requests only; missing finish means'
+            ' incomplete"}\n'
+        ),
     )
-    var with_proof = List[String]()
-    with_proof.append("python3")
-    with_proof.append("-c")
-    with_proof.append(script)
-    with_proof.append("test_fixture")
-    with_proof.append(digest)
-    var plain = List[String]()
-    plain.append("python3")
-    plain.append("-c")
-    plain.append(script)
-    plain.append("test_fixture")
-    plain.append("-")
-    for word in _words():
-        var copy = word
-        with_proof.append(word)
-        plain.append(copy)
-    var proved = run_program(with_proof, 10.0, merge_errors=False)
-    var empty = run_program(plain, 10.0, merge_errors=False)
-    if proved.status != 0 or empty.status != 0:
-        raise Error(proved.errors + empty.errors)
-    assert_equal(_header_json("test_fixture", digest, _words()), proved.output)
-    assert_equal(_header_json("test_fixture", "", _words()), empty.output)
-    assert_true(proved.output.find('"proof_sha256": "' + digest + '"') >= 0)
-    assert_true(empty.output.find('"proof_sha256": null') >= 0)
+    # The digest covers the command as ASCII JSON, escapes included.
+    var escaped: List[String] = ['café "q"', "x"]
+    assert_true(
+        _header_json("s", escaped).find(
+            "405b7fd75fb122be5b60e35925752eb839cff89ac6427324f5b23e27c07a89db"
+        )
+        >= 0
+    )
 
 
 def test_a_failed_capture_prints_its_tail_and_phase_header() raises:
@@ -272,7 +252,7 @@ def test_a_failed_capture_prints_its_tail_and_phase_header() raises:
             + " '--profile', 'aot']\n"
             + "header = {'schema': 'coverage-exec-phases-v1', 'suite':"
             " 'test_fixture',\n"
-            + " 'phase': 'capture_header', 'proof_sha256': None,\n"
+            + " 'phase': 'capture_header',\n"
             + " 'command_sha256':"
             " hashlib.sha256(json.dumps(command).encode()).hexdigest(),\n"
             + " 'semantics': 'launch requests only; missing finish means"
@@ -1019,11 +999,11 @@ def test_a_failed_phase_setup_keeps_the_program_result() raises:
             + "printf 'old adapter_finish status=0\\n' > \"$phase\"; "
             + "printf '%s\\n' 'import sys' 'print(\"PASS\")' "
             + "'sys.stderr.write(\"COVLINE:module:2:T\\n\")' "
-            + "'raise SystemExit(17)' > \"$root/coverage_hit_aot.py\"; "
+            + "'raise SystemExit(17)' > \"$root/probe.py\"; "
             + "sh tools/tool.sh "
             + mojo
             + ' coverage_io capture --out "$out" --err "$root/err.txt.gz" '
-            + '-- python3 "$root/coverage_hit_aot.py" --profile aot '
+            + '-- python3 "$root/probe.py" coverage_hit_aot --profile aot '
             + '> "$root/tool.out" 2>"$root/tool.err"; status=$?; '
             + 'test "$status" = 17 || { echo "status $status"; '
             + 'cat "$root/tool.out" "$root/tool.err"; exit 4; }; '
@@ -1055,11 +1035,11 @@ def test_a_failed_phase_setup_keeps_a_bad_probe() raises:
             + "out=$cur/test_fixture.out; "
             + "printf '%s\\n' 'import sys' "
             + "'sys.stderr.write(\"COVBRANCH:m:1:invalid\\n\")' "
-            + '> "$root/coverage_hit_aot.py"; '
+            + '> "$root/probe.py"; '
             + "sh tools/tool.sh "
             + mojo
             + ' coverage_io capture --out "$out" --err "$root/err.txt.gz" '
-            + '-- python3 "$root/coverage_hit_aot.py" --profile aot '
+            + '-- python3 "$root/probe.py" coverage_hit_aot --profile aot '
             + '> "$root/tool.out" 2>"$root/tool.err"; status=$?; '
             + 'test "$status" = 1 || { echo "status $status"; '
             + 'cat "$root/tool.out" "$root/tool.err"; exit 4; }; '

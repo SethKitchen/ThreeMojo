@@ -3,18 +3,15 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Tests for `exporters.json_writer` and `exporters.common`: every value
-kind, every escape, every refusal, numbers that read back to the same
-`Float32`, bytes in both orders, and every geometry check."""
+"""Tests for `exporters.json_writer`, `exporters.numbers` and
+`exporters.common`: every value kind, every escape, every refusal, numbers
+that read back to the same `Float32`, bytes in both orders, and every
+geometry check."""
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
-from exporters.common import (
-    check_geometry,
-    format_float32,
-    push_f32,
-    push_word,
-)
+from exporters.common import check_geometry, push_f32, push_word
+from exporters.numbers import format_float32
 from exporters.json_writer import JsonWriter, quote_json
 from loaders.json import parse_json
 from std.math import inf, nan

@@ -9,7 +9,7 @@
 texture set, an HDRI sky or a glTF model. Each entry has an id, a kind, a
 license (CC0 or CC BY 4.0), an author, a source page, a note on where it
 came from, and its files, each with a role, a URL, a SHA-256 sum and a
-path in the cache. `assets/carla/tools/carla_assets.py` downloads the files into
+path in the cache. `tools/carla_assets.mojo` downloads the files into
 `.cache/carla-assets/` and checks each sum before it keeps a file.
 
 **Bindings.** The manifest's `bindings` table maps a key to an entry id,
@@ -55,7 +55,8 @@ from extensions.carla.mesh_factory import (
     YELLOW_MARK_SURFACE,
 )
 from extensions.carla.render_textures import SurfaceMaps
-from loaders.gltf import decode_image, read_gltf
+from loaders.gltf import read_gltf
+from loaders.image_file import decode_image
 from loaders.image_batch import TextureDecodeSource, decode_textures
 from loaders.json import (
     ARRAY,

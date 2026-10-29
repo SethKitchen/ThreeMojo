@@ -106,7 +106,6 @@ from math.utils import clamp, edge_index
 from std.math import exp2
 from math.norm import length2, _ordinary_squared, squared_length2
 from math.sine import fraction
-from math.utils import mix_delta
 from math.matrix3 import Matrix3
 from math.vector2 import Vector2
 from render.framebuffer import (
@@ -605,20 +604,6 @@ def float_texel(
     return FloatColor(r, g, b, 1.0 if alpha == IGNORED else a)
 
 
-def mix(near: Float32, far: Float32, t: Float32) -> Float32:
-    """Return a channel partway from one value to another.
-
-    Args:
-        near: The first value.
-        far: The second value.
-        t: The fraction between them.
-
-    Returns:
-        The difference-first blend.
-    """
-    return mix_delta(near, far, t)
-
-
 def mix_color(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:
     """Return one color a fraction `t` of the way to another.
 
@@ -988,6 +973,7 @@ def plan_levels(
 
     Args:
         level: How far down the chain the footprint reaches, fractional.
+            NaN reads as zero.
         levels: How many levels the texture holds, at least one.
         mag_filter: `NEAREST` or `BILINEAR`.
         min_filter: Any of the six filters.
@@ -995,7 +981,9 @@ def plan_levels(
     Returns:
         The plan.
     """
-    if level <= 0:
+    # A level that is not a number reads the full-size image, as one of
+    # zero does: its index would be out of the chain.
+    if not level > 0:
         return LevelPlan(mag_filter, 0, 0, 0)
     var within = min_filter.within_level()
     if levels == 1 or min_filter.magnifies():
@@ -2146,8 +2134,6 @@ def gradient_place(
     A nonfinite coordinate or gradient is refused before the wrap. A
     finite coordinate is reduced by `gradient_sample_coordinate`.
 
-    Error: Never.
-
     Args:
         u: Horizontal coordinate.
         v: Vertical coordinate.
@@ -2997,4 +2983,76 @@ def checkerboard(
             append_color(pixels, shade)
     return Texture(
         size, size, pixels^, wrap, filter, color_space, mipmapped, alpha
+    )
+
+
+def require_linear_data(linear: Bool, name: String) raises:
+    """Refuse a data map that is not stored in linear color.
+
+    A data map, a gradient map and a map read from its alpha ask this with
+    the same words. The host asks it of a texture. The GPU asks it of the
+    descriptor it uploaded.
+
+    Nothing. The call returns when the map is linear.
+
+    Args:
+        linear: Whether the map is stored in linear color.
+        name: What to call the map in the error.
+
+    Raises:
+        Error: If the map is not stored in linear color.
+    """
+    if not linear:
+        raise Error(
+            name
+            + " holds data, not color; build the texture with"
+            " color_space=LINEAR"
+        )
+
+
+def require_data_descriptors(
+    linear: Bool, ignores_alpha: Bool, name: String
+) raises:
+    """Refuse a data map whose descriptors are not linear and ignored.
+
+    The host asks this of a texture. The GPU asks it of the descriptors it
+    uploaded. The words are the same.
+
+    Nothing. The call returns when both descriptors say the map is data.
+
+    Args:
+        linear: Whether the map is stored in linear color.
+        ignores_alpha: Whether the map ignores its alpha.
+        name: What to call it in the error: "An alpha map", say.
+
+    Raises:
+        Error: If the map is not linear, or it reads its alpha as coverage.
+    """
+    require_linear_data(linear, name)
+    if not ignores_alpha:
+        raise Error(
+            name
+            + " must ignore its own alpha; build the texture with alpha=IGNORED"
+        )
+
+
+def check_data_map(image: Texture, name: String) raises:
+    """Refuse a map that holds data and is not stored as data.
+
+    The rule `check_alpha_map` states, for every map whose bytes are
+    numbers rather than colors: an alpha map, a roughness map, a metalness
+    map, a normal map and a bump map. Shared by both backends, so neither
+    can accept what the other refuses, and the kernel's host side asks the
+    same two questions of its descriptors with the same words.
+
+    Args:
+        image: The texture named as the map.
+        name: What to call it in the error: "An alpha map", say.
+
+    Raises:
+        Error: If the texture's color space is not `LINEAR`, or it reads its
+            alpha as coverage.
+    """
+    require_data_descriptors(
+        image.color_space == LINEAR, image.alpha == IGNORED, name
     )

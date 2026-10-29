@@ -173,13 +173,33 @@ def split_fields(line: String) -> List[String]:
     return fields^
 
 
+def comment_start(line: String) -> Int:
+    """Return where a `#` comment starts in a line of an OBJ or MTL file.
+
+    A comment starts at a `#` that starts the line or follows a space or a
+    tab. A `#` inside a word is part of it, so `usemtl Material#1` names
+    `Material#1`, as three.js reads it.
+
+    Args:
+        line: The line.
+
+    Returns:
+        The byte offset of the `#`, or -1 when the line has no comment.
+    """
+    var bytes = line.as_bytes()
+    for at in range(len(bytes)):
+        if bytes[at] == 35 and (
+            at == 0 or bytes[at - 1] == 32 or bytes[at - 1] == 9
+        ):
+            return at
+    return -1
+
+
 def text_lines(text: String) -> List[String]:
     """Return the lines of a text.
 
     A carriage return becomes a line feed, then the text is split at each
     line feed. An empty line is kept.
-
-    Error: Never.
 
     Args:
         text: The text.

@@ -47,8 +47,6 @@ def floor_channels(color: FloatColor) -> FloatColor:
 def rgb_channels(color: FloatColor) -> Vector3:
     """Return the red, green, and blue of a linear color.
 
-    Error: Never.
-
     Args:
         color: The color.
 

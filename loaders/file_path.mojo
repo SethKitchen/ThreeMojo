@@ -14,8 +14,6 @@ own name.
 def path_directory(path: String) -> String:
     """Return `path` through its last `/`, or empty when it has none.
 
-    Error: Never.
-
     Args:
         path: A file's path.
 
@@ -31,8 +29,6 @@ def path_name(path: String) -> String:
 
     A path with no `/` is returned whole. `path.split('/').pop()` gives
     the same text.
-
-    Error: Never.
 
     Args:
         path: A file's path.

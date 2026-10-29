@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The coverage-instrument recipe copies helpers and binds the Mojo seal."""
+"""The coverage-instrument recipe measures its modules and copies helpers."""
 
 from std.collections import Set
 from std.os.path import realpath
@@ -14,12 +14,10 @@ from std.testing import TestSuite, assert_equal, assert_false, assert_true
 from tests._tree import tool_mojo
 from tools._imports import imported_names, resolve
 from tools._process import run_program
-from tools._python_json import PyJson
-from tools._sha256 import sha256_hex
 
 
 def _tools() -> List[String]:
-    """Return the receipt's tool inputs, except the stub Makefile."""
+    """Return the coverage tool files the recipe copies, from the real tree."""
     var names = List[String]()
     names.append("coverage/build_cli.mojo")
     names.append("coverage/instrument.mojo")
@@ -28,15 +26,6 @@ def _tools() -> List[String]:
     names.append("coverage/report.mojo")
     names.append("coverage/report_cli.mojo")
     names.append("coverage/mcdc.mojo")
-    names.append("tools/coverage_loop_proofs.py")
-    names.append("tools/coverage_io.py")
-    names.append("tools/cache_key.py")
-    names.append("tools/native_test_support.py")
-    names.append("tools/coverage_toolchain_identity.py")
-    names.append("tools/coverage_hit_aot.mojo")
-    names.append("tools/coverage_hit_cache.c")
-    names.append("tools/coverage_write_interposer.c")
-    names.append("tools/run_suite.mojo")
     return names^
 
 
@@ -88,41 +77,15 @@ def _line_from(text: String, start: String) raises -> String:
 def _compiler() -> String:
     """Return the stand-in compiler the recipe runs."""
     return (
-        "def model_generation(root, build, names=('module.mojo',)):\n"
-        "    manifest = (build / 'manifest.txt').read_bytes()\n"
-        "    for name in names:\n"
-        "        module = name.removesuffix('.mojo').encode()\n"
-        "        fragment = b''.join(row for row in"
-        " manifest.splitlines(keepends=True)\n"
-        "            if len(row.split()) >= 2 and row.split()[1] =="
-        " module)\n"
-        "        parts = [name.encode(), (root / name).read_bytes(),\n"
-        "                 (build / name).read_bytes(), fragment]\n"
-        "        record = b'COVORIGIN1 ' + b' '.join(str(len(part)).encode()"
-        " for part in parts) + b'\\n' + b''.join(parts)\n"
-        "        (build / (name + '.cov-origin')).write_bytes(record)\n"
-        "    checkpoint = (build / 'generation-inputs.json').read_bytes()\n"
-        "    index = (b'COVORIGIN_INDEX2 ' + str(len(names)).encode() + b'"
-        " ' + str(len(manifest)).encode()\n"
-        "             + b' ' + str(len(checkpoint)).encode() + b'\\n' +"
-        " manifest + checkpoint)\n"
-        "    for name in names:\n"
-        "        raw = name.encode()\n"
-        "        index += str(len(raw)).encode() + b'\\n' + raw\n"
-        "    (build / 'origins.ready').write_bytes(index)\n"
-        "import os, sys\n"
-        "from pathlib import Path\n"
-        "assert sys.argv[1:3] == ['run', 'coverage/build_cli.mojo']\n"
-        "if os.environ.get('FAIL_INSTRUMENTER'):\n"
-        "    raise SystemExit(7)\n"
-        "root = Path(sys.argv[3])\n"
-        "for name in sys.argv[4:]:\n"
-        "    path = root / name\n"
-        "    path.parent.mkdir(parents=True, exist_ok=True)\n"
-        "    path.write_text('instrumented ' + name + '\\n')\n"
-        "(root / 'manifest.txt').write_text(''.join('L ' +"
-        " name.removesuffix('.mojo') + ' 1\\n' for name in sys.argv[4:]))\n"
-        "model_generation(Path.cwd(), root, sys.argv[4:])\n"
+        '[ "$1 $2" = "run coverage/build_cli.mojo" ] || exit 9\n'
+        + '[ -z "$FAIL_INSTRUMENTER" ] || exit 7\n'
+        + "root=$3\nshift 3\n"
+        + ': > "$root/manifest.txt"\n'
+        + "for name; do\n"
+        + '  mkdir -p "$root/$(dirname "$name")"\n'
+        + '  printf \'instrumented %s\\n\' "$name" > "$root/$name"\n'
+        + '  printf \'L %s 1\\n\' "${name%.mojo}" >> "$root/manifest.txt"\n'
+        + "done\n"
     )
 
 
@@ -178,11 +141,7 @@ def _prepare() raises -> String:
         var dest = root + "/" + name
         if not Path(dest).exists():
             _copy(name, dest)
-    _copy(
-        "tools/coverage_reviewed_loops.json",
-        root + "/tools/coverage_reviewed_loops.json",
-    )
-    _write(root + "/compiler.py", _compiler())
+    _write(root + "/compiler.sh", _compiler())
     var makefile = Path("Makefile").read_text()
     var quote = _line_from(makefile, "quote =")
     var run = _slice(makefile, "define run\n", "\nendef") + "\nendef"
@@ -206,7 +165,7 @@ def _prepare() raises -> String:
         raise Error(mode.output)
     _write(
         root + "/Makefile",
-        "MOJO := python3 compiler.py\nMOJOFLAGS :=\nCOV_DIR := build\nTOOL := '"
+        "MOJO := sh compiler.sh\nMOJOFLAGS :=\nCOV_DIR := build\nTOOL := '"
         + wrapper
         + "'\n"
         + quote
@@ -286,59 +245,27 @@ def _ok(text: String) raises:
         raise Error(_body(text))
 
 
-def test_generation_order_does_not_change_the_receipt() raises:
-    """Two source orders produce one sorted checkpoint and one receipt."""
+def test_source_order_does_not_change_the_manifest() raises:
+    """Two source orders produce one sorted manifest."""
     var root = _prepare()
     try:
-        var names = List[String]()
-        names.append("math/measured.mojo")
-        names.append("math/unmeasured.mojo")
-        var first = Path(root + "/math/measured.mojo").read_bytes()
-        var second = Path(root + "/math/unmeasured.mojo").read_bytes()
-        var receipts = List[String]()
-        var orders = List[String]()
-        orders.append("math/measured.mojo math/unmeasured.mojo")
-        orders.append("math/unmeasured.mojo math/measured.mojo")
-        for order in orders:
-            _ = run_program(
-                [
-                    "rm",
-                    "-f",
-                    root + "/math/measured.mojo",
-                    root + "/math/unmeasured.mojo",
-                ],
-                10.0,
-            )
-            var forward = order == String(orders[0])
-            if forward:
-                Path(root + "/math/measured.mojo").write_bytes(first)
-                Path(root + "/math/unmeasured.mojo").write_bytes(second)
-            else:
-                Path(root + "/math/unmeasured.mojo").write_bytes(second)
-                Path(root + "/math/measured.mojo").write_bytes(first)
+        for order in [
+            "math/measured.mojo math/unmeasured.mojo",
+            "math/unmeasured.mojo math/measured.mojo",
+        ]:
             var covered = List[String]()
             covered.append("COVERED=" + order)
-            var text = _make(root, covered, False)
-            _ok(text)
-            var doc = PyJson.parse(
-                Path(root + "/build/generation-inputs.json").read_text()
-            )
-            var sources = doc.at(doc.root, "sources")
-            assert_equal(doc.length(sources), 2)
-            assert_equal(doc.text(doc.item(sources, 0)), "math/measured.mojo")
-            assert_equal(doc.text(doc.item(sources, 1)), "math/unmeasured.mojo")
+            _ok(_make(root, covered, False))
             assert_equal(
                 Path(root + "/build/manifest.txt").read_text(),
                 "L math/measured 1\nL math/unmeasured 1\n",
             )
-            receipts.append(Path(root + "/build/loop-proofs.json").read_text())
-        assert_equal(receipts[0], receipts[1])
     finally:
         _ = run_program(["rm", "-rf", root], 30.0)
 
 
 def test_duplicate_sources_are_refused() raises:
-    """A repeated measured source does not leave a receipt."""
+    """A repeated measured source does not leave a manifest."""
     var root = _prepare()
     try:
         var extra = List[String]()
@@ -346,7 +273,7 @@ def test_duplicate_sources_are_refused() raises:
         var text = _make(root, extra, False)
         assert_true(_status(text) != 0)
         assert_true(_body(text).find("distinct source identities") >= 0)
-        assert_false(Path(root + "/build/loop-proofs.json").exists())
+        assert_false(Path(root + "/build/manifest.txt").exists())
     finally:
         _ = run_program(["rm", "-rf", root], 30.0)
 
@@ -447,8 +374,7 @@ def _joined(paths: List[String]) -> String:
 
 
 def test_staged_tools_resolve_like_the_source_tree() raises:
-    """A staged tool import reaches the same files, and a later edit is refused.
-    """
+    """A staged tool import reaches the same files as the source tree."""
     var root = _prepare()
     try:
         Path(root + "/tests/test_driver.mojo").write_text(
@@ -483,61 +409,10 @@ def test_staged_tools_resolve_like_the_source_tree() raises:
                 tools.append(path)
         var tool_flat = _joined(tools)
         assert_true(tool_flat.find("tools/anatomy_probe.mojo") >= 0, tool_flat)
-        var doc = PyJson.parse(
-            Path(root + "/build/loop-proofs.json").read_text()
+        assert_equal(
+            Path(root + "/build/tools/anatomy_probe.mojo").read_bytes(),
+            Path(root + "/tools/anatomy_probe.mojo").read_bytes(),
         )
-        var receipt = doc.at(doc.root, "receipt")
-        var inputs = doc.at(receipt, "inputs")
-        var probe = root + "/tools/anatomy_probe.mojo"
-        var digest = sha256_hex(Path(probe).read_bytes())
-        var bound = doc.at(inputs, "tools/anatomy_probe.mojo")
-        assert_equal(doc.text(doc.at(bound, "source")), digest)
-        assert_equal(doc.text(doc.at(bound, "instrumented")), digest)
-        var staged = root + "/build/tools/anatomy_probe.mojo"
-        var original = Path(staged).read_text()
-        Path(staged).write_text(original + "# changed after sealing\n")
-        var verify = run_program(
-            [
-                root + "/toolwrap.sh",
-                "coverage_loop_seal",
-                "verify",
-                "--root",
-                root,
-                "--build",
-                root + "/build",
-                "--compiler=",
-                "--flags=",
-                "--mojo=python3 compiler.py",
-                "--capture-cache=/native-coverage",
-                "--suites",
-            ],
-            20.0,
-            True,
-            root,
-        )
-        assert_true(verify.status != 0, verify.output)
-        Path(staged).write_text(original)
-        var again = run_program(
-            [
-                root + "/toolwrap.sh",
-                "coverage_loop_seal",
-                "verify",
-                "--root",
-                root,
-                "--build",
-                root + "/build",
-                "--compiler=",
-                "--flags=",
-                "--mojo=python3 compiler.py",
-                "--capture-cache=/native-coverage",
-                "--suites",
-            ],
-            20.0,
-            True,
-            root,
-        )
-        if again.status != 0:
-            raise Error(again.output)
     finally:
         _ = run_program(["rm", "-rf", root], 30.0)
 
@@ -572,14 +447,9 @@ def test_an_instrumenter_failure_copies_nothing() raises:
 def main() raises:
     """Build the recipe tools, then run the tests."""
     var mojo = tool_mojo()
-    for name in [
-        "coverage_loop_begin",
-        "coverage_loop_seal",
-        "native_test_support",
-    ]:
-        var built = run_program(
-            ["sh", "tools/tool.sh", mojo, "--build", name], 120.0
-        )
-        if built.status != 0:
-            raise Error(built.output + built.errors)
+    var built = run_program(
+        ["sh", "tools/tool.sh", mojo, "--build", "native_test_support"], 120.0
+    )
+    if built.status != 0:
+        raise Error(built.output + built.errors)
     TestSuite.discover_tests[__functions_in_module()]().run()

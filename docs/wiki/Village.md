@@ -1,13 +1,13 @@
 # Village
 
-`Village` stands houses and a scanned building on the meadow, beside a pond of still water.
+`Village` stands houses and a scanned building on the meadow, beside a pond of still water. A character can walk into each house at its front door.
 
-![A brick house and a timber barn with gable roofs stand in wind-bent grass beyond a small pond, with trees, cliffs and mountains behind](out/village.png)
+![Houses of fieldstone, timber framing, brick and boards stand in wind-bent grass beyond a small pond, with trees, cliffs and mountains behind](out/village.png)
 
 `examples/village.mojo` draws this picture. The modules live in `extensions/village/`. A village joins three subjects in one scene:
 
 - the meadow of [Vegetation](Vegetation),
-- the building models of [Building model](Building-model) and [Scanned buildings](Scanned-buildings),
+- the houses of [Village houses](Village-houses), and the scans of [Scanned buildings](Scanned-buildings),
 - the Clearwater water of [Water](Water).
 
 See [Extensions](Extensions). To put people and animals in the village and walk through it, see [Village walk](Village-walk).
@@ -36,6 +36,8 @@ var image = village.render(renderer, scene, assets, camera)
 ```
 
 `Village` adds the meadow, the houses and the scanned building to the scene. `None` gives a village with no scanned building. `update` grows the grass for one camera and one time, and moves the water's clock on to that time. Call `update` before each `render`.
+
+`Village.terrain` gives what carries and stops a character: the ground, and each house's walls, floor and steps. The furniture and the scanned building are solid lots. `Village.doors` holds every door. See [Village houses](Village-houses#where-a-character-can-walk).
 
 `render` draws the scene, and then composes the pond's water into the picture. Do not draw the scene with `renderer.render` alone: that picture has no water.
 
@@ -66,7 +68,14 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 
 | Module | Holds |
 |---|---|
-| `house.mojo` | `HouseParameters`, `house_model`, `gable_roof`, `house_lot` and `stand_house`. |
+| `house.mojo` | `Facade`, `HouseParameters`, `fieldstone`, `lime_plaster`, `front_wall`, `house_model`, `house_lot` and `footing`. |
+| `house_view.mojo` | `Hinge`, `StandingHouse`, `door_leaf`, `facade_look` and `stand_house`. |
+| `interior.mojo` | `Doorway`, `HouseInterior` and `house_interior`. |
+| `terrain.mojo` | `WallSpan`, `Floor`, `Terrain`, `wall_push` and `view_entry`. |
+| `doors.mojo` | `Doors`. |
+| `props.mojo` | `PropKind`, `Prop`, `StandingProps` and `stand_props`. |
+| `sheet.mojo` | `Sheet`. |
+| `surfaces.mojo` | The textures, `HouseLooks` and `house_looks`. |
 | `scanned.mojo` | `CutBuilding`, `cut_building`, `grid_voxel`, `linear_splats`, `scan_lot` and `stand_scan`. |
 | `village.mojo` | `HousePlacement`, `VillageParameters` and `Village`. |
 
@@ -77,32 +86,42 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 | Part | Where it stands |
 |---|---|
 | A pond 12 meters across and 1.2 meters deep | Right of the trail, 11 meters ahead of the camera. |
+| A stone cottage of one storey, 7 by 5.5 meters, under slates | Left of the trail, about 25 meters away, turned 80 degrees. |
+| A framed cottage of one storey, 6.5 by 5 meters | Left of the trail, about 60 meters away, turned 70 degrees. |
+| A framed house of two storeys, 8 by 6 meters | Right of the trail, about 55 meters away, turned -80 degrees. |
 | A brick house of two storeys, 9 by 7 meters | On the left, about 75 meters away, turned 20 degrees. |
-| A timber barn of one storey 4.2 meters tall, 13 by 8 meters | Ahead, about 90 meters away, turned -12 degrees. |
+| A boarded barn of one storey 4.2 meters tall, 13 by 8 meters | Ahead, about 90 meters away, turned -12 degrees. |
 | The scanned building, if there is one | On the right, about 110 meters away, turned 28 degrees. |
 
+The houses' textures are 128 texels on a side.
+
 The water's ocean spectrum is 256 texels on a side, and its glare is 128 texels. Its caustic grid is 64, as in the still, and its caustic texture is 256 texels on a side. The water's clock starts at 5 seconds, as the Clearwater page's does.
+
+## Props
+
+`VillageParameters.props` lists the things that stand about the village. Each `Prop` is a `PropKind`, a place, a turn and a length. `stand_props` draws them with the houses' materials, in one mesh for each material.
+
+| Kind | What it is | Its length |
+|---|---|---|
+| `WELL` | A round stone wall, two posts, a beam, a little roof and a bucket | Its radius |
+| `BARREL` | Oak staves with two iron hoops | Its radius |
+| `CRATE` | A box of boards with slats on its edges | Its side |
+| `HAY_BALE` | A bale of hay, tied with two cords | Its length |
+| `FENCE` | Posts at most 2 meters apart, and two rails, a meter tall | Its length |
+| `BENCH` | A plank on two trestles | Its length |
+| `WOODPILE` | Split logs stacked under a board lid, their ends out, 0.6 meters deep and 1.15 meters tall | Its length |
+
+The default village has a well and a bench by the trail, and barrels, crates and hay before the barn. A fence closes a garden behind the stone cottage, and a bench stands before the framed house. A woodpile stands outside the hearth's gable of each house with a hearth: `woodpile_by` places it, and `hearthed` says which houses have one. Each prop but a fence is a solid lot of the terrain, and each fence is a wall span. The residents' routes keep off the props.
 
 ## Lots
 
 Each building stands on a `Lot`: its footprint, turned about +y. `Village` puts the lots into `MeadowParameters.lots` before it builds the meadow. So no grass grows on a lot or on the bare apron round it, and no tree or bush stands there. The ground under a lot is mottled dirt. See [Ponds and lots](Vegetation#ponds-and-lots).
 
+A worn footpath 0.8 meters wide leads from each house's front door to the trail. `door_path` gives it as two lots with narrow aprons. The first runs 3.5 meters straight out from the door. The second runs on to the nearest point of the trail. A door with no trail within 60 meters, or on ground with no trail, has only the first.
+
 ## Houses
 
-`house_model` assembles a building model with `extensions.building.model.assemble`. Each storey is one living room, as wide and as deep as the house.
-
-| Construction | Layers |
-|---|---|
-| Outside wall | 12 centimeters of the cladding, 10 centimeters of mineral wool, 1.25 centimeters of gypsum board |
-| Inside wall | 10 centimeters of gypsum board |
-| Slab | 20 centimeters of concrete |
-
-`add_windows` cuts a row of double-glazed windows in each outside wall. A window is 1.3 meters tall, its sill is 0.9 meters up, and the row has one window each 2.6-meter bay. `add_doors` gives each room a door 1 meter wide and 2.1 meters tall.
-
-`stand_house` adds the model's meshes to the scene with `add_building`, and turns the house by its lot. Then it adds two meshes of its own:
-
-- **A plinth.** The ground floor stands at the highest ground under the four corners. A stone plinth fills the gap down to the lowest corner, and 40 centimeters below it. It is 15 centimeters wider than the walls on each side.
-- **A gable roof.** A building model's roof is flat. With a `pitch` above zero, `stand_house` sets a gable roof on it. The ridge runs along the house's width, at the middle of its depth. The two slopes of red tiles reach 35 centimeters past the walls. A gable of the `gable` color closes each end. A `pitch` of zero keeps the flat roof.
+Each house is a canonical building model with a hall, a front door, windows and furniture. The village draws it with its own view, on a stone plinth, under a gable roof. See [Village houses](Village-houses).
 
 ## Scanned buildings
 
@@ -130,6 +149,6 @@ The pond's water is a `WaterScene`. Its sun is the meadow's sun, so the water's 
 ## Limits
 
 - The water does not reflect the houses, the trees or the sky cube. It reflects the Clearwater sky.
-- A house is a box of storeys under one gable roof. It has no porch, chimney or wing.
+- A house is a box of storeys under one gable roof. It has no porch and no wing. Its upper storeys have no stairs.
 - A scanned building's splats are lit by the scan's own light, not by the meadow's sun. They cast no shadow.
 - A lot keeps plants off the ground, but it does not level the ground. The plinth and the sunk foot fill the slope.

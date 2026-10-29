@@ -6,11 +6,16 @@
 """The people and the animals of the village, and how each one moves.
 
 Every resident is a `Character`, as the player is, so the ground, the
-houses, the trees and the pond stop them all alike. A `Route` steers each
-one: it walks to a point, rests there a while, and walks on to the next.
+walls, the trees and the pond stop them all alike, and they bump into one
+another. A `Route` steers each one: it walks to a point, rests there a
+while, and walks on to the next. A villager with a home visits it: after
+its wander, it walks to the front of its house's door, goes in, rests
+inside, and comes back out. The door opens as it comes near.
 
-**People.** A `Body` is a game humanoid on a skeleton, with its idle, walk,
-run and jump clips in an `AnimationMixer`. Each frame it stands where its
+**People.** A `Body` is a game humanoid on a skeleton, dressed in its
+`Outfit`, with its idle, walk, run and jump clips in an `AnimationMixer`.
+Each garment is a skinned mesh on the same skeleton, so the clothes move
+with the body. Each frame it stands where its
 character stands, turns the way it faces, and fades to the clip of its
 `Stance`. The walk and the run play faster or slower with the speed, so
 the feet keep pace with the ground. The player is a `Body` too.
@@ -19,11 +24,13 @@ the feet keep pace with the ground. The player is a `Body` too.
 walk, and once standing: a flipbook. Each frame its mesh shows the pose of
 how far it has walked, so a stride covers one stride of ground. Each
 `Herd` grazes round its own pasture. A species that does not walk on four
-legs keeps its standing mesh.
+legs keeps its standing mesh. A shy herd runs from the player, at
+`FLEE_PACE` times its walk, while the player is nearer than its `flee`.
 """
 
 from animation.animation_mixer import ONCE, AnimationAction, AnimationMixer
 from core.assets import Assets
+from extensions.attire.outfit import Outfit, dress
 from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -48,6 +55,8 @@ from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.checks import require_between, require_count_between
 from extensions.vegetation.ground import Ground, Lot
 from extensions.vegetation.noise import hash01
+from extensions.village.interior import Doorway
+from extensions.village.terrain import Terrain
 from extensions.village.character import (
     AIRBORNE,
     RUNNING,
@@ -100,6 +109,21 @@ comptime SOLE = Float32(0.02)
 six feet."""
 comptime ARRIVED = Float32(0.6)
 """How near a point a resident must come, in meters, to have reached it."""
+comptime STALL_SPEED = Float32(0.1)
+"""A resident that walks slower than this, in meters a second, is stuck."""
+comptime GIVE_UP = Float32(2.5)
+"""How long a resident stays stuck, in seconds, before it gives up on its
+point and rests, then walks on to the next."""
+comptime APPROACH = Float32(3.2)
+"""How far in front of its door a villager stops before it goes in, in
+meters."""
+comptime THRESHOLD = Float32(1.0)
+"""How far in front of its door a villager steps last before it goes in,
+and first after it comes out, in meters."""
+comptime INDOORS = Float32(1.8)
+"""How far behind its door a villager rests inside, in meters."""
+comptime FLEE_PACE = Float32(3)
+"""How many times its walking speed an animal runs when it flees."""
 comptime TRIES = 8
 """How many places `wander_route` tries for each point before it gives
 up on that point."""
@@ -161,9 +185,13 @@ def facing_turn(heading: Angle) -> Angle:
 
 
 struct Body(Movable):
-    """A person's skinned body, its clips, and the node that carries it."""
+    """A person's skinned body, its clothes, its clips, and the node that
+    carries it."""
 
     var person: GameHumanoid
+    # Each garment's skinned mesh in `scene.skinned_meshes`, or -1 for a
+    # garment that draws nothing.
+    var garments: List[Int]
     # The node the humanoid hangs from. It stands at the feet.
     var carrier: NodeId
     var mixer: AnimationMixer
@@ -179,21 +207,25 @@ struct Body(Movable):
         mut scene: Scene,
         mut assets: Assets,
         spec: HumanoidSpec,
+        outfit: Outfit,
         triangles: Int,
         detail: Int,
     ) raises:
-        """Build a person into a scene, standing at the origin.
+        """Build a person into a scene, dressed and standing at the origin.
 
         Args:
             scene: The scene.
             assets: The stores.
             spec: The person.
+            outfit: What the person wears. An empty outfit leaves them
+                bare.
             triangles: The skin's budget of triangles.
             detail: The cells along the body's skin, from 8 to 64. The
                 hands and the hair take half as many, and at least 8.
 
         Raises:
-            Error: If the humanoid cannot be built.
+            Error: If the humanoid cannot be built, or the outfit does not
+                check.
         """
         self.carrier = scene.add(Object3D())
         var half = max(8, detail // 2)
@@ -211,6 +243,13 @@ struct Body(Movable):
         # A humanoid wears at least its body's skin.
         for skin in self.person.skins:  # pragma: no branch
             scene.skinned_meshes[skin].cast_shadow = True
+        self.garments = List[Int]()
+        if len(outfit.garments) > 0:
+            var dressed = dress(scene, assets, self.person, outfit)
+            self.garments = dressed.meshes.copy()
+            for mesh in self.garments:  # pragma: no branch
+                if mesh >= 0:
+                    scene.skinned_meshes[mesh].cast_shadow = True
         ref rig = self.person.rig
         ref bones = self.person.bones
         self.mixer = AnimationMixer()
@@ -281,6 +320,8 @@ struct Route(Copyable, Movable):
     var resting: Float32
     # Whether it runs between the points.
     var run: Bool
+    # How long it has been stuck on its way to the point, in seconds.
+    var stalled: Float32
 
     def __init__(
         out self, var points: List[Vector3], rest: Duration, run: Bool = False
@@ -304,6 +345,7 @@ struct Route(Copyable, Movable):
         self.rest = rest
         self.resting = 0
         self.run = run
+        self.stalled = 0
 
     def steer(
         mut self, character: Character, delta: Duration
@@ -317,23 +359,51 @@ struct Route(Copyable, Movable):
 
         Returns:
             A full lean toward the next point and the yaw toward it, or no
-            input and the character's heading while it rests.
+            input and the character's heading while it rests. A character
+            that has been stuck for `GIVE_UP` seconds on its way, behind
+            a wall or another resident, rests as if it had arrived.
         """
+        var seconds = delta.to(SECOND)
         if self.resting > 0:
-            self.resting -= delta.to(SECOND)
+            self.resting -= seconds
             return (no_input(), character.heading)
         var goal = self.points[self.next]
         var way = Vector3(
             goal.x - character.position.x, 0, goal.z - character.position.z
         )
-        if way.length() < ARRIVED:
+        if way.length() < ARRIVED or self.stalled >= GIVE_UP:
             self.next = (self.next + 1) % len(self.points)
             self.resting = self.rest.to(SECOND)
+            self.stalled = 0
             return (no_input(), character.heading)
+        if character.speed().to(METER_PER_SECOND) < STALL_SPEED:
+            self.stalled += seconds
+        else:
+            self.stalled = 0
         var input = no_input()
         input.forward = 1
         input.run = self.run
         return (input, yaw_of(way))
+
+
+def visit(mut route: Route, door: Doorway):
+    """Add a visit to a house to the end of a route: up to its door, in,
+    and back out.
+
+    Args:
+        route: The route.
+        door: The house's front door.
+    """
+    var middle = door.middle()
+    var into = Vector3(door.swing_x, 0, door.swing_z)
+    for reach in [
+        -APPROACH,
+        -THRESHOLD,
+        INDOORS,
+        -THRESHOLD,
+        -APPROACH,
+    ]:  # pragma: no branch
+        route.points.append(middle + into * reach)
 
 
 def wander_route(
@@ -398,8 +468,28 @@ def _clear_of(x: Float32, z: Float32, ground: Ground, lots: List[Lot]) -> Bool:
 
 
 @fieldwise_init
+struct HouseId(Equatable, ImplicitlyCopyable, Writable):
+    """Which of the village's houses, by its place among them, as a type
+    rather than a bare int. `NO_HOUSE` is none."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names a house's place, or no house.
+
+        Returns:
+            Whether the value is a place, or `NO_HOUSE`.
+        """
+        return self.value >= -1
+
+
+comptime NO_HOUSE = HouseId(-1)
+"""No house: a villager with no home to visit."""
+
+
+@fieldwise_init
 struct Villager(Copyable, Movable):
-    """A person of the village, and where they wander."""
+    """A person of the village, what they wear, and where they wander."""
 
     var spec: HumanoidSpec
     # The middle of where they wander, and how far from it, in meters.
@@ -410,9 +500,12 @@ struct Villager(Copyable, Movable):
     var seed: Int
     # Whether they run between the points.
     var runs: Bool
+    # What they wear.
+    var outfit: Outfit
+    # The house they visit, or `NO_HOUSE`.
+    var home: HouseId
 
 
-@fieldwise_init
 struct Herd(Copyable, Movable):
     """Animals of one kind that graze round one pasture."""
 
@@ -424,6 +517,38 @@ struct Herd(Copyable, Movable):
     var reach: Float32
     # Which individual, and which points they graze between.
     var seed: Int
+    # How near the player may come before they run. Zero is tame.
+    var flee: Length
+
+    def __init__(
+        out self,
+        species: SpeciesId,
+        count: Int,
+        x: Float32,
+        z: Float32,
+        reach: Float32,
+        seed: Int,
+        flee: Length = Length(0.0, METER),
+    ):
+        """Create a herd.
+
+        Args:
+            species: What kind of animal.
+            count: How many.
+            x: The pasture's middle along x, in meters.
+            z: The pasture's middle along z, in meters.
+            reach: How far round the middle they graze, in meters.
+            seed: Which individual, and which points they graze between.
+            flee: How near the player may come before they run away. Zero
+                is tame.
+        """
+        self.species = species
+        self.count = count
+        self.x = x
+        self.z = z
+        self.reach = reach
+        self.seed = seed
+        self.flee = flee
 
 
 struct ResidentsParameters(Copyable, Movable):
@@ -459,8 +584,10 @@ struct ResidentsParameters(Copyable, Movable):
         """Refuse residents that cannot be built.
 
         Raises:
-            Error: If there are not from 0 to 64 villagers or herds; a herd
-                has not from 1 to 64 animals, or its species is not one;
+            Error: If there are not from 0 to 64 villagers or herds; a
+                villager's home is not valid; a herd has not from 1 to 64
+                animals, or its species is not one, or it flees from
+                further than 100 meters or from a negative distance;
                 a pasture or a wander reaches further than 1 kilometer;
                 the budget is not from 500 to 100,000 triangles; the detail
                 is not from 8 to 64; there are not from 1 to 32 phases; the
@@ -483,6 +610,8 @@ struct ResidentsParameters(Copyable, Movable):
                 1000,
                 "A villager must wander from 0 to 1 kilometer",
             )
+            if not self.villagers[index].home.is_valid():
+                raise Error("A villager's home must be a house, or NO_HOUSE")
         for index in range(len(self.herds)):
             ref herd = self.herds[index]
             require_species(herd.species)
@@ -494,6 +623,12 @@ struct ResidentsParameters(Copyable, Movable):
                 0,
                 1000,
                 "A pasture must reach from 0 to 1 kilometer",
+            )
+            require_between(
+                herd.flee.to(METER),
+                0,
+                100,
+                "A herd must flee from 0 to 100 meters",
             )
         require_count_between(
             self.triangles,
@@ -573,6 +708,8 @@ struct Beast(Copyable, Movable):
     var node: NodeId
     var mesh: Int
     var book: Int
+    # How near the player may come before it runs, in meters.
+    var flee: Float32
 
 
 struct Residents(Movable):
@@ -589,8 +726,9 @@ struct Residents(Movable):
         mut scene: Scene,
         mut assets: Assets,
         parameters: ResidentsParameters,
-        ground: Ground,
+        terrain: Terrain,
         lots: List[Lot],
+        homes: List[Doorway],
     ) raises:
         """Build the residents into a scene, each at its first place.
 
@@ -598,12 +736,15 @@ struct Residents(Movable):
             scene: The scene.
             assets: The stores.
             parameters: Who lives in the village.
-            ground: The ground they walk on.
-            lots: The buildings' footprints.
+            terrain: What they walk on.
+            lots: The buildings' footprints, which their routes keep off.
+            homes: Each house's front door, in the order of the village's
+                houses.
 
         Raises:
-            Error: If `parameters.check` refuses a value, or a person or an
-                animal cannot be built.
+            Error: If `parameters.check` refuses a value, a villager's
+                home is not one of `homes`, or a person or an animal
+                cannot be built.
         """
         parameters.check()
         self.bodies = List[Body]()
@@ -616,6 +757,7 @@ struct Residents(Movable):
                     scene,
                     assets,
                     villager.spec,
+                    villager.outfit,
                     parameters.triangles,
                     parameters.detail,
                 )
@@ -626,19 +768,24 @@ struct Residents(Movable):
                 villager.z,
                 villager.reach,
                 6,
-                ground,
+                terrain.ground,
                 lots,
                 parameters.rest,
             )
             route.run = villager.runs
             var start = route.points[len(route.points) - 1]
+            var home = villager.home.value
+            if home >= 0:
+                if home >= len(homes):
+                    raise Error("A villager's home must be a house")
+                visit(route, homes[home])
             self.people.append(
                 Character(
                     CharacterParameters(),
                     start.x,
                     start.z,
                     Angle(Float32(index), RADIAN),
-                    ground,
+                    terrain,
                 )
             )
             self.walks.append(route^)
@@ -684,7 +831,11 @@ struct Residents(Movable):
                     )
             else:
                 walker.walk_speed = Velocity(0.3, METER_PER_SECOND)
-            walker.run_speed = walker.walk_speed
+            # An animal runs only when it flees, at three times its walk.
+            walker.run_speed = Velocity(
+                walker.walk_speed.to(METER_PER_SECOND) * FLEE_PACE,
+                METER_PER_SECOND,
+            )
             var book = len(self.books)
             self.books.append(Flipbook(stand, frames^, stride))
             for member in range(herd.count):  # pragma: no branch
@@ -694,7 +845,7 @@ struct Residents(Movable):
                     herd.z,
                     herd.reach,
                     5,
-                    ground,
+                    terrain.ground,
                     lots,
                     parameters.rest,
                 )
@@ -715,43 +866,79 @@ struct Residents(Movable):
                     start.x,
                     start.z,
                     Angle(Float32(member) * 2.4, RADIAN),
-                    ground,
+                    terrain,
                 )
                 route.next = (member + 1) % len(route.points)
-                self.beasts.append(Beast(character^, route^, node, mesh, book))
+                self.beasts.append(
+                    Beast(
+                        character^,
+                        route^,
+                        node,
+                        mesh,
+                        book,
+                        herd.flee.to(METER),
+                    )
+                )
 
     def update(
         mut self,
         mut scene: Scene,
         delta: Duration,
-        ground: Ground,
-        lots: List[Lot],
+        terrain: Terrain,
         obstacles: List[Obstacle],
+        player: Optional[Vector3] = None,
     ) raises:
         """Move every resident along its route by one frame, and pose it.
+
+        Each resident bumps into the obstacles that you give and into
+        every other resident: where it stands now, for one that has moved
+        this frame, and where it stood, for one that has not. An animal
+        that the player comes nearer than its herd's `flee` runs straight
+        away, and walks back to its route once the player is further.
 
         Args:
             scene: The scene the residents are in.
             delta: The frame's time.
-            ground: The ground.
-            lots: The buildings' footprints.
+            terrain: The ground, the floors, the walls and the solid
+                buildings.
             obstacles: The round things in the way.
+            player: Where the player stands, which a shy animal runs from.
 
         Raises:
             Error: If the time is negative, or a clip cannot be played.
         """
-        for index in range(len(self.people)):
+        # One list holds the obstacles and then the residents; each one
+        # steps passing over its own entry.
+        var crowd = obstacles.copy()
+        var first = len(crowd)
+        crowd.extend(self.obstacles())
+        var people = len(self.people)
+        for index in range(people):
             var steer = self.walks[index].steer(self.people[index], delta)
             self.people[index].step(
-                steer[0], steer[1], delta, ground, lots, obstacles
+                steer[0], steer[1], delta, terrain, crowd, first + index
             )
+            ref feet = self.people[index].position
+            crowd[first + index].x = feet.x
+            crowd[first + index].z = feet.z
             self.bodies[index].pose(scene, self.people[index], delta)
         for index in range(len(self.beasts)):
             ref beast = self.beasts[index]
             var steer = beast.route.steer(beast.character, delta)
-            beast.character.step(
-                steer[0], steer[1], delta, ground, lots, obstacles
-            )
+            if player:
+                var at = beast.character.position
+                var away = Vector3(
+                    at.x - player.value().x, 0, at.z - player.value().z
+                )
+                if away.length() < beast.flee:
+                    var run = no_input()
+                    run.forward = 1
+                    run.run = True
+                    steer = (run, yaw_of(away))
+            var own = first + people + index
+            beast.character.step(steer[0], steer[1], delta, terrain, crowd, own)
+            crowd[own].x = beast.character.position.x
+            crowd[own].z = beast.character.position.z
             var at = beast.character.position
             ref node = scene.node(beast.node)
             node.set_position(at.x, at.y, at.z)

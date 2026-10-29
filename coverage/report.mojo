@@ -38,12 +38,6 @@ struct Entry(Copyable, Movable):
     # An MC-DC obligation: this operand must be shown to independently decide
     # the outcome. One item, not two, since it is a single yes/no property.
     var is_mcdc: Bool
-    # Empty for the original two-outcome obligation. A validated derived
-    # manifest can require only T or F from a reviewed loop-outcome proof.
-    var loop_required: String
-    var loop_reason: String
-    # Exact for literal iterables; a lower bound for reviewed nonempty range.
-    var loop_cardinality: Int
 
     def __init__(
         out self,
@@ -52,19 +46,13 @@ struct Entry(Copyable, Movable):
         is_branch: Bool,
         condition_index: Int,
         is_mcdc: Bool,
-        var loop_required: String = String(""),
-        var loop_reason: String = String(""),
-        loop_cardinality: Int = -1,
     ):
-        """Store an original entry or one explicitly masked loop outcome."""
+        """Store one manifest entry."""
         self.module = module^
         self.line = line
         self.is_branch = is_branch
         self.condition_index = condition_index
         self.is_mcdc = is_mcdc
-        self.loop_required = loop_required^
-        self.loop_reason = loop_reason^
-        self.loop_cardinality = loop_cardinality
 
     def id(self) -> String:
         """Return the probe id this entry expects to see."""
@@ -135,20 +123,12 @@ struct Report(Movable):
     var text: String
     var covered: Int
     var total: Int
-    var potential: Int
 
-    def __init__(
-        out self,
-        var text: String,
-        covered: Int,
-        total: Int,
-        potential: Int = -1,
-    ):
+    def __init__(out self, var text: String, covered: Int, total: Int):
         """Store the rendered text alongside its numerator and denominator."""
         self.text = text^
         self.covered = covered
         self.total = total
-        self.potential = total if potential < 0 else potential
 
     def is_complete(self) -> Bool:
         """Return True if every measurable item was covered."""
@@ -168,63 +148,13 @@ def parse_manifest(text: String) raises -> List[Entry]:
         Error: If a record is malformed.
     """
     var entries = List[Entry]()
-    var proof_identity = String("")
     for raw in text.splitlines():
         var line = String(raw.strip())
         if line == "":
             continue
         var fields = line.split(" ")
         # `L`/`B` carry a module and line; `C` adds the operand's index.
-        if len(fields) == 3 and fields[0] == "P":
-            if (
-                proof_identity != ""
-                or len(entries) != 0
-                or String(fields[1]) != "constant-loops-v2"
-                or String(fields[2]).byte_length() != 64
-            ):
-                raise Error("Malformed loop-proof manifest identity")
-            proof_identity = String(fields[2])
-            for cp in proof_identity.codepoint_slices():
-                if String("0123456789abcdef").find(String(cp)) < 0:
-                    raise Error("Malformed loop-proof manifest identity")
-        elif len(fields) == 6 and fields[0] == "R":
-            if proof_identity == "":
-                raise Error("Loop outcome masks require a proof identity")
-            var required = String(fields[3])
-            var reason = String(fields[4])
-            var count = Int(String(fields[5]))
-            if (
-                (required != "T" and required != "F")
-                or (
-                    reason != "literal-range"
-                    and reason != "literal-list"
-                    and reason != "reviewed-nonempty-range"
-                    and reason != "reviewed-nonempty-iterator"
-                )
-                or (
-                    (
-                        reason == "reviewed-nonempty-range"
-                        or reason == "reviewed-nonempty-iterator"
-                    )
-                    and (required != "T" or count != 1)
-                )
-                or count < 0
-                or (required == "T") != (count > 0)
-            ):
-                raise Error("Malformed constant-loop outcome mask: " + line)
-            entries.append(
-                Entry(
-                    String(fields[1]),
-                    Int(String(fields[2])),
-                    True,
-                    -1,
-                    False,
-                    required^,
-                    reason^,
-                    count,
-                )
-            )
-        elif len(fields) == 3 and (fields[0] == "L" or fields[0] == "B"):
+        if len(fields) == 3 and (fields[0] == "L" or fields[0] == "B"):
             entries.append(
                 Entry(
                     String(fields[1]),
@@ -246,21 +176,6 @@ def parse_manifest(text: String) raises -> List[Entry]:
             )
         else:
             raise Error("Malformed manifest record: " + line)
-    # A masked loop must identify exactly one original decision, never a
-    # duplicate branch or the decision of a compound Boolean expression.
-    for entry in entries:
-        if entry.loop_required == "":
-            continue
-        var decisions = 0
-        for other in entries:
-            if other.module != entry.module or other.line != entry.line:
-                continue
-            if other.condition_index >= 0:
-                raise Error("Loop outcome mask conflicts with a condition")
-            if other.is_branch:
-                decisions += 1
-        if decisions != 1:
-            raise Error("Duplicate masked loop decision")
     return entries^
 
 
@@ -397,7 +312,6 @@ def build_report(
     var out = String("")
     var grand_covered = 0
     var grand_total = 0
-    var grand_impossible = 0
 
     for module in _modules_in_order(entries):
         var line_covered = 0
@@ -429,55 +343,12 @@ def build_report(
                 # Two outcomes per decision or condition, counted separately.
                 var took_true = hits.contains(id + ":T")
                 var took_false = hits.contains(id + ":F")
-                if entry.loop_required != "":
-                    var impossible = String(
-                        "F"
-                    ) if entry.loop_required == "T" else String("T")
-                    if hits.contains(id + ":" + impossible):
-                        raise Error(
-                            "Constant-loop proof contradicted by runtime"
-                            " probe: "
-                            + id
-                            + ":"
-                            + impossible
-                        )
-                    branch_total += 1
-                    grand_impossible += 1
-                    partial += (
-                        "    line "
-                        + String(entry.line)
-                        + ": loop outcome "
-                        + (
-                            String("False") if impossible
-                            == "F" else String("True")
-                        )
-                        + " proven impossible ("
-                        + entry.loop_reason
-                        + (
-                            String(" minimum cardinality ") if (
-                                entry.loop_reason == "reviewed-nonempty-range"
-                                or entry.loop_reason
-                                == "reviewed-nonempty-iterator"
-                            ) else String(" cardinality ")
-                        )
-                        + String(entry.loop_cardinality)
-                        + ")\n"
-                    )
-                    if not took_true and not took_false:
-                        partial += (
-                            "    line "
-                            + String(entry.line)
-                            + ": required loop outcome "
-                            + entry.loop_required
-                            + " never observed\n"
-                        )
-                else:
-                    branch_total += 2
+                branch_total += 2
                 if took_true:
                     branch_covered += 1
                 if took_false:
                     branch_covered += 1
-                if entry.loop_required == "" and took_true != took_false:
+                if took_true != took_false:
                     var never = String("True") if took_false else String(
                         "False"
                     )
@@ -540,16 +411,4 @@ def build_report(
         + String(_percent(grand_covered, grand_total))
         + "%\n"
     )
-    if grand_impossible > 0:
-        out += (
-            "DENOMINATOR potential "
-            + String(grand_total + grand_impossible)
-            + ", required "
-            + String(grand_total)
-            + ", proven impossible "
-            + String(grand_impossible)
-            + "\n"
-        )
-    return Report(
-        out^, grand_covered, grand_total, grand_total + grand_impossible
-    )
+    return Report(out^, grand_covered, grand_total)

@@ -40,12 +40,15 @@ from core.raycaster import (
 from core.scene import Scene
 from geometries.box import cube
 from materials.material import BACK_SIDE, DOUBLE_SIDE, Material
+from math.bounds import Plane
 from math.matrix4 import translation
 from math.vector2 import Vector2
 from math.vector3 import Vector3
+from math.vector4 import Vector4
 from objects.instanced_mesh import BatchedMesh, InstancedMesh
 from objects.lod import Lod
 from objects.mesh import Mesh
+from objects.shadow_mesh import ShadowMesh
 from render.framebuffer import Color
 from std.math import nan
 from std.testing import (
@@ -564,6 +567,37 @@ def test_the_scene_answers_nearest_first_across_meshes() raises:
     assert_almost_equal(hits[2].distance, Float32(7.5), atol=TOLERANCE)
     assert_equal(hits[3].index, 0)
     assert_almost_equal(hits[3].distance, Float32(8.5), atol=TOLERANCE)
+
+
+def test_a_scene_pick_passes_over_a_shadow_and_a_shrunk_mesh() raises:
+    # A shadow mesh projects its node, and a mesh scaled to nothing has no
+    # extent. Neither has an inverse to carry the ray into, so three.js
+    # finds no hit on them, and the cube between them is still picked.
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var paint = assets.materials.add(Material(Color(255, 255, 255)))
+    var scene = Scene()
+    var lifted = Object3D()
+    lifted.set_position(0, 2, 0)
+    var caster = Mesh(box, paint, scene.add(lifted^))
+    scene.add_mesh(caster)
+    var shrunk = Object3D()
+    shrunk.set_scale(0, 0, 0)
+    scene.add_mesh(Mesh(box, paint, scene.add(shrunk^)))
+    scene.update()
+    var shadow = ShadowMesh(assets, scene, caster)
+    scene.add_mesh(shadow.mesh)
+    scene.update()
+    shadow.update(
+        scene, Plane(Vector3(0, 1, 0), 0.01), Vector4(of=Vector3(0, 10, 0), w=0)
+    )
+    scene.update()
+    var hits = Raycaster(
+        Vector3(0.1, 10, 0.2), Vector3(0, -1, 0)
+    ).intersect_scene(scene, assets)
+    assert_equal(len(hits), 1)
+    assert_equal(hits[0].index, 0)
+    assert_almost_equal(hits[0].distance, Float32(7.5), atol=TOLERANCE)
 
 
 def test_an_empty_scene_is_hit_nowhere() raises:

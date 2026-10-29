@@ -59,6 +59,21 @@ def test_look_at_accepts_scaled_and_nearly_parallel_up() raises:
     assert_basis(matrix)
 
 
+def test_a_tilted_parallel_up_nudges_z_as_three_js_does() raises:
+    # three.js nudges the view direction's z when up is not the z axis, so
+    # the basis keeps +x as its right direction. A nudge of x instead would
+    # roll the basis a quarter turn.
+    var matrix = Matrix4()
+    matrix.look_at(Vector3(0, 6, 8), Vector3(0, 0, 0), Vector3(0, 0.6, 0.8))
+    assert_basis(matrix)
+    var e = matrix.elements.copy()
+    assert_almost_equal(e[0], Float32(1), atol=1e-6)
+    assert_almost_equal(e[1], Float32(0), atol=1e-6)
+    assert_almost_equal(e[2], Float32(0), atol=1e-6)
+    assert_almost_equal(e[9], Float32(0.6), atol=1e-3)
+    assert_almost_equal(e[10], Float32(0.8), atol=1e-3)
+
+
 def test_look_at_handles_extreme_finite_separation() raises:
     for scale in [Float32(1e-30), Float32(1e30), Float32(3e38)]:
         var matrix = Matrix4()

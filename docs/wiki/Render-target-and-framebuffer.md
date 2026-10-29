@@ -19,13 +19,10 @@ A target can take several samples a pixel; see [Multisampled render targets](#mu
 | `FloatColor(srgb=color)` | Decode an sRGB color to linear. Alpha is not decoded. |
 | `FloatColor(of=color)` | Divide each byte by 255 without decoding. |
 | `FloatColor(hex=0xFF8000)` | Decode a 24-bit sRGB value. three.js's `setHex`. |
-| `FloatColor(style="rgb(255, 128, 0)", space=SRGB)` | A color from a CSS string. three.js's `setStyle`. See [CSS strings](#css-strings). |
 | `FloatColor(hue=h, saturation=s, lightness=l, space=LINEAR)` | A color from HSL in the linear working space. three.js's `setHSL`. Pass `space=SRGB` to describe an sRGB color, decoded. The hue wraps. The other two clamp. |
 | `encode() -> Color` | Encode linear light to sRGB bytes, clamped. |
 | `encode_with(bytes) -> Color` | The same bytes as `encode`, read from an `SrgbBytes` table. See [The sRGB table](#the-srgb-table). |
 | `hex() -> Int` | The encoded color as a 24-bit value. three.js's `getHex`. |
-| `hex_string() -> String` | The same value as six lowercase hexadecimal digits. three.js's `getHexString`. |
-| `style(space=SRGB) -> String` | A CSS string: `rgb(r,g,b)`, or `color(srgb-linear r g b)` for `LINEAR`. three.js's `getStyle`. |
 | `hsl(space=LINEAR) -> HSL` | Hue, saturation and lightness of the linear channels. three.js's `getHSL`. Pass `space=SRGB` for those of the encoded color. |
 | `quantize() -> Color` | Bytes without the transfer function, for data. |
 | `premultiplied()`, `unpremultiplied()` | Convert between straight and premultiplied alpha. |
@@ -52,7 +49,7 @@ The table gives the same bytes as `encode`. The encoded byte never falls as the 
 
 ### CSS strings
 
-`render/css_color.mojo` reads and writes CSS color strings, as three.js's `Color` does. `parse_style(style, space=SRGB)` reads every form that three.js's `setStyle` reads:
+`render/css_color.mojo` reads and writes CSS color strings, as three.js's `Color` does. These functions are not methods of `FloatColor`, so a module that only draws does not build the CSS reader. `parse_style(style, space=SRGB)` returns a `FloatColor`. It reads every form that three.js's `setStyle` reads:
 
 - `rgb(255, 0, 0)` and `rgba(255, 0, 0, 0.5)`. Each number is a whole number. A number above 255 becomes 255.
 - `rgb(100%, 0%, 0%)` and `rgba(...)`. Each share is a whole number. A share above 100 becomes 100.
@@ -68,7 +65,7 @@ This port differs from three.js in three ways:
 - The alpha of `rgba` and `hsla` is read and then dropped, as in three.js. The color is opaque.
 - A space is an ASCII space, tab or line break. JavaScript also accepts the Unicode spaces.
 
-`format_style(color, space=SRGB)` and `hex_string(color)` write a color back. `format_style` does not clamp a channel above one or below zero, as three.js does not. A channel whose rounded value does not fit in an integer is written as `toFixed` writes it.
+`format_style(color, space=SRGB)` writes a color back as three.js's `getStyle` does: `rgb(r,g,b)`, or `color(srgb-linear r g b)` for `LINEAR`. `hex_string(color)` writes six lowercase hexadecimal digits, as `getHexString` does. `format_style` does not clamp a channel above one or below zero, as three.js does not. A channel whose rounded value does not fit in an integer is written as `toFixed` writes it.
 
 ## RenderTarget
 

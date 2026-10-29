@@ -36,7 +36,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from tests._attire_fixtures import coarse_person
+from tests._attire_people import coarse_person
 from units.si import Duration, SECOND
 
 

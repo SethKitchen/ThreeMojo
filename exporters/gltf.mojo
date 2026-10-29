@@ -18,7 +18,10 @@ name, its translation, rotation and scale, its `userData` as `extras`, as
 three.js's `serializeUserData` writes it, and its children. A removed node
 is not written, nor is anything under it. A node whose
 `matrix_auto_update` is off is written with its `matrix` instead, since
-the matrix is what it draws with. The meshes on one node become one glTF
+the matrix is what it draws with. When the file carries animations, that
+node is written as the translation, rotation and scale of its matrix,
+because an animated node cannot have a `matrix`. three.js writes every
+node that way when it writes animations. The meshes on one node become one glTF
 mesh with a primitive each, which `read_gltf` reads back as one `Mesh`
 each on that node. A primitive carries `POSITION`, with the `min` and
 `max` the specification asks for, and `NORMAL`, `TEXCOORD_0`, `COLOR_0`
@@ -180,8 +183,9 @@ from exporters.common import (
     resized_image,
 )
 from exporters.json_writer import JsonWriter
+from loaders.bytes import encode_base64
 from loaders.file_path import path_directory, path_name
-from loaders.gltf import (
+from loaders.gltf_format import (
     COMPONENT_BYTE,
     COMPONENT_FLOAT,
     COMPONENT_SHORT,
@@ -263,9 +267,6 @@ comptime ELEMENT_ARRAY_BUFFER = 34963
 # The largest vertex count whose indices fit an unsigned short. glTF
 # keeps 65535 itself back, as a strip's restart.
 comptime MAX_SHORT_VERTICES = 65535
-comptime _BASE64 = (
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-)
 
 
 @fieldwise_init
@@ -303,39 +304,6 @@ struct GltfFiles(Movable):
         """Start with two empty files."""
         self.document = List[UInt8]()
         self.binary = List[UInt8]()
-
-
-def encode_base64(bytes: List[UInt8]) -> String:
-    """Return bytes as base64, in the standard alphabet, padded with `=`.
-
-    Args:
-        bytes: The bytes.
-
-    Returns:
-        The text, which `loaders.gltf.decode_base64` reads back.
-    """
-    var alphabet = String(_BASE64).as_bytes()
-    var out = List[UInt8]()
-    var at = 0
-    while at + 3 <= len(bytes):
-        var word = (
-            (Int(bytes[at]) << 16)
-            | (Int(bytes[at + 1]) << 8)
-            | Int(bytes[at + 2])
-        )
-        for shift in [18, 12, 6, 0]:  # pragma: no branch
-            out.append(alphabet[(word >> shift) & 63])
-        at += 3
-    var left = len(bytes) - at
-    if left > 0:
-        var word = Int(bytes[at]) << 16
-        if left == 2:
-            word |= Int(bytes[at + 1]) << 8
-        out.append(alphabet[(word >> 18) & 63])
-        out.append(alphabet[(word >> 12) & 63])
-        out.append(alphabet[(word >> 6) & 63] if left == 2 else UInt8(61))
-        out.append(61)
-    return String(unsafe_from_utf8=out)
 
 
 def index_component(vertices: Int) -> Int:
@@ -1014,10 +982,9 @@ struct _Exporter(Movable):
                 )
             self.uv1s.append(uv1)
             self.colors.append(-1)
-            var indices = -1
-            if geometry.is_indexed():
-                indices = self.index_accessor(geometry.index, count)
-            self.indices.append(indices)
+            # The whole index is written when a primitive draws it. A mesh
+            # with a material list draws slices of it instead.
+            self.indices.append(-1)
             self.targets.append(self.morph_targets(geometry))
             self.joints.append(-1)
             self.skin_weights.append(-1)
@@ -1744,10 +1711,16 @@ struct _Exporter(Movable):
         var slot = self.geometry(
             id, colored, assets, bones > 0, mode == MODE_TRIANGLES
         )
-        var index = self.material(material_id, assets)
-        var indices = self.indices[slot]
+        var indices = -1
         if len(slice) > 0:
             indices = self.index_accessor(slice, shape.vertex_count())
+        elif shape.is_indexed():
+            if self.indices[slot] < 0:
+                self.indices[slot] = self.index_accessor(
+                    shape.index, shape.vertex_count()
+                )
+            indices = self.indices[slot]
+        var index = self.material(material_id, assets)
         writer.begin_object()
         writer.key("attributes")
         writer.begin_object()
@@ -2788,31 +2761,34 @@ def _node_json(
     skin: Int,
     extras: String,
     extensions: String,
+    trs: Bool,
 ) raises -> String:
     """Return one node as glTF writes it: -1 for no mesh, camera or
-    skin, and an empty string for no extras and no extensions."""
+    skin, and an empty string for no extras and no extensions. `trs`
+    writes a node whose `matrix_auto_update` is off as the translation,
+    rotation and scale of its matrix, since an animation may target it."""
     var writer = JsonWriter()
     writer.begin_object()
     if node.name != "":
         writer.key("name")
         writer.string(node.name)
-    if node.matrix_auto_update:
-        if node.position != Vector3(0, 0, 0):
+    if node.matrix_auto_update or trs:
+        var position = node.position
+        var quaternion = node.quaternion
+        var scale = node.scale
+        if not node.matrix_auto_update:
+            node.matrix.decompose(position, quaternion, scale)
+        if position != Vector3(0, 0, 0):
             writer.key("translation")
-            writer.numbers([node.position.x, node.position.y, node.position.z])
-        if node.quaternion != Quaternion.identity():
+            writer.numbers([position.x, position.y, position.z])
+        if quaternion != Quaternion.identity():
             writer.key("rotation")
             writer.numbers(
-                [
-                    node.quaternion.x,
-                    node.quaternion.y,
-                    node.quaternion.z,
-                    node.quaternion.w,
-                ],
+                [quaternion.x, quaternion.y, quaternion.z, quaternion.w],
             )
-        if node.scale != Vector3(1, 1, 1):
+        if scale != Vector3(1, 1, 1):
             writer.key("scale")
-            writer.numbers([node.scale.x, node.scale.y, node.scale.z])
+            writer.numbers([scale.x, scale.y, scale.z])
     elif node.matrix != Matrix4():
         writer.key("matrix")
         var elements = copy_elements(node.matrix.elements)
@@ -3000,6 +2976,7 @@ def export_gltf(
                 skins[at],
                 parts.extras,
                 _with_custom(parts, extensions.finish() if extended else ""),
+                len(animations) > 0,
             )
         )
     for clip in animations:

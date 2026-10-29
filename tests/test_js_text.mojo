@@ -5,7 +5,14 @@
 
 """Tests for `loaders.js_text`: text as JavaScript's UTF-16 code units."""
 
-from loaders.js_text import is_js_space, js_part, js_string, js_trim, js_units
+from loaders.js_text import (
+    comment_start,
+    is_js_space,
+    js_part,
+    js_string,
+    js_trim,
+    js_units,
+)
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
 
 
@@ -30,6 +37,14 @@ def test_white_space_is_javascript_s() raises:
     var trimmed = js_trim(js_units(chr(0x3000) + " x y\t" + chr(0x205F)))
     assert_equal(js_string(trimmed, 0, len(trimmed)), "x y")
     assert_equal(len(js_trim(js_units("  "))), 0)
+
+
+def test_a_comment_starts_at_a_hash_that_starts_a_word() raises:
+    assert_equal(comment_start("# all of it"), 0)
+    assert_equal(comment_start("f 1 2 3 # after"), 8)
+    assert_equal(comment_start("f 1 2 3\t# after"), 8)
+    assert_equal(comment_start("usemtl Material#1"), -1)
+    assert_equal(comment_start("v 0 0 0"), -1)
 
 
 def main() raises:

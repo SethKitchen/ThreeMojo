@@ -77,10 +77,12 @@ from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from core.search import first_match
-from loaders.bytes import hex_digit_value
-from loaders.gltf import decode_image
+from loaders.bytes import bytes_match, hex_digit_value
+from loaders.image_file import decode_image
+from loaders.js_object import js_key_order
 from loaders.js_number import js_parse_float
 from loaders.js_text import split_fields
+from loaders.utf8 import byte_slice
 from loaders.model_nodes import decompose_onto
 from loaders.xml import NO_ELEMENT, XmlDocument, parse_xml
 from loaders.zip import ZipEntry, unzip
@@ -228,59 +230,6 @@ def three_mf_transform(text: String) raises -> Matrix4:
         for row in range(3):  # pragma: no branch
             matrix.elements[column * 4 + row] = numbers[column * 3 + row]
     return matrix^
-
-
-def js_key_order(keys: List[String]) -> List[String]:
-    """Return keys in the order a JavaScript object walks them.
-
-    Args:
-        keys: The keys, in the order they were added, each once.
-
-    Returns:
-        The keys that are array indices, from smallest, then the others
-        in the order given.
-    """
-    var indices = List[Int]()
-    var others = List[String]()
-    for key in keys:
-        var index = _array_index(key)
-        if index >= 0:
-            indices.append(index)
-        else:
-            others.append(key)
-    sort(indices)
-    var out = List[String]()
-    for index in indices:
-        out.append(String(index))
-    for key in others:
-        out.append(key)
-    return out^
-
-
-def _array_index(key: String) -> Int:
-    """Return the array index a key is, or -1.
-
-    Args:
-        key: The key.
-
-    Returns:
-        Its value when it is a whole number written without a sign or a
-        leading zero and below 2^32 - 1, or -1.
-    """
-    var bytes = key.as_bytes()
-    if len(bytes) == 0 or len(bytes) > 10:
-        return -1
-    if len(bytes) > 1 and bytes[0] == 48:
-        return -1
-    var value = 0
-    # The key is not empty here: the loop always runs.
-    for byte in bytes:  # pragma: no branch
-        if byte < 48 or byte > 57:
-            return -1
-        value = value * 10 + Int(byte) - 48
-    if value >= 0xFFFFFFFF:
-        return -1
-    return value
 
 
 def _finite(text: String, what: String) raises -> Float32:
@@ -1091,8 +1040,7 @@ def _linear(style: String) raises -> FloatColor:
     Raises:
         Error: If the text is not a color `setStyle` reads.
     """
-    var head = String(style[byte = 0 : min(7, style.byte_length())])
-    return parse_style(head, SRGB)
+    return parse_style(byte_slice(style, 0, 7), SRGB)
 
 
 def _authored(style: String) raises -> Color:
@@ -1151,8 +1099,9 @@ def _entry_role(name: String) -> Int:
         for anything else.
     """
     var length = name.byte_length()
-    var tail = String(name[byte = max(0, length - 11) : max(0, length - 5)])
-    if length >= 11 and tail == "_rels/" and name.endswith("rels"):
+    if bytes_match(
+        name.as_bytes(), length - 11, length - 5, "_rels/"
+    ) and name.endswith("rels"):
         return 0
     var rels_at = name.find("3D/_rels/")
     if rels_at >= 0 and length >= rels_at + 20 and name.endswith(".model.rels"):

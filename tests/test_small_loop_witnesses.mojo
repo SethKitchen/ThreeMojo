@@ -1,28 +1,18 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Real supported producers for the small source-bound loop proposals."""
+"""Real producers reach the R-tree frontier, cap and speed-number loops."""
 from extensions.carla.rtree import (
     SegmentCloudRtree,
     SegmentElement,
     SegmentFilter,
 )
 from extensions.carla.map_search import _MapQueryWork, MapQueryBudget
+from extensions.carla.speed_limits import read_speed_number
 from math.vector3 import Vector3
 from objects.line_segments2 import cap_steps
 from std.math import inf, nan
 from std.memory import bitcast
-from std.testing import (
-    TestSuite,
-    assert_equal,
-    assert_false,
-    assert_true,
-    assert_raises,
-)
-from tests.test_hair_renderer_boundaries import (
-    test_valid_solid_and_strand_modes_emit_visible_red_samples,
-)
-from coverage.report import Hits, parse_manifest, build_report
-from coverage.mcdc import DecisionTrace
+from std.testing import TestSuite, assert_equal, assert_false, assert_true
 
 
 @fieldwise_init
@@ -63,7 +53,7 @@ def test_empty_and_split_tree_frontiers_use_real_producers() raises:
                 assert_true(len(node.children) <= 16)
 
 
-def test_cap_count_all_special_classes_and_public_strand_render() raises:
+def test_cap_count_all_special_classes() raises:
     for radius in [
         Float32(-1),
         Float32(0),
@@ -77,41 +67,11 @@ def test_cap_count_all_special_classes_and_public_strand_render() raises:
     ]:
         var count = cap_steps(radius)
         assert_true(count >= 2 and count <= 64)
-    test_valid_solid_and_strand_modes_emit_visible_red_samples()
 
 
-def test_iterator_protocol_keeps_true_and_rejects_contrary_false() raises:
-    # Synthetic protocol records exercise reporting only, never production hits.
-    var header = String(
-        "P constant-loops-v2"
-        " 0000000000000000000000000000000000000000000000000000000000000000\n"
-    )
-    var entries = parse_manifest(
-        header + "R iterator 1 T reviewed-nonempty-iterator 1\n"
-    )
-    var hits = Hits()
-    var missing = build_report(entries, hits, List[DecisionTrace]())
-    assert_false(missing.is_complete())
-    assert_equal(missing.total, 1)
-    assert_equal(missing.potential, 2)
-    hits.add("iterator:1:T")
-    var reached = build_report(entries, hits, List[DecisionTrace]())
-    assert_true(reached.is_complete())
-    assert_true(
-        reached.text.find("reviewed-nonempty-iterator minimum cardinality 1")
-        >= 0
-    )
-    hits.add("iterator:1:F")
-    with assert_raises(contains="proof contradicted"):
-        _ = build_report(entries, hits, List[DecisionTrace]())
-    for record in [
-        "R iterator 1 F reviewed-nonempty-iterator 0\n",
-        "R iterator 1 T reviewed-nonempty-iterator 2\n",
-        "R iterator 1 T reviewed-nonempty-iterator -1\n",
-        "R iterator 1 T reviewed-unknown-iterator 1\n",
-    ]:
-        with assert_raises(contains="Malformed"):
-            _ = parse_manifest(header + record)
+def test_owned_nonempty_zero_mantissa_byte_view() raises:
+    assert_equal(read_speed_number("0.000"), Float64(0))
+    assert_equal(read_speed_number("-0E-1000"), Float64(0))
 
 
 def main() raises:

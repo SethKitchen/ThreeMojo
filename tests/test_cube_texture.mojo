@@ -63,33 +63,21 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+from tests._cube_faces import (
+    BLUE,
+    CYAN,
+    GREEN,
+    MAGENTA,
+    RED,
+    YELLOW,
+    face_colors,
+    solid,
+)
 
 comptime TOLERANCE = Float64(1e-6)
 
 # One color per face, in face order: red, green, blue, yellow, cyan,
 # magenta.
-comptime RED = Color(255, 0, 0)
-comptime GREEN = Color(0, 255, 0)
-comptime BLUE = Color(0, 0, 255)
-comptime YELLOW = Color(255, 255, 0)
-comptime CYAN = Color(0, 255, 255)
-comptime MAGENTA = Color(255, 0, 255)
-
-
-def face_colors() -> List[Color]:
-    """Return the six face colors, in face order."""
-    return [RED, GREEN, BLUE, YELLOW, CYAN, MAGENTA]
-
-
-def solid(size: Int, color: Color) raises -> Texture:
-    """Return a square texture of one color, clamped and nearest."""
-    var pixels = List[UInt8]()
-    for _ in range(size * size):
-        pixels.append(color.r)
-        pixels.append(color.g)
-        pixels.append(color.b)
-        pixels.append(color.a)
-    return Texture(size, size, pixels^, CLAMP, NEAREST, SRGB, False)
 
 
 def six_solid(size: Int = 2) raises -> List[Texture]:

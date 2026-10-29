@@ -543,11 +543,15 @@ struct MeshTree(Movable):
         # This is a scalar-indexed stack, not a vector calculation. An array
         # avoids copying a wide SIMD value for each dynamic push and pop.
         var stack = Array[Int32, STACK_SIZE](fill=0)
+        # Each node's squared gap to `p`, found once when it is pushed and
+        # held beside it for the pop to compare with the best so far.
+        var gaps = Array[Float32, STACK_SIZE](fill=0)
+        gaps[0] = _box_gap(self.low[0], self.high[0], p)
         var top = 1
         while top > 0:
             top -= 1
             var node = Int(stack[top])
-            if _box_gap(self.low[node], self.high[node], p) >= best:
+            if gaps[top] >= best:
                 continue
             if self.left[node] < 0:
                 var hit = self.leaves[self.leaf[node]].nearest(p)
@@ -558,14 +562,18 @@ struct MeshTree(Movable):
             # The nearer child last, so it is walked first.
             var l = self.left[node]
             var r = self.right[node]
-            if _box_gap(self.low[l], self.high[l], p) < _box_gap(
-                self.low[r], self.high[r], p
-            ):
+            var left_gap = _box_gap(self.low[l], self.high[l], p)
+            var right_gap = _box_gap(self.low[r], self.high[r], p)
+            if left_gap < right_gap:
                 stack[top] = Int32(r)
+                gaps[top] = right_gap
                 stack[top + 1] = Int32(l)
+                gaps[top + 1] = left_gap
             else:
                 stack[top] = Int32(l)
+                gaps[top] = left_gap
                 stack[top + 1] = Int32(r)
+                gaps[top + 1] = right_gap
             top += 2
         var hit = closest_on_triangle(
             p,

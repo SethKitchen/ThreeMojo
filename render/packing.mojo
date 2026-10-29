@@ -232,14 +232,15 @@ def packed_depth_fragment(
     three.js's `depth.glsl` fragment shader.
 
     `BASIC_DEPTH_PACKING` writes one minus the window-space depth in every
-    channel and keeps the alpha. The other three write the depth packed,
-    with an alpha of one where the packing leaves the alpha free.
+    channel and the material's opacity. The maps' alpha does not reach
+    it: the maps only feed the alpha test. The other three write the depth
+    packed, with an alpha of one where the packing leaves the alpha free.
 
     Args:
         packing: The material's packing. A value that is none of the four
             writes as `BASIC_DEPTH_PACKING`; the boundaries refuse one.
         z: The fragment's NDC depth.
-        alpha: The fragment's alpha, which only the basic packing keeps.
+        alpha: The material's opacity, which only the basic packing keeps.
 
     Returns:
         Red, green, blue and alpha, each zero to one.

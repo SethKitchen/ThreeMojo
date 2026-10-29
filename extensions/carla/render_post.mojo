@@ -32,7 +32,7 @@ The sizes and gains are this port's own choices.
 
 from extensions.carla.render_weather import HeightFog, RainSettings
 from math.matrix4 import Matrix4
-from math.utils import SeededRandom, texel_ndc, texel_ndc_up
+from math.utils import SeededRandom, rec709_luminance, texel_ndc, texel_ndc_up
 from math.vector3 import Vector3
 from render.cube_texture import CubeTexture
 from render.framebuffer import FloatColor
@@ -63,18 +63,6 @@ comptime RAIN_LENGTH = Float32(0.03)
 # What CARLA's lens sizes are scaled by, so the default lens bends the
 # corners by about two percent.
 comptime LENS_GAIN = Float32(0.25)
-
-
-def luminance(color: FloatColor) -> Float32:
-    """Return a linear color's luminance, with Rec. 709 weights.
-
-    Args:
-        color: The color.
-
-    Returns:
-        The luminance.
-    """
-    return 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b
 
 
 def henyey_greenstein(cos_theta: Float32, g: Float32) -> Float32:
@@ -358,7 +346,9 @@ def metered_luminance(frame: RenderTarget) -> Float32:
     var span = HISTOGRAM_HIGH - HISTOGRAM_LOW
     # A frame has at least one pixel.
     for color in frame.colors:  # pragma: no branch
-        var level = log2(max(luminance(color), Float32(1e-6)))
+        var level = log2(
+            max(rec709_luminance(color.r, color.g, color.b), Float32(1e-6))
+        )
         var bin = Int((level - HISTOGRAM_LOW) / span * Float32(HISTOGRAM_BINS))
         bins[min(max(bin, 0), HISTOGRAM_BINS - 1)] += 1
     var total = Float32(len(frame.colors))

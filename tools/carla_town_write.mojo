@@ -16,10 +16,8 @@ from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
 from tools._python_json import (
-    MISSING,
     PY_BOOL,
     PY_DICT,
-    PY_INT,
     PY_LIST,
     PY_NONE,
     PY_STR,
@@ -29,6 +27,7 @@ from tools.carla_gltf_compact import gltf_text
 from tools.carla_town_buffers import buffer_text
 from tools.carla_town_clean import refusal
 from tools.carla_town_glb import pack_glb
+from tools._town_json import json_text
 
 comptime CREDIT = (
     "CARLA Team, CARLA Simulator 0.9.16, CC-BY 4.0 (https://carla.org)"
@@ -52,8 +51,8 @@ def write_town(text: String) raises -> String:
     var root = doc.root
     if doc.kind(root) != PY_DICT:
         raise Error("town write is not an object")
-    var out_dir = _text(doc, doc.at(root, "out_dir"), "out_dir is not text")
-    var name = _text(doc, doc.at(root, "name"), "name is not text")
+    var out_dir = json_text(doc, doc.at(root, "out_dir"), "out_dir is not text")
+    var name = json_text(doc, doc.at(root, "name"), "name is not text")
     var tables = PyJson.parse(
         buffer_text(_buffer_request(doc, root, out_dir, name))
     )
@@ -167,13 +166,6 @@ def _quote(text: String) -> String:
             out += chr(Int(byte))
     out += '"'
     return out
-
-
-def _text(doc: PyJson, node: Int, message: String) raises -> String:
-    """Return a JSON string, or raise `message`."""
-    if doc.kind(node) != PY_STR:
-        raise Error(message)
-    return doc.text(node)
 
 
 def main() raises:

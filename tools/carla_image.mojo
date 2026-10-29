@@ -16,9 +16,7 @@
 and prints `rgba`. The values match NumPy's float64 division.
 """
 
-from std.ffi import OwnedDLHandle
 from std.memory import OpaquePointer
-from std.os import getenv, listdir
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
@@ -29,6 +27,7 @@ from tools._python_float import (
     parse_float,
     python_repr,
 )
+from tools._pillow_jpeg import jpeg_library, c_pointer, store_u64, store_i32
 from tools._python_json import MISSING, PY_DICT, PY_INT, PY_LIST, PyJson
 
 comptime _DECOMPRESS_BYTES = 632
@@ -160,19 +159,19 @@ def _is_jpeg(data: List[UInt8]) -> Bool:
 
 def _jpeg(data: List[UInt8]) raises -> String:
     """Decode a JPEG into RGBA pixels."""
-    var library = _jpeg_library()
+    var library = jpeg_library()
     var cinfo = List[UInt8](length=_DECOMPRESS_BYTES, fill=0)
     var jerr = List[UInt8](length=_ERROR_BYTES, fill=0)
-    var cinfo_ptr = _pointer(Int(cinfo.unsafe_ptr()))
-    _store_u64(cinfo, 0, UInt64(Int(jerr.unsafe_ptr())))
+    var cinfo_ptr = c_pointer(Int(cinfo.unsafe_ptr()))
+    store_u64(cinfo, 0, UInt64(Int(jerr.unsafe_ptr())))
     _ = library.call["jpeg_std_error", OpaquePointer[MutAnyOrigin]](
-        _pointer(Int(jerr.unsafe_ptr()))
+        c_pointer(Int(jerr.unsafe_ptr()))
     )
     library.call["jpeg_CreateDecompress", NoneType](
         cinfo_ptr, Int32(_LIB_VERSION), UInt64(_DECOMPRESS_BYTES)
     )
     library.call["jpeg_mem_src", NoneType](
-        cinfo_ptr, _pointer(Int(data.unsafe_ptr())), UInt64(len(data))
+        cinfo_ptr, c_pointer(Int(data.unsafe_ptr())), UInt64(len(data))
     )
     var header = library.call["jpeg_read_header", Int32](cinfo_ptr, Int32(1))
     if header != 1:
@@ -186,7 +185,7 @@ def _jpeg(data: List[UInt8]) raises -> String:
     if _load_i32(cinfo, _JPEG_COLOR) == _JCS_GRAYSCALE:
         mode = "L"
         out_space = _JCS_GRAYSCALE
-    _store_i32(cinfo, _OUT_COLOR, Int32(out_space))
+    store_i32(cinfo, _OUT_COLOR, Int32(out_space))
     var started = library.call["jpeg_start_decompress", Int32](cinfo_ptr)
     if started == 0:
         library.call["jpeg_destroy_decompress", NoneType](cinfo_ptr)
@@ -209,7 +208,7 @@ def _jpeg(data: List[UInt8]) raises -> String:
     for _ in range(height):
         row_ptr[0] = UInt64(Int(row.unsafe_ptr()))
         var read = library.call["jpeg_read_scanlines", UInt32](
-            cinfo_ptr, _pointer(Int(row_ptr.unsafe_ptr())), UInt32(1)
+            cinfo_ptr, c_pointer(Int(row_ptr.unsafe_ptr())), UInt32(1)
         )
         if read != 1:
             library.call["jpeg_destroy_decompress", NoneType](cinfo_ptr)
@@ -236,116 +235,6 @@ def _jpeg(data: List[UInt8]) raises -> String:
     _ = len(cinfo)
     _ = len(jerr)
     return _emit(mode, width, height, pixels)
-
-
-def _jpeg_library() raises -> OwnedDLHandle:
-    """Open Pillow's libjpeg 6.2."""
-    var named = getenv("CARLA_LIBJPEG", "")
-    if named != "":
-        return OwnedDLHandle(named)
-    var found = _search_jpeg()
-    if found == "":
-        raise Error("libjpeg 6.2 was not found")
-    return OwnedDLHandle(found)
-
-
-def _search_jpeg() raises -> String:
-    """Return a path of `libjpeg` 6.2, or an empty string."""
-    var folders = List[String]()
-    var home = getenv("HOME", "")
-    if home != "":
-        for version in range(9, 15):
-            _append_pillow_site(
-                folders,
-                home
-                + "/.local/lib/python3."
-                + String(version)
-                + "/site-packages",
-            )
-    _append_pillow_site(
-        folders, ".venv-carla-export/lib/python3.12/site-packages"
-    )
-    _append_pillow_site(folders, ".venv/lib/python3.12/site-packages")
-    _append_env_pillow_libs(folders)
-    for index in range(len(folders)):
-        var folder = folders[index]
-        if not Path(folder).exists():
-            continue
-        for name in listdir(folder):
-            var text = String(name)
-            if not text.startswith("libjpeg"):
-                continue
-            if text.find(".so") < 0 and text.find(".dylib") < 0:
-                continue
-            return folder + "/" + text
-    return String("")
-
-
-def _append_env_pillow_libs(mut folders: List[String]):
-    """Add Pillow's library folder for the active Python."""
-    _append_pillow_root(folders, getenv("VIRTUAL_ENV", ""))
-    var path = getenv("PATH", "")
-    var raw = path.as_bytes()
-    var start = 0
-    for index in range(len(raw) + 1):
-        if index < len(raw) and raw[index] != 58:
-            continue
-        var entry = String(path[byte=start:index])
-        start = index + 1
-        var bytes = entry.as_bytes()
-        var count = len(bytes)
-        if count < 4:
-            continue
-        if (
-            bytes[count - 4] == 47
-            and bytes[count - 3] == 98
-            and bytes[count - 2] == 105
-            and bytes[count - 1] == 110
-        ):
-            _append_pillow_root(folders, String(entry[byte = : count - 4]))
-
-
-def _append_pillow_root(mut folders: List[String], root: String):
-    """Add Pillow's library folders under one Python prefix."""
-    if root.byte_length() == 0:
-        return
-    for version in range(9, 15):
-        _append_pillow_site(
-            folders,
-            root + "/lib/python3." + String(version) + "/site-packages",
-        )
-
-
-def _append_pillow_site(mut folders: List[String], site: String):
-    """Add Pillow's library folders under one `site-packages` folder.
-
-    Linux wheels keep the libraries in `pillow.libs`. macOS wheels keep
-    them in `PIL/.dylibs`, for example `libjpeg.62.4.0.dylib`.
-    """
-    folders.append(site + "/pillow.libs")
-    folders.append(site + "/PIL/.dylibs")
-
-
-def _pointer(address: Int) -> OpaquePointer[MutAnyOrigin]:
-    """Return an address as a C pointer."""
-    return OpaquePointer[MutAnyOrigin](unsafe_from_address=address)
-
-
-def _store_u64(mut raw: List[UInt8], offset: Int, value: UInt64):
-    """Write one little-endian 64-bit field."""
-    var rest = value
-    for shift in range(8):
-        raw[offset + shift] = UInt8(rest & 255)
-        rest >>= 8
-
-
-def _store_i32(mut raw: List[UInt8], offset: Int, value: Int32):
-    """Write one little-endian 32-bit field."""
-    var bits = UInt32(value)
-    raw[offset] = UInt8(bits & 255)
-    raw[offset + 1] = UInt8((bits >> 8) & 255)
-    raw[offset + 2] = UInt8((bits >> 16) & 255)
-    raw[offset + 3] = UInt8((bits >> 24) & 255)
 
 
 def _load_u32(raw: List[UInt8], offset: Int) -> UInt32:

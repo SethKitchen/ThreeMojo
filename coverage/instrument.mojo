@@ -36,6 +36,8 @@ comptime LOOP_KEYWORD = "for "
 
 # Opt-out for a decision whose second outcome is unreachable rather than
 # untested — a loop over a length an invariant already proves is non-zero, say.
+# A loop over a literal nonempty `range` or list needs no pragma: see
+# `_is_literal_nonempty_loop`.
 # Unlike silently dropping a decision, this is visible in the source and shows
 # up in review, which is why it is spelled out per line.
 comptime PRAGMA_NO_BRANCH = "# pragma: no branch"
@@ -199,6 +201,126 @@ def _strip_comment(line: String) -> String:
         out += cp
         index += 1
     return String(out.rstrip())
+
+
+def _literal_count(text: String) -> Int:
+    """Return the value of a run of at most ten ASCII digits, or -1."""
+    if text.byte_length() == 0 or text.byte_length() > 10:
+        return -1
+    var value = 0
+    for byte in text.as_bytes():
+        if byte < UInt8(ord("0")) or byte > UInt8(ord("9")):
+            return -1
+        value = value * 10 + Int(byte - UInt8(ord("0")))
+    return value
+
+
+def _is_name_byte(byte: UInt8) -> Bool:
+    """Return True if `byte` can be part of a Mojo name."""
+    return (
+        (byte >= UInt8(ord("a")) and byte <= UInt8(ord("z")))
+        or (byte >= UInt8(ord("A")) and byte <= UInt8(ord("Z")))
+        or (byte >= UInt8(ord("0")) and byte <= UInt8(ord("9")))
+        or byte == UInt8(ord("_"))
+    )
+
+
+def _binds_range(line: String) -> Bool:
+    """Return True if one line may bind the name `range`.
+
+    Only the whole name counts: `ranged`, `node_range` and `self.range`
+    bind other names. A doubtful line counts as a binding.
+    """
+    var text = String(line.strip())
+    var bytes = text.as_bytes()
+    var at = text.find("range")
+    while at >= 0:
+        var end = at + 5
+        var whole = (at == 0 or not _is_name_byte(bytes[at - 1])) and (
+            end >= len(bytes) or not _is_name_byte(bytes[end])
+        )
+        if whole and (at == 0 or bytes[at - 1] != UInt8(ord("."))):
+            var left = String(text[byte=0:at].rstrip())
+            var right = String(text[byte=end:].lstrip())
+            for word in ["def", "fn", "var", "comptime", "ref", "for", "as"]:
+                if left == word or left.endswith(" " + word):
+                    return True
+            # An import list, on one line or as a line of its own.
+            if (left.startswith("from ") and " import " in left) or (
+                left == "" and right.startswith(",")
+            ):
+                return True
+            # A parameter, or an assignment at the start of a statement.
+            if right.startswith(":") and (
+                left == "" or left.endswith("(") or left.endswith(",")
+            ):
+                return True
+            if (
+                left == ""
+                and right.startswith("=")
+                and not right.startswith("==")
+            ):
+                return True
+        at = text.find("range", at + 1)
+    return False
+
+
+def _defines_range(source: String) -> Bool:
+    """Return True if `source` may bind its own `range`.
+
+    A module that does cannot have its `range(3)` trusted to run.
+    """
+    for line in source.splitlines():
+        if _binds_range(String(line)):
+            return True
+    return False
+
+
+def _is_literal_nonempty_loop(header: String, builtin_range: Bool) -> Bool:
+    """Return True if a `for` header iterates a literal that cannot be empty.
+
+    Such a loop has no reachable empty outcome, so it needs no branch entry,
+    as if it carried `# pragma: no branch`. Only the builtin `range` with
+    literal bounds, such as `range(3)` or `range(1, 22)`, and a list literal
+    with an element and no comprehension or unpacking qualify.
+
+    Args:
+        header: The complete `for ...:` header, comment-stripped.
+        builtin_range: False when the module may rebind `range`.
+
+    Returns:
+        True when the iterable is a literal nonempty range or list.
+    """
+    var colon = _statement_colon(header)
+    if colon < 0:
+        return False
+    var text = String(_substring(header, 0, colon).strip())
+    var at = text.find(" in ")
+    if not text.startswith(LOOP_KEYWORD) or at < 0:
+        return False
+    var iterable = String(text[byte = at + 4 :].strip())
+    if iterable.startswith("[") and iterable.endswith("]"):
+        var inside = String(iterable[byte = 1 : iterable.byte_length() - 1])
+        var items = String(inside.strip())
+        return (
+            items.byte_length() > 0
+            and not items.startswith("*")
+            and ",*" not in items.replace(" ", "")
+            and " for " not in inside
+        )
+    if not (
+        builtin_range
+        and iterable.startswith("range(")
+        and iterable.endswith(")")
+    ):
+        return False
+    var bounds = iterable[byte = 6 : iterable.byte_length() - 1].split(",")
+    if len(bounds) == 1:
+        return _literal_count(String(bounds[0].strip())) > 0
+    if len(bounds) != 2:
+        return False
+    var low = _literal_count(String(bounds[0].strip()))
+    return low >= 0 and low < _literal_count(String(bounds[1].strip()))
 
 
 def _branch_keyword(stripped: String) -> String:
@@ -787,6 +909,7 @@ def instrument(source: String, module: String) raises -> Instrumented:
     var hit = _fresh_name(String("_cov_hit"), source)
     var branch = _fresh_name(String("_cov_branch"), source)
     var loop_stem = _fresh_name(String("_cov_loop_"), source)
+    var builtin_range = not _defines_range(source)
     var declarations = List[String]()
     var used_frames = List[Int]()
     var out = String("")
@@ -889,7 +1012,10 @@ def instrument(source: String, module: String) raises -> Instrumented:
                 var body_indent = 0
                 if pending_is_loop:
                     body_indent = _body_indent(source_lines, number, pending)
-                if pending_excluded:
+                if pending_excluded or (
+                    pending_is_loop
+                    and _is_literal_nonempty_loop(pending, builtin_range)
+                ):
                     out += pending + ending
                 elif pending_is_loop:
                     _emit_loop(
@@ -974,7 +1100,9 @@ def instrument(source: String, module: String) raises -> Instrumented:
                 pending_excluded = excluded
                 continue
             var body_indent = _body_indent(source_lines, number, line)
-            if not excluded:
+            if not excluded and not _is_literal_nonempty_loop(
+                _strip_comment(line), builtin_range
+            ):
                 _emit_loop(
                     out,
                     branches,

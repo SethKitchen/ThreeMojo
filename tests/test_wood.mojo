@@ -26,7 +26,7 @@ from materials.wood import (
     wood_preset,
     wood_program,
 )
-from materials.nodes import NodeProgramId
+from materials.node_program_id import NodeProgramId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer

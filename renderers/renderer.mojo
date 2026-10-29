@@ -4053,7 +4053,7 @@ def _emit_strand_cap(
     var turn = Float32(pi) / Float32(steps)
     var inner = _strand_corner(ribbon, paint, end, profile[0], 0, profile[2])
     var outer = _strand_corner(ribbon, paint, end, profile[1], 0, 0)
-    for step in range(1, steps + 1):
+    for step in range(1, steps + 1):  # pragma: no branch
         var angle = turn * Float32(step)
         var side = cos(angle)
         var ahead = outward * sin(angle)

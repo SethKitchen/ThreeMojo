@@ -244,7 +244,7 @@ struct PID(ImplicitlyCopyable):
         self.last_input = 0
 
     def run(mut self, input: Float32, dt: Duration) raises -> Float32:
-        """Checked typed boundary. Run one step, `PID::Run`.
+        """Run one step, `PID::Run`.
 
         Args:
             input: The measurement.

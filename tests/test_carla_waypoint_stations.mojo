@@ -5,8 +5,7 @@
 
 """Review-grid station and public-pose controls from an independent oracle.
 
-Expected values come from tools/carla_lane_oracle/town-station-controls.json.
-The grid and original town are unchanged. This includes the three on-lane
+Expected values come from an independent exact-arithmetic oracle. The grid and original town are unchanged. This includes the three on-lane
 points whose default queries exhausted the reviewed head's global budget.
 """
 

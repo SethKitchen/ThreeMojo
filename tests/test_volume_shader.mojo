@@ -146,6 +146,11 @@ def test_an_iso_render_lights_the_surface_it_finds() raises:
         Int(middle.r) + Int(middle.g) + Int(middle.b) > 60,
         "the surface is lit",
     )
+    # three.js's lighting adds no ambient and no specular light: its locals
+    # hide the constants. The light is the colormap times the Lambert term.
+    assert_equal(Int(middle.r), 216)
+    assert_equal(Int(middle.g), 0)
+    assert_equal(Int(middle.b), 99)
     # Past the ball, where no texel reaches the threshold, nothing shows.
     var edge = image.get_pixel(SIZE // 2, 1)
     assert_equal(Int(edge.r) + Int(edge.g) + Int(edge.b), 0)

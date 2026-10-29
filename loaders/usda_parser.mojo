@@ -47,7 +47,7 @@ pads with `undefined`.
 """
 
 from core.ordinal import require_non_negative
-from loaders.bytes import ascii_digit, ascii_space
+from loaders.bytes import ascii_digit, ascii_space, bytes_match
 from loaders.js_number import js_parse_float
 from loaders.js_text import (
     is_js_space,
@@ -65,7 +65,7 @@ from loaders.json import (
     STRING,
     parse_json,
 )
-from loaders.three_mf import js_key_order
+from loaders.js_object import js_key_order
 from loaders.usd_specs import (
     SPEC_ATTRIBUTE,
     SPEC_PRIM,
@@ -240,7 +240,7 @@ def attribute_match(key: String) -> Optional[Tuple[String, String]]:
             continue
         var end = start + word
         var ends = List[Int]()
-        if String(key[byte = end : min(end + 2, len(bytes))]) == "[]":
+        if bytes_match(bytes, end, len(bytes), "[]"):
             ends.append(end + 2)
         ends.append(end)
         for type_end in ends:  # pragma: no branch

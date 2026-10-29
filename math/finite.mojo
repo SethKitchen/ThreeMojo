@@ -68,8 +68,6 @@ def require_positive_finite(value: Float64, message: String) raises:
 def non_negative_finite(value: Float64) -> Bool:
     """Return True when `value` is finite and zero or more.
 
-    Error: Never.
-
     Args:
         value: The number. A `Float32` converts exactly.
 
@@ -98,8 +96,6 @@ def require_non_negative_finite(value: Float64, message: String) raises:
 
 def unit_finite(value: Float64) -> Bool:
     """Return True when `value` is finite and from zero through one.
-
-    Error: Never.
 
     Args:
         value: The number. A `Float32` converts exactly.
@@ -183,8 +179,6 @@ def finite_float32(value: Float64, message: String) raises -> Float32:
 
 def stored_float32(value: Float64) -> Float64:
     """Return `value` as a `Float32` store reads it back.
-
-    Error: Never.
 
     Args:
         value: The number.

@@ -20,15 +20,7 @@ from std.tempfile import mkdtemp
 
 from tools._process import _remove_tree
 
-from tools._python_float import parse_float
-from tools._python_json import (
-    MISSING,
-    PY_BOOL,
-    PY_DICT,
-    PY_INT,
-    PY_LIST,
-    PyJson,
-)
+from tools._python_json import MISSING, PY_BOOL, PY_DICT, PY_LIST, PyJson
 from tools.carla_area_normals import normals_text
 from tools.carla_collapse_map import collapse_text
 from tools.carla_simplify import simplify_text
@@ -38,6 +30,7 @@ from tools.carla_town_finish import finish_text
 from tools.carla_town_near import near_text
 from tools.carla_town_uv import uv_text
 from tools.carla_town_weld import weld_text
+from tools._town_json import json_int
 
 
 comptime DIVISIONS = 200
@@ -78,8 +71,10 @@ def _border(doc: PyJson, root: Int) raises -> String:
     var positions = doc.at(root, "positions")
     var uvs = doc.at(root, "uvs")
     var triangles = doc.at(root, "triangles")
-    var target = _whole(doc, doc.at(root, "target"), "target is not an integer")
-    var keep = _whole(doc, doc.at(root, "keep"), "keep is not an integer")
+    var target = json_int(
+        doc, doc.at(root, "target"), "target is not an integer"
+    )
+    var keep = json_int(doc, doc.at(root, "keep"), "keep is not an integer")
     var small = _flag(doc, doc.at(root, "small"), "small is not a bool")
     var chosen = PyJson.parse(
         target_text(
@@ -96,7 +91,7 @@ def _border(doc: PyJson, root: Int) raises -> String:
     )
     if _flag(chosen, chosen.at(chosen.root, "whole"), "whole is not a bool"):
         return '{"same":true}'
-    var count = _whole(
+    var count = json_int(
         chosen, chosen.at(chosen.root, "count"), "count is not an integer"
     )
     var collapsed = PyJson.parse(
@@ -173,7 +168,9 @@ def _weld(doc: PyJson, root: Int) raises -> String:
     var positions = doc.at(root, "positions")
     var uvs = doc.at(root, "uvs")
     var triangles = doc.at(root, "triangles")
-    var target = _whole(doc, doc.at(root, "target"), "target is not an integer")
+    var target = json_int(
+        doc, doc.at(root, "target"), "target is not an integer"
+    )
     var chosen = PyJson.parse(
         target_text(
             '{"mode":"weld","triangles":'
@@ -213,7 +210,7 @@ def _weld(doc: PyJson, root: Int) raises -> String:
     )
     var prepare: String
     if not _flag(again, again.at(again.root, "whole"), "whole is not a bool"):
-        var count = _whole(
+        var count = json_int(
             again, again.at(again.root, "count"), "count is not an integer"
         )
         var collapsed = PyJson.parse(
@@ -353,7 +350,7 @@ def _transfer(
             sources += ","
             texture += ","
             facing += ","
-        var face = _whole(
+        var face = json_int(
             chosen, chosen.item(best, index), "index is not an integer"
         )
         sources += _face_points(doc, positions, triangles, face)
@@ -407,7 +404,7 @@ def _face_rows(
     for corner in range(3):
         if corner > 0:
             out += ","
-        var vertex = _whole(
+        var vertex = json_int(
             doc, doc.item(triangle, corner), "index is not an integer"
         )
         if vertex < 0 or vertex >= doc.length(rows):
@@ -481,13 +478,6 @@ def _bool(value: Bool) -> String:
     if value:
         return "true"
     return "false"
-
-
-def _whole(doc: PyJson, node: Int, message: String) raises -> Int:
-    """Return a JSON integer, or raise `message`."""
-    if doc.kind(node) != PY_INT:
-        raise Error(message)
-    return Int(parse_float(doc.text(node)))
 
 
 def main() raises:

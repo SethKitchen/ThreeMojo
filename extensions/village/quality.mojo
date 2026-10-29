@@ -20,6 +20,7 @@ each can be turned up or down alone:
 | `animal_coarseness` | Animals three times coarser | Each tier's own mesh |
 | `shadows` | `NO_SHADOWS` | `FULL_SHADOWS`: every caster every frame |
 | `shadow_size` | 64 texels | 8,192 texels |
+| `smooth_edges` | False: stair steps on the edges | True: FXAA smooths them |
 
 `game_quality` gives the four presets. `LOW` is for four cores, and
 `ULTRA` draws the village as the still picture does.
@@ -116,6 +117,8 @@ struct GameQuality(ImplicitlyCopyable):
     # side, from 64 to 8,192.
     var shadows: ShadowMode
     var shadow_size: Int
+    # Whether the frame's edges are smoothed before it is stretched.
+    var smooth_edges: Bool
 
     def check(self) raises:
         """Refuse a quality that cannot be drawn.
@@ -208,7 +211,7 @@ def game_quality(preset: QualityPreset) raises -> GameQuality:
         every fourth frame, a sky sample every 8 pixels, and a water
         sample every 8 pixels on a surface found every fourth frame,
         animals three times coarser, and cached shadows on a map of 1,024
-        texels.
+        texels. Every preset smooths the frame's edges.
         `MEDIUM`: half, fewer plants, every other frame, every 4 pixels,
         every 2 pixels, every other frame, twice as coarse, cached on
         2,048. `HIGH`: two thirds, many plants, every frame, every 2
@@ -222,18 +225,38 @@ def game_quality(preset: QualityPreset) raises -> GameQuality:
     """
     if preset == LOW:
         return GameQuality(
-            Float32(1) / 3, FEWEST_PLANTS, 4, 8, 8, 4, 3, CACHED_SHADOWS, 1024
+            Float32(1) / 3,
+            FEWEST_PLANTS,
+            4,
+            8,
+            8,
+            4,
+            3,
+            CACHED_SHADOWS,
+            1024,
+            True,
         )
     if preset == MEDIUM:
         return GameQuality(
-            0.5, FEWER_PLANTS, 2, 4, 2, 2, 2, CACHED_SHADOWS, 2048
+            0.5, FEWER_PLANTS, 2, 4, 2, 2, 2, CACHED_SHADOWS, 2048, True
         )
     if preset == HIGH:
         return GameQuality(
-            Float32(2) / 3, MANY_PLANTS, 1, 2, 2, 1, 1.5, CACHED_SHADOWS, 2048
+            Float32(2) / 3,
+            MANY_PLANTS,
+            1,
+            2,
+            2,
+            1,
+            1.5,
+            CACHED_SHADOWS,
+            2048,
+            True,
         )
     if preset == ULTRA:
-        return GameQuality(1, ALL_PLANTS, 1, 1, 1, 1, 1, FULL_SHADOWS, 4096)
+        return GameQuality(
+            1, ALL_PLANTS, 1, 1, 1, 1, 1, FULL_SHADOWS, 4096, True
+        )
     raise Error("A quality preset must be one of the four")
 
 

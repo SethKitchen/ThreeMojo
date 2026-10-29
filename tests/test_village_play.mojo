@@ -8,20 +8,22 @@ walks and jumps in front of the third-person camera."""
 
 from core.assets import Assets
 from core.scene import Scene
+from extensions.attire.outfit import Outfit
 from extensions.animals.registry import RABBIT
 from extensions.building.material import brick
 from extensions.humanoid.sex import FEMALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.field import LodBand
-from extensions.vegetation.ground import Ground, Pond
+from extensions.vegetation.ground import Ground, Lot, Pond, footpath
 from extensions.vegetation.meadow import Planting
+from controls.third_person_controls import yaw_of
 from extensions.village.character import (
     AIRBORNE,
     STANDING,
     MoveInput,
     no_input,
 )
-from extensions.village.house import HouseParameters
+from extensions.village.house import HouseParameters, house_lot
 from extensions.village.play import (
     FOCUS_HEIGHT,
     PlayParameters,
@@ -31,8 +33,17 @@ from extensions.village.play import (
     tree_obstacles,
 )
 from extensions.village.quality import LOW, ULTRA, game_quality
-from extensions.village.residents import Herd, ResidentsParameters, Villager
-from extensions.village.village import HousePlacement, VillageParameters
+from extensions.village.residents import (
+    Herd,
+    NO_HOUSE,
+    ResidentsParameters,
+    Villager,
+)
+from extensions.village.village import (
+    HousePlacement,
+    PATH_WIDTH,
+    VillageParameters,
+)
 from extensions.water.pebbles import pebble_bed
 from extensions.water.resolution import SpectrumResolution
 from render.png import DecodedImage
@@ -45,6 +56,7 @@ from std.testing import (
     assert_false,
     assert_true,
 )
+from math.vector3 import Vector3
 from units.si import (
     DEGREE,
     INCH,
@@ -137,14 +149,33 @@ def test_the_game_village_is_planted_at_its_quality_and_lived_in() raises:
     assert_almost_equal(game.start_z, 26, atol=1e-6)
     var people = default_residents()
     people.check()
-    assert_equal(len(people.villagers), 3)
+    assert_equal(len(people.villagers), 5)
     assert_equal(len(people.herds), 8)
-    var trunks = tree_obstacles(_village())
+    # Every person of the village is dressed, and so is the player.
+    for villager in people.villagers:
+        assert_true(len(villager.outfit.garments) >= 4)
+    assert_equal(len(game.outfit.garments), 4)
+    var village = _village()
+    ref placed = village.houses[0]
+    var lots: List[Lot] = [
+        house_lot(placed.house, placed.x, placed.z, placed.turn)
+    ]
+    var trunks = tree_obstacles(village, lots)
     assert_equal(len(trunks), 1)
     assert_almost_equal(trunks[0].radius, TRUNK * 0.5, atol=1e-6)
+    # A planting on the house's lot, or in the pond, does not grow, and
+    # has no trunk.
+    var crowded = _village()
+    crowded.meadow.plantings.append(Planting(0, 5, -6, 0.5))
+    crowded.meadow.plantings.append(Planting(0, 0, 4, 0.5))
+    assert_equal(len(tree_obstacles(crowded, lots)), 1)
+    # Nor does one on any other lot the meadow leaves bare, such as a
+    # footpath.
+    var path: List[Lot] = [footpath(5, 6, 7, 6, PATH_WIDTH)]
+    assert_equal(len(tree_obstacles(_village(), path)), 0)
     var bare = _village()
     bare.meadow.plantings = []
-    assert_equal(len(tree_obstacles(bare)), 0)
+    assert_equal(len(tree_obstacles(bare, lots)), 0)
 
 
 def test_a_player_walks_jumps_and_is_followed() raises:
@@ -195,11 +226,70 @@ def test_a_player_walks_jumps_and_is_followed() raises:
     assert_true(game.upscale_ms > 0)
 
 
+def test_a_player_walks_into_a_house_through_its_door() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var game = VillageGame(
+        scene,
+        assets,
+        Renderer(16, 16),
+        _game_parameters(),
+        pebble_bed(_bed()),
+        None,
+        32,
+        18,
+    )
+    ref ways = game.village.houses[0].interior.doorways
+    assert_equal(len(ways), 1)
+    var door = ways[0]
+    var middle = door.middle()
+    # Stand three meters out from the door, facing in, with the camera
+    # behind.
+    var x = middle.x - door.swing_x * 3
+    var z = middle.z - door.swing_z * 3
+    var ground = game.terrain.ground.height_at(x, z)
+    game.player.position = Vector3(x, game.terrain.height_at(x, z, ground), z)
+    var yaw = yaw_of(Vector3(door.swing_x, 0, door.swing_z))
+    game.player.heading = yaw
+    game.view.yaw = yaw
+    var ahead = MoveInput(1, 0, 0, 0, False, False)
+    var step = Duration(0.1, SECOND)
+    var nearest = Float32(1)
+    var widest = Float32(0)
+    for _ in range(45):
+        _ = game.tick(scene, assets, ahead, step)
+        nearest = min(nearest, game.reach)
+        widest = max(widest, game.village.doors.angles[0])
+    # Look round: the eye swings off the doorway, behind the front wall.
+    var look = MoveInput(0, 0, 1, 0, False, False)
+    for _ in range(8):
+        _ = game.tick(scene, assets, look, step)
+        nearest = min(nearest, game.reach)
+    # The player stands on the house's floor, the door opened as the
+    # player came, and a wall came between the player and the camera's
+    # eye.
+    var feet = game.player.position
+    assert_true(game.terrain.floor_under(feet.x, feet.z, feet.y) >= 0)
+    assert_almost_equal(
+        feet.y, game.village.houses[0].interior.floor_height, atol=1e-4
+    )
+    assert_true(widest > 1)
+    assert_true(nearest < 1)
+    # Under the ceiling, the eye stays below it.
+    var ceiling = game.terrain.ceiling_over(feet.x, feet.z, feet.y)
+    assert_true(game.camera.position.y < ceiling)
+    game.render(scene, assets)
+    assert_equal(game.window.width, 32)
+
+
 def test_a_full_size_frame_is_not_stretched() raises:
     var assets = Assets()
     var scene = Scene()
     var parameters = _game_parameters()
     parameters.quality = game_quality(ULTRA)
+    # A village with no house and no prop.
+    parameters.village.houses = []
+    parameters.village.props = []
     var game = VillageGame(
         scene,
         assets,
@@ -210,12 +300,15 @@ def test_a_full_size_frame_is_not_stretched() raises:
         24,
         14,
     )
+    assert_equal(len(game.terrain.walls), 0)
     _ = game.tick(scene, assets, no_input(), Duration(0.1, SECOND))
     game.render(scene, assets)
     assert_equal(game.fast.width, 24)
     assert_equal(game.window.width, 24)
     assert_equal(game.window.height, 14)
     assert_equal(game.upscale_ms, 0)
+    # Every preset smooths the frame's edges.
+    assert_true(game.smooth_ms > 0)
 
 
 def test_a_villager_moves_and_a_frame_one_row_short_is_stretched() raises:
@@ -224,12 +317,23 @@ def test_a_villager_moves_and_a_frame_one_row_short_is_stretched() raises:
     var parameters = _game_parameters()
     parameters.residents.herds = []
     parameters.residents.villagers = [
-        Villager(HumanoidSpec(Length(60.0, INCH), FEMALE), 2, -2, 1, 1, False)
+        Villager(
+            HumanoidSpec(Length(60.0, INCH), FEMALE),
+            2,
+            -2,
+            1,
+            1,
+            False,
+            Outfit(),
+            NO_HOUSE,
+        )
     ]
     # Nineteen twentieths of 10 by 20 rounds to 10 by 19: as wide as the
     # window, and a row short.
     parameters.quality = game_quality(ULTRA)
     parameters.quality.render_scale = 0.95
+    # The edges are left as they are drawn.
+    parameters.quality.smooth_edges = False
     var game = VillageGame(
         scene,
         assets,
@@ -248,6 +352,7 @@ def test_a_villager_moves_and_a_frame_one_row_short_is_stretched() raises:
     assert_equal(game.fast.height, 19)
     assert_equal(game.window.height, 20)
     assert_true(game.upscale_ms > 0)
+    assert_equal(game.smooth_ms, 0)
 
 
 def main() raises:

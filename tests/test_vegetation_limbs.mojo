@@ -11,9 +11,9 @@ from extensions.vegetation.limbs import (
     CrownShape,
     LimbParameters,
     Lobe,
-    _unit,
     grow_limbs,
     limb_mesh,
+    unit_or_up,
 )
 from math.vector3 import Vector3
 from std.math import cos, sin
@@ -301,8 +301,9 @@ def test_a_limb_mesh_draws_tubes_down_to_the_thinnest() raises:
 
 def test_a_unit_vector_falls_back_to_up() raises:
     """A vector near zero has no direction, so it is taken as +y."""
-    assert_almost_equal(_unit(Vector3(0, 0, 0)).y, 1)
-    assert_almost_equal(_unit(Vector3(0, 0, 2)).z, 1)
+    assert_almost_equal(unit_or_up(Vector3(0, 0, 0)).y, 1)
+    assert_almost_equal(unit_or_up(Vector3(0, 0, 2)).z, 1)
+    assert_almost_equal(unit_or_up(Vector3(3, 0, 4)).x, 0.6, atol=1e-6)
 
 
 def main() raises:

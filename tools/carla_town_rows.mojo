@@ -14,16 +14,8 @@ array of those values, in order.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._json_tools import quote_ascii
-from tools._python_json import (
-    PY_BOOL,
-    PY_DICT,
-    PY_FLOAT,
-    PY_INT,
-    PY_LIST,
-    PY_STR,
-    PyJson,
-)
+from tools._python_json import PyJson
+from tools._town_json import json_dump
 
 
 def rows_text(path: String) raises -> String:
@@ -50,7 +42,7 @@ def rows_text(path: String) raises -> String:
             raise Error("layout line is not JSON")
         var parsed = PyJson.parse(line)
         doc.append(array, doc.adopt(parsed, parsed.root))
-    return _dump(doc, array)
+    return json_dump(doc, array)
 
 
 def _decode(data: List[UInt8]) raises -> String:
@@ -139,38 +131,6 @@ def _lines(text: String) -> List[String]:
     if start < len(raw):
         out.append(String(text[byte=start:]))
     return out^
-
-
-def _dump(doc: PyJson, node: Int) raises -> String:
-    """Return JSON in insertion order, as `json.dumps` writes it."""
-    var kind = doc.kind(node)
-    if kind == PY_STR:
-        return quote_ascii(doc.text(node))
-    if kind == PY_INT or kind == PY_FLOAT:
-        return doc.text(node)
-    if kind == PY_BOOL:
-        return "true" if doc.flag(node) else "false"
-    if kind == PY_LIST:
-        var out = String("[")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ", "
-            out += _dump(doc, doc.item(node, index))
-        out += "]"
-        return out
-    if kind == PY_DICT:
-        var out = String("{")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ", "
-            out += quote_ascii(doc.key(node, index))
-            out += ": "
-            out += _dump(doc, doc.value(node, index))
-        out += "}"
-        return out
-    return "null"
 
 
 def main() raises:

@@ -16,8 +16,9 @@ triangle and prints the texture coordinates it finds there.
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float, python_repr
-from tools._python_json import PY_DICT, PY_FLOAT, PY_INT, PY_LIST, PyJson
+from tools._python_float import python_repr
+from tools._python_json import PY_DICT, PY_LIST, PyJson
+from tools._town_json import json_number
 
 
 def uv_text(text: String) raises -> String:
@@ -158,9 +159,9 @@ def _vec3(
             var point = doc.item(triangle, corner)
             if doc.kind(point) != PY_LIST or doc.length(point) != 3:
                 raise Error("vector is not 3 numbers")
-            xs.append(_number(doc, doc.item(point, 0)))
-            ys.append(_number(doc, doc.item(point, 1)))
-            zs.append(_number(doc, doc.item(point, 2)))
+            xs.append(json_number(doc, doc.item(point, 0)))
+            ys.append(json_number(doc, doc.item(point, 1)))
+            zs.append(json_number(doc, doc.item(point, 2)))
 
 
 def _vec2(
@@ -177,18 +178,8 @@ def _vec2(
             var point = doc.item(triangle, corner)
             if doc.kind(point) != PY_LIST or doc.length(point) != 2:
                 raise Error("vector is not 2 numbers")
-            xs.append(_number(doc, doc.item(point, 0)))
-            ys.append(_number(doc, doc.item(point, 1)))
-
-
-def _number(doc: PyJson, node: Int) raises -> Float64:
-    """Return a JSON number as a float."""
-    var kind = doc.kind(node)
-    if kind == PY_FLOAT:
-        return doc.number(node)
-    if kind == PY_INT:
-        return parse_float(doc.text(node))
-    raise Error("coordinate is not a number")
+            xs.append(json_number(doc, doc.item(point, 0)))
+            ys.append(json_number(doc, doc.item(point, 1)))
 
 
 def main() raises:

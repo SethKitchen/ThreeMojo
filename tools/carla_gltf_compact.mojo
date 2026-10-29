@@ -115,9 +115,9 @@ def _strip(mut doc: PyJson) raises:
             for index in range(doc.length(attributes)):
                 var key = doc.key(attributes, index)
                 if (
-                    _starts(key, "JOINTS_")
-                    or _starts(key, "WEIGHTS_")
-                    or _starts(key, "COLOR_")
+                    key.startswith("JOINTS_")
+                    or key.startswith("WEIGHTS_")
+                    or key.startswith("COLOR_")
                 ):
                     drop.append(key)
             for index in range(len(drop)):
@@ -254,18 +254,6 @@ def _int(doc: PyJson, node: Int) raises -> Int:
     if negative:
         return -value
     return value
-
-
-def _starts(text: String, prefix: String) -> Bool:
-    """Return whether `text` begins with `prefix`."""
-    var raw = text.as_bytes()
-    var head = prefix.as_bytes()
-    if len(raw) < len(head):
-        return False
-    for index in range(len(head)):
-        if raw[index] != head[index]:
-            return False
-    return True
 
 
 def _copy(data: Span[UInt8, _]) -> List[UInt8]:

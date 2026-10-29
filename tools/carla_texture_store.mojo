@@ -16,21 +16,14 @@ from std.os import makedirs
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float
-from tools._python_json import (
-    PY_BOOL,
-    PY_DICT,
-    PY_INT,
-    PY_LIST,
-    PY_STR,
-    PyJson,
-)
+from tools._python_json import PY_BOOL, PY_DICT, PY_LIST, PyJson
 from tools._sha256 import sha256_hex
 from tools.carla_image import image_file
 from tools.carla_image_pack import pack_text
 from tools.carla_jpeg import jpeg_text
 from tools.carla_png import png_text
 from tools.carla_texture_plan import plan_text
+from tools._town_json import json_int, json_text
 
 
 def store_text(text: String) raises -> String:
@@ -52,9 +45,9 @@ def store_text(text: String) raises -> String:
     var root = doc.root
     if doc.kind(root) != PY_DICT:
         raise Error("store request is not an object")
-    var op = _text(doc, doc.at(root, "op"), "op is not color or masked")
-    var out_dir = _text(doc, doc.at(root, "out_dir"), "out_dir is not text")
-    var limit = _whole(
+    var op = json_text(doc, doc.at(root, "op"), "op is not color or masked")
+    var out_dir = json_text(doc, doc.at(root, "out_dir"), "out_dir is not text")
+    var limit = json_int(
         doc, doc.at(root, "max_size"), "max_size is not an integer"
     )
     if limit < 0:
@@ -75,16 +68,16 @@ def _store_color(
     doc: PyJson, root: Int, out_dir: String, limit: Int
 ) raises -> String:
     """Package one color or data texture."""
-    var source = _text(doc, doc.at(root, "source"), "source is not text")
+    var source = json_text(doc, doc.at(root, "source"), "source is not text")
     var color = _flag(doc, doc.at(root, "color"), "color is not a bool")
     var opened = PyJson.parse(image_file(source))
-    var width = _whole(
+    var width = json_int(
         opened, opened.at(opened.root, "width"), "size is not an integer"
     )
-    var height = _whole(
+    var height = json_int(
         opened, opened.at(opened.root, "height"), "size is not an integer"
     )
-    var mode = _text(
+    var mode = json_text(
         opened, opened.at(opened.root, "mode"), "image mode is not text"
     )
     var count = width * height * 4
@@ -107,10 +100,10 @@ def _store_color(
                 _flag(
                     plan, plan.at(plan.root, "resize"), "resize is not a bool"
                 ),
-                _whole(
+                json_int(
                     plan, plan.at(plan.root, "width"), "size is not an integer"
                 ),
-                _whole(
+                json_int(
                     plan,
                     plan.at(plan.root, "height"),
                     "size is not an integer",
@@ -125,20 +118,20 @@ def _store_masked(
     doc: PyJson, root: Int, out_dir: String, limit: Int
 ) raises -> String:
     """Package one color image with a cut-out mask."""
-    var color_path = _text(doc, doc.at(root, "color"), "color is not text")
-    var mask_path = _text(doc, doc.at(root, "mask"), "mask is not text")
+    var color_path = json_text(doc, doc.at(root, "color"), "color is not text")
+    var mask_path = json_text(doc, doc.at(root, "mask"), "mask is not text")
     var color = PyJson.parse(image_file(color_path))
     var mask = PyJson.parse(image_file(mask_path))
-    var width = _whole(
+    var width = json_int(
         color, color.at(color.root, "width"), "size is not an integer"
     )
-    var height = _whole(
+    var height = json_int(
         color, color.at(color.root, "height"), "size is not an integer"
     )
-    var mask_w = _whole(
+    var mask_w = json_int(
         mask, mask.at(mask.root, "width"), "size is not an integer"
     )
-    var mask_h = _whole(
+    var mask_h = json_int(
         mask, mask.at(mask.root, "height"), "size is not an integer"
     )
     var color_px = _ints(
@@ -147,7 +140,7 @@ def _store_masked(
     var mask_px = _ints(
         mask, mask.at(mask.root, "pixels"), mask_w * mask_h * 4, "pixels"
     )
-    var mask_mode = _text(
+    var mask_mode = json_text(
         mask, mask.at(mask.root, "mode"), "image mode is not text"
     )
     var plan = PyJson.parse(
@@ -166,10 +159,10 @@ def _store_masked(
                 _flag(
                     plan, plan.at(plan.root, "resize"), "resize is not a bool"
                 ),
-                _whole(
+                json_int(
                     plan, plan.at(plan.root, "width"), "size is not an integer"
                 ),
-                _whole(
+                json_int(
                     plan,
                     plan.at(plan.root, "height"),
                     "size is not an integer",
@@ -182,13 +175,13 @@ def _store_masked(
 
 def _commit(out_dir: String, plan: PyJson, packed: PyJson) raises -> String:
     """Encode the packed samples and write the named file."""
-    var width = _whole(
+    var width = json_int(
         packed, packed.at(packed.root, "width"), "size is not an integer"
     )
-    var height = _whole(
+    var height = json_int(
         packed, packed.at(packed.root, "height"), "size is not an integer"
     )
-    var bands = _whole(
+    var bands = json_int(
         packed, packed.at(packed.root, "bands"), "bands is not an integer"
     )
     var pixels = _ints(
@@ -199,8 +192,8 @@ def _commit(out_dir: String, plan: PyJson, packed: PyJson) raises -> String:
     )
     return _write(
         out_dir,
-        _text(plan, plan.at(plan.root, "format"), "format is not text"),
-        _whole(
+        json_text(plan, plan.at(plan.root, "format"), "format is not text"),
+        json_int(
             plan, plan.at(plan.root, "quality"), "quality is not an integer"
         ),
         _flag(plan, plan.at(plan.root, "optimize"), "optimize is not a bool"),
@@ -374,16 +367,9 @@ def _ints(
     var out = List[Int]()
     for index in range(count):
         out.append(
-            _whole(doc, doc.item(node, index), "pixel is not an integer")
+            json_int(doc, doc.item(node, index), "pixel is not an integer")
         )
     return out^
-
-
-def _text(doc: PyJson, node: Int, message: String) raises -> String:
-    """Return a JSON string, or raise `message`."""
-    if doc.kind(node) != PY_STR:
-        raise Error(message)
-    return doc.text(node)
 
 
 def _flag(doc: PyJson, node: Int, message: String) raises -> Bool:
@@ -391,13 +377,6 @@ def _flag(doc: PyJson, node: Int, message: String) raises -> Bool:
     if doc.kind(node) != PY_BOOL:
         raise Error(message)
     return doc.flag(node)
-
-
-def _whole(doc: PyJson, node: Int, message: String) raises -> Int:
-    """Return a JSON integer, or raise `message`."""
-    if doc.kind(node) != PY_INT:
-        raise Error(message)
-    return Int(parse_float(doc.text(node)))
 
 
 def _join(directory: String, name: String) -> String:

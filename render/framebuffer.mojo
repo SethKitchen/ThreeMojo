@@ -41,7 +41,8 @@ decodes from. `set_rgb` and `rgb` default to the working space too, as
 arithmetic on the same numbers, in the working space. What three.js's
 `Color` lacks is an alpha, which this keeps and the HSL operations leave
 alone. CSS strings and names are read and written by `render.css_color`,
-through `FloatColor(style=...)`, `style()` and `hex_string()`.
+which holds three.js's `setStyle`, `getStyle` and `getHexString`, so that a
+module that only draws does not build the CSS reader.
 
 The depth buffer holds one NDC depth per pixel, cleared to infinity so that
 the first fragment to arrive always wins. Depth is what lets geometry be drawn
@@ -51,7 +52,6 @@ scene happening to be convex.
 
 from core.extent import require_positive_extent, require_texel_count
 from core.ordinal import require_positive
-from render.css_color import format_style, hex_string, parse_style
 from render.srgb import (
     LINEAR,
     SRGB,
@@ -134,8 +134,6 @@ struct Color(Equatable, ImplicitlyCopyable):
 def rgb_is_white(color: Color) -> Bool:
     """Return True when red, green, and blue are all 255.
 
-    Error: Never.
-
     Args:
         color: The color. Alpha is not read.
 
@@ -148,8 +146,6 @@ def rgb_is_white(color: Color) -> Bool:
 
 def rgb_is_black(color: Color) -> Bool:
     """Return True when red, green, and blue are all zero.
-
-    Error: Never.
 
     Args:
         color: The color. Alpha is not read.
@@ -165,8 +161,6 @@ def append_color(mut values: List[UInt8], color: Color):
     """Append `color`'s four channels.
 
     Nothing. Four bytes are appended.
-
-    Error: Never.
 
     Args:
         values: The list that receives red, green, blue, and alpha.
@@ -335,47 +329,6 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         else:
             raise Error("An HSL color is given in LINEAR or SRGB")
         self.a = 1.0
-
-    def __init__(out self, *, style: String, space: ColorSpace = SRGB) raises:
-        """Read a CSS color string, three.js's `setStyle`. Opaque.
-
-        `render.css_color.parse_style` reads it: `rgb()`, `rgba()`,
-        `hsl()`, `hsla()`, `#rgb`, `#rrggbb` or a color name.
-
-        Args:
-            style: The string.
-            space: The space its numbers are in, sRGB by default as in
-                three.js.
-
-        Raises:
-            Error: If the string is not a CSS color three.js reads, or the
-                space is neither `LINEAR` nor `SRGB`.
-        """
-        self = parse_style(style, space)
-
-    def style(self, space: ColorSpace = SRGB) raises -> String:
-        """Return this color as a CSS string, three.js's `getStyle`.
-
-        Args:
-            space: `SRGB` for `rgb(r,g,b)`, `LINEAR` for
-                `color(srgb-linear r g b)`.
-
-        Returns:
-            The string.
-
-        Raises:
-            Error: If the space is neither `LINEAR` nor `SRGB`.
-        """
-        return format_style(self, space)
-
-    def hex_string(self) -> String:
-        """Return this color encoded to sRGB as six lowercase hexadecimal
-        digits, three.js's `getHexString`.
-
-        Returns:
-            The digits, with no `#`.
-        """
-        return hex_string(self)
 
     @staticmethod
     def _from_hsl(
@@ -808,8 +761,6 @@ def append_float_rgb(mut values: List[Float32], color: FloatColor):
 
     Nothing. Three numbers are appended.
 
-    Error: Never.
-
     Args:
         values: The list that receives the three channels.
         color: The linear color. Alpha is not written.
@@ -825,8 +776,6 @@ def append_float_color(mut values: List[Float32], color: FloatColor):
 
     Nothing. Four numbers are appended.
 
-    Error: Never.
-
     Args:
         values: The list that receives red, green, blue, and alpha.
         color: The linear color.
@@ -840,8 +789,6 @@ def append_float_color(mut values: List[Float32], color: FloatColor):
 
 def opaque_from_linear(red: Float64, green: Float64, blue: Float64) -> Color:
     """Return linear light as the opaque sRGB bytes a material holds.
-
-    Error: Never.
 
     Args:
         red: Linear red.
@@ -864,8 +811,6 @@ def unit_byte(value: Float32) -> UInt8:
     to the nearest byte. A half rounds up. NaN and positive infinity are
     one, so the byte is 255. Negative infinity is zero.
 
-    Error: Never.
-
     Args:
         value: The fraction.
 
@@ -884,8 +829,6 @@ def rounded_byte(value: Float64) -> UInt8:
 
     A half rounds up.
 
-    Error: Never.
-
     Args:
         value: The number.
 
@@ -900,8 +843,6 @@ def rounded_byte(value: Float32) -> UInt8:
     """Return a number held from 0 to 255 and rounded to a byte.
 
     A half rounds up.
-
-    Error: Never.
 
     Args:
         value: The number.

@@ -75,7 +75,6 @@ from extensions.humanoid.skeleton.look import (
     vein_phong,
 )
 from extensions.humanoid.skeleton.place import (
-    place_mesh,
     place_mesh_node,
     place_root,
 )

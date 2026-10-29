@@ -7,9 +7,20 @@
 flipbooks and their routes."""
 
 from core.assets import Assets
+from extensions.attire.cover import Cover
+from extensions.attire.garment import Garment
+from extensions.attire.kinds import (
+    LINEN,
+    OVER_LAYER,
+    TORSO_SLOT,
+    UNDER_LAYER,
+    WOOL,
+)
+from extensions.attire.outfit import Outfit
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.animals.registry import CHICKEN, RABBIT, SpeciesId
+from extensions.humanoid.rig.joints import CHEST, HIPS, SPINE
 from extensions.humanoid.sex import FEMALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.ground import Ground, Lot, Pond
@@ -23,11 +34,19 @@ from extensions.village.character import (
     MoveInput,
     Obstacle,
 )
+from extensions.village.clothes import dyed_outfit
+from extensions.village.interior import Doorway
 from extensions.village.residents import (
+    APPROACH,
+    INDOORS,
+    THRESHOLD,
     Body,
     Flipbook,
+    GIVE_UP,
     Herd,
+    HouseId,
     JUMP_PLAY,
+    NO_HOUSE,
     Residents,
     ResidentsParameters,
     Route,
@@ -35,10 +54,12 @@ from extensions.village.residents import (
     clip_of,
     facing_turn,
     play_rate,
+    visit,
     wander_route,
 )
 from core.geometry_store import GeometryId
 from math.vector3 import Vector3
+from render.framebuffer import Color
 from std.math import pi
 from std.testing import (
     TestSuite,
@@ -65,6 +86,12 @@ from units.si import (
 def _flat() raises -> Ground:
     """Return level ground with no pond."""
     return Ground(hill_height=Length(0.0, METER))
+
+
+def _homes() -> List[Doorway]:
+    """Return one home: a door at (2, 4), a meter wide along x, that
+    swings toward -z into its house."""
+    return [Doorway(2, 4, 1, 0, 0, -1, 1, 2.1, 0, True)]
 
 
 def _small() -> ResidentsParameters:
@@ -122,6 +149,53 @@ def test_a_route_walks_rests_and_moves_on() raises:
         _ = Route([Vector3(0, 0, 0)], Duration(-1.0, SECOND))
 
 
+def test_a_stuck_resident_gives_up_on_its_point() raises:
+    var ground = _flat()
+    var walker = Character(
+        CharacterParameters(), 0, 0, Angle(0.0, RADIAN), ground
+    )
+    var route = Route(
+        [Vector3(0, 0, -5), Vector3(5, 0, 0)], Duration(1.0, SECOND)
+    )
+    # Standing still on its way, it waits, then rests and moves on.
+    var second = Duration(1.0, SECOND)
+    _ = route.steer(walker, second)
+    _ = route.steer(walker, second)
+    assert_equal(route.next, 0)
+    assert_true(route.stalled >= 2)
+    _ = route.steer(walker, second)
+    var steer = route.steer(walker, second)
+    assert_equal(route.next, 1)
+    assert_equal(steer[0].forward, 0)
+    assert_true(route.stalled == 0)
+    # Moving on its way, it is not stuck.
+    route.resting = 0
+    walker.velocity = Vector3(1, 0, 0)
+    _ = route.steer(walker, second)
+    assert_true(route.stalled == 0)
+    assert_true(GIVE_UP > 2 and GIVE_UP < 3)
+
+
+def test_residents_bump_into_each_other() raises:
+    var ground = _flat()
+    var assets = Assets()
+    var scene = Scene()
+    var p = _small()
+    p.rest = Duration(0.0, SECOND)
+    # Two rabbits that both start and graze at one point: each pushes the
+    # other away.
+    p.herds.append(Herd(RABBIT, 2, 0, 0, 0, 8))
+    var lots = List[Lot]()
+    var residents = Residents(scene, assets, p, ground, lots, _homes())
+    for _ in range(30):
+        residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
+    ref a = residents.beasts[0].character
+    ref b = residents.beasts[1].character
+    var gap = (a.position - b.position).length()
+    var reach = a.parameters.radius.to(METER) + b.parameters.radius.to(METER)
+    assert_true(gap > reach * 0.8)
+
+
 def test_a_wander_keeps_off_the_lots_and_out_of_the_water() raises:
     var pond = Ground(
         hill_height=Length(0.0, METER),
@@ -176,16 +250,47 @@ def test_residents_that_cannot_be_built_are_refused() raises:
     for _ in range(65):
         p.villagers.append(
             Villager(
-                HumanoidSpec(Length(60.0, INCH), FEMALE), 0, 0, 1, 1, False
+                HumanoidSpec(Length(60.0, INCH), FEMALE),
+                0,
+                0,
+                1,
+                1,
+                False,
+                Outfit(),
+                NO_HOUSE,
             )
         )
     with assert_raises(contains="villagers"):
         p.check()
     p = _small()
     p.villagers.append(
-        Villager(HumanoidSpec(Length(60.0, INCH), FEMALE), 0, 0, 2000, 1, False)
+        Villager(
+            HumanoidSpec(Length(60.0, INCH), FEMALE),
+            0,
+            0,
+            2000,
+            1,
+            False,
+            Outfit(),
+            NO_HOUSE,
+        )
     )
     with assert_raises(contains="wander"):
+        p.check()
+    p = _small()
+    p.villagers.append(
+        Villager(
+            HumanoidSpec(Length(60.0, INCH), FEMALE),
+            0,
+            0,
+            1,
+            1,
+            False,
+            Outfit(),
+            HouseId(-2),
+        )
+    )
+    with assert_raises(contains="home"):
         p.check()
     p = _small()
     for _ in range(65):
@@ -203,6 +308,10 @@ def test_residents_that_cannot_be_built_are_refused() raises:
     p = _small()
     p.herds.append(Herd(RABBIT, 1, 0, 0, 2000, 1))
     with assert_raises(contains="pasture"):
+        p.check()
+    p = _small()
+    p.herds.append(Herd(RABBIT, 1, 0, 0, 1, 1, flee=Length(-1.0, METER)))
+    with assert_raises(contains="flee"):
         p.check()
     p = _small()
     p.triangles = 10
@@ -232,9 +341,16 @@ def test_a_body_stands_where_its_character_stands_and_plays_its_stance() raises:
     var assets = Assets()
     var scene = Scene()
     var body = Body(
-        scene, assets, HumanoidSpec(Length(60.0, INCH), FEMALE), 500, 8
+        scene,
+        assets,
+        HumanoidSpec(Length(60.0, INCH), FEMALE),
+        Outfit(),
+        500,
+        8,
     )
     assert_true(body.lift > 0.6 and body.lift < 1.0)
+    # An empty outfit leaves the body bare.
+    assert_equal(len(body.garments), 0)
     var walker = Character(
         CharacterParameters(), 2, 3, Angle(0.0, RADIAN), ground
     )
@@ -255,19 +371,66 @@ def test_a_body_stands_where_its_character_stands_and_plays_its_stance() raises:
     assert_almost_equal(jump.time_scale, JUMP_PLAY, atol=1e-6)
 
 
+def test_a_garment_that_shows_nothing_casts_nothing() raises:
+    var assets = Assets()
+    var scene = Scene()
+    # A long coat over a narrow band round the waist hides the band.
+    var band = Cover()
+    band.reach_to(SPINE, 0.7, 0.3)
+    var coat = Cover()
+    coat.reach_to(HIPS)
+    coat.reach_to(SPINE)
+    coat.reach_to(CHEST)
+    var outfit = Outfit()
+    outfit.add(
+        Garment("band", TORSO_SLOT, UNDER_LAYER, LINEN, band^, Color(9, 9, 9))
+    )
+    outfit.add(
+        Garment("coat", TORSO_SLOT, OVER_LAYER, WOOL, coat^, Color(90, 90, 90))
+    )
+    var body = Body(
+        scene,
+        assets,
+        HumanoidSpec(Length(60.0, INCH), FEMALE),
+        outfit,
+        500,
+        8,
+    )
+    assert_equal(len(body.garments), 2)
+    assert_equal(body.garments[0], -1)
+    assert_true(scene.skinned_meshes[body.garments[1]].cast_shadow)
+
+
 def test_residents_wander_and_stand_in_the_players_way() raises:
     var ground = _flat()
     var assets = Assets()
     var scene = Scene()
     var p = _small()
     p.villagers.append(
-        Villager(HumanoidSpec(Length(60.0, INCH), FEMALE), 0, 0, 3, 4, True)
+        Villager(
+            HumanoidSpec(Length(60.0, INCH), FEMALE),
+            0,
+            0,
+            3,
+            4,
+            True,
+            dyed_outfit(2, True),
+            HouseId(0),
+        )
     )
     p.herds.append(Herd(RABBIT, 2, 5, 5, 2, 8))
     p.herds.append(Herd(CHICKEN, 1, -5, 5, 2, 9))
     var lots = List[Lot]()
-    var residents = Residents(scene, assets, p, ground, lots)
+    var residents = Residents(scene, assets, p, ground, lots, _homes())
     assert_equal(len(residents.bodies), 1)
+    # The villager's route ends with a visit to their home.
+    var walk = residents.walks[0].points.copy()
+    assert_almost_equal(walk[len(walk) - 3].z, 4 - INDOORS, atol=1e-5)
+    # The villager wears a shirt, hose, a tunic, boots and a hood, and
+    # each garment casts a shadow.
+    assert_equal(len(residents.bodies[0].garments), 5)
+    for mesh in residents.bodies[0].garments:
+        assert_true(scene.skinned_meshes[mesh].cast_shadow)
     assert_equal(len(residents.beasts), 3)
     assert_equal(len(residents.books), 2)
     assert_equal(len(residents.books[0].frames), 2)
@@ -275,9 +438,7 @@ def test_residents_wander_and_stand_in_the_players_way() raises:
     assert_equal(len(residents.books[1].frames), 0)
     var start = residents.beasts[0].character.position
     for _ in range(20):
-        residents.update(
-            scene, Duration(0.1, SECOND), ground, lots, List[Obstacle]()
-        )
+        residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
     var moved = residents.beasts[0].character.position - start
     assert_true(moved.length() > 0.01)
     var mesh = residents.beasts[0].mesh
@@ -295,15 +456,78 @@ def test_residents_wander_and_stand_in_the_players_way() raises:
     )
 
 
+def test_a_shy_animal_runs_from_the_player_and_a_tame_one_does_not() raises:
+    var ground = _flat()
+    var assets = Assets()
+    var scene = Scene()
+    var p = _small()
+    p.rest = Duration(30.0, SECOND)
+    # A shy rabbit and a tame one, each grazing at one point.
+    p.herds.append(Herd(RABBIT, 1, 0, 0, 0, 8, flee=Length(6.0, METER)))
+    p.herds.append(Herd(RABBIT, 1, 0, 3, 0, 9))
+    var lots = List[Lot]()
+    var residents = Residents(scene, assets, p, ground, lots, _homes())
+    var player = Vector3(-2, 0, 1.5)
+    var shy = residents.beasts[0].character.position
+    var tame = residents.beasts[1].character.position
+    var before = (shy - player).length()
+    for _ in range(10):
+        residents.update(
+            scene, Duration(0.1, SECOND), ground, List[Obstacle](), player
+        )
+    ref runner = residents.beasts[0].character
+    # The shy one ran straight away, faster than it walks.
+    assert_true((runner.position - player).length() > before + 0.5)
+    assert_true(runner.stance == RUNNING)
+    assert_true(
+        runner.parameters.run_speed.to(METER_PER_SECOND)
+        > runner.parameters.walk_speed.to(METER_PER_SECOND) * 2.9
+    )
+    # The tame one kept grazing where it was.
+    var still = residents.beasts[1].character.position - tame
+    assert_true(still.length() < 0.05)
+
+
+def test_a_villager_visits_their_home_through_its_door() raises:
+    var route = Route([Vector3(0, 0, 0)], Duration(1.0, SECOND))
+    visit(route, _homes()[0])
+    assert_equal(len(route.points), 6)
+    # The door's middle is (2.5, 4); the house is toward -z.
+    assert_almost_equal(route.points[1].z, 4 + APPROACH, atol=1e-5)
+    assert_almost_equal(route.points[2].z, 4 + THRESHOLD, atol=1e-5)
+    assert_almost_equal(route.points[3].z, 4 - INDOORS, atol=1e-5)
+    assert_almost_equal(route.points[3].x, 2.5, atol=1e-5)
+    assert_almost_equal(route.points[5].z, 4 + APPROACH, atol=1e-5)
+    # A home that is not one of the village's houses is refused.
+    var ground = _flat()
+    var assets = Assets()
+    var scene = Scene()
+    var p = _small()
+    p.villagers.append(
+        Villager(
+            HumanoidSpec(Length(60.0, INCH), FEMALE),
+            0,
+            0,
+            3,
+            4,
+            False,
+            Outfit(),
+            HouseId(1),
+        )
+    )
+    with assert_raises(contains="home"):
+        _ = Residents(scene, assets, p, ground, List[Lot](), _homes())
+
+
 def test_an_empty_village_has_no_residents() raises:
     var ground = _flat()
     var assets = Assets()
     var scene = Scene()
     var lots = List[Lot]()
-    var residents = Residents(scene, assets, _small(), ground, lots)
-    residents.update(
-        scene, Duration(0.1, SECOND), ground, lots, List[Obstacle]()
+    var residents = Residents(
+        scene, assets, _small(), ground, lots, List[Doorway]()
     )
+    residents.update(scene, Duration(0.1, SECOND), ground, List[Obstacle]())
     assert_equal(len(residents.obstacles()), 0)
     assert_equal(len(scene.meshes), 0)
 

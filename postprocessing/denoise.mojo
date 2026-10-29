@@ -29,7 +29,7 @@ port seeds it from `math.utils.SeededRandom`; see `postprocessing.gtao`.
 """
 
 from math.vector3 import Vector3
-from postprocessing.display_nodes import luminance_of
+from math.utils import rec709_luminance
 from postprocessing.gtao import denoise_disk, denoise_noise
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView
@@ -129,7 +129,7 @@ def denoise_pixel(
     var texel = source.sample(u, v)
     if depth >= 1 or normal.dot(normal) == 0:
         return texel
-    var center = luminance_of(texel.r, texel.g, texel.b)
+    var center = rec709_luminance(texel.r, texel.g, texel.b)
     var here = view.position(u, v, depth)
     # The node turns the disk with a 64 by 64 noise texture. A shorter
     # list would read past its last texel.
@@ -163,7 +163,7 @@ def denoise_pixel(
         )
         var luma_similarity = max(
             1
-            - abs(luminance_of(neighbor.r, neighbor.g, neighbor.b) - center)
+            - abs(rec709_luminance(neighbor.r, neighbor.g, neighbor.b) - center)
             / settings.luma_phi,
             Float32(0),
         )

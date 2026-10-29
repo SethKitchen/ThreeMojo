@@ -103,16 +103,3 @@ That nonzero coefficient selects the non-affine path.
 Adding or subtracting the requested one-meter step rounds to the unchanged s.
 Both lane directions must reject promptly.
 This guard prevents the demonstrated nonprogress loop. It does not implement the separate map-wide work budgets in issue #580.
-
-## Independent proof and controls
-
-Run `python3 tools/carla_lane_oracle/translated_parameter_resolution.py`.
-The script needs only the Python standard library.
-It writes its report under `out/carla-lane-oracle` by default.
-Set `CARLA_LANE_ORACLE_OUTPUT` to choose another directory.
-
-The proof uses exact integer and Fraction arithmetic for nearest-even rounding.
-It checks all 15 nonzero fixture subintervals and all 16 complete contiguous partitions.
-It also checks both signed directions, midpoint parity, exact stored-point distances, and the nonterminal one-meter step.
-Its source pin binds the proof to the reviewed scalar operations.
-These are source-only controls. Native suite, coverage, format, consumer, and performance gates remain required.

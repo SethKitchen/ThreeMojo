@@ -12,7 +12,9 @@ from extensions.carla.curve_sum2 import _sum2_supported_environment
 from extensions.carla.curve_bounds import _try_lane_envelope_capture
 from extensions.carla.spiral_moment_proof import (
     _all_spiral_nodes_quadrant_zero,
-    _try_build_spiral_moments,
+)
+from extensions.carla.spiral_moment_table import (
+    _try_lookup_spiral_moments,
     _try_spiral_moment_expansion,
 )
 from extensions.carla.spiral_grouped_lane import _try_grouped_lane_jet
@@ -306,7 +308,7 @@ def test_second_count_quadrant_refusal_keeps_complete_attempt_debit() raises:
     assert_equal(terms, 2065)
     assert_equal(output.record_at, -1)
     var moment_terms = 0
-    var moments = _try_build_spiral_moments(4, moment_terms, 10000)
+    var moments = _try_lookup_spiral_moments(4, moment_terms, 10000)
     assert_true(Bool(moments))
     assert_false(
         Bool(

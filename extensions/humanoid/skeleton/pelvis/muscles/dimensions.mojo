@@ -955,8 +955,6 @@ def _fan(
 def max_f(a: Float32, b: Float32) -> Float32:
     """Return the larger of two radii.
 
-    Error: Never.
-
     Args:
         a: A radius.
         b: Another radius.

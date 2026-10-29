@@ -21,13 +21,12 @@ zero. See the Math wiki page for the finite and exceptional contracts.
 """
 from core.ordinal import ordinal_valid, require_valid, require_positive
 
-from math.quaternion import Quaternion
 from math.random import mulberry32_step
 from math.remainder import remainder_float64
 from math.sine import fraction
 from math.smoothstep import smoothstep
 from std.sys import is_gpu
-from std.math import cos, exp, floor, isfinite, sin
+from std.math import exp, floor, isfinite
 from std.memory import bitcast
 from units.si import Angle, Duration, SECOND
 
@@ -62,8 +61,6 @@ def clamp(value: Float64, low: Float64, high: Float64) -> Float64:
 
 def clamp(value: Int, low: Int, high: Int) -> Int:
     """Return `value` limited to the range from `low` to `high`.
-
-    Error: Never.
 
     Args:
         value: The value.
@@ -119,8 +116,6 @@ def edge_index(index: Int, count: Int) -> Int:
     An index before zero reads the first place. An index at `count` or
     past it reads the last place.
 
-    Error: Never.
-
     Args:
         index: The requested index.
         count: How many places there are. One or more.
@@ -137,8 +132,6 @@ def clamped_texel(column: Int, row: Int, width: Int, height: Int) -> Int:
 
     A column or a row before zero reads the first place. One at the
     width or the height, or past it, reads the last place.
-
-    Error: Never.
 
     Args:
         column: The column.
@@ -500,7 +493,7 @@ def interleaved_gradient_noise(x: Float32, y: Float32) -> Float32:
 def rec709_luminance(r: Float32, g: Float32, b: Float32) -> Float32:
     """Return rec. 709 luminance to four decimal places.
 
-    three.js's `colorToLuminance`. `luminance_of` uses the longer weights.
+    three.js's `colorToLuminance`, and the `luminance` of its shaders.
 
     Args:
         r: Red.
@@ -516,7 +509,7 @@ def rec709_luminance(r: Float32, g: Float32, b: Float32) -> Float32:
 def rec709_luminance(r: Float64, g: Float64, b: Float64) -> Float64:
     """Return rec. 709 luminance to four decimal places.
 
-    three.js's `colorToLuminance`. `luminance_of` uses the longer weights.
+    three.js's `colorToLuminance`, and the `luminance` of its shaders.
 
     Args:
         r: Red.
@@ -565,8 +558,6 @@ def js_round_int(value: Float64) -> Int:
 
     JavaScript's `Math.round`, stored as an `Int`. -2.5 gives -2.
 
-    Error: Never.
-
     Args:
         value: The number.
 
@@ -596,8 +587,6 @@ def clamp_unit(value: Float32) -> Float32:
 
     An `acos` or `asin` argument uses this hold.
 
-    Error: Never.
-
     Args:
         value: The value.
 
@@ -612,8 +601,6 @@ def clamp_unit(value: Float64) -> Float64:
     """Return `value` held from minus one to one.
 
     An `acos` or `asin` argument uses this hold.
-
-    Error: Never.
 
     Args:
         value: The value.
@@ -1052,77 +1039,6 @@ def generate_uuid(mut generator: SeededRandom) -> String:
             out += String(digits[byte = pick >> 4 : (pick >> 4) + 1])
             out += String(digits[byte = pick & 15 : (pick & 15) + 1])
     return out
-
-
-@fieldwise_init
-struct ProperEulerOrder(Equatable, ImplicitlyCopyable, Writable):
-    """Which axes three proper Euler angles turn about, three.js's order
-    string for `setQuaternionFromProperEuler`, as a type rather than a bare
-    int. A proper order turns about one axis, a second, then the first
-    again.
-    """
-
-    var value: Int
-
-    def is_valid(self) -> Bool:
-        """Return True if this names one of the six proper orders.
-
-        Returns:
-            Whether it is `XYX`, `YZY`, `ZXZ`, `XZX`, `YXY` or `ZYZ`.
-        """
-        return ordinal_valid(self.value, 5)
-
-
-comptime PROPER_XYX = ProperEulerOrder(0)
-comptime PROPER_YZY = ProperEulerOrder(1)
-comptime PROPER_ZXZ = ProperEulerOrder(2)
-comptime PROPER_XZX = ProperEulerOrder(3)
-comptime PROPER_YXY = ProperEulerOrder(4)
-comptime PROPER_ZYZ = ProperEulerOrder(5)
-
-
-def quaternion_from_proper_euler(
-    a: Angle, b: Angle, c: Angle, order: ProperEulerOrder
-) raises -> Quaternion:
-    """Return the rotation of three proper Euler angles, three.js's
-    `setQuaternionFromProperEuler`.
-
-    Args:
-        a: The turn about the first axis.
-        b: The turn about the second axis.
-        c: The second turn about the first axis.
-        order: Which axes.
-
-    Returns:
-        The rotation.
-
-    Raises:
-        Error: If the order is not one of the six. three.js warns and
-            leaves the quaternion unchanged.
-    """
-    require_valid(
-        order.is_valid(),
-        "A proper Euler order is XYX, YZY, ZXZ, XZX, YXY or ZYZ",
-    )
-    var c2 = cos(b.value / 2)
-    var s2 = sin(b.value / 2)
-    var c13 = cos((a.value + c.value) / 2)
-    var s13 = sin((a.value + c.value) / 2)
-    var c1_3 = cos((a.value - c.value) / 2)
-    var s1_3 = sin((a.value - c.value) / 2)
-    var c3_1 = cos((c.value - a.value) / 2)
-    var s3_1 = sin((c.value - a.value) / 2)
-    if order == PROPER_XYX:
-        return Quaternion(c2 * s13, s2 * c1_3, s2 * s1_3, c2 * c13)
-    if order == PROPER_YZY:
-        return Quaternion(s2 * s1_3, c2 * s13, s2 * c1_3, c2 * c13)
-    if order == PROPER_ZXZ:
-        return Quaternion(s2 * c1_3, s2 * s1_3, c2 * s13, c2 * c13)
-    if order == PROPER_XZX:
-        return Quaternion(c2 * s13, s2 * s3_1, s2 * c3_1, c2 * c13)
-    if order == PROPER_YXY:
-        return Quaternion(s2 * c3_1, c2 * s13, s2 * s3_1, c2 * c13)
-    return Quaternion(s2 * s3_1, s2 * c3_1, c2 * s13, c2 * c13)
 
 
 @fieldwise_init

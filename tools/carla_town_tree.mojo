@@ -18,22 +18,17 @@ from std.os import makedirs
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float
-from tools._python_json import (
-    MISSING,
-    PY_BOOL,
-    PY_DICT,
-    PY_FLOAT,
-    PY_INT,
-    PY_LIST,
-    PY_NONE,
-    PY_STR,
-    PyJson,
-)
+from tools._python_json import PY_DICT, PY_LIST, PyJson
 from tools.carla_image_pack import joined_rgba
 from tools.carla_png import png_bytes
 from tools.carla_town_impostor import impostor_text
 from tools.carla_town_splat import SplatView, splat_view
+from tools._town_json import (
+    json_compact,
+    json_member,
+    json_named_int,
+    json_text,
+)
 
 
 def tree_text(text: String) raises -> String:
@@ -55,14 +50,18 @@ def tree_text(text: String) raises -> String:
     var doc = PyJson.parse(text)
     if doc.kind(doc.root) != PY_DICT:
         raise Error("tree request is not an object")
-    var size = _whole(doc, _member(doc, doc.root, "size"), "size")
-    var samples = _whole(doc, _member(doc, doc.root, "samples"), "samples")
+    var size = json_named_int(doc, json_member(doc, doc.root, "size"), "size")
+    var samples = json_named_int(
+        doc, json_member(doc, doc.root, "samples"), "samples"
+    )
     if size < 1:
         raise Error("size is not positive")
     if samples < 1:
         raise Error("samples is not positive")
-    var out = _text(doc, _member(doc, doc.root, "out"), "out is not text")
-    var parts = _member(doc, doc.root, "parts")
+    var out = json_text(
+        doc, json_member(doc, doc.root, "out"), "out is not text"
+    )
+    var parts = json_member(doc, doc.root, "parts")
     if doc.kind(parts) != PY_LIST or doc.length(parts) == 0:
         raise Error("parts are not a list")
     var frame_text = impostor_text(_frame_request(doc, parts, size))
@@ -71,7 +70,7 @@ def tree_text(text: String) raises -> String:
     if frame.kind(views) != PY_LIST or frame.length(views) != 2:
         raise Error("a tree has two views")
     var light = impostor_text('{"mode":"light"}')
-    var parts_json = _compact(doc, parts)
+    var parts_json = json_compact(doc, parts)
     var left = _draw(
         frame, frame.item(views, 0), size, samples, light, parts_json
     )
@@ -93,7 +92,7 @@ def _frame_request(doc: PyJson, parts: Int, size: Int) raises -> String:
         var part = doc.item(parts, index)
         if doc.kind(part) != PY_DICT:
             raise Error("part is not an object")
-        out += _compact(doc, _member(doc, part, "positions"))
+        out += json_compact(doc, json_member(doc, part, "positions"))
     out += "]}"
     return out
 
@@ -110,19 +109,19 @@ def _draw(
     var request = String('{"mode":"axis","columns":')
     request += String(size)
     request += ',"rows":'
-    request += _compact(frame, _member(frame, view, "rows"))
+    request += json_compact(frame, json_member(frame, view, "rows"))
     request += ',"samples":'
     request += String(samples)
     request += ',"cap":4096,"seed":7,"across":'
-    request += _compact(frame, _member(frame, view, "across"))
+    request += json_compact(frame, json_member(frame, view, "across"))
     request += ',"left":'
-    request += _compact(frame, _member(frame, view, "left"))
+    request += json_compact(frame, json_member(frame, view, "left"))
     request += ',"top":'
-    request += _compact(frame, _member(frame, view, "top"))
+    request += json_compact(frame, json_member(frame, view, "top"))
     request += ',"span_u":'
-    request += _compact(frame, _member(frame, view, "width"))
+    request += json_compact(frame, json_member(frame, view, "width"))
     request += ',"span_v":'
-    request += _compact(frame, _member(frame, view, "height"))
+    request += json_compact(frame, json_member(frame, view, "height"))
     request += ',"fill":true,"light":'
     request += light
     request += ',"parts":'
@@ -227,77 +226,6 @@ def _directory(path: String) -> String:
     if slash <= 0:
         return String(".")
     return String(path[byte=:slash])
-
-
-def _member(doc: PyJson, node: Int, key: String) raises -> Int:
-    """Return a member, or raise `KeyError` text when it is absent."""
-    var found = doc.get(node, key)
-    if found == MISSING:
-        raise Error("KeyError: '" + key + "'")
-    return found
-
-
-def _whole(doc: PyJson, node: Int, message: String) raises -> Int:
-    """Return a JSON integer, or raise `message`."""
-    if doc.kind(node) != PY_INT:
-        raise Error(message + " is not an integer")
-    return Int(parse_float(doc.text(node)))
-
-
-def _text(doc: PyJson, node: Int, message: String) raises -> String:
-    """Return a JSON string, or raise `message`."""
-    if doc.kind(node) != PY_STR:
-        raise Error(message)
-    return doc.text(node)
-
-
-def _compact(doc: PyJson, node: Int) raises -> String:
-    """Return JSON with no spaces, in insertion order."""
-    var kind = doc.kind(node)
-    if kind == PY_DICT:
-        var out = String("{")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ","
-            out += _quote(doc.key(node, index))
-            out += ":"
-            out += _compact(doc, doc.value(node, index))
-        out += "}"
-        return out
-    if kind == PY_LIST:
-        var out = String("[")
-        var count = doc.length(node)
-        for index in range(count):
-            if index > 0:
-                out += ","
-            out += _compact(doc, doc.item(node, index))
-        out += "]"
-        return out
-    if kind == PY_STR:
-        return _quote(doc.text(node))
-    if kind == PY_BOOL:
-        if doc.flag(node):
-            return "true"
-        return "false"
-    if kind == PY_NONE:
-        return "null"
-    return doc.text(node)
-
-
-def _quote(text: String) -> String:
-    """Return one JSON string."""
-    var out = String('"')
-    var raw = text.as_bytes()
-    for index in range(len(raw)):
-        var byte = raw[index]
-        if byte == 34 or byte == 92:
-            out += "\\"
-            out += chr(Int(byte))
-        else:
-            out += chr(Int(byte))
-    out += '"'
-    return out
 
 
 def main() raises:

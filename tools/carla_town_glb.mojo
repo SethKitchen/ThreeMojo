@@ -57,7 +57,7 @@ def pack_glb(out_dir: String, name: String) raises:
             tree.set(view, "byteLength", tree.integer(len(data)))
             tree.append(views, view)
             var mime = "image/jpeg"
-            if _ends(uri, ".png"):
+            if uri.endswith(".png"):
                 mime = "image/png"
             var fresh = tree.object()
             tree.set(
@@ -156,19 +156,6 @@ def _u32(mut out: List[UInt8], value: Int):
     for _ in range(4):
         out.append(UInt8(rest & 255))
         rest >>= 8
-
-
-def _ends(text: String, suffix: String) -> Bool:
-    """Return whether `text` ends with `suffix`."""
-    var raw = text.as_bytes()
-    var tail = suffix.as_bytes()
-    if len(raw) < len(tail):
-        return False
-    var start = len(raw) - len(tail)
-    for index in range(len(tail)):
-        if raw[start + index] != tail[index]:
-            return False
-    return True
 
 
 def _remove_tree(path: String) raises:

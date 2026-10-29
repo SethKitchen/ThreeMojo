@@ -214,12 +214,12 @@ scene.update_lods(camera_position)                  # before each frame
 | `scene.add_lod(lod)` | Add an LOD. Each level becomes a child of its node, and only level zero shows. |
 | `scene.add_lod_level(index, object, distance, hysteresis)` | Add a level to an LOD in the scene. |
 | `scene.remove_lod_level(index, distance) -> Bool` | Remove a level, and take its node off the LOD's node. |
-| `scene.update_lods(eye)` | Choose, show and hide the levels of every LOD with `auto_update`, for a camera at `eye`. |
-| `scene.update_lod(index, eye)` | The same for one LOD, whatever its `auto_update`. |
+| `scene.update_lods(eye, zoom=1)` | Choose, show and hide the levels of every LOD with `auto_update`, for a camera at `eye`. |
+| `scene.update_lod(index, eye, zoom=1)` | The same for one LOD, whatever its `auto_update`. |
 
 Choosing a level shows its node and hides the other levels' nodes, as three.js's `LOD.update` sets `visible`. The renderer, the raycaster and the bounds need nothing more: they see the level that is shown, as they see any node. A hidden level casts no shadow and is not picked.
 
-`update_lods` measures the distance from `eye` to the node's world origin. It shows the last level whose distance has been reached. Below the second level's distance it shows the first. An LOD with one level or none does not change, as in three.js. `update_lods` updates the scene when it is done.
+`update_lods` measures the distance from `eye` to the node's world origin and divides it by `zoom`, as three.js divides it by `camera.zoom`. It shows the last level whose distance has been reached. Below the second level's distance it shows the first. An LOD with one level or none does not change, as in three.js. `update_lods` updates the scene when it is done.
 
 three.js's renderer calls `LOD.update(camera)` on every LOD while it draws. This renderer does not change the scene it draws. So call `scene.update_lods` before each frame, as you call `scene.update`. A scene never given `update_lods` shows level zero.
 

@@ -261,9 +261,10 @@ struct OrthographicCamera(Camera):
             The view matrix, from where the camera was placed.
 
         Raises:
-            Error: If the camera sits at its own target, or up is parallel to
-                the view direction, or the camera rides a node -- ask
-                `view_matrix_in`.
+            Error: If a position is not finite, up is zero or not finite,
+                or the camera rides a node -- ask `view_matrix_in`. A camera
+                at its own target, or with up along the view, is turned as
+                `look_at` turns it.
         """
         return placed_view_matrix(
             self.node, self.position, self.target, self.up

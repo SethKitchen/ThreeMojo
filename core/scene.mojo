@@ -83,7 +83,11 @@ from core.object3d import (
 from core.ordinal import require_index_in_count, require_valid
 from lights.light import Light
 from materials.material import MaterialId
-from math.finite import require_non_negative_finite, require_unit_finite
+from math.finite import (
+    require_non_negative_finite,
+    require_positive_finite,
+    require_unit_finite,
+)
 from math.matrix4 import Matrix4, compose
 from math.quaternion import Quaternion
 from math.euler import XYZ, Euler
@@ -151,6 +155,20 @@ def require_mesh(index: Int, count: Int) raises:
         Error: If no mesh has that index.
     """
     require_index_in_count(index, count, "No mesh has that index")
+
+
+def _require_lod_zoom(zoom: Float32) raises:
+    """Refuse a zoom an LOD distance cannot be divided by.
+
+    Args:
+        zoom: The camera's zoom.
+
+    Raises:
+        Error: If the zoom is not positive and finite.
+    """
+    require_positive_finite(
+        Float64(zoom), "An LOD update needs a positive, finite zoom"
+    )
 
 
 def require_lod_index(index: Int, count: Int) raises:
@@ -1393,7 +1411,7 @@ struct Scene(Movable):
         self._check(index)
         return self.traverse(index)
 
-    def update_lods(mut self, eye: Vector3) raises:
+    def update_lods(mut self, eye: Vector3, zoom: Float32 = 1) raises:
         """Choose the level of every LOD whose `auto_update` is set for a
         camera at `eye`, show it and hide the others, then update the
         scene: what three.js's renderer does with `LOD.update(camera)` as
@@ -1404,23 +1422,28 @@ struct Scene(Movable):
 
         Args:
             eye: The camera's position in world space.
+            zoom: The camera's zoom. Each distance is divided by it, as
+                three.js divides by `camera.zoom`.
 
         Raises:
-            Error: If the scene is stale, or an LOD names a node that is
-                not there.
+            Error: If the zoom is not positive and finite, the scene is
+                stale, or an LOD names a node that is not there.
         """
+        _require_lod_zoom(zoom)
         # Every distance is measured before any level changes: showing a
         # level leaves the scene stale, and a stale scene has no world
         # positions to measure the next LOD by.
         var distances = List[Length]()
         for index in range(len(self.lods)):
-            distances.append(self._lod_distance(index, eye))
+            distances.append(self._lod_distance(index, eye, zoom))
         for index in range(len(self.lods)):
             if self.lods[index].auto_update:
                 self._choose_level(index, distances[index])
         self.update()
 
-    def update_lod(mut self, index: Int, eye: Vector3) raises:
+    def update_lod(
+        mut self, index: Int, eye: Vector3, zoom: Float32 = 1
+    ) raises:
         """Choose one LOD's level for a camera at `eye`, show it and hide
         the others, then update the scene: three.js's `LOD.update(camera)`,
         whatever the LOD's `auto_update`.
@@ -1428,20 +1451,25 @@ struct Scene(Movable):
         Args:
             index: Which LOD, as its position in `lods`.
             eye: The camera's position in world space.
+            zoom: The camera's zoom; see `update_lods`.
 
         Raises:
-            Error: If no LOD has that index, the scene is stale, or the
-                LOD names a node that is not there.
+            Error: If the zoom is not positive and finite, no LOD has that
+                index, the scene is stale, or the LOD names a node that is
+                not there.
         """
+        _require_lod_zoom(zoom)
         require_lod_index(index, len(self.lods))
-        self._choose_level(index, self._lod_distance(index, eye))
+        self._choose_level(index, self._lod_distance(index, eye, zoom))
         self.update()
 
-    def _lod_distance(self, index: Int, eye: Vector3) raises -> Length:
-        """How far a camera at `eye` is from one LOD's node."""
-        return Length(
-            (eye - self.world_position(self.lods[index].node)).length(), METER
-        )
+    def _lod_distance(
+        self, index: Int, eye: Vector3, zoom: Float32
+    ) raises -> Length:
+        """How far a camera at `eye` is from one LOD's node, divided by the
+        camera's zoom, as three.js divides it."""
+        var gap = (eye - self.world_position(self.lods[index].node)).length()
+        return Length(gap / zoom, METER)
 
     def _choose_level(mut self, index: Int, distance: Length) raises:
         """Choose and show one LOD's level. three.js changes nothing for an
@@ -1999,17 +2027,26 @@ def _gyroscope_world(parent: Matrix4, local: Matrix4) raises -> Matrix4:
     Returns:
         The world transform.
 
+    A transform scaled to zero along an axis has no turn to read. three.js
+    reads it as not a number and throws it away, keeping the position and
+    the axis lengths, so here a flat world transform keeps those and a flat
+    local transform turns the gyroscope by nothing.
+
     Raises:
-        Error: Never for a transform that decomposes.
+        Error: If a transform is not finite.
     """
     var world = Matrix4(copy=parent)
     world.multiply(local)
-    var at = Vector3(0, 0, 0)
+    var at = Vector3.from_matrix_position(world)
     var turn = Quaternion.identity()
-    var size = Vector3(1, 1, 1)
-    world.decompose(at, turn, size)
-    var own_at = Vector3(0, 0, 0)
+    var size = Vector3(
+        world.column_length(0), world.column_length(1), world.column_length(2)
+    )
+    if world.has_extent():
+        world.decompose(at, turn, size)
     var own_turn = Quaternion.identity()
-    var own_size = Vector3(1, 1, 1)
-    local.decompose(own_at, own_turn, own_size)
+    if local.has_extent():
+        var own_at = Vector3(0, 0, 0)
+        var own_size = Vector3(1, 1, 1)
+        local.decompose(own_at, own_turn, own_size)
     return compose(at, own_turn, size)

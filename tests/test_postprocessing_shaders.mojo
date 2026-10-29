@@ -444,7 +444,7 @@ def test_color_correction_colorify_bleach_technicolor_and_exposure() raises:
         FloatColor(0.25, 1.0, 3.0, 0.6),
     )
     var lum = effect_luminance(0.5, 0.25, 0.8)
-    near(lum, 0.2126729 * 0.5 + 0.7151522 * 0.25 + 0.072175 * 0.8)
+    near(lum, 0.2126 * 0.5 + 0.7152 * 0.25 + 0.0722 * 0.8)
     same_color(
         colorify_color(color, FloatColor(1, 0.5, 0, 1)),
         FloatColor(lum, lum * 0.5, 0, 0.6),

@@ -16,8 +16,9 @@ from std.math import floor, sqrt
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._python_float import parse_float, python_repr
-from tools._python_json import PY_DICT, PY_FLOAT, PY_INT, PY_LIST, PyJson
+from tools._python_float import python_repr
+from tools._python_json import PY_DICT, PyJson
+from tools._town_json import json_number, json_triangles, json_vec3
 
 
 def weld_text(text: String) raises -> String:
@@ -40,12 +41,12 @@ def weld_text(text: String) raises -> String:
     var px = List[Float64]()
     var py = List[Float64]()
     var pz = List[Float64]()
-    _vec3(doc, doc.at(root, "positions"), px, py, pz)
+    json_vec3(doc, doc.at(root, "positions"), px, py, pz)
     if len(px) == 0:
         raise Error("positions are empty")
-    var faces = _triangles(doc, doc.at(root, "triangles"), len(px))
-    var divisions = _number(doc, doc.at(root, "divisions"))
-    var minimum = _number(doc, doc.at(root, "minimum"))
+    var faces = json_triangles(doc, doc.at(root, "triangles"), len(px))
+    var divisions = json_number(doc, doc.at(root, "divisions"))
+    var minimum = json_number(doc, doc.at(root, "minimum"))
     var low_x = px[0]
     var low_y = py[0]
     var low_z = pz[0]
@@ -326,59 +327,6 @@ def _sort_ints(mut values: List[Int]):
             values[slot] = values[slot - 1]
             slot -= 1
         values[slot] = key
-
-
-def _vec3(
-    doc: PyJson,
-    node: Int,
-    mut xs: List[Float64],
-    mut ys: List[Float64],
-    mut zs: List[Float64],
-) raises:
-    """Read a list of 3-vectors."""
-    if doc.kind(node) != PY_LIST:
-        raise Error("vectors are not a list")
-    for index in range(doc.length(node)):
-        var point = doc.item(node, index)
-        if doc.kind(point) != PY_LIST or doc.length(point) != 3:
-            raise Error("vector is not 3 numbers")
-        xs.append(_number(doc, doc.item(point, 0)))
-        ys.append(_number(doc, doc.item(point, 1)))
-        zs.append(_number(doc, doc.item(point, 2)))
-
-
-def _triangles(doc: PyJson, node: Int, count: Int) raises -> List[Int]:
-    """Return triangle indices."""
-    if doc.kind(node) != PY_LIST:
-        raise Error("triangles are not a list")
-    var out = List[Int]()
-    for index in range(doc.length(node)):
-        var triangle = doc.item(node, index)
-        if doc.kind(triangle) != PY_LIST or doc.length(triangle) != 3:
-            raise Error("triangle is not three indices")
-        for corner in range(3):
-            var face = _whole(doc, doc.item(triangle, corner))
-            if face < 0 or face >= count:
-                raise Error("index out of range")
-            out.append(face)
-    return out^
-
-
-def _number(doc: PyJson, node: Int) raises -> Float64:
-    """Return a JSON number as a float."""
-    var kind = doc.kind(node)
-    if kind == PY_FLOAT:
-        return doc.number(node)
-    if kind == PY_INT:
-        return parse_float(doc.text(node))
-    raise Error("coordinate is not a number")
-
-
-def _whole(doc: PyJson, node: Int) raises -> Int:
-    """Return a JSON integer."""
-    if doc.kind(node) != PY_INT:
-        raise Error("index is not an integer")
-    return Int(parse_float(doc.text(node)))
 
 
 @no_inline

@@ -19,6 +19,7 @@ from extensions.water.spectrum import require_ocean_patch
 from extensions.water.surface import SurfaceField, sample_surface
 from math.utils import max3, min3
 from math.vector3 import Vector3
+from render.fillrule import pixel_index, shifted_pixel_index
 from render.tasks import TaskGroup
 from math.norm import squared_length3
 from std.math import abs, floor, hypot, isfinite, sqrt
@@ -436,17 +437,70 @@ def _splat_channel(
     ref splat = settings[]
     var verts = splat.grid + 1
     var at = plane.unsafe_offset(splat.channel * splat.n * splat.n)
+    var side = Float32(splat.n)
     for j in range(splat.grid):  # pragma: no branch
         for i in range(splat.grid):  # pragma: no branch
             var a = j * verts + i
             var b = a + 1
             var c = a + verts
             var d = c + 1
+            # The cell's reach in patches, as `_splat` finds each corner.
+            var reach = _cell_reach(floor_x, floor_z, a, b, c, d, splat)
             for instance in range(9):  # pragma: no branch
                 var ox = Float32(instance % 3 - 1)
                 var oz = Float32(instance // 3 - 1)
+                # A copy wholly a texel past an edge covers no texel.
+                if (
+                    (reach[1] + ox) * side < -1
+                    or (reach[0] + ox) * side > side + 1
+                    or (reach[3] + oz) * side < -1
+                    or (reach[2] + oz) * side > side + 1
+                ):
+                    continue
                 _splat(at, floor_x, floor_z, live, a, b, c, ox, oz, splat)
                 _splat(at, floor_x, floor_z, live, b, d, c, ox, oz, splat)
+
+
+def _cell_reach(
+    floor_x: Pointer[Float32, ImmutAnyOrigin],
+    floor_z: Pointer[Float32, ImmutAnyOrigin],
+    a: Int,
+    b: Int,
+    c: Int,
+    d: Int,
+    splat: _Splat,
+) -> Tuple[Float32, Float32, Float32, Float32]:
+    """Return the least and the greatest x, then z, of a cell's four
+    corners on the floor, in patches from the texture's corner.
+
+    Each corner is found as `_splat` finds it. Rounding keeps the order of
+    values, so every copy of a corner that `_splat` finds lies inside the
+    copy of the reach."""
+    var pa = _floor_patches(floor_x, floor_z, a, splat)
+    var pb = _floor_patches(floor_x, floor_z, b, splat)
+    var pc = _floor_patches(floor_x, floor_z, c, splat)
+    var pd = _floor_patches(floor_x, floor_z, d, splat)
+    return (
+        min(min(pa[0], pb[0]), min(pc[0], pd[0])),
+        max(max(pa[0], pb[0]), max(pc[0], pd[0])),
+        min(min(pa[1], pb[1]), min(pc[1], pd[1])),
+        max(max(pa[1], pb[1]), max(pc[1], pd[1])),
+    )
+
+
+def _floor_patches(
+    floor_x: Pointer[Float32, ImmutAnyOrigin],
+    floor_z: Pointer[Float32, ImmutAnyOrigin],
+    vertex: Int,
+    splat: _Splat,
+) -> Tuple[Float32, Float32]:
+    """Return where one corner's ray meets the floor, in patches from the
+    texture's corner, as `_splat` finds it."""
+    var slot = vertex * 3 + splat.channel
+    return (
+        (floor_x[unsafe_offset=slot] - splat.shift_x) / splat.patch,
+        (floor_z[unsafe_offset=slot] - splat.shift_z) / splat.patch,
+    )
 
 
 def _splat(
@@ -494,10 +548,10 @@ def _splat(
     var max_x = max3(ax, bx, cx)
     var min_y = min3(ay, by, cy)
     var max_y = max3(ay, by, cy)
-    var x0 = _caustic_low(min_x)
-    var x1 = _caustic_high(max_x)
-    var y0 = _caustic_low(min_y)
-    var y1 = _caustic_high(max_y)
+    var x0 = pixel_index(min_x, False)
+    var x1 = shifted_pixel_index(max_x, False, 1)
+    var y0 = pixel_index(min_y, False)
+    var y1 = shifted_pixel_index(max_y, False, 1)
     if x0 < 0:
         x0 = 0
     if y0 < 0:
@@ -512,49 +566,6 @@ def _splat(
             var py = Float32(y) + 0.5
             if caustic_covers(px, py, ax, ay, bx, by, cx, cy, area2):
                 plane[unsafe_offset=y * n + x] += intensity
-
-
-def _caustic_low(value: Float32) -> Int:
-    """Return the first texel at or before a caustic edge.
-
-    A value that is not finite, or that does not fit in an integer, is
-    past every texel. `Int` of such a float is not that coordinate.
-
-    Args:
-        value: The near edge, in texels.
-
-    Returns:
-        The floor, or `Int.MAX` or `Int.MIN` when `value` does not fit.
-    """
-    # `Float32(Int.MAX)` is 2^63, as `Float64(Int.MAX)` is, and the floor
-    # of a `Float32` is a `Float32`: the same test and index without
-    # `Float64`, which a Metal kernel cannot run.
-    if not isfinite(value) or value >= Float32(Int.MAX):
-        return Int.MAX
-    if value <= -Float32(Int.MAX):
-        return Int.MIN
-    return Int(floor(value))
-
-
-def _caustic_high(value: Float32) -> Int:
-    """Return the texel just past a caustic edge.
-
-    See `_caustic_low`. The walk is half-open, so the far edge moves one
-    texel outward when that step still fits.
-
-    Args:
-        value: The far edge, in texels.
-
-    Returns:
-        The floor plus one, or `Int.MAX` or `Int.MIN` when `value` does
-        not fit.
-    """
-    # The test and the floor in `Float32`, as in `_caustic_low`.
-    if not isfinite(value) or value >= Float32(Int.MAX):
-        return Int.MAX
-    if value <= -Float32(Int.MAX):
-        return Int.MIN
-    return Int(floor(value)) + 1
 
 
 def caustic_covers(

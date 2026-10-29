@@ -68,8 +68,6 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 ### Navigation safety
 
-- [x] [Reviewed CARLA consumer successors](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-fixed-s-nearest#reviewed-consumer-successors): one pinned ledger with exact source, token and test chains [#703](https://github.com/SethKitchen/ThreeMojo/issues/703)
-
 <details>
 <summary>Implemented: 1</summary>
 
@@ -129,13 +127,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 82</summary>
+<summary>Implemented: 70</summary>
 
-- [x] [Literal loop receipt](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#constant-loop-outcome-proofs): `tools/coverage_loop_seal.mojo` writes and checks the sealed loop receipt [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
-
-- [x] [Coverage generation checkpoint](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/coverage_loop_begin.mojo` writes the generation checkpoint [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
-
-- [x] [Coverage capture](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/coverage_io.mojo` captures one suite, reports a failed suite's last lines, checks the loop proof, and replays the captures [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
+- [x] [Coverage capture](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/coverage_io.mojo` captures one suite, reports a failed suite's last lines, and replays the captures [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Compiled coverage profile](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/coverage_hit_aot.mojo` builds a compiled capture and keeps the source path [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
@@ -195,12 +189,6 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Private test directory](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): the coverage capture and the suite runner keep a private temporary root [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
-- [x] [Owned process group](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): the coverage capture kills its child group from `tools/coverage_io.py` [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
-
-- [x] [Mojo capture profile](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): the loop receipt binds `tools/coverage_hit_aot.mojo` [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
-
-- [x] [Mojo suite runner](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): the loop receipt binds `tools/run_suite.mojo` [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
-
 - [x] [Mojo suite key](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): `tools/suite_key.mojo` keys the suite stamps [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Town build summary](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#rebuild-the-town-packages): `tools/carla_town_build.mojo` prints each town's triangle counts and package size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
@@ -212,16 +200,6 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [x] [Masked cutoff pictures](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#test-the-town-exporter): `tests/test_carla_town_cutoff.mojo` keeps a low cutoff and clears a high cutoff [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Python town bake removal](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#test-the-town-exporter): the Python files `build_towns.py`, `carla_gltf_fix.py`, and `test_build_towns.py` are removed [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
-
-- [x] [Constant-loop fixture](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/check_coverage_loop_fixture.mojo` checks the constant loops, a shadowed range, physical line endings, the production capture, and generated-stage mutations [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
-
-- [x] [Include-root proofs](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#capture-scheduling-and-progress): `tools/check_coverage_include_root.mojo` instruments the lane modules and checks the six closed loop proofs [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
-
-- [x] [Spiral-domain token gate](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_distance_gate.mojo` checks the spiral-domain token digest and the interval token digest [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
-
-- [x] [Moment producer bounds](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_moment_gate.mojo` checks the moment-producer token digests and the stored coefficient bounds [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
-
-- [x] [Selection producer bounds](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-correction-controls): `tools/carla_selection_gate.mojo` checks the selection-producer token digests and the phase-constant bounds [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Neutral CARLA texture plan](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_texture_plan.mojo` names a neutral texture and chooses its fitted size [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
@@ -242,8 +220,6 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [x] [Triangle choice for a simplified town face](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#the-carla-towns): `tools/carla_town_choose.mojo` picks the original triangle that face reads [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [C ABI host tools in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/C-ABI-and-hosts#run-it): frame compare, wasm32 retarget, the isolated page server and the Metal string run as Mojo [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
-
-- [x] [Oracle runner in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-the-tool-tests): `tools/parallel_unittest.mojo` runs the CARLA oracle units in parallel [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
 - [x] [Native test fixtures in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): `make test-cpu` links the C fixtures with `tools/native_test_support.mojo` [#761](https://github.com/SethKitchen/ThreeMojo/issues/761)
 
@@ -290,8 +266,6 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [x] [Complete coverage vectors](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#evaluation-protocol): recursion, exceptions and concurrent calls retain separate evaluation operands [#385](https://github.com/SethKitchen/ThreeMojo/issues/385)
 
 - [x] [Grouped coverage conditions](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#grouped-conditions): leaf-condition and MC/DC probes retain Boolean grouping and short-circuit order [#535](https://github.com/SethKitchen/ThreeMojo/issues/535)
-
-- [x] [Full-audit CARLA coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#platform-specific-witnesses): witness tests and reviewed loop proofs bring the five failing CARLA modules to 100 percent [#721](https://github.com/SethKitchen/ThreeMojo/issues/721)
 
 - [x] [Custom compound truth tests](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#truth-conversion-limit): the original supported same-type forms remain enabled, with identity-preserving atomic negation. [Identity-sensitive selection remains a known limitation](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#known-identity-sensitive-selection-limitation); arbitrary custom truth support is not yet complete [#560](https://github.com/SethKitchen/ThreeMojo/issues/560)
 
@@ -665,9 +639,21 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Persistent scene water](https://github.com/SethKitchen/ThreeMojo/wiki/Water#animate-it): `WaterScene` keeps its state and composes with a scene. `GpuWater` shades it on a CUDA or Apple Metal GPU, with CPU comparisons and 1080p benchmarks [#300](https://github.com/SethKitchen/ThreeMojo/issues/300)
 - [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare [#327](https://github.com/SethKitchen/ThreeMojo/issues/327)
 - [x] [Vegetation](https://github.com/SethKitchen/ThreeMojo/wiki/Vegetation): ten million culled grass blades, gusts, dirt and a trail, swaying trees grown by space colonization, and a clouded sky
-- [x] [Village](https://github.com/SethKitchen/ThreeMojo/wiki/Village): gabled houses and a building cut out of a scan, on lots in the meadow, beside a pond of Clearwater water
+- [x] [Wooded cliffs](https://github.com/SethKitchen/ThreeMojo/wiki/Vegetation#ground-sky-and-light): the canyon's far wall rises in swells of bedded rock under a ragged edge of woods [#865](https://github.com/SethKitchen/ThreeMojo/issues/865)
+- [x] [Village](https://github.com/SethKitchen/ThreeMojo/wiki/Village): gabled houses, a well, fences and barrels, and a building cut out of a scan, beside a pond of Clearwater water
+- [x] [Village houses](https://github.com/SethKitchen/ThreeMojo/wiki/Village-houses): enterable houses of brick, stone, framing and boards, with furnished rooms, swinging doors and textured walls [#857](https://github.com/SethKitchen/ThreeMojo/issues/857)
+- [x] [Village stairs](https://github.com/SethKitchen/ThreeMojo/wiki/Village-houses#the-stair): a stair to the first storey and railings round its well, on floors reached one climb at a time [#861](https://github.com/SethKitchen/ThreeMojo/issues/861)
+- [x] [Village hearths](https://github.com/SethKitchen/ThreeMojo/wiki/Village-houses#the-hearth): a chimney breast through each storey of a brick or stone house, with a glowing fireplace [#864](https://github.com/SethKitchen/ThreeMojo/issues/864)
+- [x] [Village barn](https://github.com/SethKitchen/ThreeMojo/wiki/Village-houses#the-barn): a barn with a double door, hay, mangers and a loft door, and battens painted into its boards [#866](https://github.com/SethKitchen/ThreeMojo/issues/866)
+- [x] [Village footpaths](https://github.com/SethKitchen/ThreeMojo/wiki/Village#lots): a worn path from each front door to the trail, where the grass gives way [#869](https://github.com/SethKitchen/ThreeMojo/issues/869)
+- [x] [Village facades](https://github.com/SethKitchen/ThreeMojo/wiki/Village-houses#facades): sky-lit glass, cream frames, a stone band at the upper floor, and gutters and downpipes [#870](https://github.com/SethKitchen/ThreeMojo/issues/870)
+- [x] [Woodpiles](https://github.com/SethKitchen/ThreeMojo/wiki/Village#props): split logs stacked by the gable of each house with a hearth [#872](https://github.com/SethKitchen/ThreeMojo/issues/872)
 - [x] [Village walk](https://github.com/SethKitchen/ThreeMojo/wiki/Village-walk): villagers, animals, and a player who walks, runs and jumps by gamepad before a third-person camera [#847](https://github.com/SethKitchen/ThreeMojo/issues/847)
+- [x] [Village clothes and visits](https://github.com/SethKitchen/ThreeMojo/wiki/Village-walk#clothes): dressed villagers and player, residents who keep out of each other's way and visit their homes [#858](https://github.com/SethKitchen/ThreeMojo/issues/858)
+- [x] [Shy animals](https://github.com/SethKitchen/ThreeMojo/wiki/Village-walk#the-residents): deer, rabbits, sheep and goats run from the player who comes too near [#863](https://github.com/SethKitchen/ThreeMojo/issues/863)
 - [x] [Game renderer](https://github.com/SethKitchen/ThreeMojo/wiki/Game-renderer): the village walk at 24 frames a second and 1920 by 1080 on four CPU cores, with four quality presets [#855](https://github.com/SethKitchen/ThreeMojo/issues/855)
+- [x] [Maps at each pixel](https://github.com/SethKitchen/ThreeMojo/wiki/Game-renderer#maps-at-each-pixel): the game renderer reads a map at each pixel, at the level a triangle needs, under the fog [#859](https://github.com/SethKitchen/ThreeMojo/issues/859)
+- [x] [Smooth edges](https://github.com/SethKitchen/ThreeMojo/wiki/Game-renderer#smooth-edges): the game renderer smooths the stair steps along a frame's edges before the stretch, as FXAA does [#862](https://github.com/SethKitchen/ThreeMojo/issues/862)
 - [x] [CARLA lane borders](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-borders): border-only OpenDRIVE lanes get width records from their borders, with ASAM's precedence and refusal rules [#577](https://github.com/SethKitchen/ThreeMojo/issues/577)
 - [x] [CARLA map budgets](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-map-budgets): typed construction and certified-query work limits, checked before the work, with exhaustion kept apart from no lane [#580](https://github.com/SethKitchen/ThreeMojo/issues/580)
 - [x] [Certified CARLA query pruning](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-index-admission#per-segment-skip): each segment's own curve deviation skips candidates that cannot win, with the same answers [#685](https://github.com/SethKitchen/ThreeMojo/issues/685)

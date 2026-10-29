@@ -37,8 +37,6 @@ def ordinal_valid(value: Int, last: Int) -> Bool:
 def index_in_count(index: Int, count: Int) -> Bool:
     """Return True when `index` is from zero through one below `count`.
 
-    Error: Never.
-
     Args:
         index: The place to test.
         count: How many entries the list holds.
@@ -191,8 +189,6 @@ def ordinal_label(
     valid: Bool, value: Int, names: List[String], fallback: String
 ) -> String:
     """Return the name at `value`, or `fallback` when `valid` is false.
-
-    Error: Never.
 
     Args:
         valid: Whether `value` names an entry of `names`.

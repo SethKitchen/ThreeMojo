@@ -31,30 +31,10 @@ from std.testing import (
     assert_true,
 )
 from units.si import Angle, DEGREE, Duration, Length, METER, RADIAN, SECOND
+from tests._cameras import orthographic_above
 
 comptime TOLERANCE = Float64(1e-4)
 comptime SIZE = 100
-
-
-def _ortho() raises -> OrthographicCamera:
-    """Return an orthographic camera ten meters square, five up +z.
-
-    Returns:
-        The camera.
-
-    Raises:
-        Error: If its volume is refused.
-    """
-    var camera = OrthographicCamera(
-        Length(-5.0, METER),
-        Length(5.0, METER),
-        Length(5.0, METER),
-        Length(-5.0, METER),
-        Length(0.1, METER),
-        Length(100.0, METER),
-    )
-    camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
-    return camera^
 
 
 def _perspective() raises -> PerspectiveCamera:
@@ -94,7 +74,7 @@ def test_a_rotation_between_two_directions() raises:
 
 
 def test_an_orthographic_zoom_shrinks_the_volume() raises:
-    var camera = _ortho()
+    var camera = orthographic_above()
     camera.zoom = 2
     var projection = camera.projection_matrix()
     # Five meters across maps to the edge at zoom one; half as far at two.
@@ -109,7 +89,7 @@ def test_an_orthographic_zoom_shrinks_the_volume() raises:
 
 
 def test_a_wheel_zooms_an_orthographic_camera() raises:
-    var camera = _ortho()
+    var camera = orthographic_above()
     var controls = OrbitControls()
     controls.handle(InputEvent(WHEEL, wheel=-1), camera, SIZE, SIZE)
     assert_true(controls.update(camera, _frame()))
@@ -126,7 +106,7 @@ def test_a_wheel_zooms_an_orthographic_camera() raises:
 
 
 def test_an_orthographic_pan_moves_by_the_extent() raises:
-    var camera = _ortho()
+    var camera = orthographic_above()
     var controls = OrbitControls()
     # Ten meters across a hundred pixels: a tenth of a meter a pixel.
     controls.handle(
@@ -154,7 +134,7 @@ def test_an_orthographic_pan_moves_by_the_extent() raises:
 
 
 def test_an_orthographic_zoom_to_the_cursor_keeps_the_point_under_it() raises:
-    var camera = _ortho()
+    var camera = orthographic_above()
     var controls = OrbitControls()
     controls.zoom_to_cursor = True
     # The pointer at three quarters across: 2.5 meters right of center.
@@ -219,7 +199,7 @@ def test_a_resize_changes_nothing() raises:
 
 
 def test_an_orthographic_state_is_put_back() raises:
-    var camera = _ortho()
+    var camera = orthographic_above()
     var controls = OrbitControls()
     with assert_raises(contains="save_state"):
         controls.reset(camera)

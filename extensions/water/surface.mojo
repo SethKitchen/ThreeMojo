@@ -47,8 +47,6 @@ struct SurfaceSample(ImplicitlyCopyable):
     def __add__(self, other: Self) -> Self:
         """Return the sum of two samples.
 
-        Error: Never.
-
         Args:
             other: The sample to add.
 
@@ -65,8 +63,6 @@ struct SurfaceSample(ImplicitlyCopyable):
 
     def __mul__(self, weight: Float32) -> Self:
         """Return this sample scaled by a weight.
-
-        Error: Never.
 
         Args:
             weight: The scale.

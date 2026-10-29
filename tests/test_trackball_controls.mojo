@@ -42,6 +42,7 @@ from std.testing import (
     assert_true,
 )
 from units.si import Angle, DEGREE, Duration, Length, METER, SECOND
+from tests._cameras import orthographic_above
 
 comptime TOLERANCE = Float64(1e-4)
 comptime SIZE = 100
@@ -61,27 +62,6 @@ def _camera() raises -> PerspectiveCamera:
     )
     camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
     return camera
-
-
-def _ortho() raises -> OrthographicCamera:
-    """Return an orthographic camera ten meters square, five up +z.
-
-    Returns:
-        The camera.
-
-    Raises:
-        Error: If its volume is refused.
-    """
-    var camera = OrthographicCamera(
-        Length(-5.0, METER),
-        Length(5.0, METER),
-        Length(5.0, METER),
-        Length(-5.0, METER),
-        Length(0.1, METER),
-        Length(100.0, METER),
-    )
-    camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
-    return camera^
 
 
 def _near(actual: Vector3, x: Float32, y: Float32, z: Float32) raises:
@@ -225,7 +205,7 @@ def test_a_drag_pans_as_three_js_does() raises:
 
 
 def test_an_orthographic_camera_pans_and_zooms_as_three_js_does() raises:
-    var camera = _ortho()
+    var camera = orthographic_above()
     var controls = TrackballControls(camera)
     _drag(controls, SECONDARY, 60, 70, release=True)
     assert_true(controls.update(camera))
@@ -304,7 +284,7 @@ def test_a_zoom_past_the_target_is_no_zoom() raises:
 
 
 def test_an_orthographic_camera_with_every_action_off_stays() raises:
-    var camera = _ortho()
+    var camera = orthographic_above()
     var controls = TrackballControls(camera)
     controls.no_rotate = True
     controls.no_zoom = True
@@ -460,7 +440,7 @@ def test_bad_input_is_refused() raises:
         _key(controls, 97)
     with assert_raises(contains="negative"):
         _ = controls.update(camera, Duration(-1.0, SECOND))
-    var ortho = _ortho()
+    var ortho = orthographic_above()
     with assert_raises(contains="negative"):
         _ = controls.update(ortho, Duration(-1.0, SECOND))
 
