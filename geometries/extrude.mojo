@@ -863,7 +863,8 @@ def check_extrusion(
         steps: How many layers the extrusion is cut into; at least one.
         curve_segments: How many straight runs each curve is sampled into;
             at least one.
-        bevel_enabled: True to round the two edges off.
+        bevel_enabled: True to round the two edges off. Off unless asked
+            for, where three.js's `bevelEnabled` is on by default.
         bevel_thickness: How far past each end face the bevel reaches;
             positive and finite when there is a bevel.
         bevel_size: How far out from the outline the body stands; finite,
@@ -967,7 +968,8 @@ def extrude(
         steps: How many layers the extrusion is cut into; at least one.
         curve_segments: How many straight runs each curve is sampled into;
             at least one.
-        bevel_enabled: True to round the two edges off.
+        bevel_enabled: True to round the two edges off. Off unless asked
+            for, where three.js's `bevelEnabled` is on by default.
         bevel_thickness: How far past each end face the bevel reaches;
             positive when there is a bevel.
         bevel_size: How far out from the outline the body stands; not
@@ -1091,7 +1093,8 @@ def extrude(
         steps: How many layers the extrusion is cut into; at least one.
         curve_segments: How many straight runs each curve is sampled into;
             at least one.
-        bevel_enabled: True to round the two edges off.
+        bevel_enabled: True to round the two edges off. Off unless asked
+            for, where three.js's `bevelEnabled` is on by default.
         bevel_thickness: How far past each end face the bevel reaches.
         bevel_size: How far out from the outline the body stands.
         bevel_offset: How far out every layer is moved before the bevel is

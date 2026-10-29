@@ -407,7 +407,7 @@ The vertices are built in layers, each holding every contour point once at one h
 
 ### The bevel
 
-A bevel rounds the two edges off. It adds `bevel_segments` layers at each end. They reach `bevel_thickness` past the end face, and stand `bevel_size` out from the outline, by the sine and the cosine of a quarter turn.
+A bevel rounds the two edges off. It is off unless `bevel_enabled` is true. In three.js, `bevelEnabled` is true by default. It adds `bevel_segments` layers at each end. They reach `bevel_thickness` past the end face, and stand `bevel_size` out from the outline, by the sine and the cosine of a quarter turn.
 
 three.js measures a bevel *out* from the shape drawn, and so does this. The two end faces are the outline itself, and the body between them stands proud of it all the way round. `bevel_offset` moves every layer out before the bevel is measured, the end faces included, which makes a lip rather than rounding an edge.
 
