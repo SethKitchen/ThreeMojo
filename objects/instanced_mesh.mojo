@@ -864,7 +864,7 @@ struct BatchedMesh(Copyable, Movable):
         Raises:
             Error: If an instance at or past `count` is in use.
         """
-        _sort_ascending(self.available_instances)
+        sort(self.available_instances)
         while (
             len(self.available_instances) > 0
             and self.available_instances[len(self.available_instances) - 1]
@@ -1039,19 +1039,8 @@ struct BatchedMesh(Copyable, Movable):
         return found
 
 
-def _sort_ascending(mut values: List[Int]):
-    """Sort a short list of indices, smallest first, in place."""
-    for position in range(1, len(values)):
-        var value = values[position]
-        var at = position
-        while at > 0 and values[at - 1] > value:
-            values[at] = values[at - 1]
-            at -= 1
-        values[at] = value
-
-
 def _take_lowest(mut values: List[Int]) -> Int:
     """Remove and return the smallest of a list that is not empty, as
     three.js's `sort(ascIdSort)` then `shift()` does."""
-    _sort_ascending(values)
+    sort(values)
     return values.pop(0)

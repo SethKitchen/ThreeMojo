@@ -89,20 +89,6 @@ def _normalized(vector: Vector3) -> Vector3:
     return out
 
 
-def _gap_sq(a: Vector3, b: Vector3) -> Float32:
-    """Return the square of the distance between two points.
-
-    Args:
-        a: One point.
-        b: The other.
-
-    Returns:
-        The squared distance.
-    """
-    var d = a - b
-    return d.dot(d)
-
-
 @fieldwise_init
 struct _TrianglePlane(ImplicitlyCopyable):
     """The plane of a triangle, as three.js's `Triangle.getPlane` gives it.
@@ -300,11 +286,11 @@ def triangle_capsule_intersect(
             continue
         var point1 = points.value()[0]
         var point2 = points.value()[1]
-        if _gap_sq(point1, point2) <= r2:
+        if point1.distance_to_squared(point2) <= r2:
             return Contact(
                 _normalized(point1 - point2),
                 point2,
-                capsule.radius - sqrt(_gap_sq(point1, point2)),
+                capsule.radius - sqrt(point1.distance_to_squared(point2)),
             )
     return None
 
@@ -345,7 +331,7 @@ def triangle_sphere_intersect(
         )
         if not Bool(nearest):
             continue
-        var d = _gap_sq(nearest.value(), sphere.center)
+        var d = nearest.value().distance_to_squared(sphere.center)
         if d < distance_sq:
             distance_sq = d
             closest = nearest

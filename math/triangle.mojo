@@ -304,10 +304,10 @@ struct Triangle(Equatable, ImplicitlyCopyable):
                 return self.a * w.x + self.b * w.y + self.c * w.z
         var best = _nearest_on_segment(point, self.a, self.b)
         var other = _nearest_on_segment(point, self.b, self.c)
-        if _gap(other, point) < _gap(best, point):
+        if other.distance_to_squared(point) < best.distance_to_squared(point):
             best = other
         other = _nearest_on_segment(point, self.c, self.a)
-        if _gap(other, point) < _gap(best, point):
+        if other.distance_to_squared(point) < best.distance_to_squared(point):
             best = other
         return best
 
@@ -370,12 +370,6 @@ struct Triangle(Equatable, ImplicitlyCopyable):
             Whether the two differ.
         """
         return not self == other
-
-
-def _gap(a: Vector3, b: Vector3) -> Float32:
-    """Return the squared distance between two points."""
-    var d = a - b
-    return d.dot(d)
 
 
 def _nearest_on_segment(
