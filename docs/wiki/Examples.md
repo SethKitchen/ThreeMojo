@@ -136,6 +136,8 @@ mkdir -p out
 | `village.mojo` | `village.png` | [Village](Village) |
 | `village_walk.mojo` | `village_walk.png` | [Village walk](Village-walk) |
 | `village_houses.mojo` | `village_houses.png` | [Village houses](Village-houses) |
+| `village_weather.mojo` | `village_weather.png` | [Village weather](Village-weather) |
+| `village_day.mojo` | `village_day.png` | [Village day and night](Village-day) |
 | `animals.mojo` | `animals.png` | [Animals](Animals) |
 | `walk.mojo` | `walk.png` | [Animals](Animals) |
 | `animal_anatomy.mojo` | `animal_anatomy.png` | [Animal anatomy](Animal-anatomy) |

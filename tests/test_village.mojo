@@ -17,8 +17,14 @@ from core.scene import Scene
 from extensions.building.material import brick
 from extensions.scan.frame import supersplat_frame
 from extensions.vegetation.field import LodBand
-from extensions.vegetation.ground import Ground, Lot, Pond, lot_openness
-from extensions.vegetation.meadow import Planting
+from extensions.vegetation.ground import (
+    Ground,
+    Lot,
+    Pond,
+    lot_openness,
+    no_pond,
+)
+from extensions.vegetation.meadow import MeadowParameters, Planting
 from extensions.village.house import (
     BARN,
     BOARDED,
@@ -56,6 +62,7 @@ from extensions.village.village import (
     door_path,
     default_props,
     hearthed,
+    oak,
     woodpile_by,
 )
 from extensions.water.pebbles import pebble_bed
@@ -74,7 +81,16 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import DEGREE, METER, RADIAN, SECOND, Angle, Duration, Length
+from units.si import (
+    DEGREE,
+    METER,
+    PER_METER,
+    RADIAN,
+    SECOND,
+    Angle,
+    Duration,
+    Length,
+)
 
 
 def _house(storeys: Int) -> HouseParameters:
@@ -401,10 +417,16 @@ def test_a_village_stands_its_buildings_and_draws_its_pond() raises:
         if wet.pixels[index] != dry.pixels[index]:
             changed += 1
     assert_true(changed > 0)
+    # The camera sees the pond at (0, 4); one that looks away does not.
+    assert_true(village.pond_seen(camera))
+    var away = camera
+    away.place(Vector3(0, 6, 10), Vector3(0, 6, 30))
+    assert_false(village.pond_seen(away))
     var bare = Scene()
     var empty = _parameters()
     empty.houses = []
     empty.props = []
+    empty.meadow.ground.pond = no_pond()
     var plain = Village(bare, assets, renderer, empty, pebble_bed(_bed()), None)
     assert_false(Bool(plain.scanned))
     assert_equal(len(plain.houses), 0)
@@ -412,6 +434,8 @@ def test_a_village_stands_its_buildings_and_draws_its_pond() raises:
     assert_equal(len(plain.doors.ways), 0)
     var open = plain.terrain()
     assert_equal(len(open.walls) + len(open.floors) + len(open.lots), 0)
+    # A village with no pond has no water to see.
+    assert_false(plain.pond_seen(camera))
 
 
 def test_a_footpath_leads_from_a_front_door_to_the_trail() raises:
@@ -445,6 +469,40 @@ def test_a_footpath_leads_from_a_front_door_to_the_trail() raises:
     assert_equal(len(door_path(door, open)), 1)
     var far = Doorway(200, 4, 1, 0, 0, -1, 1, 2.1, 0, True)
     assert_equal(len(door_path(far, trail)), 1)
+
+
+def test_the_village_s_old_trees_grow_as_oaks() raises:
+    var meadow = MeadowParameters()
+    var village = VillageParameters()
+    ref plain = meadow.crowns[0]
+    ref grown = village.meadow.crowns[0]
+    # Twice as thick from the twigs down, and flared twice as much.
+    assert_almost_equal(
+        grown.limbs.tip_radius.to(METER),
+        2 * plain.limbs.tip_radius.to(METER),
+        atol=1e-7,
+    )
+    assert_almost_equal(grown.limbs.flare, 2 * plain.limbs.flare, atol=1e-6)
+    assert_almost_equal(
+        grown.wood_radius.to(METER), 2 * plain.wood_radius.to(METER), atol=1e-7
+    )
+    # Brown bark, furrowed four times as close.
+    assert_true(grown.bark.x > grown.bark.z)
+    assert_true(grown.bark.x < plain.bark.x)
+    assert_almost_equal(
+        grown.bark_marks.to(PER_METER),
+        4 * plain.bark_marks.to(PER_METER),
+        atol=1e-5,
+    )
+    grown.check()
+    # The birches and the bushes keep their own wood, and a flare is
+    # never more than three.
+    assert_almost_equal(
+        village.meadow.crowns[8].bark.x, meadow.crowns[8].bark.x, atol=1e-7
+    )
+    var flared = meadow.crowns[0].copy()
+    flared.limbs.flare = 2
+    assert_almost_equal(oak(flared^).limbs.flare, 3, atol=1e-6)
 
 
 def test_a_hearth_keeps_its_woodpile_by_its_gable() raises:

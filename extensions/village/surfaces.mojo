@@ -23,6 +23,7 @@ coordinates in meters divided by that size.
 | `tile_texture` | 1 m | Five courses of clay tiles, each shading the course below it |
 | `slate_texture` | 0.9 m | Six courses of gray slates |
 | `plank_texture` | 1.2 m | Floor planks of 15 cm, their ends staggered |
+| `cloth_texture` | 0.25 m | Undyed wool in a twill weave, for rugs, quilts and hangings |
 
 `house_looks` adds each texture once to the stores, and a material for
 each: a rough standard material with its vertex colors on. The vertex
@@ -49,6 +50,7 @@ comptime ASHLAR_TILE = Float32(0.8)
 comptime TILE_TILE = Float32(1.0)
 comptime SLATE_TILE = Float32(0.9)
 comptime PLANK_TILE = Float32(1.2)
+comptime CLOTH_TILE = Float32(0.25)
 
 
 def _fade(t: Float32) -> Float32:
@@ -515,6 +517,51 @@ def plank_texture(size: Int, seed: Int) raises -> Texture:
     return canvas.texture()
 
 
+def cloth_texture(size: Int, seed: Int) raises -> Texture:
+    """Return undyed wool in a twill weave, `CLOTH_TILE` meters on a
+    side.
+
+    Args:
+        size: The texels on a side.
+        seed: Which threads are thicker or paler.
+
+    Returns:
+        Pale wool woven in a two-over-two twill of 40 threads each way,
+        so the weave runs in diagonal ribs. The vertex colors dye it.
+
+    Raises:
+        Error: If `size` is below one.
+    """
+    var canvas = _Canvas(size)
+    for y in range(size):  # pragma: no branch
+        var fy = (Float32(y) + 0.5) / Float32(size) * 40
+        var row = Int(fy)
+        var lv = fy - Float32(row)
+        for x in range(size):  # pragma: no branch
+            var fx = (Float32(x) + 0.5) / Float32(size) * 40
+            var column = Int(fx)
+            var lu = fx - Float32(column)
+            # In a two-over-two twill the warp lies on top where the
+            # thread's place along the diagonal is in the first half.
+            var warp = (column + row) % 4 < 2
+            var across = lu if warp else lv
+            # Each thread is rounded: lighter on its crown.
+            var crown = 1 - 4 * (across - 0.5) * (across - 0.5)
+            var thread = hash01(column if warp else row, 0 if warp else 1, seed)
+            var shade = 0.72 + 0.2 * crown + 0.08 * thread
+            shade += (
+                tiled_noise(
+                    Float32(x) / Float32(size) * 8,
+                    Float32(y) / Float32(size) * 8,
+                    8,
+                    seed + 3,
+                )
+                * 0.06
+            )
+            canvas.set(x, y, 232 * shade, 226 * shade, 214 * shade)
+    return canvas.texture()
+
+
 @fieldwise_init
 struct HouseLooks(ImplicitlyCopyable):
     """The materials of the village's houses, each made once."""
@@ -537,6 +584,8 @@ struct HouseLooks(ImplicitlyCopyable):
     var planks: MaterialId
     var glass: MaterialId
     var daylight: MaterialId
+    # The wool of the rugs, the quilts, the cushions and the hangings.
+    var cloth: MaterialId
 
 
 def _look(
@@ -555,7 +604,7 @@ def house_looks(mut assets: Assets, size: Int, seed: Int) raises -> HouseLooks:
     """Make the textures and the materials of the village's houses.
 
     Args:
-        assets: The stores. Nine textures and eleven materials are added.
+        assets: The stores. Ten textures and twelve materials are added.
         size: The texels on a side of each texture.
         seed: Which bricks, stones, boards and tiles.
 
@@ -581,4 +630,5 @@ def house_looks(mut assets: Assets, size: Int, seed: Int) raises -> HouseLooks:
         assets.materials.add(
             Material(Color(255, 255, 255), kind=BASIC, vertex_colors=True)
         ),
+        _look(assets, cloth_texture(size, seed), 0.95),
     )

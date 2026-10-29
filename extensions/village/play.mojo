@@ -20,16 +20,25 @@ and its animals, seen by a third-person camera.
    stance's clip.
 5. Each resident steps along its route and is posed: see `Residents`.
 6. Each door swings open while someone stands near it, and shut after.
-7. The camera follows the player. Where a wall stands between the
+7. A new press of the use button uses the spot of `Gathering` in reach:
+   see `extensions.village.gathering`. With no spot in reach, it talks
+   to the villager in reach: see `extensions.village.talk`.
+8. The camera follows the player. Where a wall stands between the
    player and the eye, the eye comes in to stand before the wall, and it
    goes back out slowly when the wall is passed. Under a ceiling, the
-   eye stays below it. It stays above the ground or the floor.
-8. The village prepares the frame: the grass for the camera, and the
+   eye stays below it. It stays above the ground or the floor. The
+   inside of each house further than `INSIDE_REACH` from the eye hides.
+9. The village prepares the frame: the grass for the camera, and the
    water's clock.
+10. The weather moves on, and scales the lights and the fog: see
+    `extensions.village.weather`. The day moves on, and dims and tints
+    them for the hour; the houses' windows glow from dusk to dawn: see
+    `extensions.village.day`.
 
 `VillageGame.render` then draws the frame with `GameRenderer` at the
 quality's size, composes the pond's water into it, and stretches it to the
-window. `GameQuality` says how finely each part of the frame is drawn: see
+window, and writes the heads-up display over it: see
+`extensions.village.hud`. `GameQuality` says how finely each part of the frame is drawn: see
 `extensions.village.quality`.
 """
 
@@ -62,6 +71,27 @@ from extensions.village.character import (
     MoveInput,
     Obstacle,
 )
+from extensions.village.gathering import GatherParameters, Gathering
+from extensions.village.hud import draw_hud, note_text, use_prompt
+from extensions.village.skills import (
+    FISHING,
+    FORAGING,
+    MINING,
+    Skills,
+    fish_haste,
+    forage_bonus,
+    ore_strikes,
+    skill_name,
+)
+from extensions.village.critters import Critters, Haunt, default_haunts
+from extensions.village.day import DayCycle, dim_water
+from extensions.village.talk import (
+    SPEECH_SECONDS,
+    Speaker,
+    Talk,
+    default_speakers,
+)
+from extensions.village.weather import CLEAR, Weather, WeatherKind
 from extensions.village.residents import (
     Body,
     Herd,
@@ -83,7 +113,7 @@ from extensions.village.clothes import (
 )
 from extensions.village.quality import GameQuality, planted
 from extensions.village.scanned import CutBuilding
-from extensions.village.terrain import Terrain
+from extensions.village.terrain import OPEN_SKY, Terrain
 from extensions.village.interior import Doorway
 from extensions.village.village import Village, VillageParameters
 from extensions.water.pebbles import PebbleBed
@@ -116,6 +146,9 @@ comptime CALM = Float32(0.1)
 """A look stick that leans less than this lets the camera trail."""
 comptime SIGHT_POINTS = 4
 """How many points along the camera's sight hold a door open."""
+comptime INSIDE_REACH = Float32(18)
+"""How far past a house's edge a camera can be and still see its inside
+drawn, in meters."""
 comptime ARM_MARGIN = Float32(0.3)
 """How far before a wall the camera's eye stops, in meters."""
 comptime ARM_EASE = Float32(3)
@@ -225,13 +258,34 @@ struct PlayParameters(Copyable, Movable):
     var heading: Angle
     # The camera's field of view.
     var field_of_view: Angle
+    # What the player can gather about the village, and the villagers
+    # who talk and give errands.
+    var gathering: GatherParameters
+    var speakers: List[Speaker]
+    # Where the fireflies and the butterflies keep: see
+    # `extensions.village.critters`.
+    var haunts: List[Haunt]
+    # Whether `VillageGame.render` writes the satchel, the prompt and the
+    # last note over the frame: see `extensions.village.hud`.
+    var hud: Bool
+    # The weather the game begins in, and whether it turns from weather to
+    # weather by itself: see `extensions.village.weather`.
+    var weather: WeatherKind
+    var weather_cycle: Bool
+    # The hour the game begins at, and how fast the day moves on: see
+    # `extensions.village.day`.
+    var day: DayCycle
 
     def __init__(out self, quality: GameQuality) raises:
         """Create the default game at a quality: the village with the
         quality's plants, its residents, and a man of six feet on the
         trail who looks toward the houses. He wears a madder-red tunic
         trimmed in weld yellow over a linen shirt, walnut hose and
-        leather boots.
+        leather boots. The village has its default spots to gather, and
+        the heads-up display is on. Its villagers talk and give errands.
+        Fireflies and butterflies keep to its default haunts. The
+        weather is clear, and stays so. It is two in the afternoon, and
+        stays so.
 
         Args:
             quality: How finely each part of a frame is drawn.
@@ -250,6 +304,13 @@ struct PlayParameters(Copyable, Movable):
         self.start_z = 26
         self.heading = Angle(0.0, RADIAN)
         self.field_of_view = Angle(55.0, DEGREE)
+        self.gathering = GatherParameters()
+        self.speakers = default_speakers()
+        self.haunts = default_haunts()
+        self.hud = True
+        self.weather = CLEAR
+        self.weather_cycle = False
+        self.day = DayCycle()
 
 
 def tree_obstacles(
@@ -314,6 +375,26 @@ struct VillageGame(Movable):
     var upscale_ms: Float64
     # The last frame, the window's size: `render` draws into it.
     var window: Framebuffer
+    # What the player can gather, and what the player has.
+    var gathering: Gathering
+    # Whether `render` writes the heads-up display; the last note, and how
+    # long ago it was given, in seconds.
+    var hud: Bool
+    var note: String
+    var note_age: Float32
+    # The villagers who talk, and how tall each villager is, in meters.
+    var talk: Talk
+    var heads: List[Float32]
+    # The fireflies and the butterflies.
+    var critters: Critters
+    # The player's gathering skills.
+    var skills: Skills
+    # The weather, and how long its clouds, fog and rain took to draw in
+    # the last frame, in milliseconds.
+    var weather: Weather
+    var weather_ms: Float64
+    # The hour of the day.
+    var day: DayCycle
 
     def __init__(
         out self,
@@ -414,6 +495,43 @@ struct VillageGame(Movable):
         self.trees = tree_obstacles(
             parameters.village, self.village.meadow.field.lots
         )
+        # The spots keep off the lots and the props, as the residents do,
+        # and a solid spot stops a character as a trunk does.
+        self.gathering = Gathering(
+            scene,
+            assets,
+            self.village.looks,
+            parameters.gathering,
+            self.village.meadow.field.ground,
+            keep_off,
+        )
+        self.trees.extend(self.gathering.obstacles())
+        self.talk = Talk(
+            scene,
+            assets,
+            self.village.looks,
+            parameters.speakers.copy(),
+            len(parameters.residents.villagers),
+        )
+        self.critters = Critters(
+            scene,
+            assets,
+            self.village.looks,
+            parameters.haunts,
+            self.village.meadow.field.ground,
+            self.village.level,
+        )
+        self.skills = Skills()
+        self.heads = List[Float32]()
+        for villager in parameters.residents.villagers:
+            self.heads.append(villager.spec.stature.to(METER))
+        self.hud = parameters.hud
+        self.note = String()
+        self.note_age = 0
+        self.weather = Weather(scene, parameters.weather)
+        self.weather.cycle = parameters.weather_cycle
+        self.day = parameters.day
+        self.weather_ms = 0
         self.clock = 0
         self.village.meadow.register_shadings(self.fast, assets)
         self.fast.set_shadows(self.quality.shadows, self.quality.shadow_size)
@@ -483,6 +601,41 @@ struct VillageGame(Movable):
                 )
             )
         self.village.doors.update(scene, people, delta)
+        self.note_age += delta.to(SECOND)
+        # The player's skills set how well they gather.
+        self.gathering.ore_strikes = ore_strikes(self.skills.level(MINING))
+        self.gathering.forage_bonus = forage_bonus(self.skills.level(FORAGING))
+        self.gathering.fish_haste = fish_haste(self.skills.level(FISHING))
+        var gathered = self.gathering.update(scene, feet, input.use, delta)
+        if gathered:
+            var kind = gathered.value()
+            var gives = self.gathering.satchel.last
+            self.note = note_text(kind, gives)
+            self.note_age = 0
+            var risen = self.skills.gain(kind, gives)
+            if risen:
+                var skill = risen.value()
+                self.note = String(
+                    skill_name(skill), " LEVEL ", self.skills.level(skill), "!"
+                )
+        # The use button talks only where no spot is in reach.
+        var places = List[Vector3]()
+        for index in range(len(self.residents.people)):
+            places.append(self.residents.people[index].position)
+        var free = input.use and self.gathering.focus < 0 and not gathered
+        var spoke = self.talk.update(
+            scene,
+            feet,
+            places,
+            self.heads,
+            free,
+            self.gathering.satchel,
+            delta,
+        )
+        if spoke:
+            # The villager stops, and turns to the player while they talk.
+            var who = self.talk.speakers[self.talk.focus].villager
+            self.residents.hold(who, SPEECH_SECONDS, feet)
         self.view.follow_target(
             Vector3(feet.x, feet.y + FOCUS_HEIGHT, feet.z), delta
         )
@@ -505,19 +658,53 @@ struct VillageGame(Movable):
             Length(self.terrain.view_ceiling(focus, eye, feet.y), METER),
             self.reach,
         )
+        # A house's inside shows only to a camera near it: from further
+        # away, its windows show little of it.
+        # The houses' lamps are lit from dusk to dawn.
+        var daylight = self.day.daylight()
+        var lamps = daylight < 0.5
+        self.critters.update(scene, daylight, self.weather.look.rain, delta)
+        ref eye_at = self.camera.position
+        for index in range(len(self.village.houses)):
+            ref house = self.village.houses[index]
+            scene.node(house.lit).visible = lamps
+            scene.node(house.daylit).visible = not lamps
+            ref middle = scene.node(house.root).position
+            var dx = eye_at.x - middle.x
+            var dz = eye_at.z - middle.z
+            var near = house.radius + INSIDE_REACH
+            scene.node(house.inside).visible = dx * dx + dz * dz < near * near
         scene.update()
         self.clock += delta.to(SECOND)
-        return self.village.update(
+        var stats = self.village.update(
             scene, assets, self.camera, Duration(self.clock, SECOND)
         )
+        # The meadow's sun sets its lights again as it fits its shadows to
+        # the camera, so the weather scales them after.
+        self.weather.update(scene, delta, self.view.yaw)
+        # The day dims and tints what the weather set.
+        self.day.advance(delta)
+        ref seen_from = self.camera.position
+        var roofed = (
+            self.terrain.ceiling_over(seen_from.x, seen_from.z, feet.y)
+            < OPEN_SKY
+        )
+        self.day.light(scene, roofed)
+        return stats
 
     def render(mut self, scene: Scene, assets: Assets) raises:
         """Draw the frame that `tick` prepared into `window`.
 
         The frame is drawn at the quality's smaller size, and the pond's
-        water is composed into it. Its edges are smoothed if the quality's
-        `smooth_edges` asks, and it is stretched over `window`. The window's
-        frame is kept from frame to frame, so it is not allocated again.
+        water is composed into it if the camera sees the pond. Its edges
+        are smoothed if the quality's `smooth_edges` asks, and it is
+        stretched over `window`. The window's frame is kept from frame to
+        frame, so it is not allocated again. The weather's clouds and fog,
+        and the night's darkness and stars, cover the frame's sky before
+        the stretch, and the weather's rain falls over
+        the window's frame after it, unless the camera's eye is under a
+        roof. If `hud` is set, the satchel, the prompt and the last note
+        are written over the window's frame.
 
         Args:
             scene: The scene the game is in.
@@ -531,20 +718,69 @@ struct VillageGame(Movable):
             scene, assets, self.camera, Duration(self.clock, SECOND)
         )
         var drawn = perf_counter_ns()
-        _ = self.village.water.compose(
-            image, scene, self.camera, self.village.level, self.village.bed
-        )
+        # Water that the camera cannot see is not composed: its surface
+        # and caustics cost most of the composition.
+        if self.village.pond_seen(self.camera):
+            # The water is lit by its own sky: it darkens with the night.
+            var share = self.day.water_light()
+            var dark = share < 1
+            var before = image.depth.copy() if dark else List[Float32]()
+            _ = self.village.water.compose(
+                image, scene, self.camera, self.village.level, self.village.bed
+            )
+            if dark:
+                dim_water(image, before, share)
         var watered = perf_counter_ns()
+        self.weather.cover(image, self.camera)
+        self.day.night_sky(image, self.camera, 1 - self.weather.look.clouds)
+        var covered = perf_counter_ns()
         self.render_ms = Float64(drawn - began) / 1.0e6
         self.water_ms = Float64(watered - drawn) / 1.0e6
         self.smooth_ms = 0
         if self.quality.smooth_edges:
             smooth_edges(image, available_workers())
-            self.smooth_ms = Float64(perf_counter_ns() - watered) / 1.0e6
+            self.smooth_ms = Float64(perf_counter_ns() - covered) / 1.0e6
         self.upscale_ms = 0
         if image.width == self.width and image.height == self.height:
             self.window = image^
-            return
-        var smoothed = perf_counter_ns()
-        upscale_into(image, self.window, available_workers())
-        self.upscale_ms = Float64(perf_counter_ns() - smoothed) / 1.0e6
+        else:
+            var smoothed = perf_counter_ns()
+            upscale_into(image, self.window, available_workers())
+            self.upscale_ms = Float64(perf_counter_ns() - smoothed) / 1.0e6
+        var raining = perf_counter_ns()
+        # No rain falls before an eye under a roof.
+        ref eye = self.camera.position
+        var feet = self.player.position.y
+        if self.terrain.ceiling_over(eye.x, eye.z, feet) >= OPEN_SKY:
+            self.weather.rain(self.window)
+        self.weather_ms = (
+            Float64(perf_counter_ns() - raining + covered - watered) / 1.0e6
+        )
+        if self.hud:
+            draw_hud(
+                self.window,
+                self.gathering.satchel,
+                self.prompt(),
+                self.note,
+                self.note_age,
+                self.talk.speech,
+                self.talk.age,
+                self.talk.errands(self.gathering.satchel),
+                self.skills.lines(),
+            )
+
+    def prompt(self) -> String:
+        """Return what the use button does now, for the heads-up display.
+
+        Returns:
+            The prompt for the spot the player can use, or else for the
+            villager the player can talk to, or an empty string if there
+            is neither.
+        """
+        var focus = self.gathering.focus
+        if focus < 0:
+            return self.talk.prompt()
+        ref g = self.gathering.spots[focus]
+        return use_prompt(
+            g.spot.kind, g.strikes, g.phase, self.gathering.ore_strikes
+        )

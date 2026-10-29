@@ -93,6 +93,7 @@ from render.game_math import (
 from render.tasks import TaskGroup
 from render.tonemap import aces_tone
 from render.texture import MIRROR, REPEAT, Texture
+from render.cube_texture import CubeTexture
 from render.texture_store import TextureId
 from std.math import ceil, exp2, floor, inf, log2, max, min, sqrt
 from std.memory import unsafe_memcpy
@@ -119,6 +120,8 @@ comptime _FRESNEL_OFFSET = Float32(-6.98316)
 comptime BLINN_PHONG_G = Float32(0.25)
 comptime MIP_LEVELS = 16
 """The most levels of a map read at each pixel."""
+comptime SKY_TASKS = 16
+"""The most tasks that share the sampling of the sky."""
 comptime LEVEL_CODE = Float32(32)
 """A triangle's map code is its map's slot times this, plus the level its
 pixels read. A triangle with no map read at each pixel has the code -1."""
@@ -1762,23 +1765,35 @@ struct GameRenderer(Movable):
         var view = camera.view_matrix()
         inverse.multiply(view)
         inverse.invert()
-        var scale = scene.background_intensity
-        for row in range(rows):  # pragma: no branch
-            var y = min(Float32(row * step), Float32(self.height)) / Float32(
-                self.height
+        # The far plane's points are an affine map of the NDC, so a
+        # sample's direction is mixed from those through three corners.
+        var eye = camera.position
+        var d00 = inverse.transform_point(Vector3(-1, 1, 1)) - eye
+        var across = inverse.transform_point(Vector3(1, 1, 1)) - eye - d00
+        var down = inverse.transform_point(Vector3(-1, -1, 1)) - eye - d00
+        # Each task takes a band of rows: there are two rows or more.
+        var tasks = min(rows, SKY_TASKS)
+        var group = TaskGroup()
+        for t in range(tasks):  # pragma: no branch
+            group.create_task(
+                _sky_task(
+                    Pointer(to=cube)
+                    .unsafe_mut_cast[False]()
+                    .unsafe_origin_cast[ImmutAnyOrigin](),
+                    out.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    d00,
+                    across,
+                    down,
+                    scene.background_intensity,
+                    columns,
+                    step,
+                    self.width,
+                    self.height,
+                    t * rows // tasks,
+                    (t + 1) * rows // tasks,
+                )
             )
-            for column in range(columns):  # pragma: no branch
-                var x = min(
-                    Float32(column * step), Float32(self.width)
-                ) / Float32(self.width)
-                var ndc = Vector3(x * 2 - 1, 1 - y * 2, 1)
-                var far = inverse.transform_point(ndc)
-                var direction = far - camera.position
-                var c = cube.sample(direction)
-                var i = (row * columns + column) * 3
-                out[i] = c.r * scale
-                out[i + 1] = c.g * scale
-                out[i + 2] = c.b * scale
+        group.wait()
         return out^
 
     def _resolve(
@@ -2853,6 +2868,34 @@ def _wrap_texel(x: F, size: F, mode: I) -> I:
         wrapped, mode.eq(Int32(MIRROR.value)).select(mirrored, held)
     )
     return index.cast[DType.int32]()
+
+
+__async def _sky_task(
+    cube: Pointer[CubeTexture, ImmutAnyOrigin],
+    samples: MutPointer[Float32, MutAnyOrigin],
+    d00: Vector3,
+    across: Vector3,
+    down: Vector3,
+    scale: Float32,
+    columns: Int,
+    step: Int,
+    width: Int,
+    height: Int,
+    first: Int,
+    past: Int,
+):
+    """Sample the background cube on rows `first` to `past` of the sky's
+    grid. A sample's direction is `d00`, through the window's top left
+    corner, plus `across` and `down` times its share of the window."""
+    for row in range(first, past):  # pragma: no branch
+        var y = min(Float32(row * step), Float32(height)) / Float32(height)
+        for column in range(columns):  # pragma: no branch
+            var x = min(Float32(column * step), Float32(width)) / Float32(width)
+            var c = cube[].sample(d00 + across * x + down * y)
+            var i = (row * columns + column) * 3
+            samples[unsafe_offset=i] = c.r * scale
+            samples[unsafe_offset=i + 1] = c.g * scale
+            samples[unsafe_offset=i + 2] = c.b * scale
 
 
 __async def _resolve_task(

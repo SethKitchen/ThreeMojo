@@ -26,7 +26,15 @@ cores.
 | Look | Right stick | The arrows |
 | Run | Hold the right trigger, the east button or the left stick | Hold Shift, or `R` |
 | Jump | The south button | Space |
+| Use | The west button | `E` |
+| Weather | | `1` clear, `2` overcast, `3` rain, `4` fog |
+| Time | | `5` moves the day on three hours |
 | Quit | The start button | Escape or `q` |
+
+With `--play`, the weather turns by itself, a minute and a half each:
+see `extensions.village.weather`. A number key sets it. The day passes
+in twenty minutes, from two in the afternoon: see
+`extensions.village.day`.
 
 The game moves by the time each frame takes, so a slow frame moves the
 player as far as many quick ones do. It prints the frames a second to the
@@ -62,6 +70,8 @@ from extensions.village.pad_input import (
     keyboard_input,
 )
 from extensions.village.play import PlayParameters, VillageGame
+from extensions.village.day import DayCycle
+from extensions.village.weather import WeatherKind
 from extensions.village.quality import (
     HIGH,
     LOW,
@@ -91,6 +101,10 @@ comptime FPS = 8
 comptime SECONDS = Float32(6)
 """How long the scripted walk lasts."""
 comptime QUIT = Key(113)
+comptime DAY_RATE = Float32(24.0 / 1200.0)
+"""The hours a second that pass in play: a day in twenty minutes."""
+comptime KEY_ONE = Key(49)
+"""The `1` key: the number keys from it set the weather."""
 comptime POLL = Duration(1.0, MILLISECOND)
 """How long the play loop waits for input before it draws."""
 comptime KEY_HOLD = Duration(10.0, SECOND)
@@ -213,11 +227,14 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
     var scene = Scene()
     var bed = pebble_bed(decode(Path(PEBBLES).read_bytes()))
     print("Building the village...", file=stderr)
+    var parameters = PlayParameters(game_quality(preset))
+    parameters.weather_cycle = True
+    parameters.day = DayCycle(14, DAY_RATE)
     var game = VillageGame(
         scene,
         assets,
         Renderer(64, 64),
-        PlayParameters(game_quality(preset)),
+        parameters,
         bed^,
         None,
         width,
@@ -247,6 +264,11 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
                         running = False
                     if event.key == KEY_SPACE:
                         tapped = True
+                    var number = event.key.value - KEY_ONE.value
+                    if number >= 0 and number < 4:
+                        game.weather.set(WeatherKind(number))
+                    if number == 4:
+                        game.day.hour = (game.day.hour + 3) % 24
                     keys.press(event.key)
                     shift = event.shift
                 elif event.kind == KEY_UP:

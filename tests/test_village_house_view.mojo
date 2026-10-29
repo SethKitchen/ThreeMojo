@@ -9,6 +9,7 @@ and every kind of furniture."""
 
 from core.assets import Assets
 from core.buffer_geometry import COLOR
+from core.object3d import NodeId
 from core.scene import Scene
 from extensions.building.ids import ElementId, SpaceId
 from extensions.building.kinds import (
@@ -54,12 +55,14 @@ from extensions.village.house_view import (
     inside_shade,
     outside_shade,
     painted,
+    roof_shade,
     stand_house,
 )
+from extensions.village.dressing import FLAME
 from extensions.village.surfaces import HouseLooks, house_looks
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from std.math import pi, sin
+from std.math import pi, sin, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -95,6 +98,26 @@ def _house(
         brick(),
         facade,
     )
+
+
+def test_a_roof_is_weathered() raises:
+    var tint = Vector3(1, 0.5, 0.3)
+    # Over the whole roof, the eave is darker than the ridge.
+    var eave = Float32(0)
+    var ridge = Float32(0)
+    var mossy = 0
+    for k in range(200):
+        var x = Float32(k) * 0.37
+        var low = roof_shade(tint, x, 0, 5, 3)
+        var high = roof_shade(tint, x, 1, 5, 3)
+        eave += low.x
+        ridge += high.x
+        # Moss turns a red tile toward green.
+        if low.y > low.x:
+            mossy += 1
+    assert_true(eave < ridge)
+    assert_true(mossy > 0)
+    assert_true(mossy < 200)
 
 
 def test_paint_and_shade() raises:
@@ -167,9 +190,28 @@ def test_every_facade_stands_with_its_doors_on_hinges() raises:
         var standing = stand_house(
             scene, assets, looks, house, model, lot, _flat()
         )
-        # Eight sheets, and a leaf for each of the two doors.
-        assert_equal(standing.meshes, 10)
-        assert_equal(len(scene.meshes), 10)
+        # Seven sheets of the shell, six of the inside, the windows'
+        # lamplight, their panes by night and by day, and a leaf for each
+        # of the two doors.
+        assert_equal(standing.meshes, 18)
+        assert_equal(len(scene.meshes), 18)
+        assert_true(scene.node(standing.daylit).visible)
+        # The lamplight hangs hidden from a node of its own.
+        assert_false(scene.node(standing.lit).visible)
+        assert_equal(scene.node(standing.lit).parent.value, standing.root.value)
+        # The inside hangs from a node of its own, and casts no shadow.
+        assert_equal(
+            scene.node(standing.inside).parent.value, standing.root.value
+        )
+        var hidden = 0
+        for mesh in scene.meshes:
+            if mesh.node.value == standing.inside.value:
+                hidden += 1
+                assert_false(mesh.cast_shadow)
+        assert_equal(hidden, 6)
+        assert_almost_equal(
+            standing.radius, sqrt(Float32(3.5 * 3.5 + 2.5 * 2.5)), atol=1e-5
+        )
         assert_equal(len(standing.hinges), 2)
         assert_equal(len(standing.interior.doorways), 2)
         assert_true(standing.triangles > 2000)
@@ -193,8 +235,8 @@ def test_a_flat_roofed_house_draws_no_roof() raises:
     var bare = Scene()
     var level = _stand(bare, assets, looks, flat)
     assert_true(level < pitched)
-    # One door, and no roof sheet.
-    assert_equal(len(bare.meshes), len(scene.meshes) - 1)
+    # One door, and the roof's sheet holds only the hood over it.
+    assert_equal(len(bare.meshes), len(scene.meshes))
 
 
 def test_steps_and_a_deep_plinth_stand_on_a_slope() raises:
@@ -322,7 +364,7 @@ def test_a_wide_window_on_a_framed_wall_and_doors_upstairs() raises:
     var standing = stand_house(scene, assets, looks, house, model, lot, _flat())
     assert_equal(len(standing.hinges), 2)
     # The upstairs door has a leaf too.
-    assert_equal(standing.meshes, 11)
+    assert_equal(standing.meshes, 19)
 
 
 def test_a_boarded_house_with_no_openings() raises:
@@ -335,8 +377,11 @@ def test_a_boarded_house_with_no_openings() raises:
     var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
     var standing = stand_house(scene, assets, looks, house, model, lot, _flat())
     assert_equal(len(standing.hinges), 0)
-    # No window: no pane, and so no glass and no daylight sheet.
-    assert_equal(standing.meshes, 6)
+    # No window: no pane, and so no glass. Of the shell, the facade, the
+    # plaster of the gutters, the wood, the stone and the roof; of the
+    # inside, the plaster, the wood, the stone, the planks, the lantern's
+    # glow and the rug's cloth.
+    assert_equal(standing.meshes, 11)
 
 
 def test_a_model_with_no_walls_or_rooms_stands_its_roof() raises:
@@ -432,15 +477,21 @@ def _barn(pitch: Float32) -> HouseParameters:
 
 
 def _drawn(
-    mut assets: Assets, looks: HouseLooks, house: HouseParameters
+    mut assets: Assets,
+    looks: HouseLooks,
+    house: HouseParameters,
+    empty: Bool = False,
 ) raises -> Int:
-    """Stand a barn's model, drawn as the house says, and return its
-    triangles."""
+    """Stand a barn's model, drawn as the house says, with its furniture
+    or `empty`, and return its triangles."""
     var scene = Scene()
     var barn = _barn(Float32(house.pitch.to(DEGREE)))
     var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
+    var model = house_model(barn)
+    if empty:
+        model.furnishings.clear()
     return stand_house(
-        scene, assets, looks, house, house_model(barn), lot, _flat()
+        scene, assets, looks, house, model, lot, _flat()
     ).triangles
 
 
@@ -474,13 +525,15 @@ def test_a_barn_hangs_two_leaves_that_swing_out() raises:
 def test_a_barn_draws_its_hay_its_mangers_and_its_loft_door() raises:
     var assets = Assets()
     var looks = house_looks(assets, 8, 1)
-    # The same model drawn as a barn and as a dwelling: the barn draws
-    # bales and mangers where the dwelling draws a shelf and a cabinet.
+    # The barn draws bales and mangers for its stock.
     var steep = _barn(35)
+    var hay = _drawn(assets, looks, steep) - _drawn(assets, looks, steep, True)
+    assert_true(hay > 600)
+    # The same model drawn as a barn and as a dwelling: what differs
+    # but the loft door is the same at every pitch.
     var dwelling = _barn(35)
     dwelling.use = DWELLING
     var stocked = _drawn(assets, looks, steep) - _drawn(assets, looks, dwelling)
-    assert_true(stocked > 600)
     # A gable too low for a loft door has none.
     var low = _barn(8)
     var low_dwelling = _barn(8)
@@ -506,11 +559,18 @@ def test_a_wide_door_leaf_is_braced() raises:
 
 
 def _has_color(
-    scene: Scene, assets: Assets, material: MaterialId, color: Vector3
+    scene: Scene,
+    assets: Assets,
+    material: MaterialId,
+    color: Vector3,
+    under: Optional[NodeId] = None,
 ) raises -> Bool:
-    """Return whether a mesh of a material has a vertex of a color."""
+    """Return whether a mesh of a material, under a node if one is given,
+    has a vertex of a color."""
     for mesh in scene.meshes:
         if mesh.material.value != material.value:
+            continue
+        if under and mesh.node.value != under.value().value:
             continue
         ref colors = assets.geometries.get(mesh.geometry).attribute_view(
             String(COLOR)
@@ -519,6 +579,65 @@ def _has_color(
             if (colors.vector3(v) - color).length() < 1e-4:
                 return True
     return False
+
+
+def _cloth_meshes(scene: Scene, looks: HouseLooks) -> Int:
+    """Return how many meshes wear the cloth."""
+    var count = 0
+    for mesh in scene.meshes:
+        if mesh.material.value == looks.cloth.value:
+            count += 1
+    return count
+
+
+def test_a_dwelling_is_dressed_and_lit_by_lanterns() raises:
+    var assets = Assets()
+    var looks = house_looks(assets, 8, 1)
+    # A house of two storeys with a stair and a chamber: a rug and a
+    # lantern in each room, clear of the stair.
+    var house = Scene()
+    var two = _house(7, 2)
+    var lot = house_lot(two, 0, 0, Angle(0.0, RADIAN))
+    var standing = stand_house(
+        house, assets, looks, two, house_model(two), lot, _flat()
+    )
+    assert_equal(_cloth_meshes(house, looks), 1)
+    assert_true(
+        _has_color(house, assets, looks.daylight, FLAME * 0.8, standing.inside)
+    )
+    # A house 3 meters deep, with a stair: the stair's band leaves too
+    # little floor for a rug or a lantern in either storey.
+    var shallow = Scene()
+    var low = HouseParameters(
+        "shallow", Length(5.0, METER), Length(3.0, METER), 2, brick()
+    )
+    var narrow = stand_house(
+        shallow,
+        assets,
+        looks,
+        low,
+        house_model(low),
+        house_lot(low, 0, 0, Angle(0.0, RADIAN)),
+        _flat(),
+    )
+    assert_false(
+        _has_color(shallow, assets, looks.daylight, FLAME * 0.8, narrow.inside)
+    )
+    # Its lantern by the front door hangs outside.
+    assert_true(_has_color(shallow, assets, looks.daylight, FLAME * 0.8))
+    # A barn has no rug and no lantern.
+    var barn = Scene()
+    _ = stand_house(
+        barn,
+        assets,
+        looks,
+        _barn(35),
+        house_model(_barn(35)),
+        house_lot(_barn(35), 0, 0, Angle(0.0, RADIAN)),
+        _flat(),
+    )
+    assert_equal(_cloth_meshes(barn, looks), 0)
+    assert_false(_has_color(barn, assets, looks.daylight, FLAME * 0.8))
 
 
 def test_a_house_is_dressed_by_its_facade() raises:
