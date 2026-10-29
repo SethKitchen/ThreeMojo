@@ -845,6 +845,7 @@ def test_the_maps_of_one_material_keep_their_own_transforms() raises:
     var material = assets.materials.get(model.materials[0])
     assert_true(material.normal_map != NO_TEXTURE)
     assert_almost_equal(material.normal_scale.x, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(material.normal_scale.y, Float32(-0.5), atol=TOLERANCE)
 
 
 def test_a_moved_map_draws_where_the_transform_puts_it() raises:
@@ -1514,13 +1515,15 @@ def test_the_specular_and_clearcoat_extensions_read_their_maps() raises:
     ]:
         assert_equal(assets.textures.get(map).color_space, LINEAR)
         assert_equal(assets.textures.get(map).alpha, IGNORED)
-    # The normal texture's scale is three.js's, on both axes.
+    # The normal texture's scale is three.js's, on both axes, with y
+    # flipped as `assignFinalMaterial` flips it for no tangents.
     assert_equal(material.clearcoat_normal_scale.x, Float32(0.5))
-    assert_equal(material.clearcoat_normal_scale.y, Float32(0.5))
-    # With no scale, the scale is one.
+    assert_equal(material.clearcoat_normal_scale.y, Float32(-0.5))
+    # With no scale, the scale is one, and y is flipped all the same.
     var second = assets.materials.get(model.materials[1])
     assert_true(second.clearcoat_normal_map != NO_TEXTURE)
     assert_equal(second.clearcoat_normal_scale.x, Float32(1))
+    assert_equal(second.clearcoat_normal_scale.y, Float32(-1))
     assert_equal(second.clearcoat_map, NO_TEXTURE)
     # And the renderer draws every one of the maps as it is stored.
     var lamp = Object3D()
@@ -1546,6 +1549,7 @@ def test_the_specular_and_clearcoat_extensions_read_their_maps() raises:
     assert_equal(unmapped.clearcoat_roughness_map, NO_TEXTURE)
     assert_equal(unmapped.clearcoat_normal_map, NO_TEXTURE)
     assert_equal(unmapped.clearcoat_normal_scale.x, Float32(1))
+    assert_equal(unmapped.clearcoat_normal_scale.y, Float32(1))
     # A coat map moved apart from the base map keeps its own transform.
     var apart_scene = Scene()
     var apart = loaded(

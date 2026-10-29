@@ -1161,7 +1161,10 @@ def test_a_malformed_material_or_texture_is_refused() raises:
     assert_equal(first.roughness_map, model.data_textures[0])
     assert_equal(first.metalness_map, model.data_textures[0])
     assert_equal(first.normal_map, model.data_textures[0])
+    # The scale's y is flipped, as three.js's `assignFinalMaterial` flips
+    # it for a geometry with no tangents.
     assert_almost_equal(first.normal_scale.x, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(first.normal_scale.y, Float32(-0.5), atol=TOLERANCE)
     assert_equal(first.emissive_map, model.color_textures[1])
     assert_almost_equal(first.alpha_test, Float32(0.5), atol=TOLERANCE)
     assert_true(model.color_textures[0] != model.data_textures[0])
@@ -1169,6 +1172,9 @@ def test_a_malformed_material_or_texture_is_refused() raises:
     var second = assets.materials.get(model.materials[1])
     assert_equal(second.map, first.map)
     assert_equal(second.normal_map, first.normal_map)
+    # With no scale, the scale is one, and y is flipped all the same.
+    assert_equal(second.normal_scale.x, Float32(1))
+    assert_equal(second.normal_scale.y, Float32(-1))
     assert_equal(assets.textures.count(), 3)
     ref mirrored = assets.textures.get(model.color_textures[0])
     assert_equal(mirrored.wrap_s, MIRROR)

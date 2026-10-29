@@ -407,7 +407,7 @@ To write the user data back, give it to `GltfExportOptions`. See [Exporters](Exp
 |---|---|
 | A primitive of triangles | A `BufferGeometry` with `position`, and `normal`, `uv`, `uv1` and `color` when present, indexed when it is. `TEXCOORD_1` becomes `uv1`. |
 | A primitive of points or lines | A `Points` or a `Line`. See [Points and lines](#points-and-lines). |
-| A material | A `STANDARD` material, or a `BASIC` or `PHYSICAL` one when an [extension](#gltf-extensions) asks. It reads base color and alpha, base color texture, metallic and roughness factors, the metallic-roughness texture as both `roughness_map` and `metalness_map`, normal texture and scale, the [occlusion texture](#occlusion), emissive factor and texture, `doubleSided`. `BLEND` sets `transparent`. `MASK` sets `alpha_test` to `alphaCutoff`. |
+| A material | A `STANDARD` material, or a `BASIC` or `PHYSICAL` one when an [extension](#gltf-extensions) asks. It reads base color and alpha, base color texture, metallic and roughness factors, the metallic-roughness texture as both `roughness_map` and `metalness_map`, normal texture and scale (see [normal maps](#normal-maps)), the [occlusion texture](#occlusion), emissive factor and texture, `doubleSided`. `BLEND` sets `transparent`. `MASK` sets `alpha_test` to `alphaCutoff`. |
 | A texture | A `Texture` at its sampler's wrap and filters. A base color or emissive map is read as sRGB. A metallic-roughness, normal or occlusion map is read as linear, with its alpha ignored. One glTF texture read both ways is two textures. |
 | A node | An `Object3D` at its translation, rotation and scale, or at its matrix decomposed, with the node's `name`. Each primitive of its mesh is a `Mesh`. |
 | A node with a `skin` | Each primitive of its mesh is a `SkinnedMesh`. See [Skins, morph targets and animations](#skins-morph-targets-and-animations). |
@@ -438,6 +438,14 @@ A point or a line gets a `BASIC` material of its own, as three.js makes a `Point
 An index here holds triangles. Thus the loader copies the vertices of an indexed point or line primitive out in index order, as three.js's `toNonIndexed` does. The morph targets are copied with them.
 
 A point or a line on a skinned node or an instanced node is refused. A skinned or instanced line is not ported.
+
+### Normal maps
+
+A `normalTexture` with a `scale` of `s` gives the `normal_scale` `(s, -s)`. A clear coat's normal texture gives its `clearcoat_normal_scale` the same way. three.js's `assignFinalMaterial` flips y like this when the geometry has no `tangent` attribute.
+
+The loader reads no `TANGENT`. Thus the renderer always builds the tangent frame from the texture coordinates. The bitangent of that frame points where `v` grows, and in glTF `v` grows down the image. The green of a glTF normal map points up the image, so y must be flipped.
+
+A material without a normal map keeps the scale `(1, 1)`, because a `Material` refuses a scale with no map. three.js flips that unused scale too. The writer writes `normalTexture.scale` from x only, as three.js's `GLTFExporter` does. Thus a file that is read, written and read again keeps its scale.
 
 ### Occlusion
 

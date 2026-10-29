@@ -978,8 +978,9 @@ def check_coat_maps(trip: Trip) raises:
     assert_almost_equal(material.specular_intensity, 0.5, atol=TOLERANCE)
     assert_almost_equal(material.clearcoat, 0.75, atol=TOLERANCE)
     assert_almost_equal(material.clearcoat_roughness, 0.25, atol=TOLERANCE)
+    # Written from x and read with y flipped, as three.js does both.
     assert_equal(material.clearcoat_normal_scale.x, Float32(0.5))
-    assert_equal(material.clearcoat_normal_scale.y, Float32(0.5))
+    assert_equal(material.clearcoat_normal_scale.y, Float32(-0.5))
     for id in [
         material.specular_intensity_map,
         material.specular_color_map,
@@ -1055,6 +1056,34 @@ def test_the_specular_and_clearcoat_maps_survive_two_trips() raises:
         second.material().clearcoat_normal_map,
         first.assets.textures.get(first.material().clearcoat_normal_map),
     )
+
+
+def test_a_normal_scale_keeps_its_value_through_two_trips() raises:
+    # The writer writes the scale's x, as three.js's `GLTFExporter` does,
+    # and the reader flips y, as three.js's `assignFinalMaterial` does for
+    # a geometry with no tangents. A scale read, written and read again
+    # comes back the same.
+    var assets = Assets()
+    var scene = one_mesh(
+        assets,
+        standard_material(
+            Color(9, 9, 9),
+            normal_map=assets.textures.add(data_image(4)),
+            normal_scale=Vector2(0.5, 0.5),
+        ),
+    )
+    var first = Trip(scene, assets)
+    var document = first.document()
+    var normals = document.get(first.first_material(), "normalTexture")
+    assert_equal(document.number(document.get(normals, "scale")), 0.5)
+    assert_equal(first.material().normal_scale.x, Float32(0.5))
+    assert_equal(first.material().normal_scale.y, Float32(-0.5))
+    var second = first.again()
+    var again = second.document()
+    var written = again.get(second.first_material(), "normalTexture")
+    assert_equal(again.number(again.get(written, "scale")), 0.5)
+    assert_equal(second.material().normal_scale.x, Float32(0.5))
+    assert_equal(second.material().normal_scale.y, Float32(-0.5))
 
 
 def test_a_clearcoat_normal_map_at_a_scale_of_one_writes_none() raises:

@@ -423,7 +423,9 @@ def check_round_trip(container: GltfContainer) raises:
     assert_equal(shiny.metalness, original.metalness)
     assert_equal(shiny.side, DOUBLE_SIDE)
     assert_equal(shiny.alpha_test, original.alpha_test)
+    # The writer writes x, and the reader flips y, as three.js's do.
     assert_equal(shiny.normal_scale.x, 0.5)
+    assert_equal(shiny.normal_scale.y, -0.5)
     assert_equal(shiny.emissive.r, original.emissive.r)
     assert_equal(shiny.emissive.g, original.emissive.g)
     assert_equal(shiny.emissive.b, original.emissive.b)

@@ -38,6 +38,16 @@ its `strength` the `ao_map_intensity`, as three.js reads them. Its red
 channel dims the indirect light. An unlit material reads no occlusion,
 as in three.js.
 
+**A normal map's green is flipped.** A `normalTexture`'s `scale` becomes
+the `normal_scale` `(scale, -scale)`, and a clear coat's normal texture
+does the same, as three.js's `assignFinalMaterial` does for a geometry
+with no `tangent` attribute. This loader reads no `TANGENT`, so the
+renderer always builds the tangent frame from the texture coordinates.
+That frame's bitangent points where `v` grows, which is down a glTF
+image, and a glTF normal map's green points up the image. A material with
+no normal map keeps the scale `(1, 1)`, because a `Material` refuses a
+scale with no map to scale; three.js flips that unused scale too.
+
 **Each map is placed on its own.** A `texCoord` of one gives the texture
 the channel `UV_CHANNEL_1`, so the renderer samples it at `uv1`, and a
 `KHR_texture_transform` gives it a transform of its own, whatever the
@@ -2078,11 +2088,13 @@ struct _Loader(Movable):
                 pbr, "metallicRoughnessTexture", LINEAR, assets
             )
         var normal_map = self.map_of(material, "normalTexture", LINEAR, assets)
-        var normal_scale = Float32(1)
+        var normal_scale = Vector2(1, 1)
         if normal_map != NO_TEXTURE:
-            normal_scale = self.number(
+            # three.js's `assignFinalMaterial` flips y with no tangents.
+            var scale = self.number(
                 self.document.get(material, "normalTexture"), "scale", 1
             )
+            normal_scale = Vector2(scale, -scale)
         var occlusion = self.occlusion_of(material, assets)
         var emissive = Color(0, 0, 0)
         var glow = self.numbers(material, "emissiveFactor", 3)
@@ -2144,7 +2156,7 @@ struct _Loader(Movable):
         var clearcoat_map = NO_TEXTURE
         var clearcoat_roughness_map = NO_TEXTURE
         var clearcoat_normal_map = NO_TEXTURE
-        var clearcoat_normal_scale = Float32(1)
+        var clearcoat_normal_scale = Vector2(1, 1)
         var coat = self.extension(material, MATERIALS_CLEARCOAT)
         if coat != NO_NODE:
             kind = PHYSICAL
@@ -2153,7 +2165,8 @@ struct _Loader(Movable):
                 coat, "clearcoatRoughnessFactor", 0
             )
             # three.js's `GLTFMaterialsClearcoatExtension`: three maps of
-            # data, and the normal texture's `scale` on both axes.
+            # data, and the normal texture's `scale` on both axes, with y
+            # then flipped as the base normal map's is.
             if clearcoat > 0:
                 clearcoat_map = self.data_map_of(
                     coat, "clearcoatTexture", assets
@@ -2165,11 +2178,12 @@ struct _Loader(Movable):
                     coat, "clearcoatNormalTexture", assets
                 )
             if clearcoat_normal_map != NO_TEXTURE:
-                clearcoat_normal_scale = self.number(
+                var scale = self.number(
                     self.document.get(coat, "clearcoatNormalTexture"),
                     "scale",
                     1,
                 )
+                clearcoat_normal_scale = Vector2(scale, -scale)
         var transmission = Float32(0)
         var transmission_map = NO_TEXTURE
         var through = self.extension(material, MATERIALS_TRANSMISSION)
@@ -2288,7 +2302,7 @@ struct _Loader(Movable):
             roughness_map=roughness_map,
             metalness_map=roughness_map,
             normal_map=normal_map,
-            normal_scale=Vector2(normal_scale, normal_scale),
+            normal_scale=normal_scale,
             bump_map=bump_map,
             bump_scale=bump_scale,
             ao_map=occlusion[0],
@@ -2324,9 +2338,7 @@ struct _Loader(Movable):
             clearcoat_map=clearcoat_map,
             clearcoat_roughness_map=clearcoat_roughness_map,
             clearcoat_normal_map=clearcoat_normal_map,
-            clearcoat_normal_scale=Vector2(
-                clearcoat_normal_scale, clearcoat_normal_scale
-            ),
+            clearcoat_normal_scale=clearcoat_normal_scale,
         )
 
     def material_for(
