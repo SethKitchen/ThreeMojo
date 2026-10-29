@@ -407,6 +407,15 @@ def test_round_round() raises:
     assert_almost_equal(pq[0].depth, 0.1, atol=1e-6)
     _near(pq[0].normal, Vector3(0, 0, 1), 1e-6)
     _near(pq[0].point, Vector3(0, 0, 0.25), 1e-6)
+    # Two parallel capsules that overlap from x = 1 to x = 2 meet at the end
+    # of the first that is nearer the middle of the second, x = 2, as
+    # three.js's Octree chooses. `Line3`'s rule starts from x = 1.
+    var r = WorldShape.round(Vector3(0, 0, 0), Vector3(2, 0, 0), 0.3)
+    var s = WorldShape.round(Vector3(1, 0.5, 0), Vector3(4, 0.5, 0), 0.3)
+    var rs = collide(r, s, 0.02)
+    assert_almost_equal(rs[0].depth, 0.1, atol=1e-6)
+    _near(rs[0].normal, Vector3(0, 1, 0), 1e-6)
+    _near(rs[0].point, Vector3(2, 0.25, 0), 1e-6)
 
 
 def test_signed_distance() raises:

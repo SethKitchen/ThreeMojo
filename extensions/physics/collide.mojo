@@ -11,7 +11,9 @@ is an overlap. A negative depth is a gap no wider than the margin: the
 solver uses it to stop a fast body at the surface, not after it.
 
 - Two round shapes, a sphere or a capsule, meet at the nearest points of
-  their segments, from `Line3.closest_points_to_line`.
+  their segments. Two parallel segments that overlap start from the end
+  of the first that is nearer the middle of the second, as three.js's
+  Octree chooses, and not from the first one's start, as its `Line3` does.
 - A round shape and a polyhedron meet at the minimum of the polyhedron's
   signed distance along the segment. The signed distance of a convex
   solid is a convex function, so a golden-section search finds it. Each
@@ -36,7 +38,7 @@ from extensions.physics.shape import (
 from math.bounds import Sphere
 from math.capsule import Capsule
 from math.octree import triangle_capsule_intersect, triangle_sphere_intersect
-from math.triangle import Line3, Triangle
+from math.triangle import POINT_EPSILON, Triangle, _segment_closest_points
 from math.utils import mix_delta
 from math.vector3 import Vector3
 from std.math import inf
@@ -170,6 +172,30 @@ def collide(
     return polyhedron_polyhedron(a.polyhedron, b.polyhedron, margin)
 
 
+def _nearest_points(
+    start1: Vector3, end1: Vector3, start2: Vector3, end2: Vector3
+) -> Tuple[Vector3, Vector3]:
+    """Return the nearest points of two segments, the first's then the
+    second's.
+
+    The arithmetic is `Line3.closest_points_to_line`'s. Two parallel
+    segments that overlap start from the end of the first that is nearer
+    the middle of the second, as three.js's Octree chooses.
+
+    Args:
+        start1: The first segment's start.
+        end1: The first segment's end.
+        start2: The second segment's start.
+        end2: The second segment's end.
+
+    Returns:
+        The point of the first segment and the point of the second.
+    """
+    return _segment_closest_points(
+        start1, end1, start2, end2, Float64(POINT_EPSILON), octree_ties=True
+    )
+
+
 def round_round(
     a: WorldShape, b: WorldShape, margin: Float32
 ) -> List[ContactPoint]:
@@ -183,11 +209,7 @@ def round_round(
     Returns:
         One contact, or none.
     """
-    var on_a = Vector3(0, 0, 0)
-    var on_b = Vector3(0, 0, 0)
-    _ = Line3(a.start, a.end).closest_points_to_line(
-        Line3(b.start, b.end), on_a, on_b
-    )
+    var on_a, on_b = _nearest_points(a.start, a.end, b.start, b.end)
     var out = List[ContactPoint]()
     var gap = (on_b - on_a).length()
     var depth = a.radius + b.radius - gap
@@ -416,12 +438,11 @@ def _edge_contact(a: Polyhedron, b: Polyhedron, edge: _Axis) -> ContactPoint:
     points of the features that reach farthest toward each other."""
     var on_a = _supporting(a, edge.normal)
     var on_b = _supporting(b, -edge.normal)
-    var pa = Vector3(0, 0, 0)
-    var pb = Vector3(0, 0, 0)
-    _ = Line3(
-        a.vertices[on_a[0]], a.vertices[on_a[len(on_a) - 1]]
-    ).closest_points_to_line(
-        Line3(b.vertices[on_b[0]], b.vertices[on_b[len(on_b) - 1]]), pa, pb
+    var pa, pb = _nearest_points(
+        a.vertices[on_a[0]],
+        a.vertices[on_a[len(on_a) - 1]],
+        b.vertices[on_b[0]],
+        b.vertices[on_b[len(on_b) - 1]],
     )
     return ContactPoint((pa + pb) * 0.5, edge.normal, -edge.separation)
 
