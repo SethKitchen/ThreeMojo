@@ -27,6 +27,7 @@ from extensions.humanoid.rig.joints import (
     named_joints,
 )
 from extensions.humanoid.rig.sword_clips import (
+    burst_clip,
     dodge_clip,
     fang_clip,
     fall_clip,
@@ -115,6 +116,7 @@ def test_each_clip_lasts_as_long_as_its_move() raises:
         "rising_edge",
         "tempest",
         "fang",
+        "burst",
         "dodge",
         "guard",
         "flinch",
@@ -130,6 +132,7 @@ def test_each_clip_lasts_as_long_as_its_move() raises:
         0.81,
         1.06,
         0.65,
+        1.44,
         0.48,
         1.0,
         0.4,
@@ -145,6 +148,7 @@ def test_each_clip_lasts_as_long_as_its_move() raises:
     clips.append(rising_edge_clip(bones, rig))
     clips.append(tempest_clip(bones, rig))
     clips.append(fang_clip(bones, rig))
+    clips.append(burst_clip(bones, rig))
     clips.append(dodge_clip(bones, rig))
     clips.append(guard_clip(bones, rig))
     clips.append(flinch_clip(bones, rig))

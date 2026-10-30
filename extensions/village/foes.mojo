@@ -27,8 +27,9 @@ A bandit returns to its post when the player falls, or leads it further
 than `LOSE` from its post. Only the bandit that holds the attack token
 attacks, so the others wait their turn round the player, as foes do in
 most action games. A plan is two or three light attacks, a heavy attack,
-or a light and a heavy attack. The dice that choose come from the
-bandit's seed, so a fight plays the same way each time.
+a light and a heavy attack, or a burst attack that glows red and that no
+guard stops. The dice that choose come from the bandit's seed, so a fight
+plays the same way each time.
 
 **Wolves.** A wolf is an animal of the village's kind, meshed as a
 flipbook, with a `Fighter` whose one attack is the `BITE`: a crouch, and
@@ -63,6 +64,7 @@ from extensions.village.clothes import (
 )
 from extensions.village.combat import (
     BITE,
+    BURST,
     FREE,
     HEAVY,
     LIGHT_ONE,
@@ -264,16 +266,19 @@ def plan_for(roll: Float32) -> List[CombatMove]:
         roll: A number from zero to one.
 
     Returns:
-        Two light attacks below 0.4, three below 0.65, a heavy attack below
-        0.9, and a light and a heavy attack above.
+        Two light attacks below 0.35, three below 0.6, a heavy attack below
+        0.8, a light and a heavy attack below 0.9, and a burst attack
+        above.
     """
-    if roll < 0.4:
+    if roll < 0.35:
         return [LIGHT_ONE, LIGHT_TWO]
-    if roll < 0.65:
+    if roll < 0.6:
         return [LIGHT_ONE, LIGHT_TWO, LIGHT_THREE]
-    if roll < 0.9:
+    if roll < 0.8:
         return [HEAVY]
-    return [LIGHT_ONE, HEAVY]
+    if roll < 0.9:
+        return [LIGHT_ONE, HEAVY]
+    return [BURST]
 
 
 struct Brain(Copyable, Movable):

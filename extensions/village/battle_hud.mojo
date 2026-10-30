@@ -20,7 +20,9 @@
 4. **Each bandit's health and ki**, over its head, while it fights or is
    hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy
    attack would finish it. A bandit that winds up a heavy attack shows a
-   red `!`, as Nioh warns of a strong blow.
+   red `!`, as Nioh warns of a strong blow. A bandit that winds up a
+   burst attack glows red at the chest, as Nioh 2 warns of a burst, and
+   the glow grows until it strikes.
 5. **A dummy's ki**, over its head, while its ki is not full.
 6. **The lock's mark**: four gold dots round the locked target's chest.
 7. **The numbers and the words** of the blows, which rise and fade.
@@ -38,6 +40,7 @@ from extensions.village.battle import (
     Battle,
 )
 from extensions.village.combat import (
+    BURST,
     COMBO_KEEP,
     FINISH_SHARE,
     LIMIT,
@@ -47,10 +50,11 @@ from extensions.village.combat import (
     LOW_STANCE,
     STAGGER,
     CombatStance,
+    Fighter,
     move_data,
 )
 from extensions.village.foes import POSTED
-from extensions.village.slashes import draw_wave
+from extensions.village.slashes import BURST_TRAIL, draw_wave, glow_star
 from extensions.village.hud import (
     GOLD_TEXT,
     SHADOW,
@@ -80,6 +84,9 @@ comptime DANGER = Rgb(255, 40, 30)
 """The color of a heavy attack's warning."""
 comptime NEAREST = Float32(0.2)
 """How far before the camera a point must be to be drawn, in meters."""
+comptime GLOW_REACH = Float32(0.35)
+"""How far a burst attack's red glow reaches from the chest as it
+begins, in meters: half a man's shoulders."""
 
 
 def stance_label(stance: CombatStance) -> String:
@@ -229,6 +236,30 @@ def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int):
     )
 
 
+def _glow(
+    mut frame: Framebuffer,
+    camera: PerspectiveCamera,
+    look: Vector3,
+    feet: Vector3,
+    fighter: Fighter,
+) raises:
+    """Glow red at the chest of a fighter that winds up a burst attack:
+    a star that grows through the start-up, as wide as the shoulders at
+    first and twice as wide as it strikes."""
+    var chest = feet + Vector3(0, CHEST, 0)
+    var at = on_screen(camera, look, chest, frame.width, frame.height)
+    if not at:
+        return
+    var center = at.value()
+    var top = camera.project(
+        chest + Vector3(0, GLOW_REACH, 0), frame.width, frame.height
+    )
+    var startup = move_data(BURST).startup.to(SECOND) * fighter.pace
+    var grown = 1 + fighter.clock / startup
+    var reach = abs(top.y - center.y) * grown
+    glow_star(frame, Vector3(center.x, center.y, 0.9), reach, BURST_TRAIL)
+
+
 def draw_battle(
     mut frame: Framebuffer,
     battle: Battle,
@@ -315,6 +346,8 @@ def draw_battle(
                 _centered(
                     frame, middle, y - 11 * scale, "!", scale * 2, DANGER, 1
                 )
+        elif foe.fighter.bursting():
+            _glow(frame, camera, look, foe.character.position, foe.fighter)
     for index in range(len(battle.dummies)):
         ref practice = battle.dummies[index]
         ref fighter = practice.fighter

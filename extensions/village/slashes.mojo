@@ -10,11 +10,12 @@ of a blow.
 body's carrier, so it turns with the body. A ribbon is the arc that a
 blade's outer third sweeps, as the move's clip swings it: across at the
 chest for the light cuts, down from over the head for the third, high to
-low for the heavy cut, low to high for the rising edge, and the last 150
-degrees of the tempest's turn, which turns with the body as the clip
-spins it.
+low for the heavy cut, low to high for the rising edge, straight ahead
+at the chest for a burst attack's thrust, and the last 150 degrees of the
+tempest's turn, which turns with the body as the clip spins it. A burst
+attack's trail is red, whoever makes it.
 
-A trail is light, so `draw_trail` adds it to the finished frame, as Tales
+A trail is light, so `Trail.draw` adds it to the finished frame, as Tales
 of Arise draws its swings. The game's renderer draws every surface
 opaque, and could not. Through the move's active part, the ribbon grows
 from its start to where the blade is, brightest at the blade and fading
@@ -23,6 +24,9 @@ away over `TRAIL_LINGER`.
 
 **Waves.** `draw_wave` adds a demon fang's wave to the frame: an arch of
 light across the way it runs, standing on the ground.
+
+**Stars.** `glow_star` adds a star of light round a point of the frame,
+as the red glow of a foe that winds up a burst attack.
 
 **Sparks.** `Sparks` keeps `SPARKS` bursts of gold rays. A blow puts the
 oldest at the place it lands; it grows and shows for `SPARK_SECONDS`.
@@ -34,6 +38,7 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.rig.sword_clips import tempest_twist
 from extensions.village.combat import (
+    BURST,
     DEMON_FANG,
     HEAVY,
     LIGHT_ONE,
@@ -79,6 +84,10 @@ comptime FOE_TRAIL = Vector3(255, 120, 50)
 """The light a bandit's trails add: the orange of a threat."""
 comptime OVER_TRAIL = Vector3(255, 215, 90)
 """The light the player's trails add Over Limit: gold."""
+comptime BURST_TRAIL = Vector3(255, 40, 30)
+"""The light of a burst attack: its trail, and its glow as it winds up."""
+comptime STAR_RAYS = 8
+"""How many rays a star of light has."""
 
 
 def _cross(a: Vector3, b: Vector3) -> Vector3:
@@ -147,8 +156,9 @@ def trail_points(move: CombatMove, scale: Float32) -> List[Vector3]:
 
     Returns:
         The ribbon's corners, as `arc_points` gives them, from 1.0 to 1.45
-        meters round the sword's shoulder for a person of six feet; none
-        for a move that is not a cut.
+        meters round the sword's shoulder for a person of six feet; a
+        straight ribbon from 0.4 to 2.6 meters ahead for a burst attack's
+        thrust; none for a move that is not a cut.
     """
     var s = scale
     var inner = Float32(1.0) * s
@@ -214,6 +224,15 @@ def trail_points(move: CombatMove, scale: Float32) -> List[Vector3]:
             inner,
             outer,
         )
+    if move == BURST:
+        # A thrust straight ahead at the chest, on the sword's side,
+        # tilted so that it shows from behind and from the side.
+        var line = List[Vector3]()
+        for k in range(TRAIL_STEPS // 2 + 1):  # pragma: no branch
+            var z = (0.4 + 2.2 * Float32(k) / Float32(TRAIL_STEPS // 2)) * s
+            line.append(Vector3(-0.2 * s, 0.28 * s, z))
+            line.append(Vector3(-0.04 * s, 0.44 * s, z))
+        return line^
     if move == TEMPEST:
         # The last 150 degrees of the blade's turn at the waist, behind
         # the blade: `Trail.show` turns it with the body.
@@ -286,6 +305,44 @@ def glow_triangle(
             for k in range(3):  # pragma: no branch
                 var lit = Float32(frame.pixels[at + k]) + light[k] * share
                 frame.pixels[at + k] = UInt8(Int(min(Float32(255), lit)))
+
+
+def glow_star(
+    mut frame: Framebuffer,
+    center: Vector3,
+    radius: Float32,
+    color: Vector3,
+):
+    """Add a star of light to a frame: `STAR_RAYS` rays round a point,
+    brightest at the point.
+
+    Args:
+        frame: The frame.
+        center: The star's middle: its x and y are pixels, and its z how
+            much of the light it adds there, from 0 to 1.
+        radius: How far its rays reach, in pixels.
+        color: The light at a share of one, as sRGB bytes.
+    """
+    var half = Float32(pi) / Float32(STAR_RAYS)
+    var waist = radius * 0.35
+    var dim = center.z * 0.4
+    for k in range(STAR_RAYS):  # pragma: no branch
+        var a = 2 * half * Float32(k)
+        var tip = Vector3(
+            center.x + radius * cos(a), center.y + radius * sin(a), 0
+        )
+        var left = Vector3(
+            center.x + waist * cos(a - half),
+            center.y + waist * sin(a - half),
+            dim,
+        )
+        var right = Vector3(
+            center.x + waist * cos(a + half),
+            center.y + waist * sin(a + half),
+            dim,
+        )
+        glow_triangle(frame, center, left, tip, color)
+        glow_triangle(frame, center, tip, right, color)
 
 
 struct Trail(Movable):
@@ -406,7 +463,8 @@ struct Trail(Movable):
                 break
             var share = max(Float32(0), 1 - (self.sweep - t) / TRAIL_TAIL)
             light.append(share * self.glow)
-        glow_ribbon(frame, camera, look, placed, light, self.color)
+        var color = BURST_TRAIL if self.shown == BURST.value else self.color
+        glow_ribbon(frame, camera, look, placed, light, color)
 
 
 def glow_ribbon(

@@ -28,6 +28,7 @@ side and the other side:
 | `rising_edge_clip` | 0.81 | A crouch with the sword low on the left, and a cut up that rises onto the toes |
 | `tempest_clip` | 1.06 | The sword arm out, and a whole turn of the body |
 | `fang_clip` | 0.65 | A crouch with the sword low behind, and a cut along the ground and up |
+| `burst_clip` | 1.44 | A long coil with the sword drawn back at the hip, and a lunge that thrusts it straight ahead |
 | `dodge_clip` | 0.48 | A low, quick crouch with the sword held in |
 | `guard_clip` | 1.0, loops | The blade upright before the face, the knees bent |
 | `flinch_clip` | 0.4 | The head and the chest thrown back |
@@ -579,6 +580,48 @@ def fang_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
     var keys: List[Pose] = [low^, along^, up^]
     var at: List[Float32] = [0.28, 0.38, 0.48]
     return _cut("fang", bones, rig, keys^, at^, 0.65)
+
+
+def burst_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
+    """Return the burst attack: a long coil with the sword drawn back at
+    the hip, point forward, and a lunge that thrusts it straight ahead,
+    1.44 seconds.
+
+    Args:
+        bones: One node per joint, in the order of the joints.
+        rig: The rig the bones were placed from.
+
+    Returns:
+        The clip, named `"burst"`.
+
+    Raises:
+        Error: If there is not one bone per joint.
+    """
+    var scale = _scale(rig)
+    var coil = Pose()
+    _legs(coil, 10, 30, 0.6, scale)
+    _body(coil, 20, Vector3(10, 10, 0), Vector3(5, 15, 0))
+    coil.turn(HEAD, 0, -40)
+    _arm(coil, Grip(17, -31, 30, -97, 56, 7))
+    _free_hand(coil, -60, -15, -40)
+    # It winds in deeper as the glow grows.
+    var deeper = Pose()
+    _legs(deeper, 10, 32, 0.7, scale)
+    _body(deeper, 25, Vector3(12, 12, 0), Vector3(6, 18, 0))
+    deeper.turn(HEAD, 0, -48)
+    _arm(deeper, Grip(24, -32, 41, -114, 61, 12))
+    _free_hand(deeper, -65, -15, -45)
+    var thrust = Pose()
+    _legs(thrust, 40, 25, 0.75, scale)
+    thrust.lift = thrust.lift + Vector3(0, 0, Float32(0.2) * scale)
+    _body(thrust, -25, Vector3(15, -10, 0), Vector3(8, -15, 0))
+    thrust.turn(HEAD, -5, 40)
+    _arm(thrust, Grip(-94, -2, 48, -3, 77, 3))
+    _free_hand(thrust, 30, -25, -20)
+    var hold = thrust.copy()
+    var keys: List[Pose] = [coil^, deeper^, thrust^, hold^]
+    var at: List[Float32] = [0.18, 0.44, 0.56, 0.68]
+    return _cut("burst", bones, rig, keys^, at^, 1.44)
 
 
 def dodge_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:

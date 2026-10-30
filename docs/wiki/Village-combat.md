@@ -67,7 +67,7 @@ The heal button eats one of the herbs that the player gathered: see [Village gat
 
 ### Over Limit
 
-A limit gauge fills as the player fights well, as in Tales of Arise. Each blow that lands fills 4 points of 100. A blow that breaks a ki or a guard fills 10 more. A parry fills 15, and a perfect dodge 20.
+A limit gauge fills as the player fights well, as in Tales of Arise. Each blow that lands fills 4 points of 100. A blow that breaks a ki, a guard or a burst attack fills 10 more. A parry fills 15, and a perfect dodge 20.
 
 When the gauge is full, the player goes Over Limit for 10 seconds. The arte gauge fills, and artes cost nothing. No blow makes the player reel, and their blows do 25 percent more damage. The gauge does not fill while Over Limit lasts. Bandits and dummies never go Over Limit.
 
@@ -84,6 +84,12 @@ A guard stops a blow from within 140 degrees before the fighter. The guard loses
 A guard raised less than 0.15 seconds before the blow parries it. The guard loses no ki. The attacker loses the blow's ki, and reels. As after a perfect dodge, the next attack within 1.2 seconds is a counter. Bandits block, and do not parry.
 
 The heavy attack and the tempest have armor until their active part ends. A blow on them does its damage, and does not make the fighter reel.
+
+### Burst attacks
+
+A bandit's burst attack glows red, as Nioh 2 warns of a burst. The bandit coils for 0.7 seconds with its sword drawn back at the hip. Then it lunges, and thrusts 2.8 meters ahead. A guard does not stop the thrust, and nor does a parry. A dodge does, and a perfect dodge of a burst is as good as any other.
+
+The burst has armor until it strikes, so a light attack does not stop it. A heavy attack or an arte that lands in the red wind-up is a **burst counter**. The bandit loses all its ki, and staggers. The fight stops for 0.2 seconds, as for a finisher. A demon fang's wave counters a burst too, from far off.
 
 ### Combos
 
@@ -103,13 +109,14 @@ The three light attacks chain. A press during a move waits for the chain point: 
 | `TEMPEST` | 0.18 s | 0.48 s | 0.40 s | 2.6 m | 360 degrees | 27, four times | 7 | | 3 |
 | `DEMON_FANG` | 0.20 s | 0.10 s | 0.35 s | A wave | | 45 | 10 | | 1 |
 | `BITE` | 0.35 s | 0.20 s | 0.45 s | 1.4 m | 70 degrees | 40 | 12 | | |
+| `BURST` | 0.70 s | 0.14 s | 0.60 s | 2.8 m | 70 degrees | 120 | 45 | 20 | |
 | `DODGE` | | 0.32 s | 0.16 s | | | | | 14 | |
 
 An attack carries its fighter forward through its start-up and its active part. A blow pushes the fighter that it hits away. The player has 500 health and 100 ki.
 
 ### The weight of a blow
 
-A strong blow stops the whole fight for 0.06 seconds, as action games freeze a frame on a heavy hit. It also shakes the camera by 6 centimeters, and the shake dies away. A finisher stops the fight for 0.2 seconds, and shakes the camera twice as far. A strong blow breaks a guard, or lands and is critical, breaks a ki or fells its fighter. A blow that lands and pushes at least 4 meters a second, or throws its fighter up, is strong too.
+A strong blow stops the whole fight for 0.06 seconds, as action games freeze a frame on a heavy hit. It also shakes the camera by 6 centimeters, and the shake dies away. A finisher or a burst counter stops the fight for 0.2 seconds, and shakes the camera twice as far. A strong blow breaks a guard, or lands and is critical, breaks a ki or fells its fighter. A blow that lands and pushes at least 4 meters a second, or throws its fighter up, is strong too.
 
 ## The bandits
 
@@ -128,7 +135,7 @@ A `Brain` decides what a bandit does, frame by frame. `FoeState` is a type with 
 | `GUARDING` | Guards for 0.9 seconds | The time is over: `CIRCLING` |
 | `RETURNING` | Walks back to its post | It is there: `POSTED` |
 
-Only the bandit that holds the attack token attacks. The others wait their turn round the player. A plan is two or three light attacks, a heavy attack, or a light and a heavy attack. A waiting bandit guards about one attack of the player's in three. A blow that lands on an attacking bandit breaks off its plan.
+Only the bandit that holds the attack token attacks. The others wait their turn round the player. A plan is two or three light attacks, a heavy attack, or a light and a heavy attack. One plan in ten is a burst attack. A waiting bandit guards about one attack of the player's in three. A blow that lands on an attacking bandit breaks off its plan.
 
 A bandit returns to its post when the player falls. It also returns when the player leads it more than 28 meters from its post. The dice that choose come from each bandit's seed, so a fight plays the same way each time.
 
@@ -154,14 +161,16 @@ The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these o
 
 - **The gauges**, in the bottom right: the stance, the health, the ki, the limit gauge, and the arte gauge as a row of points. The health turns red below a quarter. Over Limit, the limit gauge turns gold, says `OVER LIMIT`, and empties as the time runs out.
 - **The combo**, such as `12 HITS`, on the right. It fades as the combo ends.
-- **Each bandit's health and ki**, over its head, while it fights or is hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy attack would finish it. A bandit that winds up a heavy attack shows a red `!`.
+- **Each bandit's health and ki**, over its head, while it fights or is hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy attack would finish it. A bandit that winds up a heavy attack shows a red `!`. A bandit that winds up a burst attack glows red at the chest, and the glow grows until it strikes.
 - **A dummy's ki**, over its head, while its ki is not full.
 - **The lock's mark**: four gold dots round the locked target's chest.
-- **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY` or `CRITICAL`. They rise and fade.
+- **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `BURST COUNTER`. They rise and fade.
 
 The note over the prompt names each arte as it starts, and each new stance. It says `OVER LIMIT!` when Over Limit begins. A blow that lands bursts in sparks.
 
-A swing leaves a trail of light: white for the player, gold Over Limit, and orange for a bandit. Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade, and fades behind it. After the active part, it fades away in 0.15 seconds. The game's renderer draws every surface opaque, so `draw_battle` adds the trails to the finished frame. See `extensions/village/slashes.mojo`.
+A swing leaves a trail of light: white for the player, gold Over Limit, and orange for a bandit. A burst attack's thrust leaves a red trail. Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade, and fades behind it. After the active part, it fades away in 0.15 seconds.
+
+The game's renderer draws every surface opaque, so `draw_battle` adds the trails to the finished frame. See `extensions/village/slashes.mojo`.
 
 The sword hangs at the hip until the fight starts. It is in the hand while a bandit within 10 meters fights, or the player fights. It goes back to the hip 6 seconds later.
 
@@ -191,6 +200,7 @@ The module is `extensions/humanoid/rig/sword_clips.mojo`. Each clip is worked ou
 | `heavy_clip` | 1.09 | A long wind-up high, and a lunge that cuts down across |
 | `rising_edge_clip` | 0.81 | A crouch with the sword low, and a cut up that rises onto the toes |
 | `fang_clip` | 0.65 | A crouch with the sword low behind, and a cut along the ground and up |
+| `burst_clip` | 1.44 | A long coil with the sword drawn back at the hip, and a lunge that thrusts it straight ahead |
 | `tempest_clip` | 1.06 | The sword arm out, and a whole turn of the body |
 | `dodge_clip` | 0.48 | A low, quick crouch |
 | `guard_clip` | 1.0, loops | The blade held across before the face |
@@ -209,7 +219,7 @@ The rig faces plus z, and calls the side on plus x its right. A camera behind th
 | `foes.mojo` | `FoeState`, `Brain`, `Sight`, `Intent`, `Bandit`, `Den`, `Post` and `Dummy`. |
 | `arms.mojo` | `Arms`: a body's swords and sword clips. |
 | `blade.mojo` | `SwordLooks`, `add_sword` and `add_scabbard`. |
-| `slashes.mojo` | `Trail`, `Sparks`, `glow_triangle` and `slash_material`. |
+| `slashes.mojo` | `Trail`, `Sparks`, `draw_wave`, `glow_triangle`, `glow_ribbon`, `glow_star` and `slash_material`. |
 | `battle_hud.mojo` | `draw_battle`. |
 | `pad_input.mojo` | `fight_input`, and the fight's keys. |
 
@@ -217,6 +227,6 @@ The rig faces plus z, and calls the side on plus x its right. A camera behind th
 
 - The fight is not saved. A new game starts with full health, and every bandit at its post.
 - A blow lands where its arc meets a fighter's circle. The blade's own path does not decide it.
-- Only the player has artes. A bandit makes light and heavy attacks only.
+- Only the player has artes. A bandit makes light attacks, heavy attacks and burst attacks only.
 - A trail is a flat ribbon, not the blade's exact path. It is added over the frame, so a wall does not hide it.
 - A fighter in the air falls as it attacks, slowly. There are no attacks made for the air.

@@ -7,7 +7,7 @@
 bars, the lock's mark and the blows' numbers."""
 
 from cameras.perspective_camera import PerspectiveCamera
-from extensions.village.battle import Popup, Wave
+from extensions.village.battle import CHEST, Popup, Wave
 from extensions.village.battle_hud import (
     draw_bar,
     draw_battle,
@@ -15,6 +15,7 @@ from extensions.village.battle_hud import (
     stance_label,
 )
 from extensions.village.combat import (
+    BURST,
     Blow,
     HEAVY,
     LIGHT_ONE,
@@ -141,6 +142,28 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     var struck = _frame()
     draw_battle(struck, arena.battle, arena.scene, camera, look)
     assert_true(_changed(warned) > _changed(struck))
+    # A burst's wind-up glows red at the chest, and the glow grows.
+    arena.battle.foes[0].fighter.move = BURST
+    arena.battle.foes[0].fighter.clock = 0.1
+    var glowing = _frame()
+    draw_battle(glowing, arena.battle, arena.scene, camera, look)
+    arena.battle.foes[0].fighter.clock = 0.6
+    var grown = _frame()
+    draw_battle(grown, arena.battle, arena.scene, camera, look)
+    assert_true(_changed(glowing) > _changed(struck))
+    assert_true(_changed(grown) > _changed(glowing))
+    # A camera at the chest, looking up at the bars, draws no glow.
+    var chest = arena.battle.foes[0].character.position + Vector3(0, CHEST, 0)
+    var under = _camera()
+    under.place(chest, chest + Vector3(0, 1, -0.2))
+    var up = Vector3(0, 1, -0.2) / Vector3(0, 1, -0.2).length()
+    var close = _frame()
+    draw_battle(close, arena.battle, arena.scene, under, up)
+    arena.battle.foes[0].fighter.move = HEAVY
+    var plain = _frame()
+    draw_battle(plain, arena.battle, arena.scene, under, up)
+    assert_equal(_changed(close), _changed(plain))
+    assert_true(on_screen(under, up, chest + Vector3(0, 0.9, 0), 320, 180))
     # Behind the camera, a bandit, a dummy and the lock's mark are not
     # drawn; nor is a fallen bandit, nor a gauge of no arte points.
     arena.battle.foes[0].character.position = Vector3(0, 0, 9)

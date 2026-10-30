@@ -46,9 +46,14 @@ that a swing reaches with `reaches`, and gives each one the blow that
   `COUNTER_SECONDS` is a counter. The player parries within `PARRY`
   seconds. Some moves have armor: a blow on them does its damage, and does
   not make the fighter reel.
+- **Burst attacks, as in Nioh 2.** A foe's burst attack glows red through
+  its start-up. A guard does not stop it, but a dodge does. The burst has
+  armor until it strikes, so a light attack does not stop it. A heavy
+  attack or an arte that lands in the start-up is a burst counter. The
+  foe loses all its ki and staggers.
 - **Over Limit, as in Tales of Arise.** A fighter's limit gauge fills
   by `LIMIT_PER_HIT` for each blow that lands, `LIMIT_PER_BREAK` for each
-  that breaks a ki or a guard, `LIMIT_PER_PARRY` for each parry, and
+  that breaks a ki, a guard or a burst, `LIMIT_PER_PARRY` for each parry, and
   `LIMIT_PER_PERFECT` for each perfect dodge, times its `limit_gain`.
   When it reaches `LIMIT`, the fighter goes Over Limit for
   `OVER_SECONDS`: its arte gauge fills, its artes cost nothing, no blow
@@ -75,6 +80,7 @@ part strikes. The times are for the middle stance:
 | `TEMPEST` | 0.18 s | 0.48 s | 0.40 s | 2.6 m | 360 degrees | 27, four times | 7 | | 3 |
 | `DEMON_FANG` | 0.20 s | 0.10 s | 0.35 s | A wave | | 45 | 10 | | 1 |
 | `BITE` | 0.35 s | 0.20 s | 0.45 s | 1.4 m | 70 degrees | 40 | 12 | | |
+| `BURST` | 0.70 s | 0.14 s | 0.60 s | 2.8 m | 70 degrees | 120 | 45 | 20 | |
 | `DODGE` | | 0.32 s | 0.16 s | | | | | 14 | |
 """
 
@@ -97,7 +103,7 @@ from units.si import (
     Velocity,
 )
 
-comptime MOVES = 13
+comptime MOVES = 14
 """How many moves there are, `FREE` among them."""
 comptime DODGE_SAFE_FROM = Float32(0.02)
 """How far into a dodge no blow can hit it any more, in seconds."""
@@ -143,7 +149,7 @@ comptime LIMIT = Float32(100)
 comptime LIMIT_PER_HIT = Float32(4)
 """How much each blow that lands fills the limit gauge."""
 comptime LIMIT_PER_BREAK = Float32(10)
-"""How much more a blow that breaks a ki or a guard fills it."""
+"""How much more a blow that breaks a ki, a guard or a burst fills it."""
 comptime LIMIT_PER_PARRY = Float32(15)
 """How much a parry fills it."""
 comptime LIMIT_PER_PERFECT = Float32(20)
@@ -193,14 +199,17 @@ before the fighter. The cut strikes nothing itself: the game sends the
 wave."""
 comptime BITE = CombatMove(8)
 """A beast's attack: a crouch, and a leap forward that bites."""
-comptime DODGE = CombatMove(9)
+comptime BURST = CombatMove(9)
+"""A foe's burst attack: a long wind-up that glows red, and a lunging
+thrust that no guard stops."""
+comptime DODGE = CombatMove(10)
 """A quick step, which no blow can hit for a moment."""
-comptime FLINCH = CombatMove(10)
+comptime FLINCH = CombatMove(11)
 """A blow landed: the fighter reels for a moment."""
-comptime STAGGER = CombatMove(11)
+comptime STAGGER = CombatMove(12)
 """The fighter's ki ran out: it stands open, and blows on it are
 critical."""
-comptime FALL = CombatMove(12)
+comptime FALL = CombatMove(13)
 """The fighter is defeated: it falls, and it stays down."""
 
 
@@ -237,9 +246,9 @@ struct StrikeOutcome(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is one of the outcomes.
 
         Returns:
-            True from `IGNORED` to `FINISHED`.
+            True from `IGNORED` to `BURST_COUNTER`.
         """
-        return ordinal_valid(self.value, 10)
+        return ordinal_valid(self.value, 11)
 
 
 comptime IGNORED = StrikeOutcome(0)
@@ -264,6 +273,9 @@ comptime DEFEATED = StrikeOutcome(9)
 """The blow landed, and took the fighter's last health: it falls."""
 comptime FINISHED = StrikeOutcome(10)
 """A heavy attack finished a staggered, weakened fighter: it falls."""
+comptime BURST_COUNTER = StrikeOutcome(11)
+"""A heavy attack or an arte landed in a burst attack's start-up: the
+fighter loses all its ki, and staggers."""
 
 
 def move_name(move: CombatMove) raises -> String:
@@ -273,13 +285,14 @@ def move_name(move: CombatMove) raises -> String:
         move: The move.
 
     Returns:
-        Such as "LIGHT 1", "HEAVY", "RISING EDGE", "DEMON FANG" or "BITE".
+        Such as "LIGHT 1", "HEAVY", "RISING EDGE", "DEMON FANG", "BITE"
+        or "BURST".
 
     Raises:
         Error: If the move is not one.
     """
     if not move.is_valid():
-        raise Error("A combat move must be one of the thirteen")
+        raise Error("A combat move must be one of the fourteen")
     var names: List[String] = [
         "FREE",
         "LIGHT 1",
@@ -290,6 +303,7 @@ def move_name(move: CombatMove) raises -> String:
         "TEMPEST",
         "DEMON FANG",
         "BITE",
+        "BURST",
         "DODGE",
         "FLINCH",
         "STAGGER",
@@ -306,14 +320,14 @@ def outcome_word(outcome: StrikeOutcome) raises -> String:
 
     Returns:
         "PERFECT DODGE", "BLOCKED", "PARRY", "GUARD BREAK", "CRITICAL",
-        "BREAK" or "FINISHER", or an empty string for an outcome that shows
-        its damage alone, or nothing.
+        "BREAK", "FINISHER" or "BURST COUNTER", or an empty string for an
+        outcome that shows its damage alone, or nothing.
 
     Raises:
         Error: If the outcome is not one.
     """
     if not outcome.is_valid():
-        raise Error("A blow's outcome must be one of the eleven")
+        raise Error("A blow's outcome must be one of the twelve")
     var words: List[String] = [
         "",
         "",
@@ -326,6 +340,7 @@ def outcome_word(outcome: StrikeOutcome) raises -> String:
         "BREAK",
         "",
         "FINISHER",
+        "BURST COUNTER",
     ]
     return words[outcome.value]
 
@@ -337,9 +352,10 @@ def is_attack(move: CombatMove) -> Bool:
         move: The move.
 
     Returns:
-        True for the light and the heavy attacks, the artes and the bite.
+        True for the light and the heavy attacks, the artes, the bite and
+        the burst attack.
     """
-    return move.value >= LIGHT_ONE.value and move.value <= BITE.value
+    return move.value >= LIGHT_ONE.value and move.value <= BURST.value
 
 
 def is_arte(move: CombatMove) -> Bool:
@@ -373,7 +389,8 @@ def landed_blow(outcome: StrikeOutcome) -> Bool:
         outcome: The outcome.
 
     Returns:
-        True for `HIT`, `CRITICAL`, `KI_BREAK`, `DEFEATED` and `FINISHED`.
+        True for `HIT`, `CRITICAL`, `KI_BREAK`, `DEFEATED`, `FINISHED` and
+        `BURST_COUNTER`.
     """
     return outcome.value >= HIT.value
 
@@ -486,6 +503,8 @@ def move_data(move: CombatMove) raises -> MoveData:
         return _data(0.2, 0.1, 0.35, 0, 0, 45, 10, 0, 1, 0.1, 0, 2)
     if move == BITE:
         return _data(0.35, 0.2, 0.45, 1.4, 70, 40, 12, 0, 0, 2.4, 1, 2.5)
+    if move == BURST:
+        return _data(0.7, 0.14, 0.6, 2.8, 70, 120, 45, 20, 0, 2.2, 1, 6)
     if move == DODGE:
         return _data(0, 0.32, 0.16, ki_cost=14, lunge=3.2)
     if move == FLINCH:
@@ -496,7 +515,7 @@ def move_data(move: CombatMove) raises -> MoveData:
         return _data(0, 0, 2)
     if move == FREE:
         return _data(0, 0, 0)
-    raise Error("A combat move must be one of the thirteen")
+    raise Error("A combat move must be one of the fourteen")
 
 
 def stance_power(stance: CombatStance) -> Float32:
@@ -677,8 +696,11 @@ struct Blow(ImplicitlyCopyable):
     # up.
     var knockback: Velocity
     var launch: Velocity
-    # Whether it can finish a staggered, weakened fighter.
+    # Whether it can finish a staggered, weakened fighter; whether no
+    # guard stops it; and whether it counters a burst attack.
     var finish: Bool
+    var unblockable: Bool
+    var breaks_burst: Bool
 
     def __init__(
         out self,
@@ -687,6 +709,8 @@ struct Blow(ImplicitlyCopyable):
         knockback: Velocity,
         launch: Velocity,
         finish: Bool = False,
+        unblockable: Bool = False,
+        breaks_burst: Bool = False,
     ):
         """Hold a blow.
 
@@ -697,12 +721,18 @@ struct Blow(ImplicitlyCopyable):
             launch: How fast it throws the fighter up.
             finish: Whether it can finish a staggered fighter with
                 `FINISH_SHARE` of its health or less.
+            unblockable: Whether it lands through a guard, as a burst
+                attack does.
+            breaks_burst: Whether it counters a burst attack that it
+                lands on in its start-up.
         """
         self.damage = damage
         self.ki_damage = ki_damage
         self.knockback = knockback
         self.launch = launch
         self.finish = finish
+        self.unblockable = unblockable
+        self.breaks_burst = breaks_burst
 
 
 @fieldwise_init
@@ -977,17 +1007,30 @@ struct Fighter(Copyable, Movable):
         reel.
 
         Returns:
-            True Over Limit; else True for a heavy attack or a tempest,
-            until its active part ends.
+            True Over Limit; else True for a heavy attack, a tempest or a
+            burst attack, until its active part ends.
 
         Raises:
             Error: Never: the move is one.
         """
         if self.over > 0:
             return True
-        return (
-            self.move == HEAVY or self.move == TEMPEST
-        ) and self.clock < self.active_end()
+        var heavy = self.move == HEAVY or self.move == TEMPEST
+        return (heavy or self.move == BURST) and self.clock < self.active_end()
+
+    def bursting(self) raises -> Bool:
+        """Return whether the fighter winds up a burst attack, and glows
+        red.
+
+        Returns:
+            True through a burst attack's start-up.
+
+        Raises:
+            Error: Never: a burst attack is a move.
+        """
+        if self.move != BURST:
+            return False
+        return self.clock < move_data(BURST).startup.to(SECOND) * self.pace
 
     def ki_price(self, move: CombatMove) raises -> Float32:
         """Return the ki that a move spends in the fighter's stance.
@@ -1326,7 +1369,9 @@ struct Fighter(Copyable, Movable):
             power for a light or a heavy attack, the combo's bonus, and
             `COUNTER_BONUS` for a counter and `OVER_BONUS` Over Limit; its
             ki damage times the might and the power; its push and its
-            throw. A heavy attack's blow can finish.
+            throw. A heavy attack's blow can finish. A burst attack's blow
+            lands through a guard. A heavy attack's or an arte's blow
+            counters a burst attack.
 
         Raises:
             Error: Never: the move is one.
@@ -1349,6 +1394,8 @@ struct Fighter(Copyable, Movable):
             data.knockback,
             data.launch,
             self.move == HEAVY,
+            self.move == BURST,
+            self.move == HEAVY or is_arte(self.move),
         )
 
     def receive(mut self, blow: Blow, front: Bool) raises -> Struck:
@@ -1362,11 +1409,13 @@ struct Fighter(Copyable, Movable):
         Returns:
             What the blow did. A dodge evades it. A guard takes it from the
             front on ki, or parries it when it was raised less than the
-            fighter's parry before. Any other blow takes
-            health and ki, and makes the fighter reel unless it has
-            armor. A blow on a staggered fighter is critical, and takes no
-            ki; a heavy one on a staggered fighter with `FINISH_SHARE` of
-            its health or less finishes it.
+            fighter's parry before; a guard does not stop a burst attack.
+            Any other blow takes health and ki, and makes the fighter reel
+            unless it has armor. A blow on a staggered fighter is
+            critical, and takes no ki; a heavy one on a staggered fighter
+            with `FINISH_SHARE` of its health or less finishes it. A heavy
+            attack or an arte on a fighter that winds up a burst attack
+            takes all its ki, and staggers it.
 
         Raises:
             Error: Never: each move is one.
@@ -1387,7 +1436,7 @@ struct Fighter(Copyable, Movable):
                 self.charge(LIMIT_PER_PERFECT)
                 return Struck(PERFECT_DODGE, 0, 0)
             return Struck(EVADED, 0, 0)
-        if self.guarding and front:
+        if self.guarding and front and not blow.unblockable:
             if self.guard_age < self.parameters.parry.to(SECOND):
                 self.charge(LIMIT_PER_PARRY)
                 self.counter = COUNTER_SECONDS
@@ -1418,6 +1467,12 @@ struct Fighter(Copyable, Movable):
             return Struck(DEFEATED, damage, 0)
         if critical:
             return Struck(CRITICAL, damage, 0)
+        if blow.breaks_burst and self.bursting():
+            var lost = self.ki
+            self.ki = 0
+            self.rest = 0
+            self._begin(STAGGER)
+            return Struck(BURST_COUNTER, damage, lost)
         self.ki -= blow.ki_damage
         self.rest = 0
         if self.ki <= 0:
@@ -1432,8 +1487,8 @@ struct Fighter(Copyable, Movable):
         """Learn what the fighter's blow did.
 
         A blow that landed adds to the combo and fills the arte gauge and
-        the limit gauge; one that broke a ki or a guard fills the limit
-        gauge more. A parried blow costs the attacker the ki that `struck`
+        the limit gauge; one that broke a ki, a guard or a burst attack
+        fills the limit gauge more. A parried blow costs the attacker the ki that `struck`
         names, and makes it reel, or stagger when its ki runs out.
 
         Args:
@@ -1448,7 +1503,8 @@ struct Fighter(Copyable, Movable):
                 return
             self._begin(FLINCH)
             return
-        if struck.outcome == KI_BREAK or struck.outcome == GUARD_BREAK:
+        var broke = struck.outcome == KI_BREAK or struck.outcome == GUARD_BREAK
+        if broke or struck.outcome == BURST_COUNTER:
             self.charge(LIMIT_PER_BREAK)
         if landed_blow(struck.outcome):
             self.combo += 1

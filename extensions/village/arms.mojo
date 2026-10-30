@@ -29,6 +29,7 @@ from core.object3d import NodeId
 from core.scene import Scene
 from extensions.humanoid.rig.joints import HIPS, LEFT_HAND
 from extensions.humanoid.rig.sword_clips import (
+    burst_clip,
     dodge_clip,
     fang_clip,
     fall_clip,
@@ -46,6 +47,7 @@ from extensions.humanoid.rig.sword_clips import (
 from extensions.village.blade import SwordLooks, add_scabbard, add_sword
 from extensions.village.character import STANDING, Character
 from extensions.village.combat import (
+    BURST,
     DEMON_FANG,
     DODGE,
     FALL,
@@ -134,6 +136,9 @@ struct Arms(Movable):
         )
         self.moves[DEMON_FANG.value] = body.mixer.add(
             AnimationAction(fang_clip(bones, rig))
+        )
+        self.moves[BURST.value] = body.mixer.add(
+            AnimationAction(burst_clip(bones, rig))
         )
         self.moves[DODGE.value] = body.mixer.add(
             AnimationAction(dodge_clip(bones, rig))

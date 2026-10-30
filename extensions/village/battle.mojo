@@ -44,8 +44,8 @@ step and pose:
    fights, or the player fights, and is sheathed `CALM_SECONDS` after.
 6. **The weight of a blow.** A strong blow stops the whole fight for
    `HIT_STOP`, as action games freeze a frame on a heavy hit, and shakes
-   the camera by `SHAKE`: see `strong_blow`. A finisher stops it for
-   `FINISH_STOP`, and shakes it twice as far. The shake dies away at
+   the camera by `SHAKE`: see `strong_blow`. A finisher or a burst
+   counter stops it for `FINISH_STOP`, and shakes it twice as far. The shake dies away at
    `SHAKE_FADE`.
 7. **The fallen.** A fallen bandit gives `LOOT` coins, and one time in
    two a herb. It lies for the
@@ -73,6 +73,7 @@ from extensions.village.character import (
     Obstacle,
 )
 from extensions.village.combat import (
+    BURST_COUNTER,
     DEFEATED,
     DEMON_FANG,
     REACH_HEIGHT,
@@ -1161,8 +1162,8 @@ struct Battle(Movable):
 
     def _weigh(mut self, struck: Struck, blow: Blow):
         """Stop the fight a moment, and shake the camera, for a strong
-        blow; longer and harder for a finisher."""
-        if struck.outcome == FINISHED:
+        blow; longer and harder for a finisher or a burst counter."""
+        if struck.outcome == FINISHED or struck.outcome == BURST_COUNTER:
             self.freeze = FINISH_STOP
             self.shake = 2 * SHAKE
         elif strong_blow(struck, blow):

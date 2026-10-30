@@ -10,6 +10,7 @@ from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.village.combat import (
+    BURST,
     DEMON_FANG,
     DODGE,
     FREE,
@@ -24,6 +25,7 @@ from extensions.village.combat import (
     FighterParameters,
 )
 from extensions.village.slashes import (
+    BURST_TRAIL,
     PLAYER_TRAIL,
     SPARKS,
     SPARK_SECONDS,
@@ -32,6 +34,7 @@ from extensions.village.slashes import (
     arc_points,
     draw_wave,
     glow_ribbon,
+    glow_star,
     glow_triangle,
     slash_material,
     spark_sheet,
@@ -80,6 +83,7 @@ def test_a_ribbon_sweeps_its_arc() raises:
         RISING_EDGE,
         TEMPEST,
         DEMON_FANG,
+        BURST,
     ]
     for move in moves:
         assert_true(len(trail_points(move, 1)) > 0)
@@ -203,6 +207,33 @@ def test_a_trail_grows_with_the_swing_and_fades() raises:
     assert_equal(trail.shown, TEMPEST.value)
     var ring = trail.nodes[TEMPEST.value].value()
     assert_true(abs(scene.node(ring).quaternion.w) < 0.99)
+    # A burst attack's thrust is red, whoever makes it.
+    var burster = Fighter(FighterParameters())
+    _ = burster.request(BURST)
+    burster.clock = 0.84
+    trail.show(scene, burster)
+    assert_equal(trail.shown, BURST.value)
+    scene.update()
+    var red = Framebuffer(64, 64, Color(0, 0, 0))
+    trail.draw(red, scene, _camera(Vector3(0, 1.5, -5)), look)
+    var reds = 0
+    var blues = 0
+    for k in range(0, len(red.pixels), 4):
+        reds += Int(red.pixels[k])
+        blues += Int(red.pixels[k + 2])
+    assert_true(reds > 4 * blues)
+    assert_true(blues > 0)
+
+
+def test_a_star_of_light_is_brightest_at_its_middle() raises:
+    var frame = Framebuffer(40, 40, Color(0, 0, 0))
+    glow_star(frame, Vector3(20.3, 19.6, 1), 12, BURST_TRAIL)
+    var middle = (19 * 40 + 20) * 4
+    var ray = (19 * 40 + 28) * 4
+    assert_true(frame.pixels[ray] > 0)
+    assert_true(frame.pixels[middle] > frame.pixels[ray])
+    # Between two rays, past their waists, it is dark.
+    assert_equal(Int(frame.pixels[(23 * 40 + 29) * 4]), 0)
 
 
 def test_a_wave_stands_as_an_arch_of_light() raises:

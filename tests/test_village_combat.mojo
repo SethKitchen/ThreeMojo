@@ -9,6 +9,8 @@ and what each blow does."""
 from extensions.village.combat import (
     ARTE_PER_HIT,
     BITE,
+    BURST,
+    BURST_COUNTER,
     DEMON_FANG,
     FINISHED,
     FINISH_SHARE,
@@ -125,17 +127,17 @@ def _blow(damage: Float32, ki: Float32) -> Blow:
 
 
 def test_each_kind_knows_its_values() raises:
-    for value in [-1, 13]:
+    for value in [-1, 14]:
         assert_false(CombatMove(value).is_valid())
-    for value in [0, 12]:
+    for value in [0, 13]:
         assert_true(CombatMove(value).is_valid())
     for value in [-1, 3]:
         assert_false(CombatStance(value).is_valid())
     for value in [0, 2]:
         assert_true(CombatStance(value).is_valid())
-    for value in [-1, 11]:
+    for value in [-1, 12]:
         assert_false(StrikeOutcome(value).is_valid())
-    for value in [0, 10]:
+    for value in [0, 11]:
         assert_true(StrikeOutcome(value).is_valid())
 
 
@@ -146,15 +148,17 @@ def test_moves_and_outcomes_have_names_for_the_display() raises:
     assert_equal(move_name(FALL), "FALL")
     assert_equal(move_name(BITE), "BITE")
     assert_equal(move_name(DEMON_FANG), "DEMON FANG")
-    with assert_raises(contains="thirteen"):
-        _ = move_name(CombatMove(13))
+    assert_equal(move_name(BURST), "BURST")
+    with assert_raises(contains="fourteen"):
+        _ = move_name(CombatMove(14))
     assert_equal(outcome_word(PERFECT_DODGE), "PERFECT DODGE")
     assert_equal(outcome_word(PARRIED), "PARRY")
     assert_equal(outcome_word(GUARD_BREAK), "GUARD BREAK")
     assert_equal(outcome_word(KI_BREAK), "BREAK")
     assert_equal(outcome_word(HIT), "")
     assert_equal(outcome_word(FINISHED), "FINISHER")
-    with assert_raises(contains="eleven"):
+    assert_equal(outcome_word(BURST_COUNTER), "BURST COUNTER")
+    with assert_raises(contains="twelve"):
         _ = outcome_word(StrikeOutcome(-1))
 
 
@@ -163,12 +167,15 @@ def test_moves_are_sorted_into_attacks_artes_and_styles() raises:
     assert_true(is_attack(LIGHT_ONE))
     assert_true(is_attack(TEMPEST))
     assert_true(is_attack(BITE))
+    assert_true(is_attack(BURST))
     assert_false(is_attack(DODGE))
     assert_true(is_arte(RISING_EDGE))
     assert_true(is_arte(TEMPEST))
     assert_true(is_arte(DEMON_FANG))
     assert_false(is_arte(LIGHT_ONE))
     assert_false(is_arte(BITE))
+    assert_false(is_arte(BURST))
+    assert_false(styled(BURST))
     assert_false(styled(FREE))
     assert_true(styled(LIGHT_ONE))
     assert_true(styled(HEAVY))
@@ -176,6 +183,7 @@ def test_moves_are_sorted_into_attacks_artes_and_styles() raises:
     assert_false(landed_blow(PARRIED))
     assert_true(landed_blow(HIT))
     assert_true(landed_blow(DEFEATED))
+    assert_true(landed_blow(BURST_COUNTER))
     assert_true(next_light(FREE) == LIGHT_ONE)
     assert_true(next_light(LIGHT_ONE) == LIGHT_TWO)
     assert_true(next_light(LIGHT_TWO) == LIGHT_THREE)
@@ -212,8 +220,12 @@ def test_each_move_has_its_times_and_its_strength() raises:
     var fang = move_data(DEMON_FANG)
     assert_equal(fang.hits, 0)
     assert_almost_equal(fang.arte_cost, 1, atol=1e-6)
-    with assert_raises(contains="thirteen"):
-        _ = move_data(CombatMove(13))
+    var burst = move_data(BURST)
+    assert_almost_equal(burst.startup.to(SECOND), 0.7, atol=1e-6)
+    assert_almost_equal(burst.damage, 120, atol=1e-6)
+    assert_almost_equal(burst.ki_cost, 20, atol=1e-6)
+    with assert_raises(contains="fourteen"):
+        _ = move_data(CombatMove(14))
 
 
 def test_each_stance_changes_strength_pace_cost_guard_and_step() raises:
@@ -830,6 +842,58 @@ def test_a_demon_fang_launches_its_blow_and_strikes_nothing_itself() raises:
     assert_false(blow.finish)
     _step(f, 0.05)
     assert_false(f.launched())
+
+
+def test_a_burst_goes_through_a_guard_and_a_heavy_blow_counters_it() raises:
+    var burster = _fighter()
+    assert_false(burster.bursting())
+    assert_true(burster.request(BURST))
+    assert_true(burster.bursting())
+    assert_true(burster.armored())
+    _step(burster, 0.75)
+    assert_false(burster.bursting())
+    var thrust = burster.connect(0).value()
+    assert_true(thrust.unblockable)
+    assert_false(thrust.breaks_burst)
+    # Not even a fresh guard stops it.
+    var guard = _fighter()
+    guard.hold_guard(True)
+    assert_true(guard.receive(thrust, True).outcome == HIT)
+    assert_almost_equal(guard.health, 380, atol=1e-3)
+    # A light blow in its wind-up does not stop it.
+    var b = _fighter()
+    _ = b.request(BURST)
+    _step(b, 0.2)
+    assert_true(b.receive(_blow(30, 8), True).outcome == HIT)
+    assert_true(b.move == BURST)
+    assert_almost_equal(b.ki, 72, atol=1e-4)
+    # A heavy attack's blow in the wind-up counters it: all its ki goes,
+    # and it staggers.
+    var heavy = _fighter()
+    _ = heavy.request(HEAVY)
+    _step(heavy, 0.45)
+    var cut = heavy.connect(0).value()
+    assert_true(cut.breaks_burst)
+    assert_false(cut.unblockable)
+    var countered = b.receive(cut, True)
+    assert_true(countered.outcome == BURST_COUNTER)
+    assert_almost_equal(countered.damage, 90, atol=1e-3)
+    assert_almost_equal(countered.ki, 72, atol=1e-4)
+    assert_true(b.move == STAGGER)
+    assert_almost_equal(b.ki, 0, atol=1e-6)
+    # The counter fills the counterer's limit gauge as a break does.
+    heavy.landed(countered)
+    assert_almost_equal(heavy.limit, LIMIT_PER_HIT + LIMIT_PER_BREAK, atol=1e-4)
+    # After the wind-up, the same blow only hits, and the armor holds.
+    var late = _fighter()
+    _ = late.request(BURST)
+    _step(late, 0.75)
+    assert_true(late.receive(cut, True).outcome == HIT)
+    assert_true(late.move == BURST)
+    # An arte's blow counters too.
+    var arte = _fighter()
+    _ = arte.request(DEMON_FANG)
+    assert_true(arte.blow().breaks_burst)
 
 
 def main() raises:

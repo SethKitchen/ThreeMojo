@@ -49,6 +49,7 @@ from extensions.village.character import (
 )
 from extensions.village.combat import (
     BLOCKED,
+    BURST,
     FALL,
     FINISHED,
     CRITICAL,
@@ -420,6 +421,39 @@ def _swinging(mut arena: Arena, clock: Float32) raises:
     foe.character.heading = Angle(180.0, DEGREE)
     _ = foe.fighter.request(LIGHT_ONE)
     foe.fighter.clock = clock
+
+
+def _bursting(mut arena: Arena, clock: Float32) raises:
+    """Stand the bandit 1.5 meters before the player, facing them, in a
+    burst attack `clock` seconds in."""
+    ref foe = arena.battle.foes[0]
+    foe.character.position = Vector3(0, 0, -1.5)
+    foe.character.heading = Angle(180.0, DEGREE)
+    _ = foe.fighter.request(BURST)
+    foe.fighter.clock = clock
+
+
+def test_a_burst_goes_through_a_guard_and_a_heavy_cut_counters_it() raises:
+    var arena = Arena(arena_parameters(1, 0))
+    _bursting(arena, 0.6)
+    var guard = no_input()
+    guard.guard = True
+    for _ in range(6):
+        arena.tick(guard)
+    assert_true(arena.battle.fighter.health < 500)
+    assert_false(holds_text(popup_texts(arena.battle), "PARRY"))
+    assert_false(holds_text(popup_texts(arena.battle), "BLOCKED"))
+    # A heavy cut that lands in the wind-up counters it.
+    var counter = Arena(arena_parameters(1, 0))
+    counter.battle.drawn = True
+    _bursting(counter, 0.1)
+    var heavy = no_input()
+    heavy.heavy = True
+    counter.tick(heavy)
+    counter.run(0.5)
+    assert_true(holds_text(popup_texts(counter.battle), "BURST COUNTER"))
+    assert_true(counter.battle.foes[0].fighter.move == STAGGER)
+    assert_almost_equal(counter.battle.foes[0].fighter.ki, 0, atol=1e-6)
 
 
 def test_a_fresh_guard_parries_and_a_late_dodge_is_perfect() raises:
