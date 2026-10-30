@@ -18,8 +18,10 @@ from extensions.village.companion import (
     ally_fighter,
     boost_blow,
     default_allies,
+    flank_spot,
 )
 from math.vector3 import Vector3
+from std.math import cos, pi
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -74,37 +76,58 @@ def test_out_of_a_fight_she_follows_the_player() raises:
     assert_almost_equal(lost.way.z, 1, atol=1e-6)
 
 
-def test_in_a_fight_she_keeps_back_and_casts() raises:
+def _at(
+    at: Vector3, player: Vector3, target: Vector3, free: Bool = True
+) -> AllySight:
+    """Return what a companion at `at` knows in a fight."""
+    return AllySight(at, player, target, 1, free, True)
+
+
+def test_in_a_fight_she_flanks_the_foe_and_casts() raises:
+    var target = Vector3(0, 0, -6)
+    var player = Vector3(0, 0, -4)
+    # Her spot is `KEEP` from the foe, off the line to the player, on the
+    # side she stands on.
+    var right = flank_spot(target, player, Vector3(3, 0, 0))
+    var left = flank_spot(target, player, Vector3(-3, 0, 0))
+    assert_almost_equal((right - target).length(), KEEP, atol=1e-4)
+    assert_almost_equal(
+        (right - target).z, KEEP * cos(Float32(pi * 70 / 180)), atol=1e-4
+    )
+    assert_true(right.x > 4)
+    assert_true(left.x < -4)
     var mind = Companion()
-    var player = Vector3(0, 0, 1)
-    # Too near the foe, she backs away, facing it; her first cast waits.
-    var back = mind.think(_sight(player, Vector3(0, 0, 3)), _frame())
-    assert_almost_equal(back.way.z, -0.8, atol=1e-6)
-    assert_true(back.face)
-    assert_false(back.cast)
-    # At her distance, she stands, and casts once her wait is over.
+    # Away from her spot, she runs to it, facing the foe; her first cast
+    # waits.
+    var at = Vector3(3, 0, 0)
+    var run = mind.think(_at(at, player, target), _frame())
+    var to_spot = (right - at) / (right - at).length()
+    assert_true(run.way.x * to_spot.x + run.way.z * to_spot.z > 0.99)
+    assert_true(run.run)
+    assert_true(run.face)
+    assert_false(run.cast)
+    # Near it, she walks.
+    var walk = mind.think(
+        _at(right + Vector3(2, 0, 0), player, target), _frame()
+    )
+    assert_true(walk.way.x < -0.9)
+    assert_false(walk.run)
+    # At her spot, she stands, and casts once her wait is over.
     mind.cast_wait = 0
-    var cast = mind.think(_sight(player, Vector3(0, 0, KEEP)), _frame())
+    var cast = mind.think(_at(right, player, target), _frame())
     assert_almost_equal(cast.way.length(), 0, atol=1e-6)
     assert_true(cast.cast)
     assert_almost_equal(mind.cast_wait, CAST_EVERY, atol=1e-6)
     # She does not cast while her wait lasts, nor while she makes a move.
-    assert_false(mind.think(_sight(player, Vector3(0, 0, 6)), _frame()).cast)
+    assert_false(mind.think(_at(right, player, target), _frame()).cast)
     mind.cast_wait = 0
-    var busy = mind.think(
-        _sight(player, Vector3(0, 0, 6), free=False), _frame()
-    )
+    var busy = mind.think(_at(right, player, target, False), _frame())
     assert_false(busy.cast)
-    # A far foe: she walks to it, and runs when it is further; past her
-    # reach, she does not cast.
-    var walk = mind.think(_sight(player, Vector3(0, 0, 10)), _frame())
-    assert_almost_equal(walk.way.z, 1, atol=1e-6)
-    assert_false(walk.run)
-    assert_true(walk.cast)
-    mind.cast_wait = 0
-    var run = mind.think(_sight(player, Vector3(0, 0, 20)), _frame())
-    assert_true(run.run)
-    assert_false(run.cast)
+    # Past her reach, she does not cast.
+    var far = mind.think(
+        _at(Vector3(0, 0, 0), player, Vector3(0, 0, -25)), _frame()
+    )
+    assert_false(far.cast)
     # She never strays far from the player.
     var leash = mind.think(
         _sight(Vector3(12, 0, 0), Vector3(0, 0, 6)), _frame()

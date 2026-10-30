@@ -178,7 +178,9 @@ A fallen wolf lies on its side. It gives no coins, but it trains swordplay as a 
 
 The module is `extensions/village/companion.mojo`. A swordswoman in woad blue starts beside the player, and fights with them, as the party of Tales of Arise does. The foes do not attack her: she keeps out of their way.
 
-Out of a fight, she follows the player. She walks to them from more than 3 meters, and runs from more than 7. In a fight, she faces the player's foe, and keeps 6 meters from it. She never strays more than 10 meters from the player. She casts at the locked target. With no lock, she casts at the nearest foe that fights within 15 meters of the player.
+Out of a fight, she follows the player. She walks to them from more than 3 meters, and runs from more than 7. In a fight, she faces the player's foe, and stands 6 meters from it, 70 degrees off the line from the foe to the player. So she keeps out of the way of the camera.
+
+She never strays more than 10 meters from the player. She casts at the locked target. With no lock, she casts at the nearest foe that fights within 15 meters of the player.
 
 Every 2.6 seconds, she points her sword and casts a bolt of light at a foe within 14 meters. The bolt flies at 16 meters a second, and follows its foe. It does 28 damage and 10 ki damage. When the player's health falls below 40 percent, she heals 15 percent of it. Then she waits 15 seconds before she heals again.
 

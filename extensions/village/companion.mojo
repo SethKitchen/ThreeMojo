@@ -13,9 +13,12 @@ by frame, from an `AllySight`:
 1. **Out of a fight**, she follows the player. She walks to them when
    they are more than `FOLLOW` away, and runs when they are more than
    twice as far.
-2. **In a fight**, she faces the player's foe and keeps `KEEP` meters from
-   it, but never more than `LEASH` from the player. Every `CAST_EVERY`
-   seconds, she casts a bolt at a foe within `CAST_RANGE`.
+2. **In a fight**, she faces the player's foe and goes to her spot:
+   `KEEP` meters from the foe, `FLANK` off the line from the foe to the
+   player, on the side she stands on. So she stands out of the way of a
+   camera behind the player. She never strays more than `LEASH` from the
+   player. Every `CAST_EVERY` seconds, she casts a bolt at a foe within
+   `CAST_RANGE`.
 3. **She heals.** When the player's health falls below `MEND_BELOW` of
    its most, she heals `MEND_SHARE` of it. Then she waits `MEND_EVERY`
    seconds before she heals again.
@@ -37,10 +40,11 @@ from extensions.village.clothes import CREAM_WOOL, WALNUT, WOAD, village_outfit
 from extensions.village.combat import Blow, FighterParameters
 from extensions.village.foes import Bandit
 from math.vector3 import Vector3
-from std.math import sqrt
+from std.math import cos, sin, sqrt
 from units.si import (
     DEGREE,
     INCH,
+    RADIAN,
     METER_PER_SECOND,
     PER_SECOND,
     SECOND,
@@ -55,6 +59,11 @@ comptime FOLLOW = Float32(3)
 """How far from the player the companion keeps out of a fight, in meters."""
 comptime KEEP = Float32(6)
 """How far from the player's foe she keeps in a fight, in meters."""
+comptime FLANK = Angle(70.0, DEGREE)
+"""How far off the line from the foe to the player she stands in a
+fight."""
+comptime SPOT_NEAR = Float32(1)
+"""How near her spot in a fight she stops, in meters."""
 comptime LEASH = Float32(10)
 """How far from the player she strays in a fight, at most, in meters."""
 comptime CAST_RANGE = Float32(14)
@@ -93,6 +102,29 @@ def _toward(a: Vector3, b: Vector3) -> Vector3:
     if gap < 1.0e-4:
         return Vector3(0, 0, 1)
     return Vector3((b.x - a.x) / gap, 0, (b.z - a.z) / gap)
+
+
+def flank_spot(target: Vector3, player: Vector3, at: Vector3) -> Vector3:
+    """Return where the companion stands in a fight.
+
+    Args:
+        target: Where the foe she casts at stands.
+        player: Where the player stands.
+        at: Where she stands now.
+
+    Returns:
+        The point on the ground `KEEP` from the foe, `FLANK` off the line
+        from the foe to the player, on her side of that line.
+    """
+    var back = _toward(target, player)
+    var cross = back.x * (at.z - target.z) - back.z * (at.x - target.x)
+    var turn = FLANK.to(RADIAN)
+    if cross < 0:
+        turn = -turn
+    var c = cos(turn)
+    var s = sin(turn)
+    var way = Vector3(back.x * c - back.z * s, 0, back.x * s + back.z * c)
+    return Vector3(target.x + way.x * KEEP, target.y, target.z + way.z * KEEP)
 
 
 @fieldwise_init
@@ -191,16 +223,15 @@ struct Companion(Copyable, Movable):
         if sight.fighting and sight.target:
             var target = sight.target.value()
             var gap = _flat_gap(sight.at, target)
-            var toward = _toward(sight.at, target)
+            var spot = flank_spot(target, sight.player, sight.at)
+            var off = _flat_gap(sight.at, spot)
             out.face = target
             if near > LEASH:
                 out.way = home
                 out.run = True
-            elif gap < KEEP - 1:
-                out.way = toward * -0.8
-            elif gap > KEEP + 2:
-                out.way = toward
-                out.run = gap > KEEP + 6
+            elif off > SPOT_NEAR:
+                out.way = _toward(sight.at, spot)
+                out.run = off > 4
             if sight.free and self.cast_wait <= 0 and gap <= CAST_RANGE:
                 out.cast = True
                 self.cast_wait = CAST_EVERY
