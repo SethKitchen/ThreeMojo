@@ -102,6 +102,10 @@ The face is a scan. The skin of the head is the mean head of the ICT Face Model 
 3. The scan is pulled over the modeled solids like a sleeve. The solids are the vault, an ellipsoid a scalp's thickness outside the skull, and the neck, swept round its muscles. Each vertex inside them must move out along its normal. The moves are spread over the mesh until they are smooth, so the mesh stretches and does not fold.
 4. The mouth and the eyes are open in the scan. The palate, the teeth and the orbits fill those spaces, so a fan of triangles closes each opening. The scan is kept as a `MeshField`, the signed distance to a mesh through a tree of boxes.
 
+A search for the nearest triangle starts from a triangle that the point itself picks. The search walks into the nearer box at each level, and starts from the first triangle of the leaf it reaches. So a distance is the same on any thread and in any order. A head and its hair are the same for any number of workers.
+
+Two triangles that meet at a corner can each put the nearest point one ulp nearer than the other. Earlier searches started from the triangle that the last search found, on any thread. The scalp's hair then changed in its last digits from run to run, and its decimated mesh changed more.
+
 `HeadSkinField` is the smooth union of the scan and the modeled solids. This fit does not test every anatomical part for containment.
 
 The skin's mesh is the scan's own mesh, not a mesh extracted from the field. Each vertex that the field's surface does not pass through is walked onto it. The mouth's and the eyes' sockets are drawn inside. Below the seam on the neck, 56.5 cm on the template, the skin is meshed by narrow-band surface nets, in `extensions/humanoid/skeleton/surface_nets.mojo`. The two meshes lie on one surface and overlap by a few millimeters. `add_body` joins the body's skin to the scan at the same seam.

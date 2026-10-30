@@ -33,7 +33,6 @@ from math.bounds import enclose_point
 from math.vector3 import Vector3, mix_delta3
 from std.collections import Dict
 from std.math import acos, iota, max, min
-from std.atomic import Atomic, Ordering
 from std.memory import ArcPointer, bitcast
 
 # How many triangles a leaf of the tree holds, at most.
@@ -511,6 +510,32 @@ struct MeshTree(Movable):
             return 2
         return 0
 
+    def start_for(self, p: Vector3) -> Int:
+        """Return a triangle near `p` to start a search from.
+
+        The walk goes down the tree into the nearer child's box at each
+        node, and takes the first triangle of the leaf it reaches. It reads
+        nothing but `p` and the tree, so the same point always starts from
+        the same triangle, on any thread.
+
+        Args:
+            p: The point.
+
+        Returns:
+            A triangle's index.
+        """
+        var node = 0
+        while self.left[node] >= 0:
+            var l = self.left[node]
+            var r = self.right[node]
+            if _box_gap(self.low[r], self.high[r], p) < _box_gap(
+                self.low[l], self.high[l], p
+            ):
+                node = r
+            else:
+                node = l
+        return Int(self.leaves[self.leaf[node]].ids[0])
+
     def nearest(
         self, p: Vector3, start: Int
     ) -> Tuple[Int, Vector3, Float32, Float32, Int]:
@@ -587,13 +612,15 @@ struct MeshTree(Movable):
 struct MeshField(Copyable, DistanceField, Movable):
     """The signed distance to a triangle mesh.
 
-    Copies share one tree, so a copy for each thread costs nothing.
+    Copies share one tree, so a copy for each thread costs nothing. Each
+    search starts from a triangle the point itself picks, so a distance
+    is the same on any thread and in any order. A start shared between
+    threads made the result depend on which thread searched last: two
+    triangles that meet at a corner can each put the nearest point an
+    ulp nearer than the other.
     """
 
     var tree: ArcPointer[MeshTree]
-    # The triangle the last search found. Searches near one another
-    # start from it; copies and threads share it, as a hint.
-    var hint: ArcPointer[Atomic[Int64]]
     var box_low: Vector3
     var box_high: Vector3
 
@@ -614,7 +641,6 @@ struct MeshField(Copyable, DistanceField, Movable):
         self.box_low = tree.box_low
         self.box_high = tree.box_high
         self.tree = ArcPointer(tree^)
-        self.hint = ArcPointer(Atomic[Int64](0))
 
     def count(self) -> Int:
         """Return how many vertices the mesh has."""
@@ -643,11 +669,7 @@ struct MeshField(Copyable, DistanceField, Movable):
             The triangle's index, the point, two weights and the part; see
             `closest_on_triangle`.
         """
-        var hit = self.tree[].nearest(
-            p, Int(self.hint[].load[ordering=Ordering.RELAXED]())
-        )
-        self.hint[].store[ordering=Ordering.RELAXED](Int64(hit[0]))
-        return hit
+        return self.tree[].nearest(p, self.tree[].start_for(p))
 
     def distance(self, point: Vector3) -> Float32:
         """Return the signed distance to the mesh, in meters: negative on
