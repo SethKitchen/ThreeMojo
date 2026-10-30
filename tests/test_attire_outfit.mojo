@@ -59,7 +59,10 @@ from std.testing import (
 from extensions.humanoid.rig.game import GameHumanoid
 from extensions.humanoid.skeleton.head.hair.strands import HairStrands
 from tests._attire_fixtures import empty_mesh, line_rig
-from tests._attire_people import coarse_person
+from core.object3d import Object3D
+from extensions.humanoid.rig.game import add_game_humanoid
+from extensions.humanoid.skeleton.head.hair.beard import GOATEE
+from tests._attire_people import coarse_person, coarse_spec
 
 
 def test_an_outfit_holds_one_garment_a_slot_and_layer() raises:
@@ -305,6 +308,29 @@ def test_a_bare_head_keeps_its_hair_and_a_bald_one_is_fine() raises:
     hooded.add(hood())
     _ = dress(scene, assets, bald, hooded)
     assert_true(scene.node(hair).visible)
+
+
+def test_a_hood_hides_a_beard() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var bearded = add_game_humanoid(
+        scene,
+        assets,
+        root,
+        coarse_spec(),
+        3000,
+        12,
+        8,
+        8,
+        workers=1,
+        beard=GOATEE,
+    )
+    var hooded = Outfit()
+    hooded.add(hood())
+    _ = dress(scene, assets, bearded, hooded)
+    assert_false(scene.node(bearded.beard.value()).visible)
+    assert_false(scene.node(bearded.hair.value()).visible)
 
 
 def test_an_outfit_that_does_not_check_is_refused() raises:

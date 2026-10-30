@@ -75,6 +75,13 @@ from extensions.humanoid.skeleton.complexion import hair_albedo, iris_albedo
 from extensions.humanoid.skeleton.head.eyes import eyeball_mesh
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.head.hair.dimensions import SCALP_HAIR
+from extensions.humanoid.skeleton.head.hair.beard import (
+    CLEAN_SHAVEN,
+    Beard,
+    beard_label,
+    beard_mesh,
+    require_beard,
+)
 from extensions.humanoid.skeleton.head.hair.geometry import (
     head_hair_from_dimensions,
 )
@@ -112,6 +119,10 @@ comptime BODY_SHARE = Float32(0.76)
 # The side of the hair's strand map, in texels.
 comptime HAIR_TEXELS = 64
 comptime HAIR_SHARE = Float32(0.12)
+# The share a beard takes, from the body's.
+comptime BEARD_SHARE = Float32(0.03)
+# Cells along a beard's box.
+comptime BEARD_DETAIL = 28
 # Half the slot that parts the legs, so they can swing apart, in meters
 # on the template.
 comptime LEG_GAP = Float32(0.014)
@@ -142,6 +153,8 @@ struct GameHumanoid(Movable):
     var face: Optional[GameFace]
     var hair: Optional[NodeId]
     """The node of the scalp hair's shell, which a hood or a helmet hides."""
+    var beard: Optional[NodeId]
+    """The node of the facial hair's shell, if the face grows any."""
 
     def __init__(
         out self,
@@ -152,6 +165,7 @@ struct GameHumanoid(Movable):
         var strands: List[HairStrands],
         var face: Optional[GameFace] = None,
         hair: Optional[NodeId] = None,
+        beard: Optional[NodeId] = None,
     ):
         """Hold a humanoid's parts.
 
@@ -163,6 +177,7 @@ struct GameHumanoid(Movable):
             strands: Its hair's strands, or none.
             face: Preserved face and mouth binding, or no facial animation.
             hair: The node of the scalp hair's shell, if it has one.
+            beard: The node of the facial hair's shell, if it has one.
         """
         self.rig = rig^
         self.root = root
@@ -171,6 +186,7 @@ struct GameHumanoid(Movable):
         self.strands = strands^
         self.face = face^
         self.hair = hair
+        self.beard = beard
 
 
 def _key(p: Vector3) -> Int:
@@ -319,6 +335,7 @@ def add_game_humanoid(
     workers: Int = 1,
     use: HumanoidUse = VISUAL_USE,
     facial_animation: Bool = False,
+    beard: Beard = CLEAN_SHAVEN,
 ) raises -> GameHumanoid:
     """Build one person's skin on a skeleton under `parent`.
 
@@ -346,6 +363,8 @@ def add_game_humanoid(
         facial_animation: Keep original face, teeth and gums/tongue under HEAD.
             The total mesh budget then includes those parts and both eyes.
             Insufficient budgets raise instead of dropping targets or exceeding it.
+        beard: The facial hair the face grows. Clean-shaven by default.
+            A beard takes `BEARD_SHARE` of the budget from the body's.
 
     Returns:
         The humanoid: its rig, its bones and its meshes.
@@ -353,8 +372,9 @@ def add_game_humanoid(
     Raises:
         Error: If the spec, a detail, style or visual use is refused; if
             the budget is negative or cannot preserve the facial and body
-            requirements; if facial animation requests strand guides; or if
-            a scene node, mesh or geometry operation fails.
+            requirements; if facial animation requests strand guides or a
+            beard; if the beard is not named; or if a scene node, mesh or
+            geometry operation fails.
     """
     require_humanoid_use(use)
     var settings = game_build_settings(
@@ -369,6 +389,7 @@ def add_game_humanoid(
         hair_paint,
         eye_paint,
         facial_animation,
+        beard,
     )
     var node = Object3D()
     node.user_data.set_json(
@@ -421,6 +442,9 @@ def add_game_humanoid(
     # Decimation bends the strands laid round the shell; they are laid
     # again where its vertices end up.
     var meshed = shell.clone()
+    var whiskers = Optional[BufferGeometry](None)
+    if beard != CLEAN_SHAVEN:
+        whiskers = beard_mesh(dims, beard, BEARD_DETAIL, workers)
     var eyes = List[BufferGeometry]()
     # Both named sides receive an eye.
     for side in [RIGHT, LEFT]:  # pragma: no branch
@@ -459,6 +483,12 @@ def add_game_humanoid(
             )
         remaining = triangles - reserve - _FACIAL_PART_MINIMUM
     var body_budget = Int(Float32(remaining) * BODY_SHARE)
+    # A beard takes its share from the body's. With no budget, it keeps
+    # its full mesh, as every part does.
+    var beard_budget = 0
+    if whiskers and triangles > 0:
+        beard_budget = max(32, Int(Float32(remaining) * BEARD_SHARE))
+        body_budget -= beard_budget
     var hand_budget = Int(
         Float32(remaining) * (1 - BODY_SHARE - HAIR_SHARE) / 2
     )
@@ -586,6 +616,15 @@ def add_game_humanoid(
             hair_phong(spec.genome, assets.textures.add(strands^))
         )
     var hair_node = place_mesh_node(scene, assets, holder_id, shell^, hair)
+    var beard_node = Optional[NodeId](None)
+    if whiskers:
+        beard_node = place_mesh_node(
+            scene,
+            assets,
+            holder_id,
+            _budgeted(whiskers.take(), beard_budget),
+            hair,
+        )
     var face = Optional[GameFace](None)
     if facial_animation:
         var paints = List[MaterialId]()
@@ -615,7 +654,14 @@ def add_game_humanoid(
             )
         )
     return GameHumanoid(
-        rig^, root, bones^, skins^, strands^, face^, Optional(hair_node)
+        rig^,
+        root,
+        bones^,
+        skins^,
+        strands^,
+        face^,
+        Optional(hair_node),
+        beard_node,
     )
 
 
@@ -631,6 +677,7 @@ def game_build_settings(
     hair_paint: MaterialId = UNSET_PAINT,
     eye_paint: MaterialId = UNSET_PAINT,
     facial_animation: Bool = False,
+    beard: Beard = CLEAN_SHAVEN,
 ) raises -> UserData:
     """Record every game-builder option that changes a visual recipe.
 
@@ -649,19 +696,25 @@ def game_build_settings(
         hair_paint: Hair material ID, or the default sentinel.
         eye_paint: Eye material ID, or the default sentinel.
         facial_animation: Preserve original face correspondence for audio playback.
+        beard: The facial hair. Recorded only when the face grows some, so
+            a clean-shaven recipe is as it was before beards.
 
     Returns:
         A value snapshot independent of the canonical spec.
 
     Raises:
-        Error: If the hair style is unnamed, the triangle budget is
-            negative, or facial animation requests guide strands.
+        Error: If the hair style or the beard is unnamed, the triangle
+            budget is negative, or facial animation requests guide strands
+            or a beard.
     """
     require_non_negative(triangles, "Game triangle budget must be nonnegative")
     if facial_animation and guides > 0:
         raise Error(
             "Facial triangle budgets do not support strand hair; use the shell"
         )
+    require_beard(beard)
+    if facial_animation and beard != CLEAN_SHAVEN:
+        raise Error("A face that speaks does not carry a beard yet")
     require_valid(
         hair_style.is_valid(), "Game build settings require a named hair style"
     )
@@ -673,6 +726,8 @@ def game_build_settings(
     settings.set_string("hand_detail", String(hand_detail))
     settings.set_string("hair_detail", String(hair_detail))
     settings.set_string("hair_style", String(hair_style.value))
+    if beard != CLEAN_SHAVEN:
+        settings.set_string("beard", beard_label(beard))
     settings.set_string("guides", String(guides))
     settings.set_string("followers", String(followers))
     settings.set_string("skin_material_id", String(skin_paint.value))

@@ -302,6 +302,26 @@ Each guide is sampled at eight points a turn and wound round its own line. It sw
 
 Each eyebrow is an arc on the skin over its orbit, thick at its head and thin at its tail. `BROW_THICKNESS` makes it fuller or finer. `add_head` paints the brows into the skin's colors, hair by hair, in the hair's color. A solid strip stands off the curve of the brow ridge, so the brows are not a mesh. `head_hair` still meshes one, and its mass is its volume.
 
+### Facial hair
+
+A `Beard` says which facial hair a face grows. `BeardShape` draws it as its volume, as the scalp's shell is drawn: a shell over the skin, open at the mouth. The code is in `extensions/humanoid/skeleton/head/hair/beard.mojo`.
+
+| Style | Grows on | Depth |
+|---|---|---|
+| `CLEAN_SHAVEN` | nothing | |
+| `MUSTACHE` | the upper lip, arched down to the corners of the mouth | 4.5 mm |
+| `GOATEE` | the upper lip, round the mouth and down the chin | 6 mm |
+| `SHORT_BEARD` | the jaw, the chin, the cheeks and the upper lip | 4 mm |
+| `FULL_BEARD` | the same, and a mass that hangs below the chin | 7 mm on the cheeks, 14 mm at the chin |
+| `CHIN_STRAP` | a band 3 cm deep along the jaw, from sideburn to sideburn | 4 mm |
+| `MUTTON_CHOPS` | the sideburns and the cheeks, the chin and the lip bare | 6 mm |
+
+The zones are authored in template centimeters round the mouth. The lips part 65 cm above the hip joint centers, the chin's point stands at 62 cm, and the nose's base at 67 cm. A beard's upper line runs from under the nose to each corner of the mouth, then up across the cheek to the sideburn. Its lower line runs under the jaw, above the larynx, and up behind the jaw to the ear's lobe.
+
+The head's frame maps the zones onto each face. So a genome that widens the jaw or the mouth moves the beard with it. The hair thins toward each zone's edge, as a trimmed beard does.
+
+`beard_mesh` meshes the outer face of the shell. The inner face lies under the skin and never shows. Facial hair takes the scalp hair's material. Pass `beard` to `add_game_humanoid`; see [Game humanoid](Game-humanoid).
+
 ## Examples
 
 `examples/expressions.mojo` draws one face in each of the eight expressions and writes `out/expressions.png`. `examples/talking.mojo` writes `out/talking.png`, an animation: a woman says four phrases, and her face greets, smiles, frowns and is surprised.

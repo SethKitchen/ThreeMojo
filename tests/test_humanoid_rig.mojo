@@ -29,6 +29,12 @@ from extensions.humanoid.fidelity import (
     humanoid_provenance,
     require_bake_provenance,
 )
+from extensions.humanoid.skeleton.head.hair.beard import (
+    GOATEE,
+    MUSTACHE,
+    SHORT_BEARD,
+    Beard,
+)
 from extensions.humanoid.rig.game import (
     add_game_humanoid,
     game_build_settings,
@@ -622,6 +628,51 @@ def test_attribute_transfer_accepts_two_empty_meshes() raises:
     ref colors = target.attribute_view(String(COLOR))
     assert_equal(colors.count(), 0)
     assert_equal(colors.item_size, 3)
+
+
+def test_a_game_humanoid_grows_a_beard() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var bearded = add_game_humanoid(
+        scene,
+        assets,
+        root,
+        _spec(),
+        3000,
+        12,
+        8,
+        8,
+        workers=available_workers(),
+        beard=SHORT_BEARD,
+    )
+    # The beard hangs from the head beside the hair's shell and the eyes,
+    # within its share of the budget.
+    var node = bearded.beard.value()
+    var found = False
+    for mesh in scene.meshes:
+        if mesh.node == node:
+            found = True
+            var drawn = assets.geometries.get(mesh.geometry).triangle_count()
+            assert_true(drawn > 0 and drawn <= 3000 // 10)
+    assert_true(found)
+    # The recipe names the beard; a clean-shaven one does not.
+    var settings = game_build_settings(3000, 12, 8, 8, beard=SHORT_BEARD)
+    assert_equal(settings.string("beard"), "short beard")
+    assert_false(game_build_settings(3000, 12, 8, 8).has("beard"))
+    var plain = add_game_humanoid(
+        scene, assets, root, _spec(), 3000, 12, 8, 8, workers=1
+    )
+    assert_false(plain.beard)
+    # With no budget, the beard keeps its whole mesh.
+    var whole = add_game_humanoid(
+        scene, assets, root, _spec(), 0, 12, 8, 8, workers=1, beard=MUSTACHE
+    )
+    assert_true(whole.beard)
+    with assert_raises(contains="named style"):
+        _ = game_build_settings(beard=Beard(9))
+    with assert_raises(contains="does not carry a beard"):
+        _ = game_build_settings(facial_animation=True, beard=GOATEE)
 
 
 def test_game_builder_refuses_engineering_before_scene_edits() raises:
