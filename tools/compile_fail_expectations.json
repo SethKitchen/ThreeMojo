@@ -19,6 +19,18 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_beard_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 19,
+        "message": "invalid call to 'require_beard': value passed to 'beard' cannot be converted from 'IntLiteral[1]' to 'Beard'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_behavior_type_is_not_a_bare_int.mojo": {
     "errors": [
       {

@@ -287,6 +287,8 @@ def dress(
     if hooded:
         if person.hair:
             scene.node(person.hair.value()).visible = False
+        if person.beard:
+            scene.node(person.beard.value()).visible = False
         for k in range(len(person.strands)):
             if person.strands[k].node:
                 scene.node(person.strands[k].node.value()).visible = False
