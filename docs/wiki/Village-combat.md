@@ -98,6 +98,10 @@ The three light attacks chain. A press during a move waits for the chain point: 
 
 An attack carries its fighter forward through its start-up and its active part. A blow pushes the fighter that it hits away. The player has 500 health and 100 ki.
 
+### The weight of a blow
+
+A strong blow stops the whole fight for 0.06 seconds, as action games freeze a frame on a heavy hit. It also shakes the camera by 6 centimeters, and the shake dies away. A strong blow breaks a guard, or lands and is critical, breaks a ki or fells its fighter. A blow that lands and pushes at least 4 meters a second, or throws its fighter up, is strong too.
+
 ## The bandits
 
 The module is `extensions/village/foes.mojo`. Three hooded bandits keep a camp about 25 meters north-west of the start. A bandit is a person with a sword, as the player is. It has 300 health and 70 ki, and its blows do 55 percent of a move's damage.
@@ -150,7 +154,7 @@ The sword hangs at the hip until the fight starts. It is in the hand while a ban
 2. **The player moves.** A free player walks, runs and jumps, at 40 percent of the stick while guarding. A locked player faces the target.
 3. **An attack turns.** Through its start-up, an attack turns the player toward the locked target. With no lock, it turns toward the nearest target within 4 meters before them.
 4. **The bandits think and move.** Each bandit's brain decides, and its character steps or is carried by its move.
-5. **The blows.** In steps of at most 1/60 second, each fighter's clock runs, and each swing gives its blow to the fighters that it reaches.
+5. **The blows.** In steps of at most 1/60 second, each fighter's clock runs, and each swing gives its blow to the fighters that it reaches. A strong blow stops the next frames of the fight for 0.06 seconds.
 6. **The fallen.** A fallen player comes to at the start after 4 seconds. A fallen bandit lies, then comes back to its post.
 
 `Character.drive` carries a character at a set speed over the ground. An attack's lunge, a dodge and a blow's push use it. The walls, the water and the obstacles still stop the character.

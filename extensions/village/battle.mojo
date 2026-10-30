@@ -39,7 +39,11 @@ step and pose:
    `extensions.village.slashes`. Over Limit, the player's trails are
    gold, and the note says when it begins. The sword is drawn while a bandit within `ENGAGE`
    fights, or the player fights, and is sheathed `CALM_SECONDS` after.
-6. **The fallen.** A fallen bandit gives `LOOT` coins. It lies for the
+6. **The weight of a blow.** A strong blow stops the whole fight for
+   `HIT_STOP`, as action games freeze a frame on a heavy hit, and shakes
+   the camera by `SHAKE`: see `strong_blow`. The shake dies away at
+   `SHAKE_FADE`.
+7. **The fallen.** A fallen bandit gives `LOOT` coins. It lies for the
    `linger`, then is gone, and comes back to its post after the
    `respawn`. A fallen player comes to at the start after the `revive`.
 """
@@ -65,6 +69,7 @@ from extensions.village.character import (
 )
 from extensions.village.combat import (
     DEFEATED,
+    HIT,
     DODGE,
     FREE,
     GUARD_BREAK,
@@ -183,6 +188,16 @@ comptime TOKEN_REST = Float32(0.6)
 it, in seconds."""
 comptime LOOT = 8
 """How many coins a fallen bandit gives."""
+comptime HIT_STOP = Float32(0.06)
+"""How long a strong blow stops the fight, in seconds."""
+comptime SHAKE = Float32(0.06)
+"""How far a strong blow shakes the camera, in meters."""
+comptime SHAKE_FADE = Float32(10)
+"""How fast the camera's shake dies away: each second it keeps
+`exp(-SHAKE_FADE)` of itself."""
+comptime STRONG_PUSH = Float32(4)
+"""A blow that lands and pushes at least this fast, in meters a second,
+is strong."""
 comptime FLICK = Float32(0.7)
 """How far the look stick must lean, newly, to move the lock."""
 comptime HEAL_SHARE = Float32(0.3)
@@ -282,6 +297,28 @@ def throw_up(mut character: Character, struck: Struck, blow: Blow):
         character.grounded = False
     elif not character.grounded:
         character.velocity.y = max(character.velocity.y, JUGGLE)
+
+
+def strong_blow(struck: Struck, blow: Blow) -> Bool:
+    """Return whether a blow is strong enough to stop the fight a moment.
+
+    Args:
+        struck: What the blow did.
+        blow: The blow.
+
+    Returns:
+        True for a guard broken, a critical blow, a ki broken and a fighter
+        felled, and for a blow that lands, pushes at least `STRONG_PUSH`
+        or throws its fighter up.
+    """
+    if struck.outcome == GUARD_BREAK:
+        return True
+    if not landed_blow(struck.outcome):
+        return False
+    if struck.outcome != HIT:
+        return True
+    var push = blow.knockback.to(METER_PER_SECOND)
+    return push >= STRONG_PUSH or blow.launch.to(METER_PER_SECOND) > 0
 
 
 @fieldwise_init
@@ -417,6 +454,10 @@ struct Battle(Movable):
     var down: Float32
     # Whether the player was Over Limit at the end of the last frame.
     var limited: Bool
+    # How long the fight still stands still, in seconds; and how far the
+    # camera shakes, in meters.
+    var freeze: Float32
+    var shake: Float32
     # Where the player comes to.
     var start: Vector3
     # Coins won and not yet taken, and lines for the game's note.
@@ -533,6 +574,8 @@ struct Battle(Movable):
         self.slow = 0
         self.down = -1
         self.limited = False
+        self.freeze = 0
+        self.shake = 0
         self.start = start
         self.loot = 0
         self.notes = List[String]()
@@ -936,6 +979,13 @@ struct Battle(Movable):
         if outcome == PERFECT_DODGE:
             self.slow = SLOW_SECONDS
 
+    def _weigh(mut self, struck: Struck, blow: Blow):
+        """Stop the fight a moment, and shake the camera, for a strong
+        blow."""
+        if strong_blow(struck, blow):
+            self.freeze = HIT_STOP
+            self.shake = SHAKE
+
     def _player_strikes(mut self, mut scene: Scene, player: Character) raises:
         """Give the player's swing to each target that it reaches."""
         var swing = self.fighter.swing()
@@ -983,6 +1033,7 @@ struct Battle(Movable):
                 practice.fighter.health = practice.fighter.parameters.health
             self.fighter.landed(struck)
             self._show(scene, struck, there, False)
+            self._weigh(struck, hit)
 
     def _foe_strikes(
         mut self, mut scene: Scene, index: Int, mut player: Character
@@ -1014,6 +1065,7 @@ struct Battle(Movable):
         self.shove = push_of(struck, hit, _way(at, feet))
         throw_up(player, struck, hit)
         self._show(scene, struck, feet, True)
+        self._weigh(struck, hit)
 
     def _exchange(
         mut self, mut scene: Scene, mut player: Character, delta: Duration
@@ -1141,15 +1193,21 @@ struct Battle(Movable):
             terrain: The ground, the floors and the walls.
             blocking: The round things in the player's way, but the
                 bandits and the dummies.
-            delta: The frame's time.
+            delta: The frame's time. While a strong blow stops the fight,
+                none of it moves the fight on.
 
         Raises:
             Error: If the time is negative, or a fighter or a body cannot
                 move.
         """
-        var seconds = delta.to(SECOND)
-        if not (seconds >= 0 and seconds < 1.0e9):
+        var real = delta.to(SECOND)
+        if not (real >= 0 and real < 1.0e9):
             raise Error("A frame's time must not be negative or endless")
+        # A strong blow stops the fight; the camera shakes on.
+        var seconds = real if self.freeze <= 0 else Float32(0)
+        self.freeze = max(Float32(0), self.freeze - real)
+        self.shake *= exp(-SHAKE_FADE * real)
+        var still = Duration(seconds, SECOND)
         self.threat = False
         var presses = pressed(input, self.last)
         var flick = Float32(0)
@@ -1159,7 +1217,7 @@ struct Battle(Movable):
         self._command(input, presses, flick, view.yaw, player)
         var around = blocking.copy()
         around.extend(self.obstacles())
-        self._move_player(input, view.yaw, player, terrain, around, delta)
+        self._move_player(input, view.yaw, player, terrain, around, still)
         if self.lock >= 0:
             view.yaw = turn_toward(
                 view.yaw,
@@ -1169,14 +1227,14 @@ struct Battle(Movable):
         var pace = SLOW_SHARE if self.slow > 0 else Float32(1)
         var slowed = Duration(seconds * pace, SECOND)
         self._move_foes(player, terrain, blocking, slowed)
-        self._exchange(scene, player, delta)
+        self._exchange(scene, player, still)
         var over = self.fighter.over > 0
         if over and not self.limited:
             self.notes.append("OVER LIMIT!")
         self.limited = over
         self.trail.color = OVER_TRAIL if over else PLAYER_TRAIL
-        self._settle(scene, player, terrain, delta)
-        self.arms.pose(scene, body, player, self.fighter, self.drawn, delta)
+        self._settle(scene, player, terrain, still)
+        self.arms.pose(scene, body, player, self.fighter, self.drawn, still)
         self.trail.show(scene, self.fighter)
         for index in range(len(self.foes)):
             ref foe = self.foes[index]

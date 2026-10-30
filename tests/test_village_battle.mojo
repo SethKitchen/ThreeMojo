@@ -24,6 +24,8 @@ from tests._village_arena import (
     popup_texts,
 )
 from extensions.village.battle import (
+    HIT_STOP,
+    SHAKE,
     BLOCK_PUSH,
     CALM_SECONDS,
     JUGGLE,
@@ -33,6 +35,7 @@ from extensions.village.battle import (
     BattleParameters,
     pressed,
     push_of,
+    strong_blow,
     throw_up,
 )
 from extensions.village.character import (
@@ -745,6 +748,56 @@ def test_a_flick_moves_the_lock_and_herbs_heal() raises:
     healer.battle.fighter.health = 500
     healer.press(heal)
     assert_equal(healer.battle.eaten, 0)
+
+
+def test_a_strong_blow_stops_the_fight_and_shakes_the_camera() raises:
+    var slight = Blow(
+        30,
+        8,
+        Velocity(1.5, METER_PER_SECOND),
+        Velocity(0.0, METER_PER_SECOND),
+    )
+    var shove = Blow(
+        30,
+        8,
+        Velocity(4.0, METER_PER_SECOND),
+        Velocity(0.0, METER_PER_SECOND),
+    )
+    var lift = Blow(
+        30,
+        8,
+        Velocity(1.0, METER_PER_SECOND),
+        Velocity(6.5, METER_PER_SECOND),
+    )
+    assert_true(strong_blow(Struck(GUARD_BREAK, 0, 8), slight))
+    assert_false(strong_blow(Struck(BLOCKED, 0, 8), shove))
+    assert_true(strong_blow(Struck(CRITICAL, 45, 0), slight))
+    assert_false(strong_blow(Struck(HIT, 30, 8), slight))
+    assert_true(strong_blow(Struck(HIT, 30, 8), shove))
+    assert_true(strong_blow(Struck(HIT, 30, 8), lift))
+    # A heavy cut on the dummy stops the fight, and shakes the camera.
+    var arena = Arena(arena_parameters(0, 1))
+    var heavy = no_input()
+    heavy.heavy = True
+    arena.tick(heavy)
+    var stopped = False
+    for _ in range(20):
+        arena.tick(no_input())
+        if arena.battle.freeze > 0:
+            stopped = True
+            assert_true(arena.battle.shake > SHAKE * 0.5)
+            break
+    assert_true(stopped)
+    # While it stands still, the fighter's clock does not run.
+    arena.battle.freeze = HIT_STOP
+    var clock = arena.battle.fighter.clock
+    arena.tick(no_input(), 0.02)
+    assert_almost_equal(arena.battle.fighter.clock, clock, atol=1e-6)
+    assert_almost_equal(arena.battle.freeze, HIT_STOP - 0.02, atol=1e-6)
+    # Then it runs, and the shake dies away.
+    arena.run(0.5)
+    assert_true(arena.battle.fighter.clock != clock)
+    assert_true(arena.battle.shake < SHAKE * 0.01)
 
 
 def main() raises:

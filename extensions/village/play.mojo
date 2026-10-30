@@ -135,7 +135,7 @@ from render.game_smooth import smooth_edges
 from render.game_upscale import upscale_into
 from renderers.game_renderer import FULL_SHADOWS, GameRenderer
 from renderers.renderer import Renderer, available_workers
-from std.math import exp
+from std.math import cos, exp, sin
 from std.time import perf_counter_ns
 from units.si import (
     DEGREE,
@@ -163,6 +163,8 @@ comptime INSIDE_REACH = Float32(18)
 drawn, in meters."""
 comptime ARM_MARGIN = Float32(0.3)
 """How far before a wall the camera's eye stops, in meters."""
+comptime SHAKEN = Float32(1.0e-3)
+"""A camera's shake of less than this, in meters, is not seen."""
 comptime ARM_EASE = Float32(3)
 """How fast the eye goes back out once a wall is passed: each second it
 closes all but `exp(-ARM_EASE)` of its gap."""
@@ -709,6 +711,12 @@ struct VillageGame(Movable):
             Length(self.terrain.view_ceiling(focus, eye, feet.y), METER),
             self.reach,
         )
+        # A strong blow shakes the camera, and what it looks at with it.
+        var jolt = self.battle.shake
+        if jolt > SHAKEN:
+            var t = self.clock * 47
+            var off = Vector3(sin(t) * jolt, cos(t * 1.3) * jolt * 0.7, 0)
+            self.camera.place(self.camera.position + off, self.view.focus + off)
         # A house's inside shows only to a camera near it: from further
         # away, its windows show little of it.
         # The houses' lamps are lit from dusk to dawn.
