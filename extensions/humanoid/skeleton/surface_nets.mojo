@@ -38,7 +38,7 @@ from math.vector3 import Vector3, mix_delta3
 from render.tasks import TaskGroup
 from std.collections import Dict
 from std.sys import num_logical_cores
-from std.math import atan2, ceil, isfinite, max, min, pi
+from std.math import atan2, ceil, isfinite, max, min, pi, round
 
 # Fine cells per unit of `detail` along the long axis.
 comptime REFINE = 4
@@ -712,6 +712,52 @@ def finish_surface(
     var geometry = BufferGeometry()
     indexed_surface(geometry, positions^, normals^, uvs^, indices^)
     return geometry^
+
+
+def reproject_uvs(mut target: BufferGeometry, source: BufferGeometry) raises:
+    """Set a decimated mesh's texture coordinates where its vertices now
+    stand, as the mesher set its source's.
+
+    Decimation moves a vertex but keeps its texture coordinates, so a
+    texture laid round the mesh bends where the triangles merged. Each
+    vertex takes `u` round the vertical axis again, on the side of the
+    seam its old `u` was on. It takes `v` from its height, on the scale
+    the source's lowest and highest vertices give.
+
+    Args:
+        target: The decimated mesh, with `position` and `uv`.
+        source: The mesh it was decimated from, with `position` and
+            `uv`, `v` running up with the height.
+
+    Raises:
+        Error: If a mesh lacks `position` or `uv`, or the source has no
+            vertex.
+    """
+    ref from_points = source.attribute_view(String(POSITION))
+    ref from_uvs = source.attribute_view(String(UV))
+    if from_points.count() == 0:
+        raise Error("Texture coordinates need a source vertex")
+    var lowest = 0
+    var highest = 0
+    for index in range(from_points.count()):  # pragma: no branch
+        var y = from_points.vector3(index).y
+        if y < from_points.vector3(lowest).y:
+            lowest = index
+        if y > from_points.vector3(highest).y:
+            highest = index
+    var low = from_points.vector3(lowest).y
+    var v_low = from_uvs.component(lowest, 1)
+    var rise = from_uvs.component(highest, 1) - v_low
+    var span = (from_points.vector3(highest).y - low) / max(rise, Float32(1e-6))
+    ref points = target.attribute_view(String(POSITION))
+    var uvs = target.clone_attribute(String(UV))
+    for index in range(points.count()):  # pragma: no branch
+        var p = points.vector3(index)
+        var u = _u_of(p)
+        u += round(uvs.component(index, 0) - u)
+        uvs.set_component(index, 0, u)
+        uvs.set_component(index, 1, v_low + (p.y - low) / span)
+    target.set_attribute(String(UV), uvs^)
 
 
 def share_height(

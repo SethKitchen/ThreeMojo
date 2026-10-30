@@ -355,6 +355,7 @@ struct HairShape(Copyable, DistanceField, Movable):
         side: BodySide,
         skin: HeadSkinField,
         style: HairStyle = GROWN,
+        length: Optional[Float32] = None,
     ) raises:
         """Shape one head hair group on a skin already built for the same
         head.
@@ -366,6 +367,9 @@ struct HairShape(Copyable, DistanceField, Movable):
             skin: The head's skin, from the same dimensions.
             style: How the hair is cut; `GROWN` by default. A `MOHAWK`
                 keeps only a strip along the midline.
+            length: How long the hair is, in place of what the genome
+                and the style say: below zero cropped close, above zero
+                a fall to the jaw at one. None by default.
 
         Raises:
             Error: If `dimensions.validate` refuses the copy, if `part`
@@ -385,6 +389,8 @@ struct HairShape(Copyable, DistanceField, Movable):
         # A pixie is cropped closest of all.
         if style == PIXIE:
             self.length = Float32(-1)
+        if length:
+            self.length = length.value()
         # Shorter than the template crops the hair close.
         var crop = 1 + Float32(0.35) * min(Float32(0), self.length)
         # Curled hair stands fuller off the head than straight hair,
