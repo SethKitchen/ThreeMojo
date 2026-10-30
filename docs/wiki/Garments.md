@@ -53,13 +53,19 @@ The cover value of a skin vertex is the sum of its skin weights, each times its 
 1. It reads the skin once: positions, normals and the vertices that share one position.
 2. It computes the standoff of each vertex: the garment's clearance and ease, past the outer face of each layer under it.
 3. It moves each vertex out by its standoff and drapes the shell.
-4. It drops what a layer over it hides, and cuts the shell at its hems.
+4. It cuts the shell at its hems, and where a layer over it covers it.
 
 A drape pass moves each covered vertex halfway to the mean of its neighbors. Then it pushes the vertex back out to its standoff. One pass keeps the skin's shape under a thin cloth. Twenty-four passes span the hollows, as a stiff plate does.
 
 A layer under a garment lifts it in full inside and at that layer's hem. The lift fades out a quarter of a cover value past the hem. So a tunic rises smoothly over the top of a hose. No layer can pass through the layer under it at rest.
 
-A triangle is hidden when every corner has a cover value of 0.75 or more from a layer over it. The skin and the inner layers drop these triangles. So skin cannot show through a garment when the body bends, and a dressed person costs about as many triangles as a bare one.
+A garment is cut where a layer over it covers it past 0.75. That layer's hem lies at 0.5, so the garment ends under it. The cut runs along the iso-line, as a hem does, and not along the edges of triangles. So no whole triangle of an inner layer reaches out past the hem of the layer over it.
+
+The hands' skins are meshes of their own, and each layer stands off only the layers under it on the same skin. So at the wrist a glove on the hand's skin can still show past a vambrace on the arm's.
+
+A shell is one face of its fabric, so a hem has no thickness of its own. `add_rim` gives each open edge a rim: a strip of two triangles from the edge in along the normals, facing out of the edge. `dress` rims each fabric 1.5 mm thick or more, at its own thickness and at most 6 mm deep. So the hems of leather, padding, mail and plate, and the edge of each lame, show their thickness and catch the light. Copies of a vertex at one position are one vertex, so a seam where the skin was parted takes no rim.
+
+The skin drops each triangle whose every corner has a cover value of 0.75 or more from a garment. So skin cannot show through a garment when the body bends, and a dressed person costs about as many triangles as a bare one.
 
 ## Forms
 

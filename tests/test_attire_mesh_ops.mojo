@@ -12,6 +12,7 @@ from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
 from extensions.attire.mesh_ops import (
     COVER,
     MeshWriter,
+    add_rim,
     cut,
     cut_attribute,
     keep_triangles,
@@ -266,6 +267,55 @@ def test_a_writer_writes_another_mesh_s_attributes() raises:
     # A mesh with no attributes writes none.
     var bare = MeshWriter(BufferGeometry())
     assert_equal(bare.add(Vector3(0, 0, 0), 1, [0, 0, 0, 0], [1, 0, 0, 0]), 0)
+
+
+def test_an_open_edge_takes_a_rim() raises:
+    # One quad, facing -z as it winds: four open edges, each with a rim of
+    # two triangles, running back 2 mm and facing out of the edge.
+    var quad = strip(0, 1, HIPS, normals=False)
+    quad.compute_vertex_normals()
+    var rimmed = add_rim(quad, 0.002)
+    assert_equal(rimmed.triangle_count(), 2 + 4 * 2)
+    assert_equal(rimmed.vertex_count(), 4 + 4 * 4)
+    ref placed = rimmed.attribute_view(String(POSITION))
+    ref normals = rimmed.attribute_view(String(NORMAL))
+    var back = 0
+    var down = 0
+    for v in range(4, rimmed.vertex_count()):
+        if placed.vector3(v).z > 0.0019:
+            back += 1
+        var n = normals.vector3(v)
+        assert_almost_equal(n.z, 0)
+        # The bottom edge's rim faces down, out of the quad.
+        if placed.vector3(v).y < -0.99 and n.y < -0.99:
+            down += 1
+    assert_equal(back, 8)
+    assert_equal(down, 4)
+    # Its vertices keep the edge's skin weights.
+    assert_equal(
+        Int(rimmed.attribute_view(String(SKIN_INDEX)).component(4, 0)),
+        HIPS.value,
+    )
+    # A seam where the mesh was parted into copies is not an edge: two
+    # quads that share an edge by position alone have six open edges.
+    var two = merge(strip(0, 1, HIPS), strip(1, 1, HIPS))
+    assert_equal(add_rim(two, 0.002).triangle_count(), 4 + 6 * 2)
+    # Normals turned against the faces are turned back: the rim still runs
+    # in from the face.
+    var turned = add_rim(strip(0, 1, HIPS), 0.002)
+    assert_true(turned.attribute_view(String(POSITION)).vector3(5).z > 0.0019)
+    # A sliver whose edge has no length takes no rim.
+    var sliver = strip(0, 1, HIPS)
+    var flat = sliver.clone_attribute(String(POSITION))
+    flat.set_component(1, 0, flat.component(0, 0))
+    flat.set_component(3, 0, flat.component(2, 0))
+    sliver.set_attribute(String(POSITION), flat^)
+    assert_true(add_rim(sliver, 0.002).triangle_count() < 2 + 4 * 2)
+    # An empty mesh takes no rim.
+    assert_equal(add_rim(empty_mesh(), 0.002).vertex_count(), 0)
+    # No normals: refused.
+    with assert_raises():
+        _ = add_rim(strip(0, 1, HIPS, normals=False), 0.002)
 
 
 def test_meshes_without_positions_cannot_be_merged() raises:
