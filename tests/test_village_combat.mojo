@@ -9,6 +9,7 @@ and what each blow does."""
 from extensions.village.combat import (
     ARTE_PER_HIT,
     BITE,
+    DEMON_FANG,
     FINISHED,
     FINISH_SHARE,
     LIMIT,
@@ -124,9 +125,9 @@ def _blow(damage: Float32, ki: Float32) -> Blow:
 
 
 def test_each_kind_knows_its_values() raises:
-    for value in [-1, 12]:
+    for value in [-1, 13]:
         assert_false(CombatMove(value).is_valid())
-    for value in [0, 11]:
+    for value in [0, 12]:
         assert_true(CombatMove(value).is_valid())
     for value in [-1, 3]:
         assert_false(CombatStance(value).is_valid())
@@ -144,8 +145,9 @@ def test_moves_and_outcomes_have_names_for_the_display() raises:
     assert_equal(move_name(RISING_EDGE), "RISING EDGE")
     assert_equal(move_name(FALL), "FALL")
     assert_equal(move_name(BITE), "BITE")
-    with assert_raises(contains="twelve"):
-        _ = move_name(CombatMove(12))
+    assert_equal(move_name(DEMON_FANG), "DEMON FANG")
+    with assert_raises(contains="thirteen"):
+        _ = move_name(CombatMove(13))
     assert_equal(outcome_word(PERFECT_DODGE), "PERFECT DODGE")
     assert_equal(outcome_word(PARRIED), "PARRY")
     assert_equal(outcome_word(GUARD_BREAK), "GUARD BREAK")
@@ -164,7 +166,9 @@ def test_moves_are_sorted_into_attacks_artes_and_styles() raises:
     assert_false(is_attack(DODGE))
     assert_true(is_arte(RISING_EDGE))
     assert_true(is_arte(TEMPEST))
+    assert_true(is_arte(DEMON_FANG))
     assert_false(is_arte(LIGHT_ONE))
+    assert_false(is_arte(BITE))
     assert_false(styled(FREE))
     assert_true(styled(LIGHT_ONE))
     assert_true(styled(HEAVY))
@@ -205,8 +209,11 @@ def test_each_move_has_its_times_and_its_strength() raises:
     var bite = move_data(BITE)
     assert_almost_equal(bite.lunge.to(METER), 2.4, atol=1e-6)
     assert_almost_equal(bite.ki_cost, 0, atol=1e-6)
-    with assert_raises(contains="twelve"):
-        _ = move_data(CombatMove(12))
+    var fang = move_data(DEMON_FANG)
+    assert_equal(fang.hits, 0)
+    assert_almost_equal(fang.arte_cost, 1, atol=1e-6)
+    with assert_raises(contains="thirteen"):
+        _ = move_data(CombatMove(13))
 
 
 def test_each_stance_changes_strength_pace_cost_guard_and_step() raises:
@@ -493,6 +500,8 @@ def test_a_guard_blocks_from_the_front_and_parries_when_fresh() raises:
     var parried = f.receive(_blow(30, 12), True)
     assert_true(parried.outcome == PARRIED)
     assert_almost_equal(parried.ki, 12, atol=1e-6)
+    # A parry opens a counter, as a perfect dodge does.
+    assert_almost_equal(f.counter, COUNTER_SECONDS, atol=1e-6)
     assert_almost_equal(f.ki, 100, atol=1e-6)
     _step(f, 0.2)
     # Holding on does not raise it afresh.
@@ -737,6 +746,8 @@ def test_over_limit_fills_and_unleashes() raises:
     assert_almost_equal(f.limit, 0, atol=1e-6)
     f.arte = 0
     f.combo = 0
+    # The parry above opened a counter; this is not one.
+    f.counter = 0
     assert_true(f.request(TEMPEST))
     assert_almost_equal(f.arte, 0, atol=1e-6)
     _step(f, 0.25)
@@ -799,6 +810,26 @@ def test_a_heavy_blow_finishes_a_staggered_weakened_fighter() raises:
     _ = light.press_light()
     _step(light, 0.15)
     assert_false(light.connect(0).value().finish)
+
+
+def test_a_demon_fang_launches_its_blow_and_strikes_nothing_itself() raises:
+    var f = _fighter()
+    assert_false(f.launched())
+    assert_true(f.request(DEMON_FANG))
+    assert_almost_equal(f.arte, 4, atol=1e-5)
+    _step(f, 0.1)
+    assert_false(f.launched())
+    _step(f, 0.15)
+    assert_true(f.launched())
+    # Its cut strikes nothing: the wave carries its blow.
+    assert_false(f.swing())
+    assert_false(f.connect(0))
+    var blow = f.blow()
+    assert_almost_equal(blow.damage, 45, atol=1e-4)
+    assert_almost_equal(blow.ki_damage, 10, atol=1e-4)
+    assert_false(blow.finish)
+    _step(f, 0.05)
+    assert_false(f.launched())
 
 
 def main() raises:

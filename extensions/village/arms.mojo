@@ -30,6 +30,7 @@ from core.scene import Scene
 from extensions.humanoid.rig.joints import HIPS, LEFT_HAND
 from extensions.humanoid.rig.sword_clips import (
     dodge_clip,
+    fang_clip,
     fall_clip,
     flinch_clip,
     guard_clip,
@@ -45,6 +46,7 @@ from extensions.humanoid.rig.sword_clips import (
 from extensions.village.blade import SwordLooks, add_scabbard, add_sword
 from extensions.village.character import STANDING, Character
 from extensions.village.combat import (
+    DEMON_FANG,
     DODGE,
     FALL,
     FLINCH,
@@ -71,7 +73,8 @@ struct Arms(Movable):
     """A body's swords and its sword clips, and which clip plays."""
 
     # The mixer's action for each move, by the move's value, or -1 for
-    # `FREE`; and the ready stance's and the guard's.
+    # `FREE` and for a beast's bite; and the ready stance's and the
+    # guard's.
     var moves: List[Int]
     var ready: Int
     var guard: Int
@@ -128,6 +131,9 @@ struct Arms(Movable):
         )
         self.moves[TEMPEST.value] = body.mixer.add(
             AnimationAction(tempest_clip(bones, rig))
+        )
+        self.moves[DEMON_FANG.value] = body.mixer.add(
+            AnimationAction(fang_clip(bones, rig))
         )
         self.moves[DODGE.value] = body.mixer.add(
             AnimationAction(dodge_clip(bones, rig))

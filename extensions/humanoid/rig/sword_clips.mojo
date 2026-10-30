@@ -27,6 +27,7 @@ side and the other side:
 | `heavy_clip` | 1.09 | A long wind-up high on the right, and a lunge that cuts down to the left |
 | `rising_edge_clip` | 0.81 | A crouch with the sword low on the left, and a cut up that rises onto the toes |
 | `tempest_clip` | 1.06 | The sword arm out, and a whole turn of the body |
+| `fang_clip` | 0.65 | A crouch with the sword low behind, and a cut along the ground and up |
 | `dodge_clip` | 0.48 | A low, quick crouch with the sword held in |
 | `guard_clip` | 1.0, loops | The blade upright before the face, the knees bent |
 | `flinch_clip` | 0.4 | The head and the chest thrown back |
@@ -542,6 +543,42 @@ def tempest_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
         pose.turn(LEFT_UPPER_ARM, 0, 0, -60 * share)
         poses.append(pose^)
     return _clip("tempest", bones, rig, poses, seconds)
+
+
+def fang_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
+    """Return the demon fang: a crouch with the sword low behind on its
+    side, and a cut along the ground and up, 0.65 seconds.
+
+    Args:
+        bones: One node per joint, in the order of the joints.
+        rig: The rig the bones were placed from.
+
+    Returns:
+        The clip, named `"fang"`.
+
+    Raises:
+        Error: If there is not one bone per joint.
+    """
+    var scale = _scale(rig)
+    var low = Pose()
+    _legs(low, 30, 15, 0.8, scale)
+    _body(low, -10, Vector3(25, 0, 0), Vector3(10, 0, 0))
+    low.turn(HEAD, -15)
+    _arm(low, Grip(23, -82, 12, 0, 54, -56))
+    _free_hand(low, -30, -20, -60)
+    var along = Pose()
+    _legs(along, 35, 15, 0.7, scale)
+    _body(along, -15, Vector3(8, 0, 0), Vector3(2, 0, 0))
+    _arm(along, Grip(16, -69, 90, 0, 86, -35))
+    _free_hand(along, 10, -30, -40)
+    var up = Pose()
+    _legs(up, 30, 15, 0.5, scale)
+    _body(up, -18, Vector3(4, 0, 0), Vector3(0, 0, 0))
+    _arm(up, Grip(-26, -67, 110, 0, 65, 23))
+    _free_hand(up, 20, -30, -30)
+    var keys: List[Pose] = [low^, along^, up^]
+    var at: List[Float32] = [0.28, 0.38, 0.48]
+    return _cut("fang", bones, rig, keys^, at^, 0.65)
 
 
 def dodge_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:

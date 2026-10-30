@@ -21,6 +21,9 @@ from its start to where the blade is, brightest at the blade and fading
 behind it over `TRAIL_TAIL` of its length. After the active part it fades
 away over `TRAIL_LINGER`.
 
+**Waves.** `draw_wave` adds a demon fang's wave to the frame: an arch of
+light across the way it runs, standing on the ground.
+
 **Sparks.** `Sparks` keeps `SPARKS` bursts of gold rays. A blow puts the
 oldest at the place it lands; it grows and shows for `SPARK_SECONDS`.
 """
@@ -31,6 +34,7 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.rig.sword_clips import tempest_twist
 from extensions.village.combat import (
+    DEMON_FANG,
     HEAVY,
     LIGHT_ONE,
     LIGHT_THREE,
@@ -61,6 +65,10 @@ comptime TRAIL_STEPS = 18
 comptime NEAREST = Float32(0.2)
 """How far before the camera a trail's corner must be to be drawn, in
 meters."""
+comptime WAVE_INNER = Float32(0.35)
+"""The inner radius of a demon fang's arch of light, in meters."""
+comptime WAVE_OUTER = Float32(0.85)
+"""The outer radius of a demon fang's arch of light, in meters."""
 comptime SPARKS = 6
 """How many bursts of sparks can show at once."""
 comptime SPARK_SECONDS = Float32(0.16)
@@ -192,6 +200,17 @@ def trail_points(move: CombatMove, scale: Float32) -> List[Vector3]:
             ahead,
             0,
             180 * degree,
+            inner,
+            outer,
+        )
+    if move == DEMON_FANG:
+        # From low behind on the sword's side, along the ground, and up.
+        return arc_points(
+            Vector3(0, 0.2 * s, 0.1 * s),
+            Vector3(-0.3, -0.95, 0),
+            ahead,
+            -30 * degree,
+            120 * degree,
             inner,
             outer,
         )
@@ -375,39 +394,99 @@ struct Trail(Movable):
         var place = scene.world_matrix(self.nodes[self.shown].value())
         ref corners = self.ribbons[self.shown]
         var steps = len(corners) // 2 - 1
-        var pixels = List[Vector3](capacity=len(corners))
-        var before = True
+        var placed = List[Vector3](capacity=len(corners))
         for k in range(len(corners)):  # pragma: no branch
-            var p = place.transform_point(corners[k])
-            var off = p - camera.position
-            if off.x * look.x + off.y * look.y + off.z * look.z < NEAREST:
-                before = False
-            pixels.append(camera.project(p, frame.width, frame.height))
-        if not before:
-            return
-        for k in range(steps):  # pragma: no branch
-            var t0 = Float32(k) / Float32(steps)
-            var t1 = Float32(k + 1) / Float32(steps)
-            if t1 > self.sweep + 1.0e-4:
+            placed.append(place.transform_point(corners[k]))
+        # How much light each step adds: most at the blade, none ahead of
+        # it.
+        var light = List[Float32]()
+        for k in range(steps + 1):  # pragma: no branch
+            var t = Float32(k) / Float32(steps)
+            if t > self.sweep + 1.0e-4:
                 break
-            # How much light each end adds: most at the blade.
-            var s0 = (
-                max(Float32(0), 1 - (self.sweep - t0) / TRAIL_TAIL) * self.glow
-            )
-            var s1 = (
-                max(Float32(0), 1 - (self.sweep - t1) / TRAIL_TAIL) * self.glow
-            )
-            var i0 = pixels[2 * k]
-            var o0 = pixels[2 * k + 1]
-            var i1 = pixels[2 * k + 2]
-            var o1 = pixels[2 * k + 3]
-            # The inner edge adds half the outer's light.
-            var a = Vector3(i0.x, i0.y, s0 * 0.5)
-            var b = Vector3(o0.x, o0.y, s0)
-            var c = Vector3(o1.x, o1.y, s1)
-            var d = Vector3(i1.x, i1.y, s1 * 0.5)
-            glow_triangle(frame, a, b, c, self.color)
-            glow_triangle(frame, a, c, d, self.color)
+            var share = max(Float32(0), 1 - (self.sweep - t) / TRAIL_TAIL)
+            light.append(share * self.glow)
+        glow_ribbon(frame, camera, look, placed, light, self.color)
+
+
+def glow_ribbon(
+    mut frame: Framebuffer,
+    camera: PerspectiveCamera,
+    look: Vector3,
+    corners: List[Vector3],
+    light: List[Float32],
+    color: Vector3,
+) raises:
+    """Add a ribbon's light to a frame, quad by quad.
+
+    Args:
+        frame: The frame, the camera's size.
+        camera: The camera the frame was drawn from.
+        look: The way the camera looks, of length one.
+        corners: The ribbon's corners in world space: an inner corner and
+            an outer one for each step, as `arc_points` gives them.
+        light: How much light the outer corners of each step add, from 0
+            to 1; the inner corners add half as much. The ribbon is drawn
+            as far as the steps that this lists.
+        color: The light at a share of one, as sRGB bytes.
+
+    Raises:
+        Error: If the camera or the frame's size is not valid. A ribbon
+            with a corner less than `NEAREST` before the camera is not
+            drawn.
+    """
+    var pixels = List[Vector3](capacity=len(corners))
+    for p in corners:  # pragma: no branch
+        var off = p - camera.position
+        if off.x * look.x + off.y * look.y + off.z * look.z < NEAREST:
+            return
+        pixels.append(camera.project(p, frame.width, frame.height))
+    for k in range(len(light) - 1):
+        var s0 = light[k]
+        var s1 = light[k + 1]
+        var i0 = pixels[2 * k]
+        var o0 = pixels[2 * k + 1]
+        var i1 = pixels[2 * k + 2]
+        var o1 = pixels[2 * k + 3]
+        var a = Vector3(i0.x, i0.y, s0 * 0.5)
+        var b = Vector3(o0.x, o0.y, s0)
+        var c = Vector3(o1.x, o1.y, s1)
+        var d = Vector3(i1.x, i1.y, s1 * 0.5)
+        glow_triangle(frame, a, b, c, color)
+        glow_triangle(frame, a, c, d, color)
+
+
+def draw_wave(
+    mut frame: Framebuffer,
+    camera: PerspectiveCamera,
+    look: Vector3,
+    at: Vector3,
+    way: Vector3,
+    glow: Float32,
+) raises:
+    """Add a demon fang's wave to a frame: an arch of light standing on
+    the ground across the way it runs, brightest at its top.
+
+    Args:
+        frame: The frame, the camera's size.
+        camera: The camera the frame was drawn from.
+        look: The way the camera looks, of length one.
+        at: The middle of the wave's foot.
+        way: The way it runs, of length one.
+        glow: How bright it is, from 0 to 1.
+
+    Raises:
+        Error: If the camera or the frame's size is not valid.
+    """
+    var across = Vector3(-way.z, 0, way.x)
+    var corners = arc_points(
+        at, across, Vector3(0, 1, 0), 0, Float32(pi), WAVE_INNER, WAVE_OUTER
+    )
+    var steps = len(corners) // 2 - 1
+    var light = List[Float32]()
+    for k in range(steps + 1):  # pragma: no branch
+        light.append(sin(Float32(pi) * Float32(k) / Float32(steps)) * glow)
+    glow_ribbon(frame, camera, look, corners, light, PLAYER_TRAIL)
 
 
 def spark_sheet() -> Sheet:

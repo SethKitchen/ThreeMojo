@@ -10,6 +10,7 @@ from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.village.combat import (
+    DEMON_FANG,
     DODGE,
     FREE,
     HEAVY,
@@ -29,6 +30,8 @@ from extensions.village.slashes import (
     Sparks,
     Trail,
     arc_points,
+    draw_wave,
+    glow_ribbon,
     glow_triangle,
     slash_material,
     spark_sheet,
@@ -76,6 +79,7 @@ def test_a_ribbon_sweeps_its_arc() raises:
         HEAVY,
         RISING_EDGE,
         TEMPEST,
+        DEMON_FANG,
     ]
     for move in moves:
         assert_true(len(trail_points(move, 1)) > 0)
@@ -199,6 +203,44 @@ def test_a_trail_grows_with_the_swing_and_fades() raises:
     assert_equal(trail.shown, TEMPEST.value)
     var ring = trail.nodes[TEMPEST.value].value()
     assert_true(abs(scene.node(ring).quaternion.w) < 0.99)
+
+
+def test_a_wave_stands_as_an_arch_of_light() raises:
+    var look = Vector3(0, -0.3, 4) / Vector3(0, -0.3, 4).length()
+    var before = Framebuffer(64, 64, Color(0, 0, 0))
+    draw_wave(
+        before,
+        _camera(Vector3(0, 1.5, -5)),
+        look,
+        Vector3(0, 0, 0),
+        Vector3(0, 0, -1),
+        1,
+    )
+    assert_true(_light(before) > 0)
+    # Behind the camera, it is not drawn.
+    var behind = Framebuffer(64, 64, Color(0, 0, 0))
+    draw_wave(
+        behind,
+        _camera(Vector3(0, 1.5, 0.5)),
+        look,
+        Vector3(0, 0, 0),
+        Vector3(0, 0, -1),
+        1,
+    )
+    assert_equal(_light(behind), 0)
+    # A ribbon of one step has no width to draw.
+    var one = Framebuffer(64, 64, Color(0, 0, 0))
+    var corners: List[Vector3] = [Vector3(0, 0, 0), Vector3(0, 1, 0)]
+    var light: List[Float32] = [1]
+    glow_ribbon(
+        one,
+        _camera(Vector3(0, 1.5, -5)),
+        look,
+        corners,
+        light,
+        PLAYER_TRAIL,
+    )
+    assert_equal(_light(one), 0)
 
 
 def test_sparks_burst_grow_and_go() raises:

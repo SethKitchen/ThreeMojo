@@ -22,6 +22,7 @@ from extensions.gamepad.web import WebGamepadState, WebHub
 from extensions.village.character import MoveInput, no_input
 from controls.input import KEY_F, Key
 from extensions.village.pad_input import (
+    KEY_B,
     KEY_C,
     KEY_E,
     KEY_G,
@@ -211,6 +212,7 @@ def _all(input: MoveInput) -> List[Bool]:
         input.heavy,
         input.rising,
         input.tempest,
+        input.fang,
         input.dodge,
         input.guard,
         input.lock,
@@ -232,8 +234,13 @@ def test_the_shoulders_and_the_trigger_fight() raises:
     assert_false(low.jump)
     assert_true(low.low)
     assert_true(low.guard)
-    # The west button uses, or takes the middle stance.
+    # The west button uses, or takes the middle stance, or makes the demon
+    # fang.
     assert_true(_fight(west=True).use)
+    var fang = _fight(west=True, left_trigger=True)
+    assert_false(fang.use)
+    assert_true(fang.fang)
+    assert_false(_fight(west=True).fang)
     var middle = _fight(west=True, left_shoulder=True)
     assert_false(middle.use)
     assert_true(middle.middle)
@@ -299,6 +306,7 @@ def test_the_keyboard_fights() raises:
         KEY_G,
         KEY_Z,
         KEY_X,
+        KEY_B,
         KEY_C,
         KEY_V,
         KEY_T,
@@ -328,6 +336,7 @@ def test_the_fight_buttons_add() raises:
         heavy=True,
         rising=True,
         tempest=True,
+        fang=True,
         dodge=True,
         guard=True,
         lock=True,

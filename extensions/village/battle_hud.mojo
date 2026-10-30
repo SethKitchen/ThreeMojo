@@ -8,8 +8,9 @@
 
 `draw_battle` draws seven things:
 
-1. **The trails** of the swings, as light added to the frame: see
-   `extensions.village.slashes`.
+1. **The trails** of the swings, and the demon fang's waves, as light
+   added to the frame: see `extensions.village.slashes`. A wave dims as
+   it runs.
 2. **The player's gauges**, in the bottom right: the stance, the health,
    the ki, the limit gauge, and the arte gauge as a row of points. The
    health turns red below a quarter. Over Limit, the limit gauge turns
@@ -29,7 +30,13 @@ A point behind the camera is not drawn.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.scene import Scene
-from extensions.village.battle import CHEST, HEAD, POPUP_SECONDS, Battle
+from extensions.village.battle import (
+    CHEST,
+    FANG_RANGE,
+    HEAD,
+    POPUP_SECONDS,
+    Battle,
+)
 from extensions.village.combat import (
     COMBO_KEEP,
     FINISH_SHARE,
@@ -43,6 +50,7 @@ from extensions.village.combat import (
     move_data,
 )
 from extensions.village.foes import POSTED
+from extensions.village.slashes import draw_wave
 from extensions.village.hud import (
     GOLD_TEXT,
     SHADOW,
@@ -246,6 +254,9 @@ def draw_battle(
     battle.trail.draw(frame, scene, camera, look)
     for index in range(len(battle.people)):
         battle.people[index].trail.draw(frame, scene, camera, look)
+    for wave in battle.waves:
+        var glow = 1 - 0.6 * wave.gone / FANG_RANGE
+        draw_wave(frame, camera, look, wave.at, wave.way, glow)
     _gauges(frame, battle, scale)
     ref f = battle.fighter
     if f.combo >= 2:

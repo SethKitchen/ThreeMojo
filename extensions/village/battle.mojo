@@ -10,7 +10,9 @@ dummies, as in Tales of Arise and Nioh.
 step and pose:
 
 1. **Presses.** A new press of a button asks the player's `Fighter` for a
-   move: a light attack, the heavy attack, an arte, or a dodge. A dodge
+   move: a light attack, the heavy attack, an arte, or a dodge. A demon
+   fang's cut sends a wave that runs along the ground at `FANG_SPEED`
+   for `FANG_RANGE`, and strikes each target it passes over once. A dodge
    needs the sword drawn, since its button also runs. The guard button
    guards while it is held, and a new press of it makes a ki pulse. A
    stance button changes the stance. The lock button locks the camera on
@@ -72,6 +74,8 @@ from extensions.village.character import (
 )
 from extensions.village.combat import (
     DEFEATED,
+    DEMON_FANG,
+    REACH_HEIGHT,
     FINISHED,
     HIT,
     DODGE,
@@ -213,6 +217,14 @@ comptime LOOT = 8
 """How many coins a fallen bandit gives."""
 comptime HERB_CHANCE = Float32(0.5)
 """The share of fallen bandits that drop a herb as well."""
+comptime FANG_SPEED = Float32(14)
+"""How fast a demon fang's wave runs, in meters a second."""
+comptime FANG_RANGE = Float32(12)
+"""How far a demon fang's wave runs, in meters."""
+comptime FANG_WIDTH = Float32(1.6)
+"""How wide a demon fang's wave strikes, in meters."""
+comptime FANG_START = Float32(0.6)
+"""How far before the player a demon fang's wave starts, in meters."""
 comptime HIT_STOP = Float32(0.06)
 """How long a strong blow stops the fight, in seconds."""
 comptime FINISH_STOP = Float32(0.2)
@@ -259,6 +271,7 @@ def pressed(now: MoveInput, before: MoveInput) -> MoveInput:
         heavy=now.heavy and not before.heavy,
         rising=now.rising and not before.rising,
         tempest=now.tempest and not before.tempest,
+        fang=now.fang and not before.fang,
         dodge=now.dodge and not before.dodge,
         guard=now.guard and not before.guard,
         lock=now.lock and not before.lock,
@@ -346,6 +359,20 @@ def strong_blow(struck: Struck, blow: Blow) -> Bool:
         return True
     var push = blow.knockback.to(METER_PER_SECOND)
     return push >= STRONG_PUSH or blow.launch.to(METER_PER_SECOND) > 0
+
+
+@fieldwise_init
+struct Wave(Copyable, Movable):
+    """A demon fang's wave of force, which runs along the ground."""
+
+    # Where its middle is, the way it runs, of length one, and how far it
+    # has run, in meters.
+    var at: Vector3
+    var way: Vector3
+    var gone: Float32
+    # What it does to each target it strikes, and the targets it struck.
+    var blow: Blow
+    var struck: List[Int]
 
 
 @fieldwise_init
@@ -500,6 +527,8 @@ struct Battle(Movable):
     var dummies: List[Practice]
     var sparks: Sparks
     var popups: List[Popup]
+    # The demon fang's waves that run.
+    var waves: List[Wave]
     # The target locked on: a foe's index, or a dummy's after the foes;
     # -1 for none.
     var lock: Int
@@ -690,6 +719,7 @@ struct Battle(Movable):
             )
         self.sparks = Sparks(scene, assets, glow)
         self.popups = List[Popup]()
+        self.waves = List[Wave]()
         self.lock = -1
         self.token = -1
         self.token_rest = 0
@@ -934,8 +964,12 @@ struct Battle(Movable):
                 self._popup(player.position, "KI PULSE", CALM_TEXT)
         self.fighter.hold_guard(input.guard)
         var fought = input.guard or presses.lock
-        if presses.rising or presses.tempest:
-            var arte = RISING_EDGE if presses.rising else TEMPEST
+        if presses.rising or presses.tempest or presses.fang:
+            var arte = DEMON_FANG
+            if presses.rising:
+                arte = RISING_EDGE
+            elif presses.tempest:
+                arte = TEMPEST
             if self.fighter.request(arte):
                 self.notes.append(move_name(arte) + "!")
             fought = True
@@ -1153,46 +1187,95 @@ struct Battle(Movable):
             var blow = self.fighter.connect(index)
             if not blow:
                 continue
-            var hit = blow.value()
-            var way = _way(feet, there)
-            var struck: Struck
-            if index < len(self.foes):
-                ref foe = self.foes[index]
-                var front = faces(
-                    there,
-                    foe.character.heading,
-                    foe.fighter.parameters.guard_arc,
-                    feet,
+            self._land(scene, index, blow.value(), feet)
+
+    def _land(
+        mut self, mut scene: Scene, index: Int, hit: Blow, source: Vector3
+    ) raises:
+        """Give one of the player's blows to a target: from a swing, or
+        from a demon fang's wave at `source`."""
+        var there = self.target_at(index)
+        var way = _way(source, there)
+        var struck: Struck
+        if index < len(self.foes):
+            ref foe = self.foes[index]
+            var front = faces(
+                there,
+                foe.character.heading,
+                foe.fighter.parameters.guard_arc,
+                source,
+            )
+            struck = foe.fighter.receive(hit, front)
+            foe.shove = push_of(struck, hit, way)
+            throw_up(foe.character, struck, hit)
+            # An attacking foe holds the token: its brain claims it before
+            # it attacks, and lets go of the attack without it.
+            if landed_blow(struck.outcome) and foe.brain.hurt():
+                self.token = -1
+                self.token_rest = TOKEN_REST
+            if landed_blow(struck.outcome):
+                self.trained += BLOW_EXPERIENCE
+            var fell = struck.outcome == DEFEATED
+            if fell or struck.outcome == FINISHED:
+                self.trained += DEFEAT_EXPERIENCE
+            if (fell or struck.outcome == FINISHED) and not foe.beast:
+                self.loot += LOOT
+                var note = String("+", LOOT, " COINS")
+                if foe.brain.roll(6) < HERB_CHANCE:
+                    self.found += 1
+                    note += " +1 HERB"
+                self.notes.append(note)
+        else:
+            ref practice = self.dummies[index - len(self.foes)]
+            struck = practice.fighter.receive(hit, False)
+            practice.dummy.knock(way, hit.knockback.to(METER_PER_SECOND))
+            practice.fighter.health = practice.fighter.parameters.health
+            self.trained += PRACTICE_EXPERIENCE
+        self.fighter.landed(struck)
+        self._show(scene, struck, there, False)
+        self._weigh(struck, hit)
+
+    def _send_waves(
+        mut self, mut scene: Scene, player: Character, h: Float32
+    ) raises:
+        """Send a demon fang's wave as its cut swings, and run each wave
+        on by `h` seconds: it strikes each standing target it passes over
+        once, and fades out at `FANG_RANGE`."""
+        if self.fighter.move == DEMON_FANG and self.fighter.launched():
+            var ahead = _ahead(player.heading)
+            self.waves.append(
+                Wave(
+                    player.position + ahead * FANG_START,
+                    ahead,
+                    0,
+                    self.fighter.blow(),
+                    List[Int](),
                 )
-                struck = foe.fighter.receive(hit, front)
-                foe.shove = push_of(struck, hit, way)
-                throw_up(foe.character, struck, hit)
-                # An attacking bandit holds the token: its brain claims it
-                # before it attacks, and lets go of the attack without it.
-                if landed_blow(struck.outcome) and foe.brain.hurt():
-                    self.token = -1
-                    self.token_rest = TOKEN_REST
-                if landed_blow(struck.outcome):
-                    self.trained += BLOW_EXPERIENCE
-                var fell = struck.outcome == DEFEATED
-                if fell or struck.outcome == FINISHED:
-                    self.trained += DEFEAT_EXPERIENCE
-                if (fell or struck.outcome == FINISHED) and not foe.beast:
-                    self.loot += LOOT
-                    var note = String("+", LOOT, " COINS")
-                    if foe.brain.roll(6) < HERB_CHANCE:
-                        self.found += 1
-                        note += " +1 HERB"
-                    self.notes.append(note)
-            else:
-                ref practice = self.dummies[index - len(self.foes)]
-                struck = practice.fighter.receive(hit, False)
-                practice.dummy.knock(way, hit.knockback.to(METER_PER_SECOND))
-                practice.fighter.health = practice.fighter.parameters.health
-                self.trained += PRACTICE_EXPERIENCE
-            self.fighter.landed(struck)
-            self._show(scene, struck, there, False)
-            self._weigh(struck, hit)
+            )
+        var kept = List[Wave]()
+        for w in range(len(self.waves)):
+            var wave = self.waves[w].copy()
+            wave.at = wave.at + wave.way * (FANG_SPEED * h)
+            wave.gone += FANG_SPEED * h
+            for index in range(self.targets()):
+                if not self.standing(index):
+                    continue
+                var there = self.target_at(index)
+                if _flat(wave.at, there) > FANG_WIDTH / 2:
+                    continue
+                if abs(there.y - wave.at.y) > REACH_HEIGHT:
+                    continue
+                var seen = False
+                for k in wave.struck:
+                    if k == index:
+                        seen = True
+                if seen:
+                    continue
+                wave.struck.append(index)
+                self._land(scene, index, wave.blow, wave.at - wave.way)
+            if wave.gone < FANG_RANGE:
+                kept.append(wave^)
+        self.waves = kept^
 
     def _foe_strikes(
         mut self, mut scene: Scene, index: Int, mut player: Character
@@ -1241,6 +1324,7 @@ struct Battle(Movable):
             for index in range(len(self.dummies)):
                 self.dummies[index].fighter.update(Duration(h, SECOND))
             self._player_strikes(scene, player)
+            self._send_waves(scene, player, h)
             for index in range(len(self.foes)):
                 self._foe_strikes(scene, index, player)
 

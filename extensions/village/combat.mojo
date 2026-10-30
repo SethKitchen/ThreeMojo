@@ -30,7 +30,9 @@ that a swing reaches with `reaches`, and gives each one the blow that
 - **Artes, as in Tales of Arise.** An arte is a strong move that spends
   points of the arte gauge, not ki. The gauge fills by itself, and by
   `ARTE_PER_HIT` for each blow that lands. The rising edge throws a foe
-  into the air. The tempest spins, and strikes all round four times.
+  into the air. The tempest spins, and strikes all round four times. The
+  demon fang sends a wave of force along the ground: its cut strikes
+  nothing, and the wave carries its `blow`.
 - **Dodges, as in Tales of Arise.** No blow can hit a dodge from
   `DODGE_SAFE_FROM` to `DODGE_SAFE_TO` seconds into it. A blow that
   reaches a dodge before `DODGE_SAFE_FROM + PERFECT_WINDOW` is a perfect
@@ -40,7 +42,9 @@ that a swing reaches with `reaches`, and gives each one the blow that
 - **Guards.** A guard stops a blow from the front, within the guard's
   arc. A guard raised less than `FighterParameters.parry` before the blow
   parries it: the guard loses no ki, and the attacker loses the blow's ki
-  and reels. The player parries within `PARRY` seconds. Some moves have armor: a blow on them does its damage, and does
+  and reels. As after a perfect dodge, the next attack within
+  `COUNTER_SECONDS` is a counter. The player parries within `PARRY`
+  seconds. Some moves have armor: a blow on them does its damage, and does
   not make the fighter reel.
 - **Over Limit, as in Tales of Arise.** A fighter's limit gauge fills
   by `LIMIT_PER_HIT` for each blow that lands, `LIMIT_PER_BREAK` for each
@@ -69,6 +73,7 @@ part strikes. The times are for the middle stance:
 | `HEAVY` | 0.40 s | 0.14 s | 0.55 s | 2.5 m | 80 degrees | 90 | 30 | 22 | |
 | `RISING_EDGE` | 0.16 s | 0.20 s | 0.45 s | 2.1 m | 100 degrees | 66 | 18 | | 2 |
 | `TEMPEST` | 0.18 s | 0.48 s | 0.40 s | 2.6 m | 360 degrees | 27, four times | 7 | | 3 |
+| `DEMON_FANG` | 0.20 s | 0.10 s | 0.35 s | A wave | | 45 | 10 | | 1 |
 | `BITE` | 0.35 s | 0.20 s | 0.45 s | 1.4 m | 70 degrees | 40 | 12 | | |
 | `DODGE` | | 0.32 s | 0.16 s | | | | | 14 | |
 """
@@ -92,7 +97,7 @@ from units.si import (
     Velocity,
 )
 
-comptime MOVES = 12
+comptime MOVES = 13
 """How many moves there are, `FREE` among them."""
 comptime DODGE_SAFE_FROM = Float32(0.02)
 """How far into a dodge no blow can hit it any more, in seconds."""
@@ -182,16 +187,20 @@ comptime RISING_EDGE = CombatMove(5)
 """An arte: a cut up from low, which throws the foe into the air."""
 comptime TEMPEST = CombatMove(6)
 """An arte: a spin that strikes all round the fighter four times."""
-comptime BITE = CombatMove(7)
+comptime DEMON_FANG = CombatMove(7)
+"""An arte: a cut along the ground that sends a wave of force running
+before the fighter. The cut strikes nothing itself: the game sends the
+wave."""
+comptime BITE = CombatMove(8)
 """A beast's attack: a crouch, and a leap forward that bites."""
-comptime DODGE = CombatMove(8)
+comptime DODGE = CombatMove(9)
 """A quick step, which no blow can hit for a moment."""
-comptime FLINCH = CombatMove(9)
+comptime FLINCH = CombatMove(10)
 """A blow landed: the fighter reels for a moment."""
-comptime STAGGER = CombatMove(10)
+comptime STAGGER = CombatMove(11)
 """The fighter's ki ran out: it stands open, and blows on it are
 critical."""
-comptime FALL = CombatMove(11)
+comptime FALL = CombatMove(12)
 """The fighter is defeated: it falls, and it stays down."""
 
 
@@ -264,13 +273,13 @@ def move_name(move: CombatMove) raises -> String:
         move: The move.
 
     Returns:
-        Such as "LIGHT 1", "HEAVY", "RISING EDGE", "TEMPEST" or "BITE".
+        Such as "LIGHT 1", "HEAVY", "RISING EDGE", "DEMON FANG" or "BITE".
 
     Raises:
         Error: If the move is not one.
     """
     if not move.is_valid():
-        raise Error("A combat move must be one of the twelve")
+        raise Error("A combat move must be one of the thirteen")
     var names: List[String] = [
         "FREE",
         "LIGHT 1",
@@ -279,6 +288,7 @@ def move_name(move: CombatMove) raises -> String:
         "HEAVY",
         "RISING EDGE",
         "TEMPEST",
+        "DEMON FANG",
         "BITE",
         "DODGE",
         "FLINCH",
@@ -339,9 +349,9 @@ def is_arte(move: CombatMove) -> Bool:
         move: The move.
 
     Returns:
-        True for `RISING_EDGE` and `TEMPEST`.
+        True for `RISING_EDGE`, `TEMPEST` and `DEMON_FANG`.
     """
-    return move == RISING_EDGE or move == TEMPEST
+    return move.value >= RISING_EDGE.value and move.value <= DEMON_FANG.value
 
 
 def styled(move: CombatMove) -> Bool:
@@ -472,6 +482,8 @@ def move_data(move: CombatMove) raises -> MoveData:
         return _data(0.16, 0.2, 0.45, 2.1, 100, 66, 18, 0, 2, 0.4, 1, 1, 6.5)
     if move == TEMPEST:
         return _data(0.18, 0.48, 0.4, 2.6, 360, 27, 7, 0, 3, 0, 4, 2.5)
+    if move == DEMON_FANG:
+        return _data(0.2, 0.1, 0.35, 0, 0, 45, 10, 0, 1, 0.1, 0, 2)
     if move == BITE:
         return _data(0.35, 0.2, 0.45, 1.4, 70, 40, 12, 0, 0, 2.4, 1, 2.5)
     if move == DODGE:
@@ -484,7 +496,7 @@ def move_data(move: CombatMove) raises -> MoveData:
         return _data(0, 0, 2)
     if move == FREE:
         return _data(0, 0, 0)
-    raise Error("A combat move must be one of the twelve")
+    raise Error("A combat move must be one of the thirteen")
 
 
 def stance_power(stance: CombatStance) -> Float32:
@@ -1243,9 +1255,9 @@ struct Fighter(Copyable, Movable):
         """Return the part of the move that strikes in the last update.
 
         Returns:
-            The swing, if the move is an attack whose active part the last
-            update reached; else None. Its slice is the hit of the active
-            part that the update ended in, or the last.
+            The swing, if the move is an attack that strikes, and the last
+            update reached its active part; else None. Its slice is the
+            hit of the active part that the update ended in, or the last.
 
         Raises:
             Error: Never: the move is one.
@@ -1253,6 +1265,8 @@ struct Fighter(Copyable, Movable):
         if not is_attack(self.move):
             return None
         var data = move_data(self.move)
+        if data.hits == 0:
+            return None
         var start = data.startup.to(SECOND) * self.pace
         var end = self.active_end()
         if self.clock < start or self.before >= end:
@@ -1287,6 +1301,36 @@ struct Fighter(Copyable, Movable):
             if index == target:
                 return None
         self.struck.append(target)
+        return self.blow()
+
+    def launched(self) raises -> Bool:
+        """Return whether the last update reached the start of the move's
+        active part: where a demon fang sends its wave.
+
+        Returns:
+            True for an attack whose start-up ended within the update.
+
+        Raises:
+            Error: Never: the move is one.
+        """
+        if not is_attack(self.move):
+            return False
+        var start = move_data(self.move).startup.to(SECOND) * self.pace
+        return self.before < start and self.clock >= start
+
+    def blow(self) raises -> Blow:
+        """Return what the move does to a fighter it strikes.
+
+        Returns:
+            The move's damage times the fighter's might, its stance's
+            power for a light or a heavy attack, the combo's bonus, and
+            `COUNTER_BONUS` for a counter and `OVER_BONUS` Over Limit; its
+            ki damage times the might and the power; its push and its
+            throw. A heavy attack's blow can finish.
+
+        Raises:
+            Error: Never: the move is one.
+        """
         var data = move_data(self.move)
         var power = stance_power(self.stance) if styled(self.move) else 1
         var damage = (
@@ -1346,6 +1390,7 @@ struct Fighter(Copyable, Movable):
         if self.guarding and front:
             if self.guard_age < self.parameters.parry.to(SECOND):
                 self.charge(LIMIT_PER_PARRY)
+                self.counter = COUNTER_SECONDS
                 return Struck(PARRIED, 0, blow.ki_damage)
             var lost = blow.ki_damage * stance_guard(self.stance)
             self.ki -= lost

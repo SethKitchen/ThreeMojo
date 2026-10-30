@@ -7,7 +7,7 @@
 bars, the lock's mark and the blows' numbers."""
 
 from cameras.perspective_camera import PerspectiveCamera
-from extensions.village.battle import Popup
+from extensions.village.battle import Popup, Wave
 from extensions.village.battle_hud import (
     draw_bar,
     draw_battle,
@@ -15,6 +15,7 @@ from extensions.village.battle_hud import (
     stance_label,
 )
 from extensions.village.combat import (
+    Blow,
     HEAVY,
     LIGHT_ONE,
     HIGH_STANCE,
@@ -33,7 +34,7 @@ from std.testing import (
     assert_true,
 )
 from tests._village_arena import Arena, arena_parameters
-from units.si import DEGREE, METER, Angle, Length
+from units.si import DEGREE, METER, METER_PER_SECOND, Angle, Length, Velocity
 
 
 def _camera() raises -> PerspectiveCamera:
@@ -95,6 +96,21 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     b.dummies[0].fighter.ki = 10
     b.lock = 0
     b.popups.append(Popup(Vector3(0, 2, -3), "30", WHITE_TEXT, 0.1))
+    # And a demon fang's wave.
+    b.waves.append(
+        Wave(
+            Vector3(0, 0, -3),
+            Vector3(0, 0, -1),
+            2,
+            Blow(
+                45,
+                10,
+                Velocity(2.0, METER_PER_SECOND),
+                Velocity(0.0, METER_PER_SECOND),
+            ),
+            List[Int](),
+        )
+    )
     b.popups.append(Popup(Vector3(0, 2, 9), "99", WHITE_TEXT, 0.1))
     # And a swing's trail.
     b.trail.shown = LIGHT_ONE.value

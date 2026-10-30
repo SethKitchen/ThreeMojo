@@ -19,6 +19,7 @@ a PlayStation controller play alike:
 | Heavy attack | The north button | `G` |
 | Rising edge | Hold the left trigger, and the right shoulder | `Z` |
 | Tempest | Hold the left trigger, and the north button | `X` |
+| Demon fang | Hold the left trigger, and the west button | `B` |
 | Dodge | The east button | `C` |
 | Guard, and a ki pulse | The left shoulder | `V` |
 | Lock on | The right stick | `T` |
@@ -26,7 +27,9 @@ a PlayStation controller play alike:
 | Eat herbs to heal | The back button | `H` |
 
 While the left shoulder guards, the north, the west and the south buttons
-choose a stance, and do not attack, use or jump: see `fight_input`.
+choose a stance, and do not attack, use or jump. While the left trigger
+is held, the west button makes the demon fang, and does not use: see
+`fight_input`.
 
 A stick reads nothing within `DEAD_ZONE` of its middle, and the rest of
 its throw is stretched to the whole range, so a worn stick does not
@@ -89,6 +92,8 @@ comptime KEY_Z = Key(122)
 """The `Z` key: the rising edge."""
 comptime KEY_X = Key(120)
 """The `X` key: the tempest."""
+comptime KEY_B = Key(98)
+"""The `B` key: the demon fang."""
 comptime KEY_C = Key(99)
 """The `C` key: the dodge."""
 comptime KEY_V = Key(118)
@@ -158,16 +163,17 @@ def fight_input(
     Returns:
         The input, with the buttons of the module's table. The left
         shoulder guards, and the north, the west and the south buttons
-        then choose a stance. The left trigger turns the right shoulder
-        and the north button into the artes.
+        then choose a stance. The left trigger turns the right shoulder,
+        the north button and the west button into the artes.
     """
     var stance = left_shoulder and not left_trigger
     input.jump = south and not left_shoulder
-    input.use = west and not left_shoulder
+    input.use = west and not (left_shoulder or left_trigger)
     input.light = right_shoulder and not left_trigger
     input.rising = right_shoulder and left_trigger
     input.heavy = north and not (left_trigger or left_shoulder)
     input.tempest = north and left_trigger
+    input.fang = west and left_trigger
     input.dodge = east
     input.guard = left_shoulder
     input.lock = right_stick
@@ -274,6 +280,7 @@ def keyboard_input(keys: HeldKeys, shift: Bool) -> MoveInput:
         heavy=keys.is_held(KEY_G),
         rising=keys.is_held(KEY_Z),
         tempest=keys.is_held(KEY_X),
+        fang=keys.is_held(KEY_B),
         dodge=keys.is_held(KEY_C),
         guard=keys.is_held(KEY_V),
         lock=keys.is_held(KEY_T),
@@ -307,6 +314,7 @@ def combined(first: MoveInput, second: MoveInput) -> MoveInput:
         heavy=first.heavy or second.heavy,
         rising=first.rising or second.rising,
         tempest=first.tempest or second.tempest,
+        fang=first.fang or second.fang,
         dodge=first.dodge or second.dodge,
         guard=first.guard or second.guard,
         lock=first.lock or second.lock,

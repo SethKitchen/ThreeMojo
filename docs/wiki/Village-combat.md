@@ -16,6 +16,7 @@ The rules come from two games. Ki, stances and the ki pulse come from Nioh. Arte
 | Heavy attack | The north button | `G` |
 | Rising edge, an arte | Hold the left trigger, and press the right shoulder | `Z` |
 | Tempest, an arte | Hold the left trigger, and press the north button | `X` |
+| Demon fang, an arte | Hold the left trigger, and press the west button | `B` |
 | Dodge | The east button | `C` |
 | Guard | Hold the left shoulder | Hold `V` |
 | Ki pulse | Press the left shoulder just after a swing | Press `V` just after a swing |
@@ -26,7 +27,7 @@ The rules come from two games. Ki, stances and the ki pulse come from Nioh. Arte
 | Middle stance | Hold the left shoulder, and press the west button | `7` |
 | Low stance | Hold the left shoulder, and press the south button | `8` |
 
-A move starts on a new press. Hold a button and the move starts once. While the left shoulder guards, the north, the west and the south buttons choose a stance. They do not attack, use or jump then. The east button also runs, so a dodge needs the sword drawn.
+A move starts on a new press. Hold a button and the move starts once. While the left shoulder guards, the north, the west and the south buttons choose a stance. They do not attack, use or jump then. While the left trigger is held, the west button makes the demon fang, and does not use. The east button also runs, so a dodge needs the sword drawn.
 
 ## The rules
 
@@ -56,6 +57,8 @@ A **ki pulse** gets back the ki that a swing spent. Press the guard button just 
 
 An arte is a strong move that spends points of the arte gauge, not ki. The gauge holds 5 points. It fills by half a point a second, and by 0.2 points for each blow that lands. The rising edge costs 2 points, and throws the foe into the air. The tempest costs 3 points. It spins the player round, and strikes all round four times.
 
+The demon fang costs 1 point. Its cut along the ground sends a wave of force that runs 12 meters at 14 meters a second. The wave strikes each target it passes over once, for 45 damage. It shows as an arch of light across the way it runs.
+
 ### The lock and the heal
 
 The lock button locks the camera on the standing target nearest the middle of the view, within 16 meters. A radian off the middle counts as 6 meters further. While locked, the player faces the target, and the camera turns toward it. A flick of the look stick moves the lock to the target nearest in angle on that side. The lock lets go when its target falls, or goes further than 22 meters.
@@ -78,7 +81,7 @@ A blow that reaches a dodge in its first 0.15 seconds is a **perfect dodge**. Th
 
 A guard stops a blow from within 140 degrees before the fighter. The guard loses ki in place of health. A guard whose ki runs out breaks, and the fighter staggers.
 
-A guard raised less than 0.15 seconds before the blow parries it. The guard loses no ki. The attacker loses the blow's ki, and reels. Bandits block, and do not parry.
+A guard raised less than 0.15 seconds before the blow parries it. The guard loses no ki. The attacker loses the blow's ki, and reels. As after a perfect dodge, the next attack within 1.2 seconds is a counter. Bandits block, and do not parry.
 
 The heavy attack and the tempest have armor until their active part ends. A blow on them does its damage, and does not make the fighter reel.
 
@@ -98,6 +101,7 @@ The three light attacks chain. A press during a move waits for the chain point: 
 | `HEAVY` | 0.40 s | 0.14 s | 0.55 s | 2.5 m | 80 degrees | 90 | 30 | 22 | |
 | `RISING_EDGE` | 0.16 s | 0.20 s | 0.45 s | 2.1 m | 100 degrees | 66 | 18 | | 2 |
 | `TEMPEST` | 0.18 s | 0.48 s | 0.40 s | 2.6 m | 360 degrees | 27, four times | 7 | | 3 |
+| `DEMON_FANG` | 0.20 s | 0.10 s | 0.35 s | A wave | | 45 | 10 | | 1 |
 | `BITE` | 0.35 s | 0.20 s | 0.45 s | 1.4 m | 70 degrees | 40 | 12 | | |
 | `DODGE` | | 0.32 s | 0.16 s | | | | | 14 | |
 
@@ -186,6 +190,7 @@ The module is `extensions/humanoid/rig/sword_clips.mojo`. Each clip is worked ou
 | `light_three_clip` | 0.77 | A step and a cut down from over the head |
 | `heavy_clip` | 1.09 | A long wind-up high, and a lunge that cuts down across |
 | `rising_edge_clip` | 0.81 | A crouch with the sword low, and a cut up that rises onto the toes |
+| `fang_clip` | 0.65 | A crouch with the sword low behind, and a cut along the ground and up |
 | `tempest_clip` | 1.06 | The sword arm out, and a whole turn of the body |
 | `dodge_clip` | 0.48 | A low, quick crouch |
 | `guard_clip` | 1.0, loops | The blade held across before the face |

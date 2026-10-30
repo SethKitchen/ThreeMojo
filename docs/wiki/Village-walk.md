@@ -26,7 +26,7 @@ The window is 1920 by 1080 pixels by default. Give a width and a height for a di
 | Use | The west button | `E` |
 | Light attack | The right shoulder | `F` |
 | Heavy attack | The north button | `G` |
-| Rising edge and tempest | Hold the left trigger, and press the right shoulder or the north button | `Z` and `X` |
+| Rising edge, tempest and demon fang | Hold the left trigger, and press the right shoulder, the north or the west button | `Z`, `X` and `B` |
 | Dodge | The east button | `C` |
 | Guard, and a ki pulse | The left shoulder | `V` |
 | Lock on | The right stick | `T` |

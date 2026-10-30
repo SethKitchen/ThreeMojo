@@ -24,6 +24,7 @@ from tests._village_arena import (
     popup_texts,
 )
 from extensions.village.battle import (
+    FANG_RANGE,
     FINISH_STOP,
     HIT_STOP,
     SHAKE,
@@ -48,6 +49,7 @@ from extensions.village.character import (
 )
 from extensions.village.combat import (
     BLOCKED,
+    FALL,
     FINISHED,
     CRITICAL,
     FREE,
@@ -125,6 +127,7 @@ def test_a_press_is_a_button_held_now_and_not_before() raises:
         heavy=True,
         rising=True,
         tempest=True,
+        fang=True,
         dodge=True,
         guard=True,
         lock=True,
@@ -144,6 +147,7 @@ def test_a_press_is_a_button_held_now_and_not_before() raises:
         fresh.heavy,
         fresh.rising,
         fresh.tempest,
+        fresh.fang,
         fresh.dodge,
         fresh.guard,
         fresh.lock,
@@ -162,6 +166,7 @@ def test_a_press_is_a_button_held_now_and_not_before() raises:
             held.heavy,
             held.rising,
             held.tempest,
+            held.fang,
             held.dodge,
             held.guard,
             held.lock,
@@ -939,6 +944,44 @@ def test_wolves_close_in_bite_and_lie_down_when_felled() raises:
     assert_true(abs(lying.x) + abs(lying.z) > 0.5)
     arena.run(2.5)
     assert_true(arena.battle.foes[0].down < 0)
+
+
+def test_a_demon_fang_sends_a_wave_along_the_ground() raises:
+    # Two dummies in a line before the player, a fallen bandit beyond
+    # them, and a third dummy raised far above the ground.
+    var arena = Arena(arena_parameters(1, 3, 4))
+    arena.battle.foes[0].fighter.move = FALL
+    arena.battle.foes[0].down = 0
+    arena.battle.dummies[1].dummy.post.x = 0
+    arena.battle.dummies[1].dummy.post.z = -6
+    arena.battle.dummies[1].dummy.foot = 5
+    arena.battle.dummies[2].dummy.post.x = 0
+    arena.battle.dummies[2].dummy.post.z = -3
+    var fang = no_input()
+    fang.fang = True
+    arena.tick(fang)
+    assert_true(holds_text(arena.battle.notes, "DEMON FANG!"))
+    arena.run(0.3)
+    assert_equal(len(arena.battle.waves), 1)
+    arena.run(0.3)
+    # It struck each dummy in its way once, and passed the rest.
+    assert_equal(arena.battle.fighter.combo, 2)
+    assert_true(holds_text(popup_texts(arena.battle), "45"))
+    arena.run(1)
+    assert_equal(len(arena.battle.waves), 0)
+    assert_true(FANG_RANGE > 4)
+
+
+def test_a_demon_fang_with_no_one_before_it_fades_out() raises:
+    var arena = Arena(arena_parameters(0, 0))
+    var fang = no_input()
+    fang.fang = True
+    arena.tick(fang)
+    arena.run(0.3)
+    assert_equal(len(arena.battle.waves), 1)
+    arena.run(1.2)
+    assert_equal(len(arena.battle.waves), 0)
+    assert_equal(arena.battle.fighter.combo, 0)
 
 
 def main() raises:

@@ -21,6 +21,8 @@ from extensions.village.character import (
     CharacterParameters,
 )
 from extensions.village.combat import (
+    BITE,
+    DEMON_FANG,
     DODGE,
     FREE,
     HIGH_STANCE,
@@ -54,6 +56,8 @@ def test_a_body_plays_what_its_fighter_does() raises:
     var arms = Arms(scene, assets, body, SwordLooks(assets), BRIGHT_STEEL)
     assert_equal(arms.moves[FREE.value], -1)
     assert_true(arms.moves[LIGHT_ONE.value] >= 0)
+    assert_true(arms.moves[DEMON_FANG.value] >= 0)
+    assert_equal(arms.moves[BITE.value], -1)
     # A sword in the hand, one at the hip and a scabbard: two meshes a
     # sword and one the scabbard.
     assert_equal(len(scene.meshes) - before, 5)
