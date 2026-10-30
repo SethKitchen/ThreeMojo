@@ -540,5 +540,35 @@ def test_a_character_climbs_a_stair_and_comes_down() raises:
     assert_almost_equal(walker.position.y, 0, atol=1e-4)
 
 
+def test_a_drive_carries_a_character_at_a_set_speed() raises:
+    var ground = _flat()
+    var walker = _walker(ground)
+    var none = List[Obstacle]()
+    # Three meters a second along +x, faster than a walk: the heading
+    # stays, and the character runs.
+    walker.drive(Vector3(3, 0, 0), Duration(1.0, SECOND), ground, none)
+    assert_almost_equal(walker.position.x, 3, atol=1e-4)
+    assert_almost_equal(walker.heading.to(RADIAN), 0, atol=1e-6)
+    assert_true(walker.stance == Stance(2))
+    # A trunk in the way stops it.
+    var trunk: List[Obstacle] = [Obstacle(5, 0, 0.5)]
+    walker.drive(Vector3(3, 0, 0), Duration(1.0, SECOND), ground, trunk)
+    assert_true(walker.position.x < 4.3)
+    # In the air, it falls as it is carried.
+    walker.velocity.y = 3
+    walker.grounded = False
+    walker.drive(Vector3(0, 0, 1), Duration(0.1, SECOND), ground, none)
+    assert_true(walker.position.y > 0)
+    with assert_raises(contains="frame"):
+        walker.drive(Vector3(0, 0, 0), Duration(-1.0, SECOND), ground, none)
+    with assert_raises(contains="finite"):
+        walker.drive(
+            Vector3(Float32(1.0e38) * 10, 0, 0),
+            Duration(0.1, SECOND),
+            ground,
+            none,
+        )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

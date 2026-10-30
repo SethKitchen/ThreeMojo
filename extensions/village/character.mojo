@@ -111,7 +111,7 @@ comptime AIRBORNE = Stance(3)
 
 
 struct MoveInput(ImplicitlyCopyable):
-    """One frame of a player's input: two sticks and three buttons."""
+    """One frame of a player's input: two sticks and the buttons held."""
 
     # How far the move stick leans forward and right, from -1 to 1.
     var forward: Float32
@@ -123,6 +123,19 @@ struct MoveInput(ImplicitlyCopyable):
     var run: Bool
     var jump: Bool
     var use: Bool
+    # Whether the fight's buttons are held: the light and the heavy
+    # attacks, the two artes, the dodge, the guard, the lock, and the
+    # three stances. See `extensions.village.battle`.
+    var light: Bool
+    var heavy: Bool
+    var rising: Bool
+    var tempest: Bool
+    var dodge: Bool
+    var guard: Bool
+    var lock: Bool
+    var high: Bool
+    var middle: Bool
+    var low: Bool
 
     def __init__(
         out self,
@@ -133,6 +146,17 @@ struct MoveInput(ImplicitlyCopyable):
         run: Bool,
         jump: Bool,
         use: Bool = False,
+        *,
+        light: Bool = False,
+        heavy: Bool = False,
+        rising: Bool = False,
+        tempest: Bool = False,
+        dodge: Bool = False,
+        guard: Bool = False,
+        lock: Bool = False,
+        high: Bool = False,
+        middle: Bool = False,
+        low: Bool = False,
     ):
         """Hold one frame of input.
 
@@ -145,6 +169,16 @@ struct MoveInput(ImplicitlyCopyable):
             jump: Whether the jump button is held.
             use: Whether the use button is held: see
                 `extensions.village.gathering`.
+            light: Whether the light attack's button is held.
+            heavy: Whether the heavy attack's button is held.
+            rising: Whether the rising edge's buttons are held.
+            tempest: Whether the tempest's buttons are held.
+            dodge: Whether the dodge's button is held.
+            guard: Whether the guard's button is held.
+            lock: Whether the lock's button is held.
+            high: Whether the high stance's buttons are held.
+            middle: Whether the middle stance's buttons are held.
+            low: Whether the low stance's buttons are held.
         """
         self.forward = forward
         self.right = right
@@ -153,6 +187,16 @@ struct MoveInput(ImplicitlyCopyable):
         self.run = run
         self.jump = jump
         self.use = use
+        self.light = light
+        self.heavy = heavy
+        self.rising = rising
+        self.tempest = tempest
+        self.dodge = dodge
+        self.guard = guard
+        self.lock = lock
+        self.high = high
+        self.middle = middle
+        self.low = low
 
 
 def no_input() -> MoveInput:
@@ -504,7 +548,63 @@ struct Character(Copyable, Movable):
         if jump and self.grounded:
             self.velocity.y = p.jump_speed.to(METER_PER_SECOND)
             self.grounded = False
-        # Across the ground, then up and down.
+        self._travel(h, terrain, obstacles, skip)
+
+    def drive(
+        mut self,
+        velocity: Vector3,
+        delta: Duration,
+        terrain: Terrain,
+        obstacles: List[Obstacle],
+        skip: Int = -1,
+    ) raises:
+        """Move the character by one frame at a set speed over the ground,
+        as a lunge, a dodge or a blow carries it.
+
+        The speed over the ground does not turn toward a stick, and the
+        heading does not turn. Every other rule of `step` holds: the
+        walls, the water and the obstacles stop the character, it slides
+        along their edges, and it falls where the ground drops away.
+
+        Args:
+            velocity: The speed over the ground, in meters a second. Its y
+                is not used.
+            delta: The frame's time. At most `LONGEST_FRAME` counts.
+            terrain: The ground, the floors, the walls and the solid
+                buildings.
+            obstacles: The round things in the way.
+            skip: The index of an obstacle to pass over, or -1 for none.
+
+        Raises:
+            Error: If the time is negative or above a billion seconds, the
+                speed is not finite, or `parameters.check` refuses a value.
+        """
+        self.parameters.check()
+        var seconds = delta.to(SECOND)
+        if not (seconds >= 0 and seconds < 1.0e9):
+            raise Error("A frame's time must not be negative or endless")
+        require_finite(
+            Float64(velocity.x + velocity.z), "A drive's speed must be finite"
+        )
+        var left = min(seconds, LONGEST_FRAME)
+        var count = max(1, Int(ceil(left / SUBSTEP)))
+        var h = left / Float32(count)
+        for _ in range(count):  # pragma: no branch
+            self.velocity.x = velocity.x
+            self.velocity.z = velocity.z
+            self._travel(h, terrain, obstacles, skip)
+        self._settle()
+
+    def _travel(
+        mut self,
+        h: Float32,
+        terrain: Terrain,
+        obstacles: List[Obstacle],
+        skip: Int,
+    ):
+        """Move the character by its velocity for `h` seconds: across the
+        ground, out of what stands in the way, then up and down."""
+        ref p = self.parameters
         var start = self.position
         var goal = self._clear(
             start.x + self.velocity.x * h,
