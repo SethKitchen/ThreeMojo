@@ -382,6 +382,7 @@ def add_game_humanoid(
     else:
         body = body_skin_mesh(spec, detail, workers, gap)
     # The shell's inner face lies under the scalp: a game never sees it.
+    # With no strands over it, the shell takes its style's shape.
     var shell = head_hair_from_dimensions(
         dims,
         SCALP_HAIR,
@@ -390,6 +391,7 @@ def add_game_humanoid(
         workers,
         hair_style,
         outer_only=True,
+        alone=guides == 0,
     )
     var eyes = List[BufferGeometry]()
     # Both named sides receive an eye.

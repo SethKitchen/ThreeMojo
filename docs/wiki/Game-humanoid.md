@@ -33,7 +33,7 @@ The rig has nineteen joints. Each joint is a bone, a scene node named as a glTF 
 
 ## The skin and its weights
 
-`add_game_humanoid` builds three skinned meshes on one skeleton: the body's skin and each hand's. The eyes and the scalp's hair hang from the head's bone, so they turn with it. With `guides`, it grows strands of hair as well.
+`add_game_humanoid` builds three skinned meshes on one skeleton: the body's skin and each hand's. The eyes and the scalp's hair hang from the head's bone, so they turn with it. With `guides`, it grows strands of hair as well. With none, the hair's shell takes the shape of `hair_style`. A bob falls to the jaw, a ponytail hangs from its tie, and a bun stands on the crown. See [Head](Head#a-shell-drawn-alone).
 
 `skin_weights` binds a skin to the bones. It measures distance over the skin, not through the air. So a part is turned only by the bones it joins through the skin.
 
