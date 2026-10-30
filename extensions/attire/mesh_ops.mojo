@@ -19,6 +19,7 @@
 - `keep_triangles` drops the triangles a mask refuses.
 - `normalize_normals` scales interpolated normals back to unit length.
 - `top_four` keeps the four heaviest bones of a weight per bone.
+- `add_rim` gives each open edge a rim, so a hem shows its thickness.
 - `MeshWriter` writes a mesh with another mesh's attributes, vertex by
   vertex, so the two can be merged.
 
@@ -31,6 +32,7 @@ from std.memory import bitcast
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
+from core.search import first_match
 from math.vector3 import Vector3
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
 
@@ -578,3 +580,100 @@ struct MeshWriter(Movable):
         mesh.set_index(self.index.copy())
         mesh.compute_vertex_normals()
         return mesh^
+
+
+def add_rim(geometry: BufferGeometry, depth: Float32) raises -> BufferGeometry:
+    """Return a mesh with a rim along each open edge, `depth` deep.
+
+    A garment is one face of its fabric. At a hem its edge has no
+    thickness, and a plate looks as thin as paper. The rim is a strip of
+    two triangles along each open edge, from the edge in along its
+    vertices' normals, facing out of the edge. Each rim vertex takes the
+    attributes of the edge vertex it is made from, and the strip's own
+    normal, so the edge catches the light as a rolled edge does.
+
+    An edge is open when one triangle holds it. Copies of a vertex at one
+    position are one vertex here, so a seam where a mesh was parted is
+    not an edge.
+
+    Args:
+        geometry: A mesh with positions and normals, indexed or not.
+        depth: How deep the rim runs, in meters.
+
+    Returns:
+        The mesh and its rims.
+
+    Raises:
+        Error: If the mesh has no positions or no normals.
+    """
+    var groups = weld_groups(geometry)
+    var count = geometry.vertex_count()
+    var holders = Dict[Int, Int]()
+    for t in range(geometry.triangle_count()):
+        for c in range(3):  # pragma: no branch
+            var a = groups[geometry.corner_index(t, c)]
+            var b = groups[geometry.corner_index(t, (c + 1) % 3)]
+            var key = _edge_key(a, b, count)
+            holders[key] = holders.get(key, 0) + 1
+    ref placed = geometry.attribute_view(String(POSITION))
+    ref normals = geometry.attribute_view(String(NORMAL))
+    var carrier = _Carrier(geometry)
+    var position_at = first_match(carrier.names, String(POSITION))
+    var normal_at = first_match(carrier.names, String(NORMAL))
+    var written = 0
+    var index = List[Int]()
+    for t in range(geometry.triangle_count()):
+        for c in range(3):  # pragma: no branch
+            var a = geometry.corner_index(t, c)
+            var b = geometry.corner_index(t, (c + 1) % 3)
+            if holders[_edge_key(groups[a], groups[b], count)] != 1:
+                continue
+            var pa = placed.vector3(a)
+            var pb = placed.vector3(b)
+            # The face's normal, as its corners wind.
+            var face = pb - pa
+            face.cross(
+                placed.vector3(geometry.corner_index(t, (c + 2) % 3)) - pa
+            )
+            # Out of the edge: along it, crossed with the face's normal.
+            var outward = pb - pa
+            outward.cross(face)
+            var length = outward.length()
+            if length <= 0:
+                continue
+            outward = outward * (1 / length)
+            # In from the face, along each vertex's normal turned to the
+            # face's side.
+            var na = normals.vector3(a)
+            var nb = normals.vector3(b)
+            if na.dot(face) < 0:
+                na = na * -1
+            if nb.dot(face) < 0:
+                nb = nb * -1
+            var corners: List[Vector3] = [
+                pa,
+                pa - na * depth,
+                pb - nb * depth,
+                pb,
+            ]
+            var from_vertex: List[Int] = [a, a, b, b]
+            for k in range(4):  # pragma: no branch
+                carrier.copy_vertex(from_vertex[k])
+                _set_vector(carrier, position_at, written + k, corners[k])
+                _set_vector(carrier, normal_at, written + k, outward)
+            index.append(written)
+            index.append(written + 1)
+            index.append(written + 2)
+            index.append(written)
+            index.append(written + 2)
+            index.append(written + 3)
+            written += 4
+    var rims = carrier.build(index^)
+    return merge(geometry, rims)
+
+
+def _set_vector(mut carrier: _Carrier, at: Int, vertex: Int, value: Vector3):
+    """Overwrite one vertex's three components of one written attribute."""
+    carrier.out[at][vertex * 3] = value.x
+    carrier.out[at][vertex * 3 + 1] = value.y
+    carrier.out[at][vertex * 3 + 2] = value.z

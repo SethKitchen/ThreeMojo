@@ -10,6 +10,8 @@ from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from extensions.attire.shell import (
     COVER,
     HIDE_LEVEL,
+    OVER,
+    UNDER_REACH,
     SkinFrame,
     garment_piece,
     hidden_mask,
@@ -196,6 +198,16 @@ def test_a_piece_is_cut_at_its_hems() raises:
     assert_almost_equal(
         piece.attribute_view(String(POSITION)).vector3(0).z, 0.01, atol=1e-6
     )
+    # A layer over the top of it: it is cut where that layer covers it
+    # past UNDER_REACH, along the iso-line, a third of the way down the
+    # first rung.
+    var topped = garment_piece(skin, places, values, [1, 1, 0, 0, 0, 0])
+    ref placed = topped.attribute_view(String(POSITION))
+    var highest = Float32(-2)
+    for v in range(placed.count()):
+        highest = max(highest, placed.vector3(v).y)
+    assert_almost_equal(highest, -0.5 * (1 - UNDER_REACH), atol=1e-5)
+    assert_false(topped.has_attribute(String(OVER)))
     # Hidden wholly by a layer over it: nothing.
     var hidden = garment_piece(
         skin, places, values, List[Float32](length=6, fill=1)
@@ -208,6 +220,8 @@ def test_a_piece_is_cut_at_its_hems() raises:
         _ = garment_piece(skin, List[Vector3](), values, nothing)
     with assert_raises(contains="one place and one value"):
         _ = garment_piece(skin, places, [Float32(1)], nothing)
+    with assert_raises(contains="one value per vertex"):
+        _ = garment_piece(skin, places, values, [Float32(1)])
 
 
 def test_an_empty_skin_makes_an_empty_piece() raises:

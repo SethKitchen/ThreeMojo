@@ -28,8 +28,11 @@ The steps, for one skin and one garment:
    neighbors, and back out to its standoff if that took it too close.
    One pass keeps the skin's shape under a thin cloth. Many passes span
    the hollows, as a stiff plate does.
-4. `garment_piece` drops what a layer over it hides, cuts the shell at
-   its hems, and sets its normals.
+4. `garment_piece` cuts the shell at its hems, and where a layer over it
+   covers it past `UNDER_REACH`, and sets its normals. Both cuts run
+   along iso-lines, so the garment ends in a clean line just under the
+   hem of the layer over it, and no tooth of it shows past that hem when
+   a plate and the cloth under it bend apart.
 5. `hide_under` drops the skin triangles a garment covers fully, so skin
    cannot show through a garment when the body moves.
 
@@ -47,6 +50,7 @@ from extensions.attire.cover import HEM_LEVEL
 from extensions.attire.mesh_ops import (
     COVER,
     cut,
+    cut_attribute,
     keep_triangles,
     vertex_neighbors,
     weld_groups,
@@ -55,6 +59,12 @@ from extensions.humanoid.skeleton.head.skin.tint import THINNESS
 from math.utils import clamp
 from math.vector3 import Vector3
 
+comptime UNDER_REACH = Float32(0.65)
+"""A garment is cut where a layer over it covers it past this level. That
+layer's hem lies at one half, so the garment ends just under it."""
+comptime OVER = "over"
+"""The name of the attribute that carries, while a garment is cut, the
+greatest cover value of any layer over it."""
 comptime HIDE_LEVEL = Float32(0.75)
 """A triangle whose vertices all have at least this cover value from a layer
 over it is hidden. It lies well inside that layer's hem, so no gap opens
@@ -359,9 +369,10 @@ def garment_piece(
     """Return the part of a shell a garment keeps.
 
     The piece takes the skin's attributes but its colors and thinness,
-    which are the skin's own. It drops the triangles a layer over it
-    hides, then is cut at its hems, where its cover value is one half.
-    Each vertex keeps its cover value in a `cover` attribute.
+    which are the skin's own. It is cut at its hems, where its cover
+    value is one half, and where a layer over it covers it past
+    `UNDER_REACH`. Each vertex keeps its cover value in a `cover`
+    attribute.
 
     Args:
         skin: The skin the shell was made from.
@@ -379,6 +390,8 @@ def garment_piece(
     var count = skin.vertex_count()
     if len(places) != count or len(values) != count:
         raise Error("A garment piece needs one place and one value a vertex")
+    if len(over) != count:
+        raise Error("Hiding needs one value per vertex")
     var shell = skin.clone()
     var flat = List[Float32](capacity=3 * count)
     for p in places:
@@ -389,16 +402,14 @@ def garment_piece(
     shell.delete_attribute(String(COLOR))
     shell.delete_attribute(String(THINNESS))
     shell.set_attribute(String(COVER), BufferAttribute(values.copy(), 1))
-    var keep = hidden_mask(shell, over)
-    var shown = False
-    for flag in keep:
-        if flag:
-            shown = True
-    if not shown:
-        # Every triangle is hidden: cut at a level no value reaches.
-        return cut(shell, List[Float32](length=count, fill=0), HEM_LEVEL)
-    keep_triangles(shell, keep)
+    shell.set_attribute(String(OVER), BufferAttribute(over.copy(), 1))
     var piece = cut(shell, values, HEM_LEVEL)
+    # Cut where a layer over it covers it past `UNDER_REACH`, along the
+    # iso-line and not along the edges of triangles. So it ends just under
+    # that layer's hem, in a clean line, and no tooth of it reaches out
+    # past that hem when the body bends.
+    piece = cut_attribute(piece, String(OVER), UNDER_REACH, False)
+    piece.delete_attribute(String(OVER))
     if piece.triangle_count() > 0:
         piece.compute_vertex_normals()
     return piece^

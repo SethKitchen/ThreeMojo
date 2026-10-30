@@ -21,8 +21,10 @@ garment from the person's own skin, from the skin out:
    triangles as a bare one.
 4. Each garment is cut at its hems and along its dye pattern, bound to
    its bones as its articulation says, painted, and given texture
-   coordinates in meters round its bones. It is drawn with its fabric's
-   look and bump map as a skinned mesh on the person's own skeleton.
+   coordinates in meters round its bones. A fabric 1.5 mm thick or more
+   has a rim along each hem, so plate, mail, leather and padding show
+   their thickness. It is drawn with its fabric's look and bump map as a
+   skinned mesh on the person's own skeleton.
 
 `dress` changes the person's skin, and hides the scalp's hair under a
 garment that covers the head. Dress a person once.
@@ -44,7 +46,7 @@ from extensions.attire.fabric import fabric, fabric_material
 from extensions.attire.garment import Garment
 from extensions.attire.kinds import SHOD, SKIRTED, layer_label, slot_label
 from extensions.attire.last import FootLast, foot_lasts, shoe
-from extensions.attire.mesh_ops import merge, normalize_normals
+from extensions.attire.mesh_ops import add_rim, merge, normalize_normals
 from extensions.attire.plates import articulate
 from extensions.attire.shell import (
     COVER_SMOOTHING,
@@ -71,6 +73,13 @@ from extensions.humanoid.rig.game import GameHumanoid
 from math.vector3 import Vector3
 from objects.skinned_mesh import SkinnedMesh
 from render.framebuffer import Color
+
+
+comptime RIM_THINNEST = Float32(0.0015)
+"""A fabric at least this thick, in meters, has a rim at its hems: leather,
+padding, mail and plate."""
+comptime RIM_DEEPEST = Float32(0.006)
+"""The deepest a rim runs, in meters."""
 
 
 struct Outfit(Copyable, Movable):
@@ -373,6 +382,11 @@ def dress(
             meshes.append(-1)
             continue
         var piece = articulate(joined[g].take(), garment)
+        # A thick fabric shows its thickness at each hem and at each
+        # lame's edge.
+        var thick = Float32(fabric(garment.fabric).thickness.value)
+        if thick >= RIM_THINNEST:
+            piece = add_rim(piece, min(thick, RIM_DEEPEST))
         piece = dye_pattern(piece, person.rig, garment.pattern)
         paint(piece, garment.dyes)
         piece = garment_uvs(piece, person.rig)
