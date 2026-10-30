@@ -16,12 +16,13 @@ from extensions.village.battle_hud import (
 )
 from extensions.village.combat import (
     HEAVY,
+    LIGHT_ONE,
     HIGH_STANCE,
     LOW_STANCE,
     MID_STANCE,
     STAGGER,
 )
-from extensions.village.foes import CIRCLING
+from extensions.village.foes import CIRCLING, POSTED
 from extensions.village.hud import WHITE_TEXT
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
@@ -83,7 +84,7 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     var look = Vector3(0, -1, -6) / Vector3(0, -1, -6).length()
     # At rest: the gauges alone.
     var rest = _frame()
-    draw_battle(rest, arena.battle, camera, look)
+    draw_battle(rest, arena.battle, arena.scene, camera, look)
     var gauges = _changed(rest)
     assert_true(gauges > 0)
     # A combo, a fighting bandit, a tired dummy, a lock and a number.
@@ -95,20 +96,28 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     b.lock = 0
     b.popups.append(Popup(Vector3(0, 2, -3), "30", WHITE_TEXT, 0.1))
     b.popups.append(Popup(Vector3(0, 2, 9), "99", WHITE_TEXT, 0.1))
+    # And a swing's trail.
+    b.trail.shown = LIGHT_ONE.value
+    b.trail.sweep = 1
+    b.trail.glow = 1
+    arena.scene.update()
     var busy = _frame()
-    draw_battle(busy, arena.battle, camera, look)
+    draw_battle(busy, arena.battle, arena.scene, camera, look)
     assert_true(_changed(busy) > gauges)
     # A staggered bandit shows its break, and a heavy wind-up its warning.
+    # A posted bandit that is hurt shows its bars.
+    arena.battle.foes[0].brain.state = POSTED
+    arena.battle.foes[0].fighter.health = 100
     arena.battle.foes[0].fighter.move = STAGGER
     var broken = _frame()
-    draw_battle(broken, arena.battle, camera, look)
+    draw_battle(broken, arena.battle, arena.scene, camera, look)
     arena.battle.foes[0].fighter.move = HEAVY
     arena.battle.foes[0].fighter.clock = 0.1
     var warned = _frame()
-    draw_battle(warned, arena.battle, camera, look)
+    draw_battle(warned, arena.battle, arena.scene, camera, look)
     arena.battle.foes[0].fighter.clock = 0.6
     var struck = _frame()
-    draw_battle(struck, arena.battle, camera, look)
+    draw_battle(struck, arena.battle, arena.scene, camera, look)
     assert_true(_changed(warned) > _changed(struck))
     # Behind the camera, a bandit, a dummy and the lock's mark are not
     # drawn; nor is a fallen bandit, nor a gauge of no arte points.
@@ -116,11 +125,11 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     arena.battle.dummies[0].dummy.post.z = 9
     arena.battle.fighter.parameters.arte_points = 0
     var behind = _frame()
-    draw_battle(behind, arena.battle, camera, look)
+    draw_battle(behind, arena.battle, arena.scene, camera, look)
     arena.battle.foes[0].down = 0
     arena.battle.lock = -1
     var fallen = _frame()
-    draw_battle(fallen, arena.battle, camera, look)
+    draw_battle(fallen, arena.battle, arena.scene, camera, look)
     assert_true(_changed(fallen) <= _changed(behind))
 
 

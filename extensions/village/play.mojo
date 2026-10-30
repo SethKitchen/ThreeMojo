@@ -810,7 +810,9 @@ struct VillageGame(Movable):
                 self.talk.errands(self.gathering.satchel),
                 self.skills.lines(),
             )
-            draw_battle(self.window, self.battle, self.camera, self.view.look())
+            draw_battle(
+                self.window, self.battle, scene, self.camera, self.view.look()
+            )
 
     def prompt(self) -> String:
         """Return what the use button does now, for the heads-up display.

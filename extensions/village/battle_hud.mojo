@@ -6,24 +6,27 @@
 """What a fight writes over the frame, with the font of
 `extensions.village.hud`.
 
-`draw_battle` draws six things:
+`draw_battle` draws seven things:
 
-1. **The player's gauges**, in the bottom right: the stance, the health,
+1. **The trails** of the swings, as light added to the frame: see
+   `extensions.village.slashes`.
+2. **The player's gauges**, in the bottom right: the stance, the health,
    the ki, and the arte gauge as a row of points. The health turns red
    below a quarter.
-2. **The combo**, such as `12 HITS`, on the right, while two blows or more
+3. **The combo**, such as `12 HITS`, on the right, while two blows or more
    have landed and the combo lasts. It fades as the combo ends.
-3. **Each bandit's health and ki**, over its head, while it fights or is
+4. **Each bandit's health and ki**, over its head, while it fights or is
    hurt. A staggered bandit shows `BREAK`. A bandit that winds up a heavy
    attack shows a red `!`, as Nioh warns of a strong blow.
-4. **A dummy's ki**, over its head, while its ki is not full.
-5. **The lock's mark**: four gold dots round the locked target's chest.
-6. **The numbers and the words** of the blows, which rise and fade.
+5. **A dummy's ki**, over its head, while its ki is not full.
+6. **The lock's mark**: four gold dots round the locked target's chest.
+7. **The numbers and the words** of the blows, which rise and fade.
 
 A point behind the camera is not drawn.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
+from core.scene import Scene
 from extensions.village.battle import CHEST, HEAD, POPUP_SECONDS, Battle
 from extensions.village.combat import (
     COMBO_KEEP,
@@ -196,6 +199,7 @@ def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int):
 def draw_battle(
     mut frame: Framebuffer,
     battle: Battle,
+    scene: Scene,
     camera: PerspectiveCamera,
     look: Vector3,
 ) raises:
@@ -204,6 +208,7 @@ def draw_battle(
     Args:
         frame: The frame, the window's size.
         battle: The fight.
+        scene: The scene, updated, that the fight is in.
         camera: The camera the frame was drawn from.
         look: The way the camera looks, of length one.
 
@@ -213,6 +218,9 @@ def draw_battle(
     var scale = hud_scale(frame.height)
     var w = frame.width
     var h = frame.height
+    battle.trail.draw(frame, scene, camera, look)
+    for index in range(len(battle.foes)):
+        battle.foes[index].trail.draw(frame, scene, camera, look)
     _gauges(frame, battle, scale)
     ref f = battle.fighter
     if f.combo >= 2:

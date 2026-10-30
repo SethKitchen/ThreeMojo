@@ -561,6 +561,8 @@ def test_a_drive_carries_a_character_at_a_set_speed() raises:
     assert_true(walker.position.y > 0)
     with assert_raises(contains="frame"):
         walker.drive(Vector3(0, 0, 0), Duration(-1.0, SECOND), ground, none)
+    with assert_raises(contains="frame"):
+        walker.drive(Vector3(0, 0, 0), Duration(2.0e9, SECOND), ground, none)
     with assert_raises(contains="finite"):
         walker.drive(
             Vector3(Float32(1.0e38) * 10, 0, 0),

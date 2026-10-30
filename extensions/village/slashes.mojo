@@ -6,24 +6,30 @@
 """What a sword leaves in the air: the trail of a swing, and the sparks
 of a blow.
 
-**Trails.** A `Trail` hangs one ribbon for each attack from a body's
-carrier, so it turns with the body. A ribbon is an arc that a blade's
-outer two thirds sweeps, as the move's clip swings it: across at the
-chest for the light cuts, down from over the head for the third, high
-to low for the heavy cut, low to high for the rising edge, and a whole
-ring for the tempest. A ribbon shows while its move strikes, and for
-`TRAIL_LINGER` after. The tempest's ribbon is the last 150 degrees of
-the blade's turn, and turns with the body as the clip spins it. A ribbon
-is drawn unlit and half clear, brighter at the end the blade reaches
-last, as Tales of Arise draws its swings.
+**Trails.** A `Trail` keeps one ribbon for each attack, on a node under a
+body's carrier, so it turns with the body. A ribbon is the arc that a
+blade's outer third sweeps, as the move's clip swings it: across at the
+chest for the light cuts, down from over the head for the third, high to
+low for the heavy cut, low to high for the rising edge, and the last 150
+degrees of the tempest's turn, which turns with the body as the clip
+spins it.
+
+A trail is light, so `draw_trail` adds it to the finished frame, as Tales
+of Arise draws its swings. The game's renderer draws every surface
+opaque, and could not. Through the move's active part, the ribbon grows
+from its start to where the blade is, brightest at the blade and fading
+behind it over `TRAIL_TAIL` of its length. After the active part it fades
+away over `TRAIL_LINGER`.
 
 **Sparks.** `Sparks` keeps `SPARKS` bursts of gold rays. A blow puts the
 oldest at the place it lands; it grows and shows for `SPARK_SECONDS`.
 """
 
+from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
+from extensions.humanoid.rig.sword_clips import tempest_twist
 from extensions.village.combat import (
     HEAVY,
     LIGHT_ONE,
@@ -37,27 +43,32 @@ from extensions.village.combat import (
     is_attack,
     move_data,
 )
-from extensions.humanoid.rig.sword_clips import tempest_twist
 from extensions.village.sheet import Sheet
-from materials.material import BASIC, DOUBLE_SIDE, Material, MaterialId
+from materials.material import BASIC, Material, MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.framebuffer import Color
+from render.framebuffer import Color, Framebuffer
 from std.math import cos, pi, sin
 from units.si import DEGREE, SECOND, Angle, Duration
 
-comptime TRAIL_LINGER = Float32(0.06)
-"""How long a trail shows after its move's active part, in seconds."""
+comptime TRAIL_LINGER = Float32(0.15)
+"""How long a trail takes to fade after its move's active part, in
+seconds."""
+comptime TRAIL_TAIL = Float32(0.6)
+"""The share of a ribbon behind the blade over which it fades."""
 comptime TRAIL_STEPS = 18
 """How many quads an arc of a half turn takes."""
+comptime NEAREST = Float32(0.2)
+"""How far before the camera a trail's corner must be to be drawn, in
+meters."""
 comptime SPARKS = 6
 """How many bursts of sparks can show at once."""
 comptime SPARK_SECONDS = Float32(0.16)
 """How long a burst of sparks shows, in seconds."""
-comptime PLAYER_TRAIL = Vector3(0.75, 0.9, 1.0)
-"""The color of the player's trails: white, touched with blue."""
-comptime FOE_TRAIL = Vector3(1.0, 0.45, 0.25)
-"""The color of a bandit's trails: the orange of a threat."""
+comptime PLAYER_TRAIL = Vector3(150, 205, 255)
+"""The light the player's trails add, as sRGB bytes at the brightest."""
+comptime FOE_TRAIL = Vector3(255, 120, 50)
+"""The light a bandit's trails add: the orange of a threat."""
 
 
 def _cross(a: Vector3, b: Vector3) -> Vector3:
@@ -74,8 +85,7 @@ def _unit(v: Vector3) -> Vector3:
     return out
 
 
-def arc(
-    mut sheet: Sheet,
+def arc_points(
     center: Vector3,
     first: Vector3,
     second: Vector3,
@@ -83,16 +93,14 @@ def arc(
     end: Float32,
     inner: Float32,
     outer: Float32,
-    color: Vector3,
-):
-    """Add a flat ribbon round a center, between two radii.
+) -> List[Vector3]:
+    """Return the corners of a flat ribbon round a center, between two
+    radii.
 
     A point of the arc at the angle `a` lies along `first` times `cos a`
-    plus `second` times `sin a` from the center. The ribbon is darkest at
-    `begin` and brightest at `end`.
+    plus `second` times `sin a` from the center.
 
     Args:
-        sheet: The sheet.
         center: The arc's center.
         first: The way the angle zero points, of length one.
         second: The way a quarter turn points, of length one.
@@ -100,29 +108,23 @@ def arc(
         end: The angle it ends at, in radians.
         inner: Its inner radius, in meters.
         outer: Its outer radius, in meters.
-        color: Its color at `end`.
+
+    Returns:
+        For each step from `begin` to `end`, the inner corner and then the
+        outer one. A half turn takes `TRAIL_STEPS` steps, and any arc at
+        least two.
     """
     var steps = max(2, Int(TRAIL_STEPS * abs(end - begin) / pi))
-    var normal = _cross(first, second)
-    for k in range(steps):  # pragma: no branch
-        var t0 = Float32(k) / Float32(steps)
-        var t1 = Float32(k + 1) / Float32(steps)
-        var a0 = begin + (end - begin) * t0
-        var a1 = begin + (end - begin) * t1
-        var d0 = first * cos(a0) + second * sin(a0)
-        var d1 = first * cos(a1) + second * sin(a1)
-        # Fade in from the start, and stay bright to the end.
-        var c0 = color * (0.35 + 0.65 * t0 * t0)
-        var c1 = color * (0.35 + 0.65 * t1 * t1)
-        var i0 = sheet.vertex(center + d0 * inner, normal, c0, 0, 0)
-        var i1 = sheet.vertex(center + d1 * inner, normal, c1, 0, 0)
-        var i2 = sheet.vertex(center + d1 * outer, normal, c1, 0, 0)
-        var i3 = sheet.vertex(center + d0 * outer, normal, c0, 0, 0)
-        sheet.triangle(i0, i1, i2)
-        sheet.triangle(i0, i2, i3)
+    var out = List[Vector3](capacity=2 * (steps + 1))
+    for k in range(steps + 1):  # pragma: no branch
+        var a = begin + (end - begin) * Float32(k) / Float32(steps)
+        var d = first * cos(a) + second * sin(a)
+        out.append(center + d * inner)
+        out.append(center + d * outer)
+    return out^
 
 
-def trail_sheet(move: CombatMove, scale: Float32, color: Vector3) -> Sheet:
+def trail_points(move: CombatMove, scale: Float32) -> List[Vector3]:
     """Return the ribbon an attack's blade sweeps, in a body's frame.
 
     The frame is a body carrier's: plus z forward, the sword on minus x,
@@ -131,51 +133,46 @@ def trail_sheet(move: CombatMove, scale: Float32, color: Vector3) -> Sheet:
     Args:
         move: The attack. A move that is not an attack has no ribbon.
         scale: The fighter's height over six feet.
-        color: The ribbon's color.
 
     Returns:
-        The ribbon's triangles, from 0.8 to 1.45 meters round the sword's
-        shoulder for a person of six feet.
+        The ribbon's corners, as `arc_points` gives them, from 1.0 to 1.45
+        meters round the sword's shoulder for a person of six feet; none
+        for a move that is not an attack.
     """
-    var sheet = Sheet(1)
     var s = scale
-    var inner = Float32(0.8) * s
+    var inner = Float32(1.0) * s
     var outer = Float32(1.45) * s
     var sword = Vector3(-1, 0, 0)
     var ahead = Vector3(0, 0, 1)
-    var up = Vector3(0, 1, 0)
     var degree = Float32(pi / 180)
     if move == LIGHT_ONE or move == LIGHT_TWO:
-        # Across the front, at the chest.
+        # Across the front, at the chest: the first from the sword's side,
+        # the second back to it.
         var y = Float32(0.35) if move == LIGHT_ONE else Float32(0.25)
-        arc(
-            sheet,
+        var begin = Float32(-15) if move == LIGHT_ONE else Float32(165)
+        return arc_points(
             Vector3(0, y * s, 0),
             sword,
             ahead,
-            -15 * degree,
-            165 * degree,
+            begin * degree,
+            (150 - begin) * degree,
             inner,
             outer,
-            color,
         )
-    elif move == LIGHT_THREE:
+    if move == LIGHT_THREE:
         # Down the front, from over the head.
-        arc(
-            sheet,
+        return arc_points(
             Vector3(-0.15 * s, 0.5 * s, 0.1 * s),
-            up,
+            Vector3(0, 1, 0),
             ahead,
             -20 * degree,
             125 * degree,
             inner,
             outer,
-            color,
         )
-    elif move == HEAVY:
+    if move == HEAVY:
         # From high on the sword's side to low on the other.
-        arc(
-            sheet,
+        return arc_points(
             Vector3(0, 0.4 * s, 0.1 * s),
             Vector3(-0.6, 0.8, 0),
             ahead,
@@ -183,12 +180,10 @@ def trail_sheet(move: CombatMove, scale: Float32, color: Vector3) -> Sheet:
             180 * degree,
             inner,
             outer * 1.05,
-            color,
         )
-    elif move == RISING_EDGE:
+    if move == RISING_EDGE:
         # From low on the other side to high on the sword's.
-        arc(
-            sheet,
+        return arc_points(
             Vector3(0, 0.3 * s, 0.1 * s),
             Vector3(0.6, -0.8, 0),
             ahead,
@@ -196,13 +191,11 @@ def trail_sheet(move: CombatMove, scale: Float32, color: Vector3) -> Sheet:
             180 * degree,
             inner,
             outer,
-            color,
         )
-    elif move == TEMPEST:
+    if move == TEMPEST:
         # The last 150 degrees of the blade's turn at the waist, behind
         # the blade: `Trail.show` turns it with the body.
-        arc(
-            sheet,
+        return arc_points(
             Vector3(0, 0.3 * s, 0),
             sword,
             ahead,
@@ -210,14 +203,12 @@ def trail_sheet(move: CombatMove, scale: Float32, color: Vector3) -> Sheet:
             0,
             inner,
             outer * 1.1,
-            color,
         )
-    return sheet^
+    return List[Vector3]()
 
 
 def slash_material(mut assets: Assets) raises -> MaterialId:
-    """Return the material of trails and sparks: unlit, half clear, both
-    faces drawn, colored by its vertices.
+    """Return the material of sparks: unlit, and colored by its vertices.
 
     Args:
         assets: The stores the material goes into.
@@ -229,70 +220,102 @@ def slash_material(mut assets: Assets) raises -> MaterialId:
         Error: If the material cannot be made.
     """
     return assets.materials.add(
-        Material(
-            Color(255, 255, 255),
-            side=DOUBLE_SIDE,
-            opacity=0.55,
-            transparent=True,
-            kind=BASIC,
-            vertex_colors=True,
-        )
+        Material(Color(255, 255, 255), kind=BASIC, vertex_colors=True)
     )
 
 
-struct Trail(Movable):
-    """The ribbons of a body's attacks, and which one shows."""
+def glow_triangle(
+    mut frame: Framebuffer,
+    a: Vector3,
+    b: Vector3,
+    c: Vector3,
+    color: Vector3,
+):
+    """Add light over a triangle of the frame, as three.js's additive
+    blending does.
 
-    # The node of each attack's ribbon, by the move's value, or None.
-    var ribbons: List[Optional[NodeId]]
+    Args:
+        frame: The frame.
+        a: A corner: its x and y are pixels, its z how much of the light
+            it adds, from 0 to 1.
+        b: The next corner, either way round.
+        c: The last corner.
+        color: The light at a share of one, as sRGB bytes.
+    """
+    var area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+    if abs(area) < 1.0e-6:
+        return
+    var x0 = max(0, Int(min(a.x, min(b.x, c.x))))
+    var x1 = min(frame.width - 1, Int(max(a.x, max(b.x, c.x))) + 1)
+    var y0 = max(0, Int(min(a.y, min(b.y, c.y))))
+    var y1 = min(frame.height - 1, Int(max(a.y, max(b.y, c.y))) + 1)
+    for y in range(y0, y1 + 1):
+        var py = Float32(y) + 0.5
+        for x in range(x0, x1 + 1):
+            var px = Float32(x) + 0.5
+            var wa = ((b.x - px) * (c.y - py) - (b.y - py) * (c.x - px)) / area
+            var wb = ((c.x - px) * (a.y - py) - (c.y - py) * (a.x - px)) / area
+            var wc = 1 - wa - wb
+            if wa < 0 or wb < 0 or wc < 0:
+                continue
+            var share = wa * a.z + wb * b.z + wc * c.z
+            var at = (y * frame.width + x) * 4
+            var light: List[Float32] = [color.x, color.y, color.z]
+            for k in range(3):  # pragma: no branch
+                var lit = Float32(frame.pixels[at + k]) + light[k] * share
+                frame.pixels[at + k] = UInt8(Int(min(Float32(255), lit)))
+
+
+struct Trail(Movable):
+    """The ribbons of a body's attacks, and how much of which one shows."""
+
+    # The node of each attack's ribbon, by the move's value, or None; and
+    # its corners in the node's frame.
+    var nodes: List[Optional[NodeId]]
+    var ribbons: List[List[Vector3]]
+    # The light the trail adds, as sRGB bytes at the brightest.
+    var color: Vector3
+    # The attack whose ribbon shows, or -1; how far along its arc the blade
+    # is, from 0 to 1; and how bright it is, from 0 to 1.
     var shown: Int
+    var sweep: Float32
+    var glow: Float32
 
     def __init__(
         out self,
         mut scene: Scene,
-        mut assets: Assets,
-        material: MaterialId,
         carrier: NodeId,
         scale: Float32,
         color: Vector3,
     ) raises:
-        """Hang a hidden ribbon for each attack from a body's carrier.
+        """Hang a node for each attack's ribbon from a body's carrier.
 
         Args:
             scene: The scene.
-            assets: The stores for the geometries.
-            material: The trails' material: see `slash_material`.
             carrier: The node the body hangs from.
             scale: The fighter's height over six feet.
-            color: The ribbons' color.
+            color: The light the trail adds, as sRGB bytes.
 
         Raises:
-            Error: If a mesh cannot be added.
+            Error: If a node cannot be added.
         """
-        self.ribbons = List[Optional[NodeId]]()
+        self.nodes = List[Optional[NodeId]]()
+        self.ribbons = List[List[Vector3]]()
+        self.color = color
         self.shown = -1
+        self.sweep = 0
+        self.glow = 0
         for value in range(MOVES):  # pragma: no branch
             var move = CombatMove(value)
+            self.ribbons.append(trail_points(move, scale))
             if not is_attack(move):
-                self.ribbons.append(None)
+                self.nodes.append(None)
                 continue
-            var node = scene.attach(Object3D(), carrier)
-            scene.node(node).visible = False
-            var sheet = trail_sheet(move, scale, color)
-            scene.add_mesh(
-                Mesh(
-                    assets.geometries.add(sheet.geometry()),
-                    material,
-                    node,
-                    cast_shadow=False,
-                    receive_shadow=False,
-                )
-            )
-            self.ribbons.append(node)
+            self.nodes.append(scene.attach(Object3D(), carrier))
 
     def show(mut self, mut scene: Scene, fighter: Fighter) raises:
-        """Show the ribbon of the attack that strikes now, and hide the
-        rest. The tempest's ribbon turns with the body.
+        """Show the ribbon of the attack that strikes now, as far as the
+        blade has swept it; and the tempest's, turned with the body.
 
         Args:
             scene: The scene the trail is in.
@@ -301,25 +324,87 @@ struct Trail(Movable):
         Raises:
             Error: Never: the move is one.
         """
-        var want = -1
-        if is_attack(fighter.move):
-            var start = move_data(fighter.move).startup.to(SECOND)
-            var begin = start * fighter.pace
-            var end = fighter.active_end() + TRAIL_LINGER
-            if fighter.clock >= begin and fighter.clock <= end:
-                want = fighter.move.value
-        if want == TEMPEST.value:
+        self.shown = -1
+        if not is_attack(fighter.move):
+            return
+        var data = move_data(fighter.move)
+        var begin = data.startup.to(SECOND) * fighter.pace
+        var end = fighter.active_end()
+        if fighter.clock < begin or fighter.clock > end + TRAIL_LINGER:
+            return
+        self.shown = fighter.move.value
+        self.sweep = min(Float32(1), (fighter.clock - begin) / (end - begin))
+        self.glow = min(Float32(1), 1 - (fighter.clock - end) / TRAIL_LINGER)
+        if fighter.move == TEMPEST:
+            # The ribbon trails the blade all through the spin.
+            self.sweep = 1
             var share = fighter.clock / fighter.length()
-            scene.node(self.ribbons[want].value()).set_rotation_from_axis_angle(
+            scene.node(
+                self.nodes[TEMPEST.value].value()
+            ).set_rotation_from_axis_angle(
                 Vector3(0, 1, 0), Angle(-tempest_twist(share), DEGREE)
             )
-        if want == self.shown:
+
+    def draw(
+        self,
+        mut frame: Framebuffer,
+        scene: Scene,
+        camera: PerspectiveCamera,
+        look: Vector3,
+    ) raises:
+        """Add the ribbon that shows to a finished frame.
+
+        Each quad behind the blade adds less light, down to none
+        `TRAIL_TAIL` of the ribbon behind it. A quad with a corner less
+        than `NEAREST` before the camera is not drawn.
+
+        Args:
+            frame: The frame, the camera's size.
+            scene: The scene, updated, that the trail is in.
+            camera: The camera the frame was drawn from.
+            look: The way the camera looks, of length one.
+
+        Raises:
+            Error: If the camera or the frame's size is not valid.
+        """
+        if self.shown < 0:
             return
-        if self.shown >= 0:
-            scene.node(self.ribbons[self.shown].value()).visible = False
-        if want >= 0:
-            scene.node(self.ribbons[want].value()).visible = True
-        self.shown = want
+        var place = scene.world_matrix(self.nodes[self.shown].value())
+        ref corners = self.ribbons[self.shown]
+        var steps = len(corners) // 2 - 1
+        var pixels = List[Vector3](capacity=len(corners))
+        var before = True
+        for k in range(len(corners)):  # pragma: no branch
+            var p = place.transform_point(corners[k])
+            var off = p - camera.position
+            if off.x * look.x + off.y * look.y + off.z * look.z < NEAREST:
+                before = False
+            pixels.append(camera.project(p, frame.width, frame.height))
+        if not before:
+            return
+        for k in range(steps):  # pragma: no branch
+            var t0 = Float32(k) / Float32(steps)
+            var t1 = Float32(k + 1) / Float32(steps)
+            if t1 > self.sweep + 1.0e-4:
+                break
+            # How much light each end adds: most at the blade.
+            var s0 = (
+                max(Float32(0), 1 - (self.sweep - t0) / TRAIL_TAIL) * self.glow
+            )
+            var s1 = (
+                max(Float32(0), 1 - (self.sweep - t1) / TRAIL_TAIL) * self.glow
+            )
+            var i0 = pixels[2 * k]
+            var o0 = pixels[2 * k + 1]
+            var i1 = pixels[2 * k + 2]
+            var o1 = pixels[2 * k + 3]
+            # The inner edge adds half the outer's light.
+            var a = Vector3(i0.x, i0.y, s0 * 0.5)
+            var b = Vector3(o0.x, o0.y, s0)
+            var c = Vector3(o1.x, o1.y, s1)
+            var d = Vector3(i1.x, i1.y, s1 * 0.5)
+            glow_triangle(frame, a, b, c, self.color)
+            glow_triangle(frame, a, c, d, self.color)
 
 
 def spark_sheet() -> Sheet:

@@ -32,7 +32,8 @@ step and pose:
    it back `BLOCK_PUSH` as far.
 5. **What shows.** Each blow writes its damage over the fighter it lands
    on, and the outcome's word: see `outcome_word`. A blow that lands
-   bursts in sparks. The sword is drawn while a bandit within `ENGAGE`
+   bursts in sparks. Each swing's trail is measured for the display: see
+   `extensions.village.slashes`. The sword is drawn while a bandit within `ENGAGE`
    fights, or the player fights, and is sheathed `CALM_SECONDS` after.
 6. **The fallen.** A fallen bandit gives `LOOT` coins. It lies for the
    `linger`, then is gone, and comes back to its post after the
@@ -223,10 +224,8 @@ def _flat(a: Vector3, b: Vector3) -> Float32:
 
 def _way(a: Vector3, b: Vector3) -> Vector3:
     """Return the way from one point to another on the ground, of length
-    one, or +z when they meet."""
-    var gap = _flat(a, b)
-    if gap < 1.0e-4:
-        return Vector3(0, 0, 1)
+    one, or of no length when they meet."""
+    var gap = max(_flat(a, b), Float32(1.0e-4))
     return Vector3((b.x - a.x) / gap, 0, (b.z - a.z) / gap)
 
 
@@ -451,9 +450,7 @@ struct Battle(Movable):
         var glow = slash_material(assets)
         self.arms = Arms(scene, assets, body, swords, BRIGHT_STEEL)
         var scale = body.person.rig.stature / Float32(1.8288)
-        self.trail = Trail(
-            scene, assets, glow, body.carrier, scale, PLAYER_TRAIL
-        )
+        self.trail = Trail(scene, body.carrier, scale, PLAYER_TRAIL)
         self.foes = List[Foe]()
         ref ground = terrain.ground
         for bandit in parameters.bandits:
@@ -466,9 +463,7 @@ struct Battle(Movable):
             )
             var arms = Arms(scene, assets, person, swords, DULL_IRON)
             var size = person.person.rig.stature / Float32(1.8288)
-            var trail = Trail(
-                scene, assets, glow, person.carrier, size, FOE_TRAIL
-            )
+            var trail = Trail(scene, person.carrier, size, FOE_TRAIL)
             var character = Character(
                 CharacterParameters(),
                 bandit.x,
@@ -906,10 +901,11 @@ struct Battle(Movable):
                 struck = foe.fighter.receive(hit, front)
                 foe.shove = push_of(struck, hit, way)
                 throw_up(foe.character, struck, hit)
+                # An attacking bandit holds the token: its brain claims it
+                # before it attacks, and lets go of the attack without it.
                 if landed_blow(struck.outcome) and foe.brain.hurt():
-                    if self.token == index:
-                        self.token = -1
-                        self.token_rest = TOKEN_REST
+                    self.token = -1
+                    self.token_rest = TOKEN_REST
                 if struck.outcome == DEFEATED:
                     self.loot += LOOT
                     self.notes.append(String("+", LOOT, " COINS"))

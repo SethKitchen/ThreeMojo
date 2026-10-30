@@ -486,6 +486,11 @@ def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:
         _ = game.tick(scene, assets, no_input(), step)
     assert_equal(game.battle.fighter.combo, 1)
     assert_true(game.battle.drawn)
+    # Locked on, the camera does not trail behind the player.
+    var lock = no_input()
+    lock.lock = True
+    _ = game.tick(scene, assets, lock, step)
+    assert_equal(game.battle.lock, 0)
     # A stance's name is the note.
     var high = no_input()
     high.high = True

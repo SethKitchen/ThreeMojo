@@ -80,6 +80,7 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 | `hud.mojo` | `draw_hud`, `draw_text` and the prompts. See [Village gathering](Village-gathering#the-heads-up-display). |
 | `day.mojo` | `DayCycle` and `dim_water`. See [Village day and night](Village-day). |
 | `skills.mojo` | `SkillKind`, `Skills`, `skill_of`, `level_of`, `ore_strikes`, `forage_bonus` and `fish_haste`. See [Village skills](Village-skills). |
+| `combat.mojo`, `battle.mojo`, `foes.mojo`, `arms.mojo`, `blade.mojo`, `slashes.mojo`, `battle_hud.mojo` | The player's sword, the bandits and the dummies, and what a fight shows. See [Village combat](Village-combat). |
 | `critters.mojo` | `Haunt`, `default_haunts`, `wing_color` and `Critters`. See [Village critters](Village-critters). |
 | `talk.mojo` | `ErrandState`, `Errand`, `Speaker`, `default_speakers` and `Talk`. See [Village errands](Village-errands). |
 | `weather.mojo` | `WeatherKind`, `WeatherLook`, `weather_look`, `cloud_cover` and `Weather`. See [Village weather](Village-weather). |

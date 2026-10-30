@@ -24,11 +24,18 @@ The window is 1920 by 1080 pixels by default. Give a width and a height for a di
 | Run | Hold the right trigger, the east button or the left stick | Hold Shift, or `R` |
 | Jump | The south button | Space |
 | Use | The west button | `E` |
+| Light attack | The right shoulder | `F` |
+| Heavy attack | The north button | `G` |
+| Rising edge and tempest | Hold the left trigger, and press the right shoulder or the north button | `Z` and `X` |
+| Dodge | The east button | `C` |
+| Guard, and a ki pulse | The left shoulder | `V` |
+| Lock on | The right stick | `T` |
+| Stance | Hold the left shoulder, and press the north, the west or the south button | `6`, `7` and `8` |
 | Weather | | `1` clear, `2` overcast, `3` rain, `4` fog |
 | Time | | `5` moves the day on three hours |
 | Quit | The start button | Escape or `q` |
 
-The buttons are named by position, as SDL names them. The south button is A on an Xbox controller and the cross on a PlayStation controller.
+The buttons are named by position, as SDL names them. The south button is A on an Xbox controller and the cross on a PlayStation controller. The fight's controls are on [Village combat](Village-combat#the-controls).
 
 The game builds for about 15 seconds before the window opens. On a four-core Linux host, the `low` quality draws about 34 frames a second at 1920 by 1080 on the CPU. The game moves by the time each frame takes. So a slow frame moves the player as far as many quick frames do.
 
@@ -77,9 +84,9 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 `tick` does these steps in this order:
 
 1. The look stick turns the camera round the player.
-2. The player's `Character` steps by the move stick, on the village's `Terrain`. Forward is the way the camera looks.
-3. While the player moves and the look stick rests, the camera turns behind the player.
-4. The player's `Body` stands where the character stands, and plays the clip of its stance.
+2. The fight runs: see [Village combat](Village-combat#one-frame-of-the-fight). The player's `Character` steps by the move stick, on the village's `Terrain`. Forward is the way the camera looks. An attack, a dodge or a blow carries the character instead.
+3. While the player moves, the look stick rests and no lock holds, the camera turns behind the player.
+4. The player's `Body` stands where the character stands. It plays the clip of its stance, or of its sword.
 5. Each resident steps along its route, and its body or its mesh is posed.
 6. Each door swings open while someone stands near it, and shut after.
 7. The use button uses the spot in reach: see [Village gathering](Village-gathering). With no spot in reach, it talks to the villager in reach: see [Village errands](Village-errands).
@@ -92,10 +99,10 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 | Module | Holds |
 |---|---|
 | `controls/third_person_controls.mojo` | `ThirdPersonControls`, `ground_direction`, `yaw_of`, `wrap_angle` and `turn_toward`. |
-| `character.mojo` | `Stance`, `MoveInput`, `Obstacle`, `CharacterParameters`, `Character`, `lot_push` and `obstacle_push`. |
+| `character.mojo` | `Stance`, `MoveInput`, `Obstacle`, `CharacterParameters`, `Character`, `lot_push` and `obstacle_push`. `Character.drive` carries a character at a set speed. |
 | `terrain.mojo` | `WallSpan`, `Floor`, `Terrain`, `wall_push` and `view_entry`. See [Village houses](Village-houses#where-a-character-can-walk). |
 | `clothes.mojo` | The natural dyes, `natural_dye`, `village_outfit` and `dyed_outfit`. |
-| `pad_input.mojo` | `stick`, `gamepad_input`, `keyboard_input` and `combined`. |
+| `pad_input.mojo` | `stick`, `fight_input`, `gamepad_input`, `keyboard_input` and `combined`. |
 | `gathering.mojo`, `hud.mojo` | What the player gathers, and the heads-up display. See [Village gathering](Village-gathering). |
 | `talk.mojo` | The villagers who talk, and their errands. See [Village errands](Village-errands). |
 | `weather.mojo` | The clouds, the rain and the fog. See [Village weather](Village-weather). |
