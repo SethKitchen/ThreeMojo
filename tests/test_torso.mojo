@@ -996,9 +996,7 @@ def test_body_skin_is_one_surface() raises:
         scan_floor = min(scan_floor, scan.vector3(v).y)
     # The scan sinks under the body there, along its normals, by at most
     # 2 mm.
-    assert_true(
-        abs(scan_floor - (field.head_split - field.head_lap)) < 0.0021
-    )
+    assert_true(abs(scan_floor - (field.head_split - field.head_lap)) < 0.0021)
 
 
 def main() raises:
