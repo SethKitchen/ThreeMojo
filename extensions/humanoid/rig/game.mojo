@@ -112,6 +112,7 @@ from math.vector3 import Vector3, append_vector3
 from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SkinnedMesh
 from core.ordinal import require_valid, require_non_negative
+from render.tasks import TaskGroup
 
 # The share of a triangle budget the body's skin takes, and the hair's
 # shell; each hand takes half of the rest.
@@ -312,6 +313,66 @@ def _budgeted(
     ):
         carry_attributes(mesh, fewer)
     return fewer^
+
+
+__async def _budget_task(
+    meshes: Pointer[List[BufferGeometry], MutAnyOrigin],
+    budgets: Pointer[List[Int], ImmutAnyOrigin],
+    failures: Pointer[List[String], MutAnyOrigin],
+    index: Int,
+):
+    """Decimate one mesh of a list in place, or record why it failed."""
+    try:
+        var mesh = meshes[][index].clone()
+        meshes[][index] = _budgeted(mesh^, budgets[][index])
+    except e:
+        failures[][index] = String(e)
+
+
+def budget_all(
+    var meshes: List[BufferGeometry], budgets: List[Int], workers: Int
+) raises -> List[BufferGeometry]:
+    """Return each mesh decimated to its budget, the meshes at once.
+
+    Each decimation is independent and runs on one thread, so the meshes
+    are the same as when they are decimated one after another.
+
+    Args:
+        meshes: The meshes.
+        budgets: One budget per mesh, as `_budgeted` takes it.
+        workers: How many meshes to decimate at once; one or less runs
+            them one after another.
+
+    Returns:
+        The meshes, decimated, in their order.
+
+    Raises:
+        Error: If there is not one budget per mesh, or a decimation
+            fails.
+    """
+    if len(budgets) != len(meshes):
+        raise Error("Decimation needs one budget per mesh")
+    if workers <= 1:
+        var done = List[BufferGeometry](capacity=len(meshes))
+        for k in range(len(meshes)):
+            done.append(_budgeted(meshes[k].clone(), budgets[k]))
+        return done^
+    var failures = List[String](length=len(meshes), fill=String())
+    var group = TaskGroup()
+    for k in range(len(meshes)):
+        group.create_task(
+            _budget_task(
+                Pointer(to=meshes).unsafe_origin_cast[MutAnyOrigin](),
+                Pointer(to=budgets).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=failures).unsafe_origin_cast[MutAnyOrigin](),
+                k,
+            )
+        )
+    group.wait()
+    for failure in failures:
+        if failure != "":
+            raise Error(failure)
+    return meshes^
 
 
 comptime _FACIAL_PART_MINIMUM = 4 * 32
@@ -520,10 +581,19 @@ def add_game_humanoid(
         parts.append(right^)
         parts.append(left^)
     else:
-        parts.append(_budgeted(body^, body_budget))
-        parts.append(_budgeted(right^, hand_budget))
-        parts.append(_budgeted(left^, hand_budget))
-        shell = _budgeted(shell^, hair_budget)
+        # The four decimations are independent: run them at once.
+        var whole = List[BufferGeometry]()
+        whole.append(body^)
+        whole.append(right^)
+        whole.append(left^)
+        whole.append(shell^)
+        var fewer = budget_all(
+            whole^,
+            [body_budget, hand_budget, hand_budget, hair_budget],
+            workers,
+        )
+        shell = fewer.pop()
+        parts = fewer^
     if facial_animation and triangles > 0:
         var retained = reserve + shell.triangle_count()
         # Both preceding branches appended body and the two hands.
