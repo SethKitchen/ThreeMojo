@@ -20,7 +20,7 @@ skin out:
 | `gambeson` | torso | mid | padding | flexible | skirted |
 | `hauberk` | torso | outer | mail, brass at the hems | flexible | skirted |
 | `coif` | head | outer | mail | flexible | fitted |
-| `hood` | head | over | wool | flexible | fitted |
+| `hood` | head | over | wool | flexible | cowled |
 | `boots` | feet | outer | leather | flexible | shod |
 | `gloves` | hands | outer | leather | flexible | fitted |
 | `cuirass` | torso | armor | plate | rigid on the chest | fitted |
@@ -30,10 +30,19 @@ skin out:
 | `greaves` | legs | armor | plate | rigid on each shin | fitted |
 | `bascinet` | head | armor | plate | rigid on the head | fitted |
 | `surcoat` | torso | over | linen | flexible, per pale | skirted |
+| `breeches` | legs | mid | wool | flexible | fitted |
+| `gown` | torso | mid | wool | flexible | skirted to the ankles |
+| `robe` | torso | mid | wool | flexible | skirted to the ankles |
+| `jerkin` | torso | outer | leather | flexible | skirted |
+| `belt` | waist | over | leather | flexible | fitted |
+| `gorget` | neck | armor | plate | rigid on the chest | fitted |
+| `gauntlets` | hands | armor | plate | rigid on each hand | fitted |
+| `sabatons` | feet | armor | plate | rigid on each foot and its toes | shod |
 
-A skirted garment hangs below the hips as one skirt round both legs, and
-a shod one closes each foot in a last. See `extensions.attire.skirt` and
-`extensions.attire.last`.
+A skirted garment hangs below the hips as one skirt round both legs, a
+shod one closes each foot in a last, and a cowled one closes the head in
+a loose cowl. See `extensions.attire.skirt`, `extensions.attire.last` and
+`extensions.attire.cowl`.
 
 This is not a three.js port. See Extensions.
 
@@ -45,6 +54,7 @@ from extensions.attire.cover import Cover
 from extensions.attire.kinds import (
     ARMOR_LAYER,
     ARMS_SLOT,
+    COWLED,
     DYE_CHANNEL_COUNT,
     FEET_SLOT,
     FITTED,
@@ -57,6 +67,7 @@ from extensions.attire.kinds import (
     LINEN,
     MAIL,
     MID_LAYER,
+    NECK_SLOT,
     TRIM_DYE,
     OUTER_LAYER,
     OVER_LAYER,
@@ -448,6 +459,7 @@ def hood() raises -> Garment:
         Color(52, 70, 44),
         drape=8,
         ease=Length(1.8, CENTIMETER),
+        form=COWLED,
     )
 
 
@@ -668,6 +680,217 @@ def surcoat() raises -> Garment:
     return coat^
 
 
+def breeches() raises -> Garment:
+    """Return loose wool breeches, from the waist to below the knee.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    cover.reach_to(HIPS, 0.6)
+    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.2, 0)
+    # Cut looser than hose, and over them.
+    return Garment(
+        "breeches",
+        LEGS_SLOT,
+        MID_LAYER,
+        WOOL,
+        cover^,
+        Color(96, 84, 62),
+        drape=3,
+        ease=Length(6, MILLIMETER),
+    )
+
+
+def gown() raises -> Garment:
+    """Return a long wool gown with fitted sleeves, to the ankles.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    _trunk(cover)
+    cover.reach_to(NECK, 0.1)
+    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
+    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.85, 0)
+    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.8, 0)
+    # A gown falls from the hips and spreads wide by its hem.
+    return Garment(
+        "gown",
+        TORSO_SLOT,
+        MID_LAYER,
+        WOOL,
+        cover^,
+        Color(112, 32, 44),
+        form=SKIRTED,
+        flare=0.32,
+    )
+
+
+def robe() raises -> Garment:
+    """Return a monk's wool robe, loose, to the ankles.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    _trunk(cover)
+    cover.reach_to(NECK, 0.25)
+    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
+    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.95, 0)
+    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.85, 0)
+    # Heavy, undyed wool, cut loose: it falls straight.
+    return Garment(
+        "robe",
+        TORSO_SLOT,
+        MID_LAYER,
+        WOOL,
+        cover^,
+        Color(88, 66, 48),
+        drape=6,
+        ease=Length(1.2, CENTIMETER),
+        form=SKIRTED,
+        flare=0.12,
+    )
+
+
+def jerkin() raises -> Garment:
+    """Return a sleeveless leather jerkin to the top of the thighs.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    _trunk(cover)
+    cover.reach_to(NECK, 0.1)
+    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.2, 0)
+    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.25, 0)
+    return Garment(
+        "jerkin",
+        TORSO_SLOT,
+        OUTER_LAYER,
+        LEATHER,
+        cover^,
+        Color(104, 70, 42),
+        drape=6,
+        form=SKIRTED,
+        flare=0.15,
+    )
+
+
+def belt() raises -> Garment:
+    """Return a leather belt round the waist.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    # A band from the top of the pelvis to just above the waist.
+    cover.reach_to(HIPS, 1, 0.82)
+    cover.reach_to(SPINE, 0.14, 0)
+    # Stiff leather spans the hollow of the back.
+    return Garment(
+        "belt",
+        WAIST_SLOT,
+        OVER_LAYER,
+        LEATHER,
+        cover^,
+        Color(58, 38, 24),
+        drape=12,
+    )
+
+
+def gorget() raises -> Garment:
+    """Return a steel gorget round the neck, rigid on the chest.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    cover.reach_to(NECK, 0.55)
+    cover.reach_to(CHEST, 1, 0.78)
+    return Garment(
+        "gorget",
+        NECK_SLOT,
+        ARMOR_LAYER,
+        PLATE,
+        cover^,
+        Color(198, 200, 206),
+        articulation=RIGID,
+        anchor=CHEST,
+    )
+
+
+def gauntlets() raises -> Garment:
+    """Return a pair of steel gauntlets, rigid on each hand.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    _both(cover, RIGHT_HAND, LEFT_HAND, 1, 0)
+    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 1, 0.78)
+    return Garment(
+        "gauntlets",
+        HANDS_SLOT,
+        ARMOR_LAYER,
+        PLATE,
+        cover^,
+        Color(198, 200, 206),
+        articulation=RIGID,
+    )
+
+
+def sabatons() raises -> Garment:
+    """Return a pair of steel sabatons over the feet, on a last.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    _both(cover, RIGHT_FOOT, LEFT_FOOT, 1, 0)
+    _both(cover, RIGHT_TOES, LEFT_TOES, 1, 0)
+    # Each plate rides the foot or the toes: they part at the ball of
+    # the foot, as the lames of a sabaton do.
+    return Garment(
+        "sabatons",
+        FEET_SLOT,
+        ARMOR_LAYER,
+        PLATE,
+        cover^,
+        Color(198, 200, 206),
+        articulation=RIGID,
+        form=SHOD,
+    )
+
+
 def wardrobe() raises -> List[Garment]:
     """Return every garment of the wardrobe.
 
@@ -694,4 +917,12 @@ def wardrobe() raises -> List[Garment]:
         greaves(),
         bascinet(),
         surcoat(),
+        breeches(),
+        gown(),
+        robe(),
+        jerkin(),
+        belt(),
+        gorget(),
+        gauntlets(),
+        sabatons(),
     ]

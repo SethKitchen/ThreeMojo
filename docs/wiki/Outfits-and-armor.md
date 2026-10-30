@@ -34,7 +34,36 @@ It returns a `Dressed` record: the skinned mesh of each garment, or -1, and each
 |---|---|
 | `peasant` | shirt, hose, tunic, hood, boots |
 | `man-at-arms` | shirt, hose, gambeson, hauberk, coif, boots, gloves |
-| `knight` | the man-at-arms's, then cuirass, fauld, pauldrons, vambraces, greaves and surcoat |
+| `knight` | the man-at-arms's, then cuirass, fauld, pauldrons, vambraces, greaves, surcoat, gorget, gauntlets and sabatons |
+
+## Crowds
+
+A crowd in one outfit looks like a uniform. `extensions/attire/mix.mojo` dresses each person of a crowd by a seed.
+
+```mojo
+from extensions.attire.mix import mixed_outfit
+
+var dressed = dress(scene, assets, person, mixed_outfit(person_index))
+```
+
+`mixed_calling(seed)` picks a `Calling`. Of each twenty seeds, about five are peasants, four goodwives, three archers, two monks, two merchants, one a noblewoman, two men-at-arms and one a knight. `calling_outfit(calling, seed)` dresses that calling. The same seed gives the same outfit on every machine.
+
+| Calling | Garments |
+|---|---|
+| `PEASANT` | shirt, breeches over hose, tunic and boots; a hood and a belt by chance |
+| `GOODWIFE` | shirt, gown and boots, and a belt; a hood by chance |
+| `ARCHER` | shirt, hose, gambeson, jerkin, belt and boots; a hood by chance |
+| `MONK` | shirt, robe, hood, belt and boots |
+| `MERCHANT` | shirt, hose, tunic, belt and boots; a hood by chance |
+| `NOBLEWOMAN` | shirt, gown, belt and boots |
+| `MAN_AT_ARMS` | the man-at-arms's outfit and a belt; a surcoat by chance |
+| `KNIGHT` | the knight's outfit and a belt |
+
+The poor wear the dyes of `plain_dye`: madder, woad, weld, walnut, nettle, gray and cream wool, russet and lichen purple. The rich wear the dyes of `rich_dye`: kermes crimson, deep woad, verdigris, saffron, black and murex violet. A merchant's trim is rich. A knight's surcoat takes two rich dyes per pale. Three plates in ten are blackened against rust.
+
+`examples/crowd.mojo` draws the eight callings side by side, each with a genome and a stature of their own. It writes `out/crowd.png`.
+
+![Eight people of eight callings walk and stand in a studio](out/crowd.png)
 
 ## Plate
 
@@ -88,4 +117,4 @@ A player saves a look and puts it on again, on the same body or another. `outfit
 
 ## Tests
 
-`tests/test_attire_outfit.mojo`, `test_attire_preset.mojo` and `test_attire_sockets.mojo` cover this page.
+`tests/test_attire_outfit.mojo`, `test_attire_preset.mojo`, `test_attire_mix.mojo` and `test_attire_sockets.mojo` cover this page.

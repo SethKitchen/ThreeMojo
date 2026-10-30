@@ -22,6 +22,7 @@ from extensions.attire.garment import (
     hauberk,
     hood,
     hose,
+    sabatons,
     shirt,
     surcoat,
     tunic,
@@ -147,6 +148,42 @@ def test_a_person_is_dressed_from_the_skin_out() raises:
     # The coif covers the head: the hair hides.
     assert_false(scene.node(person.hair.value()).visible)
     assert_false(scene.node(person.strands[0].node.value()).visible)
+
+
+def test_a_last_over_a_last_hides_it() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    var shod = Outfit()
+    shod.add(boots())
+    var alone_over = List[Float32]()
+    var alone_shells = List[BufferGeometry]()
+    var alone = dress_pieces(
+        assets.geometries.get(
+            scene.skinned_meshes[person.skins[0]].geometry
+        ).clone(),
+        person,
+        shod,
+        alone_over,
+        alone_shells,
+    )
+    shod.add(sabatons())
+    var shells = List[BufferGeometry]()
+    var over = List[Float32]()
+    var under = dress_pieces(
+        assets.geometries.get(
+            scene.skinned_meshes[person.skins[0]].geometry
+        ).clone(),
+        person,
+        shod,
+        over,
+        shells,
+    )
+    # The boots under the sabatons keep no last of their own; the whole
+    # shells keep theirs.
+    assert_true(under[0].vertex_count() < alone[0].vertex_count())
+    assert_true(under[1].triangle_count() > 0)
+    assert_true(shells[0].vertex_count() > under[0].vertex_count())
 
 
 def test_a_garment_hidden_wholly_draws_nothing() raises:

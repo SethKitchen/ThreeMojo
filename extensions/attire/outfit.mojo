@@ -42,7 +42,14 @@ from extensions.attire.cover import cover_values
 from extensions.attire.dye import dye_pattern, paint
 from extensions.attire.fabric import fabric, fabric_material
 from extensions.attire.garment import Garment
-from extensions.attire.kinds import SHOD, SKIRTED, layer_label, slot_label
+from extensions.attire.cowl import hang_cowl, head_cowl
+from extensions.attire.kinds import (
+    COWLED,
+    SHOD,
+    SKIRTED,
+    layer_label,
+    slot_label,
+)
 from extensions.attire.last import FootLast, foot_lasts, shoe
 from extensions.attire.mesh_ops import merge, normalize_normals
 from extensions.attire.plates import articulate
@@ -244,6 +251,7 @@ def dress_pieces(
     # closes each foot in a last.
     var skirts = List[SkirtEnvelope]()
     var lasts = List[List[FootLast]]()
+    var cowls = List[List[FootLast]]()
     for i in range(len(order)):
         ref garment = outfit.garments[order[i]]
         var whole = garment_piece(skin, places[i], values[i], nothing)
@@ -263,30 +271,50 @@ def dress_pieces(
         if garment.form == SHOD:
             feet = foot_lasts(whole, person.rig)
             whole = shoe(whole, feet, person.rig)
+        var head = List[FootLast]()
+        if garment.form == COWLED:
+            head = head_cowl(whole, person.rig)
+            whole = hang_cowl(
+                whole,
+                head,
+                person.rig,
+                garment.cover.face_open,
+                Float32(fabric(garment.fabric).thickness.value),
+            )
         shells[order[i]] = whole^
         skirts.append(envelope^)
         lasts.append(feet^)
+        cowls.append(head^)
     for i in range(len(order)):
         var over = List[Float32](length=count, fill=0)
-        # A skirt over this one that falls as far hides its skirt.
+        # A skirt over this one that falls as far hides its skirt, and a
+        # last over this one hides its lasts.
         var shown = True
+        var feet = lasts[i].copy()
         for j in range(i + 1, len(order)):
             for v in range(count):
                 over[v] = max(over[v], hides[j][v])
             if skirts[j].rings() > 1 and skirts[j].hem() <= skirts[i].hem():
                 shown = False
+            if len(lasts[j]) > 0:
+                feet.clear()
         for v in range(count):
             over_skin[v] = max(over_skin[v], hides[i][v])
-        pieces[order[i]] = shoe(
-            hang_skirt(
-                garment_piece(skin, places[i], values[i], over),
-                skirts[i],
-                person.rig,
-                True,
-                shown,
-            ),
-            lasts[i],
+        ref garment = outfit.garments[order[i]]
+        var piece = hang_skirt(
+            garment_piece(skin, places[i], values[i], over),
+            skirts[i],
             person.rig,
+            True,
+            shown,
+        )
+        piece = shoe(piece, feet, person.rig)
+        pieces[order[i]] = hang_cowl(
+            piece,
+            cowls[i],
+            person.rig,
+            garment.cover.face_open,
+            Float32(fabric(garment.fabric).thickness.value),
         )
     return pieces^
 
