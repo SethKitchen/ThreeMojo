@@ -66,6 +66,7 @@ from extensions.village.combat import (
     LIGHT_ONE,
     LOW_STANCE,
     MID_STANCE,
+    MYSTIC_ARTE,
     RISING_EDGE,
     Blow,
     Struck,
@@ -1016,6 +1017,38 @@ def test_a_demon_fang_with_no_one_before_it_fades_out() raises:
     arena.run(1.2)
     assert_equal(len(arena.battle.waves), 0)
     assert_equal(arena.battle.fighter.combo, 0)
+
+
+def test_over_limit_spends_itself_on_a_mystic_arte() raises:
+    # Two dummies within the arte's reach, and one beyond it.
+    var arena = Arena(arena_parameters(0, 3))
+    var both = no_input()
+    both.mystic = True
+    both.rising = True
+    both.tempest = True
+    # Without Over Limit, its buttons make the rising edge.
+    arena.press(both)
+    assert_true(arena.battle.fighter.move == RISING_EDGE)
+    arena.run(1.5)
+    # Over Limit, they make the mystic arte, and the foes slow.
+    arena.battle.fighter.over = 5
+    var before = arena.battle.fighter.combo
+    arena.press(both)
+    assert_true(arena.battle.fighter.move == MYSTIC_ARTE)
+    assert_true(holds_text(arena.battle.notes, "MYSTIC ARTE!"))
+    assert_true(arena.battle.slow > 0)
+    assert_almost_equal(arena.battle.fighter.over, 0, atol=1e-6)
+    arena.run(3)
+    assert_true(arena.battle.fighter.free())
+    # Six hits on each of the two dummies within its reach.
+    assert_equal(arena.battle.fighter.combo - before, 12)
+    # A player who reels cannot make it.
+    arena.battle.notes.clear()
+    arena.battle.fighter.over = 5
+    arena.battle.fighter.move = FLINCH
+    arena.battle.fighter.clock = 0
+    arena.press(both)
+    assert_false(holds_text(arena.battle.notes, "MYSTIC ARTE!"))
 
 
 def main() raises:

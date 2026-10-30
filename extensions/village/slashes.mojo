@@ -12,8 +12,10 @@ blade's outer third sweeps, as the move's clip swings it: across at the
 chest for the light cuts, down from over the head for the third, high to
 low for the heavy cut, low to high for the rising edge, straight ahead
 at the chest for a burst attack's thrust, and the last 150 degrees of the
-tempest's turn, which turns with the body as the clip spins it. A burst
-attack's trail is red, whoever makes it.
+tempest's turn, which turns with the body as the clip spins it. The
+mystic arte's spins leave a wide ring that turns with the body too. A
+burst attack's trail is red, whoever makes it, and a mystic arte's is
+gold.
 
 A trail is light, so `Trail.draw` adds it to the finished frame, as Tales
 of Arise draws its swings. The game's renderer draws every surface
@@ -36,12 +38,13 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from extensions.humanoid.rig.sword_clips import tempest_twist
+from extensions.humanoid.rig.sword_clips import mystic_twist, tempest_twist
 from extensions.village.combat import (
     BURST,
     DEMON_FANG,
     HEAVY,
     LIGHT_ONE,
+    MYSTIC_ARTE,
     LIGHT_THREE,
     LIGHT_TWO,
     MOVES,
@@ -84,6 +87,9 @@ comptime FOE_TRAIL = Vector3(255, 120, 50)
 """The light a bandit's trails add: the orange of a threat."""
 comptime OVER_TRAIL = Vector3(255, 215, 90)
 """The light the player's trails add Over Limit: gold."""
+comptime MYSTIC_TRAIL = Vector3(170, 140, 60)
+"""The light of a mystic arte's ring: a softer gold, since the ring is
+wide."""
 comptime BURST_TRAIL = Vector3(255, 40, 30)
 """The light of a burst attack: its trail, and its glow as it winds up."""
 comptime STAR_RAYS = 8
@@ -233,6 +239,18 @@ def trail_points(move: CombatMove, scale: Float32) -> List[Vector3]:
             line.append(Vector3(-0.2 * s, 0.28 * s, z))
             line.append(Vector3(-0.04 * s, 0.44 * s, z))
         return line^
+    if move == MYSTIC_ARTE:
+        # The last 240 degrees of the blade's turn, out to the arte's
+        # reach: `Trail.show` turns it with the body.
+        return arc_points(
+            Vector3(0, 0.3 * s, 0),
+            sword,
+            ahead,
+            -240 * degree,
+            0,
+            inner,
+            outer * 2.5,
+        )
     if move == TEMPEST:
         # The last 150 degrees of the blade's turn at the waist, behind
         # the blade: `Trail.show` turns it with the body.
@@ -423,6 +441,14 @@ struct Trail(Movable):
             ).set_rotation_from_axis_angle(
                 Vector3(0, 1, 0), Angle(-tempest_twist(share), DEGREE)
             )
+        if fighter.move == MYSTIC_ARTE:
+            self.sweep = 1
+            var share = fighter.clock / fighter.length()
+            scene.node(
+                self.nodes[MYSTIC_ARTE.value].value()
+            ).set_rotation_from_axis_angle(
+                Vector3(0, 1, 0), Angle(-mystic_twist(share), DEGREE)
+            )
 
     def draw(
         self,
@@ -463,7 +489,11 @@ struct Trail(Movable):
                 break
             var share = max(Float32(0), 1 - (self.sweep - t) / TRAIL_TAIL)
             light.append(share * self.glow)
-        var color = BURST_TRAIL if self.shown == BURST.value else self.color
+        var color = self.color
+        if self.shown == BURST.value:
+            color = BURST_TRAIL
+        elif self.shown == MYSTIC_ARTE.value:
+            color = MYSTIC_TRAIL
         glow_ribbon(frame, camera, look, placed, light, color)
 
 

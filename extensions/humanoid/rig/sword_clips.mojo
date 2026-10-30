@@ -28,6 +28,7 @@ side and the other side:
 | `rising_edge_clip` | 0.81 | A crouch with the sword low on the left, and a cut up that rises onto the toes |
 | `tempest_clip` | 1.06 | The sword arm out, and a whole turn of the body |
 | `fang_clip` | 0.65 | A crouch with the sword low behind, and a cut along the ground and up |
+| `mystic_clip` | 2.1 | The sword raised to the sky, two whole turns of the body with the sword arm out, and a cut down |
 | `burst_clip` | 1.44 | A long coil with the sword drawn back at the hip, and a lunge that thrusts it straight ahead |
 | `dodge_clip` | 0.48 | A low, quick crouch with the sword held in |
 | `guard_clip` | 1.0, loops | The blade upright before the face, the knees bent |
@@ -76,6 +77,12 @@ comptime TEMPEST_BEGIN = Float32(0.18)
 """When the tempest's spin begins, in seconds."""
 comptime TEMPEST_END = Float32(0.66)
 """When the tempest's spin ends, in seconds."""
+comptime MYSTIC_SECONDS = Float32(2.1)
+"""How long the mystic arte lasts, in seconds."""
+comptime MYSTIC_BEGIN = Float32(0.5)
+"""When the mystic arte's spins begin, in seconds."""
+comptime MYSTIC_END = Float32(1.5)
+"""When the mystic arte's spins end, in seconds."""
 
 
 @fieldwise_init
@@ -580,6 +587,81 @@ def fang_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
     var keys: List[Pose] = [low^, along^, up^]
     var at: List[Float32] = [0.28, 0.38, 0.48]
     return _cut("fang", bones, rig, keys^, at^, 0.65)
+
+
+def mystic_twist(share: Float32) -> Float32:
+    """Return how far the mystic arte's spins turn the hips about plus y,
+    as its poses are written, before `mirrored` turns them the other way.
+
+    Args:
+        share: How far through the clip, from 0 to 1.
+
+    Returns:
+        The twist, in degrees: none until `MYSTIC_BEGIN`, then two whole
+        turns by `MYSTIC_END`.
+    """
+    var begin = MYSTIC_BEGIN / MYSTIC_SECONDS
+    var end = MYSTIC_END / MYSTIC_SECONDS
+    return -720 * hermite_fade(clamp((share - begin) / (end - begin), 0, 1))
+
+
+def mystic_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
+    """Return the mystic arte: the sword raised to the sky, two whole turns
+    of the body with the sword arm out, and a cut down, 2.1 seconds.
+
+    Args:
+        bones: One node per joint, in the order of the joints.
+        rig: The rig the bones were placed from.
+
+    Returns:
+        The clip, named `"mystic"`.
+
+    Raises:
+        Error: If there is not one bone per joint.
+    """
+    var seconds = MYSTIC_SECONDS
+    var scale = _scale(rig)
+    var sky = Pose()
+    _legs(sky, 5, 5, 0.3, scale)
+    _body(sky, 0, Vector3(-8, 0, 0), Vector3(-6, 0, 0))
+    sky.turn(HEAD, -20)
+    _arm(sky, Grip(-144, 1, 2, -9, 80, -4))
+    _free_hand(sky, -20, -40, -20)
+    var spin = Pose()
+    _legs(spin, 0, 0, 0.55, scale)
+    spin.turn(SPINE, 8)
+    _arm(spin, Grip(-10, 0, 85, -10, 70, 0))
+    spin.turn(LEFT_UPPER_ARM, 0, 0, -60)
+    var cut = Pose()
+    _legs(cut, 45, 25, 0.8, scale)
+    _body(cut, -25, Vector3(22, -15, 0), Vector3(10, -25, 0))
+    cut.turn(NECK, -15)
+    _arm(cut, Grip(-88, -28, 42, -4, 90, 28))
+    _free_hand(cut, 35, -30, -20)
+    var keys: List[Pose] = [
+        _ready(scale),
+        sky.copy(),
+        sky^,
+        spin.copy(),
+        spin^,
+        cut.copy(),
+        cut^,
+        _ready(scale),
+    ]
+    var at: List[Float32] = [0, 0.14, 0.22, 0.28, 0.69, 0.76, 0.84, 1]
+    var poses = List[Pose]()
+    var count = Int(seconds * SAMPLES) + 1
+    var span = 0
+    for k in range(count):  # pragma: no branch
+        var t = Float32(k) / Float32(count - 1)
+        while span < len(at) - 2 and t > at[span + 1]:
+            span += 1
+        var u = clamp((t - at[span]) / (at[span + 1] - at[span]), 0, 1)
+        var pose = keys[span].blend(keys[span + 1], hermite_fade(u))
+        var hips = pose.angles[HIPS.value]
+        pose.turn(HIPS, hips.x, hips.y + mystic_twist(t), hips.z)
+        poses.append(pose^)
+    return _clip("mystic", bones, rig, poses, seconds)
 
 
 def burst_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:

@@ -38,6 +38,8 @@ from extensions.humanoid.rig.sword_clips import (
     light_three_clip,
     light_two_clip,
     mirrored,
+    mystic_clip,
+    mystic_twist,
     ready_clip,
     rising_edge_clip,
     stagger_clip,
@@ -116,6 +118,7 @@ def test_each_clip_lasts_as_long_as_its_move() raises:
         "rising_edge",
         "tempest",
         "fang",
+        "mystic",
         "burst",
         "dodge",
         "guard",
@@ -132,6 +135,7 @@ def test_each_clip_lasts_as_long_as_its_move() raises:
         0.81,
         1.06,
         0.65,
+        2.1,
         1.44,
         0.48,
         1.0,
@@ -148,6 +152,7 @@ def test_each_clip_lasts_as_long_as_its_move() raises:
     clips.append(rising_edge_clip(bones, rig))
     clips.append(tempest_clip(bones, rig))
     clips.append(fang_clip(bones, rig))
+    clips.append(mystic_clip(bones, rig))
     clips.append(burst_clip(bones, rig))
     clips.append(dodge_clip(bones, rig))
     clips.append(guard_clip(bones, rig))
@@ -211,6 +216,15 @@ def test_the_tempest_winds_back_and_turns_round() raises:
     # Wound back as the spin begins, and a whole turn round at its end.
     assert_almost_equal(tempest_twist(0.17), 40, atol=0.5)
     assert_almost_equal(tempest_twist(1), -360, atol=1e-3)
+
+
+def test_the_mystic_arte_turns_round_twice() raises:
+    # Still while the sword rises, then two whole turns, and still again.
+    assert_almost_equal(mystic_twist(0), 0, atol=1e-5)
+    assert_almost_equal(mystic_twist(0.2), 0, atol=1e-5)
+    assert_almost_equal(mystic_twist(1000.0 / 2100), -360, atol=1e-2)
+    assert_almost_equal(mystic_twist(0.8), -720, atol=1e-3)
+    assert_almost_equal(mystic_twist(1), -720, atol=1e-3)
 
 
 def test_a_fall_ends_on_the_ground() raises:

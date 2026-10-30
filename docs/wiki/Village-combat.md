@@ -17,6 +17,7 @@ The rules come from two games. Ki, stances and the ki pulse come from Nioh. Arte
 | Rising edge, an arte | Hold the left trigger, and press the right shoulder | `Z` |
 | Tempest, an arte | Hold the left trigger, and press the north button | `X` |
 | Demon fang, an arte | Hold the left trigger, and press the west button | `B` |
+| Mystic arte, Over Limit | Hold the left trigger, and press the right shoulder and the north button together | `M` |
 | Dodge | The east button | `C` |
 | Guard | Hold the left shoulder | Hold `V` |
 | Ki pulse | Press the left shoulder just after a swing | Press `V` just after a swing |
@@ -71,6 +72,12 @@ A limit gauge fills as the player fights well, as in Tales of Arise. Each blow t
 
 When the gauge is full, the player goes Over Limit for 10 seconds. The arte gauge fills, and artes cost nothing. No blow makes the player reel, and their blows do 25 percent more damage. The gauge does not fill while Over Limit lasts. Bandits and dummies never go Over Limit.
 
+### The mystic arte
+
+While Over Limit lasts, the player can spend what is left of it on a **mystic arte**, as in Tales of Arise. Press the rising edge's and the tempest's buttons together. The player raises the sword to the sky, and `MYSTIC ARTE` shows large in the middle of the frame. Then the player spins round twice. The spins strike everything within 4.5 meters six times, for 70 damage a hit. Last, the player cuts down.
+
+No blow can hit the player through the mystic arte. The foes move at 30 percent of the time while it lasts. Over Limit ends when it starts. Without Over Limit, the same buttons make the rising edge.
+
 ### Dodges
 
 No blow can hit a dodge from 0.02 to 0.3 seconds into it. A dodge goes the way the move stick leans, or back when the stick rests. A dodge in an attack's recovery starts at once.
@@ -108,6 +115,7 @@ The three light attacks chain. A press during a move waits for the chain point: 
 | `RISING_EDGE` | 0.16 s | 0.20 s | 0.45 s | 2.1 m | 100 degrees | 66 | 18 | | 2 |
 | `TEMPEST` | 0.18 s | 0.48 s | 0.40 s | 2.6 m | 360 degrees | 27, four times | 7 | | 3 |
 | `DEMON_FANG` | 0.20 s | 0.10 s | 0.35 s | A wave | | 45 | 10 | | 1 |
+| `MYSTIC_ARTE` | 0.50 s | 1.00 s | 0.60 s | 4.5 m | 360 degrees | 70, six times | 20 | | Over Limit |
 | `BITE` | 0.35 s | 0.20 s | 0.45 s | 1.4 m | 70 degrees | 40 | 12 | | |
 | `BURST` | 0.70 s | 0.14 s | 0.60 s | 2.8 m | 70 degrees | 120 | 45 | 20 | |
 | `DODGE` | | 0.32 s | 0.16 s | | | | | 14 | |
@@ -159,7 +167,7 @@ Two straw dummies stand east of the start. A dummy is a post with a crossbar, a 
 
 The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these over the frame:
 
-- **The gauges**, in the bottom right: the stance, the health, the ki, the limit gauge, and the arte gauge as a row of points. The health turns red below a quarter. Over Limit, the limit gauge turns gold, says `OVER LIMIT`, and empties as the time runs out.
+- **The gauges**, in the bottom right: the stance, the health, the ki, the limit gauge, and the arte gauge as a row of points. The health turns red below a quarter. Over Limit, the limit gauge turns gold, says `OVER LIMIT`, and empties as the time runs out. Through a mystic arte's start-up, its name stands large in the middle of the frame, and a gold star grows at the sword hand.
 - **The combo**, such as `12 HITS`, on the right. It fades as the combo ends.
 - **Each bandit's health and ki**, over its head, while it fights or is hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy attack would finish it. A bandit that winds up a heavy attack shows a red `!`. A bandit that winds up a burst attack glows red at the chest, and the glow grows until it strikes.
 - **A dummy's ki**, over its head, while its ki is not full.
@@ -168,7 +176,7 @@ The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these o
 
 The note over the prompt names each arte as it starts, and each new stance. It says `OVER LIMIT!` when Over Limit begins. A blow that lands bursts in sparks.
 
-A swing leaves a trail of light: white for the player, gold Over Limit, and orange for a bandit. A burst attack's thrust leaves a red trail. Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade, and fades behind it. After the active part, it fades away in 0.15 seconds.
+A swing leaves a trail of light: white for the player, gold Over Limit, and orange for a bandit. A burst attack's thrust leaves a red trail. The mystic arte's spins leave a wide gold ring. Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade, and fades behind it. After the active part, it fades away in 0.15 seconds.
 
 The game's renderer draws every surface opaque, so `draw_battle` adds the trails to the finished frame. See `extensions/village/slashes.mojo`.
 
@@ -200,6 +208,7 @@ The module is `extensions/humanoid/rig/sword_clips.mojo`. Each clip is worked ou
 | `heavy_clip` | 1.09 | A long wind-up high, and a lunge that cuts down across |
 | `rising_edge_clip` | 0.81 | A crouch with the sword low, and a cut up that rises onto the toes |
 | `fang_clip` | 0.65 | A crouch with the sword low behind, and a cut along the ground and up |
+| `mystic_clip` | 2.1 | The sword raised to the sky, two whole turns of the body with the sword arm out, and a cut down |
 | `burst_clip` | 1.44 | A long coil with the sword drawn back at the hip, and a lunge that thrusts it straight ahead |
 | `tempest_clip` | 1.06 | The sword arm out, and a whole turn of the body |
 | `dodge_clip` | 0.48 | A low, quick crouch |

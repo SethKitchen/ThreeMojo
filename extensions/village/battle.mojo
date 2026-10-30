@@ -12,7 +12,8 @@ step and pose:
 1. **Presses.** A new press of a button asks the player's `Fighter` for a
    move: a light attack, the heavy attack, an arte, or a dodge. A demon
    fang's cut sends a wave that runs along the ground at `FANG_SPEED`
-   for `FANG_RANGE`, and strikes each target it passes over once. A dodge
+   for `FANG_RANGE`, and strikes each target it passes over once. Over
+   Limit, the mystic arte's buttons spend it on the mystic arte. A dodge
    needs the sword drawn, since its button also runs. The guard button
    guards while it is held, and a new press of it makes a ki pulse. A
    stance button changes the stance. The lock button locks the camera on
@@ -29,8 +30,9 @@ step and pose:
    player too, and fades at `SHOVE_FADE`.
 3. **The foes think and move.** See `extensions.village.foes`. One foe
    at a time holds the attack token. A bandit plays its sword's clips; a
-   wolf shows the pose of its walk, and lies on its side when it falls. A perfect dodge slows the foes to
-   `SLOW_SHARE` of the time for `SLOW_SECONDS`.
+   wolf shows the pose of its walk, and lies on its side when it falls.
+   A perfect dodge slows the foes to `SLOW_SHARE` of the time for
+   `SLOW_SECONDS`, and a mystic arte for `MYSTIC_SLOW`.
 4. **The blows.** In steps of at most `COMBAT_STEP`, each fighter's clock
    runs, and each swing gives its blow to the fighters that it reaches. A
    blow that lands pushes its fighter away, and the rising edge throws it
@@ -87,6 +89,7 @@ from extensions.village.combat import (
     HIGH_STANCE,
     LOW_STANCE,
     MID_STANCE,
+    MYSTIC_ARTE,
     PARRIED,
     PERFECT_DODGE,
     RISING_EDGE,
@@ -172,6 +175,8 @@ comptime SLOW_SECONDS = Float32(0.7)
 """How long a perfect dodge slows the foes, in seconds."""
 comptime SLOW_SHARE = Float32(0.3)
 """The share of the time the foes move at while they are slowed."""
+comptime MYSTIC_SLOW = Float32(2.1)
+"""How long a mystic arte slows the foes, in seconds: all through it."""
 comptime LOCK_RANGE = Float32(16)
 """How near a target must be to lock on to, in meters."""
 comptime LOCK_BREAK = Float32(22)
@@ -273,6 +278,7 @@ def pressed(now: MoveInput, before: MoveInput) -> MoveInput:
         rising=now.rising and not before.rising,
         tempest=now.tempest and not before.tempest,
         fang=now.fang and not before.fang,
+        mystic=now.mystic and not before.mystic,
         dodge=now.dodge and not before.dodge,
         guard=now.guard and not before.guard,
         lock=now.lock and not before.lock,
@@ -965,7 +971,12 @@ struct Battle(Movable):
                 self._popup(player.position, "KI PULSE", CALM_TEXT)
         self.fighter.hold_guard(input.guard)
         var fought = input.guard or presses.lock
-        if presses.rising or presses.tempest or presses.fang:
+        if presses.mystic and self.fighter.over > 0:
+            if self.fighter.request(MYSTIC_ARTE):
+                self.notes.append("MYSTIC ARTE!")
+                self.slow = MYSTIC_SLOW
+            fought = True
+        elif presses.rising or presses.tempest or presses.fang:
             var arte = DEMON_FANG
             if presses.rising:
                 arte = RISING_EDGE

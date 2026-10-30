@@ -58,7 +58,10 @@ that a swing reaches with `reaches`, and gives each one the blow that
   When it reaches `LIMIT`, the fighter goes Over Limit for
   `OVER_SECONDS`: its arte gauge fills, its artes cost nothing, no blow
   makes it reel, and its blows do `OVER_BONUS` times their damage. The
-  gauge does not fill while it lasts.
+  gauge does not fill while it lasts. While Over Limit lasts, the fighter
+  can spend what is left of it on a **mystic arte**: a leap and two
+  spins that strike all round six times. No blow can hit the fighter
+  through it.
 - **Combos.** The three light attacks chain. A press during a move waits,
   and its move starts at the move's chain point: after the active part
   and `CHAIN_SHARE` of the recovery. A dodge cuts the recovery of an
@@ -79,6 +82,7 @@ part strikes. The times are for the middle stance:
 | `RISING_EDGE` | 0.16 s | 0.20 s | 0.45 s | 2.1 m | 100 degrees | 66 | 18 | | 2 |
 | `TEMPEST` | 0.18 s | 0.48 s | 0.40 s | 2.6 m | 360 degrees | 27, four times | 7 | | 3 |
 | `DEMON_FANG` | 0.20 s | 0.10 s | 0.35 s | A wave | | 45 | 10 | | 1 |
+| `MYSTIC_ARTE` | 0.50 s | 1.00 s | 0.60 s | 4.5 m | 360 degrees | 70, six times | 20 | | Over Limit |
 | `BITE` | 0.35 s | 0.20 s | 0.45 s | 1.4 m | 70 degrees | 40 | 12 | | |
 | `BURST` | 0.70 s | 0.14 s | 0.60 s | 2.8 m | 70 degrees | 120 | 45 | 20 | |
 | `DODGE` | | 0.32 s | 0.16 s | | | | | 14 | |
@@ -103,7 +107,7 @@ from units.si import (
     Velocity,
 )
 
-comptime MOVES = 14
+comptime MOVES = 15
 """How many moves there are, `FREE` among them."""
 comptime DODGE_SAFE_FROM = Float32(0.02)
 """How far into a dodge no blow can hit it any more, in seconds."""
@@ -197,19 +201,23 @@ comptime DEMON_FANG = CombatMove(7)
 """An arte: a cut along the ground that sends a wave of force running
 before the fighter. The cut strikes nothing itself: the game sends the
 wave."""
-comptime BITE = CombatMove(8)
+comptime MYSTIC_ARTE = CombatMove(8)
+"""The strongest arte, as in Tales of Arise: a sword raised to the sky,
+and two spins that strike all round six times. Only a fighter Over Limit
+can make it, and it spends what is left of Over Limit."""
+comptime BITE = CombatMove(9)
 """A beast's attack: a crouch, and a leap forward that bites."""
-comptime BURST = CombatMove(9)
+comptime BURST = CombatMove(10)
 """A foe's burst attack: a long wind-up that glows red, and a lunging
 thrust that no guard stops."""
-comptime DODGE = CombatMove(10)
+comptime DODGE = CombatMove(11)
 """A quick step, which no blow can hit for a moment."""
-comptime FLINCH = CombatMove(11)
+comptime FLINCH = CombatMove(12)
 """A blow landed: the fighter reels for a moment."""
-comptime STAGGER = CombatMove(12)
+comptime STAGGER = CombatMove(13)
 """The fighter's ki ran out: it stands open, and blows on it are
 critical."""
-comptime FALL = CombatMove(13)
+comptime FALL = CombatMove(14)
 """The fighter is defeated: it falls, and it stays down."""
 
 
@@ -292,7 +300,7 @@ def move_name(move: CombatMove) raises -> String:
         Error: If the move is not one.
     """
     if not move.is_valid():
-        raise Error("A combat move must be one of the fourteen")
+        raise Error("A combat move must be one of the fifteen")
     var names: List[String] = [
         "FREE",
         "LIGHT 1",
@@ -302,6 +310,7 @@ def move_name(move: CombatMove) raises -> String:
         "RISING EDGE",
         "TEMPEST",
         "DEMON FANG",
+        "MYSTIC ARTE",
         "BITE",
         "BURST",
         "DODGE",
@@ -365,9 +374,10 @@ def is_arte(move: CombatMove) -> Bool:
         move: The move.
 
     Returns:
-        True for `RISING_EDGE`, `TEMPEST` and `DEMON_FANG`.
+        True for `RISING_EDGE`, `TEMPEST`, `DEMON_FANG` and
+        `MYSTIC_ARTE`.
     """
-    return move.value >= RISING_EDGE.value and move.value <= DEMON_FANG.value
+    return move.value >= RISING_EDGE.value and move.value <= MYSTIC_ARTE.value
 
 
 def styled(move: CombatMove) -> Bool:
@@ -501,6 +511,8 @@ def move_data(move: CombatMove) raises -> MoveData:
         return _data(0.18, 0.48, 0.4, 2.6, 360, 27, 7, 0, 3, 0, 4, 2.5)
     if move == DEMON_FANG:
         return _data(0.2, 0.1, 0.35, 0, 0, 45, 10, 0, 1, 0.1, 0, 2)
+    if move == MYSTIC_ARTE:
+        return _data(0.5, 1.0, 0.6, 4.5, 360, 70, 20, 0, 0, 0, 6, 3, 2)
     if move == BITE:
         return _data(0.35, 0.2, 0.45, 1.4, 70, 40, 12, 0, 0, 2.4, 1, 2.5)
     if move == BURST:
@@ -515,7 +527,7 @@ def move_data(move: CombatMove) raises -> MoveData:
         return _data(0, 0, 2)
     if move == FREE:
         return _data(0, 0, 0)
-    raise Error("A combat move must be one of the fourteen")
+    raise Error("A combat move must be one of the fifteen")
 
 
 def stance_power(stance: CombatStance) -> Float32:
@@ -994,8 +1006,11 @@ struct Fighter(Copyable, Movable):
         """Return whether no blow can hit the fighter now.
 
         Returns:
-            True from `DODGE_SAFE_FROM` to `DODGE_SAFE_TO` into a dodge.
+            True from `DODGE_SAFE_FROM` to `DODGE_SAFE_TO` into a dodge,
+            and all through a mystic arte.
         """
+        if self.move == MYSTIC_ARTE:
+            return True
         return (
             self.move == DODGE
             and self.clock >= DODGE_SAFE_FROM
@@ -1104,7 +1119,12 @@ struct Fighter(Copyable, Movable):
 
     def _start(mut self, move: CombatMove) raises -> Bool:
         """Start a move if the fighter has the ki and the arte points it
-        spends; return whether it started."""
+        spends, and a mystic arte only Over Limit; return whether it
+        started. A mystic arte ends Over Limit."""
+        if move == MYSTIC_ARTE:
+            if self.over <= 0:
+                return False
+            self.over = 0
         var cost = self.ki_price(move)
         if cost > 0 and self.ki <= 0:
             return False
@@ -1407,7 +1427,7 @@ struct Fighter(Copyable, Movable):
                 front of the fighter: see `faces`.
 
         Returns:
-            What the blow did. A dodge evades it. A guard takes it from the
+            What the blow did. A dodge or a mystic arte evades it. A guard takes it from the
             front on ki, or parries it when it was raised less than the
             fighter's parry before; a guard does not stop a burst attack.
             Any other blow takes health and ki, and makes the fighter reel
@@ -1424,7 +1444,8 @@ struct Fighter(Copyable, Movable):
             return Struck(IGNORED, 0, 0)
         if self.invulnerable():
             if (
-                self.clock < DODGE_SAFE_FROM + PERFECT_WINDOW
+                self.move == DODGE
+                and self.clock < DODGE_SAFE_FROM + PERFECT_WINDOW
                 and not self.perfected
             ):
                 self.perfected = True

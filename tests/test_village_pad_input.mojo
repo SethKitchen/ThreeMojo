@@ -27,6 +27,7 @@ from extensions.village.pad_input import (
     KEY_E,
     KEY_G,
     KEY_H,
+    KEY_M,
     KEY_SIX,
     KEY_SPACE,
     KEY_T,
@@ -213,6 +214,7 @@ def _all(input: MoveInput) -> List[Bool]:
         input.rising,
         input.tempest,
         input.fang,
+        input.mystic,
         input.dodge,
         input.guard,
         input.lock,
@@ -264,6 +266,13 @@ def test_the_shoulders_and_the_trigger_fight() raises:
     var rising = _fight(right_shoulder=True, left_trigger=True)
     assert_false(rising.light)
     assert_true(rising.rising)
+    assert_false(rising.mystic)
+    # The right shoulder and the north button together, with the trigger
+    # held: the mystic arte.
+    var mystic = _fight(north=True, right_shoulder=True, left_trigger=True)
+    assert_true(mystic.mystic)
+    assert_false(_fight(north=True, right_shoulder=True).mystic)
+    assert_false(_fight(north=True, left_trigger=True).mystic)
     assert_true(_fight(east=True).dodge)
     assert_true(_fight(right_stick=True).lock)
     assert_true(_fight(back=True).heal)
@@ -314,6 +323,7 @@ def test_the_keyboard_fights() raises:
         Key(KEY_SIX.value + 1),
         Key(KEY_SIX.value + 2),
         KEY_H,
+        KEY_M,
     ]:
         keys.press(key)
     var input = keyboard_input(keys, False)
@@ -337,6 +347,7 @@ def test_the_fight_buttons_add() raises:
         rising=True,
         tempest=True,
         fang=True,
+        mystic=True,
         dodge=True,
         guard=True,
         lock=True,

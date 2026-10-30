@@ -20,6 +20,7 @@ a PlayStation controller play alike:
 | Rising edge | Hold the left trigger, and the right shoulder | `Z` |
 | Tempest | Hold the left trigger, and the north button | `X` |
 | Demon fang | Hold the left trigger, and the west button | `B` |
+| Mystic arte, Over Limit | Hold the left trigger, and the right shoulder and the north button together | `M` |
 | Dodge | The east button | `C` |
 | Guard, and a ki pulse | The left shoulder | `V` |
 | Lock on | The right stick | `T` |
@@ -104,6 +105,8 @@ comptime KEY_SIX = Key(54)
 """The `6` key: the high stance. `7` and `8` follow it."""
 comptime KEY_H = Key(104)
 """The `H` key: eat herbs to heal."""
+comptime KEY_M = Key(109)
+"""The `M` key: the mystic arte, Over Limit."""
 
 
 def stick(
@@ -164,7 +167,9 @@ def fight_input(
         The input, with the buttons of the module's table. The left
         shoulder guards, and the north, the west and the south buttons
         then choose a stance. The left trigger turns the right shoulder,
-        the north button and the west button into the artes.
+        the north button and the west button into the artes, and the
+        right shoulder and the north button together into the mystic
+        arte.
     """
     var stance = left_shoulder and not left_trigger
     input.jump = south and not left_shoulder
@@ -174,6 +179,7 @@ def fight_input(
     input.heavy = north and not (left_trigger or left_shoulder)
     input.tempest = north and left_trigger
     input.fang = west and left_trigger
+    input.mystic = right_shoulder and north and left_trigger
     input.dodge = east
     input.guard = left_shoulder
     input.lock = right_stick
@@ -281,6 +287,7 @@ def keyboard_input(keys: HeldKeys, shift: Bool) -> MoveInput:
         rising=keys.is_held(KEY_Z),
         tempest=keys.is_held(KEY_X),
         fang=keys.is_held(KEY_B),
+        mystic=keys.is_held(KEY_M),
         dodge=keys.is_held(KEY_C),
         guard=keys.is_held(KEY_V),
         lock=keys.is_held(KEY_T),
@@ -315,6 +322,7 @@ def combined(first: MoveInput, second: MoveInput) -> MoveInput:
         rising=first.rising or second.rising,
         tempest=first.tempest or second.tempest,
         fang=first.fang or second.fang,
+        mystic=first.mystic or second.mystic,
         dodge=first.dodge or second.dodge,
         guard=first.guard or second.guard,
         lock=first.lock or second.lock,

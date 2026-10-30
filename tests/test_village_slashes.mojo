@@ -18,6 +18,7 @@ from extensions.village.combat import (
     LIGHT_ONE,
     LIGHT_THREE,
     LIGHT_TWO,
+    MYSTIC_ARTE,
     RISING_EDGE,
     TEMPEST,
     CombatMove,
@@ -84,6 +85,7 @@ def test_a_ribbon_sweeps_its_arc() raises:
         TEMPEST,
         DEMON_FANG,
         BURST,
+        MYSTIC_ARTE,
     ]
     for move in moves:
         assert_true(len(trail_points(move, 1)) > 0)
@@ -223,6 +225,26 @@ def test_a_trail_grows_with_the_swing_and_fades() raises:
         blues += Int(red.pixels[k + 2])
     assert_true(reds > 4 * blues)
     assert_true(blues > 0)
+    # A mystic arte's ring turns with the body, and is gold.
+    var mystic = Fighter(FighterParameters())
+    mystic.over = 1
+    _ = mystic.request(MYSTIC_ARTE)
+    mystic.clock = 0.8
+    trail.show(scene, mystic)
+    assert_equal(trail.shown, MYSTIC_ARTE.value)
+    assert_almost_equal(trail.sweep, 1, atol=1e-6)
+    var wide = trail.nodes[MYSTIC_ARTE.value].value()
+    assert_true(abs(scene.node(wide).quaternion.w) < 0.99)
+    scene.update()
+    var gold = Framebuffer(64, 64, Color(0, 0, 0))
+    trail.draw(gold, scene, _camera(Vector3(0, 1.5, -5)), look)
+    var golds = 0
+    var cools = 0
+    for k in range(0, len(gold.pixels), 4):
+        golds += Int(gold.pixels[k])
+        cools += Int(gold.pixels[k + 2])
+    assert_true(golds > 2 * cools)
+    assert_true(cools > 0)
 
 
 def test_a_star_of_light_is_brightest_at_its_middle() raises:

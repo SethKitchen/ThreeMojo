@@ -14,7 +14,9 @@
 2. **The player's gauges**, in the bottom right: the stance, the health,
    the ki, the limit gauge, and the arte gauge as a row of points. The
    health turns red below a quarter. Over Limit, the limit gauge turns
-   gold, says `OVER LIMIT`, and empties as it ends.
+   gold, says `OVER LIMIT`, and empties as it ends. Through a mystic
+   arte's start-up, `MYSTIC ARTE` stands large in the middle of the
+   frame, and a gold star grows at the player's sword hand.
 3. **The combo**, such as `12 HITS`, on the right, while two blows or more
    have landed and the combo lasts. It fades as the combo ends.
 4. **Each bandit's health and ki**, over its head, while it fights or is
@@ -44,6 +46,7 @@ from extensions.village.combat import (
     COMBO_KEEP,
     FINISH_SHARE,
     LIMIT,
+    MYSTIC_ARTE,
     OVER_SECONDS,
     HEAVY,
     HIGH_STANCE,
@@ -54,7 +57,12 @@ from extensions.village.combat import (
     move_data,
 )
 from extensions.village.foes import POSTED
-from extensions.village.slashes import BURST_TRAIL, draw_wave, glow_star
+from extensions.village.slashes import (
+    BURST_TRAIL,
+    OVER_TRAIL,
+    draw_wave,
+    glow_star,
+)
 from extensions.village.hud import (
     GOLD_TEXT,
     SHADOW,
@@ -260,6 +268,46 @@ def _glow(
     glow_star(frame, Vector3(center.x, center.y, 0.9), reach, BURST_TRAIL)
 
 
+def _mystic(
+    mut frame: Framebuffer,
+    battle: Battle,
+    scene: Scene,
+    camera: PerspectiveCamera,
+    look: Vector3,
+    scale: Int,
+) raises:
+    """Show a mystic arte's start-up: its name, large in the middle of the
+    frame, and a gold star that grows at the player's sword hand."""
+    ref f = battle.fighter
+    var startup = move_data(MYSTIC_ARTE).startup.to(SECOND) * f.pace
+    if f.clock >= startup:
+        return
+    var share = f.clock / startup
+    var title = String("MYSTIC ARTE")
+    var big = scale * 3
+    draw_text(
+        frame,
+        (frame.width - text_width(title, big)) // 2,
+        frame.height // 4,
+        title,
+        big,
+        GOLD_TEXT,
+        1,
+    )
+    var at = on_screen(
+        camera,
+        look,
+        scene.world_matrix(battle.arms.held).transform_point(Vector3(0, 0, 0)),
+        frame.width,
+        frame.height,
+    )
+    if not at:
+        return
+    var center = at.value()
+    var reach = Float32(frame.height) * (0.1 + 0.3 * share)
+    glow_star(frame, Vector3(center.x, center.y, 1), reach, OVER_TRAIL)
+
+
 def draw_battle(
     mut frame: Framebuffer,
     battle: Battle,
@@ -290,6 +338,8 @@ def draw_battle(
         draw_wave(frame, camera, look, wave.at, wave.way, glow)
     _gauges(frame, battle, scale)
     ref f = battle.fighter
+    if f.move == MYSTIC_ARTE:
+        _mystic(frame, battle, scene, camera, look, scale)
     if f.combo >= 2:
         var alpha = note_alpha(f.combo_age, COMBO_KEEP)
         var hits = String(f.combo, " HITS")

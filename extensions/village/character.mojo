@@ -124,13 +124,14 @@ struct MoveInput(ImplicitlyCopyable):
     var jump: Bool
     var use: Bool
     # Whether the fight's buttons are held: the light and the heavy
-    # attacks, the three artes, the dodge, the guard, the lock, and the
-    # three stances. See `extensions.village.battle`.
+    # attacks, the three artes and the mystic arte, the dodge, the guard,
+    # the lock, and the three stances. See `extensions.village.battle`.
     var light: Bool
     var heavy: Bool
     var rising: Bool
     var tempest: Bool
     var fang: Bool
+    var mystic: Bool
     var dodge: Bool
     var guard: Bool
     var lock: Bool
@@ -155,6 +156,7 @@ struct MoveInput(ImplicitlyCopyable):
         rising: Bool = False,
         tempest: Bool = False,
         fang: Bool = False,
+        mystic: Bool = False,
         dodge: Bool = False,
         guard: Bool = False,
         lock: Bool = False,
@@ -179,6 +181,7 @@ struct MoveInput(ImplicitlyCopyable):
             rising: Whether the rising edge's buttons are held.
             tempest: Whether the tempest's buttons are held.
             fang: Whether the demon fang's buttons are held.
+            mystic: Whether the mystic arte's buttons are held.
             dodge: Whether the dodge's button is held.
             guard: Whether the guard's button is held.
             lock: Whether the lock's button is held.
@@ -199,6 +202,7 @@ struct MoveInput(ImplicitlyCopyable):
         self.rising = rising
         self.tempest = tempest
         self.fang = fang
+        self.mystic = mystic
         self.dodge = dodge
         self.guard = guard
         self.lock = lock

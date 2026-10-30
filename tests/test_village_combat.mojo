@@ -49,6 +49,7 @@ from extensions.village.combat import (
     LIGHT_TWO,
     LOW_STANCE,
     MID_STANCE,
+    MYSTIC_ARTE,
     StrikeOutcome,
     PARRIED,
     PERFECT_ARTE,
@@ -127,9 +128,9 @@ def _blow(damage: Float32, ki: Float32) -> Blow:
 
 
 def test_each_kind_knows_its_values() raises:
-    for value in [-1, 14]:
+    for value in [-1, 15]:
         assert_false(CombatMove(value).is_valid())
-    for value in [0, 13]:
+    for value in [0, 14]:
         assert_true(CombatMove(value).is_valid())
     for value in [-1, 3]:
         assert_false(CombatStance(value).is_valid())
@@ -149,8 +150,9 @@ def test_moves_and_outcomes_have_names_for_the_display() raises:
     assert_equal(move_name(BITE), "BITE")
     assert_equal(move_name(DEMON_FANG), "DEMON FANG")
     assert_equal(move_name(BURST), "BURST")
-    with assert_raises(contains="fourteen"):
-        _ = move_name(CombatMove(14))
+    assert_equal(move_name(MYSTIC_ARTE), "MYSTIC ARTE")
+    with assert_raises(contains="fifteen"):
+        _ = move_name(CombatMove(15))
     assert_equal(outcome_word(PERFECT_DODGE), "PERFECT DODGE")
     assert_equal(outcome_word(PARRIED), "PARRY")
     assert_equal(outcome_word(GUARD_BREAK), "GUARD BREAK")
@@ -175,6 +177,7 @@ def test_moves_are_sorted_into_attacks_artes_and_styles() raises:
     assert_false(is_arte(LIGHT_ONE))
     assert_false(is_arte(BITE))
     assert_false(is_arte(BURST))
+    assert_true(is_arte(MYSTIC_ARTE))
     assert_false(styled(BURST))
     assert_false(styled(FREE))
     assert_true(styled(LIGHT_ONE))
@@ -224,8 +227,11 @@ def test_each_move_has_its_times_and_its_strength() raises:
     assert_almost_equal(burst.startup.to(SECOND), 0.7, atol=1e-6)
     assert_almost_equal(burst.damage, 120, atol=1e-6)
     assert_almost_equal(burst.ki_cost, 20, atol=1e-6)
-    with assert_raises(contains="fourteen"):
-        _ = move_data(CombatMove(14))
+    var mystic = move_data(MYSTIC_ARTE)
+    assert_equal(mystic.hits, 6)
+    assert_almost_equal(mystic.reach.to(METER), 4.5, atol=1e-6)
+    with assert_raises(contains="fifteen"):
+        _ = move_data(CombatMove(15))
 
 
 def test_each_stance_changes_strength_pace_cost_guard_and_step() raises:
@@ -894,6 +900,34 @@ def test_a_burst_goes_through_a_guard_and_a_heavy_blow_counters_it() raises:
     var arte = _fighter()
     _ = arte.request(DEMON_FANG)
     assert_true(arte.blow().breaks_burst)
+
+
+def test_a_mystic_arte_spends_over_limit_and_strikes_all_round() raises:
+    var f = _fighter()
+    # Only a fighter Over Limit can make it.
+    assert_false(f.request(MYSTIC_ARTE))
+    assert_true(f.free())
+    f.over = 5
+    assert_true(f.request(MYSTIC_ARTE))
+    assert_almost_equal(f.over, 0, atol=1e-6)
+    # No blow hits it, and none is a perfect dodge.
+    assert_true(f.invulnerable())
+    assert_true(f.receive(_blow(30, 8), True).outcome == EVADED)
+    assert_almost_equal(f.counter, 0, atol=1e-6)
+    assert_almost_equal(f.health, 500, atol=1e-6)
+    # Its six hits each strike a target once, all round, far out.
+    var hits = 0
+    for _ in range(260):
+        f.update(Duration(Float32(1) / 120, SECOND))
+        if f.move == MYSTIC_ARTE and f.swing():
+            assert_almost_equal(
+                f.swing().value().arc.to(DEGREE), 360, atol=1e-3
+            )
+        if f.connect(0):
+            hits += 1
+    assert_equal(hits, 6)
+    assert_true(f.free())
+    assert_false(f.invulnerable())
 
 
 def main() raises:

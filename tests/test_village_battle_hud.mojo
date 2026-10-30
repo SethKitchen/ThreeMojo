@@ -22,6 +22,7 @@ from extensions.village.combat import (
     HIGH_STANCE,
     LOW_STANCE,
     MID_STANCE,
+    MYSTIC_ARTE,
     STAGGER,
 )
 from extensions.village.foes import CIRCLING, POSTED
@@ -176,6 +177,27 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     var fallen = _frame()
     draw_battle(fallen, arena.battle, arena.scene, camera, look)
     assert_true(_changed(fallen) <= _changed(behind))
+    # A mystic arte's start-up writes its name large, and a gold star grows
+    # at the sword hand. After the start-up, neither shows.
+    arena.battle.fighter.move = MYSTIC_ARTE
+    arena.battle.fighter.clock = 0.3
+    arena.scene.update()
+    var rising = _frame()
+    draw_battle(rising, arena.battle, arena.scene, camera, look)
+    arena.battle.fighter.clock = 0.7
+    var spun = _frame()
+    draw_battle(spun, arena.battle, arena.scene, camera, look)
+    assert_true(_changed(rising) > _changed(spun))
+    # A camera past the player, looking away, shows the name alone.
+    var away = _camera()
+    away.place(Vector3(0, 1.5, -3), Vector3(0, 1.5, -9))
+    var ahead = Vector3(0, 0, -1)
+    var after = _frame()
+    draw_battle(after, arena.battle, arena.scene, away, ahead)
+    arena.battle.fighter.clock = 0.3
+    var named = _frame()
+    draw_battle(named, arena.battle, arena.scene, away, ahead)
+    assert_true(_changed(named) > _changed(after))
 
 
 def main() raises:
