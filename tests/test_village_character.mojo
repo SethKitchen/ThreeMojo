@@ -229,6 +229,15 @@ def test_houses_trees_and_bounds_stop_a_character() raises:
         )
     assert_true(skipping.position.z < -4)
     assert_true(skipping.position.z > -6)
+    # One that stands inside an obstacle is pushed out of it, and gains no
+    # speed from the push.
+    var inside = _walker(ground)
+    var post: List[Obstacle] = [Obstacle(0.1, 0.1, 0.5)]
+    _run(inside, no_input(), 0.5, ground, List[Lot](), post)
+    var off = Vector3(inside.position.x - 0.1, 0, inside.position.z - 0.1)
+    assert_true(off.length() > 0.5)
+    assert_true(off.length() < 1.5)
+    assert_almost_equal(inside.velocity.length(), 0, atol=1e-4)
     var far = _walker(ground)
     far.parameters.bounds = Length(2.0, METER)
     _run(far, _ahead(), 4, ground)

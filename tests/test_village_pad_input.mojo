@@ -28,6 +28,7 @@ from extensions.village.pad_input import (
     KEY_G,
     KEY_H,
     KEY_M,
+    KEY_Q,
     KEY_SIX,
     KEY_SPACE,
     KEY_T,
@@ -221,6 +222,7 @@ def _all(input: MoveInput) -> List[Bool]:
         input.high,
         input.middle,
         input.low,
+        input.boost,
         input.heal,
     ]
 
@@ -276,6 +278,12 @@ def test_the_shoulders_and_the_trigger_fight() raises:
     assert_true(_fight(east=True).dodge)
     assert_true(_fight(right_stick=True).lock)
     assert_true(_fight(back=True).heal)
+    # The left trigger and the left shoulder: the companion's boost attack.
+    var boost = _fight(left_shoulder=True, left_trigger=True)
+    assert_true(boost.boost)
+    assert_false(boost.high)
+    assert_false(_fight(left_shoulder=True).boost)
+    assert_false(_fight(left_trigger=True).boost)
 
 
 def test_a_pad_reads_its_fight_buttons() raises:
@@ -324,6 +332,7 @@ def test_the_keyboard_fights() raises:
         Key(KEY_SIX.value + 2),
         KEY_H,
         KEY_M,
+        KEY_Q,
     ]:
         keys.press(key)
     var input = keyboard_input(keys, False)
@@ -354,6 +363,7 @@ def test_the_fight_buttons_add() raises:
         high=True,
         middle=True,
         low=True,
+        boost=True,
         heal=True,
     )
     for pair in [

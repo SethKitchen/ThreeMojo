@@ -7,7 +7,7 @@
 bars, the lock's mark and the blows' numbers."""
 
 from cameras.perspective_camera import PerspectiveCamera
-from extensions.village.battle import CHEST, Popup, Wave
+from extensions.village.battle import CHEST, Bolt, Popup, Wave
 from extensions.village.battle_hud import (
     draw_bar,
     draw_battle,
@@ -204,6 +204,41 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     var named = _frame()
     draw_battle(named, arena.battle, arena.scene, away, ahead)
     assert_true(_changed(named) > _changed(after))
+
+
+def test_the_companion_shows_her_bolts_and_her_gauge() raises:
+    var arena = Arena(arena_parameters(0, 0, ally=True))
+    var camera = _camera()
+    var look = Vector3(0, -1, -6) / Vector3(0, -1, -6).length()
+    arena.scene.update()
+    var plain = _frame()
+    draw_battle(plain, arena.battle, arena.scene, camera, look)
+    # A bolt before the camera shows as a star, and a boost attack's too.
+    var blow = Blow(
+        28,
+        10,
+        Velocity(1.5, METER_PER_SECOND),
+        Velocity(0.0, METER_PER_SECOND),
+    )
+    var at = Vector3(0, 1, -3)
+    arena.battle.bolts.append(Bolt(at, at, 0, blow, False, 0))
+    var lit = _frame()
+    draw_battle(lit, arena.battle, arena.scene, camera, look)
+    assert_true(_changed(lit) > _changed(plain))
+    arena.battle.bolts[0].boosted = True
+    var gold = _frame()
+    draw_battle(gold, arena.battle, arena.scene, camera, look)
+    assert_true(_changed(gold) > _changed(plain))
+    # One behind the camera does not.
+    arena.battle.bolts[0].at = Vector3(0, 1, 9)
+    var behind = _frame()
+    draw_battle(behind, arena.battle, arena.scene, camera, look)
+    assert_equal(_changed(behind), _changed(plain))
+    # A full boost gauge says so.
+    arena.battle.allies[0].mind.charge(1000)
+    var ready = _frame()
+    draw_battle(ready, arena.battle, arena.scene, camera, look)
+    assert_true(_changed(ready) > _changed(plain))
 
 
 def main() raises:

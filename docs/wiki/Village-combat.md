@@ -1,8 +1,8 @@
 # Village combat
 
-A player of the [Village walk](Village-walk) carries a sword, and can fight. Three bandits and their captain keep a camp on the meadow. A pack of three wolves keeps a den east of the pond. Two straw dummies stand near the start for practice.
+A player of the [Village walk](Village-walk) carries a sword, and can fight. A companion fights beside them. Three bandits and their captain keep a camp on the meadow. A pack of three wolves keeps a den east of the pond. Two straw dummies stand near the start for practice.
 
-The rules come from two games. Ki, stances and the ki pulse come from Nioh. Artes, perfect dodges, Over Limit and long combos come from Tales of Arise.
+The rules come from two games. Ki, stances, the ki pulse, burst attacks and rage come from Nioh. Artes, perfect dodges, Over Limit, the mystic arte, the companion's boost attacks and long combos come from Tales of Arise.
 
 ![Seen from behind, a man in a red tunic locks on to a hooded bandit, guards, cuts, dodges, and spins with his sword](out/village_combat.png)
 
@@ -24,6 +24,7 @@ The rules come from two games. Ki, stances and the ki pulse come from Nioh. Arte
 | Lock on, or let go | Press the right stick | `T` |
 | Move the lock to the next target | While locked, flick the right stick left or right | While locked, press the left or the right arrow |
 | Eat herbs to heal | The back button | `H` |
+| The companion's boost attack | Hold the left trigger, and press the left shoulder | `Q` |
 | High stance | Hold the left shoulder, and press the north button | `6` |
 | Middle stance | Hold the left shoulder, and press the west button | `7` |
 | Low stance | Hold the left shoulder, and press the south button | `8` |
@@ -118,6 +119,7 @@ The three light attacks chain. A press during a move waits for the chain point: 
 | `MYSTIC_ARTE` | 0.50 s | 1.00 s | 0.60 s | 4.5 m | 360 degrees | 70, six times | 20 | | Over Limit |
 | `BITE` | 0.35 s | 0.20 s | 0.45 s | 1.4 m | 70 degrees | 40 | 12 | | |
 | `BURST` | 0.70 s | 0.14 s | 0.60 s | 2.8 m | 70 degrees | 120 | 45 | 20 | |
+| `CAST` | 0.35 s | 0.10 s | 0.35 s | A bolt | | 28 | 10 | | |
 | `DODGE` | | 0.32 s | 0.16 s | | | | | 14 | |
 
 An attack carries its fighter forward through its start-up and its active part. A blow pushes the fighter that it hits away. The player has 500 health and 100 ki.
@@ -161,6 +163,16 @@ A wolf's brain is a bandit's with a beast's temper. It notices the player from 1
 
 A fallen wolf lies on its side. It gives no coins, but it trains swordplay as a bandit does. It comes back to its den after a minute.
 
+## The companion
+
+The module is `extensions/village/companion.mojo`. A swordswoman in woad blue starts beside the player, and fights with them, as the party of Tales of Arise does. The foes do not attack her: she keeps out of their way.
+
+Out of a fight, she follows the player. She walks to them from more than 3 meters, and runs from more than 7. In a fight, she faces the player's foe, and keeps 6 meters from it. She never strays more than 10 meters from the player. She casts at the locked target. With no lock, she casts at the nearest foe that fights within 15 meters of the player.
+
+Every 2.6 seconds, she points her sword and casts a bolt of light at a foe within 14 meters. The bolt flies at 16 meters a second, and follows its foe. It does 28 damage and 10 ki damage. When the player's health falls below 40 percent, she heals 15 percent of it. Then she waits 15 seconds before she heals again.
+
+Her **boost gauge** fills by 4 points a second while the fight lasts, and by 10 for each bolt that lands. It holds 100. When it is full, the boost button calls for her **boost attack**: a gold bolt that does 70 damage and 50 ki damage. No guard stops it, and it counters a burst attack, as a heavy attack does.
+
 ## The dummies
 
 Two straw dummies stand east of the start. A dummy is a post with a crossbar, a body of straw and a sack for a head. It has a fighter, so blows on it break its ki and become critical. It never falls, and it rocks on its post as it is hit.
@@ -169,6 +181,7 @@ Two straw dummies stand east of the start. A dummy is a post with a crossbar, a 
 
 The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these over the frame:
 
+- **The companion's boost gauge**, in the bottom left. It says `BOOST READY` when it is full.
 - **The gauges**, in the bottom right: the stance, the health, the ki, the limit gauge, and the arte gauge as a row of points. The health turns red below a quarter. Over Limit, the limit gauge turns gold, says `OVER LIMIT`, and empties as the time runs out. Through a mystic arte's start-up, its name stands large in the middle of the frame, and a gold star grows at the sword hand.
 - **The combo**, such as `12 HITS`, on the right. It fades as the combo ends.
 - **Each bandit's health and ki**, over its head, while it fights or is hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy attack would finish it. A bandit that winds up a heavy attack shows a red `!`. A bandit that winds up a burst attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under its bars.
@@ -176,7 +189,7 @@ The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these o
 - **The lock's mark**: four gold dots round the locked target's chest.
 - **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `BURST COUNTER`. They rise and fade.
 
-The note over the prompt names each arte as it starts, and each new stance. It says `OVER LIMIT!` when Over Limit begins. A blow that lands bursts in sparks.
+The note over the prompt names each arte as it starts, and each new stance. It says `OVER LIMIT!` when Over Limit begins, and `BOOST ATTACK!` when the companion makes one. The companion's bolts are blue stars, and her boost attack's is gold. A blow that lands bursts in sparks.
 
 A swing leaves a trail of light: white for the player, gold Over Limit, and orange for a bandit. A burst attack's thrust leaves a red trail. The mystic arte's spins leave a wide gold ring. Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade, and fades behind it. After the active part, it fades away in 0.15 seconds.
 
@@ -191,7 +204,7 @@ The sword hangs at the hip until the fight starts. It is in the hand while a ban
 1. **The presses.** A new press asks the player's fighter for a move. The guard button guards while held, and a new press of it makes a ki pulse.
 2. **The player moves.** A free player walks, runs and jumps, at 40 percent of the stick while guarding. A locked player faces the target.
 3. **An attack turns.** Through its start-up, an attack turns the player toward the locked target. With no lock, it turns toward the nearest target within 4 meters before them.
-4. **The bandits think and move.** Each bandit's brain decides, and its character steps or is carried by its move.
+4. **The bandits and the companion think and move.** Each bandit's brain decides, and its character steps or is carried by its move. The companion's mind decides where she goes, and when she casts and heals.
 5. **The blows.** In steps of at most 1/60 second, each fighter's clock runs, and each swing gives its blow to the fighters that it reaches. A strong blow stops the next frames of the fight for 0.06 seconds.
 6. **The fallen.** A fallen player comes to at the start after 4 seconds. A fallen bandit lies, then comes back to its post.
 
@@ -211,6 +224,7 @@ The module is `extensions/humanoid/rig/sword_clips.mojo`. Each clip is worked ou
 | `rising_edge_clip` | 0.81 | A crouch with the sword low, and a cut up that rises onto the toes |
 | `fang_clip` | 0.65 | A crouch with the sword low behind, and a cut along the ground and up |
 | `mystic_clip` | 2.1 | The sword raised to the sky, two whole turns of the body with the sword arm out, and a cut down |
+| `cast_clip` | 0.8 | The sword raised, and pointed at the foe with the free hand beside it |
 | `burst_clip` | 1.44 | A long coil with the sword drawn back at the hip, and a lunge that thrusts it straight ahead |
 | `tempest_clip` | 1.06 | The sword arm out, and a whole turn of the body |
 | `dodge_clip` | 0.48 | A low, quick crouch |
@@ -226,8 +240,9 @@ The rig faces plus z, and calls the side on plus x its right. A camera behind th
 | Module | Holds |
 |---|---|
 | `combat.mojo` | `CombatMove`, `CombatStance`, `StrikeOutcome`, `MoveData`, `FighterParameters`, `Fighter`, `reaches` and `faces`. |
-| `battle.mojo` | `BattleParameters`, `Foe`, `Person`, `Pelt`, `Battle`, `pressed`, `push_of`, `throw_up` and `strong_blow`. |
+| `battle.mojo` | `BattleParameters`, `Foe`, `Ally`, `Bolt`, `Person`, `Pelt`, `Battle`, `pressed`, `push_of`, `throw_up` and `strong_blow`. |
 | `foes.mojo` | `FoeState`, `Brain`, `Sight`, `Intent`, `Bandit`, `Den`, `Post` and `Dummy`. |
+| `companion.mojo` | `Companion`, `AllySight`, `AllyIntent`, `ally_fighter`, `boost_blow` and `default_allies`. |
 | `arms.mojo` | `Arms`: a body's swords and sword clips. |
 | `blade.mojo` | `SwordLooks`, `add_sword` and `add_scabbard`. |
 | `slashes.mojo` | `Trail`, `Sparks`, `draw_wave`, `glow_triangle`, `glow_ribbon`, `glow_star` and `slash_material`. |
@@ -238,6 +253,7 @@ The rig faces plus z, and calls the side on plus x its right. A camera behind th
 
 - The fight is not saved. A new game starts with full health, and every bandit at its post.
 - A blow lands where its arc meets a fighter's circle. The blade's own path does not decide it.
+- The foes do not attack the companion, and she is never hurt.
 - Only the player has artes. A bandit makes light attacks, heavy attacks and burst attacks only.
 - A trail is a flat ribbon, not the blade's exact path. It is added over the frame, so a wall does not hide it.
 - A fighter in the air falls as it attacks, slowly. There are no attacks made for the air.

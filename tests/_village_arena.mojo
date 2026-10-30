@@ -18,6 +18,7 @@ from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.ground import Ground, Lot
 from extensions.village.battle import Battle, BattleParameters
+from extensions.village.companion import default_allies
 from extensions.village.character import (
     Character,
     CharacterParameters,
@@ -60,7 +61,11 @@ def flat_ground() raises -> Ground:
 
 
 def arena_parameters(
-    bandits: Int = 1, dummies: Int = 1, far: Float32 = 6, wolves: Int = 0
+    bandits: Int = 1,
+    dummies: Int = 1,
+    far: Float32 = 6,
+    wolves: Int = 0,
+    ally: Bool = False,
 ) raises -> BattleParameters:
     """Return a fight of bandits and dummies before the player.
 
@@ -72,6 +77,7 @@ def arena_parameters(
         far: How far before the player the bandits stand, in meters.
         wolves: How many wolves keep a den `far` meters before the player
             and three meters to its left, meshed in two poses.
+        ally: Whether the companion fights beside the player.
 
     Returns:
         The fight. A fallen foe lingers a second and comes back after
@@ -101,6 +107,10 @@ def arena_parameters(
     p.posts = List[Post]()
     for k in range(dummies):
         p.posts.append(Post(Float32(k) * 3, -1.5, Angle(180.0, DEGREE)))
+    if not ally:
+        p.allies = List[Bandit]()
+    else:
+        p.allies = default_allies()
     p.linger = Duration(1.0, SECOND)
     p.respawn = Duration(2.0, SECOND)
     p.revive = Duration(0.5, SECOND)

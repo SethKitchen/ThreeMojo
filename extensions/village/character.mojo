@@ -125,7 +125,8 @@ struct MoveInput(ImplicitlyCopyable):
     var use: Bool
     # Whether the fight's buttons are held: the light and the heavy
     # attacks, the three artes and the mystic arte, the dodge, the guard,
-    # the lock, and the three stances. See `extensions.village.battle`.
+    # the lock, the three stances, and the companion's boost attack. See
+    # `extensions.village.battle`.
     var light: Bool
     var heavy: Bool
     var rising: Bool
@@ -138,6 +139,7 @@ struct MoveInput(ImplicitlyCopyable):
     var high: Bool
     var middle: Bool
     var low: Bool
+    var boost: Bool
     # Whether the button that eats herbs to heal is held.
     var heal: Bool
 
@@ -163,6 +165,7 @@ struct MoveInput(ImplicitlyCopyable):
         high: Bool = False,
         middle: Bool = False,
         low: Bool = False,
+        boost: Bool = False,
         heal: Bool = False,
     ):
         """Hold one frame of input.
@@ -188,6 +191,7 @@ struct MoveInput(ImplicitlyCopyable):
             high: Whether the high stance's buttons are held.
             middle: Whether the middle stance's buttons are held.
             low: Whether the low stance's buttons are held.
+            boost: Whether the boost attack's buttons are held.
             heal: Whether the button that eats herbs to heal is held.
         """
         self.forward = forward
@@ -209,6 +213,7 @@ struct MoveInput(ImplicitlyCopyable):
         self.high = high
         self.middle = middle
         self.low = low
+        self.boost = boost
         self.heal = heal
 
 
@@ -649,8 +654,18 @@ struct Character(Copyable, Movable):
             if not self._walkable(goal.x, goal.z, start.y, terrain):
                 goal = Vector3(start.x, 0, start.z)
         if h > 0:
-            self.velocity.x = (goal.x - start.x) / h
-            self.velocity.z = (goal.z - start.z) / h
+            var vx = (goal.x - start.x) / h
+            var vz = (goal.z - start.z) / h
+            # A push out of an obstacle that it overlaps adds no speed.
+            var was = self.velocity.x * self.velocity.x
+            was += self.velocity.z * self.velocity.z
+            var now = vx * vx + vz * vz
+            if now > was:
+                var keep = sqrt(was / now)
+                vx *= keep
+                vz *= keep
+            self.velocity.x = vx
+            self.velocity.z = vz
         var floor = terrain.height_at(goal.x, goal.z, start.y)
         var y = start.y
         if self.grounded:

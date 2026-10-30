@@ -24,6 +24,7 @@ from tests._village_arena import (
     popup_texts,
 )
 from extensions.village.battle import (
+    CHEST,
     FANG_RANGE,
     FINISH_STOP,
     HIT_STOP,
@@ -35,6 +36,7 @@ from extensions.village.battle import (
     SLOW_SECONDS,
     Battle,
     BattleParameters,
+    Bolt,
     pressed,
     push_of,
     strong_blow,
@@ -50,6 +52,7 @@ from extensions.village.character import (
 from extensions.village.combat import (
     BLOCKED,
     BURST,
+    CAST,
     FALL,
     FINISHED,
     CRITICAL,
@@ -199,6 +202,14 @@ def test_a_fight_refuses_what_cannot_be_held() raises:
     p = BattleParameters()
     p.dens[0].fighter.health = 0
     with assert_raises(contains="health"):
+        p.check()
+    p = BattleParameters()
+    p.allies[0].fighter.health = 0
+    with assert_raises(contains="health"):
+        p.check()
+    p = BattleParameters()
+    p.allies.append(p.allies[0].copy())
+    with assert_raises(contains="one companion"):
         p.check()
     for count in [0, 9]:
         p = BattleParameters()
@@ -1005,6 +1016,18 @@ def test_a_demon_fang_sends_a_wave_along_the_ground() raises:
     arena.run(1)
     assert_equal(len(arena.battle.waves), 0)
     assert_true(FANG_RANGE > 4)
+    # A bolt strikes the dummy it flies at, with no companion to fill.
+    var at = arena.battle.target_at(1) + Vector3(0, CHEST, 0)
+    var bolt = Blow(
+        28,
+        10,
+        Velocity(1.5, METER_PER_SECOND),
+        Velocity(0.0, METER_PER_SECOND),
+    )
+    arena.battle.bolts.append(Bolt(at, at, 1, bolt, False, 0))
+    arena.tick(no_input())
+    assert_equal(len(arena.battle.bolts), 0)
+    assert_true(holds_text(popup_texts(arena.battle), "28"))
 
 
 def test_a_demon_fang_with_no_one_before_it_fades_out() raises:
@@ -1064,6 +1087,78 @@ def test_over_limit_spends_itself_on_a_mystic_arte() raises:
     arena.battle.fighter.clock = 0
     arena.press(both)
     assert_false(holds_text(arena.battle.notes, "MYSTIC ARTE!"))
+
+
+def test_a_companion_casts_heals_and_makes_a_boost_attack() raises:
+    var arena = Arena(arena_parameters(0, 1, ally=True))
+    assert_equal(len(arena.battle.allies), 1)
+    assert_equal(len(arena.battle.movers()), 2)
+    # Out of a fight, she stays near the player; with nobody to cast at, a
+    # call for the boost attack does nothing.
+    var boost = no_input()
+    boost.boost = True
+    arena.press(boost)
+    arena.run(1)
+    assert_false(holds_text(arena.battle.notes, "BOOST ATTACK!"))
+    # Locked on the dummy, she casts bolts that strike it.
+    var lock = no_input()
+    lock.lock = True
+    arena.press(lock)
+    assert_equal(arena.battle.lock, 0)
+    assert_equal(arena.battle.ally_target(arena.player.position), 0)
+    arena.run(1)
+    assert_true(holds_text(popup_texts(arena.battle), "28"))
+    arena.run(2)
+    assert_true(arena.battle.allies[0].mind.boost > 0)
+    # Before her gauge is full, the boost button does nothing.
+    arena.press(boost)
+    assert_false(holds_text(arena.battle.notes, "BOOST ATTACK!"))
+    # She heals a wounded player.
+    arena.battle.fighter.health = 100
+    arena.run(1)
+    assert_almost_equal(arena.battle.fighter.health, 175, atol=1e-3)
+    assert_true(holds_text(arena.battle.notes, "YOUR COMPANION HEALS 75"))
+    # With a full gauge, the boost button sends her boost attack.
+    arena.battle.allies[0].mind.charge(1000)
+    arena.press(boost)
+    assert_true(holds_text(arena.battle.notes, "BOOST ATTACK!"))
+    assert_true(arena.battle.allies[0].fighter.move == CAST)
+    # Let go of the lock in her cast: she casts at nobody.
+    arena.battle.lock = -1
+    arena.run(1)
+    assert_true(holds_text(popup_texts(arena.battle), "70"))
+    assert_equal(arena.battle.ally_target(arena.player.position), -1)
+
+
+def test_a_bolt_fades_and_a_fallen_foe_takes_nothing() raises:
+    var arena = Arena(arena_parameters(2, 0, 4, ally=True))
+    ref b = arena.battle
+    # Bandits at their posts, or going back, draw no casts; a fighting
+    # one does, unless it is down.
+    assert_equal(b.ally_target(arena.player.position), -1)
+    b.foes[0].brain.state = RETURNING
+    b.foes[1].brain.state = CLOSING
+    assert_equal(b.ally_target(arena.player.position), 1)
+    b.foes[0].brain.state = CLOSING
+    assert_equal(b.ally_target(arena.player.position), 0)
+    b.foes[0].down = 0
+    assert_equal(b.ally_target(arena.player.position), 1)
+    # A lock on a fallen foe draws no cast.
+    b.lock = 0
+    assert_equal(b.ally_target(arena.player.position), 1)
+    b.lock = -1
+    # A bolt at a fallen foe fades, and so does an old one; one that
+    # strikes a foe as it falls does nothing, and fills no gauge.
+    var faint = b.allies[0].fighter.blow()
+    var at = b.target_at(1) + Vector3(0, CHEST, 0)
+    b.bolts.append(Bolt(at, at, 0, faint, False, 0))
+    b.bolts.append(Bolt(at, at, 1, faint, False, 5))
+    b.foes[1].fighter.move = FALL
+    b.bolts.append(Bolt(at, at, 1, faint, False, 0))
+    arena.tick(no_input())
+    assert_equal(len(arena.battle.bolts), 0)
+    assert_almost_equal(arena.battle.allies[0].mind.boost, 0, atol=1e-6)
+    assert_almost_equal(arena.battle.foes[1].fighter.health, 300, atol=1e-6)
 
 
 def main() raises:

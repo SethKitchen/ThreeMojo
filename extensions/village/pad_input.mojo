@@ -26,6 +26,7 @@ a PlayStation controller play alike:
 | Lock on | The right stick | `T` |
 | High, middle and low stance | Hold the left shoulder, and the north, the west or the south button | `6`, `7` and `8` |
 | Eat herbs to heal | The back button | `H` |
+| The companion's boost attack | Hold the left trigger, and the left shoulder | `Q` |
 
 While the left shoulder guards, the north, the west and the south buttons
 choose a stance, and do not attack, use or jump. While the left trigger
@@ -107,6 +108,8 @@ comptime KEY_H = Key(104)
 """The `H` key: eat herbs to heal."""
 comptime KEY_M = Key(109)
 """The `M` key: the mystic arte, Over Limit."""
+comptime KEY_Q = Key(113)
+"""The `Q` key: the companion's boost attack."""
 
 
 def stick(
@@ -169,7 +172,8 @@ def fight_input(
         then choose a stance. The left trigger turns the right shoulder,
         the north button and the west button into the artes, and the
         right shoulder and the north button together into the mystic
-        arte.
+        arte. The left trigger and the left shoulder together call for
+        the companion's boost attack.
     """
     var stance = left_shoulder and not left_trigger
     input.jump = south and not left_shoulder
@@ -180,6 +184,7 @@ def fight_input(
     input.tempest = north and left_trigger
     input.fang = west and left_trigger
     input.mystic = right_shoulder and north and left_trigger
+    input.boost = left_shoulder and left_trigger
     input.dodge = east
     input.guard = left_shoulder
     input.lock = right_stick
@@ -294,6 +299,7 @@ def keyboard_input(keys: HeldKeys, shift: Bool) -> MoveInput:
         high=keys.is_held(KEY_SIX),
         middle=keys.is_held(Key(KEY_SIX.value + 1)),
         low=keys.is_held(Key(KEY_SIX.value + 2)),
+        boost=keys.is_held(KEY_Q),
         heal=keys.is_held(KEY_H),
     )
 
@@ -329,5 +335,6 @@ def combined(first: MoveInput, second: MoveInput) -> MoveInput:
         high=first.high or second.high,
         middle=first.middle or second.middle,
         low=first.low or second.low,
+        boost=first.boost or second.boost,
         heal=first.heal or second.heal,
     )

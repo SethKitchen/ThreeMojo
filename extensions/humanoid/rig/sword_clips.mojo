@@ -29,6 +29,7 @@ side and the other side:
 | `tempest_clip` | 1.06 | The sword arm out, and a whole turn of the body |
 | `fang_clip` | 0.65 | A crouch with the sword low behind, and a cut along the ground and up |
 | `mystic_clip` | 2.1 | The sword raised to the sky, two whole turns of the body with the sword arm out, and a cut down |
+| `cast_clip` | 0.8 | The sword raised, and pointed at the foe with the free hand beside it |
 | `burst_clip` | 1.44 | A long coil with the sword drawn back at the hip, and a lunge that thrusts it straight ahead |
 | `dodge_clip` | 0.48 | A low, quick crouch with the sword held in |
 | `guard_clip` | 1.0, loops | The blade upright before the face, the knees bent |
@@ -662,6 +663,39 @@ def mystic_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
         pose.turn(HIPS, hips.x, hips.y + mystic_twist(t), hips.z)
         poses.append(pose^)
     return _clip("mystic", bones, rig, poses, seconds)
+
+
+def cast_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
+    """Return a companion's cast: the sword raised, and pointed at the foe
+    with the free hand beside it, 0.8 seconds.
+
+    Args:
+        bones: One node per joint, in the order of the joints.
+        rig: The rig the bones were placed from.
+
+    Returns:
+        The clip, named `"cast"`.
+
+    Raises:
+        Error: If there is not one bone per joint.
+    """
+    var scale = _scale(rig)
+    var raised = Pose()
+    _legs(raised, 10, 10, 0.3, scale)
+    _body(raised, -5, Vector3(-4, 0, 0), Vector3(-4, 0, 0))
+    raised.turn(HEAD, -10)
+    _arm(raised, Grip(-144, 1, 2, -9, 80, -4))
+    _free_hand(raised, -40, -10, -60)
+    var point = Pose()
+    _legs(point, 25, 15, 0.4, scale)
+    _body(point, -20, Vector3(8, -5, 0), Vector3(4, -10, 0))
+    point.turn(HEAD, 0, 20)
+    _arm(point, Grip(-94, -2, 48, -3, 77, 3))
+    _free_hand(point, -80, -20, -10)
+    var hold = point.copy()
+    var keys: List[Pose] = [raised^, point^, hold^]
+    var at: List[Float32] = [0.3, 0.52, 0.66]
+    return _cut("cast", bones, rig, keys^, at^, 0.8)
 
 
 def burst_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:

@@ -3,8 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Swordplay in the village: the player against bandits, wolves and straw
-dummies, as in Tales of Arise and Nioh.
+"""Swordplay in the village: the player and a companion against bandits,
+wolves and straw dummies, as in Tales of Arise and Nioh.
 
 `Battle.tick` runs the fight for one frame, in place of the player's own
 step and pose:
@@ -28,7 +28,12 @@ step and pose:
    the nearest within `AIM_RANGE` before them, else the stick. A dodge
    goes the way of the stick, or back. The push of a blow carries the
    player too, and fades at `SHOVE_FADE`.
-3. **The foes think and move.** See `extensions.village.foes`. One foe
+3. **The foes think and move**, and so does the companion: see
+   `extensions.village.foes` and `extensions.village.companion`. The
+   companion casts at the locked foe, else at the nearest foe that fights
+   within `ALLY_SEEK` of the player. Her bolts fly at `BOLT_SPEED`, and
+   follow their foe. The boost button calls for her boost attack when its
+   gauge is full. One foe
    at a time holds the attack token. A bandit plays its sword's clips; a
    wolf shows the pose of its walk, and lies on its side when it falls.
    A perfect dodge slows the foes to `SLOW_SHARE` of the time for
@@ -77,6 +82,7 @@ from extensions.village.character import (
 )
 from extensions.village.combat import (
     BURST_COUNTER,
+    CAST,
     DEFEATED,
     DEMON_FANG,
     REACH_HEIGHT,
@@ -112,6 +118,14 @@ from extensions.village.combat import (
 )
 from extensions.animals.options import CROWD
 from extensions.animals.registry import WOLF
+from extensions.village.companion import (
+    BOOST_PER_HIT,
+    AllySight,
+    Companion,
+    MEND_SHARE,
+    boost_blow,
+    default_allies,
+)
 from extensions.village.foes import (
     POSTED,
     RETURNING,
@@ -249,7 +263,18 @@ comptime FLICK = Float32(0.7)
 comptime HEAL_SHARE = Float32(0.3)
 """The share of the player's health that a herb heals."""
 comptime HEAL_TEXT = Rgb(120, 230, 120)
-"""The color of what a herb heals."""
+"""The color of what a herb or the companion heals."""
+comptime BOLT_SPEED = Float32(16)
+"""How fast a companion's bolt flies, in meters a second."""
+comptime BOLT_REACH = Float32(0.5)
+"""How near its foe's chest a bolt strikes, in meters."""
+comptime BOLT_LIFE = Float32(1.5)
+"""How long a bolt flies before it fades, in seconds."""
+comptime BOLT_START = Float32(0.6)
+"""How far before the companion a bolt starts, in meters."""
+comptime ALLY_SEEK = Float32(15)
+"""How far from the player a foe that fights draws the companion's
+casts, in meters."""
 comptime HURT_TEXT = Rgb(255, 90, 70)
 """The color of the player's own damage."""
 comptime CALM_TEXT = Rgb(150, 200, 255)
@@ -279,6 +304,7 @@ def pressed(now: MoveInput, before: MoveInput) -> MoveInput:
         rising=now.rising and not before.rising,
         tempest=now.tempest and not before.tempest,
         fang=now.fang and not before.fang,
+        boost=now.boost and not before.boost,
         mystic=now.mystic and not before.mystic,
         dodge=now.dodge and not before.dodge,
         guard=now.guard and not before.guard,
@@ -402,6 +428,9 @@ struct BattleParameters(Copyable, Movable):
     var bandits: List[Bandit]
     var dens: List[Den]
     var posts: List[Post]
+    # The companion, if any: her `x` and `z` are her place from the
+    # player's start.
+    var allies: List[Bandit]
     # How long a fallen player lies before they come to; how long a fallen
     # foe lies before it is gone, and comes back to its post.
     var revive: Duration
@@ -414,7 +443,8 @@ struct BattleParameters(Copyable, Movable):
 
     def __init__(out self) raises:
         """Hold the default village's fight: the player's strength, the
-        bandits' camp and its captain, the wolves' den, and the dummies,
+        companion, the bandits' camp and its captain, the wolves' den, and
+        the dummies,
         a revive of 4 seconds, foes that lie for 10 seconds and come back
         after a minute, and wolves of six poses at their quality's cell.
 
@@ -426,6 +456,7 @@ struct BattleParameters(Copyable, Movable):
         self.bandits = default_bandits()
         self.dens = default_dens()
         self.posts = default_posts()
+        self.allies = default_allies()
         self.revive = Duration(4.0, SECOND)
         self.linger = Duration(10.0, SECOND)
         self.respawn = Duration(60.0, SECOND)
@@ -436,10 +467,10 @@ struct BattleParameters(Copyable, Movable):
         """Refuse a fight that cannot be held.
 
         Raises:
-            Error: If the player's, a bandit's, a den's or the dummies'
-                parameters do not check; a den holds not from 1 to 8
-                wolves; there are more than 16 bandits, 16 dummies or 4
-                dens; a time is negative or not below 10,000 seconds; a
+            Error: If the player's, the companion's, a bandit's, a den's or
+                the dummies' parameters do not check; a den holds not from
+                1 to 8 wolves; there are more than 16 bandits, 16 dummies,
+                4 dens or 1 companion; a time is negative or not below 10,000 seconds; a
                 wolf's walk has not from 1 to 32 poses; or its coarseness
                 is not from 1 to 8.
         """
@@ -447,6 +478,10 @@ struct BattleParameters(Copyable, Movable):
         self.dummy.check()
         for bandit in self.bandits:
             bandit.fighter.check()
+        for ally in self.allies:
+            ally.fighter.check()
+        if len(self.allies) > 1:
+            raise Error("A fight holds at most one companion")
         for den in self.dens:
             den.fighter.check()
             if not (den.count >= 1 and den.count <= 8):
@@ -503,6 +538,38 @@ struct Person(Movable):
 
 
 @fieldwise_init
+struct Ally(Movable):
+    """The companion in the scene: her character, fighter and mind, and
+    what she casts at."""
+
+    var character: Character
+    var fighter: Fighter
+    var mind: Companion
+    # Her looks' index in the battle's `people`.
+    var look: Int
+    # The target her cast aims at, or -1; and whether the cast is a boost
+    # attack.
+    var aim: Int
+    var boosting: Bool
+
+
+@fieldwise_init
+struct Bolt(Copyable, Movable):
+    """A companion's bolt of light, which flies at its target."""
+
+    # Where it is, and where it was cast from.
+    var at: Vector3
+    var origin: Vector3
+    # The target it flies at, and the blow it carries.
+    var target: Int
+    var blow: Blow
+    # Whether it is a boost attack's, and how long it has flown, in
+    # seconds.
+    var boosted: Bool
+    var age: Float32
+
+
+@fieldwise_init
 struct Pelt(ImplicitlyCopyable):
     """A wolf's looks: its node, its mesh in `scene.meshes`, and its
     flipbook's index in the battle's `books`."""
@@ -537,6 +604,11 @@ struct Battle(Movable):
     var popups: List[Popup]
     # The demon fang's waves that run.
     var waves: List[Wave]
+    # The companion, if any, and her bolts that fly; and whether the boost
+    # button was pressed this frame.
+    var allies: List[Ally]
+    var bolts: List[Bolt]
+    var called: Bool
     # The target locked on: a foe's index, or a dummy's after the foes;
     # -1 for none.
     var lock: Int
@@ -663,6 +735,32 @@ struct Battle(Movable):
                     len(self.people) - 1,
                 )
             )
+        self.allies = List[Ally]()
+        for ally in parameters.allies:
+            var person = Body(
+                scene, assets, ally.spec, ally.outfit, triangles, detail
+            )
+            var arms = Arms(scene, assets, person, swords, BRIGHT_STEEL)
+            var size = person.person.rig.stature / Float32(1.8288)
+            var trail = Trail(scene, person.carrier, size, PLAYER_TRAIL)
+            var character = Character(
+                CharacterParameters(),
+                start.x + ally.x,
+                start.z + ally.z,
+                ally.heading,
+                terrain,
+            )
+            self.people.append(Person(person^, arms^, trail^))
+            self.allies.append(
+                Ally(
+                    character^,
+                    Fighter(ally.fighter),
+                    Companion(),
+                    len(self.people) - 1,
+                    -1,
+                    False,
+                )
+            )
         var paints = animal_paints(assets)
         for den in parameters.dens:
             var look = animal_look(
@@ -728,6 +826,8 @@ struct Battle(Movable):
         self.sparks = Sparks(scene, assets, glow)
         self.popups = List[Popup]()
         self.waves = List[Wave]()
+        self.bolts = List[Bolt]()
+        self.called = False
         self.lock = -1
         self.token = -1
         self.token_rest = 0
@@ -767,16 +867,20 @@ struct Battle(Movable):
         return self.people[foe.look].body.carrier
 
     def movers(self) -> List[NodeId]:
-        """Return the nodes that move: each foe's and each dummy's.
+        """Return the nodes that move: each foe's, each dummy's and the
+        companion's.
 
         Returns:
-            Each foe's node, then each dummy's pivot.
+            Each foe's node, then each dummy's pivot, then the companion's
+            body's carrier.
         """
         var out = List[NodeId]()
         for index in range(len(self.foes)):
             out.append(self.node_of(index))
         for index in range(len(self.dummies)):
             out.append(self.dummies[index].dummy.pivot)
+        for index in range(len(self.allies)):
+            out.append(self.people[self.allies[index].look].body.carrier)
         return out^
 
     def targets(self) -> Int:
@@ -815,11 +919,12 @@ struct Battle(Movable):
         return True
 
     def obstacles(self) -> List[Obstacle]:
-        """Return the circle each standing bandit and each dummy takes up.
+        """Return the circle each standing bandit, each dummy and the
+        companion take up.
 
         Returns:
             One obstacle a bandit, of no size for a fallen one, then one a
-            dummy.
+            dummy, then the companion's.
         """
         var out = List[Obstacle]()
         for index in range(len(self.foes)):
@@ -830,6 +935,10 @@ struct Battle(Movable):
         for index in range(len(self.dummies)):
             ref post = self.dummies[index].dummy.post
             out.append(Obstacle(post.x, post.z, DUMMY_RADIUS))
+        for index in range(len(self.allies)):
+            ref ally = self.allies[index].character
+            ref at = ally.position
+            out.append(Obstacle(at.x, at.z, ally.parameters.radius.to(METER)))
         return out^
 
     def pick_lock(self, at: Vector3, yaw: Angle) -> Int:
@@ -971,6 +1080,7 @@ struct Battle(Movable):
             if back > 0:
                 self._popup(player.position, "KI PULSE", CALM_TEXT)
         self.fighter.hold_guard(input.guard)
+        self.called = presses.boost
         var fought = input.guard or presses.lock
         if presses.mystic and self.fighter.over > 0:
             if self.fighter.request(MYSTIC_ARTE):
@@ -1207,7 +1317,20 @@ struct Battle(Movable):
         mut self, mut scene: Scene, index: Int, hit: Blow, source: Vector3
     ) raises:
         """Give one of the player's blows to a target: from a swing, or
-        from a demon fang's wave at `source`."""
+        from a demon fang's wave at `source`. The player learns what it
+        did, and trains."""
+        var struck = self._strike(scene, index, hit, source)
+        if index >= len(self.foes):
+            self.trained += PRACTICE_EXPERIENCE
+        elif landed_blow(struck.outcome):
+            self.trained += BLOW_EXPERIENCE
+        self.fighter.landed(struck)
+
+    def _strike(
+        mut self, mut scene: Scene, index: Int, hit: Blow, source: Vector3
+    ) raises -> Struck:
+        """Give a blow from `source` to a target, show it, and weigh it; a
+        felled foe gives its loot. Return what the blow did."""
         var there = self.target_at(index)
         var way = _way(source, there)
         var struck: Struck
@@ -1230,8 +1353,6 @@ struct Battle(Movable):
             if landed_blow(struck.outcome) and foe.brain.hurt():
                 self.token = -1
                 self.token_rest = TOKEN_REST
-            if landed_blow(struck.outcome):
-                self.trained += BLOW_EXPERIENCE
             var fell = struck.outcome == DEFEATED
             if fell or struck.outcome == FINISHED:
                 self.trained += DEFEAT_EXPERIENCE
@@ -1247,12 +1368,11 @@ struct Battle(Movable):
             struck = practice.fighter.receive(hit, False)
             practice.dummy.knock(way, hit.knockback.to(METER_PER_SECOND))
             practice.fighter.health = practice.fighter.parameters.health
-            self.trained += PRACTICE_EXPERIENCE
-        self.fighter.landed(struck)
         if raged:
             self._popup(there + Vector3(0, 0.7, 0), "RAGE", HURT_TEXT)
         self._show(scene, struck, there, False)
         self._weigh(struck, hit)
+        return struck
 
     def _send_waves(
         mut self, mut scene: Scene, player: Character, h: Float32
@@ -1295,6 +1415,152 @@ struct Battle(Movable):
             if wave.gone < FANG_RANGE:
                 kept.append(wave^)
         self.waves = kept^
+
+    def _send_bolts(mut self, mut scene: Scene, h: Float32) raises:
+        """Send the companion's bolt as her cast points, and fly each bolt
+        on by `h` seconds toward its target's chest: it strikes there, or
+        fades when its target falls or after `BOLT_LIFE`."""
+        for k in range(len(self.allies)):
+            ref ally = self.allies[k]
+            if not (ally.fighter.move == CAST and ally.fighter.launched()):
+                continue
+            var at = ally.character.position
+            var ahead = _ahead(ally.character.heading)
+            var blow = ally.fighter.blow()
+            if ally.boosting:
+                blow = boost_blow(ally.fighter.parameters.might)
+            self.bolts.append(
+                Bolt(
+                    at + ahead * BOLT_START + Vector3(0, CHEST, 0),
+                    at,
+                    ally.aim,
+                    blow,
+                    ally.boosting,
+                    0,
+                )
+            )
+            ally.boosting = False
+        var kept = List[Bolt]()
+        for b in range(len(self.bolts)):
+            var bolt = self.bolts[b].copy()
+            bolt.age += h
+            if bolt.age > BOLT_LIFE or not self.standing(bolt.target):
+                continue
+            var off = self.target_at(bolt.target) + Vector3(0, CHEST, 0)
+            off = off - bolt.at
+            var gap = off.length()
+            var step = BOLT_SPEED * h
+            if gap > max(step, BOLT_REACH):
+                bolt.at = bolt.at + off * (step / gap)
+                kept.append(bolt^)
+                continue
+            var struck = self._strike(
+                scene, bolt.target, bolt.blow, bolt.origin
+            )
+            if landed_blow(struck.outcome):
+                for k in range(len(self.allies)):
+                    self.allies[k].mind.charge(BOOST_PER_HIT)
+        self.bolts = kept^
+
+    def ally_target(self, at: Vector3) -> Int:
+        """Return the target the companion casts at.
+
+        Args:
+            at: Where the player stands.
+
+        Returns:
+            The locked target while it stands; else the nearest standing
+            foe within `ALLY_SEEK` of the player that fights, neither at
+            its post nor going back to it; else -1.
+        """
+        if self.lock >= 0 and self.standing(self.lock):
+            return self.lock
+        var best = -1
+        var nearest = ALLY_SEEK
+        for index in range(len(self.foes)):
+            ref foe = self.foes[index]
+            var state = foe.brain.state
+            if foe.down >= 0 or state == POSTED or state == RETURNING:
+                continue
+            var gap = _flat(foe.character.position, at)
+            if gap < nearest:
+                nearest = gap
+                best = index
+        return best
+
+    def _move_ally(
+        mut self,
+        player: Character,
+        terrain: Terrain,
+        blocking: List[Obstacle],
+        delta: Duration,
+    ) raises:
+        """Let the companion think: move her, and let her cast, heal and
+        make the boost attack the player calls for."""
+        var seconds = delta.to(SECOND)
+        var around = blocking.copy()
+        var first = len(around) + len(self.foes) + len(self.dummies)
+        around.extend(self.obstacles())
+        var aim = self.ally_target(player.position)
+        var target: Optional[Vector3] = None
+        if aim >= 0:
+            target = self.target_at(aim)
+        ref p = self.fighter.parameters
+        var share = self.fighter.health / p.health
+        var mend = Float32(0)
+        var boosted = False
+        for k in range(len(self.allies)):
+            ref ally = self.allies[k]
+            var sight = AllySight(
+                ally.character.position,
+                player.position,
+                target,
+                share,
+                ally.fighter.free(),
+                self.drawn,
+            )
+            var intent = ally.mind.think(sight, delta)
+            if self.called and aim >= 0 and ally.mind.spend():
+                boosted = True
+                ally.boosting = True
+                ally.aim = aim
+                _ = ally.fighter.request(CAST)
+            elif intent.cast:
+                ally.aim = aim
+                _ = ally.fighter.request(CAST)
+            if intent.heal:
+                mend = MEND_SHARE * p.health
+            if not ally.fighter.free():
+                if target:
+                    ally.character.heading = yaw_of(
+                        target.value() - ally.character.position
+                    )
+                continue
+            var walk = MoveInput(
+                -intent.way.z, intent.way.x, 0, 0, intent.run, False
+            )
+            ally.character.step(
+                walk,
+                Angle(0.0, RADIAN),
+                delta,
+                terrain,
+                around,
+                first + k,
+            )
+            if intent.face:
+                ally.character.heading = turn_toward(
+                    ally.character.heading,
+                    yaw_of(intent.face.value() - ally.character.position),
+                    Angle(FACE_TURN * seconds, RADIAN),
+                )
+        if boosted:
+            self.notes.append("BOOST ATTACK!")
+        if mend > 0:
+            var gain = min(p.health - self.fighter.health, mend)
+            self.fighter.health += gain
+            var amount = String(Int(gain + 0.5))
+            self._popup(player.position, "+" + amount, HEAL_TEXT)
+            self.notes.append("YOUR COMPANION HEALS " + amount)
 
     def _foe_strikes(
         mut self, mut scene: Scene, index: Int, mut player: Character
@@ -1342,8 +1608,11 @@ struct Battle(Movable):
                 self.foes[index].fighter.update(Duration(h * pace, SECOND))
             for index in range(len(self.dummies)):
                 self.dummies[index].fighter.update(Duration(h, SECOND))
+            for index in range(len(self.allies)):
+                self.allies[index].fighter.update(Duration(h, SECOND))
             self._player_strikes(scene, player)
             self._send_waves(scene, player, h)
+            self._send_bolts(scene, h)
             for index in range(len(self.foes)):
                 self._foe_strikes(scene, index, player)
 
@@ -1513,6 +1782,7 @@ struct Battle(Movable):
         var pace = SLOW_SHARE if self.slow > 0 else Float32(1)
         var slowed = Duration(seconds * pace, SECOND)
         self._move_foes(player, terrain, blocking, slowed)
+        self._move_ally(player, terrain, blocking, still)
         self._exchange(scene, player, still)
         var over = self.fighter.over > 0
         if over and not self.limited:
@@ -1532,3 +1802,14 @@ struct Battle(Movable):
                 scene, person.body, foe.character, foe.fighter, True, slowed
             )
             person.trail.show(scene, foe.fighter)
+        for index in range(len(self.allies)):
+            ref ally = self.allies[index]
+            ref person = self.people[ally.look]
+            person.arms.pose(
+                scene,
+                person.body,
+                ally.character,
+                ally.fighter,
+                self.drawn,
+                still,
+            )

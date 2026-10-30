@@ -140,6 +140,7 @@ def _game_parameters() raises -> PlayParameters:
     p.battle.bandits = List[Bandit]()
     p.battle.dens = List[Den]()
     p.battle.posts = List[Post]()
+    p.battle.allies = List[Bandit]()
     return p^
 
 

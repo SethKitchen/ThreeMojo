@@ -8,15 +8,18 @@
 
 `draw_battle` draws seven things:
 
-1. **The trails** of the swings, and the demon fang's waves, as light
-   added to the frame: see `extensions.village.slashes`. A wave dims as
-   it runs.
+1. **The trails** of the swings, the demon fang's waves and the
+   companion's bolts, as light added to the frame: see
+   `extensions.village.slashes`. A wave dims as it runs. A bolt is a blue
+   star, or a gold one for a boost attack.
 2. **The player's gauges**, in the bottom right: the stance, the health,
    the ki, the limit gauge, and the arte gauge as a row of points. The
    health turns red below a quarter. Over Limit, the limit gauge turns
    gold, says `OVER LIMIT`, and empties as it ends. Through a mystic
    arte's start-up, `MYSTIC ARTE` stands large in the middle of the
-   frame, and a gold star grows at the player's sword hand.
+   frame, and a gold star grows at the player's sword hand. The
+   companion's boost gauge is in the bottom left, and says
+   `BOOST READY` when it is full.
 3. **The combo**, such as `12 HITS`, on the right, while two blows or more
    have landed and the combo lasts. It fades as the combo ends.
 4. **Each bandit's health and ki**, over its head, while it fights or is
@@ -57,6 +60,7 @@ from extensions.village.combat import (
     Fighter,
     move_data,
 )
+from extensions.village.companion import BOOST_FULL
 from extensions.village.foes import POSTED
 from extensions.village.slashes import (
     BURST_TRAIL,
@@ -93,6 +97,12 @@ comptime DANGER = Rgb(255, 40, 30)
 """The color of a heavy attack's warning."""
 comptime NEAREST = Float32(0.2)
 """How far before the camera a point must be to be drawn, in meters."""
+comptime BOOST_COLOR = Rgb(110, 220, 200)
+"""The color of the companion's boost gauge while it fills."""
+comptime BOLT_COLOR = Vector3(140, 210, 255)
+"""The light of a companion's bolt."""
+comptime BOLT_GLOW = Float32(0.3)
+"""How far a bolt's star reaches, in meters."""
 comptime GLOW_REACH = Float32(0.35)
 """How far a burst attack's red glow reaches from the chest as it
 begins, in meters: half a man's shoulders."""
@@ -245,6 +255,29 @@ def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int):
     )
 
 
+def _boost(mut frame: Framebuffer, battle: Battle, scale: Int):
+    """Draw the companion's boost gauge, in the bottom left."""
+    for k in range(len(battle.allies)):
+        ref mind = battle.allies[k].mind
+        var margin = 6 * scale
+        var y = frame.height - margin - 3 * scale
+        var color = BOOST_COLOR
+        var label = String("BOOST")
+        if mind.ready():
+            color = GOLD_TEXT
+            label = "BOOST READY"
+        draw_bar(
+            frame,
+            margin,
+            y,
+            48 * scale,
+            3 * scale,
+            mind.boost / BOOST_FULL,
+            color,
+        )
+        draw_text(frame, margin, y - 9 * scale, label, scale, color, 1)
+
+
 def _glow(
     mut frame: Framebuffer,
     camera: PerspectiveCamera,
@@ -337,7 +370,17 @@ def draw_battle(
     for wave in battle.waves:
         var glow = 1 - 0.6 * wave.gone / FANG_RANGE
         draw_wave(frame, camera, look, wave.at, wave.way, glow)
+    for bolt in battle.bolts:
+        var at = on_screen(camera, look, bolt.at, w, h)
+        if not at:
+            continue
+        var center = at.value()
+        var top = camera.project(bolt.at + Vector3(0, BOLT_GLOW, 0), w, h)
+        var reach = max(Float32(3), abs(top.y - center.y))
+        var color = OVER_TRAIL if bolt.boosted else BOLT_COLOR
+        glow_star(frame, Vector3(center.x, center.y, 1), reach, color)
     _gauges(frame, battle, scale)
+    _boost(frame, battle, scale)
     ref f = battle.fighter
     if f.move == MYSTIC_ARTE:
         _mystic(frame, battle, scene, camera, look, scale)

@@ -88,6 +88,7 @@ part strikes. The times are for the middle stance:
 | `MYSTIC_ARTE` | 0.50 s | 1.00 s | 0.60 s | 4.5 m | 360 degrees | 70, six times | 20 | | Over Limit |
 | `BITE` | 0.35 s | 0.20 s | 0.45 s | 1.4 m | 70 degrees | 40 | 12 | | |
 | `BURST` | 0.70 s | 0.14 s | 0.60 s | 2.8 m | 70 degrees | 120 | 45 | 20 | |
+| `CAST` | 0.35 s | 0.10 s | 0.35 s | A bolt | | 28 | 10 | | |
 | `DODGE` | | 0.32 s | 0.16 s | | | | | 14 | |
 """
 
@@ -110,7 +111,7 @@ from units.si import (
     Velocity,
 )
 
-comptime MOVES = 15
+comptime MOVES = 16
 """How many moves there are, `FREE` among them."""
 comptime DODGE_SAFE_FROM = Float32(0.02)
 """How far into a dodge no blow can hit it any more, in seconds."""
@@ -215,14 +216,17 @@ comptime BITE = CombatMove(9)
 comptime BURST = CombatMove(10)
 """A foe's burst attack: a long wind-up that glows red, and a lunging
 thrust that no guard stops."""
-comptime DODGE = CombatMove(11)
+comptime CAST = CombatMove(11)
+"""A companion's spell: the sword pointed at the foe, which sends a bolt
+of light. The cast strikes nothing itself: the game sends the bolt."""
+comptime DODGE = CombatMove(12)
 """A quick step, which no blow can hit for a moment."""
-comptime FLINCH = CombatMove(12)
+comptime FLINCH = CombatMove(13)
 """A blow landed: the fighter reels for a moment."""
-comptime STAGGER = CombatMove(13)
+comptime STAGGER = CombatMove(14)
 """The fighter's ki ran out: it stands open, and blows on it are
 critical."""
-comptime FALL = CombatMove(14)
+comptime FALL = CombatMove(15)
 """The fighter is defeated: it falls, and it stays down."""
 
 
@@ -305,7 +309,7 @@ def move_name(move: CombatMove) raises -> String:
         Error: If the move is not one.
     """
     if not move.is_valid():
-        raise Error("A combat move must be one of the fifteen")
+        raise Error("A combat move must be one of the sixteen")
     var names: List[String] = [
         "FREE",
         "LIGHT 1",
@@ -318,6 +322,7 @@ def move_name(move: CombatMove) raises -> String:
         "MYSTIC ARTE",
         "BITE",
         "BURST",
+        "CAST",
         "DODGE",
         "FLINCH",
         "STAGGER",
@@ -366,10 +371,10 @@ def is_attack(move: CombatMove) -> Bool:
         move: The move.
 
     Returns:
-        True for the light and the heavy attacks, the artes, the bite and
-        the burst attack.
+        True for the light and the heavy attacks, the artes, the bite, the
+        burst attack and the cast.
     """
-    return move.value >= LIGHT_ONE.value and move.value <= BURST.value
+    return move.value >= LIGHT_ONE.value and move.value <= CAST.value
 
 
 def is_arte(move: CombatMove) -> Bool:
@@ -522,6 +527,8 @@ def move_data(move: CombatMove) raises -> MoveData:
         return _data(0.35, 0.2, 0.45, 1.4, 70, 40, 12, 0, 0, 2.4, 1, 2.5)
     if move == BURST:
         return _data(0.7, 0.14, 0.6, 2.8, 70, 120, 45, 20, 0, 2.2, 1, 6)
+    if move == CAST:
+        return _data(0.35, 0.1, 0.35, damage=28, ki_damage=10, knockback=1.5)
     if move == DODGE:
         return _data(0, 0.32, 0.16, ki_cost=14, lunge=3.2)
     if move == FLINCH:
@@ -532,7 +539,7 @@ def move_data(move: CombatMove) raises -> MoveData:
         return _data(0, 0, 2)
     if move == FREE:
         return _data(0, 0, 0)
-    raise Error("A combat move must be one of the fifteen")
+    raise Error("A combat move must be one of the sixteen")
 
 
 def stance_power(stance: CombatStance) -> Float32:
@@ -1395,7 +1402,8 @@ struct Fighter(Copyable, Movable):
         active part: where a demon fang sends its wave.
 
         Returns:
-            True for an attack whose start-up ended within the update.
+            True for an attack whose start-up ended within the update: a
+            demon fang sends its wave then, and a cast its bolt.
 
         Raises:
             Error: Never: the move is one.
