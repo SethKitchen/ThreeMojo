@@ -25,6 +25,7 @@ from extensions.attire.garment import (
     surcoat,
     vambraces,
 )
+from extensions.attire.kinds import FITTED
 from extensions.attire.outfit import Outfit, dress
 from extensions.attire.preset import (
     OUTFIT_KEY,
@@ -90,6 +91,15 @@ def _swap(text: String, old: String, new: String) raises -> String:
     return text.replace(old, new)
 
 
+def _drop(text: String, key: String) raises -> String:
+    """Return `text` without one `,"key":value` field."""
+    var start = text.find(',"' + key + '":')
+    if start < 0:
+        raise Error("The text has no " + key)
+    var end = text.find(",", start + 1)
+    return String(text[byte=:start]) + String(text[byte=end:])
+
+
 def test_joints_are_found_by_name() raises:
     for joint in named_joints():
         assert_equal(joint_named(joint_label(joint)), joint)
@@ -118,6 +128,8 @@ def test_an_outfit_round_trips_through_text() raises:
         assert_equal(a.cover.starts, b.cover.starts)
         assert_equal(a.cover.ends, b.cover.ends)
         assert_true(abs(a.ease.value - b.ease.value) < 1e-6)
+        assert_equal(a.form, b.form)
+        assert_true(abs(a.flare - b.flare) < 1e-6)
         for c in range(4):
             assert_true(a.dyes[c] == b.dyes[c])
     # Written again, the text is the same.
@@ -178,9 +190,25 @@ def test_malformed_outfits_are_refused() raises:
         _ = outfit_from_json(_swap(text, '"dyes":', '"paints":'))
     with assert_raises(contains="No joint is named"):
         _ = outfit_from_json(_swap(text, '"anchor":null', '"anchor":"tail"'))
+    with assert_raises(contains="No form is named"):
+        _ = outfit_from_json(_swap(text, '"form":"shod"', '"form":"bare"'))
     # A garment that reads but does not check.
     with assert_raises(contains="A drape"):
         _ = outfit_from_json(_swap(text, '"drape":24', '"drape":-5'))
+    with assert_raises(contains="A flare"):
+        _ = outfit_from_json(_swap(text, '"flare":0', '"flare":2'))
+
+
+def test_an_outfit_saved_before_forms_is_fitted() raises:
+    var outfit = Outfit()
+    outfit.add(surcoat())
+    var text = outfit_json(outfit)
+    assert_true(text.find('"form":"skirted"') >= 0)
+    var old = _drop(_drop(text, "form"), "flare")
+    assert_true(old.find("flare") < 0)
+    var again = outfit_from_json(old)
+    assert_equal(again.garments[0].form, FITTED)
+    assert_equal(again.garments[0].flare, 0)
 
 
 def test_a_dressed_bake_remembers_its_outfit_and_its_body() raises:

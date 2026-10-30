@@ -21,7 +21,9 @@ from extensions.attire.kinds import (
     DYE_CHANNEL_COUNT,
     DYE_PATTERN_COUNT,
     FABRIC_KIND_COUNT,
+    FITTED,
     FLEXIBLE,
+    FORM_COUNT,
     HEAD_SLOT,
     LAMED,
     LAYER_COUNT,
@@ -33,6 +35,8 @@ from extensions.attire.kinds import (
     PRIMARY_DYE,
     QUARTERLY,
     RIGID,
+    SHOD,
+    SKIRTED,
     SLOT_COUNT,
     SOLID,
     STRIPES,
@@ -44,6 +48,7 @@ from extensions.attire.kinds import (
     DyeChannel,
     DyePattern,
     FabricKind,
+    Form,
     Layer,
     Slot,
     WearKind,
@@ -51,6 +56,8 @@ from extensions.attire.kinds import (
     articulation_named,
     fabric_label,
     fabric_named,
+    form_label,
+    form_named,
     layer_label,
     layer_named,
     pattern_label,
@@ -59,6 +66,7 @@ from extensions.attire.kinds import (
     require_dye_channel,
     require_dye_pattern,
     require_fabric_kind,
+    require_form,
     require_layer,
     require_slot,
     require_wear_kind,
@@ -152,6 +160,23 @@ def test_wear_kinds_are_named() raises:
     require_wear_kind(DIRT)
     with assert_raises(contains="named channel"):
         require_wear_kind(WearKind(4))
+
+
+def test_forms_are_named() raises:
+    for k in range(FORM_COUNT):
+        var form = Form(k)
+        assert_true(form.is_valid())
+        assert_equal(form_named(form_label(form)), form)
+    assert_equal(form_label(SKIRTED), "skirted")
+    assert_equal(form_label(Form(7)), "form")
+    assert_false(Form(-1).is_valid())
+    assert_false(Form(FORM_COUNT).is_valid())
+    require_form(FITTED)
+    require_form(SHOD)
+    with assert_raises(contains="named one"):
+        require_form(Form(7))
+    with assert_raises(contains="No form"):
+        _ = form_named("baggy")
 
 
 def test_articulations_are_named() raises:

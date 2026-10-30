@@ -20,7 +20,7 @@ This is not a three.js port. The code is in `extensions/attire/`. See [Garments]
 
 `dress(scene, assets, person, outfit)` does five things.
 
-1. It makes each garment's shell from each of the person's skinned meshes: the body and both hands.
+1. It makes each garment's shell from each of the person's skinned meshes: the body and both hands. It hangs a skirted garment's skirt and closes a shod garment's feet in lasts. See [Forms](Garments#forms).
 2. It drops the skin triangles the outfit hides fully.
 3. It binds each garment to its bones, cuts it along its dye pattern and paints it. It gives the garment texture coordinates in meters.
 4. It adds each garment as a skinned mesh on the person's skeleton, with its fabric's look and bump map.
@@ -74,7 +74,7 @@ scene.add_mesh(Mesh(assets.geometries.add(heater_shield(height, blue, white)), p
 
 ## Saved outfits and dressed bakes
 
-A player saves a look and puts it on again, on the same body or another. `outfit_json` writes an outfit as one JSON object. `outfit_from_json` reads it back. Slots, layers, fabrics, articulations and patterns are written by name, anchors by joint name, and dyes as sRGB bytes.
+A player saves a look and puts it on again, on the same body or another. `outfit_json` writes an outfit as one JSON object. `outfit_from_json` reads it back. Slots, layers, fabrics, articulations, patterns and forms are written by name, anchors by joint name, dyes as sRGB bytes, and the flare as a number. A garment saved without a form reads as fitted, with no flare.
 
 `write_dressed_bake` writes a sealed bake of a dressed humanoid. The geometry digest covers every garment, so dress before you bake. The scene extras keep the outfit under `OUTFIT_KEY`, with the fingerprint of the spec it was fitted to. `stored_outfit(extras, spec)` gives the outfit back and refuses it for another body.
 

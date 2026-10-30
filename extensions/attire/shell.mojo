@@ -45,6 +45,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from extensions.attire.cover import HEM_LEVEL
 from extensions.attire.mesh_ops import (
+    COVER,
     cut,
     keep_triangles,
     vertex_neighbors,
@@ -61,8 +62,6 @@ at the hem."""
 comptime DRAPE_FLOOR = Float32(0.05)
 """A vertex is draped only where its garment's cover value is above this.
 The bare skin round a garment holds still and anchors its hems."""
-comptime COVER = "cover"
-"""The name of the attribute that carries each vertex's cover value."""
 comptime COVER_SMOOTHING = 3
 """Smoothing passes of the cover values before a garment is cut. A cover
 value can step from one to zero across one edge where two joints' weights

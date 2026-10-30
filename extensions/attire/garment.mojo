@@ -6,30 +6,34 @@
 """One garment: where it goes, what it is made of, what it covers.
 
 A garment names its slot and its layer, its fabric, its cover, how it
-follows the bones, and its four dyes in a pattern. It holds no mesh.
+follows the bones, its form, and its four dyes in a pattern. It holds no mesh.
 `dress` makes its mesh from the skin of the person who wears it.
 
 The wardrobe below gives a set of medieval garments and armor, from the
 skin out:
 
-| Garment | Slot | Layer | Fabric | Articulation |
-|---|---|---|---|---|
-| `shirt` | torso | under | linen | flexible |
-| `hose` | legs | under | wool | flexible |
-| `tunic` | torso | mid | wool | flexible |
-| `gambeson` | torso | mid | padding | flexible |
-| `hauberk` | torso | outer | mail, brass at the hems | flexible |
-| `coif` | head | outer | mail | flexible |
-| `hood` | head | over | wool | flexible |
-| `boots` | feet | outer | leather | flexible |
-| `gloves` | hands | outer | leather | flexible |
-| `cuirass` | torso | armor | plate | rigid on the chest |
-| `fauld` | waist | armor | plate | four lames from the hips |
-| `pauldrons` | shoulders | armor | plate | three lames from the chest |
-| `vambraces` | arms | armor | plate | rigid on each forearm |
-| `greaves` | legs | armor | plate | rigid on each shin |
-| `bascinet` | head | armor | plate | rigid on the head |
-| `surcoat` | torso | over | linen | flexible, per pale |
+| Garment | Slot | Layer | Fabric | Articulation | Form |
+|---|---|---|---|---|---|
+| `shirt` | torso | under | linen | flexible | fitted |
+| `hose` | legs | under | wool | flexible | fitted |
+| `tunic` | torso | mid | wool | flexible | skirted |
+| `gambeson` | torso | mid | padding | flexible | skirted |
+| `hauberk` | torso | outer | mail, brass at the hems | flexible | skirted |
+| `coif` | head | outer | mail | flexible | fitted |
+| `hood` | head | over | wool | flexible | fitted |
+| `boots` | feet | outer | leather | flexible | shod |
+| `gloves` | hands | outer | leather | flexible | fitted |
+| `cuirass` | torso | armor | plate | rigid on the chest | fitted |
+| `fauld` | waist | armor | plate | four lames from the hips | skirted |
+| `pauldrons` | shoulders | armor | plate | three lames from the chest | fitted |
+| `vambraces` | arms | armor | plate | rigid on each forearm | fitted |
+| `greaves` | legs | armor | plate | rigid on each shin | fitted |
+| `bascinet` | head | armor | plate | rigid on the head | fitted |
+| `surcoat` | torso | over | linen | flexible, per pale | skirted |
+
+A skirted garment hangs below the hips as one skirt round both legs, and
+a shod one closes each foot in a last. See `extensions.attire.skirt` and
+`extensions.attire.last`.
 
 This is not a three.js port. See Extensions.
 
@@ -43,6 +47,7 @@ from extensions.attire.kinds import (
     ARMS_SLOT,
     DYE_CHANNEL_COUNT,
     FEET_SLOT,
+    FITTED,
     FLEXIBLE,
     HANDS_SLOT,
     HEAD_SLOT,
@@ -59,7 +64,9 @@ from extensions.attire.kinds import (
     PARTY,
     PLATE,
     RIGID,
+    SHOD,
     SHOULDERS_SLOT,
+    SKIRTED,
     SOLID,
     TORSO_SLOT,
     UNDER_LAYER,
@@ -68,11 +75,13 @@ from extensions.attire.kinds import (
     Articulation,
     DyePattern,
     FabricKind,
+    Form,
     Layer,
     Slot,
     require_articulation,
     require_dye_pattern,
     require_fabric_kind,
+    require_form,
     require_layer,
     require_slot,
 )
@@ -136,6 +145,11 @@ struct Garment(Copyable, Movable):
     """Smoothing passes of its shell, or -1 for its fabric's own."""
     var ease: Length
     """How much looser than its fabric's clearance it is cut."""
+    var form: Form
+    """How its shell is shaped where it does not follow the skin."""
+    var flare: Float32
+    """How far a skirted garment widens for each meter it falls, zero
+    through one."""
 
     def __init__(
         out self,
@@ -151,6 +165,8 @@ struct Garment(Copyable, Movable):
         pattern: DyePattern = SOLID,
         drape: Int = -1,
         ease: Length = Length(0, METER),
+        form: Form = FITTED,
+        flare: Float32 = 0,
     ):
         """Describe a garment, dyed one color.
 
@@ -167,6 +183,9 @@ struct Garment(Copyable, Movable):
             pattern: How its dyes lie. Solid by default.
             drape: Smoothing passes of its shell, or -1 for its fabric's.
             ease: How much looser than its fabric's clearance it is cut.
+            form: How its shell is shaped. Fitted by default.
+            flare: How far a skirted garment widens for each meter it
+                falls.
         """
         self.name = name
         self.slot = slot
@@ -180,21 +199,25 @@ struct Garment(Copyable, Movable):
         self.dyes = List[Color](length=DYE_CHANNEL_COUNT, fill=dye)
         self.drape = drape
         self.ease = ease
+        self.form = form
+        self.flare = flare
 
     def check(self) raises:
         """Refuse a garment that cannot be made.
 
         Raises:
-            Error: If a kind is not named, a lamed garment has no anchor
-                or not two through `MAX_LAMES` lames, an anchor is not a
-                named joint, there are not four dyes, the drape is
-                below -1, or the ease is negative or not finite.
+            Error: If a kind or the form is not named, a lamed garment
+                has no anchor or not two through `MAX_LAMES` lames, an
+                anchor is not a named joint, there are not four dyes, the
+                drape is below -1, the ease is negative or not finite, or
+                the flare is not zero through one.
         """
         require_slot(self.slot)
         require_layer(self.layer)
         require_fabric_kind(self.fabric)
         require_articulation(self.articulation)
         require_dye_pattern(self.pattern)
+        require_form(self.form)
         if self.anchor != NO_ANCHOR:
             require_joint(self.anchor)
         if self.articulation == LAMED:
@@ -208,6 +231,8 @@ struct Garment(Copyable, Movable):
             raise Error("A drape is -1, for the fabric's, or zero or more")
         if not (self.ease.value >= 0 and self.ease.value < 1):
             raise Error("An ease must be at least zero and below a meter")
+        if not (self.flare >= 0 and self.flare <= 1):
+            raise Error("A flare must be zero through one")
 
 
 def _both(
@@ -311,8 +336,16 @@ def tunic() raises -> Garment:
     _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
     _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.55, 0)
     _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.35, 0)
+    # Its skirt hangs round both legs and flares.
     return Garment(
-        "tunic", TORSO_SLOT, MID_LAYER, WOOL, cover^, Color(40, 70, 120)
+        "tunic",
+        TORSO_SLOT,
+        MID_LAYER,
+        WOOL,
+        cover^,
+        Color(40, 70, 120),
+        form=SKIRTED,
+        flare=0.25,
     )
 
 
@@ -331,8 +364,16 @@ def gambeson() raises -> Garment:
     _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
     _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.82, 0)
     _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.3, 0)
+    # The quilting is stiff: its skirt flares little.
     return Garment(
-        "gambeson", TORSO_SLOT, MID_LAYER, PADDING, cover^, Color(218, 206, 178)
+        "gambeson",
+        TORSO_SLOT,
+        MID_LAYER,
+        PADDING,
+        cover^,
+        Color(218, 206, 178),
+        form=SKIRTED,
+        flare=0.1,
     )
 
 
@@ -352,7 +393,14 @@ def hauberk() raises -> Garment:
     _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.8, 0)
     _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.45, 0)
     var mail = Garment(
-        "hauberk", TORSO_SLOT, OUTER_LAYER, MAIL, cover^, Color(120, 122, 128)
+        "hauberk",
+        TORSO_SLOT,
+        OUTER_LAYER,
+        MAIL,
+        cover^,
+        Color(120, 122, 128),
+        form=SKIRTED,
+        flare=0.15,
     )
     # Many hauberks end in a row of brass rings.
     mail.dyes[TRIM_DYE.value] = Color(176, 132, 62)
@@ -426,6 +474,7 @@ def boots() raises -> Garment:
         Color(84, 54, 32),
         drape=24,
         ease=Length(5, MILLIMETER),
+        form=SHOD,
     )
 
 
@@ -493,6 +542,8 @@ def fauld() raises -> Garment:
         articulation=LAMED,
         anchor=HIPS,
         lames=4,
+        form=SKIRTED,
+        flare=0.12,
     )
 
 
@@ -609,6 +660,8 @@ def surcoat() raises -> Garment:
         cover^,
         Color(160, 24, 32),
         pattern=PARTY,
+        form=SKIRTED,
+        flare=0.3,
     )
     coat.dyes[1] = Color(232, 196, 64)
     coat.dyes[2] = Color(232, 196, 64)

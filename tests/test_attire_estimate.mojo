@@ -241,13 +241,17 @@ def test_a_dressed_person_carries_the_outfit_s_mass() raises:
     # A hauberk weighs about 9 kg; the hose and the hood a little more.
     assert_true(total > 7 and total < 14)
     assert_true(tallies[CHEST.value].mass > tallies[LEFT_SHIN.value].mass)
-    # The hauberk weighs its whole shell, though the hood hides some.
-    ref drawn = assets.geometries.get(
-        scene.skinned_meshes[dressed.meshes[1]].geometry
-    )
-    assert_true(
-        garment_mass(dressed.shells[1], fabric(MAIL)).value
-        >= garment_mass(drawn, fabric(MAIL)).value
+    # The hauberk weighs its whole shell, though the hood hides some: it
+    # weighs as much on a person with no hood.
+    var bare = coarse_person(scene, assets)
+    var unhooded = Outfit()
+    unhooded.add(hose())
+    unhooded.add(hauberk())
+    var plain = dress(scene, assets, bare, unhooded)
+    assert_almost_equal(
+        garment_mass(dressed.shells[1], fabric(MAIL)).value,
+        garment_mass(plain.shells[1], fabric(MAIL)).value,
+        atol=1e-4,
     )
     var shells = List[BufferGeometry]()
     shells.append(BufferGeometry())
