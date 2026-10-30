@@ -3,101 +3,54 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A fight on flat ground: the player against a bandit and a straw dummy.
+"""The basics of a fight on flat ground: presses, frames and blows, a
+dummy, the lock, and a bandit's attacks against a guard, a parry and
+a dodge.
 
 The player stands at the middle and faces -z. The dummy stands 1.5
 meters before them, and the bandit 6 meters before them: see
 `tests/_village_arena.mojo`."""
 
-from controls.third_person_controls import ThirdPersonControls
-from core.assets import Assets
-from core.scene import Scene
-from extensions.attire.outfit import Outfit
-from extensions.humanoid.sex import FEMALE, MALE
-from extensions.humanoid.spec import HumanoidSpec
-from extensions.vegetation.ground import Ground, Lot, Pond
 from tests._village_arena import (
     Arena,
     arena_parameters,
     flat_ground,
     holds_text,
     popup_texts,
+    stand_piercing,
+    stand_swinging,
 )
 from extensions.village.battle import (
-    CHEST,
-    WAVE_RANGE,
-    FINISH_STOP,
-    HIT_STOP,
-    SHAKE,
     BLOCK_PUSH,
     CALM_SECONDS,
     JUGGLE,
-    LOOT,
     SLOW_SECONDS,
-    Battle,
     BattleParameters,
-    Bolt,
-    Knife,
     pressed,
     push_of,
-    strong_blow,
     throw_up,
 )
 from extensions.village.character import (
     Character,
     CharacterParameters,
     MoveInput,
-    Obstacle,
     no_input,
 )
 from extensions.village.combat import (
     BLOCKED,
     PIERCE,
-    CAST,
-    FALL,
-    FINISHED,
-    CRITICAL,
-    FREE,
     STAGGER,
-    DEFEATED,
     DODGE,
     EVADED,
     FLINCH,
     GUARD_BREAK,
-    HEAVY,
-    HIGH_STANCE,
     HIT,
     LIGHT_ONE,
-    LOW_STANCE,
-    MID_STANCE,
-    ULTIMATE,
-    PLUNGE,
-    RISING_EDGE,
     Blow,
     Struck,
 )
-from extensions.village.foes import (
-    ALERTED,
-    ATTACKING,
-    CLOSING,
-    CIRCLING,
-    GUARDING,
-    RETREATING,
-    RETURNING,
-    Bandit,
-    Post,
-    POSTED,
-)
-from extensions.vegetation.noise import hash01
-from extensions.village.residents import Body
-from extensions.village.skills import (
-    BLOW_EXPERIENCE,
-    DEFEAT_EXPERIENCE,
-    PRACTICE_EXPERIENCE,
-)
-from extensions.village.slashes import OVER_TRAIL, PLAYER_TRAIL
-from extensions.village.surfaces import house_looks
-from extensions.village.terrain import Terrain
+from extensions.village.foes import Post, POSTED
+from extensions.village.skills import PRACTICE_EXPERIENCE
 from math.vector3 import Vector3
 from std.math import cos, sin
 from std.testing import (
@@ -110,14 +63,11 @@ from std.testing import (
 )
 from units.si import (
     DEGREE,
-    INCH,
-    METER,
     METER_PER_SECOND,
     RADIAN,
     SECOND,
     Angle,
     Duration,
-    Length,
     Velocity,
 )
 
@@ -428,29 +378,9 @@ def test_a_bandit_comes_and_strikes_and_a_guard_blocks() raises:
     assert_almost_equal(arena.battle.fighter.health, health, atol=1e-3)
 
 
-def _swinging(mut arena: Arena, clock: Float32) raises:
-    """Stand the bandit 1.5 meters before the player, facing them, in its
-    first light attack `clock` seconds in."""
-    ref foe = arena.battle.foes[0]
-    foe.character.position = Vector3(0, 0, -1.5)
-    foe.character.heading = Angle(180.0, DEGREE)
-    _ = foe.fighter.request(LIGHT_ONE)
-    foe.fighter.clock = clock
-
-
-def _piercing(mut arena: Arena, clock: Float32) raises:
-    """Stand the bandit 1.5 meters before the player, facing them, in a
-    piercing attack `clock` seconds in."""
-    ref foe = arena.battle.foes[0]
-    foe.character.position = Vector3(0, 0, -1.5)
-    foe.character.heading = Angle(180.0, DEGREE)
-    _ = foe.fighter.request(PIERCE)
-    foe.fighter.clock = clock
-
-
 def test_a_pierce_goes_through_a_guard_and_a_heavy_cut_counters_it() raises:
     var arena = Arena(arena_parameters(1, 0))
-    _piercing(arena, 0.6)
+    stand_piercing(arena, 0.6)
     var guard = no_input()
     guard.guard = True
     for _ in range(6):
@@ -461,7 +391,7 @@ def test_a_pierce_goes_through_a_guard_and_a_heavy_cut_counters_it() raises:
     # A heavy cut that lands in the wind-up counters it.
     var counter = Arena(arena_parameters(1, 0))
     counter.battle.drawn = True
-    _piercing(counter, 0.1)
+    stand_piercing(counter, 0.1)
     var heavy = no_input()
     heavy.heavy = True
     counter.tick(heavy)
@@ -473,7 +403,7 @@ def test_a_pierce_goes_through_a_guard_and_a_heavy_cut_counters_it() raises:
 
 def test_a_fresh_guard_parries_and_a_late_dodge_is_perfect() raises:
     var arena = Arena(arena_parameters(1, 0))
-    _swinging(arena, 0.1)
+    stand_swinging(arena, 0.1)
     var guard = no_input()
     guard.guard = True
     arena.tick(guard)
@@ -481,7 +411,7 @@ def test_a_fresh_guard_parries_and_a_late_dodge_is_perfect() raises:
     assert_true(arena.battle.foes[0].fighter.move == FLINCH)
     var dodger = Arena(arena_parameters(1, 0))
     dodger.battle.drawn = True
-    _swinging(dodger, 0.1)
+    stand_swinging(dodger, 0.1)
     var dodge = no_input()
     dodge.dodge = True
     dodger.tick(dodge)
@@ -514,728 +444,6 @@ def test_a_dodge_goes_the_way_of_the_stick_or_back() raises:
     back.tick(plain)
     back.run(0.4)
     assert_true(back.player.position.z > 2)
-
-
-def test_the_player_defeats_a_bandit_who_comes_back() raises:
-    var arena = Arena(arena_parameters(1, 0))
-    _swinging(arena, 0)
-    ref foe = arena.battle.foes[0]
-    foe.fighter.move = FLINCH
-    foe.fighter.health = 1
-    foe.brain.seed = _seed(True)
-    arena.battle.lock = 0
-    arena.battle.token = 0
-    var cut = no_input()
-    cut.light = True
-    arena.tick(cut)
-    arena.run(0.3)
-    assert_true(arena.battle.foes[0].fighter.defeated())
-    assert_equal(arena.battle.foes[0].down >= 0, True)
-    assert_equal(arena.battle.lock, -1)
-    assert_equal(arena.battle.token, -1)
-    assert_false(arena.battle.standing(0))
-    assert_almost_equal(arena.battle.obstacles()[0].radius, 0, atol=1e-6)
-    assert_equal(arena.battle.loot, LOOT)
-    assert_true(holds_text(arena.battle.notes, "+8 COINS +1 HERB"))
-    assert_equal(arena.battle.found, 1)
-    assert_equal(arena.battle.trained, BLOW_EXPERIENCE + DEFEAT_EXPERIENCE)
-    arena.run(1.2)
-    assert_false(arena.scene.node(arena.battle.node_of(0)).visible)
-    arena.run(1.2)
-    assert_true(arena.battle.foes[0].fighter.free())
-    assert_true(arena.battle.foes[0].down < 0)
-    assert_true(arena.scene.node(arena.battle.node_of(0)).visible)
-
-
-def _seed(drops: Bool) -> Int:
-    """Return a seed whose first roll of the dice drops a herb, or does
-    not."""
-    for seed in range(1000):  # pragma: no branch
-        if (hash01(seed, 1, 6) < 0.5) == drops:
-            return seed
-    return -1
-
-
-def _facing(mut arena: Arena, index: Int = 0):
-    """Stand a bandit free 1.5 meters before the player, facing them."""
-    ref foe = arena.battle.foes[index]
-    foe.character.position = Vector3(0, 0, -1.5)
-    foe.character.heading = Angle(180.0, DEGREE)
-
-
-def _cut(mut arena: Arena) raises:
-    """Make a light attack, and let it strike."""
-    var cut = no_input()
-    cut.light = True
-    arena.tick(cut)
-    arena.run(0.3)
-
-
-def test_a_guard_blocks_a_cut_and_a_stagger_takes_a_critical() raises:
-    var arena = Arena(arena_parameters(1, 0))
-    _facing(arena)
-    arena.battle.foes[0].brain.state = GUARDING
-    arena.battle.foes[0].brain.timer = 5
-    arena.battle.foes[0].fighter.hold_guard(True)
-    _cut(arena)
-    assert_true(holds_text(popup_texts(arena.battle), "BLOCKED"))
-    assert_almost_equal(arena.battle.foes[0].fighter.health, 300, atol=1e-6)
-    var broken = Arena(arena_parameters(1, 0))
-    _facing(broken)
-    broken.battle.foes[0].brain.state = ALERTED
-    broken.battle.foes[0].brain.timer = 5
-    broken.battle.foes[0].fighter.move = STAGGER
-    _cut(broken)
-    assert_true(holds_text(popup_texts(broken.battle), "CRITICAL"))
-
-
-def test_a_cut_breaks_off_an_attack_and_fells_a_bandit() raises:
-    var arena = Arena(arena_parameters(2, 0))
-    _facing(arena)
-    ref attacker = arena.battle.foes[0]
-    attacker.brain.state = ATTACKING
-    attacker.brain.plan = [HEAVY, HEAVY]
-    arena.battle.token = 0
-    _cut(arena)
-    assert_true(arena.battle.foes[0].brain.state == RETREATING)
-    assert_equal(arena.battle.token, -1)
-    # A bandit with no token and no lock on it falls.
-    var fell = Arena(arena_parameters(1, 0))
-    _facing(fell)
-    fell.battle.foes[0].fighter.health = 1
-    fell.battle.foes[0].brain.seed = _seed(False)
-    _cut(fell)
-    assert_true(holds_text(fell.battle.notes, "+8 COINS"))
-    assert_equal(fell.battle.found, 0)
-    assert_true(fell.battle.foes[0].fighter.defeated())
-    assert_equal(fell.battle.token, -1)
-    assert_equal(fell.battle.lock, -1)
-    # A fallen bandit cannot be locked on to.
-    assert_equal(
-        fell.battle.pick_lock(Vector3(0, 0, 0), Angle(0.0, DEGREE)), -1
-    )
-
-
-def test_a_fallen_player_comes_to_at_the_start() raises:
-    # The second bandit stays at its post, 7 meters off.
-    var arena = Arena(arena_parameters(2, 0))
-    arena.battle.lock = 0
-    # A bandit on its way to the player goes home when the player falls.
-    arena.battle.foes[0].brain.state = CLOSING
-    arena.battle.foes[0].character.position = Vector3(0, 0, -3)
-    _ = arena.battle.fighter.receive(
-        Blow(
-            1000,
-            0,
-            Velocity(2.0, METER_PER_SECOND),
-            Velocity(0.0, METER_PER_SECOND),
-        ),
-        False,
-    )
-    arena.battle.shove = Vector3(2, 0, 0)
-    # A fallen player makes no move.
-    var cut = no_input()
-    cut.light = True
-    arena.tick(cut)
-    assert_true(arena.battle.fighter.defeated())
-    assert_equal(arena.battle.lock, -1)
-    assert_true(holds_text(arena.battle.notes, "YOU FALL"))
-    assert_true(arena.battle.foes[0].brain.state == RETURNING)
-    assert_true(arena.battle.foes[1].brain.state == POSTED)
-    assert_true(arena.player.position.x > 0)
-    arena.run(0.6)
-    assert_true(arena.battle.fighter.free())
-    assert_almost_equal(arena.player.position.x, 0, atol=1e-4)
-    assert_true(holds_text(arena.battle.notes, "YOU COME TO BY THE TRAIL"))
-
-
-def test_stances_pulses_specials_and_heavy_attacks() raises:
-    var arena = Arena(arena_parameters(0, 0))
-    var high = no_input()
-    high.high = True
-    arena.press(high)
-    assert_true(arena.battle.fighter.stance == HIGH_STANCE)
-    assert_true(holds_text(arena.battle.notes, "HIGH STANCE"))
-    arena.battle.notes.clear()
-    arena.press(high)
-    assert_equal(len(arena.battle.notes), 0)
-    var middle = no_input()
-    middle.middle = True
-    arena.press(middle)
-    assert_true(arena.battle.fighter.stance == MID_STANCE)
-    var low = no_input()
-    low.low = True
-    arena.press(low)
-    assert_true(arena.battle.fighter.stance == LOW_STANCE)
-    # A heavy attack, then a stamina recovery just after its swing.
-    var heavy = no_input()
-    heavy.heavy = True
-    arena.tick(heavy)
-    assert_true(arena.battle.fighter.move == HEAVY)
-    arena.run(0.45)
-    var pulse = no_input()
-    pulse.guard = True
-    assert_almost_equal(arena.battle.pulsed, -1, atol=1e-6)
-    arena.press(pulse)
-    assert_true(holds_text(popup_texts(arena.battle), "RECOVERED"))
-    # The pulse's ring has started, and ages.
-    assert_true(arena.battle.pulsed > 0)
-    arena.run(1.5)
-    # The rising edge says its name; the whirlwind without its points does
-    # not start.
-    var rising = no_input()
-    rising.rising = True
-    arena.press(rising)
-    assert_true(holds_text(arena.battle.notes, "RISING EDGE!"))
-    arena.run(1)
-    arena.battle.notes.clear()
-    arena.battle.fighter.special = 0
-    var whirlwind = no_input()
-    whirlwind.whirlwind = True
-    arena.press(whirlwind)
-    assert_equal(len(arena.battle.notes), 0)
-    assert_true(arena.battle.fighter.free())
-
-
-def test_an_attack_in_the_air_hangs_and_a_push_carries() raises:
-    var arena = Arena(arena_parameters(0, 0))
-    _ = arena.battle.fighter.request(RISING_EDGE)
-    arena.battle.fighter.clock = 0.17
-    arena.player.grounded = False
-    arena.player.position = Vector3(0, 2, 0)
-    arena.player.velocity = Vector3(0, -3, 0)
-    arena.tick(no_input())
-    assert_true(arena.player.velocity.y > -1)
-    # In the wind-up, it falls.
-    var early = Arena(arena_parameters(0, 0))
-    _ = early.battle.fighter.request(RISING_EDGE)
-    early.player.grounded = False
-    early.player.position = Vector3(0, 2, 0)
-    early.player.velocity = Vector3(0, -3, 0)
-    early.tick(no_input(), 0.01)
-    assert_true(early.player.velocity.y < -3)
-    # A free player that a blow pushes slides with it.
-    var pushed = Arena(arena_parameters(0, 0))
-    pushed.battle.shove = Vector3(3, 0, 0)
-    pushed.tick(no_input())
-    assert_true(pushed.player.position.x > 0.1)
-    # So does a free bandit.
-    var shoved = Arena(arena_parameters(1, 0, 20))
-    shoved.battle.foes[0].shove = Vector3(3, 0, 0)
-    shoved.tick(no_input())
-    assert_true(shoved.battle.foes[0].character.position.x > 0.1)
-
-
-def test_a_fighter_on_a_lot_or_in_the_water_is_left_out() raises:
-    var assets = Assets()
-    var scene = Scene()
-    var body = Body(
-        scene,
-        assets,
-        HumanoidSpec(Length(60.0, INCH), FEMALE),
-        Outfit(),
-        500,
-        8,
-    )
-    var ground = Ground(
-        hill_height=Length(0.0, METER),
-        pond=Pond(
-            Length(0.0, METER),
-            Length(-1.5, METER),
-            Length(1.0, METER),
-            Length(1.0, METER),
-        ),
-    )
-    var lots: List[Lot] = [Lot(0, -6, 2, 2, 0)]
-    var battle = Battle(
-        scene,
-        assets,
-        arena_parameters(1, 1),
-        house_looks(assets, 4, 1),
-        Terrain(ground),
-        lots,
-        body,
-        Vector3(0, 0, 0),
-        500,
-        8,
-    )
-    assert_equal(len(battle.foes), 0)
-    assert_equal(len(battle.dummies), 0)
-    # And the other way round: the bandit in the water, the dummy on a lot.
-    var wet = Ground(
-        hill_height=Length(0.0, METER),
-        pond=Pond(
-            Length(0.0, METER),
-            Length(-6.0, METER),
-            Length(1.0, METER),
-            Length(1.0, METER),
-        ),
-    )
-    var dry: List[Lot] = [Lot(0, -1.5, 1, 1, 0)]
-    var other = Battle(
-        scene,
-        assets,
-        arena_parameters(1, 1),
-        house_looks(assets, 4, 1),
-        Terrain(wet),
-        dry,
-        body,
-        Vector3(0, 0, 0),
-        500,
-        8,
-    )
-    assert_equal(len(other.foes), 0)
-    assert_equal(len(other.dummies), 0)
-    # A wolf on a lot, or in the water, is left out too.
-    var den: List[Lot] = [Lot(-3, -6, 0.5, 0.5, 0)]
-    var pack = Battle(
-        scene,
-        assets,
-        arena_parameters(0, 0, 6, 1),
-        house_looks(assets, 4, 1),
-        flat_ground(),
-        den,
-        body,
-        Vector3(0, 0, 0),
-        500,
-        8,
-    )
-    assert_equal(len(pack.foes), 0)
-    var marsh = Ground(
-        hill_height=Length(0.0, METER),
-        pond=Pond(
-            Length(-3.0, METER),
-            Length(-6.0, METER),
-            Length(1.0, METER),
-            Length(1.0, METER),
-        ),
-    )
-    var drowned = Battle(
-        scene,
-        assets,
-        arena_parameters(0, 0, 6, 1),
-        house_looks(assets, 4, 1),
-        Terrain(marsh),
-        List[Lot](),
-        body,
-        Vector3(0, 0, 0),
-        500,
-        8,
-    )
-    assert_equal(len(drowned.foes), 0)
-
-
-def test_over_limit_is_announced_and_turns_the_trails_gold() raises:
-    var arena = Arena(arena_parameters(0, 1))
-    arena.battle.fighter.limit = 99
-    var cut = no_input()
-    cut.light = True
-    arena.tick(cut)
-    arena.run(0.3)
-    assert_true(arena.battle.fighter.over > 0)
-    assert_true(holds_text(arena.battle.notes, "SURGE!"))
-    assert_true(arena.battle.trail.color.x == OVER_TRAIL.x)
-    arena.battle.notes.clear()
-    arena.run(0.5)
-    assert_equal(len(arena.battle.notes), 0)
-    arena.battle.fighter.over = 0.01
-    arena.run(0.2)
-    assert_true(arena.battle.trail.color.x == PLAYER_TRAIL.x)
-    assert_false(arena.battle.limited)
-
-
-def test_a_flick_moves_the_lock_and_herbs_heal() raises:
-    # Two bandits too far to notice, and the dummy before the player.
-    var arena = Arena(arena_parameters(2, 1, 15))
-    var lock = no_input()
-    lock.lock = True
-    arena.press(lock)
-    assert_equal(arena.battle.lock, 2)
-    # A flick right moves the lock to the bandit on the right.
-    var right = no_input()
-    right.look_right = 1
-    arena.tick(right)
-    assert_equal(arena.battle.lock, 1)
-    # Held, the stick moves it no further; let go and flicked left, it
-    # moves to the first target on the left.
-    arena.tick(right)
-    assert_equal(arena.battle.lock, 1)
-    arena.tick(no_input())
-    var left = no_input()
-    left.look_right = -1
-    arena.tick(left)
-    assert_equal(arena.battle.lock, 0)
-    # On the left, there is nothing more: the lock stays.
-    arena.tick(no_input())
-    arena.tick(left)
-    assert_equal(arena.battle.lock, 0)
-    # A fallen target, or one out of range, is passed over.
-    arena.battle.lock = 2
-    arena.battle.foes[1].down = 0
-    assert_equal(arena.battle.switch_lock(Vector3(0, 0, 0), 1), 2)
-    arena.battle.foes[1].down = -1
-    assert_equal(arena.battle.switch_lock(Vector3(0, 0, 30), 1), 2)
-    # Herbs heal three tenths of the health, while the satchel has them.
-    var healer = Arena(arena_parameters(0, 0))
-    healer.battle.herbs = 2
-    healer.battle.fighter.health = 100
-    var heal = no_input()
-    heal.heal = True
-    healer.press(heal)
-    assert_almost_equal(healer.battle.fighter.health, 250, atol=1e-3)
-    assert_equal(healer.battle.eaten, 1)
-    assert_true(holds_text(popup_texts(healer.battle), "+150"))
-    assert_true(holds_text(healer.battle.notes, "HERBS HEAL 150"))
-    healer.press(heal)
-    healer.press(heal)
-    assert_almost_equal(healer.battle.fighter.health, 400, atol=1e-3)
-    assert_equal(healer.battle.eaten, 2)
-    # At full health, no herb is eaten.
-    healer.battle.eaten = 0
-    healer.battle.fighter.health = 500
-    healer.press(heal)
-    assert_equal(healer.battle.eaten, 0)
-
-
-def test_a_strong_blow_stops_the_fight_and_shakes_the_camera() raises:
-    var slight = Blow(
-        30,
-        8,
-        Velocity(1.5, METER_PER_SECOND),
-        Velocity(0.0, METER_PER_SECOND),
-    )
-    var shove = Blow(
-        30,
-        8,
-        Velocity(4.0, METER_PER_SECOND),
-        Velocity(0.0, METER_PER_SECOND),
-    )
-    var lift = Blow(
-        30,
-        8,
-        Velocity(1.0, METER_PER_SECOND),
-        Velocity(6.5, METER_PER_SECOND),
-    )
-    assert_true(strong_blow(Struck(GUARD_BREAK, 0, 8), slight))
-    assert_false(strong_blow(Struck(BLOCKED, 0, 8), shove))
-    assert_true(strong_blow(Struck(CRITICAL, 45, 0), slight))
-    assert_false(strong_blow(Struck(HIT, 30, 8), slight))
-    assert_true(strong_blow(Struck(HIT, 30, 8), shove))
-    assert_true(strong_blow(Struck(HIT, 30, 8), lift))
-    # A heavy cut on the dummy stops the fight, and shakes the camera.
-    var arena = Arena(arena_parameters(0, 1))
-    var heavy = no_input()
-    heavy.heavy = True
-    arena.tick(heavy)
-    var stopped = False
-    for _ in range(20):
-        arena.tick(no_input())
-        if arena.battle.freeze > 0:
-            stopped = True
-            assert_true(arena.battle.shake > SHAKE * 0.5)
-            break
-    assert_true(stopped)
-    # While it stands still, the fighter's clock does not run.
-    arena.battle.freeze = HIT_STOP
-    var clock = arena.battle.fighter.clock
-    arena.tick(no_input(), 0.02)
-    assert_almost_equal(arena.battle.fighter.clock, clock, atol=1e-6)
-    assert_almost_equal(arena.battle.freeze, HIT_STOP - 0.02, atol=1e-6)
-    # Then it runs, and the shake dies away.
-    arena.run(0.5)
-    assert_true(arena.battle.fighter.clock != clock)
-    assert_true(arena.battle.shake < SHAKE * 0.01)
-
-
-def test_a_heavy_cut_finishes_a_broken_bandit() raises:
-    var arena = Arena(arena_parameters(1, 0))
-    _facing(arena)
-    arena.battle.foes[0].brain.state = ALERTED
-    arena.battle.foes[0].brain.timer = 5
-    arena.battle.foes[0].fighter.move = STAGGER
-    arena.battle.foes[0].fighter.health = 60
-    var heavy = no_input()
-    heavy.heavy = True
-    arena.tick(heavy)
-    var finished = False
-    for _ in range(20):
-        arena.tick(no_input())
-        if arena.battle.foes[0].fighter.defeated():
-            finished = True
-            break
-    assert_true(finished)
-    assert_true(holds_text(popup_texts(arena.battle), "FINISHER"))
-    assert_equal(arena.battle.loot, LOOT)
-    assert_almost_equal(arena.battle.shake, 2 * SHAKE, atol=1e-6)
-    assert_true(arena.battle.freeze > HIT_STOP)
-
-
-def test_wolves_close_in_bite_and_lie_down_when_felled() raises:
-    var arena = Arena(arena_parameters(0, 0, 8, 3))
-    assert_equal(len(arena.battle.foes), 3)
-    assert_equal(len(arena.battle.pelts), 3)
-    assert_true(arena.battle.foes[0].beast)
-    assert_equal(arena.battle.node_of(1), arena.battle.pelts[1].node)
-    assert_equal(len(arena.battle.movers()), 3)
-    # They notice the player, close in, take turns and bite.
-    arena.run(8)
-    assert_true(arena.battle.fighter.health < 500)
-    # A wolf felled gives no coins, but trains the sword; it lies on its
-    # side, and comes back to the den.
-    _facing(arena, 0)
-    arena.battle.foes[0].fighter.move = FLINCH
-    arena.battle.foes[0].fighter.health = 1
-    arena.battle.fighter.revive()
-    arena.battle.loot = 0
-    arena.battle.trained = 0
-    _cut(arena)
-    assert_true(arena.battle.foes[0].fighter.defeated())
-    assert_equal(arena.battle.loot, 0)
-    assert_true(arena.battle.trained >= DEFEAT_EXPERIENCE)
-    var lying = arena.scene.node(arena.battle.pelts[0].node).quaternion
-    assert_true(abs(lying.x) + abs(lying.z) > 0.5)
-    arena.run(2.5)
-    assert_true(arena.battle.foes[0].down < 0)
-
-
-def test_a_ground_wave_sends_a_wave_along_the_ground() raises:
-    # Two dummies in a line before the player, a fallen bandit beyond
-    # them, and a third dummy raised far above the ground.
-    var arena = Arena(arena_parameters(1, 3, 4))
-    arena.battle.foes[0].fighter.move = FALL
-    arena.battle.foes[0].down = 0
-    arena.battle.dummies[1].dummy.post.x = 0
-    arena.battle.dummies[1].dummy.post.z = -6
-    arena.battle.dummies[1].dummy.foot = 5
-    arena.battle.dummies[2].dummy.post.x = 0
-    arena.battle.dummies[2].dummy.post.z = -3
-    var ground_wave = no_input()
-    ground_wave.ground_wave = True
-    arena.tick(ground_wave)
-    assert_true(holds_text(arena.battle.notes, "GROUND WAVE!"))
-    arena.run(0.3)
-    assert_equal(len(arena.battle.waves), 1)
-    arena.run(0.3)
-    # It struck each dummy in its way once, and passed the rest.
-    assert_equal(arena.battle.fighter.combo, 2)
-    assert_true(holds_text(popup_texts(arena.battle), "45"))
-    arena.run(1)
-    assert_equal(len(arena.battle.waves), 0)
-    assert_true(WAVE_RANGE > 4)
-    # A bolt strikes the dummy it flies at, with no companion to fill.
-    var at = arena.battle.target_at(1) + Vector3(0, CHEST, 0)
-    var bolt = Blow(
-        28,
-        10,
-        Velocity(1.5, METER_PER_SECOND),
-        Velocity(0.0, METER_PER_SECOND),
-    )
-    arena.battle.bolts.append(Bolt(at, at, 1, bolt, False, 0))
-    arena.tick(no_input())
-    assert_equal(len(arena.battle.bolts), 0)
-    assert_true(holds_text(popup_texts(arena.battle), "28"))
-
-
-def test_a_ground_wave_with_no_one_before_it_fades_out() raises:
-    var arena = Arena(arena_parameters(0, 0))
-    var ground_wave = no_input()
-    ground_wave.ground_wave = True
-    arena.tick(ground_wave)
-    arena.run(0.3)
-    assert_equal(len(arena.battle.waves), 1)
-    arena.run(1.2)
-    assert_equal(len(arena.battle.waves), 0)
-    assert_equal(arena.battle.fighter.combo, 0)
-
-
-def test_a_foe_that_falls_below_its_rage_rages() raises:
-    var arena = Arena(arena_parameters(1, 0))
-    ref foe = arena.battle.foes[0]
-    foe.character.position = Vector3(0, 0, -1.5)
-    foe.character.heading = Angle(180.0, DEGREE)
-    foe.fighter.parameters.rage = 0.5
-    foe.fighter.health = 160
-    var heavy = no_input()
-    heavy.heavy = True
-    arena.tick(heavy)
-    arena.run(0.5)
-    assert_true(arena.battle.foes[0].fighter.raging())
-    assert_true(holds_text(popup_texts(arena.battle), "RAGE"))
-
-
-def test_a_bandit_sidesteps_an_attack() raises:
-    var arena = Arena(arena_parameters(1, 0))
-    ref foe = arena.battle.foes[0]
-    foe.character.position = Vector3(0, 0, -2)
-    foe.character.heading = Angle(180.0, DEGREE)
-    foe.brain.state = CIRCLING
-    foe.brain.timer = 5
-    # It answers every attack, and with a sidestep.
-    foe.brain.wary = 100
-    var light = no_input()
-    light.light = True
-    arena.tick(light)
-    assert_true(arena.battle.foes[0].fighter.move == DODGE)
-    arena.run(0.4)
-    assert_true(abs(arena.battle.foes[0].character.position.x) > 1)
-    # Its dodge does not slow the foes, as the player's does, even when a
-    # blow reaches it at the last moment.
-    assert_almost_equal(arena.battle.slow, 0, atol=1e-6)
-    var late = Arena(arena_parameters(1, 0))
-    ref dodger = late.battle.foes[0]
-    dodger.character.position = Vector3(0, 0, -1.5)
-    dodger.character.heading = Angle(180.0, DEGREE)
-    _ = dodger.fighter.request(DODGE)
-    dodger.fighter.clock = 0.02
-    _ = late.battle.fighter.press_light()
-    late.battle.fighter.clock = 0.13
-    late.tick(no_input())
-    assert_true(holds_text(popup_texts(late.battle), "PERFECT DODGE"))
-    assert_almost_equal(late.battle.slow, 0, atol=1e-6)
-
-
-def test_a_thrower_throws_knives_that_a_guard_blocks() raises:
-    var arena = Arena(arena_parameters(1, 0, 8, thrower=True))
-    arena.battle.foes[0].brain.state = CIRCLING
-    arena.battle.foes[0].brain.timer = 0
-    arena.run(1.2)
-    # The knife flew to the player and struck.
-    assert_almost_equal(arena.battle.fighter.health, 478, atol=1e-3)
-    assert_equal(len(arena.battle.knives), 0)
-    # A guard blocks the next.
-    arena.battle.foes[0].brain.timer = 0
-    var guard = no_input()
-    guard.guard = True
-    arena.run(1.2, guard)
-    assert_almost_equal(arena.battle.fighter.health, 478, atol=1e-3)
-    assert_true(holds_text(popup_texts(arena.battle), "BLOCKED"))
-    # A knife thrown wide falls.
-    var blow = arena.battle.foes[0].fighter.blow()
-    var wide = Vector3(5, 1, 0)
-    arena.battle.knives.append(Knife(wide, Vector3(1, 0, 0), wide, 0, blow, 0))
-    arena.run(1.5, guard)
-    assert_equal(len(arena.battle.knives), 0)
-
-
-def test_a_heavy_attack_in_the_air_plunges() raises:
-    var arena = Arena(arena_parameters(0, 1))
-    var jump = no_input()
-    jump.jump = True
-    arena.tick(jump)
-    arena.tick(no_input())
-    assert_false(arena.player.grounded)
-    var heavy = no_input()
-    heavy.heavy = True
-    arena.tick(heavy)
-    assert_true(arena.battle.fighter.move == PLUNGE)
-    assert_true(arena.player.velocity.y < -10 or arena.player.grounded)
-    arena.run(0.5)
-    assert_true(arena.player.grounded)
-    assert_true(holds_text(popup_texts(arena.battle), "70"))
-
-
-def test_over_limit_spends_itself_on_a_ultimate() raises:
-    # Two dummies within the special's reach, and one beyond it.
-    var arena = Arena(arena_parameters(0, 3))
-    var both = no_input()
-    both.ultimate = True
-    both.rising = True
-    both.whirlwind = True
-    # Without a surge, its buttons make the rising edge.
-    arena.press(both)
-    assert_true(arena.battle.fighter.move == RISING_EDGE)
-    arena.run(1.5)
-    # In a surge, they make the ultimate, and the foes slow.
-    arena.battle.fighter.over = 5
-    var before = arena.battle.fighter.combo
-    arena.press(both)
-    assert_true(arena.battle.fighter.move == ULTIMATE)
-    assert_true(holds_text(arena.battle.notes, "ULTIMATE!"))
-    assert_true(arena.battle.slow > 0)
-    assert_almost_equal(arena.battle.fighter.over, 0, atol=1e-6)
-    arena.run(3)
-    assert_true(arena.battle.fighter.free())
-    # Six hits on each of the two dummies within its reach.
-    assert_equal(arena.battle.fighter.combo - before, 12)
-    # A player who reels cannot make it.
-    arena.battle.notes.clear()
-    arena.battle.fighter.over = 5
-    arena.battle.fighter.move = FLINCH
-    arena.battle.fighter.clock = 0
-    arena.press(both)
-    assert_false(holds_text(arena.battle.notes, "ULTIMATE!"))
-
-
-def test_a_companion_casts_heals_and_makes_a_assist_attack() raises:
-    var arena = Arena(arena_parameters(0, 1, ally=True))
-    assert_equal(len(arena.battle.allies), 1)
-    assert_equal(len(arena.battle.movers()), 2)
-    # Out of a fight, she stays near the player; with nobody to cast at, a
-    # call for the assist attack does nothing.
-    var assist = no_input()
-    assist.assist = True
-    arena.press(assist)
-    arena.run(1)
-    assert_false(holds_text(arena.battle.notes, "ASSIST ATTACK!"))
-    # Locked on the dummy, she casts bolts that strike it.
-    var lock = no_input()
-    lock.lock = True
-    arena.press(lock)
-    assert_equal(arena.battle.lock, 0)
-    assert_equal(arena.battle.ally_target(arena.player.position), 0)
-    arena.run(1)
-    assert_true(holds_text(popup_texts(arena.battle), "28"))
-    arena.run(2)
-    assert_true(arena.battle.allies[0].mind.assist > 0)
-    # Before her gauge is full, the assist button does nothing.
-    arena.press(assist)
-    assert_false(holds_text(arena.battle.notes, "ASSIST ATTACK!"))
-    # She heals a wounded player.
-    arena.battle.fighter.health = 100
-    arena.run(1)
-    assert_almost_equal(arena.battle.fighter.health, 175, atol=1e-3)
-    assert_true(holds_text(arena.battle.notes, "YOUR COMPANION HEALS 75"))
-    # With a full gauge, the assist button sends her assist attack.
-    arena.battle.allies[0].mind.charge(1000)
-    arena.press(assist)
-    assert_true(holds_text(arena.battle.notes, "ASSIST ATTACK!"))
-    assert_true(arena.battle.allies[0].fighter.move == CAST)
-    # Let go of the lock in her cast: she casts at nobody.
-    arena.battle.lock = -1
-    arena.run(1)
-    assert_true(holds_text(popup_texts(arena.battle), "70"))
-    assert_equal(arena.battle.ally_target(arena.player.position), -1)
-
-
-def test_a_bolt_fades_and_a_fallen_foe_takes_nothing() raises:
-    var arena = Arena(arena_parameters(2, 0, 4, ally=True))
-    ref b = arena.battle
-    # Bandits at their posts, or going back, draw no casts; a fighting
-    # one does, unless it is down.
-    assert_equal(b.ally_target(arena.player.position), -1)
-    b.foes[0].brain.state = RETURNING
-    b.foes[1].brain.state = CLOSING
-    assert_equal(b.ally_target(arena.player.position), 1)
-    b.foes[0].brain.state = CLOSING
-    assert_equal(b.ally_target(arena.player.position), 0)
-    b.foes[0].down = 0
-    assert_equal(b.ally_target(arena.player.position), 1)
-    # A lock on a fallen foe draws no cast.
-    b.lock = 0
-    assert_equal(b.ally_target(arena.player.position), 1)
-    b.lock = -1
-    # A bolt at a fallen foe fades, and so does an old one; one that
-    # strikes a foe as it falls does nothing, and fills no gauge.
-    var faint = b.allies[0].fighter.blow()
-    var at = b.target_at(1) + Vector3(0, CHEST, 0)
-    b.bolts.append(Bolt(at, at, 0, faint, False, 0))
-    b.bolts.append(Bolt(at, at, 1, faint, False, 5))
-    b.foes[1].fighter.move = FALL
-    b.bolts.append(Bolt(at, at, 1, faint, False, 0))
-    arena.tick(no_input())
-    assert_equal(len(arena.battle.bolts), 0)
-    assert_almost_equal(arena.battle.allies[0].mind.assist, 0, atol=1e-6)
-    assert_almost_equal(arena.battle.foes[1].fighter.health, 300, atol=1e-6)
 
 
 def main() raises:

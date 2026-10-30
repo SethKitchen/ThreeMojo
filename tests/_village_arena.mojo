@@ -17,7 +17,9 @@ from extensions.attire.outfit import Outfit
 from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.ground import Ground, Lot
+from extensions.vegetation.noise import hash01
 from extensions.village.battle import Battle, BattleParameters
+from extensions.village.combat import LIGHT_ONE, PIERCE
 from extensions.village.companion import default_allies
 from extensions.village.character import (
     Character,
@@ -36,6 +38,7 @@ from extensions.village.foes import (
 from extensions.village.residents import Body
 from extensions.village.surfaces import house_looks
 from extensions.village.terrain import Terrain
+from math.vector3 import Vector3
 from units.si import (
     DEGREE,
     INCH,
@@ -252,3 +255,80 @@ def holds_text(texts: List[String], text: String) -> Bool:
         if t == text:
             return True
     return False
+
+
+def stand_facing(mut arena: Arena, index: Int = 0):
+    """Stand a bandit free 1.5 meters before the player, facing them.
+
+    Args:
+        arena: The fight.
+        index: The bandit's place in `arena.battle.foes`.
+    """
+    ref foe = arena.battle.foes[index]
+    foe.character.position = Vector3(0, 0, -1.5)
+    foe.character.heading = Angle(180.0, DEGREE)
+
+
+def stand_swinging(mut arena: Arena, clock: Float32) raises:
+    """Stand the first bandit 1.5 meters before the player, facing them,
+    in its first light attack.
+
+    Args:
+        arena: The fight.
+        clock: How far into the attack it is, in seconds.
+
+    Raises:
+        Error: If the bandit cannot start the attack.
+    """
+    stand_facing(arena)
+    ref foe = arena.battle.foes[0]
+    _ = foe.fighter.request(LIGHT_ONE)
+    foe.fighter.clock = clock
+
+
+def stand_piercing(mut arena: Arena, clock: Float32) raises:
+    """Stand the first bandit 1.5 meters before the player, facing them,
+    in a piercing attack.
+
+    Args:
+        arena: The fight.
+        clock: How far into the attack it is, in seconds.
+
+    Raises:
+        Error: If the bandit cannot start the attack.
+    """
+    stand_facing(arena)
+    ref foe = arena.battle.foes[0]
+    _ = foe.fighter.request(PIERCE)
+    foe.fighter.clock = clock
+
+
+def herb_seed(drops: Bool) -> Int:
+    """Return a seed whose first roll of the dice drops a herb, or does
+    not.
+
+    Args:
+        drops: Whether the first roll drops a herb.
+
+    Returns:
+        The first such seed from 0, or -1 if none is below 1000.
+    """
+    for seed in range(1000):  # pragma: no branch
+        if (hash01(seed, 1, 6) < 0.5) == drops:
+            return seed
+    return -1
+
+
+def light_cut(mut arena: Arena) raises:
+    """Make a light attack, and let it strike.
+
+    Args:
+        arena: The fight.
+
+    Raises:
+        Error: If the fight cannot move on.
+    """
+    var cut = no_input()
+    cut.light = True
+    arena.tick(cut)
+    arena.run(0.3)
