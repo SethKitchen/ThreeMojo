@@ -442,13 +442,14 @@ def beard_mesh(
         shape, shape.low, shape.high, detail, "beard", workers
     )
     # Drop the inner face: the triangles whose corners all lie under the
-    # skin.
+    # skin. The mesher refuses a field with no surface, so the mesh has
+    # vertices and triangles.
     ref placed = mesh.attribute_view(String(POSITION))
     var under = List[Bool](capacity=placed.count())
-    for v in range(placed.count()):
+    for v in range(placed.count()):  # pragma: no branch
         under.append(shape.skin.distance(placed.vector3(v)) < -shape.bury * 0.5)
     var index = List[Int]()
-    for t in range(mesh.triangle_count()):
+    for t in range(mesh.triangle_count()):  # pragma: no branch
         var a = mesh.corner_index(t, 0)
         var b = mesh.corner_index(t, 1)
         var c = mesh.corner_index(t, 2)
