@@ -104,7 +104,7 @@ A strong blow stops the whole fight for 0.06 seconds, as action games freeze a f
 
 ## The bandits
 
-The module is `extensions/village/foes.mojo`. Three hooded bandits keep a camp about 25 meters north-west of the start. A bandit is a person with a sword, as the player is. It has 300 health and 70 ki, and its blows do 55 percent of a move's damage.
+The module is `extensions/village/foes.mojo`. Three hooded bandits keep a camp about 25 meters north-west of the start. A bandit is a person with a sword, as the player is. It has 300 health and 70 ki, and its blows do 55 percent of a move's damage. Their captain, taller and in red, stands behind them. The captain has 650 health and 120 ki, and its blows do 80 percent of a move's damage.
 
 A `Brain` decides what a bandit does, frame by frame. `FoeState` is a type with `is_valid`.
 
@@ -123,7 +123,9 @@ Only the bandit that holds the attack token attacks. The others wait their turn 
 
 A bandit returns to its post when the player falls. It also returns when the player leads it more than 28 meters from its post. The dice that choose come from each bandit's seed, so a fight plays the same way each time.
 
-A fallen bandit gives 8 coins, which go into the satchel. It lies for 10 seconds, and comes back to its post after a minute.
+A fallen bandit gives 8 coins, which go into the satchel. One time in two, it also drops a herb. It lies for 10 seconds, and comes back to its post after a minute.
+
+Fighting trains the player's swordplay. Each level over 1 makes the player's blows 5 percent stronger: see [Village skills](Village-skills).
 
 ## The dummies
 

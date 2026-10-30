@@ -8,7 +8,8 @@ dummies to practice on.
 
 **Bandits.** A `Bandit` is a person with a sword, as the player is: a
 `Body` that plays the sword clips, and a `Fighter` with the moves of
-`extensions.village.combat`. A `Brain` decides what it does, frame by
+`extensions.village.combat`. Each bandit has its own strength, so the
+camp's captain hits harder and lasts longer. A `Brain` decides what it does, frame by
 frame, as a state machine of `FoeState`:
 
 | State | What the bandit does | It moves on when |
@@ -47,6 +48,7 @@ from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.noise import hash01
 from extensions.village.clothes import (
     GRAY_WOOL,
+    MADDER,
     NETTLE,
     WALNUT,
     village_outfit,
@@ -427,7 +429,8 @@ struct Brain(Copyable, Movable):
 
 @fieldwise_init
 struct Bandit(Copyable, Movable):
-    """A bandit: who they are, what they wear, and where they keep."""
+    """A bandit: who they are, what they wear, where they keep, and how
+    strong they are."""
 
     var spec: HumanoidSpec
     var outfit: Outfit
@@ -437,6 +440,7 @@ struct Bandit(Copyable, Movable):
     var heading: Angle
     # The seed of their dice.
     var seed: Int
+    var fighter: FighterParameters
 
 
 def bandit_fighter() -> FighterParameters:
@@ -457,6 +461,21 @@ def bandit_fighter() -> FighterParameters:
     p.might = 0.55
     p.parry = Duration(0.0, SECOND)
     p.limit_gain = 0
+    return p
+
+
+def captain_fighter() -> FighterParameters:
+    """Return how strong the bandits' captain is.
+
+    Returns:
+        A bandit's strength, with 650 health, 120 ki that comes back at
+        30 a second, and blows of 0.8 times a move's own.
+    """
+    var p = bandit_fighter()
+    p.health = 650
+    p.ki = 120
+    p.ki_rate = Frequency(30.0, PER_SECOND)
+    p.might = 0.8
     return p
 
 
@@ -487,7 +506,8 @@ def default_bandits() raises -> List[Bandit]:
     Returns:
         Three hooded bandits round a camp past the meadow's north-west
         edge, 25 meters from where the player starts: one in walnut
-        brown, one in gray and one in nettle green.
+        brown, one in gray and one in nettle green. Behind them stands
+        their captain, taller, in madder red: see `captain_fighter`.
 
     Raises:
         Error: Never: the outfits check.
@@ -500,6 +520,7 @@ def default_bandits() raises -> List[Bandit]:
             41,
             Angle(-60.0, DEGREE),
             61,
+            bandit_fighter(),
         ),
         Bandit(
             HumanoidSpec(Length(71.0, INCH), MALE, TONED, random_genome(62)),
@@ -508,6 +529,7 @@ def default_bandits() raises -> List[Bandit]:
             44,
             Angle(-120.0, DEGREE),
             62,
+            bandit_fighter(),
         ),
         Bandit(
             HumanoidSpec(Length(67.0, INCH), MALE, TONED, random_genome(63)),
@@ -516,6 +538,16 @@ def default_bandits() raises -> List[Bandit]:
             45,
             Angle(10.0, DEGREE),
             63,
+            bandit_fighter(),
+        ),
+        Bandit(
+            HumanoidSpec(Length(75.0, INCH), MALE, TONED, random_genome(64)),
+            village_outfit(MADDER, WALNUT, WALNUT, True),
+            -21,
+            49,
+            Angle(-90.0, DEGREE),
+            64,
+            captain_fighter(),
         ),
     ]
 

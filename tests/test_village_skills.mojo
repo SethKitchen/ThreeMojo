@@ -16,6 +16,11 @@ from extensions.village.gathering import (
     TRINKET,
 )
 from extensions.village.skills import (
+    BLOW_EXPERIENCE,
+    DEFEAT_EXPERIENCE,
+    PRACTICE_EXPERIENCE,
+    SWORDPLAY,
+    SWORD_MIGHT,
     FISHING,
     FISH_HASTE,
     FORAGE_BONUS_LEVEL,
@@ -32,6 +37,7 @@ from extensions.village.skills import (
     ore_strikes,
     skill_name,
     skill_of,
+    sword_might,
 )
 from std.testing import (
     TestSuite,
@@ -45,11 +51,13 @@ from std.testing import (
 
 def test_each_kind_trains_its_skill() raises:
     assert_true(FISHING.is_valid())
-    assert_false(SkillKind(3).is_valid())
+    assert_true(SWORDPLAY.is_valid())
+    assert_false(SkillKind(4).is_valid())
+    assert_equal(skill_name(SWORDPLAY), "SWORDPLAY")
     assert_equal(skill_name(FORAGING), "FORAGING")
     assert_equal(skill_name(MINING), "MINING")
     assert_equal(skill_name(FISHING), "FISHING")
-    with assert_raises(contains="one of the three"):
+    with assert_raises(contains="one of the four"):
         _ = skill_name(SkillKind(-1))
     assert_true(skill_of(HERBS).value() == FORAGING)
     assert_true(skill_of(MUSHROOMS).value() == FORAGING)
@@ -110,8 +118,23 @@ def test_experience_raises_a_skill() raises:
     assert_equal(skills.lines()[2], "FISHING 10  5000")
     with assert_raises(contains="negative"):
         _ = skills.gain(HERBS, -1)
-    with assert_raises(contains="one of the three"):
+    with assert_raises(contains="one of the four"):
         _ = skills.level(SkillKind(5))
+
+
+def test_swordplay_grows_by_fighting_and_strengthens_blows() raises:
+    var skills = Skills()
+    assert_false(Bool(skills.train(SWORDPLAY, 0)))
+    var risen = skills.train(SWORDPLAY, 50)
+    assert_true(risen.value() == SWORDPLAY)
+    assert_equal(skills.level(SWORDPLAY), 2)
+    assert_equal(skills.lines()[0], "SWORDPLAY 2  50/150")
+    with assert_raises(contains="negative"):
+        _ = skills.train(SWORDPLAY, -1)
+    assert_almost_equal(sword_might(1), 1, atol=1e-6)
+    assert_almost_equal(sword_might(10), 1 + 9 * SWORD_MIGHT, atol=1e-6)
+    assert_true(DEFEAT_EXPERIENCE > BLOW_EXPERIENCE)
+    assert_true(BLOW_EXPERIENCE > PRACTICE_EXPERIENCE)
 
 
 def main() raises:

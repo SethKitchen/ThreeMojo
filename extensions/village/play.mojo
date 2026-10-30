@@ -17,9 +17,11 @@ and its animals, seen by a third-person camera.
    bandits and the dummies stop it. A door's gap lets it into a house,
    and its floor carries it there. The bandits think and move, and the
    blows land. The player's `Body` stands where the character stands and
-   plays its stance's clip, or its sword's. The coins a fallen bandit
-   gives go into the satchel, and the herbs the player eats to heal come
-   out of it.
+   plays its stance's clip, or its sword's. The coins and the herbs a
+   fallen bandit gives go into the satchel, and the herbs the player eats
+   to heal come out of it. Fighting trains the player's swordplay, and
+   its level makes the player's blows stronger: see
+   `extensions.village.skills`.
 3. While the player moves and the look stick rests, the camera comes
    round behind the player.
 4. The camera turns toward the target the player locks on to.
@@ -89,11 +91,13 @@ from extensions.village.skills import (
     FISHING,
     FORAGING,
     MINING,
+    SWORDPLAY,
     Skills,
     fish_haste,
     forage_bonus,
     ore_strikes,
     skill_name,
+    sword_might,
 )
 from extensions.village.critters import Critters, Haunt, default_haunts
 from extensions.village.day import DayCycle, dim_water
@@ -604,6 +608,9 @@ struct VillageGame(Movable):
         blocking.extend(self.residents.obstacles())
         var calm = abs(input.look_right) < CALM and abs(input.look_up) < CALM
         self.battle.herbs = self.gathering.satchel.count(HERBS)
+        self.battle.fighter.parameters.might = sword_might(
+            self.skills.level(SWORDPLAY)
+        )
         self.battle.tick(
             scene,
             input,
@@ -622,12 +629,22 @@ struct VillageGame(Movable):
         # last word is the note.
         self.gathering.satchel.counts[CHEST.value] += self.battle.loot
         self.battle.loot = 0
-        self.gathering.satchel.counts[HERBS.value] -= self.battle.eaten
+        self.gathering.satchel.counts[HERBS.value] += (
+            self.battle.found - self.battle.eaten
+        )
+        self.battle.found = 0
         self.battle.eaten = 0
         if len(self.battle.notes) > 0:
             self.note = self.battle.notes[len(self.battle.notes) - 1]
             self.note_age = 0
             self.battle.notes.clear()
+        # Fighting trains swordplay, whose level makes the blows stronger.
+        if self.skills.train(SWORDPLAY, self.battle.trained):
+            self.note = String(
+                "SWORDPLAY LEVEL ", self.skills.level(SWORDPLAY), "!"
+            )
+            self.note_age = 0
+        self.battle.trained = 0
         var around = self.trees.copy()
         around.extend(self.battle.obstacles())
         ref feet = self.player.position

@@ -36,6 +36,7 @@ from extensions.village.foes import (
     Post,
     Sight,
     bandit_fighter,
+    captain_fighter,
     default_bandits,
     default_posts,
     dummy_fighter,
@@ -321,9 +322,14 @@ def test_bandits_and_dummies_have_their_strength() raises:
     var dummy = dummy_fighter()
     dummy.check()
     assert_almost_equal(dummy.guard_arc.to(DEGREE), 0, atol=1e-6)
+    var captain = captain_fighter()
+    captain.check()
+    assert_true(captain.health > bandit.health)
+    assert_true(captain.might > bandit.might)
     var bandits = default_bandits()
-    assert_equal(len(bandits), 3)
+    assert_equal(len(bandits), 4)
     assert_true(len(bandits[0].outfit.garments) >= 4)
+    assert_almost_equal(bandits[3].fighter.health, captain.health, atol=1e-6)
     assert_equal(len(default_posts()), 2)
 
 

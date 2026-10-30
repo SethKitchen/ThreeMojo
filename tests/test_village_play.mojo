@@ -510,6 +510,17 @@ def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:
     assert_equal(game.gathering.satchel.count(HERBS), 0)
     assert_equal(game.battle.eaten, 0)
     assert_true(game.battle.fighter.health > 200)
+    # A herb a bandit dropped goes into the satchel.
+    game.battle.found = 1
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_equal(game.gathering.satchel.count(HERBS), 1)
+    # Fighting trains swordplay; a new level is the note, and makes the
+    # blows stronger.
+    game.battle.trained = 50
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_equal(game.note, "SWORDPLAY LEVEL 2!")
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_almost_equal(game.battle.fighter.parameters.might, 1.05, atol=1e-5)
     # A strong blow shakes the camera.
     game.battle.shake = 0.05
     _ = game.tick(scene, assets, no_input(), step)

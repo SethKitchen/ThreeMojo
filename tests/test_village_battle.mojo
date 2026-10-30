@@ -76,7 +76,13 @@ from extensions.village.foes import (
     Post,
     POSTED,
 )
+from extensions.vegetation.noise import hash01
 from extensions.village.residents import Body
+from extensions.village.skills import (
+    BLOW_EXPERIENCE,
+    DEFEAT_EXPERIENCE,
+    PRACTICE_EXPERIENCE,
+)
 from extensions.village.slashes import OVER_TRAIL, PLAYER_TRAIL
 from extensions.village.surfaces import house_looks
 from extensions.village.terrain import Terrain
@@ -178,6 +184,10 @@ def test_a_fight_refuses_what_cannot_be_held() raises:
     with assert_raises(contains="16"):
         p.check()
     p = BattleParameters()
+    p.bandits[1].fighter.health = 0
+    with assert_raises(contains="health"):
+        p.check()
+    p = BattleParameters()
     p.revive = Duration(-1.0, SECOND)
     with assert_raises(contains="revive"):
         p.check()
@@ -246,6 +256,7 @@ def test_a_blow_pushes_and_throws() raises:
 def test_the_player_cuts_a_dummy() raises:
     # The bandit stands too far to notice, or to reach.
     var arena = Arena(arena_parameters(1, 1, 15))
+    assert_equal(arena.battle.trained, 0)
     assert_equal(len(arena.battle.dummies), 1)
     assert_equal(arena.battle.targets(), 2)
     assert_true(arena.battle.standing(1))
@@ -261,6 +272,7 @@ def test_the_player_cuts_a_dummy() raises:
     arena.run(0.3)
     assert_equal(arena.battle.fighter.combo, 1)
     assert_true(holds_text(popup_texts(arena.battle), "30"))
+    assert_equal(arena.battle.trained, PRACTICE_EXPERIENCE)
     assert_almost_equal(arena.battle.foes[0].fighter.health, 300, atol=1e-6)
     assert_false(arena.battle.limited)
     # The dummy rocks, and keeps its health.
@@ -430,6 +442,7 @@ def test_the_player_defeats_a_bandit_who_comes_back() raises:
     ref foe = arena.battle.foes[0]
     foe.fighter.move = FLINCH
     foe.fighter.health = 1
+    foe.brain.seed = _seed(True)
     arena.battle.lock = 0
     arena.battle.token = 0
     var cut = no_input()
@@ -443,13 +456,24 @@ def test_the_player_defeats_a_bandit_who_comes_back() raises:
     assert_false(arena.battle.standing(0))
     assert_almost_equal(arena.battle.obstacles()[0].radius, 0, atol=1e-6)
     assert_equal(arena.battle.loot, LOOT)
-    assert_true(len(arena.battle.notes) > 0)
+    assert_true(holds_text(arena.battle.notes, "+8 COINS +1 HERB"))
+    assert_equal(arena.battle.found, 1)
+    assert_equal(arena.battle.trained, BLOW_EXPERIENCE + DEFEAT_EXPERIENCE)
     arena.run(1.2)
     assert_false(arena.scene.node(arena.battle.foes[0].body.carrier).visible)
     arena.run(1.2)
     assert_true(arena.battle.foes[0].fighter.free())
     assert_true(arena.battle.foes[0].down < 0)
     assert_true(arena.scene.node(arena.battle.foes[0].body.carrier).visible)
+
+
+def _seed(drops: Bool) -> Int:
+    """Return a seed whose first roll of the dice drops a herb, or does
+    not."""
+    for seed in range(1000):  # pragma: no branch
+        if (hash01(seed, 1, 6) < 0.5) == drops:
+            return seed
+    return -1
 
 
 def _facing(mut arena: Arena, index: Int = 0):
@@ -499,7 +523,10 @@ def test_a_cut_breaks_off_an_attack_and_fells_a_bandit() raises:
     var fell = Arena(arena_parameters(1, 0))
     _facing(fell)
     fell.battle.foes[0].fighter.health = 1
+    fell.battle.foes[0].brain.seed = _seed(False)
     _cut(fell)
+    assert_true(holds_text(fell.battle.notes, "+8 COINS"))
+    assert_equal(fell.battle.found, 0)
     assert_true(fell.battle.foes[0].fighter.defeated())
     assert_equal(fell.battle.token, -1)
     assert_equal(fell.battle.lock, -1)

@@ -43,7 +43,8 @@ step and pose:
    `HIT_STOP`, as action games freeze a frame on a heavy hit, and shakes
    the camera by `SHAKE`: see `strong_blow`. The shake dies away at
    `SHAKE_FADE`.
-7. **The fallen.** A fallen bandit gives `LOOT` coins. It lies for the
+7. **The fallen.** A fallen bandit gives `LOOT` coins, and one time in
+   two a herb. It lies for the
    `linger`, then is gone, and comes back to its post after the
    `respawn`. A fallen player comes to at the start after the `revive`.
 """
@@ -106,13 +107,17 @@ from extensions.village.foes import (
     Dummy,
     Post,
     Sight,
-    bandit_fighter,
     default_bandits,
     default_posts,
     dummy_fighter,
 )
 from extensions.village.hud import GOLD_TEXT, WHITE_TEXT, Rgb
 from extensions.village.residents import Body
+from extensions.village.skills import (
+    BLOW_EXPERIENCE,
+    DEFEAT_EXPERIENCE,
+    PRACTICE_EXPERIENCE,
+)
 from extensions.village.slashes import (
     FOE_TRAIL,
     OVER_TRAIL,
@@ -188,6 +193,8 @@ comptime TOKEN_REST = Float32(0.6)
 it, in seconds."""
 comptime LOOT = 8
 """How many coins a fallen bandit gives."""
+comptime HERB_CHANCE = Float32(0.5)
+"""The share of fallen bandits that drop a herb as well."""
 comptime HIT_STOP = Float32(0.06)
 """How long a strong blow stops the fight, in seconds."""
 comptime SHAKE = Float32(0.06)
@@ -336,7 +343,6 @@ struct BattleParameters(Copyable, Movable):
     """Who fights in the village, and how strong they are."""
 
     var player: FighterParameters
-    var bandit: FighterParameters
     var dummy: FighterParameters
     var bandits: List[Bandit]
     var posts: List[Post]
@@ -348,14 +354,14 @@ struct BattleParameters(Copyable, Movable):
 
     def __init__(out self) raises:
         """Hold the default village's fight: the player's strength, the
-        bandits' camp and the dummies, a revive of 4 seconds, and bandits
-        that lie for 10 seconds and come back after a minute.
+        bandits' camp and its captain, and the dummies, a revive of 4
+        seconds, and bandits that lie for 10 seconds and come back after
+        a minute.
 
         Raises:
             Error: Never: the outfits check.
         """
         self.player = FighterParameters()
-        self.bandit = bandit_fighter()
         self.dummy = dummy_fighter()
         self.bandits = default_bandits()
         self.posts = default_posts()
@@ -367,13 +373,14 @@ struct BattleParameters(Copyable, Movable):
         """Refuse a fight that cannot be held.
 
         Raises:
-            Error: If a fighter's parameters do not check, there are more
-                than 16 bandits or 16 dummies, or a time is negative or
-                not below 10,000 seconds.
+            Error: If the player's, a bandit's or the dummies' parameters
+                do not check, there are more than 16 bandits or 16 dummies,
+                or a time is negative or not below 10,000 seconds.
         """
         self.player.check()
-        self.bandit.check()
         self.dummy.check()
+        for bandit in self.bandits:
+            bandit.fighter.check()
         if len(self.bandits) > 16 or len(self.posts) > 16:
             raise Error("A fight holds at most 16 bandits and 16 dummies")
         for time in [  # pragma: no branch
@@ -464,9 +471,14 @@ struct Battle(Movable):
     var loot: Int
     var notes: List[String]
     # How many herbs the satchel holds, as the game says before each
-    # frame, and how many the player ate, for the game to take.
+    # frame; how many the player ate, for the game to take; and how many
+    # fallen bandits dropped, for the game to give.
     var herbs: Int
     var eaten: Int
+    var found: Int
+    # The swordplay experience won and not yet taken: see
+    # `extensions.village.skills`.
+    var trained: Int
 
     def __init__(
         out self,
@@ -534,7 +546,7 @@ struct Battle(Movable):
             self.foes.append(
                 Foe(
                     character^,
-                    Fighter(parameters.bandit),
+                    Fighter(bandit.fighter),
                     person^,
                     arms^,
                     trail^,
@@ -581,6 +593,8 @@ struct Battle(Movable):
         self.notes = List[String]()
         self.herbs = 0
         self.eaten = 0
+        self.found = 0
+        self.trained = 0
 
     def movers(self) -> List[NodeId]:
         """Return the nodes that move: each bandit's and each dummy's.
@@ -1023,14 +1037,22 @@ struct Battle(Movable):
                 if landed_blow(struck.outcome) and foe.brain.hurt():
                     self.token = -1
                     self.token_rest = TOKEN_REST
+                if landed_blow(struck.outcome):
+                    self.trained += BLOW_EXPERIENCE
                 if struck.outcome == DEFEATED:
                     self.loot += LOOT
-                    self.notes.append(String("+", LOOT, " COINS"))
+                    self.trained += DEFEAT_EXPERIENCE
+                    var note = String("+", LOOT, " COINS")
+                    if foe.brain.roll(6) < HERB_CHANCE:
+                        self.found += 1
+                        note += " +1 HERB"
+                    self.notes.append(note)
             else:
                 ref practice = self.dummies[index - len(self.foes)]
                 struck = practice.fighter.receive(hit, False)
                 practice.dummy.knock(way, hit.knockback.to(METER_PER_SECOND))
                 practice.fighter.health = practice.fighter.parameters.health
+                self.trained += PRACTICE_EXPERIENCE
             self.fighter.landed(struck)
             self._show(scene, struck, there, False)
             self._weigh(struck, hit)

@@ -3,7 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The player's gathering skills, which grow with use.
+"""The player's skills, which grow with use: three of gathering, and
+swordplay.
 
 Each thing gathered gives experience to one skill, a `SkillKind`:
 
@@ -13,7 +14,13 @@ Each thing gathered gives experience to one skill, a `SkillKind`:
 | `MINING` | Ore | 30 | One strike fewer for each `MINING_STEP` levels, down to one |
 | `FISHING` | Fish | 25 | A fish bites sooner: the wait is `FISH_HASTE` shorter for each level |
 
-Coins and trinkets give no experience. A skill begins at level 1 and
+Coins and trinkets give no experience. `SWORDPLAY` grows by fighting:
+`BLOW_EXPERIENCE` for each of the player's blows that lands on a bandit,
+`PRACTICE_EXPERIENCE` for each that lands on a straw dummy, and
+`DEFEAT_EXPERIENCE` for each bandit felled. Each level over 1 makes the
+player's blows `SWORD_MIGHT` stronger: see `sword_might`.
+
+A skill begins at level 1 and
 stops at `MAX_LEVEL`. Level `L` needs `level_experience(L)`: 25 times
 `L - 1` times `L`, so 50 for level 2, 150 for level 3 and 2,250 for
 level 10.
@@ -30,7 +37,7 @@ from extensions.village.gathering import (
     STRIKES,
 )
 
-comptime SKILLS = 3
+comptime SKILLS = 4
 """How many skills there are."""
 comptime MAX_LEVEL = 10
 """The highest level of a skill."""
@@ -40,12 +47,20 @@ comptime MINING_STEP = 3
 """How many mining levels take one strike off a boulder."""
 comptime FISH_HASTE = Float32(0.06)
 """How much shorter a fish's wait is for each fishing level over 1."""
+comptime SWORD_MIGHT = Float32(0.05)
+"""How much stronger the player's blows are for each swordplay level
+over 1."""
+comptime BLOW_EXPERIENCE = 2
+"""The swordplay experience of a blow that lands on a bandit."""
+comptime PRACTICE_EXPERIENCE = 1
+"""The swordplay experience of a blow that lands on a straw dummy."""
+comptime DEFEAT_EXPERIENCE = 40
+"""The swordplay experience of a bandit felled."""
 
 
 @fieldwise_init
 struct SkillKind(Equatable, ImplicitlyCopyable, Writable):
-    """One of the player's gathering skills, as a type rather than a bare
-    int."""
+    """One of the player's skills, as a type rather than a bare int."""
 
     var value: Int
 
@@ -53,7 +68,7 @@ struct SkillKind(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is one of the skills.
 
         Returns:
-            True for `FORAGING`, `MINING` and `FISHING`.
+            True for `FORAGING`, `MINING`, `FISHING` and `SWORDPLAY`.
         """
         return ordinal_valid(self.value, SKILLS - 1)
 
@@ -64,6 +79,8 @@ comptime MINING = SkillKind(1)
 """Striking ore from the boulders."""
 comptime FISHING = SkillKind(2)
 """Hooking fish in the pond."""
+comptime SWORDPLAY = SkillKind(3)
+"""Fighting with the sword."""
 
 
 def skill_name(skill: SkillKind) raises -> String:
@@ -73,7 +90,7 @@ def skill_name(skill: SkillKind) raises -> String:
         skill: The skill.
 
     Returns:
-        "FORAGING", "MINING" or "FISHING".
+        "FORAGING", "MINING", "FISHING" or "SWORDPLAY".
 
     Raises:
         Error: If the skill is not one.
@@ -84,7 +101,9 @@ def skill_name(skill: SkillKind) raises -> String:
         return "MINING"
     if skill == FISHING:
         return "FISHING"
-    raise Error("A skill must be one of the three")
+    if skill == SWORDPLAY:
+        return "SWORDPLAY"
+    raise Error("A skill must be one of the four")
 
 
 def skill_of(kind: GatherKind) -> Optional[SkillKind]:
@@ -182,6 +201,18 @@ def forage_bonus(level: Int) -> Int:
     return 1 if level >= FORAGE_BONUS_LEVEL else 0
 
 
+def sword_might(level: Int) -> Float32:
+    """Return how many times its damage the player's blow does.
+
+    Args:
+        level: The swordplay level.
+
+    Returns:
+        One at level 1, and `SWORD_MIGHT` more for each level over it.
+    """
+    return 1 + SWORD_MIGHT * Float32(level - 1)
+
+
 def fish_haste(level: Int) -> Float32:
     """Return the share of a fish's usual wait that it waits.
 
@@ -216,7 +247,7 @@ struct Skills(Copyable, Movable):
             Error: If the skill is not one.
         """
         if not skill.is_valid():
-            raise Error("A skill must be one of the three")
+            raise Error("A skill must be one of the four")
         return level_of(self.experience[skill.value])
 
     def gain(
@@ -239,9 +270,27 @@ struct Skills(Copyable, Movable):
         var trained = skill_of(kind)
         if not trained:
             return None
-        var skill = trained.value()
+        return self.train(trained.value(), experience_for(kind) * count)
+
+    def train(
+        mut self, skill: SkillKind, experience: Int
+    ) raises -> Optional[SkillKind]:
+        """Give a skill some experience.
+
+        Args:
+            skill: The skill.
+            experience: How much, zero or more.
+
+        Returns:
+            The skill, if it rose a level; else None.
+
+        Raises:
+            Error: If the skill is not one, or the experience is negative.
+        """
+        if experience < 0:
+            raise Error("A skill's experience must not be negative")
         var before = self.level(skill)
-        self.experience[skill.value] += experience_for(kind) * count
+        self.experience[skill.value] += experience
         if self.level(skill) > before:
             return skill
         return None

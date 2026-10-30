@@ -25,7 +25,7 @@ from extensions.village.character import (
     Obstacle,
     no_input,
 )
-from extensions.village.foes import Bandit, Post
+from extensions.village.foes import Bandit, Post, bandit_fighter
 from extensions.village.residents import Body
 from extensions.village.surfaces import house_looks
 from extensions.village.terrain import Terrain
@@ -60,7 +60,7 @@ def arena_parameters(
 
     Args:
         bandits: How many bandits, three meters apart along x, `far`
-            meters before the player.
+            meters before the player, each of a bandit's strength.
         dummies: How many dummies, three meters apart along x, 1.5 meters
             before the player.
         far: How far before the player the bandits stand, in meters.
@@ -83,6 +83,7 @@ def arena_parameters(
                 -far,
                 Angle(180.0, DEGREE),
                 5 + k,
+                bandit_fighter(),
             )
         )
     p.posts = List[Post]()
