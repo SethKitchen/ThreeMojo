@@ -287,6 +287,8 @@ A `Beard` says which facial hair a face grows. `BeardShape` draws it as its volu
 | `GOATEE` | the upper lip, round the mouth and down the chin | 6 mm |
 | `SHORT_BEARD` | the jaw, the chin, the cheeks and the upper lip | 4 mm |
 | `FULL_BEARD` | the same, and a mass that hangs below the chin | 7 mm on the cheeks, 14 mm at the chin |
+| `CHIN_STRAP` | a band 3 cm deep along the jaw, from sideburn to sideburn | 4 mm |
+| `MUTTON_CHOPS` | the sideburns and the cheeks, the chin and the lip bare | 6 mm |
 
 The zones are authored in template centimeters round the mouth. The lips part 65 cm above the hip joint centers, the chin's point stands at 62 cm, and the nose's base at 67 cm. A beard's upper line runs from under the nose to each corner of the mouth, then up across the cheek to the sideburn. Its lower line runs under the jaw, above the larynx, and up behind the jaw to the ear's lobe.
 

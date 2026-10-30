@@ -35,7 +35,7 @@ The rig has nineteen joints. Each joint is a bone, a scene node named as a glTF 
 
 `add_game_humanoid` builds three skinned meshes on one skeleton: the body's skin and each hand's. The eyes and the scalp's hair hang from the head's bone, so they turn with it. With `guides`, it grows strands of hair as well.
 
-With `beard`, the face grows facial hair: a mustache, a goatee, a short beard or a full beard. See [Facial hair](Head#facial-hair). The beard hangs from the head's bone with the hair, in the hair's material, and `person.beard` names its node. It takes 3 % of the triangle budget from the body's share.
+With `beard`, the face grows facial hair: a mustache, a goatee, a short or full beard, a chin strap or mutton chops. See [Facial hair](Head#facial-hair). The beard hangs from the head's bone with the hair, in the hair's material, and `person.beard` names its node. It takes 3 % of the triangle budget from the body's share.
 
 A clean-shaven build's recipe is as it was, and a bearded one records the beard. A hood or a helmet hides the beard with the hair. A face with facial animation does not carry a beard yet.
 

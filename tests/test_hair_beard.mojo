@@ -10,12 +10,14 @@ from extensions.humanoid.sex import MALE
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.head.hair.beard import (
     BEARD_COUNT,
+    CHIN_STRAP,
     CLEAN_SHAVEN,
     FULL_BEARD,
     GOATEE,
     MOUTH_Y,
     MOUTH_Z,
     MUSTACHE,
+    MUTTON_CHOPS,
     NOSE_BASE_Y,
     SHORT_BEARD,
     SIDEBURN_Y,
@@ -101,6 +103,18 @@ def test_each_style_grows_where_it_should() raises:
     assert_true(short.zone(brow) > 0)
     assert_true(short.zone(behind) > 0)
     assert_true(short.zone(lips) > 0)
+    # A chin strap runs along the jaw, under the chin, and not up the
+    # cheek or over the lip.
+    var strap = BeardShape(dims, CHIN_STRAP, skin)
+    var under_jaw = Vector3(0, 58.5, 8.0)
+    assert_true(strap.zone(under_jaw) < 0)
+    assert_true(strap.zone(cheek) > 0)
+    assert_true(strap.zone(upper_lip) > 0)
+    # Mutton chops grow on the cheek but not on the chin or the lip.
+    var chops = BeardShape(dims, MUTTON_CHOPS, skin)
+    assert_true(chops.zone(cheek) < 0)
+    assert_true(chops.zone(chin) > 0)
+    assert_true(chops.zone(upper_lip) > 0)
     # A full beard is deeper at the chin than on the cheek; the others
     # are as deep at either.
     var full = BeardShape(dims, FULL_BEARD, skin)

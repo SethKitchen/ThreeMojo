@@ -15,6 +15,8 @@ skin, open at the mouth. Its style says where it grows and how deep:
 | `GOATEE` | the upper lip, round the mouth and down the chin | 6 mm |
 | `SHORT_BEARD` | the jaw, the chin, the cheeks and the upper lip | 4 mm |
 | `FULL_BEARD` | the same, and a mass that hangs below the chin | 7 mm on the cheeks, 14 mm at the chin |
+| `CHIN_STRAP` | a band 3 cm deep along the jaw, from sideburn to sideburn | 4 mm |
+| `MUTTON_CHOPS` | the sideburns and the cheeks, the chin and the lip bare | 6 mm |
 
 The zones are authored in template centimeters round the mouth: the
 lips part at 65 cm above the hip joint centers, the chin's point stands
@@ -64,6 +66,11 @@ comptime SIDEBURN_Y = Float32(71.5)
 """The height a beard's line meets the sideburn, in template cm."""
 comptime EAR_TURN = Float32(95.0)
 """How far round from the front a beard reaches, in degrees: to the ear."""
+comptime STRAP_BAND = Float32(3.0)
+"""How far up from a beard's lower line a chin strap reaches, in template
+cm."""
+comptime CHOP_TURN = Float32(32.0)
+"""How far round from the front mutton chops begin, in degrees."""
 comptime BEARD_BURY = Float32(0.08)
 """How far under the skin a beard's inner face lies, in template cm."""
 comptime BEARD_SOFT = Float32(0.35)
@@ -81,7 +88,7 @@ struct Beard(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is a named style.
 
         Returns:
-            True for `CLEAN_SHAVEN` through `FULL_BEARD`.
+            True for `CLEAN_SHAVEN` through `MUTTON_CHOPS`.
         """
         return ordinal_valid(self.value, BEARD_COUNT - 1)
 
@@ -96,13 +103,26 @@ comptime SHORT_BEARD = Beard(3)
 """A close beard over the jaw, the chin, the cheeks and the upper lip."""
 comptime FULL_BEARD = Beard(4)
 """A deep beard over the same, that hangs below the chin."""
-comptime BEARD_COUNT = 5
+comptime CHIN_STRAP = Beard(5)
+"""A narrow band along the jaw, from sideburn to sideburn, and no
+mustache."""
+comptime MUTTON_CHOPS = Beard(6)
+"""Sideburns grown down over the cheeks, the chin bare."""
+comptime BEARD_COUNT = 7
 """How many styles there are."""
 
 
 def _beard_names() -> List[String]:
     """Return the style names, in order."""
-    return ["clean-shaven", "mustache", "goatee", "short beard", "full beard"]
+    return [
+        "clean-shaven",
+        "mustache",
+        "goatee",
+        "short beard",
+        "full beard",
+        "chin strap",
+        "mutton chops",
+    ]
 
 
 def beard_label(beard: Beard) -> String:
@@ -279,6 +299,9 @@ struct BeardShape(Copyable, DistanceField, Movable):
         elif beard == FULL_BEARD:
             side = 0.7
             chin = 1.4
+        elif beard == MUTTON_CHOPS:
+            side = 0.6
+            chin = 0.6
         self.side_depth = h.cm(side)
         self.chin_depth = h.cm(chin)
         self.mass_center = h.at(0, 58.6, 7.6)
@@ -348,6 +371,12 @@ struct BeardShape(Copyable, DistanceField, Movable):
         var beard = max(
             max(t.y - beard_top(turn), beard_bottom(turn) - t.y), reach
         )
+        if self.beard == CHIN_STRAP:
+            # Only a band along the jaw.
+            beard = max(beard, t.y - (beard_bottom(turn) + STRAP_BAND))
+        elif self.beard == MUTTON_CHOPS:
+            # Only the sides: the chin and the lip are bare.
+            beard = max(beard, (CHOP_TURN - abs(turn)) * Float32(7 * pi / 180))
         return max(beard, lips)
 
     def depth(self, t: Vector3, zone: Float32) -> Float32:
