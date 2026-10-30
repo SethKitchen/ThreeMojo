@@ -97,10 +97,14 @@ def head_hair_from_dimensions(
     """
     var field = HairShape(dimensions, part, side, style)
     # A shell thinner than two cells breaks into patches: the mesher
-    # cannot close it. Very short hair is cut no thinner than that.
+    # cannot close it. Very short hair is cut no thinner than that, and a
+    # closed shell keeps its edges that deep, where they thin. The outer
+    # face alone may thin to nothing: the skin lies under it.
     var cell = (field.high.y - field.low.y) / Float32(detail * REFINE)
     field.side_depth = max(field.side_depth, MIN_SHELL_CELLS * cell)
     field.crown_depth = max(field.crown_depth, MIN_SHELL_CELLS * cell)
+    if not outer_only:
+        field.edge = MIN_SHELL_CELLS * cell
     var label = head_hair_label(part)
     var mesh = mesh_surface(
         field, field.low, field.high, detail, label, workers

@@ -264,6 +264,10 @@ comptime HAIRLINE_FLAT = Float32(3.0)
 comptime HAIRLINE_TEMPLE = Float32(4.6)
 comptime HAIRLINE_RECESS_MALE = Float32(1.1)
 comptime HAIRLINE_RECESS_FEMALE = Float32(0.3)
+# How much higher an edge of the scalp's hair stands for each meter off
+# the skin. The hair then thins to nothing at its edge in a wedge, and
+# does not end in a ledge whose underside the light never reaches.
+comptime EDGE_SLOPE = Float32(2.0)
 
 
 struct HairShape(Copyable, DistanceField, Movable):
@@ -272,7 +276,8 @@ struct HairShape(Copyable, DistanceField, Movable):
     The scalp's hair is a shell over the skin itself, so it fits every
     head a genome makes: about seven millimeters deep at the sides and
     a centimeter on the crown, cut back to a hairline over the forehead,
-    away round each ear and off above the nape. `HAIR_LENGTH` below
+    away round each ear and off above the nape, each edge thinning to
+    nothing in a wedge; see `EDGE_SLOPE`. `HAIR_LENGTH` below
     zero crops it close; above zero it grows a fall that hangs over the
     ears and the nape toward the jaw, open over the face. An eyebrow is its
     `head_hair_field`.
@@ -285,6 +290,9 @@ struct HairShape(Copyable, DistanceField, Movable):
     var soft: Float32
     var side_depth: Float32
     var crown_depth: Float32
+    # How deep the shell stands at its edges, at the least: zero thins
+    # it to nothing there. See `EDGE_SLOPE`.
+    var edge: Float32
     var ears: Float32
     var crown: Float32
     var nape: Float32
@@ -387,6 +395,7 @@ struct HairShape(Copyable, DistanceField, Movable):
         if style.is_tied():
             volume = 1
         self.side_depth = h.cm(0.55) * crop * volume
+        self.edge = 0
         self.crown_depth = h.cm(1.0) * crop * volume
         # Longer grows a fall from the cranium's own ellipsoid out to a
         # bob that reaches the jaw.
@@ -473,10 +482,13 @@ struct HairShape(Copyable, DistanceField, Movable):
         var depth = mix_delta(self.side_depth, self.crown_depth, up)
         var skin = self.skin.distance(point)
         var d = max(skin - depth, -skin - self.bury)
-        d = smax(d, self.nape - point.y, self.soft)
+        # Each edge rises off the skin, as `EDGE_SLOPE` says, from `edge`
+        # deep.
+        var lift = EDGE_SLOPE * max(skin - self.edge, 0)
+        d = smax(d, self.nape - point.y + lift, self.soft)
         var cheek = max(point.y - self.sideburn, self.ear_line - point.z)
-        d = smax(d, -cheek, self.soft)
-        d = smax(d, self.hairline(point), self.soft)
+        d = smax(d, lift - cheek, self.soft)
+        d = smax(d, self.hairline(point) + lift, self.soft)
         for index in range(len(self.cuts)):  # pragma: no branch
             d = smax(d, -self.cuts[index].distance(point, self.soft), self.soft)
         if self.length > 0:
