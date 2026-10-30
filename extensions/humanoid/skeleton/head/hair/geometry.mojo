@@ -25,9 +25,11 @@ from extensions.humanoid.skeleton.head.hair.dimensions import (
 )
 from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
-from extensions.humanoid.skeleton.surface_nets import mesh_surface
+from extensions.humanoid.skeleton.surface_nets import REFINE, mesh_surface
 from extensions.humanoid.spec import HumanoidSpec
 
+comptime MIN_SHELL_CELLS = Float32(2.2)
+"""The fewest cells of its mesh a scalp hair shell stands deep."""
 comptime INNER_DEPTH = Float32(0.0004)
 """How far under the skin a hair shell's corner must lie to be on its
 inner face, in meters. The inner face lies 0.8 mm under it, on the
@@ -94,6 +96,11 @@ def head_hair_from_dimensions(
             out of range, or if the field produces no surface.
     """
     var field = HairShape(dimensions, part, side, style)
+    # A shell thinner than two cells breaks into patches: the mesher
+    # cannot close it. Very short hair is cut no thinner than that.
+    var cell = (field.high.y - field.low.y) / Float32(detail * REFINE)
+    field.side_depth = max(field.side_depth, MIN_SHELL_CELLS * cell)
+    field.crown_depth = max(field.crown_depth, MIN_SHELL_CELLS * cell)
     var label = head_hair_label(part)
     var mesh = mesh_surface(
         field, field.low, field.high, detail, label, workers

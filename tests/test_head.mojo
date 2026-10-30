@@ -8,7 +8,8 @@ joint tissues and cartilages, the muscles, the vessels, the nerves, the
 lymph nodes, the skin and the hair."""
 
 from core.assets import Assets
-from core.buffer_geometry import POSITION
+from core.buffer_geometry import POSITION, BufferGeometry
+from extensions.humanoid.genome import HAIR_LENGTH, Expression, Genome
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.humanoid.athleticism import Athleticism
@@ -816,6 +817,39 @@ def test_hair() raises:
         ).triangle_count(),
         head_hair_from_dimensions(dims, EYEBROWS, RIGHT, 8).triangle_count(),
     )
+
+
+def _euler(mesh: BufferGeometry) raises -> Int:
+    """Return a mesh's Euler characteristic, its corners welded where
+    they meet: two for one closed shell, less for each hole through it."""
+    ref placed = mesh.attribute_view(String(POSITION))
+    var first = Dict[String, Int]()
+    var group = List[Int](capacity=placed.count())
+    for v in range(placed.count()):
+        var p = placed.vector3(v)
+        group.append(first.setdefault(String(p.x, " ", p.y, " ", p.z), v))
+    var edges = Dict[Int, Int]()
+    var count = placed.count()
+    for t in range(mesh.triangle_count()):
+        for c in range(3):
+            var a = group[mesh.corner_index(t, c)]
+            var b = group[mesh.corner_index(t, (c + 1) % 3)]
+            edges[min(a, b) * count + max(a, b)] = 1
+    return len(first) - len(edges) + mesh.triangle_count()
+
+
+def test_short_hair_is_meshed_whole() raises:
+    # Cropped close, the shell is thinner than two cells of a coarse mesh.
+    # It is meshed no thinner than that, so no hole opens through it.
+    var cropped = HumanoidSpec(
+        Length(6.0, FOOT),
+        MALE,
+        genome=Genome().with_gene(HAIR_LENGTH, Expression(-1)),
+    )
+    var dims = head_muscle_dimensions(cropped)
+    var shell = head_hair_from_dimensions(dims, SCALP_HAIR, RIGHT, 16)
+    # One closed shell, with no hole through it.
+    assert_equal(_euler(shell), 2)
 
 
 def test_contents_bits() raises:
