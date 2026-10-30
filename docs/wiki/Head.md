@@ -277,10 +277,10 @@ A game humanoid with no strands draws only the hair's shell. A designed style's 
 | `PONYTAIL`, `HIGH_PONYTAIL` | A tapered tail from the tie, out from the head and down behind it. |
 | `BRAID` | A narrower tail from the nape, down the back. |
 | `PIGTAILS` | A tail from each tie, behind each ear, down beside the neck. |
-| `BUN`, `SPACE_BUNS` | A ball out from each tie, where the groom coils it. |
+| `BUN`, `SPACE_BUNS` | A ball on each tie, half as far out as the groom coils it, so it sits on the head. |
 | `PIXIE` | Cropped close, as it is under strands. |
 
-A tail and a bun take their ties from the groom, and join the shell in a smooth fillet. The tails pass behind the neck, but they do not know the body, so the lowest part of a braid can sink into the back. `GROWN`, `LAYERED` and `MOHAWK` are drawn as they are. A long tail stretches the shell's box. So the mesh takes more cells, up to 64, and each cell stays the size it is on the head alone.
+A tail and a bun take their ties from the groom, and join the shell in a smooth fillet. The tails pass behind the neck, but they do not know the body, so the lowest part of a braid can sink into the back. `GROWN`, `LAYERED` and `MOHAWK` are drawn as they are. `examples/game_hairstyles.mojo` draws the woman of `examples/hairstyles.mojo` in every style as a game humanoid, and writes `out/game_hairstyles.png`. A long tail stretches the shell's box. So the mesh takes more cells, up to 64, and each cell stays the size it is on the head alone.
 
 A style keeps no head of its own. Each root is a point of a unit cranium, and each strand is kept as offsets from its root in the cranium's frame there. So a style fits every head a genome makes. `HairStyleFile.strand` puts a strand on a person's cranium. The groom then walks its root onto the skin and lifts any point of it that would pass under the skin. The follow strands, the clumping and the shading are the grown hair's.
 

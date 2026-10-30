@@ -34,7 +34,6 @@ from extensions.humanoid.skeleton.head.hair.dimensions import (
 from extensions.humanoid.skeleton.head.hair.groom import (
     BRAID_TIE_Y,
     BRAID_TIE_Z,
-    BUN_FLOAT,
     BUN_RADIUS,
     BUN_TIE_Y,
     BUN_TIE_Z,
@@ -73,6 +72,10 @@ from math.vector3 import Vector3, component_max, component_min
 # jaw, as `HairShape`'s length does.
 comptime BOB_LENGTH = Float32(1.0)
 comptime HALF_UP_LENGTH = Float32(0.7)
+# How far a bun's ball sits out from its tie, in its radius: nearer than
+# the groom coils it, as the shell is the hair's mass and the tie lies
+# under the hair's surface.
+comptime BUN_SET = Float32(0.55)
 # Long hair down the back: the middle of the sheet and its half sizes
 # across, down and through, in template centimeters.
 comptime SHEET_Y = Float32(62.0)
@@ -188,7 +191,7 @@ def _tail(
 
 def _bun(mut clay: Sculpt, h: HeadDimensions, tie: Vector3, radius: Float32):
     """Add a bun: a ball out from its tie, away from the cranium's
-    middle, as the groom coils one.
+    middle, where the groom coils one.
 
     Args:
         clay: The sculpt the bun joins.
@@ -198,7 +201,7 @@ def _bun(mut clay: Sculpt, h: HeadDimensions, tie: Vector3, radius: Float32):
     """
     var away = tie - Vector3(0, CRANIUM_CENTER_Y, -1.0)
     away.normalize()
-    var middle = tie + away * (radius * BUN_FLOAT)
+    var middle = tie + away * (radius * BUN_SET)
     var r = h.cm(radius)
     clay.ellipsoid(h.at(middle.x, middle.y, middle.z), Vector3(r, r, r))
 
