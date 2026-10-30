@@ -4,9 +4,9 @@ A player of the [Village walk](Village-walk) carries a sword, and can fight. A c
 
 The rules come from two games. Ki, stances, the ki pulse, burst attacks and rage come from Nioh. Artes, perfect dodges, Over Limit, the mystic arte, the companion's boost attacks and long combos come from Tales of Arise.
 
-![Seen from behind, a man in a red tunic locks on to a hooded bandit, guards, cuts, dodges, and spins with his sword](out/village_combat.png)
+![A man in red fights hooded bandits beside a woman in blue: he cuts, spins and sends a wave, and she casts bolts of light](out/village_combat.png)
 
-`examples/village_combat.mojo` draws this picture. A gamepad of the web backend plays a fixed script against the bandits. To fight with your own gamepad or keyboard, run `examples/village_walk.mojo --play`: see [Village walk](Village-walk#play-the-game).
+`examples/village_combat.mojo` draws this picture. A gamepad of the web backend plays a fixed script against the bandits, and the companion fights beside the player. To fight with your own gamepad or keyboard, run `examples/village_walk.mojo --play`: see [Village walk](Village-walk#play-the-game).
 
 ## The controls
 

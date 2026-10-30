@@ -8,10 +8,12 @@
     mojo run -I . examples/village_combat.mojo [path.png]
 
 The page is Village combat. The player stands on the meadow north-west
-of the trail, six meters from the bandits' camp. The bandits notice the
-player and come. The script locks on to the nearest, guards as they
-come, steps in and cuts three times, dodges, makes the rising edge and
-the tempest, and ends with a heavy cut. The camera follows the lock.
+of the trail, six meters from the bandits' camp, with the companion
+beside them. The bandits notice the player and come. The script locks on
+to the nearest, guards as they come, steps in and cuts three times,
+dodges, makes the rising edge and the tempest, cuts once heavily, and
+ends with the demon fang. The companion casts at the locked bandit. The
+camera follows the lock.
 
 The program needs no window and no pad. A pad of the web backend plays
 the script at the `medium` quality in a window of 480 by 270. The program
@@ -46,11 +48,12 @@ comptime WIDTH = 480
 comptime HEIGHT = 270
 comptime FPS = 8
 """The frames a second of the scripted fight."""
-comptime SECONDS = Float32(9)
+comptime SECONDS = Float32(10)
 """How long the scripted fight lasts."""
 # The buttons of the browser's standard layout.
 comptime SOUTH = 0
 comptime EAST = 1
+comptime WEST = 2
 comptime NORTH = 3
 comptime LEFT_SHOULDER = 4
 comptime RIGHT_SHOULDER = 5
@@ -102,9 +105,13 @@ def _script(mut state: WebGamepadState, t: Float32):
         _hold(state, LEFT_TRIGGER)
         if _tap(t, 6.5):
             _hold(state, NORTH)
-    # A heavy cut.
+    # A heavy cut, and the demon fang.
     if _tap(t, 7.75):
         _hold(state, NORTH)
+    if t >= 8.75 and t < 9.0:
+        _hold(state, LEFT_TRIGGER)
+        if _tap(t, 8.75):
+            _hold(state, WEST)
 
 
 def main() raises:
