@@ -11,7 +11,7 @@ The page is Outfits and armor. The eight callings stand together: a
 peasant, a goodwife, an archer, a monk, a merchant, a noblewoman, a
 man-at-arms and a knight. Each person's seed picks a genome and a
 stature, and `calling_outfit` dresses them for their calling, dyed by
-the seed. The women wear their
+the seed. Soldiers are toned, and one in three of the others. The women wear their
 hair long, in a braid or in a bun. The crowd stands in two rows and
 walks in place, each at a pace of their own, while the camera passes
 along the front row. It writes `out/crowd.png` and prints how long the
@@ -35,13 +35,17 @@ from core.object3d import Object3D
 from core.scene import Scene
 from environments.room_environment import room_environment
 from extensions.attire.mix import (
+    ARCHER,
     GOODWIFE,
+    KNIGHT,
+    MAN_AT_ARMS,
     NOBLEWOMAN,
     Calling,
     calling_label,
     calling_outfit,
 )
 from extensions.attire.outfit import dress
+from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.genome import random_genome
 from extensions.humanoid.rig.clips import idle_clip, walk_clip
 from extensions.humanoid.rig.game import add_game_humanoid
@@ -129,6 +133,15 @@ def main() raises:
             sex = FEMALE
             style = long_hair[seed % len(long_hair)]
         var genome = random_genome(seed)
+        # Soldiers are trained; of the others, one in three.
+        var build = UNTONED
+        if (
+            calling == ARCHER
+            or calling == MAN_AT_ARMS
+            or calling == KNIGHT
+            or seed % 3 == 0
+        ):
+            build = TONED
         # Statures from five feet one to six feet one.
         var stature = Length(Float32(61 + seed % 13), INCH)
         var row = index // (PEOPLE // 2)
@@ -141,7 +154,7 @@ def main() raises:
             scene,
             assets,
             at,
-            HumanoidSpec(stature, sex, genome=genome),
+            HumanoidSpec(stature, sex, build, genome),
             TRIANGLES,
             hair_style=style,
             workers=workers,
