@@ -96,6 +96,7 @@ from extensions.humanoid.skeleton.torso.body import (
     body_skin_mesh,
     body_skin_parts,
 )
+from extensions.humanoid.skeleton.surface_nets import reproject_uvs
 from extensions.humanoid.spec import HumanoidSpec
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
@@ -393,6 +394,9 @@ def add_game_humanoid(
         outer_only=True,
         alone=guides == 0,
     )
+    # Decimation bends the strands laid round the shell; they are laid
+    # again where its vertices end up.
+    var meshed = shell.clone()
     var eyes = List[BufferGeometry]()
     # Both named sides receive an eye.
     for side in [RIGHT, LEFT]:  # pragma: no branch
@@ -549,6 +553,7 @@ def add_game_humanoid(
     holder.set_position(-head.x, -head.y, -head.z)
     var holder_id = scene.attach(holder^, bones[HEAD.value])
     # The hair's strands run down its shell, as its texture coordinates do.
+    reproject_uvs(shell, meshed)
     var hair = hair_paint
     if hair.value < 0:
         var strands = hair_albedo(HAIR_TEXELS, spec.genome)
