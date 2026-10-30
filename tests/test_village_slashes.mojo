@@ -100,6 +100,22 @@ def test_light_adds_over_a_triangle() raises:
         PLAYER_TRAIL,
     )
     assert_equal(_light(frame), 0)
+    # One above the frame, or left of it, adds nothing.
+    glow_triangle(
+        frame,
+        Vector3(1, -9, 1),
+        Vector3(9, -9, 1),
+        Vector3(5, -2, 1),
+        PLAYER_TRAIL,
+    )
+    glow_triangle(
+        frame,
+        Vector3(-9, 1, 1),
+        Vector3(-9, 9, 1),
+        Vector3(-2, 5, 1),
+        PLAYER_TRAIL,
+    )
+    assert_equal(_light(frame), 0)
     # One that runs off the frame adds light where it lies on it.
     glow_triangle(
         frame,
