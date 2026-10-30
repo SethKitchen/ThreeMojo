@@ -8,13 +8,14 @@
 A garment made from the skin follows the ears, the nape and the hollow
 under the chin, as a balaclava does. A hood does not: it hangs loose
 round the head, from the crown down to the neck, and frames the face.
-`hang_cowl` replaces the part of a hood's shell above the middle of the
+`hang_cowl` replaces the part of a hood's shell above the base of the
 neck with a mesh laid on the convex hull of the shell there:
 
 1. `cowl_bottom` is at the base of the neck. The shell is cut a little
-   below it, so its edge lies inside the cowl.
-2. The shell's vertices above the bottom are closed in their convex
-   hull. The hull spans the ears, the nape and the hollow under the
+   above it, so its edge lies inside the cowl.
+2. The shell's vertices above the bottom, and the points where the shell
+   crosses it, are closed in their convex hull, so the hull reaches down
+   to the bottom. The hull spans the ears, the nape and the hollow under the
    chin.
 3. A sphere of `COWL_RINGS` rings and `COWL_SECTORS` sectors, stretched
    to the hood's box, is cast from its middle onto the hull, `COWL_STAND`
@@ -38,7 +39,7 @@ from core.buffer_geometry import POSITION, BufferGeometry
 from extensions.attire.cover import face_oval
 from extensions.attire.last import FootLast, foot_last
 from extensions.attire.mesh_ops import MeshWriter, cut, merge
-from extensions.attire.skirt import leg_side, skirt_scale
+from extensions.attire.skirt import leg_side, skirt_scale, slice_segments
 from extensions.humanoid.rig.joints import HEAD, NECK, HumanoidRig
 from math.vector3 import Vector3
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
@@ -52,7 +53,7 @@ comptime COWL_STAND = Float32(0.006)
 comptime COWL_DROP = Float32(1.0)
 """How far down the neck a cowl reaches, from the skull, in neck lengths."""
 comptime COWL_OVERLAP = Float32(0.015)
-"""How far below a cowl's bottom the shell is cut, in meters on the
+"""How far above a cowl's bottom the shell is cut, in meters on the
 template, so the shell's edge lies inside the cowl."""
 comptime COWL_RIM = Float32(0.004)
 """How far above its bottom a cowl is cut level, in meters on the
@@ -82,8 +83,9 @@ def head_cowl(whole: BufferGeometry, rig: HumanoidRig) raises -> List[FootLast]:
         rig: The rig it was made on.
 
     Returns:
-        One hull, of the shell's vertices above `cowl_bottom`, or none if
-        fewer than four lie there.
+        One hull, of the shell's vertices above `cowl_bottom` and the
+        points where the shell crosses it, or none if fewer than four
+        points make it. With no vertex above the bottom, there is none.
 
     Raises:
         Error: If the mesh has no positions or skin weights, or the points
@@ -97,6 +99,9 @@ def head_cowl(whole: BufferGeometry, rig: HumanoidRig) raises -> List[FootLast]:
         var p = placed.vector3(v)
         if legs[v] and p.y > bottom:
             points.append(p)
+    # Where the shell crosses the bottom, so the hull reaches down to it.
+    if len(points) > 0:
+        points.extend(slice_segments(whole, legs, bottom))
     var hulls = List[FootLast]()
     if len(points) >= 4:
         hulls.append(foot_last(points))
@@ -247,9 +252,9 @@ def hang_cowl(
     if len(hulls) == 0:
         return piece.clone()
     ref placed = piece.attribute_view(String(POSITION))
-    var below = cowl_bottom(rig) - COWL_OVERLAP * skirt_scale(rig)
+    var above = cowl_bottom(rig) + COWL_OVERLAP * skirt_scale(rig)
     var values = List[Float32](capacity=placed.count())
     for v in range(placed.count()):
-        values.append(below - placed.vector3(v).y)
+        values.append(above - placed.vector3(v).y)
     var hood = cut(piece, values, 0)
     return merge(hood, cowl_mesh(hulls[0], piece, rig, open_face, thickness))

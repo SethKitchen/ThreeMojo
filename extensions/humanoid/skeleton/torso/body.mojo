@@ -422,6 +422,7 @@ def body_skin_parts(
         field.high,
         field.epsilon,
         shapes,
+        seam=floor,
     )
     if len(shapes) == 0:
         scan = clip_level(scan, floor, keep_above=True)

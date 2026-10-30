@@ -119,6 +119,21 @@ def test_a_decimated_mesh_lays_its_texture_where_it_stands() raises:
     empty.set_attribute(String(UV), BufferAttribute(List[Float32](), 2))
     with assert_raises(contains="source vertex"):
         reproject_uvs(fewer, empty)
+    # A source with no height, or whose v does not rise, gives no scale.
+    var flat = BufferGeometry()
+    flat.set_attribute(
+        String(POSITION), BufferAttribute([Float32(0), 0, 0, 1, 0, 0], 3)
+    )
+    flat.set_attribute(String(UV), BufferAttribute([Float32(0), 0, 1, 1], 2))
+    with assert_raises(contains="rises with its height"):
+        reproject_uvs(fewer, flat)
+    var falling = BufferGeometry()
+    falling.set_attribute(
+        String(POSITION), BufferAttribute([Float32(0), 0, 0, 0, 1, 0], 3)
+    )
+    falling.set_attribute(String(UV), BufferAttribute([Float32(0), 1, 0, 0], 2))
+    with assert_raises(contains="rises with its height"):
+        reproject_uvs(fewer, falling)
 
 
 def test_smoothing_is_optional() raises:

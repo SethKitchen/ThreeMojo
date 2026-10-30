@@ -48,6 +48,7 @@ from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
 from extensions.humanoid.skeleton.surface_nets import mesh_surface
 from math.utils import clamp
 from math.vector3 import Vector3
+from units.si import DEGREE, Angle
 
 comptime MOUTH_Y = Float32(65.0)
 """Where the lips part, in template centimeters above the hips."""
@@ -185,18 +186,18 @@ def _rounded(x: Float32, y: Float32, a: Float32, b: Float32) -> Float32:
     return (sqrt(sqrt(r)) - 1) * min(a, b)
 
 
-def beard_top(turn: Float32) -> Float32:
+def beard_top(turn: Angle) -> Float32:
     """Return the height of a full beard's upper line, round the head.
 
     Args:
-        turn: How far round from the front, in degrees, either way.
+        turn: How far round from the front, either way.
 
     Returns:
         The height in template cm: under the nose at the front, down to
         the corners of the mouth, then up across the cheek to the
         sideburn.
     """
-    var a = abs(turn)
+    var a = abs(turn.to(DEGREE))
     if a <= 14:
         return NOSE_BASE_Y
     if a <= 24:
@@ -204,17 +205,17 @@ def beard_top(turn: Float32) -> Float32:
     return Float32(64.4) + (SIDEBURN_Y - Float32(64.4)) * _ramp(a, 24, 80)
 
 
-def beard_bottom(turn: Float32) -> Float32:
+def beard_bottom(turn: Angle) -> Float32:
     """Return the height of a beard's lower line, round the head.
 
     Args:
-        turn: How far round from the front, in degrees, either way.
+        turn: How far round from the front, either way.
 
     Returns:
         The height in template cm: above the larynx at the front, under
         the jaw at the sides, and up to the ear's lobe behind the jaw.
     """
-    var a = abs(turn)
+    var a = abs(turn.to(DEGREE))
     if a <= 50:
         return Float32(57.2) + Float32(0.8) * _ramp(a, 0, 50)
     return Float32(58.0) + Float32(10.0) * _ramp(a, 50, EAR_TURN)
@@ -368,12 +369,13 @@ struct BeardShape(Copyable, DistanceField, Movable):
             return max(min(min(mustache, chin), ring), lips)
         var turn = atan2(t.x, t.z - HEAD_AXIS_Z) * Float32(180 / pi)
         var reach = Float32(7) * (abs(turn) - EAR_TURN) * Float32(pi / 180)
+        var around = Angle(turn, DEGREE)
         var beard = max(
-            max(t.y - beard_top(turn), beard_bottom(turn) - t.y), reach
+            max(t.y - beard_top(around), beard_bottom(around) - t.y), reach
         )
         if self.beard == CHIN_STRAP:
             # Only a band along the jaw.
-            beard = max(beard, t.y - (beard_bottom(turn) + STRAP_BAND))
+            beard = max(beard, t.y - (beard_bottom(around) + STRAP_BAND))
         elif self.beard == MUTTON_CHOPS:
             # Only the sides: the chin and the lip are bare.
             beard = max(beard, (CHOP_TURN - abs(turn)) * Float32(7 * pi / 180))

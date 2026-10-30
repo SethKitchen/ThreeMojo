@@ -10,8 +10,8 @@ sits: padding under mail under plate. A fabric kind selects the look and
 the physical constants. A dye channel and a dye pattern say how a
 garment takes color. A wear kind names one channel of dirt, blood, wet
 or damage. A form says how a garment's shell is shaped where it does not
-follow the skin: a skirt round both legs, a last round each foot, or a
-cowl round the head.
+follow the skin: a skirt round both legs, a last round each foot, a
+cowl round the head, or a taut band round the body.
 
 Each kind is a type, so a bare integer does not compile. A value that
 is not named is still constructible, and the boundary that reads it
@@ -593,7 +593,7 @@ def form_named(name: String) raises -> Form:
     """Return the form that `name` names.
 
     Args:
-        name: `fitted`, `skirted`, `shod` or `cowled`.
+        name: `fitted`, `skirted`, `shod`, `cowled` or `banded`.
 
     Returns:
         The named form.

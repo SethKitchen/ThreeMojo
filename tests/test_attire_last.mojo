@@ -92,12 +92,22 @@ def test_each_foot_takes_its_own_side_below_the_top() raises:
     var left = foot_points(boots, rig, False)
     assert_true(len(right) > 4)
     assert_equal(len(right), len(left))
+    # They reach up to the top, where the shell crosses it.
+    var high = Float32(-10)
     for p in right:
         assert_true(p.x < 0 and p.x > -0.2)
-        assert_true(p.y < -0.83)
+        assert_true(p.y <= last_top(rig) + 1e-5)
+        high = max(high, p.y)
+    assert_almost_equal(high, last_top(rig), atol=1e-5)
     for p in left:
         assert_true(p.x > 0)
     assert_equal(len(foot_points(empty_mesh(), rig, True)), 0)
+    # A shell all below the top crosses it nowhere.
+    var low = tube(-0.1, 0.05, 0.05, -0.85, -0.93, RIGHT_FOOT, 2)
+    var sunk = foot_points(_covered(low), rig, True)
+    assert_true(len(sunk) > 0)
+    for p in sunk:
+        assert_true(p.y < -0.84)
 
 
 def test_a_last_is_cast_onto_its_hull() raises:
@@ -133,6 +143,8 @@ def test_a_boot_has_a_last_for_each_foot() raises:
     assert_equal(len(lasts), 2)
     assert_true(lasts[0].center.x < 0)
     assert_true(lasts[1].center.x > 0)
+    # Each reaches up to the top.
+    assert_almost_equal(lasts[0].top, last_top(rig), atol=1e-5)
     # A side with fewer than four points has no last.
     var one = merge(
         tube(-0.1, 0, 0.05, -0.6, -0.85, RIGHT_SHIN),

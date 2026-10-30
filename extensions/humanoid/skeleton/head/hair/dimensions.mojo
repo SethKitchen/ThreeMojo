@@ -373,7 +373,8 @@ struct HairShape(Copyable, DistanceField, Movable):
 
         Raises:
             Error: If `dimensions.validate` refuses the copy, if `part`
-                is not named, or if `side` or `style` is not valid.
+                is not named, if `side` or `style` is not valid, or if
+                `length` is not from -1 to 1, as a gene is.
         """
         require_hair_style(style)
         self.group = head_hair_field(dimensions, part, side, skin)
@@ -390,7 +391,10 @@ struct HairShape(Copyable, DistanceField, Movable):
         if style == PIXIE:
             self.length = Float32(-1)
         if length:
-            self.length = length.value()
+            var override = length.value()
+            if not (override >= -1 and override <= 1):
+                raise Error("A hair length must be from -1 to 1")
+            self.length = override
         # Shorter than the template crops the hair close.
         var crop = 1 + Float32(0.35) * min(Float32(0), self.length)
         # Curled hair stands fuller off the head than straight hair,

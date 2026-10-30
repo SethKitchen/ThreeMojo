@@ -14,7 +14,8 @@ the shell there:
 1. `last_top` is a little above the ankle joints. The shell is cut a
    little below it, so its edge lies inside the last.
 2. `foot_lasts` closes the shell's vertices below the top on each side of
-   the body in their convex hull.
+   the body in their convex hull, with the points where the shell crosses
+   the top, so the hull reaches up to it.
 3. A sphere of `LAST_RINGS` rings and `LAST_SECTORS` sectors, stretched to
    the foot's box, is cast from the middle of the foot onto the hull. So
    the last is evenly meshed, even where the hull has long facets over
@@ -35,7 +36,7 @@ from std.math import cos, pi, sin, sqrt
 
 from core.buffer_geometry import POSITION, BufferGeometry
 from extensions.attire.mesh_ops import MeshWriter, cut, merge
-from extensions.attire.skirt import leg_side, skirt_scale
+from extensions.attire.skirt import leg_side, skirt_scale, slice_segments
 from extensions.humanoid.rig.joints import (
     HIPS,
     LEFT_FOOT,
@@ -142,7 +143,9 @@ def foot_points(
 
     Returns:
         The positions of the trunk and leg vertices below `last_top` on
-        that side of the hips.
+        that side of the hips, and of the points where the shell crosses
+        `last_top` there, so a last reaches up to it. With no vertex below
+        the top on that side, none.
 
     Raises:
         Error: If the mesh has no positions or skin weights.
@@ -159,6 +162,10 @@ def foot_points(
         var p = placed.vector3(v)
         if legs[v] and p.y < top and (p.x - middle) * side > 0:
             points.append(p)
+    if len(points) > 0:
+        for p in slice_segments(piece, legs, top):
+            if (p.x - middle) * side > 0:
+                points.append(p)
     return points^
 
 

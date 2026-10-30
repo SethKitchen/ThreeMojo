@@ -105,6 +105,7 @@ from extensions.humanoid.skeleton.torso.bones.dimensions import (
 )
 from materials.material import MaterialId
 from math.vector3 import Vector3, midpoint
+from extensions.humanoid.skeleton.head.hair.styles import GROWN
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -454,6 +455,14 @@ def test_hair_follows_the_skin() raises:
         head_muscle_dimensions(_person(Genome(), FEMALE)), SCALP_HAIR, RIGHT
     )
     assert_true(her.line_recess < scalp.line_recess)
+    # A length in place of the genome's stays within a gene's range.
+    var half = HairShape(dims, SCALP_HAIR, RIGHT, skin, GROWN, Float32(0.5))
+    assert_equal(half.length, Float32(0.5))
+    var zero = Float32(0)
+    var wrong: List[Float32] = [-4, 1.5, zero / zero]
+    for k in range(3):
+        with assert_raises(contains="hair length"):
+            _ = HairShape(dims, SCALP_HAIR, RIGHT, skin, GROWN, wrong[k])
     with assert_raises(contains="RIGHT or LEFT"):
         _ = head_hair_field(dims, EYEBROWS, BodySide(5), skin)
     var brow = HairShape(dims, EYEBROWS, LEFT)

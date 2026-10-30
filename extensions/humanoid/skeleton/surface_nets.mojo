@@ -730,8 +730,9 @@ def reproject_uvs(mut target: BufferGeometry, source: BufferGeometry) raises:
             `uv`, `v` running up with the height.
 
     Raises:
-        Error: If a mesh lacks `position` or `uv`, or the source has no
-            vertex.
+        Error: If a mesh lacks `position` or `uv`, the source has no
+            vertex, or its highest vertex is not above its lowest with a
+            greater `v`.
     """
     ref from_points = source.attribute_view(String(POSITION))
     ref from_uvs = source.attribute_view(String(UV))
@@ -748,7 +749,12 @@ def reproject_uvs(mut target: BufferGeometry, source: BufferGeometry) raises:
     var low = from_points.vector3(lowest).y
     var v_low = from_uvs.component(lowest, 1)
     var rise = from_uvs.component(highest, 1) - v_low
-    var span = (from_points.vector3(highest).y - low) / max(rise, Float32(1e-6))
+    var height = from_points.vector3(highest).y - low
+    if not (height > 0 and rise > 0):
+        raise Error(
+            "Texture coordinates need a source whose v rises with its height"
+        )
+    var span = height / rise
     ref points = target.attribute_view(String(POSITION))
     var uvs = target.clone_attribute(String(UV))
     for index in range(points.count()):  # pragma: no branch

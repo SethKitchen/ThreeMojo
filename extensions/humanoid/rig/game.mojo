@@ -340,8 +340,9 @@ def budget_all(
     Args:
         meshes: The meshes.
         budgets: One budget per mesh, as `_budgeted` takes it.
-        workers: How many meshes to decimate at once; one or less runs
-            them one after another.
+        workers: Above one, every mesh is decimated at once, each on
+            a task of its own; one or less decimates them one after
+            another.
 
     Returns:
         The meshes, decimated, in their order.
@@ -425,7 +426,8 @@ def add_game_humanoid(
             The total mesh budget then includes those parts and both eyes.
             Insufficient budgets raise instead of dropping targets or exceeding it.
         beard: The facial hair the face grows. Clean-shaven by default.
-            A beard takes `BEARD_SHARE` of the budget from the body's.
+            A beard takes `BEARD_SHARE` of the budget, and 32 triangles
+            at least, from the body's.
 
     Returns:
         The humanoid: its rig, its bones and its meshes.
@@ -544,12 +546,14 @@ def add_game_humanoid(
             )
         remaining = triangles - reserve - _FACIAL_PART_MINIMUM
     var body_budget = Int(Float32(remaining) * BODY_SHARE)
-    # A beard takes its share from the body's. With no budget, it keeps
-    # its full mesh, as every part does.
+    # A beard takes its share, and 32 triangles at least, from the body's.
+    # The body keeps a budget of one at least: none would keep its full
+    # mesh. With no budget, the beard keeps its full mesh, as every part
+    # does.
     var beard_budget = 0
     if whiskers and triangles > 0:
         beard_budget = max(32, Int(Float32(remaining) * BEARD_SHARE))
-        body_budget -= beard_budget
+        body_budget = max(1, body_budget - beard_budget)
     var hand_budget = Int(
         Float32(remaining) * (1 - BODY_SHARE - HAIR_SHARE) / 2
     )

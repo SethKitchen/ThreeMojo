@@ -34,15 +34,16 @@ skin out:
 | `gown` | torso | mid | wool | flexible | skirted to the ankles |
 | `robe` | torso | mid | wool | flexible | skirted to the ankles |
 | `jerkin` | torso | outer | leather | flexible | skirted |
-| `belt` | waist | over | leather | flexible | fitted |
+| `belt` | waist | over | leather | flexible | banded |
 | `gorget` | neck | armor | plate | rigid on the chest | fitted |
 | `gauntlets` | hands | armor | plate | rigid on each hand | fitted |
 | `sabatons` | feet | armor | plate | rigid on each foot and its toes | shod |
 
 A skirted garment hangs below the hips as one skirt round both legs, a
-shod one closes each foot in a last, and a cowled one closes the head in
-a loose cowl. See `extensions.attire.skirt`, `extensions.attire.last` and
-`extensions.attire.cowl`.
+shod one closes each foot in a last, a cowled one closes the head in a
+loose cowl, and a banded one is drawn as a taut band round the body. See
+`extensions.attire.skirt`, `extensions.attire.last`,
+`extensions.attire.cowl` and `extensions.attire.band`.
 
 This is not a three.js port. See Extensions.
 

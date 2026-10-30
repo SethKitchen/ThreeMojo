@@ -85,8 +85,8 @@ from render.framebuffer import Color
 
 
 comptime RIM_THINNEST = Float32(0.0015)
-"""A fabric at least this thick, in meters, has a rim at its hems: leather,
-padding, mail and plate."""
+"""A fabric at least this thick, in meters, has a rim at its hems: velvet,
+leather, padding, mail and plate."""
 comptime RIM_DEEPEST = Float32(0.006)
 """The deepest a rim runs, in meters."""
 
@@ -289,9 +289,17 @@ def dress_pieces(
             feet = foot_lasts(whole, person.rig)
             whole = shoe(whole, feet, person.rig)
         if garment.form == BANDED:
+            # A band's cover, smoothed over a coarse skin, can stay under
+            # one half everywhere, so its piece is cut at half its peak.
+            var peak = Float32(1.0e-6)
+            for v in range(count):
+                peak = max(peak, values[i][v])
+            var scaled = List[Float32](capacity=count)
+            for v in range(count):
+                scaled.append(values[i][v] / peak)
             whole = belt_band(
                 garment_piece(skin, places[i], everything, nothing),
-                whole,
+                garment_piece(skin, places[i], scaled, nothing),
                 person.rig,
                 Float32(fabric(garment.fabric).thickness.value),
             )

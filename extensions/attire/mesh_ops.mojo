@@ -474,9 +474,13 @@ struct MeshWriter(Movable):
     merged with the shell they join."""
 
     var names: List[String]
+    """The names of the attributes it writes."""
     var sizes: List[Int]
+    """How many components each attribute has a vertex."""
     var out: List[List[Float32]]
+    """Each attribute's values, written so far."""
     var index: List[Int]
+    """The corners of its triangles, three a triangle."""
 
     def __init__(out self, like: BufferGeometry) raises:
         """Write the attributes `like` has.

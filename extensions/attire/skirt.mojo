@@ -37,8 +37,8 @@ hem, so a hem trim lies along it as along any hem.
 
 This is not a three.js port. See Extensions.
 
-    var envelope = skirt_envelope(whole, rig, 0.2, under, gap)
-    var piece = hang_skirt(piece, envelope, rig, lined=True, thickness)
+    var envelope = skirt_envelope(whole, rig, 0.2, under, gap, thickness)
+    var skirt = hang_skirt(piece, envelope, rig, lined=True)
 """
 
 from std.math import cos, pi, sin, sqrt

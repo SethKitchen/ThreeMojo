@@ -121,7 +121,7 @@ Below the top, a skirt hangs clear of the legs. So it hides neither the skin nor
 `extensions/attire/last.mojo` shoes each foot in four steps.
 
 1. `last_top` is 2 cm above the higher ankle joint on the template. The shell is cut 2 cm below that, so its edge lies inside the last.
-2. `foot_lasts` closes the shell's vertices below the top on each side of the hips in their convex hull.
+2. `foot_lasts` closes the shell's vertices below the top on each side of the hips in their convex hull. The hull also takes the points where the shell crosses the top. So the hull reaches up to the top, even on a coarse skin.
 3. `last_mesh` casts a sphere of 12 rings and 18 sectors from the middle of the foot onto the hull. The sphere is stretched to the foot's box. So the last is evenly meshed, even where the hull has long flat facets over the toes and the arch. The last stands 1.5 mm out of the hull. So the seam where the shaft meets it is a clean step, as a boot's welt is.
 4. The flat top of the hull lies inside the shaft. The last is cut level 3 mm below it.
 
@@ -131,8 +131,8 @@ Each vertex of a last takes the weights of the nearest vertex of the shell. So t
 
 `extensions/attire/cowl.mojo` closes a hood round the head in four steps.
 
-1. `cowl_bottom` is at the base of the neck. The shell is cut 1.5 cm below it, so its edge lies inside the cowl.
-2. `head_cowl` closes the shell's vertices above the bottom in their convex hull. The hull spans the ears, the nape and the hollow under the chin.
+1. `cowl_bottom` is at the base of the neck. The shell is cut 1.5 cm above it, so its edge lies inside the cowl.
+2. `head_cowl` closes the shell's vertices above the bottom in their convex hull. The hull also takes the points where the shell crosses the bottom, so it reaches down to the bottom. The hull spans the ears, the nape and the hollow under the chin.
 3. `cowl_mesh` casts a sphere of 18 rings and 28 sectors onto the hull, 6 mm out of it, so the hood stands loose. The sphere's pole looks forward through the face, so its rings run round the face's opening.
 4. The cowl is cut open along the face's oval and level at its bottom. A lining one fabric thickness inside it shows where the opening looks into the hood.
 
@@ -223,7 +223,7 @@ paint(piece, garment.dyes)
 | `gown` | torso | mid | wool, to the ankles | skirted, flare 0.32 |
 | `robe` | torso | mid | wool, to the ankles, cut loose | skirted, flare 0.12 |
 | `jerkin` | torso | outer | leather, sleeveless | skirted, flare 0.15 |
-| `belt` | waist | over | leather | fitted |
+| `belt` | waist | over | leather | banded |
 | `gorget` | neck | armor | plate, rigid on the chest | fitted |
 | `gauntlets` | hands | armor | plate, rigid on each hand | fitted |
 | `sabatons` | feet | armor | plate, rigid on each foot and its toes | shod |

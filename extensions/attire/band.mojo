@@ -14,7 +14,9 @@ the outline of its own shell, as a belt drawn taut is. Its top and its
 bottom edges are level, and it spans the hollow of the back.
 
 The band stands where the garment's cover puts it: its middle is the
-mean height of the piece the cover cuts. Each of its rows follows the
+mean height of the piece the cover cuts. `dress_pieces` cuts that piece
+at half the cover's own peak, since a narrow band's cover, smoothed over
+a coarse skin, can stay under one half everywhere. Each of its rows follows the
 convex outline of the shell at that height, with the arms left out.
 Each side takes the skin weights of the shell vertex nearest it.
 

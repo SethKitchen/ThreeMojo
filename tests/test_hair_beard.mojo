@@ -41,7 +41,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import FOOT, Length
+from units.si import DEGREE, FOOT, Angle, Length
 
 
 def test_beards_are_named() raises:
@@ -63,16 +63,19 @@ def test_beards_are_named() raises:
 def test_a_beard_line_runs_from_the_mouth_to_the_sideburn() raises:
     # Under the nose at the front, down to the corners of the mouth, up
     # across the cheek to the sideburn.
-    assert_almost_equal(beard_top(0), NOSE_BASE_Y)
-    assert_almost_equal(beard_top(-10), NOSE_BASE_Y)
-    assert_almost_equal(beard_top(24), 64.4)
-    assert_true(beard_top(19) < NOSE_BASE_Y and beard_top(19) > 64.4)
-    assert_almost_equal(beard_top(80), SIDEBURN_Y)
-    assert_almost_equal(beard_top(90), SIDEBURN_Y)
+    assert_almost_equal(beard_top(Angle(0.0, DEGREE)), NOSE_BASE_Y)
+    assert_almost_equal(beard_top(Angle(-10.0, DEGREE)), NOSE_BASE_Y)
+    assert_almost_equal(beard_top(Angle(24.0, DEGREE)), 64.4)
+    assert_true(
+        beard_top(Angle(19.0, DEGREE)) < NOSE_BASE_Y
+        and beard_top(Angle(19.0, DEGREE)) > 64.4
+    )
+    assert_almost_equal(beard_top(Angle(80.0, DEGREE)), SIDEBURN_Y)
+    assert_almost_equal(beard_top(Angle(90.0, DEGREE)), SIDEBURN_Y)
     # Above the larynx at the front, under the jaw, up to the ear's lobe.
-    assert_almost_equal(beard_bottom(0), 57.2)
-    assert_almost_equal(beard_bottom(-50), 58.0)
-    assert_true(beard_bottom(80) > 58.0)
+    assert_almost_equal(beard_bottom(Angle(0.0, DEGREE)), 57.2)
+    assert_almost_equal(beard_bottom(Angle(-50.0, DEGREE)), 58.0)
+    assert_true(beard_bottom(Angle(80.0, DEGREE)) > 58.0)
 
 
 def test_each_style_grows_where_it_should() raises:

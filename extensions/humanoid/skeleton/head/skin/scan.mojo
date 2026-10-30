@@ -778,6 +778,7 @@ def scan_skin_mesh[
     high: Vector3,
     step: Float32,
     shapes: List[String] = List[String](),
+    seam: Optional[Float32] = None,
 ) raises -> BufferGeometry:
     """Return the scan's skin as a mesh on the surface of `field`.
 
@@ -801,6 +802,10 @@ def scan_skin_mesh[
         step: The gradient's sample distance, in meters.
         shapes: The model's expression shapes to rig, by name; see
             `rig_expressions`. None by default.
+        seam: The height where the mesh that meets this one joins it, in
+            meters, when it is above `floor`. Within `BLEND_BAND` above
+            it, a vertex is placed on the surface exactly and its normal
+            turns to the field's gradient. `floor` by default.
 
     Returns:
         A geometry with `position`, `normal` and `uv`; `v` runs over the
@@ -813,6 +818,9 @@ def scan_skin_mesh[
     var triangles = skin_triangles(model)
     var skin = scan.skin(model)
     var count = len(skin)
+    var join = floor
+    if seam:
+        join = seam.value()
     # Each vertex's place on the field's surface, once it is needed: zero
     # not yet placed, one placed, two lost. A vertex the walk cannot
     # bring onto the surface is off the field's solids, as the scan's
@@ -837,7 +845,7 @@ def scan_skin_mesh[
                 # Near the floor the mesh meets the field's own mesh, so
                 # each vertex there is walked onto the surface exactly.
                 var snap = SNAP
-                if p.y < floor + BLEND_BAND:
+                if p.y < join + BLEND_BAND:
                     snap = ON_SURFACE
                 if v < FACE_AND_HEAD.end and abs(field.distance(p)) > snap:
                     p = _walk(field, p, low, high, step)
@@ -871,7 +879,7 @@ def scan_skin_mesh[
         n.normalize()
         # Near the floor the normal turns to the field's gradient, as the
         # field's own mesh has it, so the two shade alike where they meet.
-        var rise = (points[v].y - floor) / BLEND_BAND
+        var rise = (points[v].y - join) / BLEND_BAND
         if rise < 1:
             var g = surface_gradient(field, points[v], step)
             g.normalize()

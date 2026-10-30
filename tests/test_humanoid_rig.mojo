@@ -676,6 +676,26 @@ def test_a_game_humanoid_grows_a_beard() raises:
         _ = game_build_settings(facial_animation=True, beard=GOATEE)
 
 
+def test_a_beard_leaves_the_body_a_budget() raises:
+    # A beard's least share cannot leave the body with no budget, which
+    # would keep its whole mesh.
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var tiny = add_game_humanoid(
+        scene, assets, root, _spec(), 40, 12, 8, 8, workers=1, beard=MUSTACHE
+    )
+    var whole = add_game_humanoid(
+        scene, assets, root, _spec(), 0, 12, 8, 8, workers=1
+    )
+    var body = scene.skinned_meshes[tiny.skins[0]].geometry
+    var full = scene.skinned_meshes[whole.skins[0]].geometry
+    assert_true(
+        assets.geometries.get(body).triangle_count()
+        < assets.geometries.get(full).triangle_count()
+    )
+
+
 def _grid(cells: Int) raises -> BufferGeometry:
     """Return a flat grid of `cells` by `cells` quads, wavy in z."""
     var points = List[Vector3]()

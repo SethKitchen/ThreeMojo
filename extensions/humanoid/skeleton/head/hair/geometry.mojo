@@ -26,7 +26,7 @@ from extensions.humanoid.skeleton.head.hair.dimensions import (
 from extensions.humanoid.skeleton.head.hair.silhouette import HairSilhouette
 from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
-from extensions.humanoid.skeleton.isosurface import MAX_DETAIL
+from extensions.humanoid.skeleton.isosurface import MAX_DETAIL, check_detail
 from extensions.humanoid.skeleton.surface_nets import REFINE, mesh_surface
 from extensions.humanoid.spec import HumanoidSpec
 from std.math import ceil
@@ -108,6 +108,8 @@ def head_hair_from_dimensions(
     var label = head_hair_label(part)
     var mesh: BufferGeometry
     if alone and field.scalp and style.is_designed():
+        # The detail asked for is checked before the tails stretch it.
+        check_detail(detail, label)
         var shaped = HairSilhouette(dimensions, skin, style)
         # The style's tails stretch the box: more cells keep each one
         # the size it is on the head alone.
@@ -160,11 +162,11 @@ def drop_inner_face(mut mesh: BufferGeometry, skin: HeadSkinField) raises:
     leaves the shell's whole triangle budget to the face that shows.
 
     Args:
-        mesh: An indexed hair shell.
+        mesh: A hair shell. It is indexed after, if it was not before.
         skin: The head's skin the shell was made over.
 
     Raises:
-        Error: If the mesh has no positions or no index.
+        Error: If the mesh has no positions.
     """
     ref placed = mesh.attribute_view(String(POSITION))
     var under = List[Bool](capacity=placed.count())

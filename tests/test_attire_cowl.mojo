@@ -9,6 +9,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
 from extensions.attire.cover import face_opening, face_oval
 from extensions.attire.cowl import (
+    COWL_OVERLAP,
     COWL_RINGS,
     COWL_SECTORS,
     cowl_bottom,
@@ -17,6 +18,7 @@ from extensions.attire.cowl import (
     head_cowl,
 )
 from extensions.attire.last import FootLast
+from extensions.attire.skirt import skirt_scale
 from extensions.attire.mesh_ops import COVER, merge
 from extensions.humanoid.rig.joints import (
     HEAD,
@@ -78,6 +80,10 @@ def test_a_cowl_reaches_the_base_of_the_neck() raises:
     # Only the head and neck above the bottom: the arm is left out.
     assert_true(hulls[0].center.x < 0.01 and hulls[0].center.x > -0.01)
     assert_almost_equal(hulls[0].top, 1.85, atol=1e-5)
+    # The hull takes where the shell crosses the bottom, so it reaches
+    # down to it.
+    var reach = hulls[0].top - 2 * hulls[0].reach.y
+    assert_almost_equal(reach, cowl_bottom(rig), atol=1e-4)
     # A hood that does not reach above the bottom has no cowl.
     var low = tube(0, 0, 0.09, 1.4, 1.2, HEAD)
     assert_equal(len(head_cowl(low, rig)), 0)
@@ -123,6 +129,14 @@ def test_a_hood_hangs_its_cowl() raises:
     for v in range(placed.count()):
         lowest = min(lowest, placed.vector3(v).y)
     assert_almost_equal(lowest, 1.0, atol=1e-5)
+    # The shell reaches up into the cowl, past its bottom, so no gap
+    # opens round the neck.
+    var edge = cowl_bottom(rig) + COWL_OVERLAP * skirt_scale(rig)
+    var at_edge = 0
+    for v in range(placed.count()):
+        if abs(placed.vector3(v).y - edge) < 1e-4:
+            at_edge += 1
+    assert_true(at_edge > 0)
     # An empty shell hangs the cowl alone.
     var alone = hang_cowl(empty_mesh(), hulls, rig, True, 0.0012)
     assert_true(alone.triangle_count() > 0)

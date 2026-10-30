@@ -495,6 +495,12 @@ def test_a_braid_s_shell_drawn_alone_hangs_down_the_back() raises:
         brow.triangle_count(),
         head_hair_from_dimensions(dims, EYEBROWS, RIGHT, 8).triangle_count(),
     )
+    # A detail out of range is refused before the tails stretch it.
+    for detail in [6, 200]:
+        with assert_raises(contains="detail"):
+            _ = head_hair_from_dimensions(
+                dims, SCALP_HAIR, RIGHT, detail, 1, BRAID, alone=True
+            )
 
 
 def main() raises:
