@@ -130,6 +130,8 @@ A strong blow stops the whole fight for 0.06 seconds, as action games freeze a f
 
 The module is `extensions/village/foes.mojo`. Three hooded bandits keep a camp about 25 meters north-west of the start. A bandit is a person with a sword, as the player is. It has 300 health and 70 ki, and its blows do 55 percent of a move's damage. Their captain, taller and in red, stands behind them. The captain has 650 health and 120 ki, and its blows do 80 percent of a move's damage.
 
+Below half its health, the captain rages, as the bosses of Nioh do. `RAGE` shows over it as it begins, and under its bars while it lasts. A raging fighter's attacks take 80 percent of their time. A raging bandit's dice roll high. It makes no plan of two light attacks, and twice as many burst attacks.
+
 A `Brain` decides what a bandit does, frame by frame. `FoeState` is a type with `is_valid`.
 
 | State | What the bandit does | It moves on when |
@@ -169,7 +171,7 @@ The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these o
 
 - **The gauges**, in the bottom right: the stance, the health, the ki, the limit gauge, and the arte gauge as a row of points. The health turns red below a quarter. Over Limit, the limit gauge turns gold, says `OVER LIMIT`, and empties as the time runs out. Through a mystic arte's start-up, its name stands large in the middle of the frame, and a gold star grows at the sword hand.
 - **The combo**, such as `12 HITS`, on the right. It fades as the combo ends.
-- **Each bandit's health and ki**, over its head, while it fights or is hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy attack would finish it. A bandit that winds up a heavy attack shows a red `!`. A bandit that winds up a burst attack glows red at the chest, and the glow grows until it strikes.
+- **Each bandit's health and ki**, over its head, while it fights or is hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy attack would finish it. A bandit that winds up a heavy attack shows a red `!`. A bandit that winds up a burst attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under its bars.
 - **A dummy's ki**, over its head, while its ki is not full.
 - **The lock's mark**: four gold dots round the locked target's chest.
 - **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `BURST COUNTER`. They rise and fade.

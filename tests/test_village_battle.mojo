@@ -1019,6 +1019,21 @@ def test_a_demon_fang_with_no_one_before_it_fades_out() raises:
     assert_equal(arena.battle.fighter.combo, 0)
 
 
+def test_a_foe_that_falls_below_its_rage_rages() raises:
+    var arena = Arena(arena_parameters(1, 0))
+    ref foe = arena.battle.foes[0]
+    foe.character.position = Vector3(0, 0, -1.5)
+    foe.character.heading = Angle(180.0, DEGREE)
+    foe.fighter.parameters.rage = 0.5
+    foe.fighter.health = 160
+    var heavy = no_input()
+    heavy.heavy = True
+    arena.tick(heavy)
+    arena.run(0.5)
+    assert_true(arena.battle.foes[0].fighter.raging())
+    assert_true(holds_text(popup_texts(arena.battle), "RAGE"))
+
+
 def test_over_limit_spends_itself_on_a_mystic_arte() raises:
     # Two dummies within the arte's reach, and one beyond it.
     var arena = Arena(arena_parameters(0, 3))

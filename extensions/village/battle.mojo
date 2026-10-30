@@ -40,7 +40,8 @@ step and pose:
    it back `BLOCK_PUSH` as far.
 5. **What shows.** Each blow writes its damage over the fighter it lands
    on, and the outcome's word: see `outcome_word`. A blow that lands
-   bursts in sparks. Each swing's trail is measured for the display: see
+   bursts in sparks. A foe that begins to rage shows `RAGE`. Each
+   swing's trail is measured for the display: see
    `extensions.village.slashes`. Over Limit, the player's trails are
    gold, and the note says when it begins. The sword is drawn while a bandit within `ENGAGE`
    fights, or the player fights, and is sheathed `CALM_SECONDS` after.
@@ -1096,6 +1097,7 @@ struct Battle(Movable):
                 ready,
                 self.token == index,
                 self.token < 0 and self.token_rest <= 0,
+                fighter.raging(),
             )
             var intent = foe.brain.think(sight, delta)
             var toward = yaw_of(feet - foe.character.position)
@@ -1209,6 +1211,7 @@ struct Battle(Movable):
         var there = self.target_at(index)
         var way = _way(source, there)
         var struck: Struck
+        var raged = False
         if index < len(self.foes):
             ref foe = self.foes[index]
             var front = faces(
@@ -1217,8 +1220,10 @@ struct Battle(Movable):
                 foe.fighter.parameters.guard_arc,
                 source,
             )
+            var calm = not foe.fighter.raging()
             struck = foe.fighter.receive(hit, front)
             foe.shove = push_of(struck, hit, way)
+            raged = calm and foe.fighter.raging()
             throw_up(foe.character, struck, hit)
             # An attacking foe holds the token: its brain claims it before
             # it attacks, and lets go of the attack without it.
@@ -1244,6 +1249,8 @@ struct Battle(Movable):
             practice.fighter.health = practice.fighter.parameters.health
             self.trained += PRACTICE_EXPERIENCE
         self.fighter.landed(struck)
+        if raged:
+            self._popup(there + Vector3(0, 0.7, 0), "RAGE", HURT_TEXT)
         self._show(scene, struck, there, False)
         self._weigh(struck, hit)
 

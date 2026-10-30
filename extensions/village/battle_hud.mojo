@@ -24,7 +24,8 @@
    attack would finish it. A bandit that winds up a heavy attack shows a
    red `!`, as Nioh warns of a strong blow. A bandit that winds up a
    burst attack glows red at the chest, as Nioh 2 warns of a burst, and
-   the glow grows until it strikes.
+   the glow grows until it strikes. A raging bandit shows `RAGE` under
+   its bars.
 5. **A dummy's ki**, over its head, while its ki is not full.
 6. **The lock's mark**: four gold dots round the locked target's chest.
 7. **The numbers and the words** of the blows, which rise and fade.
@@ -398,6 +399,8 @@ def draw_battle(
                 )
         elif foe.fighter.bursting():
             _glow(frame, camera, look, foe.character.position, foe.fighter)
+        if foe.fighter.raging():
+            _centered(frame, middle, y + 6 * scale, "RAGE", scale, DANGER, 1)
     for index in range(len(battle.dummies)):
         ref practice = battle.dummies[index]
         ref fighter = practice.fighter

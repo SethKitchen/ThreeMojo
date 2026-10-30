@@ -55,6 +55,7 @@ from extensions.village.combat import (
     PERFECT_ARTE,
     PERFECT_DODGE,
     PULSE_LATE,
+    RAGE_PACE,
     RISING_EDGE,
     STAGGER,
     Struck,
@@ -928,6 +929,35 @@ def test_a_mystic_arte_spends_over_limit_and_strikes_all_round() raises:
     assert_equal(hits, 6)
     assert_true(f.free())
     assert_false(f.invulnerable())
+
+
+def test_a_fighter_rages_below_its_share_of_health() raises:
+    var p = FighterParameters()
+    p.rage = 0.5
+    var f = Fighter(p)
+    assert_false(f.raging())
+    _ = f.press_light()
+    assert_almost_equal(f.pace, 1, atol=1e-6)
+    f.health = 250
+    assert_true(f.raging())
+    # Its attacks are quicker; its reels are not.
+    _ = f.request(HEAVY)
+    _run(f, 1.2)
+    assert_true(f.free())
+    _ = f.request(HEAVY)
+    assert_almost_equal(f.pace, RAGE_PACE, atol=1e-6)
+    var g = Fighter(p)
+    g.health = 200
+    _ = g.receive(_blow(10, 1), False)
+    assert_true(g.move == FLINCH)
+    assert_almost_equal(g.pace, 1, atol=1e-6)
+    # A fallen fighter does not rage, and nor does one without a rage.
+    g.health = 0
+    assert_false(g.raging())
+    assert_false(_fighter().raging())
+    p.rage = 1.5
+    with assert_raises(contains="rage"):
+        _ = Fighter(p)
 
 
 def main() raises:

@@ -74,6 +74,7 @@ def _sight(
     ready: Bool = True,
     holds: Bool = False,
     unclaimed: Bool = True,
+    raging: Bool = False,
 ) -> Sight:
     """Return what a bandit at the middle knows."""
     return Sight(
@@ -86,6 +87,7 @@ def _sight(
         ready,
         holds,
         unclaimed,
+        raging,
     )
 
 
@@ -409,6 +411,25 @@ def test_a_wolf_bites_and_leaps_back_from_attacks() raises:
     var empty = dens[0].copy()
     empty.count = 0
     assert_equal(len(den_places(empty)), 0)
+
+
+def test_a_raging_bandit_rolls_its_plans_high() raises:
+    var twos = 0
+    for seed in range(40):
+        var calm = _brain(CIRCLING, 0)
+        calm.seed = seed
+        _ = calm.think(_sight(Vector3(0, 0, CIRCLE)), _frame())
+        if len(calm.plan) == 2 and calm.plan[1] == LIGHT_TWO:
+            twos += 1
+        var mad = _brain(CIRCLING, 0)
+        mad.seed = seed
+        _ = mad.think(_sight(Vector3(0, 0, CIRCLE), raging=True), _frame())
+        assert_true(mad.state == ATTACKING)
+        assert_false(len(mad.plan) == 2 and mad.plan[1] == LIGHT_TWO)
+    assert_true(twos > 0)
+    # The captain rages at half its health; a bandit never does.
+    assert_almost_equal(captain_fighter().rage, 0.5, atol=1e-6)
+    assert_almost_equal(bandit_fighter().rage, 0, atol=1e-6)
 
 
 def main() raises:

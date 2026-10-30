@@ -62,6 +62,9 @@ that a swing reaches with `reaches`, and gives each one the blow that
   can spend what is left of it on a **mystic arte**: a leap and two
   spins that strike all round six times. No blow can hit the fighter
   through it.
+- **Rage, as in the bosses of Nioh.** A fighter whose `rage` is above
+  zero rages once its health falls to that share of its most. A raging
+  fighter's attacks take `RAGE_PACE` of their time.
 - **Combos.** The three light attacks chain. A press during a move waits,
   and its move starts at the move's chain point: after the active part
   and `CHAIN_SHARE` of the recovery. A dodge cuts the recovery of an
@@ -162,6 +165,8 @@ comptime OVER_SECONDS = Float32(10)
 """How long Over Limit lasts, in seconds."""
 comptime OVER_BONUS = Float32(1.25)
 """How many times its damage a blow does Over Limit."""
+comptime RAGE_PACE = Float32(0.8)
+"""How many times its time a raging fighter's attack takes."""
 comptime REACH_HEIGHT = Float32(1.8)
 """How far above or below a swing a fighter can be and still be hit, in
 meters."""
@@ -781,13 +786,16 @@ struct FighterParameters(ImplicitlyCopyable):
     # How many times the gauge's gains fill the fighter's limit gauge;
     # zero never goes Over Limit.
     var limit_gain: Float32
+    # The share of its health at or below which the fighter rages; zero
+    # never rages.
+    var rage: Float32
 
     def __init__(out self):
         """Create the player: 500 health, 100 ki that comes back at 32 a
         second after 0.6 seconds, an arte gauge of 5 points that comes
         back at half a point a second, blows of the moves' own strength,
-        a guard of 140 degrees that parries for `PARRY` seconds, and a
-        limit gauge that fills at the gains' own pace."""
+        a guard of 140 degrees that parries for `PARRY` seconds, a limit
+        gauge that fills at the gains' own pace, and no rage."""
         self.health = 500
         self.ki = 100
         self.ki_rate = Frequency(32.0, PER_SECOND)
@@ -798,6 +806,7 @@ struct FighterParameters(ImplicitlyCopyable):
         self.guard_arc = Angle(140.0, DEGREE)
         self.parry = Duration(PARRY, SECOND)
         self.limit_gain = 1
+        self.rage = 0
 
     def check(self) raises:
         """Refuse a fighter that cannot fight.
@@ -807,8 +816,8 @@ struct FighterParameters(ImplicitlyCopyable):
                 and below a million; a rate or the arte gauge is negative
                 or not below a million; the delay is negative or not below
                 10,000 seconds; the guard's arc is not from 0 to 360
-                degrees; the parry is not from 0 to 10 seconds; or the
-                limit gain is not from 0 to 100.
+                degrees; the parry is not from 0 to 10 seconds; the limit
+                gain is not from 0 to 100; or the rage is not from 0 to 1.
         """
         for value in [self.health, self.ki, self.might]:  # pragma: no branch
             if not (value > 0 and value < 1.0e6):
@@ -850,6 +859,9 @@ struct FighterParameters(ImplicitlyCopyable):
             0,
             100,
             "A fighter's limit gain must be from 0 to 100",
+        )
+        require_between(
+            self.rage, 0, 1, "A fighter's rage must be a share from 0 to 1"
         )
 
 
@@ -957,6 +969,16 @@ struct Fighter(Copyable, Movable):
             True when the move is `FALL`.
         """
         return self.move == FALL
+
+    def raging(self) -> Bool:
+        """Return whether the fighter rages: its attacks are quicker.
+
+        Returns:
+            True while the fighter has health, and no more than its
+            `rage` share of its most.
+        """
+        ref p = self.parameters
+        return self.health > 0 and self.health <= p.rage * p.health
 
     def length(self) raises -> Float32:
         """Return how long the move lasts, in seconds, at its pace.
@@ -1096,6 +1118,8 @@ struct Fighter(Copyable, Movable):
         self.clock = 0
         self.before = 0
         self.pace = stance_pace(self.stance) if styled(move) else 1
+        if is_attack(move) and self.raging():
+            self.pace *= RAGE_PACE
         self.queued = FREE
         self.guarding = False
         self.struck.clear()

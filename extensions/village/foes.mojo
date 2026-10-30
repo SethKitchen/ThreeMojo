@@ -9,7 +9,8 @@ keep a den, and straw dummies to practice on.
 **Bandits.** A `Bandit` is a person with a sword, as the player is: a
 `Body` that plays the sword clips, and a `Fighter` with the moves of
 `extensions.village.combat`. Each bandit has its own strength, so the
-camp's captain hits harder and lasts longer. A `Brain` decides what it does, frame by
+camp's captain hits harder and lasts longer, and rages below half its
+health: see `Fighter.raging`. A `Brain` decides what it does, frame by
 frame, as a state machine of `FoeState`:
 
 | State | What the bandit does | It moves on when |
@@ -28,8 +29,9 @@ than `LOSE` from its post. Only the bandit that holds the attack token
 attacks, so the others wait their turn round the player, as foes do in
 most action games. A plan is two or three light attacks, a heavy attack,
 a light and a heavy attack, or a burst attack that glows red and that no
-guard stops. The dice that choose come from the bandit's seed, so a fight
-plays the same way each time.
+guard stops. A raging bandit's dice roll high: it makes no plan of two
+light attacks, and twice as many burst attacks. The dice that choose come
+from the bandit's seed, so a fight plays the same way each time.
 
 **Wolves.** A wolf is an animal of the village's kind, meshed as a
 flipbook, with a `Fighter` whose one attack is the `BITE`: a crouch, and
@@ -241,6 +243,8 @@ struct Sight(ImplicitlyCopyable):
     # can be taken.
     var holds: Bool
     var unclaimed: Bool
+    # Whether the bandit rages: its plans roll high.
+    var raging: Bool
 
 
 def _flat_gap(a: Vector3, b: Vector3) -> Float32:
@@ -483,7 +487,10 @@ struct Brain(Copyable, Movable):
             if self.beast:
                 self.plan = [BITE]
             else:
-                self.plan = plan_for(self.roll(4))
+                var roll = self.roll(4)
+                if sight.raging:
+                    roll = max(roll, 1 - roll)
+                self.plan = plan_for(roll)
             self.step = 0
             return
         if self.roll(5) < FLIP_RATE * seconds:
@@ -535,13 +542,15 @@ def captain_fighter() -> FighterParameters:
 
     Returns:
         A bandit's strength, with 650 health, 120 ki that comes back at
-        30 a second, and blows of 0.8 times a move's own.
+        30 a second, blows of 0.8 times a move's own, and a rage at half
+        its health.
     """
     var p = bandit_fighter()
     p.health = 650
     p.ki = 120
     p.ki_rate = Frequency(30.0, PER_SECOND)
     p.might = 0.8
+    p.rage = 0.5
     return p
 
 

@@ -153,6 +153,12 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     draw_battle(grown, arena.battle, arena.scene, camera, look)
     assert_true(_changed(glowing) > _changed(struck))
     assert_true(_changed(grown) > _changed(glowing))
+    # A raging bandit says so under its bars.
+    arena.battle.foes[0].fighter.parameters.rage = 0.5
+    var raging = _frame()
+    draw_battle(raging, arena.battle, arena.scene, camera, look)
+    assert_true(_changed(raging) > _changed(grown))
+    arena.battle.foes[0].fighter.parameters.rage = 0
     # A camera at the chest, looking up at the bars, draws no glow.
     var chest = arena.battle.foes[0].character.position + Vector3(0, CHEST, 0)
     var under = _camera()
