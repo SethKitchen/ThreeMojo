@@ -36,6 +36,8 @@ Each light attack, heavy attack and dodge spends ki. Ki comes back 0.6 seconds a
 
 A fighter that spends its last ki is winded. It staggers when its move ends. A blow that lands also takes ki. A fighter whose ki runs out staggers for 1.6 seconds. A blow on a staggered fighter is critical, and does 1.5 times its damage.
 
+A heavy attack on a staggered fighter with 35 percent of its health or less is a **finisher**. It fells the fighter at once, and its word is `FINISHER`. The boost strikes of Tales of Arise and the grapples of Nioh work so.
+
 A **ki pulse** gets back the ki that a swing spent. Press the guard button just after the swing's active part. Within 0.15 seconds, the pulse gets back all of it. Until 0.45 seconds, it gets back half. A pulse that gets ki back also ends a winded state.
 
 ### Stances
@@ -100,7 +102,7 @@ An attack carries its fighter forward through its start-up and its active part. 
 
 ### The weight of a blow
 
-A strong blow stops the whole fight for 0.06 seconds, as action games freeze a frame on a heavy hit. It also shakes the camera by 6 centimeters, and the shake dies away. A strong blow breaks a guard, or lands and is critical, breaks a ki or fells its fighter. A blow that lands and pushes at least 4 meters a second, or throws its fighter up, is strong too.
+A strong blow stops the whole fight for 0.06 seconds, as action games freeze a frame on a heavy hit. It also shakes the camera by 6 centimeters, and the shake dies away. A finisher stops the fight for 0.2 seconds, and shakes the camera twice as far. A strong blow breaks a guard, or lands and is critical, breaks a ki or fells its fighter. A blow that lands and pushes at least 4 meters a second, or throws its fighter up, is strong too.
 
 ## The bandits
 
@@ -137,7 +139,7 @@ The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these o
 
 - **The gauges**, in the bottom right: the stance, the health, the ki, the limit gauge, and the arte gauge as a row of points. The health turns red below a quarter. Over Limit, the limit gauge turns gold, says `OVER LIMIT`, and empties as the time runs out.
 - **The combo**, such as `12 HITS`, on the right. It fades as the combo ends.
-- **Each bandit's health and ki**, over its head, while it fights or is hurt. A staggered bandit shows `BREAK`. A bandit that winds up a heavy attack shows a red `!`.
+- **Each bandit's health and ki**, over its head, while it fights or is hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy attack would finish it. A bandit that winds up a heavy attack shows a red `!`.
 - **A dummy's ki**, over its head, while its ki is not full.
 - **The lock's mark**: four gold dots round the locked target's chest.
 - **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY` or `CRITICAL`. They rise and fade.

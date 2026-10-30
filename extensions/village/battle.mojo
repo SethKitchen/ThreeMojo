@@ -41,7 +41,8 @@ step and pose:
    fights, or the player fights, and is sheathed `CALM_SECONDS` after.
 6. **The weight of a blow.** A strong blow stops the whole fight for
    `HIT_STOP`, as action games freeze a frame on a heavy hit, and shakes
-   the camera by `SHAKE`: see `strong_blow`. The shake dies away at
+   the camera by `SHAKE`: see `strong_blow`. A finisher stops it for
+   `FINISH_STOP`, and shakes it twice as far. The shake dies away at
    `SHAKE_FADE`.
 7. **The fallen.** A fallen bandit gives `LOOT` coins, and one time in
    two a herb. It lies for the
@@ -70,6 +71,7 @@ from extensions.village.character import (
 )
 from extensions.village.combat import (
     DEFEATED,
+    FINISHED,
     HIT,
     DODGE,
     FREE,
@@ -197,6 +199,8 @@ comptime HERB_CHANCE = Float32(0.5)
 """The share of fallen bandits that drop a herb as well."""
 comptime HIT_STOP = Float32(0.06)
 """How long a strong blow stops the fight, in seconds."""
+comptime FINISH_STOP = Float32(0.2)
+"""How long a finisher stops the fight, in seconds."""
 comptime SHAKE = Float32(0.06)
 """How far a strong blow shakes the camera, in meters."""
 comptime SHAKE_FADE = Float32(10)
@@ -995,8 +999,11 @@ struct Battle(Movable):
 
     def _weigh(mut self, struck: Struck, blow: Blow):
         """Stop the fight a moment, and shake the camera, for a strong
-        blow."""
-        if strong_blow(struck, blow):
+        blow; longer and harder for a finisher."""
+        if struck.outcome == FINISHED:
+            self.freeze = FINISH_STOP
+            self.shake = 2 * SHAKE
+        elif strong_blow(struck, blow):
             self.freeze = HIT_STOP
             self.shake = SHAKE
 
@@ -1039,7 +1046,7 @@ struct Battle(Movable):
                     self.token_rest = TOKEN_REST
                 if landed_blow(struck.outcome):
                     self.trained += BLOW_EXPERIENCE
-                if struck.outcome == DEFEATED:
+                if struck.outcome == DEFEATED or struck.outcome == FINISHED:
                     self.loot += LOOT
                     self.trained += DEFEAT_EXPERIENCE
                     var note = String("+", LOOT, " COINS")

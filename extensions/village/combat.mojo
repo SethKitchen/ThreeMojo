@@ -19,7 +19,10 @@ that a swing reaches with `reaches`, and gives each one the blow that
   spent: all of it in the first `PULSE_PERFECT` seconds after the swing,
   and `PULSE_LATE` of it until `PULSE_WINDOW`. A blow that lands also takes
   ki. A fighter with no ki left staggers, and a blow on a staggered fighter
-  is critical: it does `CRITICAL_BONUS` times its damage.
+  is critical: it does `CRITICAL_BONUS` times its damage. A heavy attack
+  on a staggered fighter with `FINISH_SHARE` of its health or less is a
+  finisher, as Tales of Arise's boost strikes and Nioh's grapples are: it
+  fells the fighter at once.
 - **Stances, as in Nioh.** The high stance hits harder and more slowly,
   and costs more ki. The low stance is quick and costs less ki, and hits
   less hard. The middle stance is between them, and guards best. A stance
@@ -108,6 +111,9 @@ comptime PARRY = Float32(0.15)
 seconds."""
 comptime CRITICAL_BONUS = Float32(1.5)
 """How many times its damage a blow on a staggered fighter does."""
+comptime FINISH_SHARE = Float32(0.35)
+"""A heavy attack on a staggered fighter with this share of its health or
+less finishes it."""
 comptime PULSE_PERFECT = Float32(0.15)
 """How long after a swing a ki pulse gets back all its ki, in seconds."""
 comptime PULSE_WINDOW = Float32(0.45)
@@ -219,9 +225,9 @@ struct StrikeOutcome(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is one of the outcomes.
 
         Returns:
-            True from `IGNORED` to `DEFEATED`.
+            True from `IGNORED` to `FINISHED`.
         """
-        return ordinal_valid(self.value, 9)
+        return ordinal_valid(self.value, 10)
 
 
 comptime IGNORED = StrikeOutcome(0)
@@ -244,6 +250,8 @@ comptime KI_BREAK = StrikeOutcome(8)
 """The blow landed, and took the fighter's last ki: it staggers."""
 comptime DEFEATED = StrikeOutcome(9)
 """The blow landed, and took the fighter's last health: it falls."""
+comptime FINISHED = StrikeOutcome(10)
+"""A heavy attack finished a staggered, weakened fighter: it falls."""
 
 
 def move_name(move: CombatMove) raises -> String:
@@ -283,15 +291,15 @@ def outcome_word(outcome: StrikeOutcome) raises -> String:
         outcome: The outcome.
 
     Returns:
-        "PERFECT DODGE", "BLOCKED", "PARRY", "GUARD BREAK", "CRITICAL" or
-        "BREAK", or an empty string for an outcome that shows its damage
-        alone, or nothing.
+        "PERFECT DODGE", "BLOCKED", "PARRY", "GUARD BREAK", "CRITICAL",
+        "BREAK" or "FINISHER", or an empty string for an outcome that shows
+        its damage alone, or nothing.
 
     Raises:
         Error: If the outcome is not one.
     """
     if not outcome.is_valid():
-        raise Error("A blow's outcome must be one of the ten")
+        raise Error("A blow's outcome must be one of the eleven")
     var words: List[String] = [
         "",
         "",
@@ -303,6 +311,7 @@ def outcome_word(outcome: StrikeOutcome) raises -> String:
         "CRITICAL",
         "BREAK",
         "",
+        "FINISHER",
     ]
     return words[outcome.value]
 
@@ -350,7 +359,7 @@ def landed_blow(outcome: StrikeOutcome) -> Bool:
         outcome: The outcome.
 
     Returns:
-        True for `HIT`, `CRITICAL`, `KI_BREAK` and `DEFEATED`.
+        True for `HIT`, `CRITICAL`, `KI_BREAK`, `DEFEATED` and `FINISHED`.
     """
     return outcome.value >= HIT.value
 
@@ -641,7 +650,6 @@ struct Swing(ImplicitlyCopyable):
     var slice: Int
 
 
-@fieldwise_init
 struct Blow(ImplicitlyCopyable):
     """What a swing does to a fighter it reaches."""
 
@@ -651,6 +659,32 @@ struct Blow(ImplicitlyCopyable):
     # up.
     var knockback: Velocity
     var launch: Velocity
+    # Whether it can finish a staggered, weakened fighter.
+    var finish: Bool
+
+    def __init__(
+        out self,
+        damage: Float32,
+        ki_damage: Float32,
+        knockback: Velocity,
+        launch: Velocity,
+        finish: Bool = False,
+    ):
+        """Hold a blow.
+
+        Args:
+            damage: The health it takes.
+            ki_damage: The ki it takes.
+            knockback: How fast it pushes the fighter away.
+            launch: How fast it throws the fighter up.
+            finish: Whether it can finish a staggered fighter with
+                `FINISH_SHARE` of its health or less.
+        """
+        self.damage = damage
+        self.ki_damage = ki_damage
+        self.knockback = knockback
+        self.launch = launch
+        self.finish = finish
 
 
 @fieldwise_init
@@ -1264,6 +1298,7 @@ struct Fighter(Copyable, Movable):
             data.ki_damage * self.parameters.might * power,
             data.knockback,
             data.launch,
+            self.move == HEAVY,
         )
 
     def receive(mut self, blow: Blow, front: Bool) raises -> Struck:
@@ -1280,7 +1315,8 @@ struct Fighter(Copyable, Movable):
             fighter's parry before. Any other blow takes
             health and ki, and makes the fighter reel unless it has
             armor. A blow on a staggered fighter is critical, and takes no
-            ki.
+            ki; a heavy one on a staggered fighter with `FINISH_SHARE` of
+            its health or less finishes it.
 
         Raises:
             Error: Never: each move is one.
@@ -1316,6 +1352,12 @@ struct Fighter(Copyable, Movable):
         self.combo = 0
         var damage = blow.damage
         var critical = self.move == STAGGER
+        var weak = self.health <= FINISH_SHARE * self.parameters.health
+        if critical and blow.finish and weak:
+            var rest = self.health
+            self.health = 0
+            self._begin(FALL)
+            return Struck(FINISHED, rest, 0)
         if critical:
             damage *= CRITICAL_BONUS
         self.health -= damage

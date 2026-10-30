@@ -17,8 +17,9 @@
 3. **The combo**, such as `12 HITS`, on the right, while two blows or more
    have landed and the combo lasts. It fades as the combo ends.
 4. **Each bandit's health and ki**, over its head, while it fights or is
-   hurt. A staggered bandit shows `BREAK`. A bandit that winds up a heavy
-   attack shows a red `!`, as Nioh warns of a strong blow.
+   hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy
+   attack would finish it. A bandit that winds up a heavy attack shows a
+   red `!`, as Nioh warns of a strong blow.
 5. **A dummy's ki**, over its head, while its ki is not full.
 6. **The lock's mark**: four gold dots round the locked target's chest.
 7. **The numbers and the words** of the blows, which rise and fade.
@@ -31,6 +32,7 @@ from core.scene import Scene
 from extensions.village.battle import CHEST, HEAD, POPUP_SECONDS, Battle
 from extensions.village.combat import (
     COMBO_KEEP,
+    FINISH_SHARE,
     LIMIT,
     OVER_SECONDS,
     HEAVY,
@@ -292,9 +294,10 @@ def draw_battle(
         )
         var middle = x + bar // 2
         if foe.fighter.move == STAGGER:
-            _centered(
-                frame, middle, y - 9 * scale, "BREAK", scale, GOLD_TEXT, 1
-            )
+            var word = String("BREAK")
+            if foe.fighter.health <= FINISH_SHARE * p.health:
+                word = "FINISH"
+            _centered(frame, middle, y - 9 * scale, word, scale, GOLD_TEXT, 1)
         elif foe.fighter.move == HEAVY:
             var startup = move_data(HEAVY).startup.to(SECOND) * foe.fighter.pace
             if foe.fighter.clock < startup:

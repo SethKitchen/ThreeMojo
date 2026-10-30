@@ -8,6 +8,8 @@ and what each blow does."""
 
 from extensions.village.combat import (
     ARTE_PER_HIT,
+    FINISHED,
+    FINISH_SHARE,
     LIMIT,
     LIMIT_PER_BREAK,
     LIMIT_PER_HIT,
@@ -129,9 +131,9 @@ def test_each_kind_knows_its_values() raises:
         assert_false(CombatStance(value).is_valid())
     for value in [0, 2]:
         assert_true(CombatStance(value).is_valid())
-    for value in [-1, 10]:
+    for value in [-1, 11]:
         assert_false(StrikeOutcome(value).is_valid())
-    for value in [0, 9]:
+    for value in [0, 10]:
         assert_true(StrikeOutcome(value).is_valid())
 
 
@@ -147,7 +149,8 @@ def test_moves_and_outcomes_have_names_for_the_display() raises:
     assert_equal(outcome_word(GUARD_BREAK), "GUARD BREAK")
     assert_equal(outcome_word(KI_BREAK), "BREAK")
     assert_equal(outcome_word(HIT), "")
-    with assert_raises(contains="ten"):
+    assert_equal(outcome_word(FINISHED), "FINISHER")
+    with assert_raises(contains="eleven"):
         _ = outcome_word(StrikeOutcome(-1))
 
 
@@ -749,6 +752,47 @@ def test_over_limit_fills_and_unleashes() raises:
     f.limit = 50
     f.revive()
     assert_almost_equal(f.limit, 0, atol=1e-6)
+
+
+def test_a_heavy_blow_finishes_a_staggered_weakened_fighter() raises:
+    var finishing = Blow(
+        90,
+        30,
+        Velocity(5.0, METER_PER_SECOND),
+        Velocity(0.0, METER_PER_SECOND),
+        True,
+    )
+    var f = _fighter()
+    _ = f.receive(_blow(10, 200), False)
+    assert_true(f.move == STAGGER)
+    f.health = 500 * FINISH_SHARE
+    var finished = f.receive(finishing, False)
+    assert_true(finished.outcome == FINISHED)
+    assert_almost_equal(finished.damage, 500 * FINISH_SHARE, atol=1e-3)
+    assert_true(f.defeated())
+    assert_true(landed_blow(FINISHED))
+    # Too healthy, it is only critical.
+    var g = _fighter()
+    _ = g.receive(_blow(10, 200), False)
+    assert_true(g.receive(finishing, False).outcome == CRITICAL)
+    # A light blow does not finish.
+    var h = _fighter()
+    _ = h.receive(_blow(10, 200), False)
+    h.health = 50
+    assert_true(h.receive(_blow(10, 1), False).outcome == CRITICAL)
+    # Nor does a heavy one on a fighter that stands.
+    var k = _fighter()
+    k.health = 150
+    assert_true(k.receive(finishing, False).outcome == HIT)
+    # A heavy attack's blow can finish; a light attack's cannot.
+    var heavy = _fighter()
+    _ = heavy.request(HEAVY)
+    _step(heavy, 0.45)
+    assert_true(heavy.connect(0).value().finish)
+    var light = _fighter()
+    _ = light.press_light()
+    _step(light, 0.15)
+    assert_false(light.connect(0).value().finish)
 
 
 def main() raises:

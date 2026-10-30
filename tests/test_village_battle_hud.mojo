@@ -107,12 +107,16 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     # A staggered bandit shows its break, and a heavy wind-up its warning.
     # A posted bandit that is hurt shows its bars.
     arena.battle.foes[0].brain.state = POSTED
-    arena.battle.foes[0].fighter.health = 100
+    arena.battle.foes[0].fighter.health = 200
     arena.battle.foes[0].fighter.move = STAGGER
     # Over Limit, the limit gauge says so.
     arena.battle.fighter.over = 5
     var broken = _frame()
     draw_battle(broken, arena.battle, arena.scene, camera, look)
+    # A broken bandit that a heavy attack would finish says so.
+    arena.battle.foes[0].fighter.health = 50
+    var finish = _frame()
+    draw_battle(finish, arena.battle, arena.scene, camera, look)
     arena.battle.foes[0].fighter.move = HEAVY
     arena.battle.foes[0].fighter.clock = 0.1
     var warned = _frame()

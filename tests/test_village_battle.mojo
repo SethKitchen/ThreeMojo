@@ -24,6 +24,7 @@ from tests._village_arena import (
     popup_texts,
 )
 from extensions.village.battle import (
+    FINISH_STOP,
     HIT_STOP,
     SHAKE,
     BLOCK_PUSH,
@@ -47,6 +48,7 @@ from extensions.village.character import (
 )
 from extensions.village.combat import (
     BLOCKED,
+    FINISHED,
     CRITICAL,
     FREE,
     STAGGER,
@@ -825,6 +827,29 @@ def test_a_strong_blow_stops_the_fight_and_shakes_the_camera() raises:
     arena.run(0.5)
     assert_true(arena.battle.fighter.clock != clock)
     assert_true(arena.battle.shake < SHAKE * 0.01)
+
+
+def test_a_heavy_cut_finishes_a_broken_bandit() raises:
+    var arena = Arena(arena_parameters(1, 0))
+    _facing(arena)
+    arena.battle.foes[0].brain.state = ALERTED
+    arena.battle.foes[0].brain.timer = 5
+    arena.battle.foes[0].fighter.move = STAGGER
+    arena.battle.foes[0].fighter.health = 60
+    var heavy = no_input()
+    heavy.heavy = True
+    arena.tick(heavy)
+    var finished = False
+    for _ in range(20):
+        arena.tick(no_input())
+        if arena.battle.foes[0].fighter.defeated():
+            finished = True
+            break
+    assert_true(finished)
+    assert_true(holds_text(popup_texts(arena.battle), "FINISHER"))
+    assert_equal(arena.battle.loot, LOOT)
+    assert_almost_equal(arena.battle.shake, 2 * SHAKE, atol=1e-6)
+    assert_true(arena.battle.freeze > HIT_STOP)
 
 
 def main() raises:
