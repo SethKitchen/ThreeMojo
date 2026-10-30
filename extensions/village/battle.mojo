@@ -650,7 +650,8 @@ struct Battle(Movable):
         var base = yaw_of(self.target_at(self.lock) - at).to(RADIAN)
         var best = self.lock
         var nearest = Float32(10)
-        for index in range(self.targets()):
+        # A lock names a target, so there is one at least.
+        for index in range(self.targets()):  # pragma: no branch
             if index == self.lock or not self.standing(index):
                 continue
             var there = self.target_at(index)
