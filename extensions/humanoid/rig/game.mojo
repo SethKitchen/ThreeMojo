@@ -66,13 +66,12 @@ from extensions.humanoid.side import LEFT, RIGHT
 from extensions.humanoid.skeleton.arm.assembly import (
     UNSET_PAINT,
     place_mesh_node,
-    resolved_paint,
 )
 from extensions.humanoid.skeleton.arm.frame import arm_muscle_dimensions
 from extensions.humanoid.skeleton.hand.skin.geometry import (
     hand_skin_from_dimensions,
 )
-from extensions.humanoid.skeleton.complexion import iris_albedo
+from extensions.humanoid.skeleton.complexion import hair_albedo, iris_albedo
 from extensions.humanoid.skeleton.head.eyes import eyeball_mesh
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.head.hair.dimensions import SCALP_HAIR
@@ -100,6 +99,7 @@ from extensions.humanoid.skeleton.torso.body import (
 from extensions.humanoid.spec import HumanoidSpec
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
+from math.vector2 import Vector2
 from math.vector3 import Vector3, append_vector3
 from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SkinnedMesh
@@ -108,6 +108,8 @@ from core.ordinal import require_valid, require_non_negative
 # The share of a triangle budget the body's skin takes, and the hair's
 # shell; each hand takes half of the rest.
 comptime BODY_SHARE = Float32(0.76)
+# The side of the hair's strand map, in texels.
+comptime HAIR_TEXELS = 64
 comptime HAIR_SHARE = Float32(0.12)
 # Half the slot that parts the legs, so they can swing apart, in meters
 # on the template.
@@ -403,8 +405,15 @@ def add_game_humanoid(
         facial_meshes.append(mouth_mesh(dims, GUMS_AND_TONGUE, shapes))
     else:
         body = body_skin_mesh(spec, detail, workers, gap)
+    # The shell's inner face lies under the scalp: a game never sees it.
     var shell = head_hair_from_dimensions(
-        dims, SCALP_HAIR, RIGHT, hair_detail, workers, hair_style
+        dims,
+        SCALP_HAIR,
+        RIGHT,
+        hair_detail,
+        workers,
+        hair_style,
+        outer_only=True,
     )
     var eyes = List[BufferGeometry]()
     # Both named sides receive an eye.
@@ -561,7 +570,14 @@ def add_game_humanoid(
     var head = rig.at(HEAD)
     holder.set_position(-head.x, -head.y, -head.z)
     var holder_id = scene.attach(holder^, bones[HEAD.value])
-    var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
+    # The hair's strands run down its shell, as its texture coordinates do.
+    var hair = hair_paint
+    if hair.value < 0:
+        var strands = hair_albedo(HAIR_TEXELS, spec.genome)
+        strands.repeat = Vector2(6, 2)
+        hair = assets.materials.add(
+            hair_phong(spec.genome, assets.textures.add(strands^))
+        )
     var hair_node = place_mesh_node(scene, assets, holder_id, shell^, hair)
     var face = Optional[GameFace](None)
     if facial_animation:

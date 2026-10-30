@@ -85,6 +85,12 @@ These were measured on four cores. Most of the build is the hair's shell, at `ha
 
 A decimated skin keeps the normals of the full skin too, so it shades as the full skin does. The body, the head and the hands then shade alike across their seams. A vertex keeps its own normal where the nearest full vertex faces more than 60° away, as across the gap between the lips. The hair's shell keeps the normals the simplifier makes.
 
+The hair's shell is drawn in a Phong material with a map of strands, six times round the head and twice down it. Its texture coordinates run down the hair, so the strands do too.
+
+The hair's shell keeps only its outer face. Its inner face lies 0.8 mm under the scalp, so the skin always hides it. With `outer_only=True`, `head_hair_from_dimensions` drops each triangle whose three corners lie more than 0.4 mm under the skin. That is about 40 % of the shell's triangles. So the hair's whole budget goes to the face that shows, and the decimation has less to do.
+
+A shell thinner than two cells of its mesh breaks into patches, because the mesher cannot close it. So `head_hair_from_dimensions` meshes the shell at least 2.2 cells deep. At `hair_detail` 32 a cell is about 2.3 mm, and only hair cropped very close is cut thicker than its genome asks.
+
 ## Example
 
 `examples/game_humanoid.mojo` bakes `out/humanoid.glb` once, then loads it and plays idle, walk, run, jump and wave, each fading into the next. It writes `out/game_humanoid.png` and prints the frame rate.

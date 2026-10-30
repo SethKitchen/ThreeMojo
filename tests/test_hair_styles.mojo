@@ -16,6 +16,7 @@ from extensions.humanoid.skeleton.head.frame import (
 from extensions.humanoid.skeleton.head.hair.dimensions import (
     SCALP_HAIR,
     HairShape,
+    _on_skin,
 )
 from extensions.humanoid.skeleton.head.hair.geometry import (
     head_hair_from_dimensions,
@@ -391,6 +392,33 @@ def test_a_mohawk_shaves_the_sides() raises:
         _ = HairShape(dims, SCALP_HAIR, RIGHT, skin, HairStyle(99))
     var shell = head_hair_from_dimensions(dims, SCALP_HAIR, RIGHT, 8, 1, MOHAWK)
     assert_true(shell.triangle_count() > 0)
+
+
+def _thickness(hair: HairShape, skin: HeadSkinField, at: Vector3) -> Float32:
+    """Return how far the hair stands off the skin at a point on it, out
+    along the skin's normal, to a quarter of a millimeter."""
+    var normal = skin.gradient(at)
+    var off = Float32(0)
+    while off < 0.03 and hair.distance(at + normal * off) < 0:
+        off += 0.00025
+    return off
+
+
+def test_the_hair_thins_to_nothing_at_its_hairline() raises:
+    var dims = _dims()
+    var skin = HeadSkinField(dims)
+    var hair = HairShape(dims, SCALP_HAIR, RIGHT, skin)
+    # On the forehead's midline, 4 mm above the hairline, the hair is
+    # thin: a level cut left it 8.75 mm deep there, in a ledge. Two
+    # centimeters up it is as deep as on the crown's front.
+    var near = _on_skin(
+        skin, Vector3(hair.line_center, hair.line_middle + 0.004, 0.2)
+    )
+    var far = _on_skin(
+        skin, Vector3(hair.line_center, hair.line_middle + 0.024, 0.2)
+    )
+    assert_true(_thickness(hair, skin, near) < 0.003)
+    assert_true(_thickness(hair, skin, far) > 0.009)
 
 
 def main() raises:

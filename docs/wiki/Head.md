@@ -206,6 +206,8 @@ The scalp's hair is strands over a shell. `add_groom` grows the strands. The she
 
 The shell lies over the skin itself: about seven millimeters deep at the sides and a centimeter on the crown. It follows every head a genome makes. Its hairline is level across the middle of the forehead, set back at each temple, and turns down past the temples to the sideburns. A male's temples are set back more than a female's. The shell is cut away round each ear and off above the nape.
 
+Each edge of the shell rises off the skin in a wedge. A cut stands 2 mm higher for each millimeter off the skin, so the hair thins to nothing at its edge, as real hair does. A level cut left a ledge as deep as the hair, and its underside faced down, away from the light. It drew a black line round the hairline, and the hair looked like a helmet. A closed shell keeps its edges two cells of its mesh deep, so the mesher can close it there. A game's shell keeps only its outer face, and that face thins to nothing over the skin.
+
 ### Strands
 
 `add_groom(scene, assets, parent, spec, guides, followers)` grows a groom, the way grooming tools grow one:

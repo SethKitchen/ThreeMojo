@@ -11,6 +11,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
+from render.texture_store import NO_TEXTURE
 from extensions.humanoid.rig.clips import (
     Pose,
     clip_from_poses,
@@ -398,6 +399,27 @@ def test_a_game_humanoid_is_built_bound_and_light() raises:
         workers=available_workers(),
     )
     assert_equal(scene.skinned_meshes[roomy.skins[0]].material, paint)
+    # The hair's shell is drawn with its strands mapped down it, unless a
+    # look is given.
+    for mesh in scene.meshes:
+        if mesh.node == person.hair.value():
+            var look = assets.materials.get(mesh.material)
+            assert_true(look.map != NO_TEXTURE)
+    var given = add_game_humanoid(
+        scene,
+        assets,
+        root,
+        _spec(),
+        3000,
+        12,
+        8,
+        8,
+        hair_paint=paint,
+        workers=available_workers(),
+    )
+    for mesh in scene.meshes:
+        if mesh.node == given.hair.value():
+            assert_equal(mesh.material, paint)
     var full = 0
     for k in whole.skins:  # pragma: no branch
         full += assets.geometries.get(
