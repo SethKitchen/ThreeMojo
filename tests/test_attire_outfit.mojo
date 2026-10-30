@@ -30,12 +30,19 @@ from extensions.attire.garment import (
 from extensions.attire.kinds import (
     LINEN,
     OVER_LAYER,
+    SKIRTED,
     TORSO_SLOT,
     UNDER_LAYER,
     WOOL,
     Layer,
 )
-from extensions.humanoid.rig.joints import CHEST, HIPS, SPINE
+from extensions.humanoid.rig.joints import (
+    CHEST,
+    HIPS,
+    LEFT_THIGH,
+    RIGHT_THIGH,
+    SPINE,
+)
 from render.framebuffer import Color
 from extensions.attire.outfit import Outfit, dress, dress_pieces
 from objects.skinned_mesh import SKIN_INDEX
@@ -150,26 +157,33 @@ def test_a_person_is_dressed_from_the_skin_out() raises:
     assert_false(scene.node(person.strands[0].node.value()).visible)
 
 
+def _pieces(
+    scene: Scene, assets: Assets, person: GameHumanoid, outfit: Outfit
+) raises -> List[BufferGeometry]:
+    """Return the pieces of an outfit made from a person's body skin."""
+    var over = List[Float32]()
+    var shells = List[BufferGeometry]()
+    return dress_pieces(
+        assets.geometries.get(
+            scene.skinned_meshes[person.skins[0]].geometry
+        ).clone(),
+        person,
+        outfit,
+        over,
+        shells,
+    )
+
+
 def test_a_last_over_a_last_hides_it() raises:
     var scene = Scene()
     var assets = Assets()
     var person = coarse_person(scene, assets)
     var shod = Outfit()
     shod.add(boots())
-    var alone_over = List[Float32]()
-    var alone_shells = List[BufferGeometry]()
-    var alone = dress_pieces(
-        assets.geometries.get(
-            scene.skinned_meshes[person.skins[0]].geometry
-        ).clone(),
-        person,
-        shod,
-        alone_over,
-        alone_shells,
-    )
+    var alone = _pieces(scene, assets, person, shod)
     shod.add(sabatons())
-    var shells = List[BufferGeometry]()
     var over = List[Float32]()
+    var shells = List[BufferGeometry]()
     var under = dress_pieces(
         assets.geometries.get(
             scene.skinned_meshes[person.skins[0]].geometry
@@ -184,6 +198,39 @@ def test_a_last_over_a_last_hides_it() raises:
     assert_true(under[0].vertex_count() < alone[0].vertex_count())
     assert_true(under[1].triangle_count() > 0)
     assert_true(shells[0].vertex_count() > under[0].vertex_count())
+
+
+def test_a_longer_skirt_over_a_skirt_hides_it() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    var cover = Cover()
+    cover.reach_to(HIPS)
+    cover.reach_to(SPINE)
+    cover.reach_to(CHEST)
+    cover.reach_to(RIGHT_THIGH, 0.12)
+    cover.reach_to(LEFT_THIGH, 0.12)
+    var short = Garment(
+        "short",
+        TORSO_SLOT,
+        OVER_LAYER,
+        WOOL,
+        cover^,
+        Color(90, 90, 90),
+        form=SKIRTED,
+        flare=0.2,
+    )
+    # A short skirt over the tunic's leaves the tunic's skirt to show
+    # below it; a surcoat that falls past it hides it.
+    var under_short = Outfit()
+    under_short.add(tunic())
+    under_short.add(short^)
+    var under_long = Outfit()
+    under_long.add(tunic())
+    under_long.add(surcoat())
+    var shown = _pieces(scene, assets, person, under_short)[0].triangle_count()
+    var hidden = _pieces(scene, assets, person, under_long)[0].triangle_count()
+    assert_true(shown > hidden)
 
 
 def test_a_garment_hidden_wholly_draws_nothing() raises:
