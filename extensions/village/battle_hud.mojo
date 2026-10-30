@@ -27,18 +27,16 @@
 4. **Each bandit's health and ki**, over its head, while it fights or is
    hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy
    attack would finish it. A bandit that winds up a heavy attack shows a
-   red `!`, as Nioh warns of a strong blow. A bandit that winds up a
-   burst attack glows red at the chest, as Nioh 2 warns of a burst, and
-   the glow grows until it strikes. A raging bandit shows `RAGE` under
+   red `!`, a warning of a strong blow. A bandit that winds up a burst
+   attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under
    its bars.
 5. **A dummy's ki**, over its head, while its ki is not full.
 6. **The lock's mark**: four gold dots round the locked target's chest.
 7. **The numbers and the words** of the blows, which rise and fade.
 8. **The edges of the frame**, tinted: blue while the player's perfect
-   dodge slows the foes, as Tales of Arise's perfect evade does; gold
-   through a mystic arte; and red below a quarter of the player's
-   health. A ki pulse rings the player's feet with blue light, as Nioh's
-   does.
+   dodge slows the foes; gold through a mystic arte; and red below a
+   quarter of the player's health. A ki pulse rings the player's feet
+   with blue light.
 
 A point behind the camera is not drawn.
 """

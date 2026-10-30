@@ -2,7 +2,7 @@
 
 A player of the [Village walk](Village-walk) carries a sword, and can fight. A companion fights beside them. Four bandits and their captain keep a camp on the meadow. A pack of three wolves keeps a den east of the pond. Two straw dummies stand near the start for practice.
 
-The rules come from two games. Ki, stances, the ki pulse, burst attacks and rage come from Nioh. Artes, perfect dodges, Over Limit, the mystic arte, the companion's boost attacks and long combos come from Tales of Arise.
+The rules are of the action games' kind. The player spends ki on each move, picks a stance, and makes artes from an arte gauge. Perfect dodges, parries, long combos and a limit gauge reward good play. The foes guard, sidestep, rage and wind up red burst attacks.
 
 ![A man in red fights hooded bandits beside a woman in blue: he cuts, spins and sends a wave, and she casts bolts of light](out/village_combat.png)
 
@@ -42,7 +42,7 @@ Each light attack, heavy attack and dodge spends ki. Ki comes back 0.6 seconds a
 
 A fighter that spends its last ki is winded. It staggers when its move ends. A blow that lands also takes ki. A fighter whose ki runs out staggers for 1.6 seconds. A blow on a staggered fighter is critical, and does 1.5 times its damage.
 
-A heavy attack on a staggered fighter with 35 percent of its health or less is a **finisher**. It fells the fighter at once, and its word is `FINISHER`. The boost strikes of Tales of Arise and the grapples of Nioh work so.
+A heavy attack on a staggered fighter with 35 percent of its health or less is a **finisher**. It fells the fighter at once, and its word is `FINISHER`.
 
 A **ki pulse** gets back the ki that a swing spent. Press the guard button just after the swing's active part. Within 0.15 seconds, the pulse gets back all of it. Until 0.45 seconds, it gets back half. A pulse that gets ki back also ends a winded state.
 
@@ -64,7 +64,7 @@ The demon fang costs 1 point. Its cut along the ground sends a wave of force tha
 
 ### The plunge
 
-A heavy attack in the air is a **plunge**, as in the air combos of Tales of Arise. The player dives at 14 meters a second, and cuts down to the ground. The cut strikes everything within 2.6 meters, all round, for 70 damage. A ring of light spreads over the ground as it strikes. The plunge has armor until it strikes, and it counters a burst attack as a heavy attack does. Throw a foe up with the rising edge, jump after it, cut, and plunge to end the combo.
+A heavy attack in the air is a **plunge**. The player dives at 14 meters a second, and cuts down to the ground. The cut strikes everything within 2.6 meters, all round, for 70 damage. A ring of light spreads over the ground as it strikes. The plunge has armor until it strikes, and it counters a burst attack as a heavy attack does. Throw a foe up with the rising edge, jump after it, cut, and plunge to end the combo.
 
 ### The lock and the heal
 
@@ -74,13 +74,13 @@ The heal button eats one of the herbs that the player gathered: see [Village gat
 
 ### Over Limit
 
-A limit gauge fills as the player fights well, as in Tales of Arise. Each blow that lands fills 4 points of 100. A blow that breaks a ki, a guard or a burst attack fills 10 more. A parry fills 15, and a perfect dodge 20.
+A limit gauge fills as the player fights well. Each blow that lands fills 4 points of 100. A blow that breaks a ki, a guard or a burst attack fills 10 more. A parry fills 15, and a perfect dodge 20.
 
 When the gauge is full, the player goes Over Limit for 10 seconds. The arte gauge fills, and artes cost nothing. No blow makes the player reel, and their blows do 25 percent more damage. The gauge does not fill while Over Limit lasts. Bandits and dummies never go Over Limit.
 
 ### The mystic arte
 
-While Over Limit lasts, the player can spend what is left of it on a **mystic arte**, as in Tales of Arise. Press the rising edge's and the tempest's buttons together. The player raises the sword to the sky, and `MYSTIC ARTE` shows large in the middle of the frame. Then the player spins round twice. The spins strike everything within 4.5 meters six times, for 70 damage a hit. Last, the player cuts down.
+While Over Limit lasts, the player can spend what is left of it on a **mystic arte**. Press the rising edge's and the tempest's buttons together. The player raises the sword to the sky, and `MYSTIC ARTE` shows large in the middle of the frame. Then the player spins round twice. The spins strike everything within 4.5 meters six times, for 70 damage a hit. Last, the player cuts down.
 
 No blow can hit the player through the mystic arte. The foes move at 30 percent of the time while it lasts. Over Limit ends when it starts. Without Over Limit, the same buttons make the rising edge.
 
@@ -100,7 +100,7 @@ The heavy attack and the tempest have armor until their active part ends. A blow
 
 ### Burst attacks
 
-A bandit's burst attack glows red, as Nioh 2 warns of a burst. The bandit coils for 0.7 seconds with its sword drawn back at the hip. Then it lunges, and thrusts 2.8 meters ahead. A guard does not stop the thrust, and nor does a parry. A dodge does, and a perfect dodge of a burst is as good as any other.
+A bandit's burst attack glows red as a warning. The bandit coils for 0.7 seconds with its sword drawn back at the hip. Then it lunges, and thrusts 2.8 meters ahead. A guard does not stop the thrust, and nor does a parry. A dodge does, and a perfect dodge of a burst is as good as any other.
 
 The burst has armor until it strikes, so a light attack does not stop it. A heavy attack or an arte that lands in the red wind-up is a **burst counter**. The bandit loses all its ki, and staggers. The fight stops for 0.2 seconds, as for a finisher. A demon fang's wave counters a burst too, from far off.
 
@@ -141,7 +141,7 @@ The module is `extensions/village/foes.mojo`. Three hooded bandits keep a camp a
 
 A fourth bandit, in gray and weld yellow, throws knives. A thrower keeps 8 meters from the player, and never takes the attack token. About every 3.5 seconds, it draws its free arm back and throws a knife at the player's chest. The knife flies straight at 18 meters a second. A dodge evades it, and a guard blocks it or parries it, as it does a cut.
 
-Below half its health, the captain rages, as the bosses of Nioh do. `RAGE` shows over it as it begins, and under its bars while it lasts. A raging fighter's attacks take 80 percent of their time. A raging bandit's dice roll high. It makes no plan of two light attacks, and twice as many burst attacks.
+Below half its health, the captain rages. `RAGE` shows over it as it begins, and under its bars while it lasts. A raging fighter's attacks take 80 percent of their time. A raging bandit's dice roll high. It makes no plan of two light attacks, and twice as many burst attacks.
 
 A `Brain` decides what a bandit does, frame by frame. `FoeState` is a type with `is_valid`.
 
@@ -176,7 +176,7 @@ A fallen wolf lies on its side. It gives no coins, but it trains swordplay as a 
 
 ## The companion
 
-The module is `extensions/village/companion.mojo`. A swordswoman in woad blue starts beside the player, and fights with them, as the party of Tales of Arise does. The foes do not attack her: she keeps out of their way.
+The module is `extensions/village/companion.mojo`. A swordswoman in woad blue starts beside the player, and fights with them. The foes do not attack her: she keeps out of their way.
 
 Out of a fight, she follows the player. She walks to them from more than 3 meters, and runs from more than 7. In a fight, she faces the player's foe, and stands 6 meters from it, 70 degrees off the line from the foe to the player. So she keeps out of the way of the camera.
 
@@ -201,7 +201,7 @@ The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these o
 - **A dummy's ki**, over its head, while its ki is not full.
 - **The lock's mark**: four gold dots round the locked target's chest.
 - **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `BURST COUNTER`. They rise and fade.
-- **The edges of the frame**, tinted. They turn blue while the player's perfect dodge slows the foes, as Tales of Arise's perfect evade does. They turn gold through a mystic arte, and red below a quarter of the player's health. A ki pulse rings the player's feet with blue light, as in Nioh.
+- **The edges of the frame**, tinted. They turn blue while the player's perfect dodge slows the foes. They turn gold through a mystic arte, and red below a quarter of the player's health. A ki pulse rings the player's feet with blue light.
 
 The note over the prompt names each arte as it starts, and each new stance. It says `OVER LIMIT!` when Over Limit begins, and `BOOST ATTACK!` when the companion makes one. The companion's bolts are blue stars, and her boost attack's is gold. A thrown knife is a small orange star. A blow that lands bursts in sparks.
 

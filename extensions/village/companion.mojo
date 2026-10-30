@@ -3,8 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The player's companion in a fight, as the party of Tales of Arise is: a
-swordswoman who keeps back, casts bolts of light at the player's foe,
+"""The player's companion in a fight: a swordswoman who keeps back, casts bolts of light at the player's foe,
 heals the player, and makes a boost attack when the player calls for it.
 
 A `Companion` is her mind. `Companion.think` decides what she does, frame

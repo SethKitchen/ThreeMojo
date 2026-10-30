@@ -4,7 +4,7 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """Swordplay in the village: the player and a companion against bandits,
-wolves and straw dummies, as in Tales of Arise and Nioh.
+wolves and straw dummies.
 
 `Battle.tick` runs the fight for one frame, in place of the player's own
 step and pose:

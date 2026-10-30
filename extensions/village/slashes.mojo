@@ -18,8 +18,8 @@ mystic arte's spins leave a wide ring that turns with the body too. A
 burst attack's trail is red, whoever makes it, and a mystic arte's is
 gold.
 
-A trail is light, so `Trail.draw` adds it to the finished frame, as Tales
-of Arise draws its swings. The game's renderer draws every surface
+A trail is light, so `Trail.draw` adds it to the finished frame, as an
+action game draws its swings. The game's renderer draws every surface
 opaque, and could not. Through the move's active part, the ribbon grows
 from its start to where the blade is, brightest at the blade and fading
 behind it over `TRAIL_TAIL` of its length. After the active part it fades

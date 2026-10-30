@@ -9,9 +9,9 @@ blow does to the fighter that it reaches.
 A `Fighter` does not know where it stands. The game finds the fighters
 that a swing reaches with `reaches`, and gives each one the blow that
 `Fighter.connect` returns. `Fighter.receive` says what the blow did, and
-`Fighter.landed` tells the attacker. The rules come from two games:
+`Fighter.landed` tells the attacker. The rules:
 
-- **Ki, as in Nioh.** Each light attack, heavy attack and dodge spends
+- **Ki.** Each light attack, heavy attack and dodge spends
   ki. Ki comes back after `FighterParameters.ki_delay` without spending.
   A fighter that spends its last ki is winded: it staggers when its move
   ends. A guard takes a blow on ki, not on health. A **ki pulse**, a press
@@ -21,23 +21,22 @@ that a swing reaches with `reaches`, and gives each one the blow that
   ki. A fighter with no ki left staggers, and a blow on a staggered fighter
   is critical: it does `CRITICAL_BONUS` times its damage. A heavy attack
   on a staggered fighter with `FINISH_SHARE` of its health or less is a
-  finisher, as Tales of Arise's boost strikes and Nioh's grapples are: it
-  fells the fighter at once.
-- **Stances, as in Nioh.** The high stance hits harder and more slowly,
+  finisher: it fells the fighter at once.
+- **Stances.** The high stance hits harder and more slowly,
   and costs more ki. The low stance is quick and costs less ki, and hits
   less hard. The middle stance is between them, and guards best. A stance
   changes the light and the heavy attacks, and the dodge's ki and length.
-- **Artes, as in Tales of Arise.** An arte is a strong move that spends
+- **Artes.** An arte is a strong move that spends
   points of the arte gauge, not ki. The gauge fills by itself, and by
   `ARTE_PER_HIT` for each blow that lands. The rising edge throws a foe
   into the air. The tempest spins, and strikes all round four times. The
   demon fang sends a wave of force along the ground: its cut strikes
   nothing, and the wave carries its `blow`.
-- **The plunge, as in the air combos of Tales of Arise.** A heavy attack
+- **The plunge.** A heavy attack
   in the air is a plunge: the fighter dives, and slams the ground all
   round. It has armor until it strikes, and it counters a burst attack
   as a heavy attack does.
-- **Dodges, as in Tales of Arise.** No blow can hit a dodge from
+- **Dodges.** No blow can hit a dodge from
   `DODGE_SAFE_FROM` to `DODGE_SAFE_TO` seconds into it. A blow that
   reaches a dodge before `DODGE_SAFE_FROM + PERFECT_WINDOW` is a perfect
   dodge. The dodger gets back the dodge's ki and `PERFECT_ARTE` points of
@@ -50,12 +49,12 @@ that a swing reaches with `reaches`, and gives each one the blow that
   `COUNTER_SECONDS` is a counter. The player parries within `PARRY`
   seconds. Some moves have armor: a blow on them does its damage, and does
   not make the fighter reel.
-- **Burst attacks, as in Nioh 2.** A foe's burst attack glows red through
+- **Burst attacks.** A foe's burst attack glows red through
   its start-up. A guard does not stop it, but a dodge does. The burst has
   armor until it strikes, so a light attack does not stop it. A heavy
   attack or an arte that lands in the start-up is a burst counter. The
   foe loses all its ki and staggers.
-- **Over Limit, as in Tales of Arise.** A fighter's limit gauge fills
+- **Over Limit.** A fighter's limit gauge fills
   by `LIMIT_PER_HIT` for each blow that lands, `LIMIT_PER_BREAK` for each
   that breaks a ki, a guard or a burst, `LIMIT_PER_PARRY` for each parry, and
   `LIMIT_PER_PERFECT` for each perfect dodge, times its `limit_gain`.
@@ -66,7 +65,7 @@ that a swing reaches with `reaches`, and gives each one the blow that
   can spend what is left of it on a **mystic arte**: a leap and two
   spins that strike all round six times. No blow can hit the fighter
   through it.
-- **Rage, as in the bosses of Nioh.** A fighter whose `rage` is above
+- **Rage.** A fighter whose `rage` is above
   zero rages once its health falls to that share of its most. A raging
   fighter's attacks take `RAGE_PACE` of their time.
 - **Combos.** The three light attacks chain. A press during a move waits,
@@ -214,7 +213,7 @@ comptime DEMON_FANG = CombatMove(7)
 before the fighter. The cut strikes nothing itself: the game sends the
 wave."""
 comptime MYSTIC_ARTE = CombatMove(8)
-"""The strongest arte, as in Tales of Arise: a sword raised to the sky,
+"""The strongest arte: a sword raised to the sky,
 and two spins that strike all round six times. Only a fighter Over Limit
 can make it, and it spends what is left of Over Limit."""
 comptime PLUNGE = CombatMove(9)
