@@ -710,7 +710,7 @@ struct Battle(Movable):
         dummies.
 
         A bandit, a wolf or a dummy on a lot or its apron, or in the
-        water, is left out.
+        water, is left out. A den with no wolf left builds no look.
 
         Args:
             scene: The scene.
@@ -805,6 +805,18 @@ struct Battle(Movable):
             )
         var paints = animal_paints(assets)
         for den in parameters.dens:
+            var places = den_places(den)
+            var kept = List[Int]()
+            for k in range(len(places)):  # pragma: no branch
+                var at = places[k]
+                if lot_openness(lots, at.x, at.z) < 1:
+                    continue
+                if ground.wet(at.x, at.z):
+                    continue
+                kept.append(k)
+            # A den whose every wolf is left out costs no look.
+            if len(kept) == 0:
+                continue
             var look = animal_look(
                 assets,
                 WOLF,
@@ -816,13 +828,8 @@ struct Battle(Movable):
             var walker = look.walker
             walker.run_speed = Velocity(WOLF_RUN, METER_PER_SECOND)
             self.books.append(look.book.copy())
-            var places = den_places(den)
-            for k in range(len(places)):  # pragma: no branch
+            for k in kept:  # pragma: no branch
                 var at = places[k]
-                if lot_openness(lots, at.x, at.z) < 1:
-                    continue
-                if ground.wet(at.x, at.z):
-                    continue
                 var node = scene.add(Object3D())
                 self.pelts.append(
                     Pelt(node, len(scene.meshes), len(self.books) - 1)
