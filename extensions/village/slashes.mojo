@@ -430,7 +430,9 @@ struct Trail(Movable):
 
     def show(mut self, mut scene: Scene, fighter: Fighter) raises:
         """Show the ribbon of the attack that strikes now, as far as the
-        blade has swept it; and the tempest's, turned with the body.
+        blade has swept it; and the tempest's, turned with the body. An
+        attack with no ribbon, such as a bite, a cast or a throw, shows
+        none.
 
         Args:
             scene: The scene the trail is in.
@@ -441,6 +443,8 @@ struct Trail(Movable):
         """
         self.shown = -1
         if not is_attack(fighter.move):
+            return
+        if len(self.ribbons[fighter.move.value]) == 0:
             return
         var data = move_data(fighter.move)
         var begin = data.startup.to(SECOND) * fighter.pace

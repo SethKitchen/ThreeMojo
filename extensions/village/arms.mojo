@@ -46,6 +46,7 @@ from extensions.humanoid.rig.sword_clips import (
     rising_edge_clip,
     stagger_clip,
     tempest_clip,
+    throw_clip,
 )
 from extensions.village.blade import SwordLooks, add_scabbard, add_sword
 from extensions.village.character import STANDING, Character
@@ -66,6 +67,7 @@ from extensions.village.combat import (
     RISING_EDGE,
     STAGGER,
     TEMPEST,
+    THROW,
     CombatMove,
     Fighter,
 )
@@ -154,6 +156,9 @@ struct Arms(Movable):
         )
         self.moves[CAST.value] = body.mixer.add(
             AnimationAction(cast_clip(bones, rig))
+        )
+        self.moves[THROW.value] = body.mixer.add(
+            AnimationAction(throw_clip(bones, rig))
         )
         self.moves[DODGE.value] = body.mixer.add(
             AnimationAction(dodge_clip(bones, rig))

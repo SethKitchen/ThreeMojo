@@ -37,6 +37,7 @@ from extensions.village.battle import (
     Battle,
     BattleParameters,
     Bolt,
+    Knife,
     pressed,
     push_of,
     strong_blow,
@@ -1091,6 +1092,29 @@ def test_a_bandit_sidesteps_an_attack() raises:
     late.tick(no_input())
     assert_true(holds_text(popup_texts(late.battle), "PERFECT DODGE"))
     assert_almost_equal(late.battle.slow, 0, atol=1e-6)
+
+
+def test_a_thrower_throws_knives_that_a_guard_blocks() raises:
+    var arena = Arena(arena_parameters(1, 0, 8, thrower=True))
+    arena.battle.foes[0].brain.state = CIRCLING
+    arena.battle.foes[0].brain.timer = 0
+    arena.run(1.2)
+    # The knife flew to the player and struck.
+    assert_almost_equal(arena.battle.fighter.health, 478, atol=1e-3)
+    assert_equal(len(arena.battle.knives), 0)
+    # A guard blocks the next.
+    arena.battle.foes[0].brain.timer = 0
+    var guard = no_input()
+    guard.guard = True
+    arena.run(1.2, guard)
+    assert_almost_equal(arena.battle.fighter.health, 478, atol=1e-3)
+    assert_true(holds_text(popup_texts(arena.battle), "BLOCKED"))
+    # A knife thrown wide falls.
+    var blow = arena.battle.foes[0].fighter.blow()
+    var wide = Vector3(5, 1, 0)
+    arena.battle.knives.append(Knife(wide, Vector3(1, 0, 0), wide, 0, blow, 0))
+    arena.run(1.5, guard)
+    assert_equal(len(arena.battle.knives), 0)
 
 
 def test_a_heavy_attack_in_the_air_plunges() raises:

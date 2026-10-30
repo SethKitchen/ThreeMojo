@@ -47,6 +47,7 @@ from extensions.humanoid.rig.sword_clips import (
     stagger_clip,
     tempest_clip,
     tempest_twist,
+    throw_clip,
     twin_joint,
 )
 from extensions.humanoid.sex import MALE
@@ -124,6 +125,7 @@ def test_each_clip_lasts_as_long_as_its_move() raises:
         "plunge",
         "burst",
         "cast",
+        "throw",
         "dodge",
         "guard",
         "flinch",
@@ -143,6 +145,7 @@ def test_each_clip_lasts_as_long_as_its_move() raises:
         0.75,
         1.44,
         0.8,
+        1.0,
         0.48,
         1.0,
         0.4,
@@ -162,6 +165,7 @@ def test_each_clip_lasts_as_long_as_its_move() raises:
     clips.append(plunge_clip(bones, rig))
     clips.append(burst_clip(bones, rig))
     clips.append(cast_clip(bones, rig))
+    clips.append(throw_clip(bones, rig))
     clips.append(dodge_clip(bones, rig))
     clips.append(guard_clip(bones, rig))
     clips.append(flinch_clip(bones, rig))

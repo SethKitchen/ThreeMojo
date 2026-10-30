@@ -66,6 +66,7 @@ def arena_parameters(
     far: Float32 = 6,
     wolves: Int = 0,
     ally: Bool = False,
+    thrower: Bool = False,
 ) raises -> BattleParameters:
     """Return a fight of bandits and dummies before the player.
 
@@ -78,6 +79,7 @@ def arena_parameters(
         wolves: How many wolves keep a den `far` meters before the player
             and three meters to its left, meshed in two poses.
         ally: Whether the companion fights beside the player.
+        thrower: Whether the bandits throw knives.
 
     Returns:
         The fight. A fallen foe lingers a second and comes back after
@@ -98,6 +100,7 @@ def arena_parameters(
                 Angle(180.0, DEGREE),
                 5 + k,
                 bandit_fighter(),
+                thrower,
             )
         )
     p.dens = List[Den]()

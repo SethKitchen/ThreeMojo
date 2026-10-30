@@ -7,7 +7,7 @@
 bars, the lock's mark and the blows' numbers."""
 
 from cameras.perspective_camera import PerspectiveCamera
-from extensions.village.battle import CHEST, Bolt, Popup, Wave
+from extensions.village.battle import CHEST, Bolt, Knife, Popup, Wave
 from extensions.village.battle_hud import (
     HURT_TINT,
     draw_bar,
@@ -246,8 +246,14 @@ def test_the_companion_shows_her_bolts_and_her_gauge() raises:
     var gold = _frame()
     draw_battle(gold, arena.battle, arena.scene, camera, look)
     assert_true(_changed(gold) > _changed(plain))
-    # One behind the camera does not.
+    # A knife is a star too.
     arena.battle.bolts[0].at = Vector3(0, 1, 9)
+    arena.battle.knives.append(Knife(at, Vector3(0, 0, 1), at, 0, blow, 0))
+    var knife = _frame()
+    draw_battle(knife, arena.battle, arena.scene, camera, look)
+    assert_true(_changed(knife) > _changed(plain))
+    arena.battle.knives.clear()
+    # One behind the camera does not.
     var behind = _frame()
     draw_battle(behind, arena.battle, arena.scene, camera, look)
     assert_equal(_changed(behind), _changed(plain))

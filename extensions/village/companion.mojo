@@ -271,5 +271,6 @@ def default_allies() raises -> List[Bandit]:
             Angle(0.0, DEGREE),
             70,
             ally_fighter(),
+            False,
         )
     ]

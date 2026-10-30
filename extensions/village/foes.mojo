@@ -33,6 +33,10 @@ guard stops. A raging bandit's dice roll high: it makes no plan of two
 light attacks, and twice as many burst attacks. The dice that choose come
 from the bandit's seed, so a fight plays the same way each time.
 
+**Throwers.** A thrower is a bandit who keeps back, at `THROW_CIRCLE`,
+and never takes the attack token. Every `THROW_EVERY` seconds or so it
+throws a knife at the player: see `Brain.thrower`.
+
 **Wolves.** A wolf is an animal of the village's kind, meshed as a
 flipbook, with a `Fighter` whose one attack is the `BITE`: a crouch, and
 a leap that bites. Its brain is a bandit's with a beast's temper: see
@@ -61,6 +65,7 @@ from extensions.village.clothes import (
     GRAY_WOOL,
     MADDER,
     NETTLE,
+    WELD,
     WALNUT,
     village_outfit,
 )
@@ -68,6 +73,7 @@ from extensions.village.combat import (
     BITE,
     BURST,
     FREE,
+    THROW,
     HEAVY,
     LIGHT_ONE,
     LIGHT_THREE,
@@ -118,6 +124,10 @@ comptime GUARD_CHANCE = Float32(0.35)
 comptime SIDESTEP_SHARE = Float32(0.4)
 """The share of a bandit's answers to an attack that are a sidestep, not
 a guard."""
+comptime THROW_CIRCLE = Float32(8)
+"""How far from the player a thrower keeps, in meters."""
+comptime THROW_EVERY = Float32(3.5)
+"""How long a thrower waits between two knives, about, in seconds."""
 comptime GUARD_REACH = Float32(3.5)
 """How near the player a bandit must be to guard their attack, in
 meters."""
@@ -324,6 +334,8 @@ struct Brain(Copyable, Movable):
     var strike: Float32
     var wary: Float32
     var beast: Bool
+    # Whether it throws knives from afar rather than taking turns to cut.
+    var throws: Bool
 
     def __init__(out self, seed: Int):
         """Post a bandit, with its dice's seed: it notices the player from
@@ -345,6 +357,7 @@ struct Brain(Copyable, Movable):
         self.strike = STRIKE
         self.wary = GUARD_CHANCE
         self.beast = False
+        self.throws = False
 
     @staticmethod
     def wolf(seed: Int) -> Brain:
@@ -363,6 +376,23 @@ struct Brain(Copyable, Movable):
         brain.circle = WOLF_CIRCLE
         brain.strike = WOLF_STRIKE
         brain.beast = True
+        return brain^
+
+    @staticmethod
+    def thrower(seed: Int) -> Brain:
+        """Return a thrower's brain: it keeps `THROW_CIRCLE` from the
+        player, never takes the attack token, and throws a knife about
+        every `THROW_EVERY` seconds.
+
+        Args:
+            seed: The seed of its dice.
+
+        Returns:
+            The brain, at its post.
+        """
+        var brain = Brain(seed)
+        brain.circle = THROW_CIRCLE
+        brain.throws = True
         return brain^
 
     def roll(mut self, salt: Int) -> Float32:
@@ -482,7 +512,7 @@ struct Brain(Copyable, Movable):
     ):
         """Wait a turn round the player: step round them at its circle,
         guard an attack, sidestep it or leap back from it, or take the
-        token and attack."""
+        token and attack; or, for a thrower, throw a knife."""
         if gap > self.circle + 2:
             self.state = CLOSING
             return
@@ -503,7 +533,12 @@ struct Brain(Copyable, Movable):
             self.timer = GUARD_TIME
             out.guard = True
             return
-        if self.timer <= 0 and (sight.holds or sight.unclaimed):
+        if self.throws:
+            if self.timer <= 0 and sight.free:
+                out.attack = THROW
+                self.timer = THROW_EVERY * (0.8 + 0.4 * self.roll(4))
+                return
+        elif self.timer <= 0 and (sight.holds or sight.unclaimed):
             out.claim = True
             self.state = ATTACKING
             if self.beast:
@@ -536,6 +571,8 @@ struct Bandit(Copyable, Movable):
     # The seed of their dice.
     var seed: Int
     var fighter: FighterParameters
+    # Whether they keep back and throw knives: see `Brain.thrower`.
+    var thrower: Bool
 
 
 def bandit_fighter() -> FighterParameters:
@@ -668,7 +705,8 @@ def default_bandits() raises -> List[Bandit]:
         Three hooded bandits round a camp past the meadow's north-west
         edge, 25 meters from where the player starts: one in walnut
         brown, one in gray and one in nettle green. Behind them stands
-        their captain, taller, in madder red: see `captain_fighter`.
+        their captain, taller, in madder red: see `captain_fighter`. A
+        thrower in gray and weld yellow keeps the camp's east side.
 
     Raises:
         Error: Never: the outfits check.
@@ -682,6 +720,7 @@ def default_bandits() raises -> List[Bandit]:
             Angle(-60.0, DEGREE),
             61,
             bandit_fighter(),
+            False,
         ),
         Bandit(
             HumanoidSpec(Length(71.0, INCH), MALE, TONED, random_genome(62)),
@@ -691,6 +730,7 @@ def default_bandits() raises -> List[Bandit]:
             Angle(-120.0, DEGREE),
             62,
             bandit_fighter(),
+            False,
         ),
         Bandit(
             HumanoidSpec(Length(67.0, INCH), MALE, TONED, random_genome(63)),
@@ -700,6 +740,7 @@ def default_bandits() raises -> List[Bandit]:
             Angle(10.0, DEGREE),
             63,
             bandit_fighter(),
+            False,
         ),
         Bandit(
             HumanoidSpec(Length(75.0, INCH), MALE, TONED, random_genome(64)),
@@ -709,6 +750,17 @@ def default_bandits() raises -> List[Bandit]:
             Angle(-90.0, DEGREE),
             64,
             captain_fighter(),
+            False,
+        ),
+        Bandit(
+            HumanoidSpec(Length(68.0, INCH), MALE, TONED, random_genome(65)),
+            village_outfit(GRAY_WOOL, WELD, WALNUT, True),
+            -15,
+            47,
+            Angle(-150.0, DEGREE),
+            65,
+            bandit_fighter(),
+            True,
         ),
     ]
 

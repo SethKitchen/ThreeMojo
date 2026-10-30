@@ -31,6 +31,7 @@ side and the other side:
 | `mystic_clip` | 2.1 | The sword raised to the sky, two whole turns of the body with the sword arm out, and a cut down |
 | `cast_clip` | 0.8 | The sword raised, and pointed at the foe with the free hand beside it |
 | `plunge_clip` | 0.75 | The sword raised over the head, and a cut down to the ground in a deep crouch |
+| `throw_clip` | 1.0 | The free arm drawn back over the shoulder, and flung forward to throw a knife |
 | `burst_clip` | 1.44 | A long coil with the sword drawn back at the hip, and a lunge that thrusts it straight ahead |
 | `dodge_clip` | 0.48 | A low, quick crouch with the sword held in |
 | `guard_clip` | 1.0, loops | The blade upright before the face, the knees bent |
@@ -698,6 +699,39 @@ def plunge_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
     var keys: List[Pose] = [raised^, slam^, hold^]
     var at: List[Float32] = [0.16, 0.36, 0.6]
     return _cut("plunge", bones, rig, keys^, at^, 0.75)
+
+
+def throw_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
+    """Return a thrower's throw: the free arm drawn back over the shoulder,
+    and flung forward to throw a knife, the sword held low, 1.0 seconds.
+
+    Args:
+        bones: One node per joint, in the order of the joints.
+        rig: The rig the bones were placed from.
+
+    Returns:
+        The clip, named `"throw"`.
+
+    Raises:
+        Error: If there is not one bone per joint.
+    """
+    var scale = _scale(rig)
+    var wind = Pose()
+    _legs(wind, 15, 25, 0.35, scale)
+    _body(wind, 25, Vector3(-4, 10, 0), Vector3(-6, 15, 0))
+    wind.turn(HEAD, 0, -35)
+    _arm(wind, Grip(-42, -7, 17, -21, 42, 8))
+    _free_hand(wind, -160, -20, -100)
+    var fling = Pose()
+    _legs(fling, 35, 15, 0.4, scale)
+    _body(fling, -15, Vector3(10, -10, 0), Vector3(6, -15, 0))
+    fling.turn(HEAD, 0, 20)
+    _arm(fling, Grip(-42, -7, 17, -21, 42, 8))
+    _free_hand(fling, -70, -10, -5)
+    var hold = fling.copy()
+    var keys: List[Pose] = [wind^, fling^, hold^]
+    var at: List[Float32] = [0.38, 0.5, 0.62]
+    return _cut("throw", bones, rig, keys^, at^, 1.0)
 
 
 def cast_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:

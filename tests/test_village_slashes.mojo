@@ -19,6 +19,7 @@ from extensions.village.combat import (
     LIGHT_THREE,
     LIGHT_TWO,
     MYSTIC_ARTE,
+    THROW,
     PLUNGE,
     RISING_EDGE,
     TEMPEST,
@@ -210,6 +211,12 @@ def test_a_trail_grows_with_the_swing_and_fades() raises:
     spinner.clock = 0.4
     trail.show(scene, spinner)
     assert_equal(trail.shown, TEMPEST.value)
+    # A throw has no ribbon, and shows none.
+    var thrower = Fighter(FighterParameters())
+    _ = thrower.request(THROW)
+    thrower.clock = 0.5
+    trail.show(scene, thrower)
+    assert_equal(trail.shown, -1)
     var ring = trail.nodes[TEMPEST.value].value()
     assert_true(abs(scene.node(ring).quaternion.w) < 0.99)
     # A burst attack's thrust is red, whoever makes it.

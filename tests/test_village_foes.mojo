@@ -12,12 +12,14 @@ from extensions.village.combat import (
     BITE,
     BURST,
     FREE,
+    THROW,
     HEAVY,
     LIGHT_ONE,
     LIGHT_THREE,
     LIGHT_TWO,
 )
 from extensions.village.foes import (
+    THROW_CIRCLE,
     WOLF_CIRCLE,
     WOLF_NOTICE,
     ALERT,
@@ -339,9 +341,12 @@ def test_bandits_and_dummies_have_their_strength() raises:
     assert_true(captain.health > bandit.health)
     assert_true(captain.might > bandit.might)
     var bandits = default_bandits()
-    assert_equal(len(bandits), 4)
+    assert_equal(len(bandits), 5)
     assert_true(len(bandits[0].outfit.garments) >= 4)
     assert_almost_equal(bandits[3].fighter.health, captain.health, atol=1e-6)
+    # One of them throws knives.
+    assert_false(bandits[0].thrower)
+    assert_true(bandits[4].thrower)
     assert_equal(len(default_posts()), 2)
 
 
@@ -453,6 +458,31 @@ def test_a_threatened_bandit_guards_or_sidesteps() raises:
     assert_true(guards > 0)
     assert_true(steps > 0)
     assert_true(steps < guards)
+
+
+def test_a_thrower_keeps_back_and_throws_without_the_token() raises:
+    var brain = Brain.thrower(4)
+    assert_true(brain.throws)
+    assert_almost_equal(brain.circle, THROW_CIRCLE, atol=1e-6)
+    brain.state = CIRCLING
+    brain.timer = 0
+    # Its wait over, it throws a knife, and does not take the token.
+    var throw = brain.think(_sight(Vector3(0, 0, THROW_CIRCLE)), _frame())
+    assert_true(throw.attack == THROW)
+    assert_false(throw.claim)
+    assert_true(brain.state == CIRCLING)
+    assert_true(brain.timer > 2)
+    # While it waits, or while it makes a move, it circles at its
+    # distance, and takes no token either.
+    var wait = brain.think(_sight(Vector3(0, 0, THROW_CIRCLE)), _frame())
+    assert_true(wait.attack == FREE)
+    assert_false(wait.claim)
+    brain.timer = 0
+    var busy = brain.think(
+        _sight(Vector3(0, 0, THROW_CIRCLE), free=False), _frame()
+    )
+    assert_true(busy.attack == FREE)
+    assert_false(busy.claim)
 
 
 def main() raises:

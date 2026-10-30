@@ -62,6 +62,7 @@ from extensions.village.combat import (
     STAGGER,
     Struck,
     TEMPEST,
+    THROW,
     Blow,
     combo_bonus,
     faces,
@@ -131,9 +132,9 @@ def _blow(damage: Float32, ki: Float32) -> Blow:
 
 
 def test_each_kind_knows_its_values() raises:
-    for value in [-1, 17]:
+    for value in [-1, 18]:
         assert_false(CombatMove(value).is_valid())
-    for value in [0, 16]:
+    for value in [0, 17]:
         assert_true(CombatMove(value).is_valid())
     for value in [-1, 3]:
         assert_false(CombatStance(value).is_valid())
@@ -156,8 +157,9 @@ def test_moves_and_outcomes_have_names_for_the_display() raises:
     assert_equal(move_name(MYSTIC_ARTE), "MYSTIC ARTE")
     assert_equal(move_name(CAST), "CAST")
     assert_equal(move_name(PLUNGE), "PLUNGE")
-    with assert_raises(contains="seventeen"):
-        _ = move_name(CombatMove(17))
+    assert_equal(move_name(THROW), "THROW")
+    with assert_raises(contains="eighteen"):
+        _ = move_name(CombatMove(18))
     assert_equal(outcome_word(PERFECT_DODGE), "PERFECT DODGE")
     assert_equal(outcome_word(PARRIED), "PARRY")
     assert_equal(outcome_word(GUARD_BREAK), "GUARD BREAK")
@@ -177,6 +179,7 @@ def test_moves_are_sorted_into_attacks_artes_and_styles() raises:
     assert_true(is_attack(BURST))
     assert_true(is_attack(CAST))
     assert_true(is_attack(PLUNGE))
+    assert_true(is_attack(THROW))
     assert_false(is_arte(PLUNGE))
     assert_false(styled(PLUNGE))
     assert_false(is_attack(DODGE))
@@ -245,8 +248,11 @@ def test_each_move_has_its_times_and_its_strength() raises:
     var plunge = move_data(PLUNGE)
     assert_almost_equal(plunge.arc.to(DEGREE), 360, atol=1e-4)
     assert_almost_equal(plunge.ki_cost, 18, atol=1e-6)
-    with assert_raises(contains="seventeen"):
-        _ = move_data(CombatMove(17))
+    var throw = move_data(THROW)
+    assert_equal(throw.hits, 0)
+    assert_almost_equal(throw.damage, 40, atol=1e-6)
+    with assert_raises(contains="eighteen"):
+        _ = move_data(CombatMove(18))
 
 
 def test_each_stance_changes_strength_pace_cost_guard_and_step() raises:

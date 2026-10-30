@@ -9,8 +9,9 @@
 `draw_battle` draws eight things:
 
 1. **The trails** of the swings, the demon fang's waves, the
-   companion's bolts and a plunge's ring, as light added to the frame:
-   see `extensions.village.slashes`. A wave dims as it runs. A plunge's
+   companion's bolts, the throwers' knives and a plunge's ring, as light
+   added to the frame: see `extensions.village.slashes`. A wave dims as
+   it runs. A knife is a small orange star. A plunge's
    ring spreads over the ground from the player's feet, and fades. A bolt is a blue
    star, or a gold one for a boost attack.
 2. **The player's gauges**, in the bottom right: the stance, the health,
@@ -72,6 +73,7 @@ from extensions.village.companion import BOOST_FULL
 from extensions.village.foes import POSTED
 from extensions.village.slashes import (
     BURST_TRAIL,
+    FOE_TRAIL,
     OVER_TRAIL,
     draw_ring,
     draw_wave,
@@ -113,6 +115,8 @@ comptime BOLT_COLOR = Vector3(140, 210, 255)
 """The light of a companion's bolt."""
 comptime BOLT_GLOW = Float32(0.3)
 """How far a bolt's star reaches, in meters."""
+comptime KNIFE_GLOW = Float32(0.15)
+"""How far a knife's star reaches, in meters."""
 comptime SLOW_TINT = Rgb(70, 140, 255)
 """The tint of the frame's edges while a perfect dodge slows the foes."""
 comptime MYSTIC_TINT = Rgb(255, 200, 80)
@@ -356,6 +360,27 @@ def _edges(
         draw_ring(frame, camera, look, feet, 0.6 + share, 1 - share)
 
 
+def _star(
+    mut frame: Framebuffer,
+    camera: PerspectiveCamera,
+    look: Vector3,
+    at: Vector3,
+    size: Float32,
+    color: Vector3,
+) raises:
+    """Add a star of light at a point before the camera, reaching `size`
+    meters from it, and three pixels at least."""
+    var seen = on_screen(camera, look, at, frame.width, frame.height)
+    if not seen:
+        return
+    var center = seen.value()
+    var top = camera.project(
+        at + Vector3(0, size, 0), frame.width, frame.height
+    )
+    var reach = max(Float32(3), abs(top.y - center.y))
+    glow_star(frame, Vector3(center.x, center.y, 1), reach, color)
+
+
 def _boost(mut frame: Framebuffer, battle: Battle, scale: Int):
     """Draw the companion's boost gauge, in the bottom left."""
     for k in range(len(battle.allies)):
@@ -472,14 +497,10 @@ def draw_battle(
         var glow = 1 - 0.6 * wave.gone / FANG_RANGE
         draw_wave(frame, camera, look, wave.at, wave.way, glow)
     for bolt in battle.bolts:
-        var at = on_screen(camera, look, bolt.at, w, h)
-        if not at:
-            continue
-        var center = at.value()
-        var top = camera.project(bolt.at + Vector3(0, BOLT_GLOW, 0), w, h)
-        var reach = max(Float32(3), abs(top.y - center.y))
         var color = OVER_TRAIL if bolt.boosted else BOLT_COLOR
-        glow_star(frame, Vector3(center.x, center.y, 1), reach, color)
+        _star(frame, camera, look, bolt.at, BOLT_GLOW, color)
+    for knife in battle.knives:
+        _star(frame, camera, look, knife.at, KNIFE_GLOW, FOE_TRAIL)
     _ring(frame, battle, scene, camera, look)
     _edges(frame, battle, scene, camera, look)
     _gauges(frame, battle, scale)

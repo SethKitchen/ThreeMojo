@@ -1,6 +1,6 @@
 # Village combat
 
-A player of the [Village walk](Village-walk) carries a sword, and can fight. A companion fights beside them. Three bandits and their captain keep a camp on the meadow. A pack of three wolves keeps a den east of the pond. Two straw dummies stand near the start for practice.
+A player of the [Village walk](Village-walk) carries a sword, and can fight. A companion fights beside them. Four bandits and their captain keep a camp on the meadow. A pack of three wolves keeps a den east of the pond. Two straw dummies stand near the start for practice.
 
 The rules come from two games. Ki, stances, the ki pulse, burst attacks and rage come from Nioh. Artes, perfect dodges, Over Limit, the mystic arte, the companion's boost attacks and long combos come from Tales of Arise.
 
@@ -126,6 +126,7 @@ The three light attacks chain. A press during a move waits for the chain point: 
 | `BITE` | 0.35 s | 0.20 s | 0.45 s | 1.4 m | 70 degrees | 40 | 12 | | |
 | `BURST` | 0.70 s | 0.14 s | 0.60 s | 2.8 m | 70 degrees | 120 | 45 | 20 | |
 | `CAST` | 0.35 s | 0.10 s | 0.35 s | A bolt | | 28 | 10 | | |
+| `THROW` | 0.45 s | 0.10 s | 0.45 s | A knife | | 40 | 14 | | |
 | `DODGE` | | 0.32 s | 0.16 s | | | | | 14 | |
 
 An attack carries its fighter forward through its start-up and its active part. A blow pushes the fighter that it hits away. The player has 500 health and 100 ki.
@@ -137,6 +138,8 @@ A strong blow stops the whole fight for 0.06 seconds, as action games freeze a f
 ## The bandits
 
 The module is `extensions/village/foes.mojo`. Three hooded bandits keep a camp about 25 meters north-west of the start. A bandit is a person with a sword, as the player is. It has 300 health and 70 ki, and its blows do 55 percent of a move's damage. Their captain, taller and in red, stands behind them. The captain has 650 health and 120 ki, and its blows do 80 percent of a move's damage.
+
+A fourth bandit, in gray and weld yellow, throws knives. A thrower keeps 8 meters from the player, and never takes the attack token. About every 3.5 seconds, it draws its free arm back and throws a knife at the player's chest. The knife flies straight at 18 meters a second. A dodge evades it, and a guard blocks it or parries it, as it does a cut.
 
 Below half its health, the captain rages, as the bosses of Nioh do. `RAGE` shows over it as it begins, and under its bars while it lasts. A raging fighter's attacks take 80 percent of their time. A raging bandit's dice roll high. It makes no plan of two light attacks, and twice as many burst attacks.
 
@@ -198,7 +201,7 @@ The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these o
 - **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `BURST COUNTER`. They rise and fade.
 - **The edges of the frame**, tinted. They turn blue while the player's perfect dodge slows the foes, as Tales of Arise's perfect evade does. They turn gold through a mystic arte, and red below a quarter of the player's health. A ki pulse rings the player's feet with blue light, as in Nioh.
 
-The note over the prompt names each arte as it starts, and each new stance. It says `OVER LIMIT!` when Over Limit begins, and `BOOST ATTACK!` when the companion makes one. The companion's bolts are blue stars, and her boost attack's is gold. A blow that lands bursts in sparks.
+The note over the prompt names each arte as it starts, and each new stance. It says `OVER LIMIT!` when Over Limit begins, and `BOOST ATTACK!` when the companion makes one. The companion's bolts are blue stars, and her boost attack's is gold. A thrown knife is a small orange star. A blow that lands bursts in sparks.
 
 A swing leaves a trail of light: white for the player, gold Over Limit, and orange for a bandit. A burst attack's thrust leaves a red trail. The mystic arte's spins leave a wide gold ring. A plunge rings the ground with light where it lands.
 
@@ -237,6 +240,7 @@ The module is `extensions/humanoid/rig/sword_clips.mojo`. Each clip is worked ou
 | `mystic_clip` | 2.1 | The sword raised to the sky, two whole turns of the body with the sword arm out, and a cut down |
 | `cast_clip` | 0.8 | The sword raised, and pointed at the foe with the free hand beside it |
 | `plunge_clip` | 0.75 | The sword raised over the head, and a cut down to the ground in a deep crouch |
+| `throw_clip` | 1.0 | The free arm drawn back over the shoulder, and flung forward to throw a knife |
 | `burst_clip` | 1.44 | A long coil with the sword drawn back at the hip, and a lunge that thrusts it straight ahead |
 | `tempest_clip` | 1.06 | The sword arm out, and a whole turn of the body |
 | `dodge_clip` | 0.48 | A low, quick crouch |

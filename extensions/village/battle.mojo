@@ -32,7 +32,9 @@ step and pose:
    player too, and fades at `SHOVE_FADE`.
 3. **The foes think and move**, and so does the companion: see
    `extensions.village.foes` and `extensions.village.companion`. The
-   companion casts at the locked foe, else at the nearest foe that fights
+   thrower keeps back and throws knives, which fly at `KNIFE_SPEED`
+   along the way they were thrown. The companion casts at the locked
+   foe, else at the nearest foe that fights
    within `ALLY_SEEK` of the player. Her bolts fly at `BOLT_SPEED`, and
    follow their foe. The boost button calls for her boost attack when its
    gauge is full. One foe
@@ -105,6 +107,7 @@ from extensions.village.combat import (
     PERFECT_DODGE,
     RISING_EDGE,
     TEMPEST,
+    THROW,
     Blow,
     CombatMove,
     CombatStance,
@@ -270,6 +273,12 @@ comptime HEAL_TEXT = Rgb(120, 230, 120)
 """The color of what a herb or the companion heals."""
 comptime PLUNGE_SPEED = Float32(14)
 """How fast a plunge dives, in meters a second."""
+comptime KNIFE_SPEED = Float32(18)
+"""How fast a thrown knife flies, in meters a second."""
+comptime KNIFE_REACH = Float32(0.5)
+"""How near the player's chest a knife strikes, in meters."""
+comptime KNIFE_LIFE = Float32(1.2)
+"""How long a knife flies before it falls, in seconds."""
 comptime BOLT_SPEED = Float32(16)
 """How fast a companion's bolt flies, in meters a second."""
 comptime BOLT_REACH = Float32(0.5)
@@ -578,6 +587,23 @@ struct Bolt(Copyable, Movable):
 
 
 @fieldwise_init
+struct Knife(Copyable, Movable):
+    """A thrower's knife, which flies straight along the way it was
+    thrown."""
+
+    # Where it is, the way it flies, of length one, and where it was
+    # thrown from.
+    var at: Vector3
+    var way: Vector3
+    var origin: Vector3
+    # The foe that threw it, the blow it carries, and how long it has
+    # flown, in seconds.
+    var thrower: Int
+    var blow: Blow
+    var age: Float32
+
+
+@fieldwise_init
 struct Pelt(ImplicitlyCopyable):
     """A wolf's looks: its node, its mesh in `scene.meshes`, and its
     flipbook's index in the battle's `books`."""
@@ -617,6 +643,8 @@ struct Battle(Movable):
     var allies: List[Ally]
     var bolts: List[Bolt]
     var called: Bool
+    # The throwers' knives that fly.
+    var knives: List[Knife]
     # The target locked on: a foe's index, or a dummy's after the foes;
     # -1 for none.
     var lock: Int
@@ -737,7 +765,9 @@ struct Battle(Movable):
                 Foe(
                     character^,
                     Fighter(bandit.fighter),
-                    Brain(bandit.seed),
+                    Brain.thrower(bandit.seed) if bandit.thrower else Brain(
+                        bandit.seed
+                    ),
                     home,
                     bandit.heading,
                     Vector3(0, 0, 0),
@@ -841,6 +871,7 @@ struct Battle(Movable):
         self.waves = List[Wave]()
         self.bolts = List[Bolt]()
         self.called = False
+        self.knives = List[Knife]()
         self.lock = -1
         self.token = -1
         self.token_rest = 0
@@ -1609,16 +1640,68 @@ struct Battle(Movable):
         var blow = self.foes[index].fighter.connect(0)
         if not blow:
             return
-        var hit = blow.value()
+        self._hurt(scene, index, blow.value(), at, player)
+
+    def _hurt(
+        mut self,
+        mut scene: Scene,
+        index: Int,
+        hit: Blow,
+        source: Vector3,
+        mut player: Character,
+    ) raises:
+        """Give a foe's blow from `source` to the player: a swing's, or a
+        knife's. The foe learns what it did."""
+        ref feet = player.position
         var front = faces(
-            feet, player.heading, self.fighter.parameters.guard_arc, at
+            feet, player.heading, self.fighter.parameters.guard_arc, source
         )
         var struck = self.fighter.receive(hit, front)
         self.foes[index].fighter.landed(struck)
-        self.shove = push_of(struck, hit, _way(at, feet))
+        self.shove = push_of(struck, hit, _way(source, feet))
         throw_up(player, struck, hit)
         self._show(scene, struck, feet, True)
         self._weigh(struck, hit)
+
+    def _send_knives(
+        mut self, mut scene: Scene, mut player: Character, h: Float32
+    ) raises:
+        """Send a thrower's knife as its arm flings, at the player's chest;
+        and fly each knife on by `h` seconds: it strikes the player when
+        it passes within `KNIFE_REACH` of their chest, and falls after
+        `KNIFE_LIFE`."""
+        var chest = player.position + Vector3(0, CHEST, 0)
+        for index in range(len(self.foes)):
+            ref foe = self.foes[index]
+            if not (foe.fighter.move == THROW and foe.fighter.launched()):
+                continue
+            var hand = foe.character.position + Vector3(0, CHEST, 0)
+            var way = chest - hand
+            way = way / max(way.length(), Float32(1.0e-4))
+            self.knives.append(
+                Knife(
+                    hand + way * 0.5,
+                    way,
+                    foe.character.position,
+                    index,
+                    foe.fighter.blow(),
+                    0,
+                )
+            )
+        var kept = List[Knife]()
+        for k in range(len(self.knives)):
+            var knife = self.knives[k].copy()
+            knife.age += h
+            knife.at = knife.at + knife.way * (KNIFE_SPEED * h)
+            if knife.age > KNIFE_LIFE:
+                continue
+            if (chest - knife.at).length() <= KNIFE_REACH:
+                self._hurt(
+                    scene, knife.thrower, knife.blow, knife.origin, player
+                )
+                continue
+            kept.append(knife^)
+        self.knives = kept^
 
     def _exchange(
         mut self, mut scene: Scene, mut player: Character, delta: Duration
@@ -1639,6 +1722,7 @@ struct Battle(Movable):
             self._player_strikes(scene, player)
             self._send_waves(scene, player, h)
             self._send_bolts(scene, h)
+            self._send_knives(scene, player, h)
             for index in range(len(self.foes)):
                 self._foe_strikes(scene, index, player)
 
