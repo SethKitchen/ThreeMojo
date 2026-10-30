@@ -470,6 +470,30 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_combat_move_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'move_name': value passed to 'move' cannot be converted from 'IntLiteral[1]' to 'CombatMove'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_combat_stance_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "invalid call to 'stance_power': value passed to 'stance' cannot be converted from 'IntLiteral[1]' to 'CombatStance'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_combine_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3781,6 +3805,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_strike_outcome_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "invalid call to 'outcome_word': value passed to 'outcome' cannot be converted from 'IntLiteral[1]' to 'StrikeOutcome'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/a_structural_node_id_is_not_a_bare_int.mojo": {
     "errors": [
