@@ -7,12 +7,13 @@
 
 from extensions.humanoid.genome import (
     Expression,
+    random_genome,
     FACE_SHAPE_1,
     FACE_SHAPES,
     Genome,
 )
 from extensions.humanoid.sex import MALE
-from extensions.humanoid.skeleton.field import DistanceField
+from extensions.humanoid.skeleton.field import DistanceField, cross
 from extensions.humanoid.skeleton.head.frame import (
     HeadMuscleDimensions,
     head_muscle_dimensions,
@@ -25,6 +26,8 @@ from extensions.humanoid.skeleton.head.skin.scan import (
     SCAN_Y,
     SCAN_Z,
     SINK_TOP,
+    _folded,
+    _untangles,
     _walk,
     cap_hole,
     carry,
@@ -37,7 +40,14 @@ from extensions.humanoid.skeleton.head.skin.scan import (
 )
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
-from std.testing import TestSuite, assert_equal, assert_raises, assert_true
+from std.collections import Dict
+from std.testing import (
+    TestSuite,
+    assert_equal,
+    assert_false,
+    assert_raises,
+    assert_true,
+)
 from units.si import FOOT, Length
 
 
@@ -60,6 +70,41 @@ struct _Ball(DistanceField, ImplicitlyCopyable):
 def _dims() raises -> HeadMuscleDimensions:
     """Return the six-foot male template's head."""
     return head_muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE))
+
+
+def _facing(points: List[Vector3], triangles: List[Int], t: Int) -> Vector3:
+    """Return the unit normal of triangle `t`."""
+    var a = points[triangles[3 * t]]
+    var n = cross(
+        points[triangles[3 * t + 1]] - a, points[triangles[3 * t + 2]] - a
+    )
+    n.normalize()
+    return n
+
+
+def _folds(
+    points: List[Vector3], triangles: List[Int], low: Float32, high: Float32
+) raises -> Int:
+    """Return how many edges between two heights join two triangles that
+    face apart."""
+    var first = Dict[Int, Int]()
+    var count = len(points)
+    var folds = 0
+    for t in range(len(triangles) // 3):  # pragma: no branch
+        for c in range(3):  # pragma: no branch
+            var a = triangles[3 * t + c]
+            var b = triangles[3 * t + (c + 1) % 3]
+            var key = min(a, b) * count + max(a, b)
+            if key not in first:
+                first[key] = t
+                continue
+            var y = (points[a].y + points[b].y) / 2
+            if y < low or y > high:
+                continue
+            var other = _facing(points, triangles, first[key])
+            if _facing(points, triangles, t).dot(other) < 0:
+                folds += 1
+    return folds
 
 
 def test_the_scan_lands_on_the_template() raises:
@@ -127,6 +172,48 @@ def test_a_mesh_is_pulled_over_a_solid() raises:
     ]
     fit_over(high, triangles, edges, _Ball(0.5, False), 5, 0.01, -5, 5, 0.1)
     assert_true(abs(high[4].z - 0.455) < 1e-3)
+
+
+def test_the_neck_does_not_fold_under_the_chin() raises:
+    # Under the chin the scan is pushed out over the sternocleidomastoid,
+    # where it turns sharply. Pushed along its own normals, it folded in
+    # creases there: 82 edges over these ten people, and 24 on one. Along
+    # smoothed normals, and untangled after, it folds at an edge or two
+    # near its floor, under the body's mesh.
+    var folds = 0
+    for seed in range(10):  # pragma: no branch
+        var dims = head_muscle_dimensions(
+            HumanoidSpec(Length(6.0, FOOT), MALE, genome=random_genome(seed))
+        )
+        var scan = HeadSkinField(dims).scan.copy()
+        var points = List[Vector3]()
+        for v in range(scan.mesh.count()):  # pragma: no branch
+            points.append(scan.mesh.point(v))
+        var top = dims.head.at(0, 62.0, 0).y
+        var one = _folds(points, scan.mesh.tree[].triangles, scan.floor, top)
+        assert_true(one <= 3)
+        folds += one
+    assert_true(folds <= 20)
+
+
+def test_only_a_pushed_fold_above_the_band_is_untangled() raises:
+    assert_true(_untangles(True, 0.002, 1, 0))
+    assert_false(_untangles(False, 0.002, 1, 0))
+    assert_false(_untangles(True, 0.0005, 1, 0))
+    assert_false(_untangles(True, 0.002, -1, 0))
+    # Two triangles that face one way across an edge are no fold; one
+    # turned over onto the other is.
+    var points: List[Vector3] = [
+        Vector3(0, 0, 0),
+        Vector3(1, 0, 0),
+        Vector3(0, 1, 0),
+        Vector3(1, 1, 0),
+    ]
+    var flat = _folded(points, [0, 1, 2, 2, 1, 3])
+    var turned = _folded(points, [0, 1, 2, 1, 2, 3])
+    for v in range(4):  # pragma: no branch
+        assert_false(flat[v])
+        assert_true(turned[v])
 
 
 def test_a_mesh_follows_its_coarse_copy() raises:
