@@ -14,7 +14,9 @@ seed an outfit of its own, in three choices:
 2. The dyes of each garment, from the calling's palette. The poor wear
    undyed wool and the dyes of common plants. The rich wear kermes
    crimson, deep woad and saffron. Armor is bright steel or blackened.
-3. Small choices: a hood or a bare head, a belt or none.
+3. Small choices: a hood or a bare head, a belt or none, and a garment
+   parti-colored or quartered: a merchant's tunic, a woman's gown, a
+   company's surcoat.
 
 `calling_outfit` gives the outfit of one calling for a seed. The same
 seed gives the same outfit, on every machine.
@@ -53,8 +55,10 @@ from extensions.attire.garment import (
     tunic,
 )
 from extensions.attire.kinds import (
+    PARTY,
     PLATE,
     PRIMARY_DYE,
+    QUARTERLY,
     SECONDARY_DYE,
     TRIM_DYE,
 )
@@ -276,6 +280,9 @@ def calling_outfit(calling: Calling, seed: Int) raises -> Outfit:
             var coat = surcoat()
             coat.dyes[PRIMARY_DYE.value] = plain_dye(plain + 1)
             coat.dyes[SECONDARY_DYE.value] = plain_dye(plain + 2)
+            # Some companies wear their colors quartered.
+            if _chance(seed, 7, 30):
+                coat.pattern = QUARTERLY
             coat.dyes[TRIM_DYE.value] = plain_dye(plain + 2)
             outfit.add(coat^)
         outfit.add(belt())
@@ -293,7 +300,12 @@ def calling_outfit(calling: Calling, seed: Int) raises -> Outfit:
         if calling == NOBLEWOMAN:
             dye = rich_dye(rich)
             trim = rich_dye(rich + 3)
-        outfit.add(_dyed(gown(), dye, trim))
+        var dress = _dyed(gown(), dye, trim)
+        # A gown can be parti-colored: a second dye on the left side.
+        if _chance(seed, 8, 30):
+            dress.pattern = PARTY
+            dress.dyes[SECONDARY_DYE.value] = trim
+        outfit.add(dress^)
         if calling == GOODWIFE and _chance(seed, 5, 50):
             outfit.add(_dyed(hood(), plain_dye(plain + 5), plain_dye(plain)))
     else:
@@ -309,7 +321,12 @@ def calling_outfit(calling: Calling, seed: Int) raises -> Outfit:
             var trim = plain_dye(plain + 1)
             if calling == MERCHANT:
                 trim = rich_dye(rich)
-            outfit.add(_dyed(tunic(), plain_dye(plain), trim))
+            var coat = _dyed(tunic(), plain_dye(plain), trim)
+            # Townsmen liked a tunic parti-colored, a dye on each side.
+            if calling == MERCHANT and _chance(seed, 8, 40):
+                coat.pattern = PARTY
+                coat.dyes[SECONDARY_DYE.value] = plain_dye(plain + 4)
+            outfit.add(coat^)
         if _chance(seed, 5, 40):
             outfit.add(_dyed(hood(), plain_dye(plain + 2), plain_dye(plain)))
     if calling != PEASANT or _chance(seed, 6, 60):

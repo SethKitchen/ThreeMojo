@@ -6,7 +6,9 @@
 """Tests for a crowd's clothes: outfits picked by a seed."""
 
 from extensions.attire.kinds import (
+    PARTY,
     PLATE,
+    QUARTERLY,
     PRIMARY_DYE,
     SECONDARY_DYE,
     TRIM_DYE,
@@ -123,6 +125,24 @@ def test_small_choices_differ_from_seed_to_seed() raises:
     assert_true(belted > 20 and belted < 55)
     assert_true(surcoats > 15 and surcoats < 45)
     assert_true(blackened > 5 and blackened < 35)
+    # Some gowns, merchants' tunics and men-at-arms' surcoats are
+    # parti-colored or quartered.
+    var parted = 0
+    var quartered = 0
+    var gowns = 0
+    for seed in range(60):
+        for garment in calling_outfit(MERCHANT, seed).garments:
+            if garment.name == "tunic" and garment.pattern == PARTY:
+                parted += 1
+        for garment in calling_outfit(MAN_AT_ARMS, seed).garments:
+            if garment.name == "surcoat" and garment.pattern == QUARTERLY:
+                quartered += 1
+        for garment in calling_outfit(NOBLEWOMAN, seed).garments:
+            if garment.name == "gown" and garment.pattern == PARTY:
+                gowns += 1
+    assert_true(parted > 10 and parted < 40)
+    assert_true(quartered > 2 and quartered < 20)
+    assert_true(gowns > 8 and gowns < 30)
     # Each goodwife's hood is a chance too.
     var goodwives = 0
     for seed in range(40):

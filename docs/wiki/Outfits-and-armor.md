@@ -61,6 +61,8 @@ var dressed = dress(scene, assets, person, mixed_outfit(person_index))
 
 The poor wear the dyes of `plain_dye`: madder, woad, weld, walnut, nettle, gray and cream wool, russet and lichen purple. The rich wear the dyes of `rich_dye`: kermes crimson, deep woad, verdigris, saffron, black and murex violet. A merchant's trim is rich. A knight's surcoat takes two rich dyes per pale. Three plates in ten are blackened against rust.
 
+Some garments are parti-colored: four merchants' tunics in ten and three women's gowns in ten take a second dye on the left side. Three men-at-arms' surcoats in ten are quartered.
+
 `examples/crowd.mojo` draws the eight callings side by side, each with a genome and a stature of their own. It writes `out/crowd.png`.
 
 ![Eight people of eight callings walk and stand in a studio](out/crowd.png)
