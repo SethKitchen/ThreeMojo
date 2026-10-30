@@ -213,16 +213,16 @@ def _all(input: MoveInput) -> List[Bool]:
         input.light,
         input.heavy,
         input.rising,
-        input.tempest,
-        input.fang,
-        input.mystic,
+        input.whirlwind,
+        input.ground_wave,
+        input.ultimate,
         input.dodge,
         input.guard,
         input.lock,
         input.high,
         input.middle,
         input.low,
-        input.boost,
+        input.assist,
         input.heal,
     ]
 
@@ -238,28 +238,28 @@ def test_the_shoulders_and_the_trigger_fight() raises:
     assert_false(low.jump)
     assert_true(low.low)
     assert_true(low.guard)
-    # The west button uses, or takes the middle stance, or makes the demon
-    # fang.
+    # The west button uses, or takes the middle stance, or makes the ground
+    # wave.
     assert_true(_fight(west=True).use)
-    var fang = _fight(west=True, left_trigger=True)
-    assert_false(fang.use)
-    assert_true(fang.fang)
-    assert_false(_fight(west=True).fang)
+    var ground_wave = _fight(west=True, left_trigger=True)
+    assert_false(ground_wave.use)
+    assert_true(ground_wave.ground_wave)
+    assert_false(_fight(west=True).ground_wave)
     var middle = _fight(west=True, left_shoulder=True)
     assert_false(middle.use)
     assert_true(middle.middle)
-    # The north button: the heavy attack, the tempest, or the high stance.
+    # The north button: the heavy attack, the whirlwind, or the high stance.
     var heavy = _fight(north=True)
     assert_true(heavy.heavy)
-    assert_false(heavy.tempest)
-    var tempest = _fight(north=True, left_trigger=True)
-    assert_false(tempest.heavy)
-    assert_true(tempest.tempest)
+    assert_false(heavy.whirlwind)
+    var whirlwind = _fight(north=True, left_trigger=True)
+    assert_false(whirlwind.heavy)
+    assert_true(whirlwind.whirlwind)
     var high = _fight(north=True, left_shoulder=True)
     assert_false(high.heavy)
     assert_true(high.high)
     var both = _fight(north=True, left_shoulder=True, left_trigger=True)
-    assert_true(both.tempest)
+    assert_true(both.whirlwind)
     assert_false(both.high)
     # The right shoulder: a light attack, or the rising edge.
     var light = _fight(right_shoulder=True)
@@ -268,22 +268,22 @@ def test_the_shoulders_and_the_trigger_fight() raises:
     var rising = _fight(right_shoulder=True, left_trigger=True)
     assert_false(rising.light)
     assert_true(rising.rising)
-    assert_false(rising.mystic)
+    assert_false(rising.ultimate)
     # The right shoulder and the north button together, with the trigger
-    # held: the mystic arte.
-    var mystic = _fight(north=True, right_shoulder=True, left_trigger=True)
-    assert_true(mystic.mystic)
-    assert_false(_fight(north=True, right_shoulder=True).mystic)
-    assert_false(_fight(north=True, left_trigger=True).mystic)
+    # held: the ultimate.
+    var ultimate = _fight(north=True, right_shoulder=True, left_trigger=True)
+    assert_true(ultimate.ultimate)
+    assert_false(_fight(north=True, right_shoulder=True).ultimate)
+    assert_false(_fight(north=True, left_trigger=True).ultimate)
     assert_true(_fight(east=True).dodge)
     assert_true(_fight(right_stick=True).lock)
     assert_true(_fight(back=True).heal)
-    # The left trigger and the left shoulder: the companion's boost attack.
-    var boost = _fight(left_shoulder=True, left_trigger=True)
-    assert_true(boost.boost)
-    assert_false(boost.high)
-    assert_false(_fight(left_shoulder=True).boost)
-    assert_false(_fight(left_trigger=True).boost)
+    # The left trigger and the left shoulder: the companion's assist attack.
+    var assist = _fight(left_shoulder=True, left_trigger=True)
+    assert_true(assist.assist)
+    assert_false(assist.high)
+    assert_false(_fight(left_shoulder=True).assist)
+    assert_false(_fight(left_trigger=True).assist)
 
 
 def test_a_pad_reads_its_fight_buttons() raises:
@@ -354,16 +354,16 @@ def test_the_fight_buttons_add() raises:
         light=True,
         heavy=True,
         rising=True,
-        tempest=True,
-        fang=True,
-        mystic=True,
+        whirlwind=True,
+        ground_wave=True,
+        ultimate=True,
         dodge=True,
         guard=True,
         lock=True,
         high=True,
         middle=True,
         low=True,
-        boost=True,
+        assist=True,
         heal=True,
     )
     for pair in [

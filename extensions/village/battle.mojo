@@ -10,12 +10,12 @@ wolves and straw dummies.
 step and pose:
 
 1. **Presses.** A new press of a button asks the player's `Fighter` for a
-   move: a light attack, the heavy attack, an arte, or a dodge. A demon
-   fang's cut sends a wave that runs along the ground at `FANG_SPEED`
-   for `FANG_RANGE`, and strikes each target it passes over once. Over
-   Limit, the mystic arte's buttons spend it on the mystic arte. A dodge
+   move: a light attack, the heavy attack, a special, or a dodge. A ground
+   wave's cut sends a wave that runs along the ground at `WAVE_SPEED`
+   for `WAVE_RANGE`, and strikes each target it passes over once. In a
+   surge, the ultimate's buttons spend it on the ultimate. A dodge
    needs the sword drawn, since its button also runs. The guard button
-   guards while it is held, and a new press of it makes a ki pulse. A
+   guards while it is held, and a new press of it makes a stamina recovery. A
    stance button changes the stance. The lock button locks the camera on
    the foe or the dummy nearest the middle of the view, or lets go. While
    it locks, a flick of the look stick moves the lock to the next target
@@ -36,12 +36,12 @@ step and pose:
    along the way they were thrown. The companion casts at the locked
    foe, else at the nearest foe that fights
    within `ALLY_SEEK` of the player. Her bolts fly at `BOLT_SPEED`, and
-   follow their foe. The boost button calls for her boost attack when its
+   follow their foe. The assist button calls for her assist attack when its
    gauge is full. One foe
    at a time holds the attack token. A bandit plays its sword's clips; a
    wolf shows the pose of its walk, and lies on its side when it falls.
    A perfect dodge slows the foes to `SLOW_SHARE` of the time for
-   `SLOW_SECONDS`, and a mystic arte for `MYSTIC_SLOW`.
+   `SLOW_SECONDS`, and an ultimate for `ULTIMATE_SLOW`.
 4. **The blows.** In steps of at most `COMBAT_STEP`, each fighter's clock
    runs, and each swing gives its blow to the fighters that it reaches. A
    blow that lands pushes its fighter away, and the rising edge throws it
@@ -51,14 +51,14 @@ step and pose:
    on, and the outcome's word: see `outcome_word`. A blow that lands
    bursts in sparks. A foe that begins to rage shows `RAGE`. Each
    swing's trail is measured for the display: see
-   `extensions.village.slashes`. Over Limit, the player's trails are
+   `extensions.village.slashes`. In a surge, the player's trails are
    gold, and the note says when it begins. A plunge's landing rings the
    ground with light. The sword is drawn while a bandit within `ENGAGE`
    fights, or the player fights, and is sheathed `CALM_SECONDS` after.
 6. **The weight of a blow.** A strong blow stops the whole fight for
    `HIT_STOP`, as action games freeze a frame on a heavy hit, and shakes
-   the camera by `SHAKE`: see `strong_blow`. A finisher or a burst
-   counter stops it for `FINISH_STOP`, and shakes it twice as far. The shake dies away at
+   the camera by `SHAKE`: see `strong_blow`. A finisher or a pierce
+   break stops it for `FINISH_STOP`, and shakes it twice as far. The shake dies away at
    `SHAKE_FADE`.
 7. **The fallen.** A fallen bandit gives `LOOT` coins, and one time in
    two a herb. It lies for the
@@ -86,10 +86,10 @@ from extensions.village.character import (
     Obstacle,
 )
 from extensions.village.combat import (
-    BURST_COUNTER,
+    PIERCE_BREAK,
     CAST,
     DEFEATED,
-    DEMON_FANG,
+    GROUND_WAVE,
     REACH_HEIGHT,
     FINISHED,
     HIT,
@@ -101,12 +101,12 @@ from extensions.village.combat import (
     HIGH_STANCE,
     LOW_STANCE,
     MID_STANCE,
-    MYSTIC_ARTE,
+    ULTIMATE,
     PARRIED,
     PLUNGE,
     PERFECT_DODGE,
     RISING_EDGE,
-    TEMPEST,
+    WHIRLWIND,
     THROW,
     Blow,
     CombatMove,
@@ -126,11 +126,11 @@ from extensions.village.combat import (
 from extensions.animals.options import CROWD
 from extensions.animals.registry import WOLF
 from extensions.village.companion import (
-    BOOST_PER_HIT,
+    ASSIST_PER_HIT,
     AllySight,
     Companion,
     MEND_SHARE,
-    boost_blow,
+    assist_blow,
     default_allies,
 )
 from extensions.village.foes import (
@@ -197,8 +197,8 @@ comptime SLOW_SECONDS = Float32(0.7)
 """How long a perfect dodge slows the foes, in seconds."""
 comptime SLOW_SHARE = Float32(0.3)
 """The share of the time the foes move at while they are slowed."""
-comptime MYSTIC_SLOW = Float32(2.1)
-"""How long a mystic arte slows the foes, in seconds: all through it."""
+comptime ULTIMATE_SLOW = Float32(2.1)
+"""How long an ultimate slows the foes, in seconds: all through it."""
 comptime LOCK_RANGE = Float32(16)
 """How near a target must be to lock on to, in meters."""
 comptime LOCK_BREAK = Float32(22)
@@ -245,14 +245,14 @@ comptime LOOT = 8
 """How many coins a fallen bandit gives."""
 comptime HERB_CHANCE = Float32(0.5)
 """The share of fallen bandits that drop a herb as well."""
-comptime FANG_SPEED = Float32(14)
-"""How fast a demon fang's wave runs, in meters a second."""
-comptime FANG_RANGE = Float32(12)
-"""How far a demon fang's wave runs, in meters."""
-comptime FANG_WIDTH = Float32(1.6)
-"""How wide a demon fang's wave strikes, in meters."""
-comptime FANG_START = Float32(0.6)
-"""How far before the player a demon fang's wave starts, in meters."""
+comptime WAVE_SPEED = Float32(14)
+"""How fast a ground wave's wave runs, in meters a second."""
+comptime WAVE_RANGE = Float32(12)
+"""How far a ground wave's wave runs, in meters."""
+comptime WAVE_WIDTH = Float32(1.6)
+"""How wide a ground wave's wave strikes, in meters."""
+comptime WAVE_START = Float32(0.6)
+"""How far before the player a ground wave's wave starts, in meters."""
 comptime HIT_STOP = Float32(0.06)
 """How long a strong blow stops the fight, in seconds."""
 comptime FINISH_STOP = Float32(0.2)
@@ -293,7 +293,7 @@ casts, in meters."""
 comptime HURT_TEXT = Rgb(255, 90, 70)
 """The color of the player's own damage."""
 comptime CALM_TEXT = Rgb(150, 200, 255)
-"""The color of a guard's, a dodge's and a pulse's words."""
+"""The color of a guard's, a dodge's and a recovery's words."""
 
 
 def pressed(now: MoveInput, before: MoveInput) -> MoveInput:
@@ -317,10 +317,10 @@ def pressed(now: MoveInput, before: MoveInput) -> MoveInput:
         light=now.light and not before.light,
         heavy=now.heavy and not before.heavy,
         rising=now.rising and not before.rising,
-        tempest=now.tempest and not before.tempest,
-        fang=now.fang and not before.fang,
-        boost=now.boost and not before.boost,
-        mystic=now.mystic and not before.mystic,
+        whirlwind=now.whirlwind and not before.whirlwind,
+        ground_wave=now.ground_wave and not before.ground_wave,
+        assist=now.assist and not before.assist,
+        ultimate=now.ultimate and not before.ultimate,
         dodge=now.dodge and not before.dodge,
         guard=now.guard and not before.guard,
         lock=now.lock and not before.lock,
@@ -396,7 +396,7 @@ def strong_blow(struck: Struck, blow: Blow) -> Bool:
         blow: The blow.
 
     Returns:
-        True for a guard broken, a critical blow, a ki broken and a fighter
+        True for a guard broken, a critical blow, a stamina broken and a fighter
         felled, and for a blow that lands, pushes at least `STRONG_PUSH`
         or throws its fighter up.
     """
@@ -412,7 +412,7 @@ def strong_blow(struck: Struck, blow: Blow) -> Bool:
 
 @fieldwise_init
 struct Wave(Copyable, Movable):
-    """A demon fang's wave of force, which runs along the ground."""
+    """A ground wave's wave of force, which runs along the ground."""
 
     # Where its middle is, the way it runs, of length one, and how far it
     # has run, in meters.
@@ -564,10 +564,10 @@ struct Ally(Movable):
     var mind: Companion
     # Her looks' index in the battle's `people`.
     var look: Int
-    # The target her cast aims at, or -1; and whether the cast is a boost
+    # The target her cast aims at, or -1; and whether the cast is a assist
     # attack.
     var aim: Int
-    var boosting: Bool
+    var assisting: Bool
 
 
 @fieldwise_init
@@ -580,9 +580,9 @@ struct Bolt(Copyable, Movable):
     # The target it flies at, and the blow it carries.
     var target: Int
     var blow: Blow
-    # Whether it is a boost attack's, and how long it has flown, in
+    # Whether it is a assist attack's, and how long it has flown, in
     # seconds.
-    var boosted: Bool
+    var assisted: Bool
     var age: Float32
 
 
@@ -636,9 +636,9 @@ struct Battle(Movable):
     var dummies: List[Practice]
     var sparks: Sparks
     var popups: List[Popup]
-    # The demon fang's waves that run.
+    # The ground wave's waves that run.
     var waves: List[Wave]
-    # The companion, if any, and her bolts that fly; and whether the boost
+    # The companion, if any, and her bolts that fly; and whether the assist
     # button was pressed this frame.
     var allies: List[Ally]
     var bolts: List[Bolt]
@@ -667,12 +667,12 @@ struct Battle(Movable):
     var calm: Float32
     # How long the foes are still slowed, in seconds.
     var slow: Float32
-    # How long ago the player last made a ki pulse that got ki back, in
+    # How long ago the player last made a stamina recovery that got stamina back, in
     # seconds, or -1 if they never did.
     var pulsed: Float32
     # How long the player has lain fallen, in seconds, or -1.
     var down: Float32
-    # Whether the player was Over Limit at the end of the last frame.
+    # Whether the player was in a surge at the end of the last frame.
     var limited: Bool
     # How long the fight still stands still, in seconds; and how far the
     # camera shakes, in meters.
@@ -1123,24 +1123,24 @@ struct Battle(Movable):
         if presses.guard:
             var back = self.fighter.pulse()
             if back > 0:
-                self._popup(player.position, "KI PULSE", CALM_TEXT)
+                self._popup(player.position, "RECOVERED", CALM_TEXT)
                 self.pulsed = 0
         self.fighter.hold_guard(input.guard)
-        self.called = presses.boost
+        self.called = presses.assist
         var fought = input.guard or presses.lock
-        if presses.mystic and self.fighter.over > 0:
-            if self.fighter.request(MYSTIC_ARTE):
-                self.notes.append("MYSTIC ARTE!")
-                self.slow = MYSTIC_SLOW
+        if presses.ultimate and self.fighter.over > 0:
+            if self.fighter.request(ULTIMATE):
+                self.notes.append("ULTIMATE!")
+                self.slow = ULTIMATE_SLOW
             fought = True
-        elif presses.rising or presses.tempest or presses.fang:
-            var arte = DEMON_FANG
+        elif presses.rising or presses.whirlwind or presses.ground_wave:
+            var special = GROUND_WAVE
             if presses.rising:
-                arte = RISING_EDGE
-            elif presses.tempest:
-                arte = TEMPEST
-            if self.fighter.request(arte):
-                self.notes.append(move_name(arte) + "!")
+                special = RISING_EDGE
+            elif presses.whirlwind:
+                special = WHIRLWIND
+            if self.fighter.request(special):
+                self.notes.append(move_name(special) + "!")
             fought = True
         elif presses.light:
             _ = self.fighter.press_light()
@@ -1342,8 +1342,8 @@ struct Battle(Movable):
 
     def _weigh(mut self, struck: Struck, blow: Blow):
         """Stop the fight a moment, and shake the camera, for a strong
-        blow; longer and harder for a finisher or a burst counter."""
-        if struck.outcome == FINISHED or struck.outcome == BURST_COUNTER:
+        blow; longer and harder for a finisher or a pierce break."""
+        if struck.outcome == FINISHED or struck.outcome == PIERCE_BREAK:
             self.freeze = FINISH_STOP
             self.shake = 2 * SHAKE
         elif strong_blow(struck, blow):
@@ -1374,7 +1374,7 @@ struct Battle(Movable):
         mut self, mut scene: Scene, index: Int, hit: Blow, source: Vector3
     ) raises:
         """Give one of the player's blows to a target: from a swing, or
-        from a demon fang's wave at `source`. The player learns what it
+        from a ground wave's wave at `source`. The player learns what it
         did, and trains."""
         var struck = self._strike(scene, index, hit, source)
         if index >= len(self.foes):
@@ -1434,14 +1434,14 @@ struct Battle(Movable):
     def _send_waves(
         mut self, mut scene: Scene, player: Character, h: Float32
     ) raises:
-        """Send a demon fang's wave as its cut swings, and run each wave
+        """Send a ground wave's wave as its cut swings, and run each wave
         on by `h` seconds: it strikes each standing target it passes over
-        once, and fades out at `FANG_RANGE`."""
-        if self.fighter.move == DEMON_FANG and self.fighter.launched():
+        once, and fades out at `WAVE_RANGE`."""
+        if self.fighter.move == GROUND_WAVE and self.fighter.launched():
             var ahead = _ahead(player.heading)
             self.waves.append(
                 Wave(
-                    player.position + ahead * FANG_START,
+                    player.position + ahead * WAVE_START,
                     ahead,
                     0,
                     self.fighter.blow(),
@@ -1451,13 +1451,13 @@ struct Battle(Movable):
         var kept = List[Wave]()
         for w in range(len(self.waves)):
             var wave = self.waves[w].copy()
-            wave.at = wave.at + wave.way * (FANG_SPEED * h)
-            wave.gone += FANG_SPEED * h
+            wave.at = wave.at + wave.way * (WAVE_SPEED * h)
+            wave.gone += WAVE_SPEED * h
             for index in range(self.targets()):
                 if not self.standing(index):
                     continue
                 var there = self.target_at(index)
-                if _flat(wave.at, there) > FANG_WIDTH / 2:
+                if _flat(wave.at, there) > WAVE_WIDTH / 2:
                     continue
                 if abs(there.y - wave.at.y) > REACH_HEIGHT:
                     continue
@@ -1469,7 +1469,7 @@ struct Battle(Movable):
                     continue
                 wave.struck.append(index)
                 self._land(scene, index, wave.blow, wave.at - wave.way)
-            if wave.gone < FANG_RANGE:
+            if wave.gone < WAVE_RANGE:
                 kept.append(wave^)
         self.waves = kept^
 
@@ -1484,19 +1484,19 @@ struct Battle(Movable):
             var at = ally.character.position
             var ahead = _ahead(ally.character.heading)
             var blow = ally.fighter.blow()
-            if ally.boosting:
-                blow = boost_blow(ally.fighter.parameters.might)
+            if ally.assisting:
+                blow = assist_blow(ally.fighter.parameters.might)
             self.bolts.append(
                 Bolt(
                     at + ahead * BOLT_START + Vector3(0, CHEST, 0),
                     at,
                     ally.aim,
                     blow,
-                    ally.boosting,
+                    ally.assisting,
                     0,
                 )
             )
-            ally.boosting = False
+            ally.assisting = False
         var kept = List[Bolt]()
         for b in range(len(self.bolts)):
             var bolt = self.bolts[b].copy()
@@ -1516,7 +1516,7 @@ struct Battle(Movable):
             )
             if landed_blow(struck.outcome):
                 for k in range(len(self.allies)):
-                    self.allies[k].mind.charge(BOOST_PER_HIT)
+                    self.allies[k].mind.charge(ASSIST_PER_HIT)
         self.bolts = kept^
 
     def ally_target(self, at: Vector3) -> Int:
@@ -1553,7 +1553,7 @@ struct Battle(Movable):
         delta: Duration,
     ) raises:
         """Let the companion think: move her, and let her cast, heal and
-        make the boost attack the player calls for."""
+        make the assist attack the player calls for."""
         var seconds = delta.to(SECOND)
         var around = blocking.copy()
         var first = len(around) + len(self.foes) + len(self.dummies)
@@ -1565,7 +1565,7 @@ struct Battle(Movable):
         ref p = self.fighter.parameters
         var share = self.fighter.health / p.health
         var mend = Float32(0)
-        var boosted = False
+        var assisted = False
         for k in range(len(self.allies)):
             ref ally = self.allies[k]
             var sight = AllySight(
@@ -1578,8 +1578,8 @@ struct Battle(Movable):
             )
             var intent = ally.mind.think(sight, delta)
             if self.called and aim >= 0 and ally.mind.spend():
-                boosted = True
-                ally.boosting = True
+                assisted = True
+                ally.assisting = True
                 ally.aim = aim
                 _ = ally.fighter.request(CAST)
             elif intent.cast:
@@ -1610,8 +1610,8 @@ struct Battle(Movable):
                     yaw_of(intent.face.value() - ally.character.position),
                     Angle(FACE_TURN * seconds, RADIAN),
                 )
-        if boosted:
-            self.notes.append("BOOST ATTACK!")
+        if assisted:
+            self.notes.append("ASSIST ATTACK!")
         if mend > 0:
             var gain = min(p.health - self.fighter.health, mend)
             self.fighter.health += gain
@@ -1898,7 +1898,7 @@ struct Battle(Movable):
         self._exchange(scene, player, still)
         var over = self.fighter.over > 0
         if over and not self.limited:
-            self.notes.append("OVER LIMIT!")
+            self.notes.append("SURGE!")
         self.limited = over
         self.trail.color = OVER_TRAIL if over else PLAYER_TRAIL
         self._settle(scene, player, terrain, still)

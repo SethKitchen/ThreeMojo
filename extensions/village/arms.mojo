@@ -29,10 +29,10 @@ from core.object3d import NodeId
 from core.scene import Scene
 from extensions.humanoid.rig.joints import HIPS, LEFT_HAND
 from extensions.humanoid.rig.sword_clips import (
-    burst_clip,
+    pierce_clip,
     cast_clip,
     dodge_clip,
-    fang_clip,
+    ground_wave_clip,
     fall_clip,
     flinch_clip,
     guard_clip,
@@ -40,20 +40,20 @@ from extensions.humanoid.rig.sword_clips import (
     light_one_clip,
     light_three_clip,
     light_two_clip,
-    mystic_clip,
+    ultimate_clip,
     plunge_clip,
     ready_clip,
     rising_edge_clip,
     stagger_clip,
-    tempest_clip,
+    whirlwind_clip,
     throw_clip,
 )
 from extensions.village.blade import SwordLooks, add_scabbard, add_sword
 from extensions.village.character import STANDING, Character
 from extensions.village.combat import (
-    BURST,
+    PIERCE,
     CAST,
-    DEMON_FANG,
+    GROUND_WAVE,
     DODGE,
     FALL,
     FLINCH,
@@ -62,11 +62,11 @@ from extensions.village.combat import (
     LIGHT_THREE,
     LIGHT_TWO,
     MOVES,
-    MYSTIC_ARTE,
+    ULTIMATE,
     PLUNGE,
     RISING_EDGE,
     STAGGER,
-    TEMPEST,
+    WHIRLWIND,
     THROW,
     CombatMove,
     Fighter,
@@ -139,20 +139,20 @@ struct Arms(Movable):
         self.moves[RISING_EDGE.value] = body.mixer.add(
             AnimationAction(rising_edge_clip(bones, rig))
         )
-        self.moves[TEMPEST.value] = body.mixer.add(
-            AnimationAction(tempest_clip(bones, rig))
+        self.moves[WHIRLWIND.value] = body.mixer.add(
+            AnimationAction(whirlwind_clip(bones, rig))
         )
-        self.moves[DEMON_FANG.value] = body.mixer.add(
-            AnimationAction(fang_clip(bones, rig))
+        self.moves[GROUND_WAVE.value] = body.mixer.add(
+            AnimationAction(ground_wave_clip(bones, rig))
         )
-        self.moves[MYSTIC_ARTE.value] = body.mixer.add(
-            AnimationAction(mystic_clip(bones, rig))
+        self.moves[ULTIMATE.value] = body.mixer.add(
+            AnimationAction(ultimate_clip(bones, rig))
         )
         self.moves[PLUNGE.value] = body.mixer.add(
             AnimationAction(plunge_clip(bones, rig))
         )
-        self.moves[BURST.value] = body.mixer.add(
-            AnimationAction(burst_clip(bones, rig))
+        self.moves[PIERCE.value] = body.mixer.add(
+            AnimationAction(pierce_clip(bones, rig))
         )
         self.moves[CAST.value] = body.mixer.add(
             AnimationAction(cast_clip(bones, rig))

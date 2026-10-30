@@ -18,19 +18,19 @@ a PlayStation controller play alike:
 | Light attack | The right shoulder | `F` |
 | Heavy attack | The north button | `G` |
 | Rising edge | Hold the left trigger, and the right shoulder | `Z` |
-| Tempest | Hold the left trigger, and the north button | `X` |
-| Demon fang | Hold the left trigger, and the west button | `B` |
-| Mystic arte, Over Limit | Hold the left trigger, and the right shoulder and the north button together | `M` |
+| Whirlwind | Hold the left trigger, and the north button | `X` |
+| Ground wave | Hold the left trigger, and the west button | `B` |
+| Ultimate, in a surge | Hold the left trigger, and the right shoulder and the north button together | `M` |
 | Dodge | The east button | `C` |
-| Guard, and a ki pulse | The left shoulder | `V` |
+| Guard, and a stamina recovery | The left shoulder | `V` |
 | Lock on | The right stick | `T` |
 | High, middle and low stance | Hold the left shoulder, and the north, the west or the south button | `6`, `7` and `8` |
 | Eat herbs to heal | The back button | `H` |
-| The companion's boost attack | Hold the left trigger, and the left shoulder | `Q` |
+| The companion's assist attack | Hold the left trigger, and the left shoulder | `Q` |
 
 While the left shoulder guards, the north, the west and the south buttons
 choose a stance, and do not attack, use or jump. While the left trigger
-is held, the west button makes the demon fang, and does not use: see
+is held, the west button makes the ground wave, and does not use: see
 `fight_input`.
 
 A stick reads nothing within `DEAD_ZONE` of its middle, and the rest of
@@ -93,13 +93,13 @@ comptime KEY_G = Key(103)
 comptime KEY_Z = Key(122)
 """The `Z` key: the rising edge."""
 comptime KEY_X = Key(120)
-"""The `X` key: the tempest."""
+"""The `X` key: the whirlwind."""
 comptime KEY_B = Key(98)
-"""The `B` key: the demon fang."""
+"""The `B` key: the ground wave."""
 comptime KEY_C = Key(99)
 """The `C` key: the dodge."""
 comptime KEY_V = Key(118)
-"""The `V` key: the guard, and a ki pulse."""
+"""The `V` key: the guard, and a stamina recovery."""
 comptime KEY_T = Key(116)
 """The `T` key: the lock on a foe."""
 comptime KEY_SIX = Key(54)
@@ -107,9 +107,9 @@ comptime KEY_SIX = Key(54)
 comptime KEY_H = Key(104)
 """The `H` key: eat herbs to heal."""
 comptime KEY_M = Key(109)
-"""The `M` key: the mystic arte, Over Limit."""
+"""The `M` key: the ultimate, in a surge."""
 comptime KEY_Q = Key(113)
-"""The `Q` key: the companion's boost attack."""
+"""The `Q` key: the companion's assist attack."""
 
 
 def stick(
@@ -170,10 +170,10 @@ def fight_input(
         The input, with the buttons of the module's table. The left
         shoulder guards, and the north, the west and the south buttons
         then choose a stance. The left trigger turns the right shoulder,
-        the north button and the west button into the artes, and the
-        right shoulder and the north button together into the mystic
-        arte. The left trigger and the left shoulder together call for
-        the companion's boost attack.
+        the north button and the west button into the specials, and the
+        right shoulder and the north button together into the ultimate
+        special. The left trigger and the left shoulder together call for
+        the companion's assist attack.
     """
     var stance = left_shoulder and not left_trigger
     input.jump = south and not left_shoulder
@@ -181,10 +181,10 @@ def fight_input(
     input.light = right_shoulder and not left_trigger
     input.rising = right_shoulder and left_trigger
     input.heavy = north and not (left_trigger or left_shoulder)
-    input.tempest = north and left_trigger
-    input.fang = west and left_trigger
-    input.mystic = right_shoulder and north and left_trigger
-    input.boost = left_shoulder and left_trigger
+    input.whirlwind = north and left_trigger
+    input.ground_wave = west and left_trigger
+    input.ultimate = right_shoulder and north and left_trigger
+    input.assist = left_shoulder and left_trigger
     input.dodge = east
     input.guard = left_shoulder
     input.lock = right_stick
@@ -227,7 +227,7 @@ def gamepad_input(pad: Gamepad, dead_zone: Float32 = DEAD_ZONE) -> MoveInput:
         or pad.get_button(BUTTON_EAST)
         or pad.get_button(BUTTON_LEFT_STICK)
     )
-    var arte = Float32(pad.get_axis(AXIS_LEFT_TRIGGER)) / AXIS_HIGH
+    var special = Float32(pad.get_axis(AXIS_LEFT_TRIGGER)) / AXIS_HIGH
     return fight_input(
         MoveInput(
             clamp(forward, -1, 1),
@@ -243,7 +243,7 @@ def gamepad_input(pad: Gamepad, dead_zone: Float32 = DEAD_ZONE) -> MoveInput:
         pad.get_button(BUTTON_EAST),
         pad.get_button(BUTTON_RIGHT_SHOULDER),
         pad.get_button(BUTTON_LEFT_SHOULDER),
-        arte > TRIGGER_PRESS,
+        special > TRIGGER_PRESS,
         pad.get_button(BUTTON_RIGHT_STICK),
         pad.get_button(BUTTON_BACK),
     )
@@ -290,16 +290,16 @@ def keyboard_input(keys: HeldKeys, shift: Bool) -> MoveInput:
         light=keys.is_held(KEY_F),
         heavy=keys.is_held(KEY_G),
         rising=keys.is_held(KEY_Z),
-        tempest=keys.is_held(KEY_X),
-        fang=keys.is_held(KEY_B),
-        mystic=keys.is_held(KEY_M),
+        whirlwind=keys.is_held(KEY_X),
+        ground_wave=keys.is_held(KEY_B),
+        ultimate=keys.is_held(KEY_M),
         dodge=keys.is_held(KEY_C),
         guard=keys.is_held(KEY_V),
         lock=keys.is_held(KEY_T),
         high=keys.is_held(KEY_SIX),
         middle=keys.is_held(Key(KEY_SIX.value + 1)),
         low=keys.is_held(Key(KEY_SIX.value + 2)),
-        boost=keys.is_held(KEY_Q),
+        assist=keys.is_held(KEY_Q),
         heal=keys.is_held(KEY_H),
     )
 
@@ -326,15 +326,15 @@ def combined(first: MoveInput, second: MoveInput) -> MoveInput:
         light=first.light or second.light,
         heavy=first.heavy or second.heavy,
         rising=first.rising or second.rising,
-        tempest=first.tempest or second.tempest,
-        fang=first.fang or second.fang,
-        mystic=first.mystic or second.mystic,
+        whirlwind=first.whirlwind or second.whirlwind,
+        ground_wave=first.ground_wave or second.ground_wave,
+        ultimate=first.ultimate or second.ultimate,
         dodge=first.dodge or second.dodge,
         guard=first.guard or second.guard,
         lock=first.lock or second.lock,
         high=first.high or second.high,
         middle=first.middle or second.middle,
         low=first.low or second.low,
-        boost=first.boost or second.boost,
+        assist=first.assist or second.assist,
         heal=first.heal or second.heal,
     )

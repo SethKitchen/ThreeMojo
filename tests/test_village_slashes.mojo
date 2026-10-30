@@ -10,25 +10,25 @@ from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.village.combat import (
-    BURST,
-    DEMON_FANG,
+    PIERCE,
+    GROUND_WAVE,
     DODGE,
     FREE,
     HEAVY,
     LIGHT_ONE,
     LIGHT_THREE,
     LIGHT_TWO,
-    MYSTIC_ARTE,
+    ULTIMATE,
     THROW,
     PLUNGE,
     RISING_EDGE,
-    TEMPEST,
+    WHIRLWIND,
     CombatMove,
     Fighter,
     FighterParameters,
 )
 from extensions.village.slashes import (
-    BURST_TRAIL,
+    PIERCE_TRAIL,
     PLAYER_TRAIL,
     SPARKS,
     SPARK_SECONDS,
@@ -85,10 +85,10 @@ def test_a_ribbon_sweeps_its_arc() raises:
         LIGHT_THREE,
         HEAVY,
         RISING_EDGE,
-        TEMPEST,
-        DEMON_FANG,
-        BURST,
-        MYSTIC_ARTE,
+        WHIRLWIND,
+        GROUND_WAVE,
+        PIERCE,
+        ULTIMATE,
         PLUNGE,
     ]
     for move in moves:
@@ -205,26 +205,26 @@ def test_a_trail_grows_with_the_swing_and_fades() raises:
     var none = Framebuffer(64, 64, Color(0, 0, 0))
     trail.draw(none, scene, _camera(Vector3(0, 1.5, -5)), look)
     assert_equal(_light(none), 0)
-    # The tempest's ribbon turns with the body.
+    # The whirlwind's ribbon turns with the body.
     var spinner = Fighter(FighterParameters())
-    _ = spinner.request(TEMPEST)
+    _ = spinner.request(WHIRLWIND)
     spinner.clock = 0.4
     trail.show(scene, spinner)
-    assert_equal(trail.shown, TEMPEST.value)
+    assert_equal(trail.shown, WHIRLWIND.value)
     # A throw has no ribbon, and shows none.
     var thrower = Fighter(FighterParameters())
     _ = thrower.request(THROW)
     thrower.clock = 0.5
     trail.show(scene, thrower)
     assert_equal(trail.shown, -1)
-    var ring = trail.nodes[TEMPEST.value].value()
+    var ring = trail.nodes[WHIRLWIND.value].value()
     assert_true(abs(scene.node(ring).quaternion.w) < 0.99)
-    # A burst attack's thrust is red, whoever makes it.
-    var burster = Fighter(FighterParameters())
-    _ = burster.request(BURST)
-    burster.clock = 0.84
-    trail.show(scene, burster)
-    assert_equal(trail.shown, BURST.value)
+    # A piercing attack's thrust is red, whoever makes it.
+    var piercer = Fighter(FighterParameters())
+    _ = piercer.request(PIERCE)
+    piercer.clock = 0.84
+    trail.show(scene, piercer)
+    assert_equal(trail.shown, PIERCE.value)
     scene.update()
     var red = Framebuffer(64, 64, Color(0, 0, 0))
     trail.draw(red, scene, _camera(Vector3(0, 1.5, -5)), look)
@@ -235,15 +235,15 @@ def test_a_trail_grows_with_the_swing_and_fades() raises:
         blues += Int(red.pixels[k + 2])
     assert_true(reds > 4 * blues)
     assert_true(blues > 0)
-    # A mystic arte's ring turns with the body, and is gold.
-    var mystic = Fighter(FighterParameters())
-    mystic.over = 1
-    _ = mystic.request(MYSTIC_ARTE)
-    mystic.clock = 0.8
-    trail.show(scene, mystic)
-    assert_equal(trail.shown, MYSTIC_ARTE.value)
+    # An ultimate's ring turns with the body, and is gold.
+    var ultimate = Fighter(FighterParameters())
+    ultimate.over = 1
+    _ = ultimate.request(ULTIMATE)
+    ultimate.clock = 0.8
+    trail.show(scene, ultimate)
+    assert_equal(trail.shown, ULTIMATE.value)
     assert_almost_equal(trail.sweep, 1, atol=1e-6)
-    var wide = trail.nodes[MYSTIC_ARTE.value].value()
+    var wide = trail.nodes[ULTIMATE.value].value()
     assert_true(abs(scene.node(wide).quaternion.w) < 0.99)
     scene.update()
     var gold = Framebuffer(64, 64, Color(0, 0, 0))
@@ -259,7 +259,7 @@ def test_a_trail_grows_with_the_swing_and_fades() raises:
 
 def test_a_star_of_light_is_brightest_at_its_middle() raises:
     var frame = Framebuffer(40, 40, Color(0, 0, 0))
-    glow_star(frame, Vector3(20.3, 19.6, 1), 12, BURST_TRAIL)
+    glow_star(frame, Vector3(20.3, 19.6, 1), 12, PIERCE_TRAIL)
     var middle = (19 * 40 + 20) * 4
     var ray = (19 * 40 + 28) * 4
     assert_true(frame.pixels[ray] > 0)

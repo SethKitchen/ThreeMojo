@@ -8,34 +8,34 @@
 
 `draw_battle` draws eight things:
 
-1. **The trails** of the swings, the demon fang's waves, the
+1. **The trails** of the swings, the ground wave's waves, the
    companion's bolts, the throwers' knives and a plunge's ring, as light
    added to the frame: see `extensions.village.slashes`. A wave dims as
    it runs. A knife is a small orange star. A plunge's
    ring spreads over the ground from the player's feet, and fades. A bolt is a blue
-   star, or a gold one for a boost attack.
+   star, or a gold one for a assist attack.
 2. **The player's gauges**, in the bottom right: the stance, the health,
-   the ki, the limit gauge, and the arte gauge as a row of points. The
-   health turns red below a quarter. Over Limit, the limit gauge turns
-   gold, says `OVER LIMIT`, and empties as it ends. Through a mystic
-   arte's start-up, `MYSTIC ARTE` stands large in the middle of the
+   the stamina, the limit gauge, and the special gauge as a row of points. The
+   health turns red below a quarter. In a surge, the limit gauge turns
+   gold, says `SURGE`, and empties as it ends. Through a ultimate
+   special's start-up, `ULTIMATE` stands large in the middle of the
    frame, and a gold star grows at the player's sword hand. The
-   companion's boost gauge is in the bottom left, and says
-   `BOOST READY` when it is full.
+   companion's assist gauge is in the bottom left, and says
+   `ASSIST READY` when it is full.
 3. **The combo**, such as `12 HITS`, on the right, while two blows or more
    have landed and the combo lasts. It fades as the combo ends.
-4. **Each bandit's health and ki**, over its head, while it fights or is
+4. **Each bandit's health and stamina**, over its head, while it fights or is
    hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy
    attack would finish it. A bandit that winds up a heavy attack shows a
-   red `!`, a warning of a strong blow. A bandit that winds up a burst
+   red `!`, a warning of a strong blow. A bandit that winds up a piercing
    attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under
    its bars.
-5. **A dummy's ki**, over its head, while its ki is not full.
+5. **A dummy's stamina**, over its head, while its stamina is not full.
 6. **The lock's mark**: four gold dots round the locked target's chest.
 7. **The numbers and the words** of the blows, which rise and fade.
 8. **The edges of the frame**, tinted: blue while the player's perfect
-   dodge slows the foes; gold through a mystic arte; and red below a
-   quarter of the player's health. A ki pulse rings the player's feet
+   dodge slows the foes; gold through an ultimate; and red below a
+   quarter of the player's health. A stamina recovery rings the player's feet
    with blue light.
 
 A point behind the camera is not drawn.
@@ -45,17 +45,17 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.scene import Scene
 from extensions.village.battle import (
     CHEST,
-    FANG_RANGE,
+    WAVE_RANGE,
     HEAD,
     POPUP_SECONDS,
     Battle,
 )
 from extensions.village.combat import (
-    BURST,
+    PIERCE,
     COMBO_KEEP,
     FINISH_SHARE,
     LIMIT,
-    MYSTIC_ARTE,
+    ULTIMATE,
     OVER_SECONDS,
     PLUNGE,
     HEAVY,
@@ -67,10 +67,10 @@ from extensions.village.combat import (
     Fighter,
     move_data,
 )
-from extensions.village.companion import BOOST_FULL
+from extensions.village.companion import ASSIST_FULL
 from extensions.village.foes import POSTED
 from extensions.village.slashes import (
-    BURST_TRAIL,
+    PIERCE_TRAIL,
     FOE_TRAIL,
     OVER_TRAIL,
     draw_ring,
@@ -97,18 +97,18 @@ comptime HEALTH = Rgb(96, 200, 90)
 """The color of a healthy fighter's health."""
 comptime WOUNDED = Rgb(225, 70, 50)
 """The color of a fighter's health below a quarter, and of a bandit's."""
-comptime KI_COLOR = Rgb(140, 205, 255)
-"""The color of ki."""
-comptime ARTE_COLOR = Rgb(255, 190, 70)
-"""The color of the arte gauge's points."""
+comptime STAMINA_COLOR = Rgb(140, 205, 255)
+"""The color of stamina."""
+comptime SPECIAL_COLOR = Rgb(255, 190, 70)
+"""The color of the special gauge's points."""
 comptime LIMIT_COLOR = Rgb(200, 120, 255)
 """The color of the limit gauge while it fills."""
 comptime DANGER = Rgb(255, 40, 30)
 """The color of a heavy attack's warning."""
 comptime NEAREST = Float32(0.2)
 """How far before the camera a point must be to be drawn, in meters."""
-comptime BOOST_COLOR = Rgb(110, 220, 200)
-"""The color of the companion's boost gauge while it fills."""
+comptime ASSIST_COLOR = Rgb(110, 220, 200)
+"""The color of the companion's assist gauge while it fills."""
 comptime BOLT_COLOR = Vector3(140, 210, 255)
 """The light of a companion's bolt."""
 comptime BOLT_GLOW = Float32(0.3)
@@ -117,19 +117,19 @@ comptime KNIFE_GLOW = Float32(0.15)
 """How far a knife's star reaches, in meters."""
 comptime SLOW_TINT = Rgb(70, 140, 255)
 """The tint of the frame's edges while a perfect dodge slows the foes."""
-comptime MYSTIC_TINT = Rgb(255, 200, 80)
-"""The tint of the frame's edges through a mystic arte."""
+comptime ULTIMATE_TINT = Rgb(255, 200, 80)
+"""The tint of the frame's edges through an ultimate."""
 comptime HURT_TINT = Rgb(200, 20, 20)
 """The tint of the frame's edges below a quarter of health."""
 comptime EDGE = Float32(0.55)
 """How far from the middle of the frame its edges' tint begins, as a share
 of the way to a corner."""
 comptime PULSE_FLASH = Float32(0.3)
-"""How long a ki pulse's ring spreads and fades, in seconds."""
+"""How long a stamina recovery's ring spreads and fades, in seconds."""
 comptime RING_SECONDS = Float32(0.3)
 """How long a plunge's ring spreads and fades, in seconds."""
 comptime GLOW_REACH = Float32(0.35)
-"""How far a burst attack's red glow reaches from the chest as it
+"""How far a piercing attack's red glow reaches from the chest as it
 begins, in meters: half a man's shoulders."""
 
 
@@ -219,17 +219,17 @@ def _centered(
 
 
 def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int):
-    """Draw the player's stance, health, ki and arte gauge."""
+    """Draw the player's stance, health, stamina and special gauge."""
     ref f = battle.fighter
     var margin = 6 * scale
     var width = 72 * scale
     var x = frame.width - margin - width
     var y = frame.height - margin - 4 * scale
-    # The arte gauge: one box a point, filled by its share.
-    var points = Int(f.parameters.arte_points + 0.5)
+    # The special gauge: one box a point, filled by its share.
+    var points = Int(f.parameters.special_points + 0.5)
     var pip = 6 * scale
     for k in range(points):
-        var share = f.arte - Float32(k)
+        var share = f.special - Float32(k)
         draw_bar(
             frame,
             x + width - (points - k) * (pip + 2 * scale),
@@ -237,18 +237,18 @@ def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int):
             pip,
             3 * scale,
             share,
-            ARTE_COLOR,
+            SPECIAL_COLOR,
         )
     if points > 0:
-        draw_text(frame, x, y - 2 * scale, "AG", scale, ARTE_COLOR, 1)
+        draw_text(frame, x, y - 2 * scale, "SP", scale, SPECIAL_COLOR, 1)
     y -= 7 * scale
     var share = f.limit / LIMIT
     var color = LIMIT_COLOR
-    var label = String("OL")
+    var label = String("SG")
     if f.over > 0:
         share = f.over / OVER_SECONDS
         color = GOLD_TEXT
-        label = "OVER LIMIT"
+        label = "SURGE"
     draw_bar(frame, x, y, width, 2 * scale, share, color)
     draw_text(
         frame,
@@ -260,8 +260,18 @@ def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int):
         1,
     )
     y -= 10 * scale
-    draw_bar(frame, x, y, width, 3 * scale, f.ki / f.parameters.ki, KI_COLOR)
-    draw_text(frame, x - 16 * scale, y - 2 * scale, "KI", scale, KI_COLOR, 1)
+    draw_bar(
+        frame,
+        x,
+        y,
+        width,
+        3 * scale,
+        f.stamina / f.parameters.stamina,
+        STAMINA_COLOR,
+    )
+    draw_text(
+        frame, x - 16 * scale, y - 2 * scale, "ST", scale, STAMINA_COLOR, 1
+    )
     y -= 12 * scale
     var health = f.health / f.parameters.health
     var hue = HEALTH if health >= 0.25 else WOUNDED
@@ -342,11 +352,11 @@ def _edges(
     camera: PerspectiveCamera,
     look: Vector3,
 ) raises:
-    """Tint the edges of the frame for the slowed foes, a mystic arte or
-    low health, and ring the player's feet after a ki pulse."""
+    """Tint the edges of the frame for the slowed foes, an ultimate or
+    low health, and ring the player's feet after a stamina recovery."""
     ref f = battle.fighter
-    if f.move == MYSTIC_ARTE:
-        tint_edges(frame, MYSTIC_TINT, 0.35)
+    if f.move == ULTIMATE:
+        tint_edges(frame, ULTIMATE_TINT, 0.35)
     elif battle.slow > 0:
         tint_edges(frame, SLOW_TINT, 0.4 * min(Float32(1), battle.slow * 5))
     if f.health > 0 and f.health < 0.25 * f.parameters.health:
@@ -379,24 +389,24 @@ def _star(
     glow_star(frame, Vector3(center.x, center.y, 1), reach, color)
 
 
-def _boost(mut frame: Framebuffer, battle: Battle, scale: Int):
-    """Draw the companion's boost gauge, in the bottom left."""
+def _assist(mut frame: Framebuffer, battle: Battle, scale: Int):
+    """Draw the companion's assist gauge, in the bottom left."""
     for k in range(len(battle.allies)):
         ref mind = battle.allies[k].mind
         var margin = 6 * scale
         var y = frame.height - margin - 3 * scale
-        var color = BOOST_COLOR
-        var label = String("BOOST")
+        var color = ASSIST_COLOR
+        var label = String("ASSIST")
         if mind.ready():
             color = GOLD_TEXT
-            label = "BOOST READY"
+            label = "ASSIST READY"
         draw_bar(
             frame,
             margin,
             y,
             48 * scale,
             3 * scale,
-            mind.boost / BOOST_FULL,
+            mind.assist / ASSIST_FULL,
             color,
         )
         draw_text(frame, margin, y - 9 * scale, label, scale, color, 1)
@@ -409,7 +419,7 @@ def _glow(
     feet: Vector3,
     fighter: Fighter,
 ) raises:
-    """Glow red at the chest of a fighter that winds up a burst attack:
+    """Glow red at the chest of a fighter that winds up a piercing attack:
     a star that grows through the start-up, as wide as the shoulders at
     first and twice as wide as it strikes."""
     var chest = feet + Vector3(0, CHEST, 0)
@@ -420,13 +430,13 @@ def _glow(
     var top = camera.project(
         chest + Vector3(0, GLOW_REACH, 0), frame.width, frame.height
     )
-    var startup = move_data(BURST).startup.to(SECOND) * fighter.pace
+    var startup = move_data(PIERCE).startup.to(SECOND) * fighter.pace
     var grown = 1 + fighter.clock / startup
     var reach = abs(top.y - center.y) * grown
-    glow_star(frame, Vector3(center.x, center.y, 0.9), reach, BURST_TRAIL)
+    glow_star(frame, Vector3(center.x, center.y, 0.9), reach, PIERCE_TRAIL)
 
 
-def _mystic(
+def _ultimate(
     mut frame: Framebuffer,
     battle: Battle,
     scene: Scene,
@@ -434,14 +444,14 @@ def _mystic(
     look: Vector3,
     scale: Int,
 ) raises:
-    """Show a mystic arte's start-up: its name, large in the middle of the
+    """Show an ultimate's start-up: its name, large in the middle of the
     frame, and a gold star that grows at the player's sword hand."""
     ref f = battle.fighter
-    var startup = move_data(MYSTIC_ARTE).startup.to(SECOND) * f.pace
+    var startup = move_data(ULTIMATE).startup.to(SECOND) * f.pace
     if f.clock >= startup:
         return
     var share = f.clock / startup
-    var title = String("MYSTIC ARTE")
+    var title = String("ULTIMATE")
     var big = scale * 3
     draw_text(
         frame,
@@ -492,20 +502,20 @@ def draw_battle(
     for index in range(len(battle.people)):
         battle.people[index].trail.draw(frame, scene, camera, look)
     for wave in battle.waves:
-        var glow = 1 - 0.6 * wave.gone / FANG_RANGE
+        var glow = 1 - 0.6 * wave.gone / WAVE_RANGE
         draw_wave(frame, camera, look, wave.at, wave.way, glow)
     for bolt in battle.bolts:
-        var color = OVER_TRAIL if bolt.boosted else BOLT_COLOR
+        var color = OVER_TRAIL if bolt.assisted else BOLT_COLOR
         _star(frame, camera, look, bolt.at, BOLT_GLOW, color)
     for knife in battle.knives:
         _star(frame, camera, look, knife.at, KNIFE_GLOW, FOE_TRAIL)
     _ring(frame, battle, scene, camera, look)
     _edges(frame, battle, scene, camera, look)
     _gauges(frame, battle, scale)
-    _boost(frame, battle, scale)
+    _assist(frame, battle, scale)
     ref f = battle.fighter
-    if f.move == MYSTIC_ARTE:
-        _mystic(frame, battle, scene, camera, look, scale)
+    if f.move == ULTIMATE:
+        _ultimate(frame, battle, scene, camera, look, scale)
     if f.combo >= 2:
         var alpha = note_alpha(f.combo_age, COMBO_KEEP)
         var hits = String(f.combo, " HITS")
@@ -547,8 +557,8 @@ def draw_battle(
             y + 3 * scale,
             bar,
             scale,
-            foe.fighter.ki / p.ki,
-            KI_COLOR,
+            foe.fighter.stamina / p.stamina,
+            STAMINA_COLOR,
         )
         var middle = x + bar // 2
         if foe.fighter.move == STAGGER:
@@ -562,14 +572,14 @@ def draw_battle(
                 _centered(
                     frame, middle, y - 11 * scale, "!", scale * 2, DANGER, 1
                 )
-        elif foe.fighter.bursting():
+        elif foe.fighter.piercing():
             _glow(frame, camera, look, foe.character.position, foe.fighter)
         if foe.fighter.raging():
             _centered(frame, middle, y + 6 * scale, "RAGE", scale, DANGER, 1)
     for index in range(len(battle.dummies)):
         ref practice = battle.dummies[index]
         ref fighter = practice.fighter
-        if fighter.ki >= fighter.parameters.ki:
+        if fighter.stamina >= fighter.parameters.stamina:
             continue
         var over = on_screen(
             camera, look, practice.dummy.where() + Vector3(0, 1.75, 0), w, h
@@ -582,8 +592,8 @@ def draw_battle(
             Int(over.value().y),
             bar,
             scale,
-            fighter.ki / fighter.parameters.ki,
-            KI_COLOR,
+            fighter.stamina / fighter.parameters.stamina,
+            STAMINA_COLOR,
         )
     if battle.lock >= 0:
         var mark = on_screen(

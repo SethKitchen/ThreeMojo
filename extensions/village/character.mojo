@@ -124,22 +124,22 @@ struct MoveInput(ImplicitlyCopyable):
     var jump: Bool
     var use: Bool
     # Whether the fight's buttons are held: the light and the heavy
-    # attacks, the three artes and the mystic arte, the dodge, the guard,
-    # the lock, the three stances, and the companion's boost attack. See
+    # attacks, the three specials and the ultimate, the dodge, the guard,
+    # the lock, the three stances, and the companion's assist attack. See
     # `extensions.village.battle`.
     var light: Bool
     var heavy: Bool
     var rising: Bool
-    var tempest: Bool
-    var fang: Bool
-    var mystic: Bool
+    var whirlwind: Bool
+    var ground_wave: Bool
+    var ultimate: Bool
     var dodge: Bool
     var guard: Bool
     var lock: Bool
     var high: Bool
     var middle: Bool
     var low: Bool
-    var boost: Bool
+    var assist: Bool
     # Whether the button that eats herbs to heal is held.
     var heal: Bool
 
@@ -156,16 +156,16 @@ struct MoveInput(ImplicitlyCopyable):
         light: Bool = False,
         heavy: Bool = False,
         rising: Bool = False,
-        tempest: Bool = False,
-        fang: Bool = False,
-        mystic: Bool = False,
+        whirlwind: Bool = False,
+        ground_wave: Bool = False,
+        ultimate: Bool = False,
         dodge: Bool = False,
         guard: Bool = False,
         lock: Bool = False,
         high: Bool = False,
         middle: Bool = False,
         low: Bool = False,
-        boost: Bool = False,
+        assist: Bool = False,
         heal: Bool = False,
     ):
         """Hold one frame of input.
@@ -182,16 +182,16 @@ struct MoveInput(ImplicitlyCopyable):
             light: Whether the light attack's button is held.
             heavy: Whether the heavy attack's button is held.
             rising: Whether the rising edge's buttons are held.
-            tempest: Whether the tempest's buttons are held.
-            fang: Whether the demon fang's buttons are held.
-            mystic: Whether the mystic arte's buttons are held.
+            whirlwind: Whether the whirlwind's buttons are held.
+            ground_wave: Whether the ground wave's buttons are held.
+            ultimate: Whether the ultimate's buttons are held.
             dodge: Whether the dodge's button is held.
             guard: Whether the guard's button is held.
             lock: Whether the lock's button is held.
             high: Whether the high stance's buttons are held.
             middle: Whether the middle stance's buttons are held.
             low: Whether the low stance's buttons are held.
-            boost: Whether the boost attack's buttons are held.
+            assist: Whether the assist attack's buttons are held.
             heal: Whether the button that eats herbs to heal is held.
         """
         self.forward = forward
@@ -204,16 +204,16 @@ struct MoveInput(ImplicitlyCopyable):
         self.light = light
         self.heavy = heavy
         self.rising = rising
-        self.tempest = tempest
-        self.fang = fang
-        self.mystic = mystic
+        self.whirlwind = whirlwind
+        self.ground_wave = ground_wave
+        self.ultimate = ultimate
         self.dodge = dodge
         self.guard = guard
         self.lock = lock
         self.high = high
         self.middle = middle
         self.low = low
-        self.boost = boost
+        self.assist = assist
         self.heal = heal
 
 

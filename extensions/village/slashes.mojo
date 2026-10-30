@@ -12,10 +12,10 @@ blade's outer third sweeps, as the move's clip swings it: across at the
 chest for the light cuts, down from over the head for the third, high to
 low for the heavy cut, low to high for the rising edge, down the front
 to the ground for the plunge, straight ahead
-at the chest for a burst attack's thrust, and the last 150 degrees of the
-tempest's turn, which turns with the body as the clip spins it. The
-mystic arte's spins leave a wide ring that turns with the body too. A
-burst attack's trail is red, whoever makes it, and a mystic arte's is
+at the chest for a piercing attack's thrust, and the last 150 degrees of the
+whirlwind's turn, which turns with the body as the clip spins it. The
+ultimate's spins leave a wide ring that turns with the body too. A
+piercing attack's trail is red, whoever makes it, and an ultimate's is
 gold.
 
 A trail is light, so `Trail.draw` adds it to the finished frame, as an
@@ -25,14 +25,14 @@ from its start to where the blade is, brightest at the blade and fading
 behind it over `TRAIL_TAIL` of its length. After the active part it fades
 away over `TRAIL_LINGER`.
 
-**Waves.** `draw_wave` adds a demon fang's wave to the frame: an arch of
+**Waves.** `draw_wave` adds a ground wave's wave to the frame: an arch of
 light across the way it runs, standing on the ground.
 
 **Rings.** `draw_ring` adds a ring of light on the ground, as a plunge
 slams it.
 
 **Stars.** `glow_star` adds a star of light round a point of the frame,
-as the red glow of a foe that winds up a burst attack.
+as the red glow of a foe that winds up a piercing attack.
 
 **Sparks.** `Sparks` keeps `SPARKS` bursts of gold rays. A blow puts the
 oldest at the place it lands; it grows and shows for `SPARK_SECONDS`.
@@ -42,19 +42,19 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from extensions.humanoid.rig.sword_clips import mystic_twist, tempest_twist
+from extensions.humanoid.rig.sword_clips import ultimate_twist, whirlwind_twist
 from extensions.village.combat import (
-    BURST,
-    DEMON_FANG,
+    PIERCE,
+    GROUND_WAVE,
     HEAVY,
     LIGHT_ONE,
-    MYSTIC_ARTE,
+    ULTIMATE,
     LIGHT_THREE,
     LIGHT_TWO,
     MOVES,
     PLUNGE,
     RISING_EDGE,
-    TEMPEST,
+    WHIRLWIND,
     CombatMove,
     Fighter,
     is_attack,
@@ -79,9 +79,9 @@ comptime NEAREST = Float32(0.2)
 """How far before the camera a trail's corner must be to be drawn, in
 meters."""
 comptime WAVE_INNER = Float32(0.35)
-"""The inner radius of a demon fang's arch of light, in meters."""
+"""The inner radius of a ground wave's arch of light, in meters."""
 comptime WAVE_OUTER = Float32(0.85)
-"""The outer radius of a demon fang's arch of light, in meters."""
+"""The outer radius of a ground wave's arch of light, in meters."""
 comptime SPARKS = 6
 """How many bursts of sparks can show at once."""
 comptime SPARK_SECONDS = Float32(0.16)
@@ -91,12 +91,12 @@ comptime PLAYER_TRAIL = Vector3(150, 205, 255)
 comptime FOE_TRAIL = Vector3(255, 120, 50)
 """The light a bandit's trails add: the orange of a threat."""
 comptime OVER_TRAIL = Vector3(255, 215, 90)
-"""The light the player's trails add Over Limit: gold."""
-comptime MYSTIC_TRAIL = Vector3(170, 140, 60)
-"""The light of a mystic arte's ring: a softer gold, since the ring is
+"""The light the player's trails add in a surge: gold."""
+comptime ULTIMATE_TRAIL = Vector3(170, 140, 60)
+"""The light of an ultimate's ring: a softer gold, since the ring is
 wide."""
-comptime BURST_TRAIL = Vector3(255, 40, 30)
-"""The light of a burst attack: its trail, and its glow as it winds up."""
+comptime PIERCE_TRAIL = Vector3(255, 40, 30)
+"""The light of a piercing attack: its trail, and its glow as it winds up."""
 comptime RING_INNER = Float32(0.7)
 """A plunge's ring's inner radius, as a share of its outer one."""
 comptime STAR_RAYS = 8
@@ -170,7 +170,7 @@ def trail_points(move: CombatMove, scale: Float32) -> List[Vector3]:
     Returns:
         The ribbon's corners, as `arc_points` gives them, from 1.0 to 1.45
         meters round the sword's shoulder for a person of six feet; a
-        straight ribbon from 0.4 to 2.6 meters ahead for a burst attack's
+        straight ribbon from 0.4 to 2.6 meters ahead for a piercing attack's
         thrust; none for a move that is not a cut.
     """
     var s = scale
@@ -237,7 +237,7 @@ def trail_points(move: CombatMove, scale: Float32) -> List[Vector3]:
             inner,
             outer,
         )
-    if move == DEMON_FANG:
+    if move == GROUND_WAVE:
         # From low behind on the sword's side, along the ground, and up.
         return arc_points(
             Vector3(0, 0.2 * s, 0.1 * s),
@@ -248,7 +248,7 @@ def trail_points(move: CombatMove, scale: Float32) -> List[Vector3]:
             inner,
             outer,
         )
-    if move == BURST:
+    if move == PIERCE:
         # A thrust straight ahead at the chest, on the sword's side,
         # tilted so that it shows from behind and from the side.
         var line = List[Vector3]()
@@ -257,8 +257,8 @@ def trail_points(move: CombatMove, scale: Float32) -> List[Vector3]:
             line.append(Vector3(-0.2 * s, 0.28 * s, z))
             line.append(Vector3(-0.04 * s, 0.44 * s, z))
         return line^
-    if move == MYSTIC_ARTE:
-        # The last 240 degrees of the blade's turn, out to the arte's
+    if move == ULTIMATE:
+        # The last 240 degrees of the blade's turn, out to the special's
         # reach: `Trail.show` turns it with the body.
         return arc_points(
             Vector3(0, 0.3 * s, 0),
@@ -269,7 +269,7 @@ def trail_points(move: CombatMove, scale: Float32) -> List[Vector3]:
             inner,
             outer * 2.5,
         )
-    if move == TEMPEST:
+    if move == WHIRLWIND:
         # The last 150 degrees of the blade's turn at the waist, behind
         # the blade: `Trail.show` turns it with the body.
         return arc_points(
@@ -430,7 +430,7 @@ struct Trail(Movable):
 
     def show(mut self, mut scene: Scene, fighter: Fighter) raises:
         """Show the ribbon of the attack that strikes now, as far as the
-        blade has swept it; and the tempest's, turned with the body. An
+        blade has swept it; and the whirlwind's, turned with the body. An
         attack with no ribbon, such as a bite, a cast or a throw, shows
         none.
 
@@ -454,22 +454,22 @@ struct Trail(Movable):
         self.shown = fighter.move.value
         self.sweep = min(Float32(1), (fighter.clock - begin) / (end - begin))
         self.glow = min(Float32(1), 1 - (fighter.clock - end) / TRAIL_LINGER)
-        if fighter.move == TEMPEST:
+        if fighter.move == WHIRLWIND:
             # The ribbon trails the blade all through the spin.
             self.sweep = 1
             var share = fighter.clock / fighter.length()
             scene.node(
-                self.nodes[TEMPEST.value].value()
+                self.nodes[WHIRLWIND.value].value()
             ).set_rotation_from_axis_angle(
-                Vector3(0, 1, 0), Angle(-tempest_twist(share), DEGREE)
+                Vector3(0, 1, 0), Angle(-whirlwind_twist(share), DEGREE)
             )
-        if fighter.move == MYSTIC_ARTE:
+        if fighter.move == ULTIMATE:
             self.sweep = 1
             var share = fighter.clock / fighter.length()
             scene.node(
-                self.nodes[MYSTIC_ARTE.value].value()
+                self.nodes[ULTIMATE.value].value()
             ).set_rotation_from_axis_angle(
-                Vector3(0, 1, 0), Angle(-mystic_twist(share), DEGREE)
+                Vector3(0, 1, 0), Angle(-ultimate_twist(share), DEGREE)
             )
 
     def draw(
@@ -512,10 +512,10 @@ struct Trail(Movable):
             var share = max(Float32(0), 1 - (self.sweep - t) / TRAIL_TAIL)
             light.append(share * self.glow)
         var color = self.color
-        if self.shown == BURST.value:
-            color = BURST_TRAIL
-        elif self.shown == MYSTIC_ARTE.value:
-            color = MYSTIC_TRAIL
+        if self.shown == PIERCE.value:
+            color = PIERCE_TRAIL
+        elif self.shown == ULTIMATE.value:
+            color = ULTIMATE_TRAIL
         glow_ribbon(frame, camera, look, placed, light, color)
 
 
@@ -574,7 +574,7 @@ def draw_wave(
     way: Vector3,
     glow: Float32,
 ) raises:
-    """Add a demon fang's wave to a frame: an arch of light standing on
+    """Add a ground wave's wave to a frame: an arch of light standing on
     the ground across the way it runs, brightest at its top.
 
     Args:

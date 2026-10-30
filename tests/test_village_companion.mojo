@@ -4,19 +4,19 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """The companion's mind: she follows, keeps back, casts, heals, and fills
-her boost gauge."""
+her assist gauge."""
 
 from extensions.humanoid.sex import FEMALE
 from extensions.village.companion import (
-    BOOST_FULL,
-    BOOST_RATE,
+    ASSIST_FULL,
+    ASSIST_RATE,
     CAST_EVERY,
     KEEP,
     MEND_EVERY,
     AllySight,
     Companion,
     ally_fighter,
-    boost_blow,
+    assist_blow,
     default_allies,
     flank_spot,
 )
@@ -67,7 +67,7 @@ def test_out_of_a_fight_she_follows_the_player() raises:
     )
     assert_almost_equal(calm.way.z, 1, atol=1e-6)
     assert_false(calm.cast)
-    assert_almost_equal(mind.boost, 0, atol=1e-6)
+    assert_almost_equal(mind.assist, 0, atol=1e-6)
     # On the player's own spot, she stands.
     var still = mind.think(_sight(Vector3(0, 0, 0)), _frame())
     assert_almost_equal(still.way.length(), 0, atol=1e-6)
@@ -153,30 +153,30 @@ def test_she_heals_a_wounded_player() raises:
     assert_false(mind.think(_sight(player, health=0.3), _frame()).heal)
 
 
-def test_the_boost_gauge_fills_and_is_spent() raises:
+def test_the_assist_gauge_fills_and_is_spent() raises:
     var mind = Companion()
     assert_false(mind.ready())
     assert_false(mind.spend())
     _ = mind.think(_sight(Vector3(0, 0, 1)), Duration(2.0, SECOND))
-    assert_almost_equal(mind.boost, 2 * BOOST_RATE, atol=1e-4)
+    assert_almost_equal(mind.assist, 2 * ASSIST_RATE, atol=1e-4)
     mind.charge(1000)
-    assert_almost_equal(mind.boost, BOOST_FULL, atol=1e-6)
+    assert_almost_equal(mind.assist, ASSIST_FULL, atol=1e-6)
     assert_true(mind.ready())
     mind.cast_wait = 0
     assert_true(mind.spend())
-    assert_almost_equal(mind.boost, 0, atol=1e-6)
+    assert_almost_equal(mind.assist, 0, atol=1e-6)
     assert_almost_equal(mind.cast_wait, CAST_EVERY, atol=1e-6)
 
 
-def test_her_strength_and_her_boost_attack() raises:
+def test_her_strength_and_her_assist_attack() raises:
     ally_fighter().check()
     assert_almost_equal(ally_fighter().health, 400, atol=1e-6)
-    var blow = boost_blow(2)
+    var blow = assist_blow(2)
     assert_almost_equal(blow.damage, 140, atol=1e-4)
-    assert_almost_equal(blow.ki_damage, 100, atol=1e-4)
+    assert_almost_equal(blow.stamina_damage, 100, atol=1e-4)
     assert_almost_equal(blow.knockback.to(METER_PER_SECOND), 5, atol=1e-6)
     assert_true(blow.unblockable)
-    assert_true(blow.breaks_burst)
+    assert_true(blow.breaks_pierce)
     assert_false(blow.finish)
     var allies = default_allies()
     assert_equal(len(allies), 1)

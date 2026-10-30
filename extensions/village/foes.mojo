@@ -28,9 +28,9 @@ A bandit returns to its post when the player falls, or leads it further
 than `LOSE` from its post. Only the bandit that holds the attack token
 attacks, so the others wait their turn round the player, as foes do in
 most action games. A plan is two or three light attacks, a heavy attack,
-a light and a heavy attack, or a burst attack that glows red and that no
+a light and a heavy attack, or a piercing attack that glows red and that no
 guard stops. A raging bandit's dice roll high: it makes no plan of two
-light attacks, and twice as many burst attacks. The dice that choose come
+light attacks, and twice as many piercing attacks. The dice that choose come
 from the bandit's seed, so a fight plays the same way each time.
 
 **Throwers.** A thrower is a bandit who keeps back, at `THROW_CIRCLE`,
@@ -46,7 +46,7 @@ bandit guards an attack, a wolf leaps back from it. A pack of `Den`'s
 wolves keeps east of the pond.
 
 **Dummies.** A dummy is a post with a crossbar, a body of straw and a
-sack for a head. It has a fighter too, so blows on it break its ki and
+sack for a head. It has a fighter too, so blows on it break its stamina and
 are critical, but it never falls: each blow's health comes back at once.
 It rocks on its post as it is hit.
 """
@@ -71,7 +71,7 @@ from extensions.village.clothes import (
 )
 from extensions.village.combat import (
     BITE,
-    BURST,
+    PIERCE,
     FREE,
     THROW,
     HEAVY,
@@ -296,7 +296,7 @@ def plan_for(roll: Float32) -> List[CombatMove]:
 
     Returns:
         Two light attacks below 0.35, three below 0.6, a heavy attack below
-        0.8, a light and a heavy attack below 0.9, and a burst attack
+        0.8, a light and a heavy attack below 0.9, and a piercing attack
         above.
     """
     if roll < 0.35:
@@ -307,7 +307,7 @@ def plan_for(roll: Float32) -> List[CombatMove]:
         return [HEAVY]
     if roll < 0.9:
         return [LIGHT_ONE, HEAVY]
-    return [BURST]
+    return [PIERCE]
 
 
 struct Brain(Copyable, Movable):
@@ -579,17 +579,17 @@ def bandit_fighter() -> FighterParameters:
     """Return how strong a bandit is.
 
     Returns:
-        300 health, 70 ki that comes back at 26 a second after 0.8
-        seconds, no arte gauge, blows of 0.55 times a move's own, a guard
-        that blocks and never parries, and no Over Limit.
+        300 health, 70 stamina that comes back at 26 a second after 0.8
+        seconds, no special gauge, blows of 0.55 times a move's own, a guard
+        that blocks and never parries, and no surge.
     """
     var p = FighterParameters()
     p.health = 300
-    p.ki = 70
-    p.ki_rate = Frequency(26.0, PER_SECOND)
-    p.ki_delay = Duration(0.8, SECOND)
-    p.arte_points = 0
-    p.arte_rate = Frequency(0.0, PER_SECOND)
+    p.stamina = 70
+    p.stamina_rate = Frequency(26.0, PER_SECOND)
+    p.stamina_delay = Duration(0.8, SECOND)
+    p.special_points = 0
+    p.special_rate = Frequency(0.0, PER_SECOND)
     p.might = 0.55
     p.parry = Duration(0.0, SECOND)
     p.limit_gain = 0
@@ -600,14 +600,14 @@ def captain_fighter() -> FighterParameters:
     """Return how strong the bandits' captain is.
 
     Returns:
-        A bandit's strength, with 650 health, 120 ki that comes back at
+        A bandit's strength, with 650 health, 120 stamina that comes back at
         30 a second, blows of 0.8 times a move's own, and a rage at half
         its health.
     """
     var p = bandit_fighter()
     p.health = 650
-    p.ki = 120
-    p.ki_rate = Frequency(30.0, PER_SECOND)
+    p.stamina = 120
+    p.stamina_rate = Frequency(30.0, PER_SECOND)
     p.might = 0.8
     p.rage = 0.5
     return p
@@ -617,17 +617,17 @@ def wolf_fighter() -> FighterParameters:
     """Return how strong a wolf is.
 
     Returns:
-        160 health, 60 ki that comes back at 30 a second after 0.6
-        seconds, no arte gauge, bites of 0.6 times the bite's own, no
-        guard, and no Over Limit.
+        160 health, 60 stamina that comes back at 30 a second after 0.6
+        seconds, no special gauge, bites of 0.6 times the bite's own, no
+        guard, and no surge.
     """
     var p = FighterParameters()
     p.health = 160
-    p.ki = 60
-    p.ki_rate = Frequency(30.0, PER_SECOND)
-    p.ki_delay = Duration(0.6, SECOND)
-    p.arte_points = 0
-    p.arte_rate = Frequency(0.0, PER_SECOND)
+    p.stamina = 60
+    p.stamina_rate = Frequency(30.0, PER_SECOND)
+    p.stamina_delay = Duration(0.6, SECOND)
+    p.special_points = 0
+    p.special_rate = Frequency(0.0, PER_SECOND)
     p.might = 0.6
     p.guard_arc = Angle(0.0, DEGREE)
     p.parry = Duration(0.0, SECOND)
@@ -681,17 +681,17 @@ def dummy_fighter() -> FighterParameters:
     """Return how strong a straw dummy is.
 
     Returns:
-        A great deal of health, 120 ki that comes back at 40 a second
+        A great deal of health, 120 stamina that comes back at 40 a second
         after a second, a guard that covers nothing and never parries, and
-        no Over Limit.
+        no surge.
     """
     var p = FighterParameters()
     p.health = 1.0e5
-    p.ki = 120
-    p.ki_rate = Frequency(40.0, PER_SECOND)
-    p.ki_delay = Duration(1.0, SECOND)
-    p.arte_points = 0
-    p.arte_rate = Frequency(0.0, PER_SECOND)
+    p.stamina = 120
+    p.stamina_rate = Frequency(40.0, PER_SECOND)
+    p.stamina_delay = Duration(1.0, SECOND)
+    p.special_points = 0
+    p.special_rate = Frequency(0.0, PER_SECOND)
     p.guard_arc = Angle(0.0, DEGREE)
     p.parry = Duration(0.0, SECOND)
     p.limit_gain = 0
