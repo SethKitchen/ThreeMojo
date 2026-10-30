@@ -26,10 +26,13 @@ from extensions.attire.kinds import (
     PARTY,
     PLATE,
     RIGID,
+    SHOD,
+    SKIRTED,
     TORSO_SLOT,
     Articulation,
     DyePattern,
     FabricKind,
+    Form,
     Layer,
     Slot,
 )
@@ -109,6 +112,9 @@ def test_the_wardrobe_checks() raises:
     assert_true(hood().cover.face_open)
     assert_true(hood().ease.value > 0)
     assert_true(boots().drape > 0)
+    assert_equal(boots().form, SHOD)
+    assert_equal(surcoat().form, SKIRTED)
+    assert_true(surcoat().flare > 0)
 
 
 def test_a_garment_refuses_what_cannot_be_made() raises:
@@ -162,6 +168,20 @@ def test_a_garment_refuses_what_cannot_be_made() raises:
         bad.check()
     bad.ease = Length(nan[DType.float32](), METER)
     with assert_raises(contains="An ease"):
+        bad.check()
+    bad = good.copy()
+    bad.form = Form(5)
+    with assert_raises(contains="form must"):
+        bad.check()
+    bad = good.copy()
+    bad.flare = -0.1
+    with assert_raises(contains="A flare"):
+        bad.check()
+    bad.flare = 1.5
+    with assert_raises(contains="A flare"):
+        bad.check()
+    bad.flare = nan[DType.float32]()
+    with assert_raises(contains="A flare"):
         bad.check()
 
 

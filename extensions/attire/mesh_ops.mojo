@@ -18,6 +18,9 @@
 - `merge` joins two meshes that have the same attributes.
 - `keep_triangles` drops the triangles a mask refuses.
 - `normalize_normals` scales interpolated normals back to unit length.
+- `top_four` keeps the four heaviest bones of a weight per bone.
+- `MeshWriter` writes a mesh with another mesh's attributes, vertex by
+  vertex, so the two can be merged.
 
 This is not a three.js port. See Extensions.
 
@@ -28,7 +31,11 @@ from std.memory import bitcast
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
+from math.vector3 import Vector3
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
+
+comptime COVER = "cover"
+"""The name of the attribute that carries each vertex's cover value."""
 
 
 def _bits(value: Float32) -> Int:
@@ -429,3 +436,145 @@ def normalize_normals(mut geometry: BufferGeometry) raises:
         normals.set_component(v, 1, n.y)
         normals.set_component(v, 2, n.z)
     geometry.set_attribute(String(NORMAL), normals^)
+
+
+def top_four(all: List[Float32]) -> Tuple[List[Int], List[Float32]]:
+    """Return the four heaviest bones of a weight per bone.
+
+    Args:
+        all: One weight per bone, at least four bones.
+
+    Returns:
+        The four heaviest bones, heaviest first, and their weights scaled
+        to add up to one.
+    """
+    var bones = List[Int]()
+    var total = Float32(0)
+    for _ in range(4):  # pragma: no branch
+        var best = 0
+        var heaviest = Float32(-1)
+        for j in range(len(all)):  # pragma: no branch
+            if all[j] > heaviest and j not in bones:
+                heaviest = all[j]
+                best = j
+        bones.append(best)
+        total += all[best]
+    var weights = List[Float32]()
+    for k in range(4):  # pragma: no branch
+        weights.append(all[bones[k]] / max(total, Float32(1e-30)))
+    return (bones^, weights^)
+
+
+struct MeshWriter(Movable):
+    """A mesh with another mesh's attributes, written vertex by vertex.
+
+    A garment's skirt and its lasts are made this way, so they can be
+    merged with the shell they join."""
+
+    var names: List[String]
+    var sizes: List[Int]
+    var out: List[List[Float32]]
+    var index: List[Int]
+
+    def __init__(out self, like: BufferGeometry) raises:
+        """Write the attributes `like` has.
+
+        Args:
+            like: The mesh whose attributes to write.
+
+        Raises:
+            Error: If an attribute cannot be read.
+        """
+        self.names = like.names.copy()
+        self.sizes = List[Int]()
+        self.out = List[List[Float32]]()
+        self.index = List[Int]()
+        for name in self.names:
+            self.sizes.append(like.attribute_view(name).item_size)
+            self.out.append(List[Float32]())
+
+    def add(
+        mut self,
+        p: Vector3,
+        cover: Float32,
+        bones: List[Int],
+        weights: List[Float32],
+    ) -> Int:
+        """Append one vertex. Any attribute it does not name is zero.
+
+        Args:
+            p: Its position.
+            cover: Its cover value.
+            bones: Its four bones.
+            weights: Their four weights.
+
+        Returns:
+            The vertex's index.
+        """
+        var at = 0
+        for k in range(len(self.names)):  # pragma: no branch
+            at = len(self.out[k]) // self.sizes[k]
+            var name = self.names[k]
+            if name == String(POSITION):
+                self.out[k].append(p.x)
+                self.out[k].append(p.y)
+                self.out[k].append(p.z)
+            elif name == String(COVER):
+                self.out[k].append(cover)
+            elif name == String(SKIN_INDEX):
+                for c in range(4):  # pragma: no branch
+                    self.out[k].append(Float32(bones[c]))
+            elif name == String(SKIN_WEIGHT):
+                for c in range(4):  # pragma: no branch
+                    self.out[k].append(weights[c])
+            else:
+                for _ in range(self.sizes[k]):  # pragma: no branch
+                    self.out[k].append(0)
+        return at
+
+    def triangle(mut self, a: Int, b: Int, c: Int):
+        """Append one triangle.
+
+        Args:
+            a: Its first corner.
+            b: Its second corner.
+            c: Its third corner.
+        """
+        self.index.append(a)
+        self.index.append(b)
+        self.index.append(c)
+
+    def quad(mut self, a: Int, b: Int, c: Int, d: Int):
+        """Append two triangles: `a, b, c` and `c, b, d`.
+
+        Args:
+            a: A corner.
+            b: The next corner, down from `a`.
+            c: The corner beside `a`.
+            d: The corner beside `b`.
+        """
+        self.index.append(a)
+        self.index.append(b)
+        self.index.append(c)
+        self.index.append(c)
+        self.index.append(b)
+        self.index.append(d)
+
+    def build(mut self) raises -> BufferGeometry:
+        """Return the mesh written, with normals computed from its faces.
+
+        Returns:
+            An indexed mesh with every attribute `like` has.
+
+        Raises:
+            Error: If an attribute is malformed.
+        """
+        var mesh = BufferGeometry()
+        for k in range(len(self.names)):  # pragma: no branch
+            mesh.set_attribute(
+                self.names[k],
+                BufferAttribute(self.out[k].copy(), self.sizes[k]),
+            )
+        mesh.set_index(self.index.copy())
+        mesh.compute_vertex_normals()
+        return mesh^

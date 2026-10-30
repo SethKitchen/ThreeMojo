@@ -28,8 +28,9 @@ A `Garment` holds no mesh. `dress` makes its mesh from the skin of the person wh
 | `anchor`, `lames` | `Joint`, `Int` | The bone a plate rides, and the number of lames. |
 | `pattern`, `dyes` | `DyePattern`, four `Color` values | How it is dyed. |
 | `drape`, `ease` | `Int`, `Length` | Smoothing passes of its shell, and how loose it is cut. |
+| `form`, `flare` | `Form`, `Float32` | How its shell is shaped where it does not follow the skin, and how far a skirt widens for each meter it falls. |
 
-Every slot, layer, fabric, articulation, pattern, dye channel and wear channel is a type with `is_valid`. A bare integer does not compile.
+Every slot, layer, fabric, articulation, pattern, form, dye channel and wear channel is a type with `is_valid`. A bare integer does not compile.
 
 ## Cover
 
@@ -59,6 +60,44 @@ A drape pass moves each covered vertex halfway to the mean of its neighbors. The
 A layer under a garment lifts it in full inside and at that layer's hem. The lift fades out a quarter of a cover value past the hem. So a tunic rises smoothly over the top of a hose. No layer can pass through the layer under it at rest.
 
 A triangle is hidden when every corner has a cover value of 0.75 or more from a layer over it. The skin and the inner layers drop these triangles. So skin cannot show through a garment when the body bends, and a dressed person costs about as many triangles as a bare one.
+
+## Forms
+
+A shell made from the skin follows each thigh and each toe. A skirt and a boot do not. The form says how the shell is shaped there.
+
+| Form | The shell | Example |
+|---|---|---|
+| `FITTED` | follows the skin everywhere | a shirt, hose, a coif |
+| `SKIRTED` | hangs below the hips as one tube round both legs | a tunic, a hauberk, a surcoat, a fauld |
+| `SHOD` | closes each foot in a smooth last | boots |
+
+### Skirts
+
+`extensions/attire/skirt.mojo` hangs a skirt in four steps.
+
+1. `skirt_top` is 3 cm below the hip joints on the template, above the crotch. There the shell is one tube round the pelvis. The shell of the trunk and the legs is cut there.
+2. `skirt_envelope` slices the garment's own shell at rings 3 cm apart, from the top to the lowest point of the shell on the legs. That point is the hem. Each slice is closed as a convex hull, so it spans the gap between the thighs.
+3. Each ring is at least as wide as the ring above it, plus the flare times the drop. So the cloth falls straight or flares, and does not tuck in between the legs. A skirt under it lifts it by that skirt's thickness and this garment's clearance.
+4. `skirt_mesh` lofts the rings on 40 sides. The top ring reaches 1.5 cm up inside the shell, so no gap opens at the cut.
+
+A drawn skirt is lined: it has an inner face one fabric thickness inside, and a strip across its hem. So the hem shows its thickness, and the inside of the skirt draws when it is seen from below.
+
+Each vertex at the top takes the weights of the nearest vertex of the shell. Down the skirt the weights pass to the thighs: at the hem the thighs hold 0.9 of each vertex. The right thigh turns the right side and the left thigh the left side. The two share a band 10 cm wide at the middle of the front and the back. So the skirt opens as a leg lifts.
+
+The cover value falls from one to one half over the 4 cm above the hem. So a trim lies along a skirt's hem, as along any hem.
+
+Below the top, a skirt hangs clear of the legs. So it hides neither the skin nor the garments under it there, and the hose and the legs draw under it. A band 6 cm deep below the top stays hidden, so no triangle that crosses the top shows through the shell over it. A skirt over another that falls as far hides it. The inner skirt is then not drawn.
+
+### Lasts
+
+`extensions/attire/last.mojo` shoes each foot in four steps.
+
+1. `last_top` is 2 cm above the higher ankle joint on the template. The shell is cut 2 cm below that, so its edge lies inside the last.
+2. `foot_lasts` closes the shell's vertices below the top on each side of the hips in their convex hull.
+3. `last_mesh` casts a sphere of 12 rings and 18 sectors from the middle of the foot onto the hull. The sphere is stretched to the foot's box. So the last is evenly meshed, even where the hull has long flat facets over the toes and the arch. The last stands 1.5 mm out of the hull. So the seam where the shaft meets it is a clean step, as a boot's welt is.
+4. The flat top of the hull lies inside the shaft. The last is cut level 3 mm below it.
+
+Each vertex of a last takes the weights of the nearest vertex of the shell. So the toe box bends with the toes.
 
 ## Fabrics
 
@@ -123,24 +162,24 @@ paint(piece, garment.dyes)
 
 `wardrobe()` gives sixteen medieval garments, from the skin out.
 
-| Garment | Slot | Layer | Fabric |
-|---|---|---|---|
-| `shirt` | torso | under | linen |
-| `hose` | legs | under | wool |
-| `tunic` | torso | mid | wool |
-| `gambeson` | torso | mid | padding |
-| `hauberk` | torso | outer | mail, brass at the hems |
-| `coif` | head | outer | mail |
-| `hood` | head | over | wool |
-| `boots` | feet | outer | leather |
-| `gloves` | hands | outer | leather |
-| `cuirass` | torso | armor | plate |
-| `fauld` | waist | armor | plate |
-| `pauldrons` | shoulders | armor | plate |
-| `vambraces` | arms | armor | plate |
-| `greaves` | legs | armor | plate |
-| `bascinet` | head | armor | plate |
-| `surcoat` | torso | over | linen, per pale |
+| Garment | Slot | Layer | Fabric | Form |
+|---|---|---|---|---|
+| `shirt` | torso | under | linen | fitted |
+| `hose` | legs | under | wool | fitted |
+| `tunic` | torso | mid | wool | skirted, flare 0.25 |
+| `gambeson` | torso | mid | padding | skirted, flare 0.1 |
+| `hauberk` | torso | outer | mail, brass at the hems | skirted, flare 0.15 |
+| `coif` | head | outer | mail | fitted |
+| `hood` | head | over | wool | fitted |
+| `boots` | feet | outer | leather | shod |
+| `gloves` | hands | outer | leather | fitted |
+| `cuirass` | torso | armor | plate | fitted |
+| `fauld` | waist | armor | plate | skirted, flare 0.12 |
+| `pauldrons` | shoulders | armor | plate | fitted |
+| `vambraces` | arms | armor | plate | fitted |
+| `greaves` | legs | armor | plate | fitted |
+| `bascinet` | head | armor | plate | fitted |
+| `surcoat` | torso | over | linen, per pale | skirted, flare 0.3 |
 
 ## Garments made elsewhere
 
@@ -162,4 +201,4 @@ Roblox's cages and MakeHuman's `mhclo` files bind a garment to a body mesh from 
 
 ## Tests
 
-`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_surface.mojo`, `test_attire_dye.mojo`, `test_attire_garment.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.
+`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_skirt.mojo`, `test_attire_last.mojo`, `test_attire_surface.mojo`, `test_attire_dye.mojo`, `test_attire_garment.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.

@@ -10,7 +10,9 @@ game, and puts it on again later, on the same body or on another one.
 `outfit_json` writes an outfit as one JSON object, and `outfit_from_json`
 reads it back. A garment's slot, layer, fabric, articulation and pattern
 are written by name, its anchor by joint name, its dyes as sRGB bytes
-and its cover as two lists of nineteen fractions, one per joint.
+and its cover as two lists of nineteen fractions, one per joint. Its form
+is written by name and its flare as a number; a garment saved without
+them is read as fitted, with no flare.
 
 `outfit_named` gives three outfits ready to wear: a peasant's, a
 man-at-arms's in mail, and a knight's full harness under a surcoat.
@@ -58,6 +60,8 @@ from extensions.attire.kinds import (
     articulation_named,
     fabric_label,
     fabric_named,
+    form_label,
+    form_named,
     layer_label,
     layer_named,
     pattern_label,
@@ -210,6 +214,8 @@ def garment_record(garment: Garment) raises -> UserData:
     record.set_number("drape", Float64(garment.drape))
     record.set_meters("ease_m", garment.ease)
     record.set_boolean("face_open", garment.cover.face_open)
+    record.set_string("form", form_label(garment.form))
+    record.set_number("flare", Float64(garment.flare))
     record.set_json("starts", _numbers(garment.cover.starts))
     record.set_json("ends", _numbers(garment.cover.ends))
     return record^
@@ -328,6 +334,9 @@ def garment_from(document: JsonDocument, node: Int) raises -> Garment:
             Float32(document.number(_field(document, node, "ease_m"))),
             METER,
         ),
+        # An outfit saved before garments had forms is fitted.
+        form=form_named(document.optional_string(node, "form", "fitted")),
+        flare=Float32(document.optional_number(node, "flare", 0)),
     )
     garment.dyes = colors^
     garment.check()
