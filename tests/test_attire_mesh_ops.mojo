@@ -311,6 +311,8 @@ def test_an_open_edge_takes_a_rim() raises:
     flat.set_component(3, 0, flat.component(2, 0))
     sliver.set_attribute(String(POSITION), flat^)
     assert_true(add_rim(sliver, 0.002).triangle_count() < 2 + 4 * 2)
+    # An empty mesh takes no rim.
+    assert_equal(add_rim(empty_mesh(), 0.002).vertex_count(), 0)
     # No normals: refused.
     with assert_raises():
         _ = add_rim(strip(0, 1, HIPS, normals=False), 0.002)
