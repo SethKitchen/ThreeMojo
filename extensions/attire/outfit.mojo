@@ -43,7 +43,9 @@ from extensions.attire.dye import dye_pattern, paint
 from extensions.attire.fabric import fabric, fabric_material, fold_depth
 from extensions.attire.garment import Garment
 from extensions.attire.cowl import hang_cowl, head_cowl
+from extensions.attire.band import belt_band
 from extensions.attire.kinds import (
+    BANDED,
     COWLED,
     SHOD,
     SKIRTED,
@@ -234,6 +236,10 @@ def dress_pieces(
         faces.append(outer_faces(frame, shell, Float32(cloth.thickness.value)))
         places.append(shell^)
         var hide = mine.copy()
+        # A band is drawn over the garments under it, so it hides none of
+        # them: they show round it whole.
+        if garment.form == BANDED:
+            hide = List[Float32](length=count, fill=0)
         if garment.form == SKIRTED:
             for v in range(count):
                 if legs[v] and frame.points[v].y < clear:
@@ -247,6 +253,7 @@ def dress_pieces(
         pieces.append(BufferGeometry())
         shells.append(BufferGeometry())
     var nothing = List[Float32](length=count, fill=0)
+    var everything = List[Float32](length=count, fill=1)
     # Each skirt hangs over the skirts under it, from the skin out. A boot
     # closes each foot in a last.
     var skirts = List[SkirtEnvelope]()
@@ -272,6 +279,13 @@ def dress_pieces(
         if garment.form == SHOD:
             feet = foot_lasts(whole, person.rig)
             whole = shoe(whole, feet, person.rig)
+        if garment.form == BANDED:
+            whole = belt_band(
+                garment_piece(skin, places[i], everything, nothing),
+                whole,
+                person.rig,
+                Float32(fabric(garment.fabric).thickness.value),
+            )
         var head = List[FootLast]()
         if garment.form == COWLED:
             head = head_cowl(whole, person.rig)
@@ -302,6 +316,10 @@ def dress_pieces(
         for v in range(count):
             over_skin[v] = max(over_skin[v], hides[i][v])
         ref garment = outfit.garments[order[i]]
+        # A band is drawn whole, over what lies under it.
+        if garment.form == BANDED:
+            pieces[order[i]] = shells[order[i]].clone()
+            continue
         var piece = hang_skirt(
             garment_piece(skin, places[i], values[i], over),
             skirts[i],

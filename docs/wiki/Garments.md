@@ -71,6 +71,17 @@ A shell made from the skin follows each thigh and each toe. A skirt and a boot d
 | `SKIRTED` | hangs below the hips as one tube round both legs | a tunic, a hauberk, a surcoat, a fauld |
 | `SHOD` | closes each foot in a smooth last | boots, sabatons |
 | `COWLED` | closes the head in a loose cowl, open at the face | a hood |
+| `BANDED` | is drawn as a taut band round the body, level at its top and its bottom | a belt |
+
+### Bands
+
+A belt is narrower than the ramp a hem is cut across. So its cover stays near one half, and a cut along it came out ragged on a game's coarse skin. `extensions/attire/band.mojo` draws a `BANDED` garment as a lined band of leather 4 cm deep on the template.
+
+1. The band's middle is the mean height of the piece the garment's cover cuts.
+2. The garment's whole shell is sliced at three rows across the band, with the arms left out. Each slice is closed as a convex hull, so the band spans the hollow of the back, as a belt drawn taut does.
+3. Each side of each row stands on the hull, and takes the skin weights of the shell vertex nearest it.
+
+A band hides nothing under it: the tunic under a belt is drawn whole.
 
 ### Skirts
 

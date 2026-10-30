@@ -6,13 +6,15 @@
 """Tests for outfits, and for dressing a game humanoid in one."""
 
 from core.assets import Assets
-from core.buffer_geometry import COLOR, NORMAL, UV, BufferGeometry
+from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from core.object3d import NodeId
 from core.scene import Scene
 from extensions.attire.dye import DYE
+from extensions.attire.band import BAND_HEIGHT
 from extensions.attire.cover import Cover, cover_of
 from extensions.attire.garment import (
     Garment,
+    belt,
     boots,
     coif,
     cuirass,
@@ -231,6 +233,33 @@ def test_a_longer_skirt_over_a_skirt_hides_it() raises:
     var shown = _pieces(scene, assets, person, under_short)[0].triangle_count()
     var hidden = _pieces(scene, assets, person, under_long)[0].triangle_count()
     assert_true(shown > hidden)
+
+
+def test_a_belt_is_a_level_band_over_the_tunic() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    var belted = Outfit()
+    belted.add(tunic())
+    belted.add(belt())
+    var pieces = _pieces(scene, assets, person, belted)
+    # The belt's top and bottom edges are level: it spans no more than
+    # its own depth.
+    ref placed = pieces[1].attribute_view(String(POSITION))
+    var low = Float32(1e9)
+    var high = Float32(-1e9)
+    for v in range(placed.count()):
+        low = min(low, placed.vector3(v).y)
+        high = max(high, placed.vector3(v).y)
+    assert_true(placed.count() > 0)
+    assert_true(high - low <= BAND_HEIGHT * 1.01)
+    # The tunic shows whole under it.
+    var alone = Outfit()
+    alone.add(tunic())
+    assert_equal(
+        pieces[0].triangle_count(),
+        _pieces(scene, assets, person, alone)[0].triangle_count(),
+    )
 
 
 def test_a_garment_hidden_wholly_draws_nothing() raises:

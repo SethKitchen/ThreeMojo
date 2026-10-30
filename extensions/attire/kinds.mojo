@@ -549,7 +549,7 @@ struct Form(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is a named form.
 
         Returns:
-            True for `FITTED`, `SKIRTED`, `SHOD` and `COWLED`.
+            True for `FITTED`, `SKIRTED`, `SHOD`, `COWLED` and `BANDED`.
         """
         return ordinal_valid(self.value, FORM_COUNT - 1)
 
@@ -565,13 +565,16 @@ boot or a shoe."""
 comptime COWLED = Form(3)
 """Above the neck it closes round the head in one loose cowl, open at the
 face: a hood."""
-comptime FORM_COUNT = 4
+comptime BANDED = Form(4)
+"""It is drawn as a taut band round the body where its cover lies, level
+at its top and its bottom: a belt."""
+comptime FORM_COUNT = 5
 """How many forms there are."""
 
 
 def _form_names() -> List[String]:
     """Return the form names, in order."""
-    return ["fitted", "skirted", "shod", "cowled"]
+    return ["fitted", "skirted", "shod", "cowled", "banded"]
 
 
 def form_label(form: Form) -> String:
