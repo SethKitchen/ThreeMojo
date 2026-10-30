@@ -41,6 +41,7 @@ from extensions.humanoid.rig.sword_clips import (
     light_three_clip,
     light_two_clip,
     mystic_clip,
+    plunge_clip,
     ready_clip,
     rising_edge_clip,
     stagger_clip,
@@ -61,6 +62,7 @@ from extensions.village.combat import (
     LIGHT_TWO,
     MOVES,
     MYSTIC_ARTE,
+    PLUNGE,
     RISING_EDGE,
     STAGGER,
     TEMPEST,
@@ -143,6 +145,9 @@ struct Arms(Movable):
         )
         self.moves[MYSTIC_ARTE.value] = body.mixer.add(
             AnimationAction(mystic_clip(bones, rig))
+        )
+        self.moves[PLUNGE.value] = body.mixer.add(
+            AnimationAction(plunge_clip(bones, rig))
         )
         self.moves[BURST.value] = body.mixer.add(
             AnimationAction(burst_clip(bones, rig))

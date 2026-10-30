@@ -41,6 +41,7 @@ from extensions.humanoid.rig.sword_clips import (
     mirrored,
     mystic_clip,
     mystic_twist,
+    plunge_clip,
     ready_clip,
     rising_edge_clip,
     stagger_clip,
@@ -120,6 +121,7 @@ def test_each_clip_lasts_as_long_as_its_move() raises:
         "tempest",
         "fang",
         "mystic",
+        "plunge",
         "burst",
         "cast",
         "dodge",
@@ -138,6 +140,7 @@ def test_each_clip_lasts_as_long_as_its_move() raises:
         1.06,
         0.65,
         2.1,
+        0.75,
         1.44,
         0.8,
         0.48,
@@ -156,6 +159,7 @@ def test_each_clip_lasts_as_long_as_its_move() raises:
     clips.append(tempest_clip(bones, rig))
     clips.append(fang_clip(bones, rig))
     clips.append(mystic_clip(bones, rig))
+    clips.append(plunge_clip(bones, rig))
     clips.append(burst_clip(bones, rig))
     clips.append(cast_clip(bones, rig))
     clips.append(dodge_clip(bones, rig))

@@ -10,7 +10,8 @@ of a blow.
 body's carrier, so it turns with the body. A ribbon is the arc that a
 blade's outer third sweeps, as the move's clip swings it: across at the
 chest for the light cuts, down from over the head for the third, high to
-low for the heavy cut, low to high for the rising edge, straight ahead
+low for the heavy cut, low to high for the rising edge, down the front
+to the ground for the plunge, straight ahead
 at the chest for a burst attack's thrust, and the last 150 degrees of the
 tempest's turn, which turns with the body as the clip spins it. The
 mystic arte's spins leave a wide ring that turns with the body too. A
@@ -26,6 +27,9 @@ away over `TRAIL_LINGER`.
 
 **Waves.** `draw_wave` adds a demon fang's wave to the frame: an arch of
 light across the way it runs, standing on the ground.
+
+**Rings.** `draw_ring` adds a ring of light on the ground, as a plunge
+slams it.
 
 **Stars.** `glow_star` adds a star of light round a point of the frame,
 as the red glow of a foe that winds up a burst attack.
@@ -48,6 +52,7 @@ from extensions.village.combat import (
     LIGHT_THREE,
     LIGHT_TWO,
     MOVES,
+    PLUNGE,
     RISING_EDGE,
     TEMPEST,
     CombatMove,
@@ -92,6 +97,8 @@ comptime MYSTIC_TRAIL = Vector3(170, 140, 60)
 wide."""
 comptime BURST_TRAIL = Vector3(255, 40, 30)
 """The light of a burst attack: its trail, and its glow as it winds up."""
+comptime RING_INNER = Float32(0.7)
+"""A plunge's ring's inner radius, as a share of its outer one."""
 comptime STAR_RAYS = 8
 """How many rays a star of light has."""
 
@@ -194,6 +201,17 @@ def trail_points(move: CombatMove, scale: Float32) -> List[Vector3]:
             ahead,
             -20 * degree,
             125 * degree,
+            inner,
+            outer,
+        )
+    if move == PLUNGE:
+        # Down the front, from over the head to the ground.
+        return arc_points(
+            Vector3(-0.15 * s, 0.3 * s, 0.1 * s),
+            Vector3(0, 1, 0),
+            ahead,
+            -20 * degree,
+            150 * degree,
             inner,
             outer,
         )
@@ -574,6 +592,41 @@ def draw_wave(
     var light = List[Float32]()
     for k in range(steps + 1):  # pragma: no branch
         light.append(sin(Float32(pi) * Float32(k) / Float32(steps)) * glow)
+    glow_ribbon(frame, camera, look, corners, light, PLAYER_TRAIL)
+
+
+def draw_ring(
+    mut frame: Framebuffer,
+    camera: PerspectiveCamera,
+    look: Vector3,
+    center: Vector3,
+    radius: Float32,
+    glow: Float32,
+) raises:
+    """Add a ring of light on the ground to a frame, as a plunge slams it.
+
+    Args:
+        frame: The frame, the camera's size.
+        camera: The camera the frame was drawn from.
+        look: The way the camera looks, of length one.
+        center: The ring's middle, on the ground.
+        radius: Its outer radius, in meters; its inner one is
+            `RING_INNER` of it.
+        glow: How bright it is, from 0 to 1.
+
+    Raises:
+        Error: If the camera or the frame's size is not valid.
+    """
+    var corners = arc_points(
+        center,
+        Vector3(1, 0, 0),
+        Vector3(0, 0, 1),
+        0,
+        Float32(2 * pi),
+        radius * RING_INNER,
+        radius,
+    )
+    var light = List[Float32](length=len(corners) // 2, fill=glow)
     glow_ribbon(frame, camera, look, corners, light, PLAYER_TRAIL)
 
 

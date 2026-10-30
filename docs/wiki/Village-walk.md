@@ -26,6 +26,7 @@ The window is 1920 by 1080 pixels by default. Give a width and a height for a di
 | Use | The west button | `E` |
 | Light attack | The right shoulder | `F` |
 | Heavy attack | The north button | `G` |
+| Plunge, in the air | Jump, and press the north button | Jump, and press `G` |
 | Rising edge, tempest and demon fang | Hold the left trigger, and press the right shoulder, the north or the west button | `Z`, `X` and `B` |
 | Mystic arte, Over Limit | Hold the left trigger, and press the right shoulder and the north button together | `M` |
 | The companion's boost attack | Hold the left trigger, and press the left shoulder | `Q` |

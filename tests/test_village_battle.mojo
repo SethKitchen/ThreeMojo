@@ -70,6 +70,7 @@ from extensions.village.combat import (
     LOW_STANCE,
     MID_STANCE,
     MYSTIC_ARTE,
+    PLUNGE,
     RISING_EDGE,
     Blow,
     Struck,
@@ -1055,6 +1056,23 @@ def test_a_foe_that_falls_below_its_rage_rages() raises:
     arena.run(0.5)
     assert_true(arena.battle.foes[0].fighter.raging())
     assert_true(holds_text(popup_texts(arena.battle), "RAGE"))
+
+
+def test_a_heavy_attack_in_the_air_plunges() raises:
+    var arena = Arena(arena_parameters(0, 1))
+    var jump = no_input()
+    jump.jump = True
+    arena.tick(jump)
+    arena.tick(no_input())
+    assert_false(arena.player.grounded)
+    var heavy = no_input()
+    heavy.heavy = True
+    arena.tick(heavy)
+    assert_true(arena.battle.fighter.move == PLUNGE)
+    assert_true(arena.player.velocity.y < -10 or arena.player.grounded)
+    arena.run(0.5)
+    assert_true(arena.player.grounded)
+    assert_true(holds_text(popup_texts(arena.battle), "70"))
 
 
 def test_over_limit_spends_itself_on_a_mystic_arte() raises:

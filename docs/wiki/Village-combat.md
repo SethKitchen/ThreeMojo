@@ -14,6 +14,7 @@ The rules come from two games. Ki, stances, the ki pulse, burst attacks and rage
 |---|---|---|
 | Light attack | The right shoulder | `F` |
 | Heavy attack | The north button | `G` |
+| Plunge, in the air | Jump, and press the north button | Jump, and press `G` |
 | Rising edge, an arte | Hold the left trigger, and press the right shoulder | `Z` |
 | Tempest, an arte | Hold the left trigger, and press the north button | `X` |
 | Demon fang, an arte | Hold the left trigger, and press the west button | `B` |
@@ -60,6 +61,10 @@ A **ki pulse** gets back the ki that a swing spent. Press the guard button just 
 An arte is a strong move that spends points of the arte gauge, not ki. The gauge holds 5 points. It fills by half a point a second, and by 0.2 points for each blow that lands. The rising edge costs 2 points, and throws the foe into the air. The tempest costs 3 points. It spins the player round, and strikes all round four times.
 
 The demon fang costs 1 point. Its cut along the ground sends a wave of force that runs 12 meters at 14 meters a second. The wave strikes each target it passes over once, for 45 damage. It shows as an arch of light across the way it runs.
+
+### The plunge
+
+A heavy attack in the air is a **plunge**, as in the air combos of Tales of Arise. The player dives at 14 meters a second, and cuts down to the ground. The cut strikes everything within 2.6 meters, all round, for 70 damage. A ring of light spreads over the ground as it strikes. The plunge has armor until it strikes, and it counters a burst attack as a heavy attack does. Throw a foe up with the rising edge, jump after it, cut, and plunge to end the combo.
 
 ### The lock and the heal
 
@@ -117,6 +122,7 @@ The three light attacks chain. A press during a move waits for the chain point: 
 | `TEMPEST` | 0.18 s | 0.48 s | 0.40 s | 2.6 m | 360 degrees | 27, four times | 7 | | 3 |
 | `DEMON_FANG` | 0.20 s | 0.10 s | 0.35 s | A wave | | 45 | 10 | | 1 |
 | `MYSTIC_ARTE` | 0.50 s | 1.00 s | 0.60 s | 4.5 m | 360 degrees | 70, six times | 20 | | Over Limit |
+| `PLUNGE` | 0.15 s | 0.15 s | 0.45 s | 2.6 m | 360 degrees | 70 | 25 | 18 | |
 | `BITE` | 0.35 s | 0.20 s | 0.45 s | 1.4 m | 70 degrees | 40 | 12 | | |
 | `BURST` | 0.70 s | 0.14 s | 0.60 s | 2.8 m | 70 degrees | 120 | 45 | 20 | |
 | `CAST` | 0.35 s | 0.10 s | 0.35 s | A bolt | | 28 | 10 | | |
@@ -191,7 +197,9 @@ The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these o
 
 The note over the prompt names each arte as it starts, and each new stance. It says `OVER LIMIT!` when Over Limit begins, and `BOOST ATTACK!` when the companion makes one. The companion's bolts are blue stars, and her boost attack's is gold. A blow that lands bursts in sparks.
 
-A swing leaves a trail of light: white for the player, gold Over Limit, and orange for a bandit. A burst attack's thrust leaves a red trail. The mystic arte's spins leave a wide gold ring. Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade, and fades behind it. After the active part, it fades away in 0.15 seconds.
+A swing leaves a trail of light: white for the player, gold Over Limit, and orange for a bandit. A burst attack's thrust leaves a red trail. The mystic arte's spins leave a wide gold ring. A plunge rings the ground with light where it lands.
+
+Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade, and fades behind it. After the active part, it fades away in 0.15 seconds.
 
 The game's renderer draws every surface opaque, so `draw_battle` adds the trails to the finished frame. See `extensions/village/slashes.mojo`.
 
@@ -225,6 +233,7 @@ The module is `extensions/humanoid/rig/sword_clips.mojo`. Each clip is worked ou
 | `fang_clip` | 0.65 | A crouch with the sword low behind, and a cut along the ground and up |
 | `mystic_clip` | 2.1 | The sword raised to the sky, two whole turns of the body with the sword arm out, and a cut down |
 | `cast_clip` | 0.8 | The sword raised, and pointed at the foe with the free hand beside it |
+| `plunge_clip` | 0.75 | The sword raised over the head, and a cut down to the ground in a deep crouch |
 | `burst_clip` | 1.44 | A long coil with the sword drawn back at the hip, and a lunge that thrusts it straight ahead |
 | `tempest_clip` | 1.06 | The sword arm out, and a whole turn of the body |
 | `dodge_clip` | 0.48 | A low, quick crouch |
@@ -256,4 +265,4 @@ The rig faces plus z, and calls the side on plus x its right. A camera behind th
 - The foes do not attack the companion, and she is never hurt.
 - Only the player has artes. A bandit makes light attacks, heavy attacks and burst attacks only.
 - A trail is a flat ribbon, not the blade's exact path. It is added over the frame, so a wall does not hide it.
-- A fighter in the air falls as it attacks, slowly. There are no attacks made for the air.
+- A fighter in the air hangs there while its attack strikes. The plunge is the one attack made for the air.

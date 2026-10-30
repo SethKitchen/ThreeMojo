@@ -25,7 +25,9 @@ step and pose:
    at `GUARD_PACE` of the stick while guarding, and faces what they lock
    on. An attack carries the player along their heading, and turns them
    toward what they aim at through its start-up: the locked target, else
-   the nearest within `AIM_RANGE` before them, else the stick. A dodge
+   the nearest within `AIM_RANGE` before them, else the stick. In the
+   air, the heavy attack's button makes the plunge, which dives at
+   `PLUNGE_SPEED`. A dodge
    goes the way of the stick, or back. The push of a blow carries the
    player too, and fades at `SHOVE_FADE`.
 3. **The foes think and move**, and so does the companion: see
@@ -48,7 +50,8 @@ step and pose:
    bursts in sparks. A foe that begins to rage shows `RAGE`. Each
    swing's trail is measured for the display: see
    `extensions.village.slashes`. Over Limit, the player's trails are
-   gold, and the note says when it begins. The sword is drawn while a bandit within `ENGAGE`
+   gold, and the note says when it begins. A plunge's landing rings the
+   ground with light. The sword is drawn while a bandit within `ENGAGE`
    fights, or the player fights, and is sheathed `CALM_SECONDS` after.
 6. **The weight of a blow.** A strong blow stops the whole fight for
    `HIT_STOP`, as action games freeze a frame on a heavy hit, and shakes
@@ -98,6 +101,7 @@ from extensions.village.combat import (
     MID_STANCE,
     MYSTIC_ARTE,
     PARRIED,
+    PLUNGE,
     PERFECT_DODGE,
     RISING_EDGE,
     TEMPEST,
@@ -264,6 +268,8 @@ comptime HEAL_SHARE = Float32(0.3)
 """The share of the player's health that a herb heals."""
 comptime HEAL_TEXT = Rgb(120, 230, 120)
 """The color of what a herb or the companion heals."""
+comptime PLUNGE_SPEED = Float32(14)
+"""How fast a plunge dives, in meters a second."""
 comptime BOLT_SPEED = Float32(16)
 """How fast a companion's bolt flies, in meters a second."""
 comptime BOLT_REACH = Float32(0.5)
@@ -1100,7 +1106,8 @@ struct Battle(Movable):
             _ = self.fighter.press_light()
             fought = True
         elif presses.heavy:
-            _ = self.fighter.request(HEAVY)
+            var heavy = HEAVY if player.grounded else PLUNGE
+            _ = self.fighter.request(heavy)
             fought = True
         if presses.dodge and self.drawn:
             _ = self.fighter.request(DODGE)
@@ -1165,9 +1172,12 @@ struct Battle(Movable):
                     Angle(TRACK_TURN * seconds, RADIAN),
                 )
             way = _ahead(player.heading)
-            # An attack in the air hangs there while it strikes.
+            # An attack in the air hangs there while it strikes; a plunge
+            # dives.
             if not player.grounded and self.fighter.swing():
                 player.velocity.y = max(player.velocity.y, Float32(0))
+            if move == PLUNGE and not player.grounded:
+                player.velocity.y = -PLUNGE_SPEED
         var speed = self.fighter.drive().to(METER_PER_SECOND)
         player.drive(way * speed + self.shove, delta, terrain, blocking)
 

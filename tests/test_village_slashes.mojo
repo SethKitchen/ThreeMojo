@@ -19,6 +19,7 @@ from extensions.village.combat import (
     LIGHT_THREE,
     LIGHT_TWO,
     MYSTIC_ARTE,
+    PLUNGE,
     RISING_EDGE,
     TEMPEST,
     CombatMove,
@@ -33,6 +34,7 @@ from extensions.village.slashes import (
     Sparks,
     Trail,
     arc_points,
+    draw_ring,
     draw_wave,
     glow_ribbon,
     glow_star,
@@ -86,6 +88,7 @@ def test_a_ribbon_sweeps_its_arc() raises:
         DEMON_FANG,
         BURST,
         MYSTIC_ARTE,
+        PLUNGE,
     ]
     for move in moves:
         assert_true(len(trail_points(move, 1)) > 0)
@@ -281,6 +284,14 @@ def test_a_wave_stands_as_an_arch_of_light() raises:
         1,
     )
     assert_equal(_light(behind), 0)
+    # A ring on the ground before the camera adds light; a dark one adds
+    # none.
+    var ring = Framebuffer(64, 64, Color(0, 0, 0))
+    draw_ring(ring, _camera(Vector3(0, 1.5, -5)), look, Vector3(0, 0, 0), 2, 1)
+    assert_true(_light(ring) > 0)
+    var dark = Framebuffer(64, 64, Color(0, 0, 0))
+    draw_ring(dark, _camera(Vector3(0, 1.5, -5)), look, Vector3(0, 0, 0), 2, 0)
+    assert_equal(_light(dark), 0)
     # A ribbon of one step has no width to draw.
     var one = Framebuffer(64, 64, Color(0, 0, 0))
     var corners: List[Vector3] = [Vector3(0, 0, 0), Vector3(0, 1, 0)]

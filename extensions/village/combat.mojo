@@ -33,6 +33,10 @@ that a swing reaches with `reaches`, and gives each one the blow that
   into the air. The tempest spins, and strikes all round four times. The
   demon fang sends a wave of force along the ground: its cut strikes
   nothing, and the wave carries its `blow`.
+- **The plunge, as in the air combos of Tales of Arise.** A heavy attack
+  in the air is a plunge: the fighter dives, and slams the ground all
+  round. It has armor until it strikes, and it counters a burst attack
+  as a heavy attack does.
 - **Dodges, as in Tales of Arise.** No blow can hit a dodge from
   `DODGE_SAFE_FROM` to `DODGE_SAFE_TO` seconds into it. A blow that
   reaches a dodge before `DODGE_SAFE_FROM + PERFECT_WINDOW` is a perfect
@@ -86,6 +90,7 @@ part strikes. The times are for the middle stance:
 | `TEMPEST` | 0.18 s | 0.48 s | 0.40 s | 2.6 m | 360 degrees | 27, four times | 7 | | 3 |
 | `DEMON_FANG` | 0.20 s | 0.10 s | 0.35 s | A wave | | 45 | 10 | | 1 |
 | `MYSTIC_ARTE` | 0.50 s | 1.00 s | 0.60 s | 4.5 m | 360 degrees | 70, six times | 20 | | Over Limit |
+| `PLUNGE` | 0.15 s | 0.15 s | 0.45 s | 2.6 m | 360 degrees | 70 | 25 | 18 | |
 | `BITE` | 0.35 s | 0.20 s | 0.45 s | 1.4 m | 70 degrees | 40 | 12 | | |
 | `BURST` | 0.70 s | 0.14 s | 0.60 s | 2.8 m | 70 degrees | 120 | 45 | 20 | |
 | `CAST` | 0.35 s | 0.10 s | 0.35 s | A bolt | | 28 | 10 | | |
@@ -111,7 +116,7 @@ from units.si import (
     Velocity,
 )
 
-comptime MOVES = 16
+comptime MOVES = 17
 """How many moves there are, `FREE` among them."""
 comptime DODGE_SAFE_FROM = Float32(0.02)
 """How far into a dodge no blow can hit it any more, in seconds."""
@@ -211,22 +216,25 @@ comptime MYSTIC_ARTE = CombatMove(8)
 """The strongest arte, as in Tales of Arise: a sword raised to the sky,
 and two spins that strike all round six times. Only a fighter Over Limit
 can make it, and it spends what is left of Over Limit."""
-comptime BITE = CombatMove(9)
+comptime PLUNGE = CombatMove(9)
+"""A heavy attack in the air: a dive, and a cut that slams the ground all
+round."""
+comptime BITE = CombatMove(10)
 """A beast's attack: a crouch, and a leap forward that bites."""
-comptime BURST = CombatMove(10)
+comptime BURST = CombatMove(11)
 """A foe's burst attack: a long wind-up that glows red, and a lunging
 thrust that no guard stops."""
-comptime CAST = CombatMove(11)
+comptime CAST = CombatMove(12)
 """A companion's spell: the sword pointed at the foe, which sends a bolt
 of light. The cast strikes nothing itself: the game sends the bolt."""
-comptime DODGE = CombatMove(12)
+comptime DODGE = CombatMove(13)
 """A quick step, which no blow can hit for a moment."""
-comptime FLINCH = CombatMove(13)
+comptime FLINCH = CombatMove(14)
 """A blow landed: the fighter reels for a moment."""
-comptime STAGGER = CombatMove(14)
+comptime STAGGER = CombatMove(15)
 """The fighter's ki ran out: it stands open, and blows on it are
 critical."""
-comptime FALL = CombatMove(15)
+comptime FALL = CombatMove(16)
 """The fighter is defeated: it falls, and it stays down."""
 
 
@@ -309,7 +317,7 @@ def move_name(move: CombatMove) raises -> String:
         Error: If the move is not one.
     """
     if not move.is_valid():
-        raise Error("A combat move must be one of the sixteen")
+        raise Error("A combat move must be one of the seventeen")
     var names: List[String] = [
         "FREE",
         "LIGHT 1",
@@ -320,6 +328,7 @@ def move_name(move: CombatMove) raises -> String:
         "TEMPEST",
         "DEMON FANG",
         "MYSTIC ARTE",
+        "PLUNGE",
         "BITE",
         "BURST",
         "CAST",
@@ -371,8 +380,8 @@ def is_attack(move: CombatMove) -> Bool:
         move: The move.
 
     Returns:
-        True for the light and the heavy attacks, the artes, the bite, the
-        burst attack and the cast.
+        True for the light and the heavy attacks, the artes, the plunge,
+        the bite, the burst attack and the cast.
     """
     return move.value >= LIGHT_ONE.value and move.value <= CAST.value
 
@@ -523,6 +532,8 @@ def move_data(move: CombatMove) raises -> MoveData:
         return _data(0.2, 0.1, 0.35, 0, 0, 45, 10, 0, 1, 0.1, 0, 2)
     if move == MYSTIC_ARTE:
         return _data(0.5, 1.0, 0.6, 4.5, 360, 70, 20, 0, 0, 0, 6, 3, 2)
+    if move == PLUNGE:
+        return _data(0.15, 0.15, 0.45, 2.6, 360, 70, 25, 18, 0, 0, 1, 4)
     if move == BITE:
         return _data(0.35, 0.2, 0.45, 1.4, 70, 40, 12, 0, 0, 2.4, 1, 2.5)
     if move == BURST:
@@ -539,7 +550,7 @@ def move_data(move: CombatMove) raises -> MoveData:
         return _data(0, 0, 2)
     if move == FREE:
         return _data(0, 0, 0)
-    raise Error("A combat move must be one of the sixteen")
+    raise Error("A combat move must be one of the seventeen")
 
 
 def stance_power(stance: CombatStance) -> Float32:
@@ -1051,16 +1062,17 @@ struct Fighter(Copyable, Movable):
         reel.
 
         Returns:
-            True Over Limit; else True for a heavy attack, a tempest or a
-            burst attack, until its active part ends.
+            True Over Limit; else True for a heavy attack, a plunge, a
+            tempest or a burst attack, until its active part ends.
 
         Raises:
             Error: Never: the move is one.
         """
         if self.over > 0:
             return True
-        var heavy = self.move == HEAVY or self.move == TEMPEST
-        return (heavy or self.move == BURST) and self.clock < self.active_end()
+        var heavy = self.move == HEAVY or self.move == PLUNGE
+        var spin = self.move == TEMPEST or self.move == BURST
+        return (heavy or spin) and self.clock < self.active_end()
 
     def bursting(self) raises -> Bool:
         """Return whether the fighter winds up a burst attack, and glows
@@ -1422,8 +1434,8 @@ struct Fighter(Copyable, Movable):
             `COUNTER_BONUS` for a counter and `OVER_BONUS` Over Limit; its
             ki damage times the might and the power; its push and its
             throw. A heavy attack's blow can finish. A burst attack's blow
-            lands through a guard. A heavy attack's or an arte's blow
-            counters a burst attack.
+            lands through a guard. A heavy attack's, a plunge's or an
+            arte's blow counters a burst attack.
 
         Raises:
             Error: Never: the move is one.
@@ -1447,7 +1459,7 @@ struct Fighter(Copyable, Movable):
             data.launch,
             self.move == HEAVY,
             self.move == BURST,
-            self.move == HEAVY or is_arte(self.move),
+            self.move == HEAVY or self.move == PLUNGE or is_arte(self.move),
         )
 
     def receive(mut self, blow: Blow, front: Bool) raises -> Struck:

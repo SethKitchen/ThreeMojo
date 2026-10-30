@@ -55,6 +55,7 @@ from extensions.village.combat import (
     PARRIED,
     PERFECT_ARTE,
     PERFECT_DODGE,
+    PLUNGE,
     PULSE_LATE,
     RAGE_PACE,
     RISING_EDGE,
@@ -130,9 +131,9 @@ def _blow(damage: Float32, ki: Float32) -> Blow:
 
 
 def test_each_kind_knows_its_values() raises:
-    for value in [-1, 16]:
+    for value in [-1, 17]:
         assert_false(CombatMove(value).is_valid())
-    for value in [0, 15]:
+    for value in [0, 16]:
         assert_true(CombatMove(value).is_valid())
     for value in [-1, 3]:
         assert_false(CombatStance(value).is_valid())
@@ -154,8 +155,9 @@ def test_moves_and_outcomes_have_names_for_the_display() raises:
     assert_equal(move_name(BURST), "BURST")
     assert_equal(move_name(MYSTIC_ARTE), "MYSTIC ARTE")
     assert_equal(move_name(CAST), "CAST")
-    with assert_raises(contains="sixteen"):
-        _ = move_name(CombatMove(16))
+    assert_equal(move_name(PLUNGE), "PLUNGE")
+    with assert_raises(contains="seventeen"):
+        _ = move_name(CombatMove(17))
     assert_equal(outcome_word(PERFECT_DODGE), "PERFECT DODGE")
     assert_equal(outcome_word(PARRIED), "PARRY")
     assert_equal(outcome_word(GUARD_BREAK), "GUARD BREAK")
@@ -174,6 +176,9 @@ def test_moves_are_sorted_into_attacks_artes_and_styles() raises:
     assert_true(is_attack(BITE))
     assert_true(is_attack(BURST))
     assert_true(is_attack(CAST))
+    assert_true(is_attack(PLUNGE))
+    assert_false(is_arte(PLUNGE))
+    assert_false(styled(PLUNGE))
     assert_false(is_attack(DODGE))
     assert_true(is_arte(RISING_EDGE))
     assert_true(is_arte(TEMPEST))
@@ -237,8 +242,11 @@ def test_each_move_has_its_times_and_its_strength() raises:
     var cast = move_data(CAST)
     assert_equal(cast.hits, 0)
     assert_almost_equal(cast.damage, 28, atol=1e-6)
-    with assert_raises(contains="sixteen"):
-        _ = move_data(CombatMove(16))
+    var plunge = move_data(PLUNGE)
+    assert_almost_equal(plunge.arc.to(DEGREE), 360, atol=1e-4)
+    assert_almost_equal(plunge.ki_cost, 18, atol=1e-6)
+    with assert_raises(contains="seventeen"):
+        _ = move_data(CombatMove(17))
 
 
 def test_each_stance_changes_strength_pace_cost_guard_and_step() raises:
@@ -627,6 +635,12 @@ def test_heavy_attacks_and_tempests_have_armor() raises:
     var t = _fighter()
     _ = t.request(TEMPEST)
     assert_true(t.armored())
+    # A plunge has armor, and its blow counters a burst.
+    var p = _fighter()
+    _ = p.request(PLUNGE)
+    assert_true(p.armored())
+    assert_true(p.blow().breaks_burst)
+    assert_false(p.blow().finish)
     var l = _fighter()
     _ = l.press_light()
     assert_false(l.armored())

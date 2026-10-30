@@ -8,9 +8,10 @@
 
 `draw_battle` draws seven things:
 
-1. **The trails** of the swings, the demon fang's waves and the
-   companion's bolts, as light added to the frame: see
-   `extensions.village.slashes`. A wave dims as it runs. A bolt is a blue
+1. **The trails** of the swings, the demon fang's waves, the
+   companion's bolts and a plunge's ring, as light added to the frame:
+   see `extensions.village.slashes`. A wave dims as it runs. A plunge's
+   ring spreads over the ground from the player's feet, and fades. A bolt is a blue
    star, or a gold one for a boost attack.
 2. **The player's gauges**, in the bottom right: the stance, the health,
    the ki, the limit gauge, and the arte gauge as a row of points. The
@@ -52,6 +53,7 @@ from extensions.village.combat import (
     LIMIT,
     MYSTIC_ARTE,
     OVER_SECONDS,
+    PLUNGE,
     HEAVY,
     HIGH_STANCE,
     LOW_STANCE,
@@ -65,6 +67,7 @@ from extensions.village.foes import POSTED
 from extensions.village.slashes import (
     BURST_TRAIL,
     OVER_TRAIL,
+    draw_ring,
     draw_wave,
     glow_star,
 )
@@ -81,7 +84,7 @@ from extensions.village.hud import (
 )
 from math.vector3 import Vector3
 from render.framebuffer import Framebuffer
-from units.si import SECOND
+from units.si import METER, SECOND
 
 comptime HEALTH = Rgb(96, 200, 90)
 """The color of a healthy fighter's health."""
@@ -103,6 +106,8 @@ comptime BOLT_COLOR = Vector3(140, 210, 255)
 """The light of a companion's bolt."""
 comptime BOLT_GLOW = Float32(0.3)
 """How far a bolt's star reaches, in meters."""
+comptime RING_SECONDS = Float32(0.3)
+"""How long a plunge's ring spreads and fades, in seconds."""
 comptime GLOW_REACH = Float32(0.35)
 """How far a burst attack's red glow reaches from the chest as it
 begins, in meters: half a man's shoulders."""
@@ -255,6 +260,28 @@ def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int):
     )
 
 
+def _ring(
+    mut frame: Framebuffer,
+    battle: Battle,
+    scene: Scene,
+    camera: PerspectiveCamera,
+    look: Vector3,
+) raises:
+    """Ring the ground with light as the player's plunge strikes: it spreads
+    to the plunge's reach over `RING_SECONDS`, and fades."""
+    ref f = battle.fighter
+    if f.move != PLUNGE:
+        return
+    var data = move_data(PLUNGE)
+    var share = (f.clock - data.startup.to(SECOND)) / RING_SECONDS
+    if share < 0 or share > 1:
+        return
+    var feet = scene.world_matrix(battle.trail.nodes[PLUNGE.value].value())
+    var at = feet.transform_point(Vector3(0, 0.05, 0))
+    var radius = data.reach.to(METER) * (0.3 + 0.7 * share)
+    draw_ring(frame, camera, look, at, radius, 1 - share)
+
+
 def _boost(mut frame: Framebuffer, battle: Battle, scale: Int):
     """Draw the companion's boost gauge, in the bottom left."""
     for k in range(len(battle.allies)):
@@ -379,6 +406,7 @@ def draw_battle(
         var reach = max(Float32(3), abs(top.y - center.y))
         var color = OVER_TRAIL if bolt.boosted else BOLT_COLOR
         glow_star(frame, Vector3(center.x, center.y, 1), reach, color)
+    _ring(frame, battle, scene, camera, look)
     _gauges(frame, battle, scale)
     _boost(frame, battle, scale)
     ref f = battle.fighter

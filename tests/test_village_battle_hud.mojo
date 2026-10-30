@@ -23,6 +23,7 @@ from extensions.village.combat import (
     LOW_STANCE,
     MID_STANCE,
     MYSTIC_ARTE,
+    PLUNGE,
     STAGGER,
 )
 from extensions.village.foes import CIRCLING, POSTED
@@ -204,6 +205,19 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     var named = _frame()
     draw_battle(named, arena.battle, arena.scene, away, ahead)
     assert_true(_changed(named) > _changed(after))
+    # A plunge rings the ground as it strikes, and not before or after.
+    arena.battle.fighter.move = PLUNGE
+    arena.battle.fighter.clock = 0.1
+    var early = _frame()
+    draw_battle(early, arena.battle, arena.scene, camera, look)
+    arena.battle.fighter.clock = 0.2
+    var ringing = _frame()
+    draw_battle(ringing, arena.battle, arena.scene, camera, look)
+    arena.battle.fighter.clock = 0.5
+    var late = _frame()
+    draw_battle(late, arena.battle, arena.scene, camera, look)
+    assert_true(_changed(ringing) > _changed(early))
+    assert_equal(_changed(late), _changed(early))
 
 
 def test_the_companion_shows_her_bolts_and_her_gauge() raises:
