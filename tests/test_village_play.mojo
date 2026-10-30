@@ -501,6 +501,15 @@ def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:
     _ = game.tick(scene, assets, no_input(), step)
     assert_equal(game.gathering.satchel.count(CHEST), 8)
     assert_equal(game.battle.loot, 0)
+    # A herb eaten to heal comes out of it.
+    game.gathering.satchel.counts[HERBS.value] = 1
+    game.battle.fighter.health = 100
+    var heal = no_input()
+    heal.heal = True
+    _ = game.tick(scene, assets, heal, step)
+    assert_equal(game.gathering.satchel.count(HERBS), 0)
+    assert_equal(game.battle.eaten, 0)
+    assert_true(game.battle.fighter.health > 200)
     game.render(scene, assets)
     assert_equal(game.window.width, 64)
 

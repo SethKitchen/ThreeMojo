@@ -1,6 +1,6 @@
 # Village combat
 
-A player of the [Village walk](Village-walk) carries a sword, and can fight. Three bandits keep a camp on the meadow, and two straw dummies stand near the start for practice. The rules come from two games. Ki, stances and the ki pulse come from Nioh. Artes, perfect dodges and long combos come from Tales of Arise.
+A player of the [Village walk](Village-walk) carries a sword, and can fight. Three bandits keep a camp on the meadow, and two straw dummies stand near the start for practice. The rules come from two games. Ki, stances and the ki pulse come from Nioh. Artes, perfect dodges, Over Limit and long combos come from Tales of Arise.
 
 ![Seen from behind, a man in a red tunic locks on to a hooded bandit, guards, cuts, dodges, and spins with his sword](out/village_combat.png)
 
@@ -18,6 +18,8 @@ A player of the [Village walk](Village-walk) carries a sword, and can fight. Thr
 | Guard | Hold the left shoulder | Hold `V` |
 | Ki pulse | Press the left shoulder just after a swing | Press `V` just after a swing |
 | Lock on, or let go | Press the right stick | `T` |
+| Move the lock to the next target | While locked, flick the right stick left or right | While locked, press the left or the right arrow |
+| Eat herbs to heal | The back button | `H` |
 | High stance | Hold the left shoulder, and press the north button | `6` |
 | Middle stance | Hold the left shoulder, and press the west button | `7` |
 | Low stance | Hold the left shoulder, and press the south button | `8` |
@@ -49,6 +51,18 @@ A **ki pulse** gets back the ki that a swing spent. Press the guard button just 
 ### Artes
 
 An arte is a strong move that spends points of the arte gauge, not ki. The gauge holds 5 points. It fills by half a point a second, and by 0.2 points for each blow that lands. The rising edge costs 2 points, and throws the foe into the air. The tempest costs 3 points. It spins the player round, and strikes all round four times.
+
+### The lock and the heal
+
+The lock button locks the camera on the standing target nearest the middle of the view, within 16 meters. A radian off the middle counts as 6 meters further. While locked, the player faces the target, and the camera turns toward it. A flick of the look stick moves the lock to the target nearest in angle on that side. The lock lets go when its target falls, or goes further than 22 meters.
+
+The heal button eats one of the herbs that the player gathered: see [Village gathering](Village-gathering). A herb heals 30 percent of the player's health. A player at full health eats nothing.
+
+### Over Limit
+
+A limit gauge fills as the player fights well, as in Tales of Arise. Each blow that lands fills 4 points of 100. A blow that breaks a ki or a guard fills 10 more. A parry fills 15, and a perfect dodge 20.
+
+When the gauge is full, the player goes Over Limit for 10 seconds. The arte gauge fills, and artes cost nothing. No blow makes the player reel, and their blows do 25 percent more damage. The gauge does not fill while Over Limit lasts. Bandits and dummies never go Over Limit.
 
 ### Dodges
 
@@ -115,16 +129,16 @@ Two straw dummies stand east of the start. A dummy is a post with a crossbar, a 
 
 The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these over the frame:
 
-- **The gauges**, in the bottom right: the stance, the health, the ki, and the arte gauge as a row of points. The health turns red below a quarter.
+- **The gauges**, in the bottom right: the stance, the health, the ki, the limit gauge, and the arte gauge as a row of points. The health turns red below a quarter. Over Limit, the limit gauge turns gold, says `OVER LIMIT`, and empties as the time runs out.
 - **The combo**, such as `12 HITS`, on the right. It fades as the combo ends.
 - **Each bandit's health and ki**, over its head, while it fights or is hurt. A staggered bandit shows `BREAK`. A bandit that winds up a heavy attack shows a red `!`.
 - **A dummy's ki**, over its head, while its ki is not full.
 - **The lock's mark**: four gold dots round the locked target's chest.
 - **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY` or `CRITICAL`. They rise and fade.
 
-The note over the prompt names each arte as it starts, and each new stance. A blow that lands bursts in sparks.
+The note over the prompt names each arte as it starts, and each new stance. It says `OVER LIMIT!` when Over Limit begins. A blow that lands bursts in sparks.
 
-A swing leaves a trail of light, white for the player and orange for a bandit. Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade, and fades behind it. After the active part, it fades away in 0.15 seconds. The game's renderer draws every surface opaque, so `draw_battle` adds the trails to the finished frame. See `extensions/village/slashes.mojo`.
+A swing leaves a trail of light: white for the player, gold Over Limit, and orange for a bandit. Through the active part, the trail grows from where the swing starts to where the blade is. It is brightest at the blade, and fades behind it. After the active part, it fades away in 0.15 seconds. The game's renderer draws every surface opaque, so `draw_battle` adds the trails to the finished frame. See `extensions/village/slashes.mojo`.
 
 The sword hangs at the hip until the fight starts. It is in the hand while a bandit within 10 meters fights, or the player fights. It goes back to the hip 6 seconds later.
 

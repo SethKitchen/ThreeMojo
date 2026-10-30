@@ -136,6 +136,8 @@ struct MoveInput(ImplicitlyCopyable):
     var high: Bool
     var middle: Bool
     var low: Bool
+    # Whether the button that eats herbs to heal is held.
+    var heal: Bool
 
     def __init__(
         out self,
@@ -157,6 +159,7 @@ struct MoveInput(ImplicitlyCopyable):
         high: Bool = False,
         middle: Bool = False,
         low: Bool = False,
+        heal: Bool = False,
     ):
         """Hold one frame of input.
 
@@ -179,6 +182,7 @@ struct MoveInput(ImplicitlyCopyable):
             high: Whether the high stance's buttons are held.
             middle: Whether the middle stance's buttons are held.
             low: Whether the low stance's buttons are held.
+            heal: Whether the button that eats herbs to heal is held.
         """
         self.forward = forward
         self.right = right
@@ -197,6 +201,7 @@ struct MoveInput(ImplicitlyCopyable):
         self.high = high
         self.middle = middle
         self.low = low
+        self.heal = heal
 
 
 def no_input() -> MoveInput:

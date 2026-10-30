@@ -69,6 +69,8 @@ comptime PLAYER_TRAIL = Vector3(150, 205, 255)
 """The light the player's trails add, as sRGB bytes at the brightest."""
 comptime FOE_TRAIL = Vector3(255, 120, 50)
 """The light a bandit's trails add: the orange of a threat."""
+comptime OVER_TRAIL = Vector3(255, 215, 90)
+"""The light the player's trails add Over Limit: gold."""
 
 
 def _cross(a: Vector3, b: Vector3) -> Vector3:

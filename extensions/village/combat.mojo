@@ -39,6 +39,14 @@ that a swing reaches with `reaches`, and gives each one the blow that
   parries it: the guard loses no ki, and the attacker loses the blow's ki
   and reels. The player parries within `PARRY` seconds. Some moves have armor: a blow on them does its damage, and does
   not make the fighter reel.
+- **Over Limit, as in Tales of Arise.** A fighter's limit gauge fills
+  by `LIMIT_PER_HIT` for each blow that lands, `LIMIT_PER_BREAK` for each
+  that breaks a ki or a guard, `LIMIT_PER_PARRY` for each parry, and
+  `LIMIT_PER_PERFECT` for each perfect dodge, times its `limit_gain`.
+  When it reaches `LIMIT`, the fighter goes Over Limit for
+  `OVER_SECONDS`: its arte gauge fills, its artes cost nothing, no blow
+  makes it reel, and its blows do `OVER_BONUS` times their damage. The
+  gauge does not fill while it lasts.
 - **Combos.** The three light attacks chain. A press during a move waits,
   and its move starts at the move's chain point: after the active part
   and `CHAIN_SHARE` of the recovery. A dodge cuts the recovery of an
@@ -118,6 +126,20 @@ comptime COMBO_KEEP = Float32(2.5)
 """How long a combo lasts after its last blow, in seconds."""
 comptime ARTE_PER_HIT = Float32(0.2)
 """The points of the arte gauge that each blow that lands gives."""
+comptime LIMIT = Float32(100)
+"""How full the limit gauge must be to go Over Limit."""
+comptime LIMIT_PER_HIT = Float32(4)
+"""How much each blow that lands fills the limit gauge."""
+comptime LIMIT_PER_BREAK = Float32(10)
+"""How much more a blow that breaks a ki or a guard fills it."""
+comptime LIMIT_PER_PARRY = Float32(15)
+"""How much a parry fills it."""
+comptime LIMIT_PER_PERFECT = Float32(20)
+"""How much a perfect dodge fills it."""
+comptime OVER_SECONDS = Float32(10)
+"""How long Over Limit lasts, in seconds."""
+comptime OVER_BONUS = Float32(1.25)
+"""How many times its damage a blow does Over Limit."""
 comptime REACH_HEIGHT = Float32(1.8)
 """How far above or below a swing a fighter can be and still be hit, in
 meters."""
@@ -662,12 +684,16 @@ struct FighterParameters(ImplicitlyCopyable):
     # after the guard is raised it parries a blow.
     var guard_arc: Angle
     var parry: Duration
+    # How many times the gauge's gains fill the fighter's limit gauge;
+    # zero never goes Over Limit.
+    var limit_gain: Float32
 
     def __init__(out self):
         """Create the player: 500 health, 100 ki that comes back at 32 a
         second after 0.6 seconds, an arte gauge of 5 points that comes
         back at half a point a second, blows of the moves' own strength,
-        and a guard of 140 degrees that parries for `PARRY` seconds."""
+        a guard of 140 degrees that parries for `PARRY` seconds, and a
+        limit gauge that fills at the gains' own pace."""
         self.health = 500
         self.ki = 100
         self.ki_rate = Frequency(32.0, PER_SECOND)
@@ -677,6 +703,7 @@ struct FighterParameters(ImplicitlyCopyable):
         self.might = 1
         self.guard_arc = Angle(140.0, DEGREE)
         self.parry = Duration(PARRY, SECOND)
+        self.limit_gain = 1
 
     def check(self) raises:
         """Refuse a fighter that cannot fight.
@@ -686,7 +713,8 @@ struct FighterParameters(ImplicitlyCopyable):
                 and below a million; a rate or the arte gauge is negative
                 or not below a million; the delay is negative or not below
                 10,000 seconds; the guard's arc is not from 0 to 360
-                degrees; or the parry is not from 0 to 10 seconds.
+                degrees; the parry is not from 0 to 10 seconds; or the
+                limit gain is not from 0 to 100.
         """
         for value in [self.health, self.ki, self.might]:  # pragma: no branch
             if not (value > 0 and value < 1.0e6):
@@ -722,6 +750,12 @@ struct FighterParameters(ImplicitlyCopyable):
             0,
             10,
             "A fighter's parry must last from 0 to 10 seconds",
+        )
+        require_between(
+            self.limit_gain,
+            0,
+            100,
+            "A fighter's limit gain must be from 0 to 100",
         )
 
 
@@ -771,6 +805,10 @@ struct Fighter(Copyable, Movable):
     # Whether the fighter spent its last ki: it staggers when its move
     # ends.
     var winded: Bool
+    # How full the limit gauge is, and how long Over Limit still lasts, in
+    # seconds.
+    var limit: Float32
+    var over: Float32
 
     def __init__(out self, parameters: FighterParameters) raises:
         """Create a fighter with full health, ki and arte gauge, in the
@@ -807,6 +845,8 @@ struct Fighter(Copyable, Movable):
         self.combo = 0
         self.combo_age = 0
         self.winded = False
+        self.limit = 0
+        self.over = 0
 
     def free(self) -> Bool:
         """Return whether the fighter makes no move, so it can walk.
@@ -885,12 +925,14 @@ struct Fighter(Copyable, Movable):
         reel.
 
         Returns:
-            True for a heavy attack or a tempest, until its active part
-            ends.
+            True Over Limit; else True for a heavy attack or a tempest,
+            until its active part ends.
 
         Raises:
             Error: Never: the move is one.
         """
+        if self.over > 0:
+            return True
         return (
             self.move == HEAVY or self.move == TEMPEST
         ) and self.clock < self.active_end()
@@ -972,6 +1014,8 @@ struct Fighter(Copyable, Movable):
         if cost > 0 and self.ki <= 0:
             return False
         var points = move_data(move).arte_cost
+        if self.over > 0:
+            points = 0
         if self.arte < points:
             return False
         self._begin(move)
@@ -986,6 +1030,21 @@ struct Fighter(Copyable, Movable):
             self._begin(STAGGER)
             return
         self._begin(FREE)
+
+    def charge(mut self, amount: Float32):
+        """Fill the limit gauge, and go Over Limit when it is full.
+
+        Args:
+            amount: How much, before the fighter's `limit_gain`. Nothing
+                fills while Over Limit lasts.
+        """
+        if self.over > 0:
+            return
+        self.limit += amount * self.parameters.limit_gain
+        if self.limit >= LIMIT:
+            self.limit = 0
+            self.over = OVER_SECONDS
+            self.arte = self.parameters.arte_points
 
     def request(mut self, move: CombatMove) raises -> Bool:
         """Ask the fighter to make a move.
@@ -1137,6 +1196,7 @@ struct Fighter(Copyable, Movable):
         if self.combo_age > COMBO_KEEP:
             self.combo = 0
         self.counter = max(Float32(0), self.counter - seconds)
+        self.over = max(Float32(0), self.over - seconds)
         self.guard_age += seconds
 
     def swing(self) raises -> Optional[Swing]:
@@ -1197,6 +1257,8 @@ struct Fighter(Copyable, Movable):
         )
         if self.countering:
             damage *= COUNTER_BONUS
+        if self.over > 0:
+            damage *= OVER_BONUS
         return Blow(
             damage,
             data.ki_damage * self.parameters.might * power,
@@ -1236,10 +1298,12 @@ struct Fighter(Copyable, Movable):
                     self.parameters.arte_points, self.arte + PERFECT_ARTE
                 )
                 self.counter = COUNTER_SECONDS
+                self.charge(LIMIT_PER_PERFECT)
                 return Struck(PERFECT_DODGE, 0, 0)
             return Struck(EVADED, 0, 0)
         if self.guarding and front:
             if self.guard_age < self.parameters.parry.to(SECOND):
+                self.charge(LIMIT_PER_PARRY)
                 return Struck(PARRIED, 0, blow.ki_damage)
             var lost = blow.ki_damage * stance_guard(self.stance)
             self.ki -= lost
@@ -1274,9 +1338,10 @@ struct Fighter(Copyable, Movable):
     def landed(mut self, struck: Struck):
         """Learn what the fighter's blow did.
 
-        A blow that landed adds to the combo and fills the arte gauge. A
-        parried blow costs the attacker the ki that `struck` names, and
-        makes it reel, or stagger when its ki runs out.
+        A blow that landed adds to the combo and fills the arte gauge and
+        the limit gauge; one that broke a ki or a guard fills the limit
+        gauge more. A parried blow costs the attacker the ki that `struck`
+        names, and makes it reel, or stagger when its ki runs out.
 
         Args:
             struck: What the blow did.
@@ -1290,15 +1355,19 @@ struct Fighter(Copyable, Movable):
                 return
             self._begin(FLINCH)
             return
+        if struck.outcome == KI_BREAK or struck.outcome == GUARD_BREAK:
+            self.charge(LIMIT_PER_BREAK)
         if landed_blow(struck.outcome):
             self.combo += 1
             self.combo_age = 0
             self.arte = min(
                 self.parameters.arte_points, self.arte + ARTE_PER_HIT
             )
+            self.charge(LIMIT_PER_HIT)
 
     def revive(mut self):
-        """Stand the fighter up with full health, ki and arte gauge, free."""
+        """Stand the fighter up with full health, ki and arte gauge, an
+        empty limit gauge, free."""
         self.health = self.parameters.health
         self.ki = self.parameters.ki
         self.arte = self.parameters.arte_points
@@ -1306,4 +1375,6 @@ struct Fighter(Copyable, Movable):
         self.combo = 0
         self.counter = 0
         self.pulse_age = -1
+        self.limit = 0
+        self.over = 0
         self._begin(FREE)

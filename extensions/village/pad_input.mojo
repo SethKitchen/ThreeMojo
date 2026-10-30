@@ -23,6 +23,7 @@ a PlayStation controller play alike:
 | Guard, and a ki pulse | The left shoulder | `V` |
 | Lock on | The right stick | `T` |
 | High, middle and low stance | Hold the left shoulder, and the north, the west or the south button | `6`, `7` and `8` |
+| Eat herbs to heal | The back button | `H` |
 
 While the left shoulder guards, the north, the west and the south buttons
 choose a stance, and do not attack, use or jump: see `fight_input`.
@@ -57,6 +58,7 @@ from extensions.gamepad.ids import (
     BUTTON_DPAD_DOWN,
     BUTTON_DPAD_LEFT,
     BUTTON_DPAD_RIGHT,
+    BUTTON_BACK,
     BUTTON_DPAD_UP,
     BUTTON_EAST,
     BUTTON_LEFT_SHOULDER,
@@ -95,6 +97,8 @@ comptime KEY_T = Key(116)
 """The `T` key: the lock on a foe."""
 comptime KEY_SIX = Key(54)
 """The `6` key: the high stance. `7` and `8` follow it."""
+comptime KEY_H = Key(104)
+"""The `H` key: eat herbs to heal."""
 
 
 def stick(
@@ -133,6 +137,7 @@ def fight_input(
     left_shoulder: Bool,
     left_trigger: Bool,
     right_stick: Bool,
+    back: Bool = False,
 ) -> MoveInput:
     """Return an input with a gamepad's buttons for the jump, the use and
     the fight.
@@ -148,6 +153,7 @@ def fight_input(
         left_trigger: Whether the left trigger is held past
             `TRIGGER_PRESS`.
         right_stick: Whether the right stick is pressed in.
+        back: Whether the back button is held: it eats herbs to heal.
 
     Returns:
         The input, with the buttons of the module's table. The left
@@ -168,6 +174,7 @@ def fight_input(
     input.high = north and stance
     input.middle = west and stance
     input.low = south and stance
+    input.heal = back
     return input
 
 
@@ -221,6 +228,7 @@ def gamepad_input(pad: Gamepad, dead_zone: Float32 = DEAD_ZONE) -> MoveInput:
         pad.get_button(BUTTON_LEFT_SHOULDER),
         arte > TRIGGER_PRESS,
         pad.get_button(BUTTON_RIGHT_STICK),
+        pad.get_button(BUTTON_BACK),
     )
 
 
@@ -272,6 +280,7 @@ def keyboard_input(keys: HeldKeys, shift: Bool) -> MoveInput:
         high=keys.is_held(KEY_SIX),
         middle=keys.is_held(Key(KEY_SIX.value + 1)),
         low=keys.is_held(Key(KEY_SIX.value + 2)),
+        heal=keys.is_held(KEY_H),
     )
 
 
@@ -304,4 +313,5 @@ def combined(first: MoveInput, second: MoveInput) -> MoveInput:
         high=first.high or second.high,
         middle=first.middle or second.middle,
         low=first.low or second.low,
+        heal=first.heal or second.heal,
     )

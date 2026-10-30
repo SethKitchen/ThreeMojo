@@ -31,6 +31,7 @@ The window is 1920 by 1080 pixels by default. Give a width and a height for a di
 | Guard, and a ki pulse | The left shoulder | `V` |
 | Lock on | The right stick | `T` |
 | Stance | Hold the left shoulder, and press the north, the west or the south button | `6`, `7` and `8` |
+| Eat herbs to heal | The back button | `H` |
 | Weather | | `1` clear, `2` overcast, `3` rain, `4` fog |
 | Time | | `5` moves the day on three hours |
 | Quit | The start button | Escape or `q` |

@@ -14,7 +14,10 @@ step and pose:
    needs the sword drawn, since its button also runs. The guard button
    guards while it is held, and a new press of it makes a ki pulse. A
    stance button changes the stance. The lock button locks the camera on
-   the foe or the dummy nearest the middle of the view, or lets go.
+   the foe or the dummy nearest the middle of the view, or lets go. While
+   it locks, a flick of the look stick moves the lock to the next target
+   that way. The heal button eats one of the satchel's herbs, and heals
+   `HEAL_SHARE` of the player's health.
 2. **The player moves.** A free player walks, runs and jumps as before,
    at `GUARD_PACE` of the stick while guarding, and faces what they lock
    on. An attack carries the player along their heading, and turns them
@@ -33,7 +36,8 @@ step and pose:
 5. **What shows.** Each blow writes its damage over the fighter it lands
    on, and the outcome's word: see `outcome_word`. A blow that lands
    bursts in sparks. Each swing's trail is measured for the display: see
-   `extensions.village.slashes`. The sword is drawn while a bandit within `ENGAGE`
+   `extensions.village.slashes`. Over Limit, the player's trails are
+   gold, and the note says when it begins. The sword is drawn while a bandit within `ENGAGE`
    fights, or the player fights, and is sheathed `CALM_SECONDS` after.
 6. **The fallen.** A fallen bandit gives `LOOT` coins. It lies for the
    `linger`, then is gone, and comes back to its post after the
@@ -106,6 +110,7 @@ from extensions.village.hud import GOLD_TEXT, WHITE_TEXT, Rgb
 from extensions.village.residents import Body
 from extensions.village.slashes import (
     FOE_TRAIL,
+    OVER_TRAIL,
     PLAYER_TRAIL,
     Sparks,
     Trail,
@@ -178,6 +183,12 @@ comptime TOKEN_REST = Float32(0.6)
 it, in seconds."""
 comptime LOOT = 8
 """How many coins a fallen bandit gives."""
+comptime FLICK = Float32(0.7)
+"""How far the look stick must lean, newly, to move the lock."""
+comptime HEAL_SHARE = Float32(0.3)
+"""The share of the player's health that a herb heals."""
+comptime HEAL_TEXT = Rgb(120, 230, 120)
+"""The color of what a herb heals."""
 comptime HURT_TEXT = Rgb(255, 90, 70)
 """The color of the player's own damage."""
 comptime CALM_TEXT = Rgb(150, 200, 255)
@@ -212,6 +223,7 @@ def pressed(now: MoveInput, before: MoveInput) -> MoveInput:
         high=now.high and not before.high,
         middle=now.middle and not before.middle,
         low=now.low and not before.low,
+        heal=now.heal and not before.heal,
     )
 
 
@@ -403,11 +415,17 @@ struct Battle(Movable):
     var slow: Float32
     # How long the player has lain fallen, in seconds, or -1.
     var down: Float32
+    # Whether the player was Over Limit at the end of the last frame.
+    var limited: Bool
     # Where the player comes to.
     var start: Vector3
     # Coins won and not yet taken, and lines for the game's note.
     var loot: Int
     var notes: List[String]
+    # How many herbs the satchel holds, as the game says before each
+    # frame, and how many the player ate, for the game to take.
+    var herbs: Int
+    var eaten: Int
 
     def __init__(
         out self,
@@ -514,9 +532,12 @@ struct Battle(Movable):
         self.calm = CALM_SECONDS
         self.slow = 0
         self.down = -1
+        self.limited = False
         self.start = start
         self.loot = 0
         self.notes = List[String]()
+        self.herbs = 0
+        self.eaten = 0
 
     def movers(self) -> List[NodeId]:
         """Return the nodes that move: each bandit's and each dummy's.
@@ -614,6 +635,37 @@ struct Battle(Movable):
                 best = index
         return best
 
+    def switch_lock(self, at: Vector3, side: Float32) -> Int:
+        """Return the target that a flick moves the lock to.
+
+        Args:
+            at: Where the player stands.
+            side: 1 for a flick to the right, -1 for one to the left.
+
+        Returns:
+            The standing target within `LOCK_RANGE` nearest in angle to
+            the locked one on that side, as the player sees them; the
+            locked one if there is none.
+        """
+        var base = yaw_of(self.target_at(self.lock) - at).to(RADIAN)
+        var best = self.lock
+        var nearest = Float32(10)
+        for index in range(self.targets()):
+            if index == self.lock or not self.standing(index):
+                continue
+            var there = self.target_at(index)
+            if _flat(at, there) > LOCK_RANGE:
+                continue
+            var off = wrap_angle(
+                Angle(yaw_of(there - at).to(RADIAN) - base, RADIAN)
+            )
+            # A yaw that grows turns to the left.
+            var turn = -off.to(RADIAN) * side
+            if turn > 0 and turn < nearest:
+                nearest = turn
+                best = index
+        return best
+
     def aim(
         self, at: Vector3, heading: Angle, stick: Vector3
     ) -> Optional[Angle]:
@@ -655,12 +707,24 @@ struct Battle(Movable):
         mut self,
         input: MoveInput,
         presses: MoveInput,
+        flick: Float32,
         yaw: Angle,
         player: Character,
     ) raises:
         """Turn the frame's presses into the player's moves."""
         if self.fighter.defeated():
             return
+        if presses.heal and self.herbs > self.eaten:
+            ref f = self.fighter
+            var gain = min(
+                f.parameters.health - f.health, HEAL_SHARE * f.parameters.health
+            )
+            if gain > 0:
+                f.health += gain
+                self.eaten += 1
+                var amount = String(Int(gain + 0.5))
+                self._popup(player.position, "+" + amount, HEAL_TEXT)
+                self.notes.append("HERBS HEAL " + amount)
         var stances: List[CombatStance] = [HIGH_STANCE, MID_STANCE, LOW_STANCE]
         var asked: List[Bool] = [presses.high, presses.middle, presses.low]
         var names: List[String] = ["HIGH", "MIDDLE", "LOW"]
@@ -672,6 +736,8 @@ struct Battle(Movable):
                 self.lock = -1
             else:
                 self.lock = self.pick_lock(player.position, yaw)
+        if self.lock >= 0 and flick != 0:
+            self.lock = self.switch_lock(player.position, flick)
         if presses.guard:
             var back = self.fighter.pulse()
             if back > 0:
@@ -1085,8 +1151,11 @@ struct Battle(Movable):
             raise Error("A frame's time must not be negative or endless")
         self.threat = False
         var presses = pressed(input, self.last)
+        var flick = Float32(0)
+        if abs(input.look_right) > FLICK and abs(self.last.look_right) <= FLICK:
+            flick = Float32(1) if input.look_right > 0 else Float32(-1)
         self.last = input
-        self._command(input, presses, view.yaw, player)
+        self._command(input, presses, flick, view.yaw, player)
         var around = blocking.copy()
         around.extend(self.obstacles())
         self._move_player(input, view.yaw, player, terrain, around, delta)
@@ -1100,6 +1169,11 @@ struct Battle(Movable):
         var slowed = Duration(seconds * pace, SECOND)
         self._move_foes(player, terrain, blocking, slowed)
         self._exchange(scene, player, delta)
+        var over = self.fighter.over > 0
+        if over and not self.limited:
+            self.notes.append("OVER LIMIT!")
+        self.limited = over
+        self.trail.color = OVER_TRAIL if over else PLAYER_TRAIL
         self._settle(scene, player, terrain, delta)
         self.arms.pose(scene, body, player, self.fighter, self.drawn, delta)
         self.trail.show(scene, self.fighter)

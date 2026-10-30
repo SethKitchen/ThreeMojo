@@ -25,6 +25,7 @@ from extensions.village.pad_input import (
     KEY_C,
     KEY_E,
     KEY_G,
+    KEY_H,
     KEY_SIX,
     KEY_SPACE,
     KEY_T,
@@ -183,6 +184,7 @@ def _fight(
     left_shoulder: Bool = False,
     left_trigger: Bool = False,
     right_stick: Bool = False,
+    back: Bool = False,
 ) -> MoveInput:
     """Return the input of some gamepad buttons held."""
     return fight_input(
@@ -195,6 +197,7 @@ def _fight(
         left_shoulder,
         left_trigger,
         right_stick,
+        back,
     )
 
 
@@ -214,6 +217,7 @@ def _all(input: MoveInput) -> List[Bool]:
         input.high,
         input.middle,
         input.low,
+        input.heal,
     ]
 
 
@@ -255,6 +259,7 @@ def test_the_shoulders_and_the_trigger_fight() raises:
     assert_true(rising.rising)
     assert_true(_fight(east=True).dodge)
     assert_true(_fight(right_stick=True).lock)
+    assert_true(_fight(back=True).heal)
 
 
 def test_a_pad_reads_its_fight_buttons() raises:
@@ -280,6 +285,11 @@ def test_a_pad_reads_its_fight_buttons() raises:
     lock.digital_buttons[11] = True
     lock.analog_buttons[11] = 1
     assert_true(_pad(lock).lock)
+    # The back button is button 8.
+    var heal = _state()
+    heal.digital_buttons[8] = True
+    heal.analog_buttons[8] = 1
+    assert_true(_pad(heal).heal)
 
 
 def test_the_keyboard_fights() raises:
@@ -295,6 +305,7 @@ def test_the_keyboard_fights() raises:
         KEY_SIX,
         Key(KEY_SIX.value + 1),
         Key(KEY_SIX.value + 2),
+        KEY_H,
     ]:
         keys.press(key)
     var input = keyboard_input(keys, False)
@@ -323,6 +334,7 @@ def test_the_fight_buttons_add() raises:
         high=True,
         middle=True,
         low=True,
+        heal=True,
     )
     for pair in [
         combined(held, no_input()),

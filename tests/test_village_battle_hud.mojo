@@ -109,6 +109,8 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     arena.battle.foes[0].brain.state = POSTED
     arena.battle.foes[0].fighter.health = 100
     arena.battle.foes[0].fighter.move = STAGGER
+    # Over Limit, the limit gauge says so.
+    arena.battle.fighter.over = 5
     var broken = _frame()
     draw_battle(broken, arena.battle, arena.scene, camera, look)
     arena.battle.foes[0].fighter.move = HEAVY

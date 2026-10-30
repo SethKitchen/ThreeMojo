@@ -8,6 +8,13 @@ and what each blow does."""
 
 from extensions.village.combat import (
     ARTE_PER_HIT,
+    LIMIT,
+    LIMIT_PER_BREAK,
+    LIMIT_PER_HIT,
+    LIMIT_PER_PARRY,
+    LIMIT_PER_PERFECT,
+    OVER_BONUS,
+    OVER_SECONDS,
     BLOCKED,
     COMBO_KEEP,
     COMBO_STEP,
@@ -682,6 +689,66 @@ def test_a_frame_moves_the_clocks_on() raises:
     assert_almost_equal(f.pulse_age, -1, atol=1e-6)
     _step(f, 0.2)
     assert_true(f.free())
+
+
+def test_over_limit_fills_and_unleashes() raises:
+    var f = _fighter()
+    # Each landed blow, break, parry and perfect dodge fills the gauge.
+    f.landed(Struck(HIT, 30, 8))
+    assert_almost_equal(f.limit, LIMIT_PER_HIT, atol=1e-6)
+    f.landed(Struck(KI_BREAK, 30, 8))
+    assert_almost_equal(f.limit, 2 * LIMIT_PER_HIT + LIMIT_PER_BREAK, atol=1e-5)
+    f.landed(Struck(GUARD_BREAK, 0, 8))
+    assert_almost_equal(
+        f.limit, 2 * LIMIT_PER_HIT + 2 * LIMIT_PER_BREAK, atol=1e-5
+    )
+    f.hold_guard(True)
+    _ = f.receive(_blow(30, 8), True)
+    assert_almost_equal(
+        f.limit,
+        2 * LIMIT_PER_HIT + 2 * LIMIT_PER_BREAK + LIMIT_PER_PARRY,
+        atol=1e-5,
+    )
+    f.hold_guard(False)
+    var dodger = _fighter()
+    _ = dodger.request(DODGE)
+    _step(dodger, 0.05)
+    _ = dodger.receive(_blow(30, 8), True)
+    assert_almost_equal(dodger.limit, LIMIT_PER_PERFECT, atol=1e-5)
+    # Full, the fighter goes Over Limit: a full arte gauge, armor, free
+    # artes and stronger blows.
+    f.arte = 0
+    f.charge(LIMIT)
+    assert_almost_equal(f.limit, 0, atol=1e-6)
+    assert_almost_equal(f.over, OVER_SECONDS, atol=1e-6)
+    assert_almost_equal(f.arte, 5, atol=1e-6)
+    assert_true(f.armored())
+    # Nothing fills it while it lasts.
+    f.charge(50)
+    assert_almost_equal(f.limit, 0, atol=1e-6)
+    f.arte = 0
+    f.combo = 0
+    assert_true(f.request(TEMPEST))
+    assert_almost_equal(f.arte, 0, atol=1e-6)
+    _step(f, 0.25)
+    assert_almost_equal(f.connect(0).value().damage, 27 * OVER_BONUS, atol=1e-3)
+    _run(f, 1)
+    # It ends.
+    _step(f, OVER_SECONDS)
+    assert_almost_equal(f.over, 0, atol=1e-6)
+    assert_false(f.armored())
+    # A fighter of no gain never fills it.
+    var p = FighterParameters()
+    p.limit_gain = 0
+    var dull = Fighter(p)
+    dull.charge(LIMIT)
+    assert_almost_equal(dull.over, 0, atol=1e-6)
+    p.limit_gain = -1
+    with assert_raises(contains="limit"):
+        p.check()
+    f.limit = 50
+    f.revive()
+    assert_almost_equal(f.limit, 0, atol=1e-6)
 
 
 def main() raises:

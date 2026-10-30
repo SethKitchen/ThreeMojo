@@ -74,6 +74,7 @@ from extensions.village.foes import (
     POSTED,
 )
 from extensions.village.residents import Body
+from extensions.village.slashes import OVER_TRAIL, PLAYER_TRAIL
 from extensions.village.surfaces import house_looks
 from extensions.village.terrain import Terrain
 from math.vector3 import Vector3
@@ -119,6 +120,7 @@ def test_a_press_is_a_button_held_now_and_not_before() raises:
         high=True,
         middle=True,
         low=True,
+        heal=True,
     )
     var none = no_input()
     var fresh = pressed(all, none)
@@ -137,6 +139,7 @@ def test_a_press_is_a_button_held_now_and_not_before() raises:
         fresh.high,
         fresh.middle,
         fresh.low,
+        fresh.heal,
     ]:
         assert_true(button)
     for held in [pressed(all, all), pressed(none, all)]:
@@ -154,6 +157,7 @@ def test_a_press_is_a_button_held_now_and_not_before() raises:
             held.high,
             held.middle,
             held.low,
+            held.heal,
         ]:
             assert_false(button)
 
@@ -255,6 +259,7 @@ def test_the_player_cuts_a_dummy() raises:
     assert_equal(arena.battle.fighter.combo, 1)
     assert_true(holds_text(popup_texts(arena.battle), "30"))
     assert_almost_equal(arena.battle.foes[0].fighter.health, 300, atol=1e-6)
+    assert_false(arena.battle.limited)
     # The dummy rocks, and keeps its health.
     var rocked = arena.battle.dummies[0].dummy.spin.length()
     assert_true(rocked > 0)
@@ -668,6 +673,78 @@ def test_a_fighter_on_a_lot_or_in_the_water_is_left_out() raises:
     )
     assert_equal(len(other.foes), 0)
     assert_equal(len(other.dummies), 0)
+
+
+def test_over_limit_is_announced_and_turns_the_trails_gold() raises:
+    var arena = Arena(arena_parameters(0, 1))
+    arena.battle.fighter.limit = 99
+    var cut = no_input()
+    cut.light = True
+    arena.tick(cut)
+    arena.run(0.3)
+    assert_true(arena.battle.fighter.over > 0)
+    assert_true(holds_text(arena.battle.notes, "OVER LIMIT!"))
+    assert_true(arena.battle.trail.color.x == OVER_TRAIL.x)
+    arena.battle.notes.clear()
+    arena.run(0.5)
+    assert_equal(len(arena.battle.notes), 0)
+    arena.battle.fighter.over = 0.01
+    arena.run(0.2)
+    assert_true(arena.battle.trail.color.x == PLAYER_TRAIL.x)
+    assert_false(arena.battle.limited)
+
+
+def test_a_flick_moves_the_lock_and_herbs_heal() raises:
+    # Two bandits too far to notice, and the dummy before the player.
+    var arena = Arena(arena_parameters(2, 1, 15))
+    var lock = no_input()
+    lock.lock = True
+    arena.press(lock)
+    assert_equal(arena.battle.lock, 2)
+    # A flick right moves the lock to the bandit on the right.
+    var right = no_input()
+    right.look_right = 1
+    arena.tick(right)
+    assert_equal(arena.battle.lock, 1)
+    # Held, the stick moves it no further; let go and flicked left, it
+    # moves to the first target on the left.
+    arena.tick(right)
+    assert_equal(arena.battle.lock, 1)
+    arena.tick(no_input())
+    var left = no_input()
+    left.look_right = -1
+    arena.tick(left)
+    assert_equal(arena.battle.lock, 0)
+    # On the left, there is nothing more: the lock stays.
+    arena.tick(no_input())
+    arena.tick(left)
+    assert_equal(arena.battle.lock, 0)
+    # A fallen target, or one out of range, is passed over.
+    arena.battle.lock = 2
+    arena.battle.foes[1].down = 0
+    assert_equal(arena.battle.switch_lock(Vector3(0, 0, 0), 1), 2)
+    arena.battle.foes[1].down = -1
+    assert_equal(arena.battle.switch_lock(Vector3(0, 0, 30), 1), 2)
+    # Herbs heal three tenths of the health, while the satchel has them.
+    var healer = Arena(arena_parameters(0, 0))
+    healer.battle.herbs = 2
+    healer.battle.fighter.health = 100
+    var heal = no_input()
+    heal.heal = True
+    healer.press(heal)
+    assert_almost_equal(healer.battle.fighter.health, 250, atol=1e-3)
+    assert_equal(healer.battle.eaten, 1)
+    assert_true(holds_text(popup_texts(healer.battle), "+150"))
+    assert_true(holds_text(healer.battle.notes, "HERBS HEAL 150"))
+    healer.press(heal)
+    healer.press(heal)
+    assert_almost_equal(healer.battle.fighter.health, 400, atol=1e-3)
+    assert_equal(healer.battle.eaten, 2)
+    # At full health, no herb is eaten.
+    healer.battle.eaten = 0
+    healer.battle.fighter.health = 500
+    healer.press(heal)
+    assert_equal(healer.battle.eaten, 0)
 
 
 def main() raises:

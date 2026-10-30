@@ -11,8 +11,9 @@
 1. **The trails** of the swings, as light added to the frame: see
    `extensions.village.slashes`.
 2. **The player's gauges**, in the bottom right: the stance, the health,
-   the ki, and the arte gauge as a row of points. The health turns red
-   below a quarter.
+   the ki, the limit gauge, and the arte gauge as a row of points. The
+   health turns red below a quarter. Over Limit, the limit gauge turns
+   gold, says `OVER LIMIT`, and empties as it ends.
 3. **The combo**, such as `12 HITS`, on the right, while two blows or more
    have landed and the combo lasts. It fades as the combo ends.
 4. **Each bandit's health and ki**, over its head, while it fights or is
@@ -30,6 +31,8 @@ from core.scene import Scene
 from extensions.village.battle import CHEST, HEAD, POPUP_SECONDS, Battle
 from extensions.village.combat import (
     COMBO_KEEP,
+    LIMIT,
+    OVER_SECONDS,
     HEAVY,
     HIGH_STANCE,
     LOW_STANCE,
@@ -61,6 +64,8 @@ comptime KI_COLOR = Rgb(140, 205, 255)
 """The color of ki."""
 comptime ARTE_COLOR = Rgb(255, 190, 70)
 """The color of the arte gauge's points."""
+comptime LIMIT_COLOR = Rgb(200, 120, 255)
+"""The color of the limit gauge while it fills."""
 comptime DANGER = Rgb(255, 40, 30)
 """The color of a heavy attack's warning."""
 comptime NEAREST = Float32(0.2)
@@ -175,14 +180,32 @@ def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int):
         )
     if points > 0:
         draw_text(frame, x, y - 2 * scale, "AG", scale, ARTE_COLOR, 1)
+    y -= 7 * scale
+    var share = f.limit / LIMIT
+    var color = LIMIT_COLOR
+    var label = String("OL")
+    if f.over > 0:
+        share = f.over / OVER_SECONDS
+        color = GOLD_TEXT
+        label = "OVER LIMIT"
+    draw_bar(frame, x, y, width, 2 * scale, share, color)
+    draw_text(
+        frame,
+        x - text_width(label, scale) - 4 * scale,
+        y - 2 * scale,
+        label,
+        scale,
+        color,
+        1,
+    )
     y -= 10 * scale
     draw_bar(frame, x, y, width, 3 * scale, f.ki / f.parameters.ki, KI_COLOR)
     draw_text(frame, x - 16 * scale, y - 2 * scale, "KI", scale, KI_COLOR, 1)
     y -= 12 * scale
     var health = f.health / f.parameters.health
-    var color = HEALTH if health >= 0.25 else WOUNDED
-    draw_bar(frame, x, y, width, 4 * scale, health, color)
-    draw_text(frame, x - 16 * scale, y - scale, "HP", scale, color, 1)
+    var hue = HEALTH if health >= 0.25 else WOUNDED
+    draw_bar(frame, x, y, width, 4 * scale, health, hue)
+    draw_text(frame, x - 16 * scale, y - scale, "HP", scale, hue, 1)
     var count = String(Int(f.health + 0.5), "/", Int(f.parameters.health))
     var right = x + width
     y -= 10 * scale

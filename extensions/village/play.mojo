@@ -18,7 +18,8 @@ and its animals, seen by a third-person camera.
    and its floor carries it there. The bandits think and move, and the
    blows land. The player's `Body` stands where the character stands and
    plays its stance's clip, or its sword's. The coins a fallen bandit
-   gives go into the satchel.
+   gives go into the satchel, and the herbs the player eats to heal come
+   out of it.
 3. While the player moves and the look stick rests, the camera comes
    round behind the player.
 4. The camera turns toward the target the player locks on to.
@@ -77,7 +78,12 @@ from extensions.village.character import (
 )
 from extensions.village.battle import Battle, BattleParameters
 from extensions.village.battle_hud import draw_battle
-from extensions.village.gathering import CHEST, GatherParameters, Gathering
+from extensions.village.gathering import (
+    CHEST,
+    HERBS,
+    GatherParameters,
+    Gathering,
+)
 from extensions.village.hud import draw_hud, note_text, use_prompt
 from extensions.village.skills import (
     FISHING,
@@ -595,6 +601,7 @@ struct VillageGame(Movable):
         var blocking = self.trees.copy()
         blocking.extend(self.residents.obstacles())
         var calm = abs(input.look_right) < CALM and abs(input.look_up) < CALM
+        self.battle.herbs = self.gathering.satchel.count(HERBS)
         self.battle.tick(
             scene,
             input,
@@ -613,6 +620,8 @@ struct VillageGame(Movable):
         # last word is the note.
         self.gathering.satchel.counts[CHEST.value] += self.battle.loot
         self.battle.loot = 0
+        self.gathering.satchel.counts[HERBS.value] -= self.battle.eaten
+        self.battle.eaten = 0
         if len(self.battle.notes) > 0:
             self.note = self.battle.notes[len(self.battle.notes) - 1]
             self.note_age = 0
