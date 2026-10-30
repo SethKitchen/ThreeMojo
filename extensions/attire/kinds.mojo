@@ -10,7 +10,8 @@ sits: padding under mail under plate. A fabric kind selects the look and
 the physical constants. A dye channel and a dye pattern say how a
 garment takes color. A wear kind names one channel of dirt, blood, wet
 or damage. A form says how a garment's shell is shaped where it does not
-follow the skin: a skirt round both legs, or a last round each foot.
+follow the skin: a skirt round both legs, a last round each foot, or a
+cowl round the head.
 
 Each kind is a type, so a bare integer does not compile. A value that
 is not named is still constructible, and the boundary that reads it
@@ -548,7 +549,7 @@ struct Form(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is a named form.
 
         Returns:
-            True for `FITTED`, `SKIRTED` and `SHOD`.
+            True for `FITTED`, `SKIRTED`, `SHOD` and `COWLED`.
         """
         return ordinal_valid(self.value, FORM_COUNT - 1)
 
@@ -561,13 +562,16 @@ hauberk, a surcoat, a fauld."""
 comptime SHOD = Form(2)
 """It closes each foot in a smooth last, over the toes and the arch: a
 boot or a shoe."""
-comptime FORM_COUNT = 3
+comptime COWLED = Form(3)
+"""Above the neck it closes round the head in one loose cowl, open at the
+face: a hood."""
+comptime FORM_COUNT = 4
 """How many forms there are."""
 
 
 def _form_names() -> List[String]:
     """Return the form names, in order."""
-    return ["fitted", "skirted", "shod"]
+    return ["fitted", "skirted", "shod", "cowled"]
 
 
 def form_label(form: Form) -> String:
@@ -586,7 +590,7 @@ def form_named(name: String) raises -> Form:
     """Return the form that `name` names.
 
     Args:
-        name: `fitted`, `skirted` or `shod`.
+        name: `fitted`, `skirted`, `shod` or `cowled`.
 
     Returns:
         The named form.

@@ -75,7 +75,8 @@ A shell made from the skin follows each thigh and each toe. A skirt and a boot d
 |---|---|---|
 | `FITTED` | follows the skin everywhere | a shirt, hose, a coif |
 | `SKIRTED` | hangs below the hips as one tube round both legs | a tunic, a hauberk, a surcoat, a fauld |
-| `SHOD` | closes each foot in a smooth last | boots |
+| `SHOD` | closes each foot in a smooth last | boots, sabatons |
+| `COWLED` | closes the head in a loose cowl, open at the face | a hood |
 
 ### Skirts
 
@@ -85,6 +86,16 @@ A shell made from the skin follows each thigh and each toe. A skirt and a boot d
 2. `skirt_envelope` slices the garment's own shell at rings 3 cm apart, from the top to the lowest point of the shell on the legs. That point is the hem. Each slice is closed as a convex hull, so it spans the gap between the thighs.
 3. Each ring is at least as wide as the ring above it, plus the flare times the drop. So the cloth falls straight or flares, and does not tuck in between the legs. A skirt under it lifts it by that skirt's thickness and this garment's clearance.
 4. `skirt_mesh` lofts the rings on 40 sides. The top ring reaches 1.5 cm up inside the shell, so no gap opens at the cut.
+
+Ten folds run down each skirt. They stand only out of the rings, so no fold dips into a skirt under it. They deepen as the cloth falls, from none at the top to their whole depth at the hem. Every skirt's folds lie at the same sides, so a skirt over another folds over its folds. `fold_depth` gives the depth at the hem.
+
+| Fabric | Fold at the hem |
+|---|---|
+| `LINEN`, `SILK` | 18 mm |
+| `WOOL`, `VELVET` | 25 mm |
+| `LEATHER`, `MAIL` | 6 mm |
+| `PADDING` | 4 mm |
+| `PLATE` | none |
 
 A drawn skirt is lined: it has an inner face one fabric thickness inside, and a strip across its hem. So the hem shows its thickness, and the inside of the skirt draws when it is seen from below.
 
@@ -103,7 +114,18 @@ Below the top, a skirt hangs clear of the legs. So it hides neither the skin nor
 3. `last_mesh` casts a sphere of 12 rings and 18 sectors from the middle of the foot onto the hull. The sphere is stretched to the foot's box. So the last is evenly meshed, even where the hull has long flat facets over the toes and the arch. The last stands 1.5 mm out of the hull. So the seam where the shaft meets it is a clean step, as a boot's welt is.
 4. The flat top of the hull lies inside the shaft. The last is cut level 3 mm below it.
 
-Each vertex of a last takes the weights of the nearest vertex of the shell. So the toe box bends with the toes.
+Each vertex of a last takes the weights of the nearest vertex of the shell. So the toe box bends with the toes. An outer last hides the last under it: sabatons over boots draw the boots' shafts and not their lasts.
+
+### Cowls
+
+`extensions/attire/cowl.mojo` closes a hood round the head in four steps.
+
+1. `cowl_bottom` is at the base of the neck. The shell is cut 1.5 cm below it, so its edge lies inside the cowl.
+2. `head_cowl` closes the shell's vertices above the bottom in their convex hull. The hull spans the ears, the nape and the hollow under the chin.
+3. `cowl_mesh` casts a sphere of 18 rings and 28 sectors onto the hull, 6 mm out of it, so the hood stands loose. The sphere's pole looks forward through the face, so its rings run round the face's opening.
+4. The cowl is cut open along the face's oval and level at its bottom. A lining one fabric thickness inside it shows where the opening looks into the hood.
+
+`face_oval` gives the oval's distance without the clamp of `face_opening`. So the cut runs smoothly through triangles larger than the opening's ramp.
 
 ## Fabrics
 
@@ -166,7 +188,7 @@ paint(piece, garment.dyes)
 
 ## The wardrobe
 
-`wardrobe()` gives sixteen medieval garments, from the skin out.
+`wardrobe()` gives twenty-four medieval garments.
 
 | Garment | Slot | Layer | Fabric | Form |
 |---|---|---|---|---|
@@ -176,7 +198,7 @@ paint(piece, garment.dyes)
 | `gambeson` | torso | mid | padding | skirted, flare 0.1 |
 | `hauberk` | torso | outer | mail, brass at the hems | skirted, flare 0.15 |
 | `coif` | head | outer | mail | fitted |
-| `hood` | head | over | wool | fitted |
+| `hood` | head | over | wool | cowled |
 | `boots` | feet | outer | leather | shod |
 | `gloves` | hands | outer | leather | fitted |
 | `cuirass` | torso | armor | plate | fitted |
@@ -186,6 +208,14 @@ paint(piece, garment.dyes)
 | `greaves` | legs | armor | plate | fitted |
 | `bascinet` | head | armor | plate | fitted |
 | `surcoat` | torso | over | linen, per pale | skirted, flare 0.3 |
+| `breeches` | legs | mid | wool, cut loose | fitted |
+| `gown` | torso | mid | wool, to the ankles | skirted, flare 0.32 |
+| `robe` | torso | mid | wool, to the ankles, cut loose | skirted, flare 0.12 |
+| `jerkin` | torso | outer | leather, sleeveless | skirted, flare 0.15 |
+| `belt` | waist | over | leather | fitted |
+| `gorget` | neck | armor | plate, rigid on the chest | fitted |
+| `gauntlets` | hands | armor | plate, rigid on each hand | fitted |
+| `sabatons` | feet | armor | plate, rigid on each foot and its toes | shod |
 
 ## Garments made elsewhere
 
@@ -207,4 +237,4 @@ Roblox's cages and MakeHuman's `mhclo` files bind a garment to a body mesh from 
 
 ## Tests
 
-`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_skirt.mojo`, `test_attire_last.mojo`, `test_attire_surface.mojo`, `test_attire_dye.mojo`, `test_attire_garment.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.
+`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_skirt.mojo`, `test_attire_last.mojo`, `test_attire_cowl.mojo`, `test_attire_surface.mojo`, `test_attire_dye.mojo`, `test_attire_garment.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.

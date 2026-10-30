@@ -10,6 +10,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
 from extensions.attire.mesh_ops import COVER, merge
 from extensions.attire.skirt import (
+    SKIRT_FOLDS,
     SKIRT_LEG_SHARE,
     SKIRT_SIDES,
     SkirtEnvelope,
@@ -203,6 +204,26 @@ def test_a_skirt_falls_and_flares() raises:
                 over.radii[k * SKIRT_SIDES + side]
                 >= envelope.radius_at(over.heights[k], side) + 0.003 - 1e-5
             )
+
+
+def test_a_skirt_folds_deeper_toward_its_hem() raises:
+    var rig = standing_rig()
+    var mesh = _hips_and_legs()
+    var plain = skirt_envelope(mesh, rig, 0.2, List[SkirtEnvelope](), 0, 0)
+    var folded = skirt_envelope(
+        mesh, rig, 0.2, List[SkirtEnvelope](), 0, 0, folds=0.01
+    )
+    var hem = (folded.rings() - 1) * SKIRT_SIDES
+    # No fold at the top; the whole depth at the hem, on the folds'
+    # crests, and none in their troughs. The folds stand only out.
+    for side in range(SKIRT_SIDES):
+        assert_almost_equal(folded.radii[side], plain.radii[side])
+        assert_true(folded.radii[hem + side] >= plain.radii[hem + side])
+    assert_almost_equal(folded.radii[hem], plain.radii[hem] + 0.01, atol=1e-5)
+    var trough = SKIRT_SIDES // (2 * SKIRT_FOLDS)
+    assert_almost_equal(
+        folded.radii[hem + trough], plain.radii[hem + trough], atol=1e-5
+    )
 
 
 def test_a_short_skirt_does_not_lift_a_long_one() raises:

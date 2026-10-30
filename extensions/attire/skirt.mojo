@@ -19,6 +19,8 @@ part of a garment's shell below the hips with such a tube:
    a convex hull, so it spans the gap between the thighs. Each ring is at
    least as wide as the ring above it, plus the flare, so the cloth falls
    and does not tuck in between the legs. A skirt under it lifts it.
+   Folds stand out of the rings, `SKIRT_FOLDS` of them round the skirt,
+   from none at the top to their whole depth at the hem.
 3. `skirt_mesh` lofts the rings into a tube on `SKIRT_SIDES` sides. The
    top of the tube reaches up inside the shell, so no gap opens at the
    cut. A lined skirt has an inner face one fabric thickness inside, and
@@ -39,7 +41,7 @@ This is not a three.js port. See Extensions.
     var piece = hang_skirt(piece, envelope, rig, lined=True, thickness)
 """
 
-from std.math import cos, pi, sin
+from std.math import cos, pi, sin, sqrt
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
@@ -64,6 +66,8 @@ comptime SKIRT_TOP = Float32(0.03)
 template. The legs part 6 cm below them."""
 comptime SKIRT_SIDES = 40
 """How many sides a skirt's tube has."""
+comptime SKIRT_FOLDS = 10
+"""How many folds run down a skirt."""
 comptime SKIRT_RING = Float32(0.03)
 """The most a skirt's rings lie apart, in meters on the template."""
 comptime SKIRT_TUCK = Float32(0.015)
@@ -153,6 +157,20 @@ struct SkirtEnvelope(Copyable, Movable):
                 var b = self.radii[(k + 1) * SKIRT_SIDES + side]
                 return a + (b - a) * t
         return 0
+
+
+def _fold(side: Int, fall: Float32) -> Float32:
+    """Return how far a side stands out in its fold, in a fold's depth.
+
+    The folds deepen as the cloth falls, from none at the top to their
+    whole depth at the hem, and stand only out, so no fold dips into a
+    skirt under it. Every skirt's folds lie at the same sides, so a skirt
+    over another folds over its folds.
+    """
+    var turn = (
+        2 * Float32(pi) * Float32(SKIRT_FOLDS * side) / Float32(SKIRT_SIDES)
+    )
+    return fall * sqrt(fall) * (Float32(0.5) + Float32(0.5) * cos(turn))
 
 
 def skirt_scale(rig: HumanoidRig) -> Float32:
@@ -407,6 +425,7 @@ def skirt_envelope(
     under: List[SkirtEnvelope],
     clearance: Float32,
     thickness: Float32,
+    folds: Float32 = 0,
 ) raises -> SkirtEnvelope:
     """Return the rings a garment's skirt hangs on.
 
@@ -418,10 +437,13 @@ def skirt_envelope(
         under: The skirts of the garments under it, which lift it.
         clearance: The gap it keeps off a skirt under it, in meters.
         thickness: Its fabric's thickness, in meters.
+        folds: How deep its folds stand out at the hem, in meters. None
+            by default.
 
     Returns:
         The envelope. It has no rings when the garment reaches less than
-        `SKIRT_SHORTEST` below the top.
+        `SKIRT_SHORTEST` below the top. Its radii carry the folds; a
+        ring falls from the ring above as it was before its folds.
 
     Raises:
         Error: If the mesh has no positions or skin weights.
@@ -437,6 +459,7 @@ def skirt_envelope(
     var spacing = SKIRT_RING * scale
     var rings = Int((top - hem) / spacing) + 2
     var above = List[Float32]()
+    var fallen = List[Float32]()
     for k in range(rings):  # pragma: no branch
         var y = top + (hem - top) * Float32(k) / Float32(rings - 1)
         envelope.heights.append(y)
@@ -455,10 +478,13 @@ def skirt_envelope(
                 var lifted = skirt.radius_at(y, side)
                 if lifted > 0:
                     r = max(r, lifted + skirt.thickness + clearance)
-            envelope.radii.append(r)
+            fallen.append(r)
+            envelope.radii.append(
+                r + folds * _fold(side, (top - y) / (top - hem))
+            )
         above.clear()
         for side in range(SKIRT_SIDES):  # pragma: no branch
-            above.append(envelope.radii[k * SKIRT_SIDES + side])
+            above.append(fallen[k * SKIRT_SIDES + side])
     envelope.tuck = top + SKIRT_TUCK * scale
     var inside = segment_radii(
         slice_segments(whole, legs, envelope.tuck), envelope.center

@@ -22,6 +22,7 @@ from extensions.attire.garment import (
     hauberk,
     hood,
     hose,
+    sabatons,
     shirt,
     surcoat,
     tunic,
@@ -171,6 +172,32 @@ def _pieces(
         over,
         shells,
     )
+
+
+def test_a_last_over_a_last_hides_it() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    var shod = Outfit()
+    shod.add(boots())
+    var alone = _pieces(scene, assets, person, shod)
+    shod.add(sabatons())
+    var over = List[Float32]()
+    var shells = List[BufferGeometry]()
+    var under = dress_pieces(
+        assets.geometries.get(
+            scene.skinned_meshes[person.skins[0]].geometry
+        ).clone(),
+        person,
+        shod,
+        over,
+        shells,
+    )
+    # The boots under the sabatons keep no last of their own; the whole
+    # shells keep theirs.
+    assert_true(under[0].vertex_count() < alone[0].vertex_count())
+    assert_true(under[1].triangle_count() > 0)
+    assert_true(shells[0].vertex_count() > under[0].vertex_count())
 
 
 def test_a_longer_skirt_over_a_skirt_hides_it() raises:

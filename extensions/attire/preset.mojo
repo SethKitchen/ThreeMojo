@@ -43,12 +43,15 @@ from extensions.attire.garment import (
     cuirass,
     fauld,
     gambeson,
+    gauntlets,
     gloves,
+    gorget,
     greaves,
     hauberk,
     hood,
     hose,
     pauldrons,
+    sabatons,
     shirt,
     surcoat,
     tunic,
@@ -96,7 +99,7 @@ def outfit_named(name: String) raises -> Outfit:
     |---|---|
     | `peasant` | shirt, hose, tunic, hood, boots |
     | `man-at-arms` | shirt, hose, gambeson, hauberk, coif, boots, gloves |
-    | `knight` | the man-at-arms's, then cuirass, fauld, pauldrons, vambraces, greaves and surcoat |
+    | `knight` | the man-at-arms's, then cuirass, fauld, pauldrons, vambraces, greaves, surcoat, gorget, gauntlets and sabatons |
 
     Args:
         name: `peasant`, `man-at-arms` or `knight`.
@@ -138,6 +141,9 @@ def outfit_named(name: String) raises -> Outfit:
             vambraces(),
             greaves(),
             surcoat(),
+            gorget(),
+            gauntlets(),
+            sabatons(),
         ]:
             outfit.add(garment.copy())
     return outfit^

@@ -191,6 +191,8 @@ $(call gallery,genomes,genomes)
 $(call gallery,family,family)
 # Three people dressed from the skin out walk: cloth, mail, plate, a cloak and a sword.
 $(call gallery,armory,armory)
+# Eight people of eight callings, each of a genome and an outfit picked by a seed.
+$(call gallery,crowd,crowd)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.
