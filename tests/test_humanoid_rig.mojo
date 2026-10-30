@@ -30,6 +30,7 @@ from extensions.humanoid.fidelity import (
 )
 from extensions.humanoid.rig.game import (
     add_game_humanoid,
+    budget_all,
     game_build_settings,
     carry_attributes,
 )
@@ -572,6 +573,64 @@ def test_attribute_transfer_accepts_two_empty_meshes() raises:
     ref colors = target.attribute_view(String(COLOR))
     assert_equal(colors.count(), 0)
     assert_equal(colors.item_size, 3)
+
+
+def _grid(cells: Int) raises -> BufferGeometry:
+    """Return a flat grid of `cells` by `cells` quads, wavy in z."""
+    var points = List[Vector3]()
+    for j in range(cells + 1):
+        for i in range(cells + 1):
+            var x = Float32(i) / Float32(cells)
+            var y = Float32(j) / Float32(cells)
+            points.append(Vector3(x, y, 0.05 * x * x + 0.03 * y))
+    var triangles = List[Int]()
+    for j in range(cells):
+        for i in range(cells):
+            var a = j * (cells + 1) + i
+            triangles.append(a)
+            triangles.append(a + 1)
+            triangles.append(a + cells + 1)
+            triangles.append(a + 1)
+            triangles.append(a + cells + 2)
+            triangles.append(a + cells + 1)
+    return _mesh(points, triangles)
+
+
+def _grids() raises -> List[BufferGeometry]:
+    """Return three grids of 12, 8 and 10 cells a side."""
+    var meshes = List[BufferGeometry]()
+    meshes.append(_grid(12))
+    meshes.append(_grid(8))
+    meshes.append(_grid(10))
+    return meshes^
+
+
+def test_parts_are_decimated_at_once_as_one_after_another() raises:
+    var budgets: List[Int] = [40, 0, 30]
+    var serial = budget_all(_grids(), budgets, 1)
+    var parallel = budget_all(_grids(), budgets, 4)
+    assert_equal(len(parallel), 3)
+    for k in range(3):
+        assert_equal(parallel[k].triangle_count(), serial[k].triangle_count())
+        ref a = parallel[k].attribute_view(String(POSITION))
+        ref b = serial[k].attribute_view(String(POSITION))
+        assert_equal(a.count(), b.count())
+        for v in range(a.count()):
+            assert_true(a.vector3(v) == b.vector3(v))
+    # No budget keeps a mesh whole.
+    assert_equal(parallel[1].triangle_count(), 128)
+    assert_true(parallel[0].triangle_count() <= 40)
+    with assert_raises(contains="one budget per mesh"):
+        _ = budget_all(_grids(), [40], 4)
+    # A mesh that cannot be decimated, as one with a morph target, fails
+    # the whole at once.
+    var broken = _grid(8)
+    broken.add_morph_target(broken.clone_attribute(String(POSITION)))
+    var mixed = List[BufferGeometry]()
+    mixed.append(_grid(8))
+    mixed.append(broken^)
+    with assert_raises(contains="morph"):
+        _ = budget_all(mixed^, [20, 20], 4)
 
 
 def test_game_builder_refuses_engineering_before_scene_edits() raises:

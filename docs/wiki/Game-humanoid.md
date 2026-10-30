@@ -81,6 +81,8 @@ Build the humanoid once and bake it with `write_sealed_bake(path, scene, assets,
 
 These were measured on four cores. Most of the build is the hair's shell, at `hair_detail` 32.
 
+The body's skin, each hand's and the hair's shell are decimated at once, one on each thread, with `budget_all`. Each decimation is the same as before, so the meshes are too. On a shared four-core machine a build at 24,000 triangles fell from 3.3 s to 2.5 s.
+
 `triangles` sets the skin's budget. The body's skin takes 76 % of it, the hair's shell 12 % and each hand 6 %. A decimated skin keeps its colors: each vertex takes those of the nearest vertex of the full skin. At 20,000 triangles a frame takes 52 ms. A material with textures and light through thin skin costs about twice the time of the default Phong.
 
 ## Example
