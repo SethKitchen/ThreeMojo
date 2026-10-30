@@ -20,8 +20,8 @@ def test_safe_collapse_refuses_before_scene_or_asset_changes() raises:
     var assets = Assets()
     var root = scene.add(Object3D())
     # This template reserves 42,423 face, mouth and eye triangles. The
-    # remaining 1,000 exceed the minimum, but safe collapse retains more.
-    # In particular, the hair shell alone retains 1,664 triangles.
+    # remaining 140 exceed the minimum of 128, but safe collapse retains
+    # 184 for the body, the hands and the hair's shell.
     with assert_raises(
         contains="Facial LOD safe-collapse limit exceeds budget"
     ):
@@ -30,7 +30,7 @@ def test_safe_collapse_refuses_before_scene_or_asset_changes() raises:
             assets,
             root,
             HumanoidSpec(Length(6, FOOT), MALE),
-            43423,
+            42563,
             detail=12,
             hand_detail=8,
             hair_detail=8,

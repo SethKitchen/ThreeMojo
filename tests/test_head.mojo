@@ -8,6 +8,7 @@ joint tissues and cartilages, the muscles, the vessels, the nerves, the
 lymph nodes, the skin and the hair."""
 
 from core.assets import Assets
+from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, BufferGeometry
 from extensions.humanoid.genome import HAIR_LENGTH, Expression, Genome
 from core.object3d import Object3D
@@ -74,6 +75,7 @@ from extensions.humanoid.skeleton.head.hair.dimensions import (
 )
 from extensions.humanoid.skeleton.head.hair.geometry import (
     INNER_DEPTH,
+    drop_inner_face,
     head_hair,
     head_hair_from_dimensions,
 )
@@ -810,6 +812,12 @@ def test_hair() raises:
             if skin.distance(p) >= -INNER_DEPTH:
                 shown = True
         assert_true(shown)
+    # An empty mesh has no inner face to drop.
+    var none = BufferGeometry()
+    none.set_attribute(String(POSITION), BufferAttribute(List[Float32](), 3))
+    none.set_index(List[Int]())
+    drop_inner_face(none, skin)
+    assert_equal(none.triangle_count(), 0)
     # An eyebrow lies on the skin: it has no inner face to drop.
     assert_equal(
         head_hair_from_dimensions(
