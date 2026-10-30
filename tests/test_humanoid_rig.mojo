@@ -622,6 +622,9 @@ def test_parts_are_decimated_at_once_as_one_after_another() raises:
     assert_true(parallel[0].triangle_count() <= 40)
     with assert_raises(contains="one budget per mesh"):
         _ = budget_all(_grids(), [40], 4)
+    # Nothing to decimate: nothing back.
+    assert_equal(len(budget_all(List[BufferGeometry](), List[Int](), 1)), 0)
+    assert_equal(len(budget_all(List[BufferGeometry](), List[Int](), 4)), 0)
     # A mesh that cannot be decimated, as one with a morph target, fails
     # the whole at once.
     var broken = _grid(8)
