@@ -292,10 +292,10 @@ def dress_pieces(
             # A band's cover, smoothed over a coarse skin, can stay under
             # one half everywhere, so its piece is cut at half its peak.
             var peak = Float32(1.0e-6)
-            for v in range(count):
+            for v in range(count):  # pragma: no branch
                 peak = max(peak, values[i][v])
             var scaled = List[Float32](capacity=count)
-            for v in range(count):
+            for v in range(count):  # pragma: no branch
                 scaled.append(values[i][v] / peak)
             whole = belt_band(
                 garment_piece(skin, places[i], everything, nothing),
