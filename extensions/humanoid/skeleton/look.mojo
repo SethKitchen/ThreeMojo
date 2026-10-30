@@ -323,14 +323,18 @@ def skin_phong(
     return material^
 
 
-def hair_phong(genome: Genome = Genome()) raises -> Material:
+def hair_phong(
+    genome: Genome = Genome(), map: TextureId = NO_TEXTURE
+) raises -> Material:
     """Return a Phong material for a keratin hair shaft.
 
     The color is the hair tone `genome` asks for: medium brown on the
-    template genome.
+    template genome. With a `hair_albedo` map, the map carries the tone
+    and the strands, and the color is white.
 
     Args:
         genome: Reads the hair's genes. The template genome by default.
+        map: Id of a `hair_albedo` texture, or `NO_TEXTURE`.
 
     Returns:
         A `PHONG` material.
@@ -339,8 +343,12 @@ def hair_phong(genome: Genome = Genome()) raises -> Material:
         Error: If the Phong constructor refuses the values, or if
             `genome` is not valid.
     """
+    var color = hair_tone(genome)
+    if map != NO_TEXTURE:
+        color = Color(255, 255, 255)
     return phong_material(
-        hair_tone(genome),
+        color,
+        map=map,
         specular=Color(96, 84, 72),
         shininess=40.0,
     )

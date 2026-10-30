@@ -83,6 +83,8 @@ These were measured on four cores. Most of the build is the hair's shell, at `ha
 
 `triangles` sets the skin's budget. The body's skin takes 76 % of it, the hair's shell 12 % and each hand 6 %. A decimated skin keeps its colors: each vertex takes those of the nearest vertex of the full skin. At 20,000 triangles a frame takes 52 ms. A material with textures and light through thin skin costs about twice the time of the default Phong.
 
+The hair's shell is drawn in a Phong material with a map of strands, six times round the head and twice down it. Its texture coordinates run down the hair, so the strands do too.
+
 The hair's shell keeps only its outer face. Its inner face lies 0.8 mm under the scalp, so the skin always hides it. With `outer_only=True`, `head_hair_from_dimensions` drops each triangle whose three corners lie more than 0.4 mm under the skin. That is about 40 % of the shell's triangles. So the hair's whole budget goes to the face that shows, and the decimation has less to do.
 
 A shell thinner than two cells of its mesh breaks into patches, because the mesher cannot close it. So `head_hair_from_dimensions` meshes the shell at least 2.2 cells deep. At `hair_detail` 32 a cell is about 2.3 mm, and only hair cropped very close is cut thicker than its genome asks.
