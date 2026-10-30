@@ -99,7 +99,7 @@ The face is a scan. The skin of the head is the mean head of the ICT Face Model 
 
 1. The face shape genes weigh the scan's identity modes, so each face is a face of its own. The scan's eyes then land on the template's eyes. Each vertex then goes through the head's frame, as an authored point does. So the genome's face and head genes move the scan as they move the skull under it. See [Genome](Genome).
 2. The ear genes warp the ears. Each ear grows about its root, its back edge stands out, and its lobe hangs lower.
-3. The scan is pulled over the modeled solids like a sleeve. The solids are the vault, an ellipsoid a scalp's thickness outside the skull, and the neck, swept round its muscles. Each vertex inside them must move out along its normal. The moves are spread over the mesh until they are smooth, so the mesh stretches and does not fold.
+3. The scan is pulled over the modeled solids like a sleeve. The solids are the vault, an ellipsoid a scalp's thickness outside the skull, and the neck, swept round its muscles. Each vertex inside them must move out along its normal. The moves are spread over the mesh until they are smooth, so the mesh stretches and does not fold. Each normal is the mean of the normals four rings round it. Under the chin the mesh turns sharply over the sternocleidomastoid, and pushed along its own normals there, it folded in a crease. Then each corner of a fold that the fit pushed moves to the mean of its neighbors, and out of the solids again. The scan's own folds, at the lips and the eyelids, stay. Over ten people, the folded edges on the neck went from 82 to 13.
 4. The mouth and the eyes are open in the scan. The palate, the teeth and the orbits fill those spaces, so a fan of triangles closes each opening. The scan is kept as a `MeshField`, the signed distance to a mesh through a tree of boxes.
 
 A search for the nearest triangle starts from a triangle that the point itself picks. The search walks into the nearer box at each level, and starts from the first triangle of the leaf it reaches. So a distance is the same on any thread and in any order. A head and its hair are the same for any number of workers.
@@ -109,6 +109,10 @@ Two triangles that meet at a corner can each put the nearest point one ulp neare
 `HeadSkinField` is the smooth union of the scan and the modeled solids. This fit does not test every anatomical part for containment.
 
 The skin's mesh is the scan's own mesh, not a mesh extracted from the field. Each vertex that the field's surface does not pass through is walked onto it. The mouth's and the eyes' sockets are drawn inside. Below the seam on the neck, 56.5 cm on the template, the skin is meshed by narrow-band surface nets, in `extensions/humanoid/skeleton/surface_nets.mojo`. The two meshes lie on one surface and overlap by a few millimeters. `add_body` joins the body's skin to the scan at the same seam.
+
+Each mesh of the seam ends in a level edge. A surface net ends in a ragged edge at its box, and the scan keeps only whole triangles above its floor. So the body is meshed 2 cm past its top, and the scan reaches 1.5 cm below its floor. `clip_level`, in `extensions/humanoid/skeleton/clip.mojo`, then cuts each one level. It clips each triangle that crosses the height, and it mixes every attribute onto the new vertices. A face with expressions keeps its scan's triangles whole, for its targets.
+
+The scan's triangles are large, and each one cuts in and out of the neck's curve by up to a millimeter. Where they overlap the body's finer mesh, they show through it in shards. So `sink_under_body` moves each scan vertex in the overlap 2 mm in along its normal. The move fades to nothing over 4 mm either side of the body's top edge.
 
 A box whose block count does not fit in an integer is refused.
 

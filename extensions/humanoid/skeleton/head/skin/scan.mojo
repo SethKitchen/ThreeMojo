@@ -65,6 +65,7 @@ from extensions.humanoid.skeleton.surface_nets import (
     surface_gradient,
 )
 from math.vector3 import Vector3, mix_delta3, append_vector3
+from std.collections import Dict
 from std.math import cos, max, min, sin
 
 # Where the scan's frame lands on the template, in template cm: the
@@ -123,6 +124,15 @@ comptime FIT_ROUNDS = 12
 # How many rounds fill the dents between the ridges the scan is pushed
 # over.
 comptime FILL_ROUNDS = 6
+# How many rounds smooth the normals the scan is pushed along. Pushed out
+# along its own normals, a mesh folds where it turns sharply, as under
+# the chin over the sternocleidomastoid; smoothed normals turn slowly.
+comptime NORMAL_ROUNDS = 4
+# How many rounds smooth out the folds left after the fit, and how far a
+# vertex must have been pushed, in meters, for one to move it. The scan's
+# own folds, at the lips and the eyelids, were not pushed, and stay.
+comptime UNTANGLE_ROUNDS = 3
+comptime UNTANGLE_MOVED = Float32(0.001)
 # The face shape genes fade in up the neck, from nothing at the first
 # height to all of it at the second, in template centimeters.
 comptime IDENTITY_FROM = Float32(57.0)
@@ -296,7 +306,9 @@ def fit_over[
     # normal falls short: each pass measures again and pushes again.
     var passes = 0
     for _ in range(FIT_PASSES):  # pragma: no branch
-        var directions = _normals(points, triangles, end)
+        var directions = _smoothed(
+            _normals(points, triangles, end), froms, tos, NORMAL_ROUNDS
+        )
         # How far each vertex must move along its normal: at least
         # `needs`, and no more than `limits`.
         var needs = List[Float32](length=end, fill=0)
@@ -352,7 +364,9 @@ def fit_over[
     # Filling the dents between the ridges leaves a smooth sleeve: each
     # vertex pushed out comes out at least as far as its neighbors do on
     # the mean. Nothing moves in, so nothing goes back inside.
-    var normals = _normals(points, triangles, end)
+    var normals = _smoothed(
+        _normals(points, triangles, end), froms, tos, NORMAL_ROUNDS
+    )
     var outs = List[Float32](length=end, fill=0)
     for v in range(end):  # pragma: no branch
         outs[v] = (points[v] - start[v]).dot(normals[v])
@@ -369,12 +383,89 @@ def fit_over[
                 filled[v] = max(filled[v], means[v] / Float32(counts[v]))
     for v in range(end):  # pragma: no branch
         points[v] = points[v] + normals[v] * (filled[v] - outs[v])
+    # Over a ridge that turns sharply from the mesh, as under the chin
+    # over the sternocleidomastoid, the sleeve can still fold. Each corner
+    # of a fold that was pushed out above the band moves to the mean of
+    # itself and its neighbors, then out of the solid again.
+    for _ in range(UNTANGLE_ROUNDS):  # pragma: no branch
+        var folded = _folded(points, triangles)
+        var outward = _smoothed(
+            _normals(points, triangles, end), froms, tos, NORMAL_ROUNDS
+        )
+        var sums = List[Vector3](length=end, fill=Vector3(0, 0, 0))
+        for e in range(len(froms)):  # pragma: no branch
+            sums[froms[e]] = sums[froms[e]] + points[tos[e]]
+            sums[tos[e]] = sums[tos[e]] + points[froms[e]]
+        for v in range(end):  # pragma: no branch
+            var moved = (points[v] - start[v]).length()
+            if _untangles(folded[v], moved, points[v].y, sink_high):
+                points[v] = (sums[v] + points[v]) / Float32(counts[v] + 1)
+                var gap = margin - hull.distance(points[v])
+                points[v] = points[v] + outward[v] * max(gap, 0)
+
+
+def _untangles(
+    folded: Bool, moved: Float32, y: Float32, sink_high: Float32
+) -> Bool:
+    """Return True if a vertex is one the untangling may move: a corner of
+    a fold, pushed out by the fit, above the band where the mesh sinks."""
+    return folded and moved > UNTANGLE_MOVED and y > sink_high
+
+
+def _facing(points: List[Vector3], triangles: List[Int], t: Int) -> Vector3:
+    """Return the unit normal of the triangle whose corners start at `t`."""
+    var a = points[triangles[t]]
+    var n = cross(points[triangles[t + 1]] - a, points[triangles[t + 2]] - a)
+    n.normalize()
+    return n
+
+
+def _folded(points: List[Vector3], triangles: List[Int]) -> List[Bool]:
+    """Return, for each vertex, whether it is a corner of a fold: of two
+    triangles that meet at an edge at more than a right angle."""
+    var folded = List[Bool](length=len(points), fill=False)
+    var first = Dict[Int, Int]()
+    var count = len(points)
+    for t in range(0, len(triangles), 3):  # pragma: no branch
+        for c in range(3):  # pragma: no branch
+            var a = triangles[t + c]
+            var b = triangles[t + (c + 1) % 3]
+            var key = min(a, b) * count + max(a, b)
+            var other = first.get(key, -1)
+            if other < 0:
+                first[key] = t
+            elif (
+                _facing(points, triangles, t).dot(
+                    _facing(points, triangles, other)
+                )
+                < 0
+            ):
+                for k in range(3):  # pragma: no branch
+                    folded[triangles[t + k]] = True
+                    folded[triangles[other + k]] = True
+    return folded^
 
 
 def _fills(pushed: Float32, count: Int, y: Float32, sink_high: Float32) -> Bool:
     """Return True if a vertex is one the fill may move: pushed out, with
     neighbors, above the band where the mesh sinks."""
     return pushed > 0 and count > 0 and y > sink_high
+
+
+def _smoothed(
+    var normals: List[Vector3], froms: List[Int], tos: List[Int], rounds: Int
+) -> List[Vector3]:
+    """Return unit normals smoothed over the mesh: each round, each
+    normal turns to the mean of itself and its neighbors."""
+    for _ in range(rounds):  # pragma: no branch
+        var sums = normals.copy()
+        for e in range(len(froms)):  # pragma: no branch
+            sums[froms[e]] = sums[froms[e]] + normals[tos[e]]
+            sums[tos[e]] = sums[tos[e]] + normals[froms[e]]
+        for v in range(len(sums)):  # pragma: no branch
+            sums[v].normalize()
+        normals = sums^
+    return normals^
 
 
 def _normals(
