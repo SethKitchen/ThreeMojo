@@ -123,6 +123,9 @@ def test_a_hood_hangs_its_cowl() raises:
     for v in range(placed.count()):
         lowest = min(lowest, placed.vector3(v).y)
     assert_almost_equal(lowest, 1.0, atol=1e-5)
+    # An empty shell hangs the cowl alone.
+    var alone = hang_cowl(empty_mesh(), hulls, rig, True, 0.0012)
+    assert_true(alone.triangle_count() > 0)
     # No hull: the hood as it was.
     var same = hang_cowl(hood, List[FootLast](), rig, True, 0.0012)
     assert_equal(same.triangle_count(), hood.triangle_count())
