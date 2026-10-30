@@ -8,9 +8,10 @@
 from animation.animation_mixer import AnimationAction, AnimationMixer
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, POSITION, BufferGeometry
+from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
+from render.texture_store import NO_TEXTURE
 from extensions.humanoid.rig.clips import (
     Pose,
     clip_from_poses,
@@ -28,8 +29,15 @@ from extensions.humanoid.fidelity import (
     humanoid_provenance,
     require_bake_provenance,
 )
+from extensions.humanoid.skeleton.head.hair.beard import (
+    GOATEE,
+    MUSTACHE,
+    SHORT_BEARD,
+    Beard,
+)
 from extensions.humanoid.rig.game import (
     add_game_humanoid,
+    budget_all,
     game_build_settings,
     carry_attributes,
 )
@@ -398,6 +406,27 @@ def test_a_game_humanoid_is_built_bound_and_light() raises:
         workers=available_workers(),
     )
     assert_equal(scene.skinned_meshes[roomy.skins[0]].material, paint)
+    # The hair's shell is drawn with its strands mapped down it, unless a
+    # look is given.
+    for mesh in scene.meshes:
+        if mesh.node == person.hair.value():
+            var look = assets.materials.get(mesh.material)
+            assert_true(look.map != NO_TEXTURE)
+    var given = add_game_humanoid(
+        scene,
+        assets,
+        root,
+        _spec(),
+        3000,
+        12,
+        8,
+        8,
+        hair_paint=paint,
+        workers=available_workers(),
+    )
+    for mesh in scene.meshes:
+        if mesh.node == given.hair.value():
+            assert_equal(mesh.material, paint)
     var full = 0
     for k in whole.skins:  # pragma: no branch
         full += assets.geometries.get(
@@ -417,6 +446,32 @@ def test_colors_are_carried_to_a_decimated_skin() raises:
     ref carried = target.attribute_view(String(COLOR))
     assert_equal(carried.component(0, 1), 1)
     assert_equal(carried.component(1, 0), 1)
+
+
+def _facing(mut mesh: BufferGeometry, var normals: List[Float32]) raises:
+    """Give a mesh a normal at each vertex."""
+    mesh.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+
+
+def test_normals_are_carried_where_they_face_the_same_way() raises:
+    var source = _mesh([Vector3(0, 0, 0), Vector3(0.5, 0, 0)], [])
+    _facing(source, [0, 1, 0, 0, 0, 1])
+    # The first faces nearly as its nearest full vertex does, and takes
+    # its normal; the second faces across, and keeps its own.
+    var target = _mesh([Vector3(0.001, 0, 0), Vector3(0.499, 0, 0)], [])
+    _facing(target, [0, 0.8, 0.6, 0, 1, 0])
+    carry_attributes(source, target)
+    ref carried = target.attribute_view(String(NORMAL))
+    assert_equal(carried.packed(), [0, 1, 0, 0, 1, 0])
+    # A mesh with no normals gives none and takes none.
+    var bare = _mesh([Vector3(0.001, 0, 0)], [])
+    carry_attributes(source, bare)
+    assert_false(bare.has_attribute(String(NORMAL)))
+    var plain = _mesh([Vector3(0, 0, 0)], [])
+    var kept = _mesh([Vector3(0.001, 0, 0)], [])
+    _facing(kept, [1, 0, 0])
+    carry_attributes(plain, kept)
+    assert_equal(kept.attribute_view(String(NORMAL)).packed(), [1, 0, 0])
 
 
 def test_weld_hash_collisions_do_not_join_distinct_positions() raises:
@@ -566,12 +621,120 @@ def test_attribute_transfer_searches_past_the_first_populated_ring() raises:
 def test_attribute_transfer_accepts_two_empty_meshes() raises:
     var source = _mesh([], [])
     source.set_attribute(String(COLOR), BufferAttribute(List[Float32](), 3))
+    _facing(source, List[Float32]())
     var target = _mesh([], [])
+    _facing(target, List[Float32]())
     carry_attributes(source, target)
     assert_equal(target.attribute_view(String(POSITION)).count(), 0)
     ref colors = target.attribute_view(String(COLOR))
     assert_equal(colors.count(), 0)
     assert_equal(colors.item_size, 3)
+
+
+def test_a_game_humanoid_grows_a_beard() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var bearded = add_game_humanoid(
+        scene,
+        assets,
+        root,
+        _spec(),
+        3000,
+        12,
+        8,
+        8,
+        workers=available_workers(),
+        beard=SHORT_BEARD,
+    )
+    # The beard hangs from the head beside the hair's shell and the eyes,
+    # within its share of the budget.
+    var node = bearded.beard.value()
+    var found = False
+    for mesh in scene.meshes:
+        if mesh.node == node:
+            found = True
+            var drawn = assets.geometries.get(mesh.geometry).triangle_count()
+            assert_true(drawn > 0 and drawn <= 3000 // 10)
+    assert_true(found)
+    # The recipe names the beard; a clean-shaven one does not.
+    var settings = game_build_settings(3000, 12, 8, 8, beard=SHORT_BEARD)
+    assert_equal(settings.string("beard"), "short beard")
+    assert_false(game_build_settings(3000, 12, 8, 8).has("beard"))
+    var plain = add_game_humanoid(
+        scene, assets, root, _spec(), 3000, 12, 8, 8, workers=1
+    )
+    assert_false(plain.beard)
+    # With no budget, the beard keeps its whole mesh.
+    var whole = add_game_humanoid(
+        scene, assets, root, _spec(), 0, 12, 8, 8, workers=1, beard=MUSTACHE
+    )
+    assert_true(whole.beard)
+    with assert_raises(contains="named style"):
+        _ = game_build_settings(beard=Beard(9))
+    with assert_raises(contains="does not carry a beard"):
+        _ = game_build_settings(facial_animation=True, beard=GOATEE)
+
+
+def _grid(cells: Int) raises -> BufferGeometry:
+    """Return a flat grid of `cells` by `cells` quads, wavy in z."""
+    var points = List[Vector3]()
+    for j in range(cells + 1):
+        for i in range(cells + 1):
+            var x = Float32(i) / Float32(cells)
+            var y = Float32(j) / Float32(cells)
+            points.append(Vector3(x, y, 0.05 * x * x + 0.03 * y))
+    var triangles = List[Int]()
+    for j in range(cells):
+        for i in range(cells):
+            var a = j * (cells + 1) + i
+            triangles.append(a)
+            triangles.append(a + 1)
+            triangles.append(a + cells + 1)
+            triangles.append(a + 1)
+            triangles.append(a + cells + 2)
+            triangles.append(a + cells + 1)
+    return _mesh(points, triangles)
+
+
+def _grids() raises -> List[BufferGeometry]:
+    """Return three grids of 12, 8 and 10 cells a side."""
+    var meshes = List[BufferGeometry]()
+    meshes.append(_grid(12))
+    meshes.append(_grid(8))
+    meshes.append(_grid(10))
+    return meshes^
+
+
+def test_parts_are_decimated_at_once_as_one_after_another() raises:
+    var budgets: List[Int] = [40, 0, 30]
+    var serial = budget_all(_grids(), budgets, 1)
+    var parallel = budget_all(_grids(), budgets, 4)
+    assert_equal(len(parallel), 3)
+    for k in range(3):
+        assert_equal(parallel[k].triangle_count(), serial[k].triangle_count())
+        ref a = parallel[k].attribute_view(String(POSITION))
+        ref b = serial[k].attribute_view(String(POSITION))
+        assert_equal(a.count(), b.count())
+        for v in range(a.count()):
+            assert_true(a.vector3(v) == b.vector3(v))
+    # No budget keeps a mesh whole.
+    assert_equal(parallel[1].triangle_count(), 128)
+    assert_true(parallel[0].triangle_count() <= 40)
+    with assert_raises(contains="one budget per mesh"):
+        _ = budget_all(_grids(), [40], 4)
+    # Nothing to decimate: nothing back.
+    assert_equal(len(budget_all(List[BufferGeometry](), List[Int](), 1)), 0)
+    assert_equal(len(budget_all(List[BufferGeometry](), List[Int](), 4)), 0)
+    # A mesh that cannot be decimated, as one with a morph target, fails
+    # the whole at once.
+    var broken = _grid(8)
+    broken.add_morph_target(broken.clone_attribute(String(POSITION)))
+    var mixed = List[BufferGeometry]()
+    mixed.append(_grid(8))
+    mixed.append(broken^)
+    with assert_raises(contains="morph"):
+        _ = budget_all(mixed^, [20, 20], 4)
 
 
 def test_game_builder_refuses_engineering_before_scene_edits() raises:

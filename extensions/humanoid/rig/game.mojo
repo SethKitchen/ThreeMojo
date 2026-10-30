@@ -25,7 +25,7 @@ This is not a three.js port. See Extensions.
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, POSITION, BufferGeometry
+from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.fidelity import (
@@ -66,16 +66,22 @@ from extensions.humanoid.side import LEFT, RIGHT
 from extensions.humanoid.skeleton.arm.assembly import (
     UNSET_PAINT,
     place_mesh_node,
-    resolved_paint,
 )
 from extensions.humanoid.skeleton.arm.frame import arm_muscle_dimensions
 from extensions.humanoid.skeleton.hand.skin.geometry import (
     hand_skin_from_dimensions,
 )
-from extensions.humanoid.skeleton.complexion import iris_albedo
+from extensions.humanoid.skeleton.complexion import hair_albedo, iris_albedo
 from extensions.humanoid.skeleton.head.eyes import eyeball_mesh
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.head.hair.dimensions import SCALP_HAIR
+from extensions.humanoid.skeleton.head.hair.beard import (
+    CLEAN_SHAVEN,
+    Beard,
+    beard_label,
+    beard_mesh,
+    require_beard,
+)
 from extensions.humanoid.skeleton.head.hair.geometry import (
     head_hair_from_dimensions,
 )
@@ -97,18 +103,27 @@ from extensions.humanoid.skeleton.torso.body import (
     body_skin_mesh,
     body_skin_parts,
 )
+from extensions.humanoid.skeleton.surface_nets import reproject_uvs
 from extensions.humanoid.spec import HumanoidSpec
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
+from math.vector2 import Vector2
 from math.vector3 import Vector3, append_vector3
 from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SkinnedMesh
 from core.ordinal import require_valid, require_non_negative
+from render.tasks import TaskGroup
 
 # The share of a triangle budget the body's skin takes, and the hair's
 # shell; each hand takes half of the rest.
 comptime BODY_SHARE = Float32(0.76)
+# The side of the hair's strand map, in texels.
+comptime HAIR_TEXELS = 64
 comptime HAIR_SHARE = Float32(0.12)
+# The share a beard takes, from the body's.
+comptime BEARD_SHARE = Float32(0.03)
+# Cells along a beard's box.
+comptime BEARD_DETAIL = 28
 # Half the slot that parts the legs, so they can swing apart, in meters
 # on the template.
 comptime LEG_GAP = Float32(0.014)
@@ -117,6 +132,10 @@ comptime CROTCH = Float32(0.06)
 # The cell a nearest point is sought in when carrying colors over, in
 # meters.
 comptime CARRY_CELL = Float32(0.01)
+# A decimated vertex takes the normal of the nearest full vertex only if
+# the two turn apart by less than this, as the cosine between them: not
+# from across a thin gap, as between the lips, where the two face apart.
+comptime CARRY_FACING = Float32(0.5)
 
 
 struct GameHumanoid(Movable):
@@ -135,6 +154,8 @@ struct GameHumanoid(Movable):
     var face: Optional[GameFace]
     var hair: Optional[NodeId]
     """The node of the scalp hair's shell, which a hood or a helmet hides."""
+    var beard: Optional[NodeId]
+    """The node of the facial hair's shell, if the face grows any."""
 
     def __init__(
         out self,
@@ -145,6 +166,7 @@ struct GameHumanoid(Movable):
         var strands: List[HairStrands],
         var face: Optional[GameFace] = None,
         hair: Optional[NodeId] = None,
+        beard: Optional[NodeId] = None,
     ):
         """Hold a humanoid's parts.
 
@@ -156,6 +178,7 @@ struct GameHumanoid(Movable):
             strands: Its hair's strands, or none.
             face: Preserved face and mouth binding, or no facial animation.
             hair: The node of the scalp hair's shell, if it has one.
+            beard: The node of the facial hair's shell, if it has one.
         """
         self.rig = rig^
         self.root = root
@@ -164,6 +187,7 @@ struct GameHumanoid(Movable):
         self.strands = strands^
         self.face = face^
         self.hair = hair
+        self.beard = beard
 
 
 def _key(p: Vector3) -> Int:
@@ -175,13 +199,21 @@ def _key(p: Vector3) -> Int:
 
 
 def carry_attributes(source: BufferGeometry, mut target: BufferGeometry) raises:
-    """Give a decimated mesh the colors and the thinness of the mesh it
-    was decimated from, each vertex those of the nearest source vertex.
+    """Give a decimated mesh the colors, the thinness and the normals of
+    the mesh it was decimated from, each vertex those of the nearest
+    source vertex.
+
+    A normal is carried only where the two meshes face the same way, to
+    within `CARRY_FACING`. A full mesh's normals are those of its smooth
+    surface, so the decimated mesh shades as it does. Two meshes that
+    meet at a seam then shade alike across it, where the normals the
+    simplifier makes from the faces on one side would not.
 
     Args:
-        source: The full mesh, with `position` and any of `color` and
-            `thinness`.
-        target: The decimated mesh, in the same frame.
+        source: The full mesh, with `position` and any of `color`,
+            `thinness` and `normal`.
+        target: The decimated mesh, in the same frame. Its normals, if
+            it has them, are replaced.
 
     Raises:
         Error: If either mesh has no positions, or a nonempty target
@@ -244,6 +276,18 @@ def carry_attributes(source: BufferGeometry, mut target: BufferGeometry) raises:
             for c in range(size):  # pragma: no branch
                 data.append(values.component(nearest[v], c))
         target.set_attribute(name, BufferAttribute(data^, size))
+    if source.has_attribute(String(NORMAL)) and target.has_attribute(
+        String(NORMAL)
+    ):
+        ref smooth = source.attribute_view(String(NORMAL))
+        var normals = target.clone_attribute(String(NORMAL))
+        for v in range(len(nearest)):
+            var n = smooth.vector3(nearest[v])
+            if n.dot(normals.vector3(v)) > CARRY_FACING:
+                normals.set_component(v, 0, n.x)
+                normals.set_component(v, 1, n.y)
+                normals.set_component(v, 2, n.z)
+        target.set_attribute(String(NORMAL), normals^)
 
 
 def _outline(mut points: List[Float32], mesh: BufferGeometry) raises:
@@ -271,6 +315,66 @@ def _budgeted(
     return fewer^
 
 
+__async def _budget_task(
+    meshes: Pointer[List[BufferGeometry], MutAnyOrigin],
+    budgets: Pointer[List[Int], ImmutAnyOrigin],
+    failures: Pointer[List[String], MutAnyOrigin],
+    index: Int,
+):
+    """Decimate one mesh of a list in place, or record why it failed."""
+    try:
+        var mesh = meshes[][index].clone()
+        meshes[][index] = _budgeted(mesh^, budgets[][index])
+    except e:
+        failures[][index] = String(e)
+
+
+def budget_all(
+    var meshes: List[BufferGeometry], budgets: List[Int], workers: Int
+) raises -> List[BufferGeometry]:
+    """Return each mesh decimated to its budget, the meshes at once.
+
+    Each decimation is independent and runs on one thread, so the meshes
+    are the same as when they are decimated one after another.
+
+    Args:
+        meshes: The meshes.
+        budgets: One budget per mesh, as `_budgeted` takes it.
+        workers: How many meshes to decimate at once; one or less runs
+            them one after another.
+
+    Returns:
+        The meshes, decimated, in their order.
+
+    Raises:
+        Error: If there is not one budget per mesh, or a decimation
+            fails.
+    """
+    if len(budgets) != len(meshes):
+        raise Error("Decimation needs one budget per mesh")
+    if workers <= 1:
+        var done = List[BufferGeometry](capacity=len(meshes))
+        for k in range(len(meshes)):
+            done.append(_budgeted(meshes[k].clone(), budgets[k]))
+        return done^
+    var failures = List[String](length=len(meshes), fill=String())
+    var group = TaskGroup()
+    for k in range(len(meshes)):
+        group.create_task(
+            _budget_task(
+                Pointer(to=meshes).unsafe_origin_cast[MutAnyOrigin](),
+                Pointer(to=budgets).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=failures).unsafe_origin_cast[MutAnyOrigin](),
+                k,
+            )
+        )
+    group.wait()
+    for failure in failures:
+        if failure != "":
+            raise Error(failure)
+    return meshes^
+
+
 comptime _FACIAL_PART_MINIMUM = 4 * 32
 
 
@@ -292,6 +396,7 @@ def add_game_humanoid(
     workers: Int = 1,
     use: HumanoidUse = VISUAL_USE,
     facial_animation: Bool = False,
+    beard: Beard = CLEAN_SHAVEN,
 ) raises -> GameHumanoid:
     """Build one person's skin on a skeleton under `parent`.
 
@@ -319,6 +424,8 @@ def add_game_humanoid(
         facial_animation: Keep original face, teeth and gums/tongue under HEAD.
             The total mesh budget then includes those parts and both eyes.
             Insufficient budgets raise instead of dropping targets or exceeding it.
+        beard: The facial hair the face grows. Clean-shaven by default.
+            A beard takes `BEARD_SHARE` of the budget from the body's.
 
     Returns:
         The humanoid: its rig, its bones and its meshes.
@@ -326,8 +433,9 @@ def add_game_humanoid(
     Raises:
         Error: If the spec, a detail, style or visual use is refused; if
             the budget is negative or cannot preserve the facial and body
-            requirements; if facial animation requests strand guides; or if
-            a scene node, mesh or geometry operation fails.
+            requirements; if facial animation requests strand guides or a
+            beard; if the beard is not named; or if a scene node, mesh or
+            geometry operation fails.
     """
     require_humanoid_use(use)
     var settings = game_build_settings(
@@ -342,6 +450,7 @@ def add_game_humanoid(
         hair_paint,
         eye_paint,
         facial_animation,
+        beard,
     )
     var node = Object3D()
     node.user_data.set_json(
@@ -379,9 +488,24 @@ def add_game_humanoid(
         facial_meshes.append(mouth_mesh(dims, GUMS_AND_TONGUE, shapes))
     else:
         body = body_skin_mesh(spec, detail, workers, gap)
+    # The shell's inner face lies under the scalp: a game never sees it.
+    # With no strands over it, the shell takes its style's shape.
     var shell = head_hair_from_dimensions(
-        dims, SCALP_HAIR, RIGHT, hair_detail, workers, hair_style
+        dims,
+        SCALP_HAIR,
+        RIGHT,
+        hair_detail,
+        workers,
+        hair_style,
+        outer_only=True,
+        alone=guides == 0,
     )
+    # Decimation bends the strands laid round the shell; they are laid
+    # again where its vertices end up.
+    var meshed = shell.clone()
+    var whiskers = Optional[BufferGeometry](None)
+    if beard != CLEAN_SHAVEN:
+        whiskers = beard_mesh(dims, beard, BEARD_DETAIL, workers)
     var eyes = List[BufferGeometry]()
     # Both named sides receive an eye.
     for side in [RIGHT, LEFT]:  # pragma: no branch
@@ -420,6 +544,12 @@ def add_game_humanoid(
             )
         remaining = triangles - reserve - _FACIAL_PART_MINIMUM
     var body_budget = Int(Float32(remaining) * BODY_SHARE)
+    # A beard takes its share from the body's. With no budget, it keeps
+    # its full mesh, as every part does.
+    var beard_budget = 0
+    if whiskers and triangles > 0:
+        beard_budget = max(32, Int(Float32(remaining) * BEARD_SHARE))
+        body_budget -= beard_budget
     var hand_budget = Int(
         Float32(remaining) * (1 - BODY_SHARE - HAIR_SHARE) / 2
     )
@@ -451,10 +581,19 @@ def add_game_humanoid(
         parts.append(right^)
         parts.append(left^)
     else:
-        parts.append(_budgeted(body^, body_budget))
-        parts.append(_budgeted(right^, hand_budget))
-        parts.append(_budgeted(left^, hand_budget))
-        shell = _budgeted(shell^, hair_budget)
+        # The four decimations are independent: run them at once.
+        var whole = List[BufferGeometry]()
+        whole.append(body^)
+        whole.append(right^)
+        whole.append(left^)
+        whole.append(shell^)
+        var fewer = budget_all(
+            whole^,
+            [body_budget, hand_budget, hand_budget, hair_budget],
+            workers,
+        )
+        shell = fewer.pop()
+        parts = fewer^
     if facial_animation and triangles > 0:
         var retained = reserve + shell.triangle_count()
         # Both preceding branches appended body and the two hands.
@@ -537,8 +676,25 @@ def add_game_humanoid(
     var head = rig.at(HEAD)
     holder.set_position(-head.x, -head.y, -head.z)
     var holder_id = scene.attach(holder^, bones[HEAD.value])
-    var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
+    # The hair's strands run down its shell, as its texture coordinates do.
+    reproject_uvs(shell, meshed)
+    var hair = hair_paint
+    if hair.value < 0:
+        var strands = hair_albedo(HAIR_TEXELS, spec.genome)
+        strands.repeat = Vector2(6, 2)
+        hair = assets.materials.add(
+            hair_phong(spec.genome, assets.textures.add(strands^))
+        )
     var hair_node = place_mesh_node(scene, assets, holder_id, shell^, hair)
+    var beard_node = Optional[NodeId](None)
+    if whiskers:
+        beard_node = place_mesh_node(
+            scene,
+            assets,
+            holder_id,
+            _budgeted(whiskers.take(), beard_budget),
+            hair,
+        )
     var face = Optional[GameFace](None)
     if facial_animation:
         var paints = List[MaterialId]()
@@ -568,7 +724,14 @@ def add_game_humanoid(
             )
         )
     return GameHumanoid(
-        rig^, root, bones^, skins^, strands^, face^, Optional(hair_node)
+        rig^,
+        root,
+        bones^,
+        skins^,
+        strands^,
+        face^,
+        Optional(hair_node),
+        beard_node,
     )
 
 
@@ -584,6 +747,7 @@ def game_build_settings(
     hair_paint: MaterialId = UNSET_PAINT,
     eye_paint: MaterialId = UNSET_PAINT,
     facial_animation: Bool = False,
+    beard: Beard = CLEAN_SHAVEN,
 ) raises -> UserData:
     """Record every game-builder option that changes a visual recipe.
 
@@ -602,19 +766,25 @@ def game_build_settings(
         hair_paint: Hair material ID, or the default sentinel.
         eye_paint: Eye material ID, or the default sentinel.
         facial_animation: Preserve original face correspondence for audio playback.
+        beard: The facial hair. Recorded only when the face grows some, so
+            a clean-shaven recipe is as it was before beards.
 
     Returns:
         A value snapshot independent of the canonical spec.
 
     Raises:
-        Error: If the hair style is unnamed, the triangle budget is
-            negative, or facial animation requests guide strands.
+        Error: If the hair style or the beard is unnamed, the triangle
+            budget is negative, or facial animation requests guide strands
+            or a beard.
     """
     require_non_negative(triangles, "Game triangle budget must be nonnegative")
     if facial_animation and guides > 0:
         raise Error(
             "Facial triangle budgets do not support strand hair; use the shell"
         )
+    require_beard(beard)
+    if facial_animation and beard != CLEAN_SHAVEN:
+        raise Error("A face that speaks does not carry a beard yet")
     require_valid(
         hair_style.is_valid(), "Game build settings require a named hair style"
     )
@@ -626,6 +796,8 @@ def game_build_settings(
     settings.set_string("hand_detail", String(hand_detail))
     settings.set_string("hair_detail", String(hair_detail))
     settings.set_string("hair_style", String(hair_style.value))
+    if beard != CLEAN_SHAVEN:
+        settings.set_string("beard", beard_label(beard))
     settings.set_string("guides", String(guides))
     settings.set_string("followers", String(followers))
     settings.set_string("skin_material_id", String(skin_paint.value))

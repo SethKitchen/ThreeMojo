@@ -33,7 +33,11 @@ The rig has nineteen joints. Each joint is a bone, a scene node named as a glTF 
 
 ## The skin and its weights
 
-`add_game_humanoid` builds three skinned meshes on one skeleton: the body's skin and each hand's. The eyes and the scalp's hair hang from the head's bone, so they turn with it. With `guides`, it grows strands of hair as well.
+`add_game_humanoid` builds three skinned meshes on one skeleton: the body's skin and each hand's. The eyes and the scalp's hair hang from the head's bone, so they turn with it. With `guides`, it grows strands of hair as well. With none, the hair's shell takes the shape of `hair_style`. A bob falls to the jaw, a ponytail hangs from its tie, and a bun stands on the crown. See [Head](Head#a-shell-drawn-alone).
+
+With `beard`, the face grows facial hair: a mustache, a goatee, a short or full beard, a chin strap or mutton chops. See [Facial hair](Head#facial-hair). The beard hangs from the head's bone with the hair, in the hair's material, and `person.beard` names its node. It takes 3 % of the triangle budget from the body's share.
+
+A clean-shaven build's recipe is as it was, and a bearded one records the beard. A hood or a helmet hides the beard with the hair. A face with facial animation does not carry a beard yet.
 
 `skin_weights` binds a skin to the bones. It measures distance over the skin, not through the air. So a part is turned only by the bones it joins through the skin.
 
@@ -81,7 +85,17 @@ Build the humanoid once and bake it with `write_sealed_bake(path, scene, assets,
 
 These were measured on four cores. Most of the build is the hair's shell, at `hair_detail` 32.
 
+The body's skin, each hand's and the hair's shell are decimated at once, one on each thread, with `budget_all`. Each decimation is the same as before, so the meshes are too. On a shared four-core machine a build at 24,000 triangles fell from 3.3 s to 2.5 s.
+
 `triangles` sets the skin's budget. The body's skin takes 76 % of it, the hair's shell 12 % and each hand 6 %. A decimated skin keeps its colors: each vertex takes those of the nearest vertex of the full skin. At 20,000 triangles a frame takes 52 ms. A material with textures and light through thin skin costs about twice the time of the default Phong.
+
+A decimated skin keeps the normals of the full skin too, so it shades as the full skin does. The body, the head and the hands then shade alike across their seams. A vertex keeps its own normal where the nearest full vertex faces more than 60° away, as across the gap between the lips. The hair's shell keeps the normals the simplifier makes.
+
+The hair's shell is drawn in a Phong material with a map of strands, six times round the head and twice down it. Its texture coordinates run down the hair, so the strands do too. Decimation moves the shell's vertices but keeps their coordinates, which bent the strands into zigzags. So `reproject_uvs` lays the coordinates again where the vertices end up, and the strands stay straight.
+
+The hair's shell keeps only its outer face. Its inner face lies 0.8 mm under the scalp, so the skin always hides it. With `outer_only=True`, `head_hair_from_dimensions` drops each triangle whose three corners lie more than 0.4 mm under the skin. That is about 40 % of the shell's triangles. So the hair's whole budget goes to the face that shows, and the decimation has less to do.
+
+A shell thinner than two cells of its mesh breaks into patches, because the mesher cannot close it. So `head_hair_from_dimensions` meshes the shell at least 2.2 cells deep. At `hair_detail` 32 a cell is about 2.3 mm, and only hair cropped very close is cut thicker than its genome asks.
 
 ## Example
 

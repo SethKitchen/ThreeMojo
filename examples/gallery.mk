@@ -190,10 +190,14 @@ $(call gallery,walk,walk)
 $(call gallery,animal_anatomy,animal_anatomy)
 $(call gallery,game_humanoid,game_humanoid)
 $(call gallery,hairstyles,hairstyles)
+# The same woman in every style as a game humanoid: the hair is its shell alone.
+$(call gallery,game_hairstyles,game_hairstyles)
 $(call gallery,genomes,genomes)
 $(call gallery,family,family)
 # Three people dressed from the skin out walk: cloth, mail, plate, a cloak and a sword.
 $(call gallery,armory,armory)
+# Eight people of eight callings, each of a genome and an outfit picked by a seed.
+$(call gallery,crowd,crowd)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.

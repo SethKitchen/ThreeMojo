@@ -18,6 +18,10 @@
 - `merge` joins two meshes that have the same attributes.
 - `keep_triangles` drops the triangles a mask refuses.
 - `normalize_normals` scales interpolated normals back to unit length.
+- `top_four` keeps the four heaviest bones of a weight per bone.
+- `add_rim` gives each open edge a rim, so a hem shows its thickness.
+- `MeshWriter` writes a mesh with another mesh's attributes, vertex by
+  vertex, so the two can be merged.
 
 This is not a three.js port. See Extensions.
 
@@ -28,7 +32,12 @@ from std.memory import bitcast
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
+from core.search import first_match
+from math.vector3 import Vector3
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
+
+comptime COVER = "cover"
+"""The name of the attribute that carries each vertex's cover value."""
 
 
 def _bits(value: Float32) -> Int:
@@ -429,3 +438,242 @@ def normalize_normals(mut geometry: BufferGeometry) raises:
         normals.set_component(v, 1, n.y)
         normals.set_component(v, 2, n.z)
     geometry.set_attribute(String(NORMAL), normals^)
+
+
+def top_four(all: List[Float32]) -> Tuple[List[Int], List[Float32]]:
+    """Return the four heaviest bones of a weight per bone.
+
+    Args:
+        all: One weight per bone, at least four bones.
+
+    Returns:
+        The four heaviest bones, heaviest first, and their weights scaled
+        to add up to one.
+    """
+    var bones = List[Int]()
+    var total = Float32(0)
+    for _ in range(4):  # pragma: no branch
+        var best = 0
+        var heaviest = Float32(-1)
+        for j in range(len(all)):  # pragma: no branch
+            if all[j] > heaviest and j not in bones:
+                heaviest = all[j]
+                best = j
+        bones.append(best)
+        total += all[best]
+    var weights = List[Float32]()
+    for k in range(4):  # pragma: no branch
+        weights.append(all[bones[k]] / max(total, Float32(1e-30)))
+    return (bones^, weights^)
+
+
+struct MeshWriter(Movable):
+    """A mesh with another mesh's attributes, written vertex by vertex.
+
+    A garment's skirt and its lasts are made this way, so they can be
+    merged with the shell they join."""
+
+    var names: List[String]
+    var sizes: List[Int]
+    var out: List[List[Float32]]
+    var index: List[Int]
+
+    def __init__(out self, like: BufferGeometry) raises:
+        """Write the attributes `like` has.
+
+        Args:
+            like: The mesh whose attributes to write.
+
+        Raises:
+            Error: If an attribute cannot be read.
+        """
+        self.names = like.names.copy()
+        self.sizes = List[Int]()
+        self.out = List[List[Float32]]()
+        self.index = List[Int]()
+        for name in self.names:
+            self.sizes.append(like.attribute_view(name).item_size)
+            self.out.append(List[Float32]())
+
+    def add(
+        mut self,
+        p: Vector3,
+        cover: Float32,
+        bones: List[Int],
+        weights: List[Float32],
+    ) -> Int:
+        """Append one vertex. Any attribute it does not name is zero.
+
+        Args:
+            p: Its position.
+            cover: Its cover value.
+            bones: Its four bones.
+            weights: Their four weights.
+
+        Returns:
+            The vertex's index.
+        """
+        var at = 0
+        for k in range(len(self.names)):  # pragma: no branch
+            at = len(self.out[k]) // self.sizes[k]
+            var name = self.names[k]
+            if name == String(POSITION):
+                self.out[k].append(p.x)
+                self.out[k].append(p.y)
+                self.out[k].append(p.z)
+            elif name == String(COVER):
+                self.out[k].append(cover)
+            elif name == String(SKIN_INDEX):
+                for c in range(4):  # pragma: no branch
+                    self.out[k].append(Float32(bones[c]))
+            elif name == String(SKIN_WEIGHT):
+                for c in range(4):  # pragma: no branch
+                    self.out[k].append(weights[c])
+            else:
+                for _ in range(self.sizes[k]):  # pragma: no branch
+                    self.out[k].append(0)
+        return at
+
+    def triangle(mut self, a: Int, b: Int, c: Int):
+        """Append one triangle.
+
+        Args:
+            a: Its first corner.
+            b: Its second corner.
+            c: Its third corner.
+        """
+        self.index.append(a)
+        self.index.append(b)
+        self.index.append(c)
+
+    def quad(mut self, a: Int, b: Int, c: Int, d: Int):
+        """Append two triangles: `a, b, c` and `c, b, d`.
+
+        Args:
+            a: A corner.
+            b: The next corner, down from `a`.
+            c: The corner beside `a`.
+            d: The corner beside `b`.
+        """
+        self.index.append(a)
+        self.index.append(b)
+        self.index.append(c)
+        self.index.append(c)
+        self.index.append(b)
+        self.index.append(d)
+
+    def build(mut self) raises -> BufferGeometry:
+        """Return the mesh written, with normals computed from its faces.
+
+        Returns:
+            An indexed mesh with every attribute `like` has.
+
+        Raises:
+            Error: If an attribute is malformed.
+        """
+        var mesh = BufferGeometry()
+        for k in range(len(self.names)):  # pragma: no branch
+            mesh.set_attribute(
+                self.names[k],
+                BufferAttribute(self.out[k].copy(), self.sizes[k]),
+            )
+        mesh.set_index(self.index.copy())
+        mesh.compute_vertex_normals()
+        return mesh^
+
+
+def add_rim(geometry: BufferGeometry, depth: Float32) raises -> BufferGeometry:
+    """Return a mesh with a rim along each open edge, `depth` deep.
+
+    A garment is one face of its fabric. At a hem its edge has no
+    thickness, and a plate looks as thin as paper. The rim is a strip of
+    two triangles along each open edge, from the edge in along its
+    vertices' normals, facing out of the edge. Each rim vertex takes the
+    attributes of the edge vertex it is made from, and the strip's own
+    normal, so the edge catches the light as a rolled edge does.
+
+    An edge is open when one triangle holds it. Copies of a vertex at one
+    position are one vertex here, so a seam where a mesh was parted is
+    not an edge.
+
+    Args:
+        geometry: A mesh with positions and normals, indexed or not.
+        depth: How deep the rim runs, in meters.
+
+    Returns:
+        The mesh and its rims.
+
+    Raises:
+        Error: If the mesh has no positions or no normals.
+    """
+    var groups = weld_groups(geometry)
+    var count = geometry.vertex_count()
+    var holders = Dict[Int, Int]()
+    for t in range(geometry.triangle_count()):
+        for c in range(3):  # pragma: no branch
+            var a = groups[geometry.corner_index(t, c)]
+            var b = groups[geometry.corner_index(t, (c + 1) % 3)]
+            var key = _edge_key(a, b, count)
+            holders[key] = holders.get(key, 0) + 1
+    ref placed = geometry.attribute_view(String(POSITION))
+    ref normals = geometry.attribute_view(String(NORMAL))
+    var carrier = _Carrier(geometry)
+    var position_at = first_match(carrier.names, String(POSITION))
+    var normal_at = first_match(carrier.names, String(NORMAL))
+    var written = 0
+    var index = List[Int]()
+    for t in range(geometry.triangle_count()):
+        for c in range(3):  # pragma: no branch
+            var a = geometry.corner_index(t, c)
+            var b = geometry.corner_index(t, (c + 1) % 3)
+            if holders[_edge_key(groups[a], groups[b], count)] != 1:
+                continue
+            var pa = placed.vector3(a)
+            var pb = placed.vector3(b)
+            # The face's normal, as its corners wind.
+            var face = pb - pa
+            face.cross(
+                placed.vector3(geometry.corner_index(t, (c + 2) % 3)) - pa
+            )
+            # Out of the edge: along it, crossed with the face's normal.
+            var outward = pb - pa
+            outward.cross(face)
+            var length = outward.length()
+            if length <= 0:
+                continue
+            outward = outward * (1 / length)
+            # In from the face, along each vertex's normal turned to the
+            # face's side.
+            var na = normals.vector3(a)
+            var nb = normals.vector3(b)
+            if na.dot(face) < 0:
+                na = na * -1
+            if nb.dot(face) < 0:
+                nb = nb * -1
+            var corners: List[Vector3] = [
+                pa,
+                pa - na * depth,
+                pb - nb * depth,
+                pb,
+            ]
+            var from_vertex: List[Int] = [a, a, b, b]
+            for k in range(4):  # pragma: no branch
+                carrier.copy_vertex(from_vertex[k])
+                _set_vector(carrier, position_at, written + k, corners[k])
+                _set_vector(carrier, normal_at, written + k, outward)
+            index.append(written)
+            index.append(written + 1)
+            index.append(written + 2)
+            index.append(written)
+            index.append(written + 2)
+            index.append(written + 3)
+            written += 4
+    var rims = carrier.build(index^)
+    return merge(geometry, rims)
+
+
+def _set_vector(mut carrier: _Carrier, at: Int, vertex: Int, value: Vector3):
+    """Overwrite one vertex's three components of one written attribute."""
+    carrier.out[at][vertex * 3] = value.x
+    carrier.out[at][vertex * 3 + 1] = value.y
+    carrier.out[at][vertex * 3 + 2] = value.z

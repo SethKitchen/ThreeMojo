@@ -6,30 +6,43 @@
 """One garment: where it goes, what it is made of, what it covers.
 
 A garment names its slot and its layer, its fabric, its cover, how it
-follows the bones, and its four dyes in a pattern. It holds no mesh.
+follows the bones, its form, and its four dyes in a pattern. It holds no mesh.
 `dress` makes its mesh from the skin of the person who wears it.
 
 The wardrobe below gives a set of medieval garments and armor, from the
 skin out:
 
-| Garment | Slot | Layer | Fabric | Articulation |
-|---|---|---|---|---|
-| `shirt` | torso | under | linen | flexible |
-| `hose` | legs | under | wool | flexible |
-| `tunic` | torso | mid | wool | flexible |
-| `gambeson` | torso | mid | padding | flexible |
-| `hauberk` | torso | outer | mail, brass at the hems | flexible |
-| `coif` | head | outer | mail | flexible |
-| `hood` | head | over | wool | flexible |
-| `boots` | feet | outer | leather | flexible |
-| `gloves` | hands | outer | leather | flexible |
-| `cuirass` | torso | armor | plate | rigid on the chest |
-| `fauld` | waist | armor | plate | four lames from the hips |
-| `pauldrons` | shoulders | armor | plate | three lames from the chest |
-| `vambraces` | arms | armor | plate | rigid on each forearm |
-| `greaves` | legs | armor | plate | rigid on each shin |
-| `bascinet` | head | armor | plate | rigid on the head |
-| `surcoat` | torso | over | linen | flexible, per pale |
+| Garment | Slot | Layer | Fabric | Articulation | Form |
+|---|---|---|---|---|---|
+| `shirt` | torso | under | linen | flexible | fitted |
+| `hose` | legs | under | wool | flexible | fitted |
+| `tunic` | torso | mid | wool | flexible | skirted |
+| `gambeson` | torso | mid | padding | flexible | skirted |
+| `hauberk` | torso | outer | mail, brass at the hems | flexible | skirted |
+| `coif` | head | outer | mail | flexible | fitted |
+| `hood` | head | over | wool | flexible | cowled |
+| `boots` | feet | outer | leather | flexible | shod |
+| `gloves` | hands | outer | leather | flexible | fitted |
+| `cuirass` | torso | armor | plate | rigid on the chest | fitted |
+| `fauld` | waist | armor | plate | four lames from the hips | skirted |
+| `pauldrons` | shoulders | armor | plate | three lames from the chest | fitted |
+| `vambraces` | arms | armor | plate | rigid on each forearm | fitted |
+| `greaves` | legs | armor | plate | rigid on each shin | fitted |
+| `bascinet` | head | armor | plate | rigid on the head | fitted |
+| `surcoat` | torso | over | linen | flexible, per pale | skirted |
+| `breeches` | legs | mid | wool | flexible | fitted |
+| `gown` | torso | mid | wool | flexible | skirted to the ankles |
+| `robe` | torso | mid | wool | flexible | skirted to the ankles |
+| `jerkin` | torso | outer | leather | flexible | skirted |
+| `belt` | waist | over | leather | flexible | fitted |
+| `gorget` | neck | armor | plate | rigid on the chest | fitted |
+| `gauntlets` | hands | armor | plate | rigid on each hand | fitted |
+| `sabatons` | feet | armor | plate | rigid on each foot and its toes | shod |
+
+A skirted garment hangs below the hips as one skirt round both legs, a
+shod one closes each foot in a last, and a cowled one closes the head in
+a loose cowl. See `extensions.attire.skirt`, `extensions.attire.last` and
+`extensions.attire.cowl`.
 
 This is not a three.js port. See Extensions.
 
@@ -41,8 +54,11 @@ from extensions.attire.cover import Cover
 from extensions.attire.kinds import (
     ARMOR_LAYER,
     ARMS_SLOT,
+    BANDED,
+    COWLED,
     DYE_CHANNEL_COUNT,
     FEET_SLOT,
+    FITTED,
     FLEXIBLE,
     HANDS_SLOT,
     HEAD_SLOT,
@@ -52,6 +68,7 @@ from extensions.attire.kinds import (
     LINEN,
     MAIL,
     MID_LAYER,
+    NECK_SLOT,
     TRIM_DYE,
     OUTER_LAYER,
     OVER_LAYER,
@@ -59,7 +76,9 @@ from extensions.attire.kinds import (
     PARTY,
     PLATE,
     RIGID,
+    SHOD,
     SHOULDERS_SLOT,
+    SKIRTED,
     SOLID,
     TORSO_SLOT,
     UNDER_LAYER,
@@ -68,11 +87,13 @@ from extensions.attire.kinds import (
     Articulation,
     DyePattern,
     FabricKind,
+    Form,
     Layer,
     Slot,
     require_articulation,
     require_dye_pattern,
     require_fabric_kind,
+    require_form,
     require_layer,
     require_slot,
 )
@@ -136,6 +157,11 @@ struct Garment(Copyable, Movable):
     """Smoothing passes of its shell, or -1 for its fabric's own."""
     var ease: Length
     """How much looser than its fabric's clearance it is cut."""
+    var form: Form
+    """How its shell is shaped where it does not follow the skin."""
+    var flare: Float32
+    """How far a skirted garment widens for each meter it falls, zero
+    through one."""
 
     def __init__(
         out self,
@@ -151,6 +177,8 @@ struct Garment(Copyable, Movable):
         pattern: DyePattern = SOLID,
         drape: Int = -1,
         ease: Length = Length(0, METER),
+        form: Form = FITTED,
+        flare: Float32 = 0,
     ):
         """Describe a garment, dyed one color.
 
@@ -167,6 +195,9 @@ struct Garment(Copyable, Movable):
             pattern: How its dyes lie. Solid by default.
             drape: Smoothing passes of its shell, or -1 for its fabric's.
             ease: How much looser than its fabric's clearance it is cut.
+            form: How its shell is shaped. Fitted by default.
+            flare: How far a skirted garment widens for each meter it
+                falls.
         """
         self.name = name
         self.slot = slot
@@ -180,21 +211,25 @@ struct Garment(Copyable, Movable):
         self.dyes = List[Color](length=DYE_CHANNEL_COUNT, fill=dye)
         self.drape = drape
         self.ease = ease
+        self.form = form
+        self.flare = flare
 
     def check(self) raises:
         """Refuse a garment that cannot be made.
 
         Raises:
-            Error: If a kind is not named, a lamed garment has no anchor
-                or not two through `MAX_LAMES` lames, an anchor is not a
-                named joint, there are not four dyes, the drape is
-                below -1, or the ease is negative or not finite.
+            Error: If a kind or the form is not named, a lamed garment
+                has no anchor or not two through `MAX_LAMES` lames, an
+                anchor is not a named joint, there are not four dyes, the
+                drape is below -1, the ease is negative or not finite, or
+                the flare is not zero through one.
         """
         require_slot(self.slot)
         require_layer(self.layer)
         require_fabric_kind(self.fabric)
         require_articulation(self.articulation)
         require_dye_pattern(self.pattern)
+        require_form(self.form)
         if self.anchor != NO_ANCHOR:
             require_joint(self.anchor)
         if self.articulation == LAMED:
@@ -208,6 +243,8 @@ struct Garment(Copyable, Movable):
             raise Error("A drape is -1, for the fabric's, or zero or more")
         if not (self.ease.value >= 0 and self.ease.value < 1):
             raise Error("An ease must be at least zero and below a meter")
+        if not (self.flare >= 0 and self.flare <= 1):
+            raise Error("A flare must be zero through one")
 
 
 def _both(
@@ -311,8 +348,16 @@ def tunic() raises -> Garment:
     _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
     _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.55, 0)
     _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.35, 0)
+    # Its skirt hangs round both legs and flares.
     return Garment(
-        "tunic", TORSO_SLOT, MID_LAYER, WOOL, cover^, Color(40, 70, 120)
+        "tunic",
+        TORSO_SLOT,
+        MID_LAYER,
+        WOOL,
+        cover^,
+        Color(40, 70, 120),
+        form=SKIRTED,
+        flare=0.25,
     )
 
 
@@ -331,8 +376,16 @@ def gambeson() raises -> Garment:
     _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
     _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.82, 0)
     _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.3, 0)
+    # The quilting is stiff: its skirt flares little.
     return Garment(
-        "gambeson", TORSO_SLOT, MID_LAYER, PADDING, cover^, Color(218, 206, 178)
+        "gambeson",
+        TORSO_SLOT,
+        MID_LAYER,
+        PADDING,
+        cover^,
+        Color(218, 206, 178),
+        form=SKIRTED,
+        flare=0.1,
     )
 
 
@@ -352,7 +405,14 @@ def hauberk() raises -> Garment:
     _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.8, 0)
     _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.45, 0)
     var mail = Garment(
-        "hauberk", TORSO_SLOT, OUTER_LAYER, MAIL, cover^, Color(120, 122, 128)
+        "hauberk",
+        TORSO_SLOT,
+        OUTER_LAYER,
+        MAIL,
+        cover^,
+        Color(120, 122, 128),
+        form=SKIRTED,
+        flare=0.15,
     )
     # Many hauberks end in a row of brass rings.
     mail.dyes[TRIM_DYE.value] = Color(176, 132, 62)
@@ -400,6 +460,7 @@ def hood() raises -> Garment:
         Color(52, 70, 44),
         drape=8,
         ease=Length(1.8, CENTIMETER),
+        form=COWLED,
     )
 
 
@@ -426,6 +487,7 @@ def boots() raises -> Garment:
         Color(84, 54, 32),
         drape=24,
         ease=Length(5, MILLIMETER),
+        form=SHOD,
     )
 
 
@@ -493,6 +555,8 @@ def fauld() raises -> Garment:
         articulation=LAMED,
         anchor=HIPS,
         lames=4,
+        form=SKIRTED,
+        flare=0.12,
     )
 
 
@@ -609,10 +673,224 @@ def surcoat() raises -> Garment:
         cover^,
         Color(160, 24, 32),
         pattern=PARTY,
+        form=SKIRTED,
+        flare=0.3,
     )
     coat.dyes[1] = Color(232, 196, 64)
     coat.dyes[2] = Color(232, 196, 64)
     return coat^
+
+
+def breeches() raises -> Garment:
+    """Return loose wool breeches, from the waist to below the knee.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    cover.reach_to(HIPS, 0.6)
+    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.2, 0)
+    # Cut looser than hose, and over them.
+    return Garment(
+        "breeches",
+        LEGS_SLOT,
+        MID_LAYER,
+        WOOL,
+        cover^,
+        Color(96, 84, 62),
+        drape=3,
+        ease=Length(6, MILLIMETER),
+    )
+
+
+def gown() raises -> Garment:
+    """Return a long wool gown with fitted sleeves, to the ankles.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    _trunk(cover)
+    cover.reach_to(NECK, 0.1)
+    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
+    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.85, 0)
+    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.8, 0)
+    # A gown falls from the hips and spreads wide by its hem.
+    return Garment(
+        "gown",
+        TORSO_SLOT,
+        MID_LAYER,
+        WOOL,
+        cover^,
+        Color(112, 32, 44),
+        form=SKIRTED,
+        flare=0.32,
+    )
+
+
+def robe() raises -> Garment:
+    """Return a monk's wool robe, loose, to the ankles.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    _trunk(cover)
+    cover.reach_to(NECK, 0.25)
+    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 1, 0)
+    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 0.95, 0)
+    _both(cover, RIGHT_THIGH, LEFT_THIGH, 1, 0)
+    _both(cover, RIGHT_SHIN, LEFT_SHIN, 0.85, 0)
+    # Heavy, undyed wool, cut loose: it falls straight.
+    return Garment(
+        "robe",
+        TORSO_SLOT,
+        MID_LAYER,
+        WOOL,
+        cover^,
+        Color(88, 66, 48),
+        drape=6,
+        ease=Length(1.2, CENTIMETER),
+        form=SKIRTED,
+        flare=0.12,
+    )
+
+
+def jerkin() raises -> Garment:
+    """Return a sleeveless leather jerkin to the top of the thighs.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    _trunk(cover)
+    cover.reach_to(NECK, 0.1)
+    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.2, 0)
+    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.25, 0)
+    return Garment(
+        "jerkin",
+        TORSO_SLOT,
+        OUTER_LAYER,
+        LEATHER,
+        cover^,
+        Color(104, 70, 42),
+        drape=6,
+        form=SKIRTED,
+        flare=0.15,
+    )
+
+
+def belt() raises -> Garment:
+    """Return a leather belt round the waist.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    # A band from the top of the pelvis to just above the waist.
+    cover.reach_to(HIPS, 1, 0.82)
+    cover.reach_to(SPINE, 0.14, 0)
+    # Stiff leather spans the hollow of the back: a taut band.
+    return Garment(
+        "belt",
+        WAIST_SLOT,
+        OVER_LAYER,
+        LEATHER,
+        cover^,
+        Color(58, 38, 24),
+        drape=12,
+        form=BANDED,
+    )
+
+
+def gorget() raises -> Garment:
+    """Return a steel gorget round the neck, rigid on the chest.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    cover.reach_to(NECK, 0.55)
+    cover.reach_to(CHEST, 1, 0.78)
+    return Garment(
+        "gorget",
+        NECK_SLOT,
+        ARMOR_LAYER,
+        PLATE,
+        cover^,
+        Color(198, 200, 206),
+        articulation=RIGID,
+        anchor=CHEST,
+    )
+
+
+def gauntlets() raises -> Garment:
+    """Return a pair of steel gauntlets, rigid on each hand.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    _both(cover, RIGHT_HAND, LEFT_HAND, 1, 0)
+    _both(cover, RIGHT_FOREARM, LEFT_FOREARM, 1, 0.78)
+    return Garment(
+        "gauntlets",
+        HANDS_SLOT,
+        ARMOR_LAYER,
+        PLATE,
+        cover^,
+        Color(198, 200, 206),
+        articulation=RIGID,
+    )
+
+
+def sabatons() raises -> Garment:
+    """Return a pair of steel sabatons over the feet, on a last.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which a wardrobe garment's is not.
+    """
+    var cover = Cover()
+    _both(cover, RIGHT_FOOT, LEFT_FOOT, 1, 0)
+    _both(cover, RIGHT_TOES, LEFT_TOES, 1, 0)
+    # Each plate rides the foot or the toes: they part at the ball of
+    # the foot, as the lames of a sabaton do.
+    return Garment(
+        "sabatons",
+        FEET_SLOT,
+        ARMOR_LAYER,
+        PLATE,
+        cover^,
+        Color(198, 200, 206),
+        articulation=RIGID,
+        form=SHOD,
+    )
 
 
 def wardrobe() raises -> List[Garment]:
@@ -641,4 +919,12 @@ def wardrobe() raises -> List[Garment]:
         greaves(),
         bascinet(),
         surcoat(),
+        breeches(),
+        gown(),
+        robe(),
+        jerkin(),
+        belt(),
+        gorget(),
+        gauntlets(),
+        sabatons(),
     ]

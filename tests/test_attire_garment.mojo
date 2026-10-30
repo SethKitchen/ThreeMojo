@@ -11,25 +11,39 @@ from extensions.attire.garment import (
     MAX_LAMES,
     NO_ANCHOR,
     Garment,
+    belt,
     boots,
+    breeches,
     cuirass,
     fauld,
+    gauntlets,
+    gorget,
+    gown,
     greaves,
     hood,
+    jerkin,
+    robe,
+    sabatons,
     surcoat,
     wardrobe,
 )
 from extensions.attire.kinds import (
+    BANDED,
     ARMOR_LAYER,
+    COWLED,
+    FITTED,
     FLEXIBLE,
     LAMED,
     PARTY,
     PLATE,
     RIGID,
+    SHOD,
+    SKIRTED,
     TORSO_SLOT,
     Articulation,
     DyePattern,
     FabricKind,
+    Form,
     Layer,
     Slot,
 )
@@ -44,6 +58,7 @@ from extensions.humanoid.rig.joints import (
     CHEST,
     HIPS,
     JOINT_COUNT,
+    RIGHT_SHIN,
     SPINE,
     Joint,
 )
@@ -97,7 +112,7 @@ def _shared(
 
 def test_the_wardrobe_checks() raises:
     var all = wardrobe()
-    assert_equal(len(all), 16)
+    assert_equal(len(all), 24)
     for garment in all:
         garment.check()
         assert_true(garment.name != "")
@@ -109,6 +124,22 @@ def test_the_wardrobe_checks() raises:
     assert_true(hood().cover.face_open)
     assert_true(hood().ease.value > 0)
     assert_true(boots().drape > 0)
+    assert_equal(boots().form, SHOD)
+    assert_equal(surcoat().form, SKIRTED)
+    assert_true(surcoat().flare > 0)
+    # The long garments fall to the ankles; a gown spreads wider than a
+    # robe.
+    assert_equal(gown().form, SKIRTED)
+    assert_true(gown().flare > robe().flare)
+    assert_true(gown().cover.covers(RIGHT_SHIN))
+    assert_equal(jerkin().form, SKIRTED)
+    assert_equal(sabatons().form, SHOD)
+    assert_equal(sabatons().articulation, RIGID)
+    assert_equal(gorget().anchor, CHEST)
+    assert_equal(gauntlets().articulation, RIGID)
+    assert_true(breeches().ease.value > 0)
+    assert_equal(belt().form, BANDED)
+    assert_equal(hood().form, COWLED)
 
 
 def test_a_garment_refuses_what_cannot_be_made() raises:
@@ -162,6 +193,20 @@ def test_a_garment_refuses_what_cannot_be_made() raises:
         bad.check()
     bad.ease = Length(nan[DType.float32](), METER)
     with assert_raises(contains="An ease"):
+        bad.check()
+    bad = good.copy()
+    bad.form = Form(5)
+    with assert_raises(contains="form must"):
+        bad.check()
+    bad = good.copy()
+    bad.flare = -0.1
+    with assert_raises(contains="A flare"):
+        bad.check()
+    bad.flare = 1.5
+    with assert_raises(contains="A flare"):
+        bad.check()
+    bad.flare = nan[DType.float32]()
+    with assert_raises(contains="A flare"):
         bad.check()
 
 

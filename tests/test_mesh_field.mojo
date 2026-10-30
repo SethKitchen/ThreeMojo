@@ -166,6 +166,40 @@ def test_a_mesh_field_is_signed() raises:
     assert_true(abs(single.distance(Vector3(0.2, 0.2, -1)) + 1) < 1e-6)
 
 
+def test_a_search_does_not_depend_on_the_last_one() raises:
+    # A box of many triangles: corners each triangle of a fan shares.
+    var box = _box(6)
+    var field = MeshField(box[0].copy(), box[1].copy())
+    var corner = box[0][box[1][0]]
+    var first = field.nearest(corner)
+    # Searches elsewhere first, from each side of the box, do not change
+    # which of the triangles round the corner is found.
+    for p in [
+        Vector3(2, 0, 0),
+        Vector3(-2, 0, 0),
+        Vector3(0, 2, 0),
+        Vector3(0, -2, 0),
+        Vector3(0, 0, 2),
+        Vector3(0, 0, -2),
+    ]:
+        _ = field.nearest(p)
+        var again = field.nearest(corner)
+        assert_equal(again[0], first[0])
+        assert_true(_near(again[1], first[1]))
+    # Copies share the tree and find the same triangle.
+    var copy = field.copy()
+    assert_equal(copy.nearest(corner)[0], first[0])
+    # A tree of one leaf starts from its first triangle.
+    var flat: List[Vector3] = [
+        Vector3(0, 0, 0),
+        Vector3(1, 0, 0),
+        Vector3(0, 1, 0),
+    ]
+    var one: List[Int] = [0, 1, 2]
+    var single = MeshField(flat^, one^)
+    assert_equal(single.tree[].start_for(Vector3(5, 5, 5)), 0)
+
+
 def test_a_mesh_field_refuses_a_bad_mesh() raises:
     var points: List[Vector3] = [Vector3(0, 0, 0), Vector3(1, 0, 0)]
     with assert_raises(contains="whole triangles"):

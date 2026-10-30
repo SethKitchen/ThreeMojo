@@ -29,8 +29,11 @@ def test_budget_transfer_matches_unguarded_path_for_all_attribute_sets() raises:
                 String(THINNESS),
                 BufferAttribute(List[Float32](length=count, fill=0.25), 1),
             )
+        # A mesh with neither attribute, a hair shell, keeps the
+        # simplifier's normals; the others take the full mesh's too.
         var expected = simplify(source, 12)
-        carry_attributes(source, expected)
+        if attributes != 0:
+            carry_attributes(source, expected)
         var actual = _budgeted(source.clone(), 12)
         assert_true(actual.triangle_count() < source.triangle_count())
         assert_equal(actual.index, expected.index)

@@ -6,7 +6,7 @@
 """Tests for the fabric table, its looks and the areal density units."""
 
 from extensions.anatomy.evidence import DESIGN, FROM_TEXT
-from extensions.attire.fabric import fabric, fabric_material
+from extensions.attire.fabric import fabric, fabric_material, fold_depth
 from extensions.attire.kinds import (
     FABRIC_KIND_COUNT,
     LEATHER,
@@ -89,6 +89,17 @@ def test_each_fabric_has_a_physical_look() raises:
     assert_true(fabric_material(LEATHER, white).clearcoat > 0)
     with assert_raises(contains="named kind"):
         _ = fabric_material(FabricKind(-1), white)
+
+
+def test_soft_cloth_folds_and_plate_does_not() raises:
+    assert_true(fold_depth(WOOL).value > fold_depth(LINEN).value)
+    assert_equal(fold_depth(SILK).value, fold_depth(LINEN).value)
+    assert_equal(fold_depth(VELVET).value, fold_depth(WOOL).value)
+    assert_true(fold_depth(LEATHER).value > fold_depth(PADDING).value)
+    assert_equal(fold_depth(MAIL).value, fold_depth(LEATHER).value)
+    assert_equal(fold_depth(PLATE).value, 0)
+    with assert_raises(contains="named kind"):
+        _ = fold_depth(FabricKind(99))
 
 
 def main() raises:

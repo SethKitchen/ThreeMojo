@@ -19,6 +19,18 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_beard_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 19,
+        "message": "invalid call to 'require_beard': value passed to 'beard' cannot be converted from 'IntLiteral[1]' to 'Beard'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_behavior_type_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -273,6 +285,18 @@
         "column": 30,
         "line": 12,
         "message": "invalid call to 'axis_rotation': value passed to 'channel' cannot be converted from 'IntLiteral[3]' to 'BvhChannel'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_calling_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'require_calling': value passed to 'calling' cannot be converted from 'IntLiteral[1]' to 'Calling'"
       }
     ],
     "notes": [
@@ -1499,6 +1523,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_garment_form_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 18,
+        "message": "invalid call to 'require_form': value passed to 'form' cannot be converted from 'IntLiteral[1]' to 'Form'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/a_garment_layer_is_not_a_bare_int.mojo": {
     "errors": [

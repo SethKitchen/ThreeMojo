@@ -11,14 +11,20 @@ garment from the person's own skin, from the skin out:
 
 1. Each garment's shell stands off the skin, and off the outer face of
    every garment before it in the outfit's layer order.
-2. Each garment drops what the garments over it hide fully, and the skin
-   drops what any garment hides fully. A body in full plate draws few of
-   its skin triangles, so a dressed person costs about as many triangles
-   as a bare one.
-3. Each garment is cut at its hems and along its dye pattern, bound to
+2. A skirted garment hangs its skirt round both legs below the hips, and
+   a shod garment closes each foot in a last. A skirt hangs over the
+   skirts under it.
+3. Each garment drops what the garments over it hide fully, and the skin
+   drops what any garment hides fully. A skirt hides nothing below its
+   top, where it hangs clear of the legs. A body in full plate draws few
+   of its skin triangles, so a dressed person costs about as many
+   triangles as a bare one.
+4. Each garment is cut at its hems and along its dye pattern, bound to
    its bones as its articulation says, painted, and given texture
-   coordinates in meters round its bones. It is drawn with its fabric's
-   look and bump map as a skinned mesh on the person's own skeleton.
+   coordinates in meters round its bones. A fabric 1.5 mm thick or more
+   has a rim along each hem, so plate, mail, leather and padding show
+   their thickness. It is drawn with its fabric's look and bump map as a
+   skinned mesh on the person's own skeleton.
 
 `dress` changes the person's skin, and hides the scalp's hair under a
 garment that covers the head. Dress a person once.
@@ -36,10 +42,20 @@ from core.buffer_geometry import BufferGeometry
 from core.scene import Scene
 from extensions.attire.cover import cover_values
 from extensions.attire.dye import dye_pattern, paint
-from extensions.attire.fabric import fabric, fabric_material
+from extensions.attire.fabric import fabric, fabric_material, fold_depth
 from extensions.attire.garment import Garment
-from extensions.attire.kinds import layer_label, slot_label
-from extensions.attire.mesh_ops import merge, normalize_normals
+from extensions.attire.cowl import hang_cowl, head_cowl
+from extensions.attire.band import belt_band
+from extensions.attire.kinds import (
+    BANDED,
+    COWLED,
+    SHOD,
+    SKIRTED,
+    layer_label,
+    slot_label,
+)
+from extensions.attire.last import FootLast, foot_lasts, shoe
+from extensions.attire.mesh_ops import add_rim, merge, normalize_normals
 from extensions.attire.plates import articulate
 from extensions.attire.shell import (
     COVER_SMOOTHING,
@@ -51,12 +67,28 @@ from extensions.attire.shell import (
     smooth_values,
     standoff,
 )
+from extensions.attire.skirt import (
+    SKIRT_RING,
+    SkirtEnvelope,
+    hang_skirt,
+    leg_side,
+    skirt_envelope,
+    skirt_scale,
+    skirt_top,
+)
 from extensions.attire.surface import SurfaceMaps, garment_uvs
 from extensions.humanoid.rig.joints import HEAD
 from extensions.humanoid.rig.game import GameHumanoid
 from math.vector3 import Vector3
 from objects.skinned_mesh import SkinnedMesh
 from render.framebuffer import Color
+
+
+comptime RIM_THINNEST = Float32(0.0015)
+"""A fabric at least this thick, in meters, has a rim at its hems: leather,
+padding, mail and plate."""
+comptime RIM_DEEPEST = Float32(0.006)
+"""The deepest a rim runs, in meters."""
 
 
 struct Outfit(Copyable, Movable):
@@ -177,7 +209,15 @@ def dress_pieces(
     var frame = SkinFrame(skin)
     var count = frame.count()
     var order = outfit.order()
+    # Below its top, a skirt hangs clear of the legs, so it hides neither
+    # the skin nor the garments under it there. A band two rings deep
+    # below the top stays hidden, so no triangle that crosses the top
+    # shows through the shell over it.
+    var legs = leg_side(skin)
+    var top = skirt_top(person.rig)
+    var clear = top - 2 * SKIRT_RING * skirt_scale(person.rig)
     var values = List[List[Float32]]()
+    var hides = List[List[Float32]]()
     var faces = List[List[Float32]]()
     var places = List[List[Vector3]]()
     for k in order:
@@ -204,6 +244,16 @@ def dress_pieces(
         var shell = shell_positions(frame, standoffs, mine, drape)
         faces.append(outer_faces(frame, shell, Float32(cloth.thickness.value)))
         places.append(shell^)
+        var hide = mine.copy()
+        # A band is drawn over the garments under it, so it hides none of
+        # them: they show round it whole.
+        if garment.form == BANDED:
+            hide = List[Float32](length=count, fill=0)
+        if garment.form == SKIRTED:
+            for v in range(count):
+                if legs[v] and frame.points[v].y < clear:
+                    hide[v] = 0
+        hides.append(hide^)
         values.append(mine^)
     over_skin = List[Float32](length=count, fill=0)
     var pieces = List[BufferGeometry](capacity=len(order))
@@ -212,15 +262,88 @@ def dress_pieces(
         pieces.append(BufferGeometry())
         shells.append(BufferGeometry())
     var nothing = List[Float32](length=count, fill=0)
+    var everything = List[Float32](length=count, fill=1)
+    # Each skirt hangs over the skirts under it, from the skin out. A boot
+    # closes each foot in a last.
+    var skirts = List[SkirtEnvelope]()
+    var lasts = List[List[FootLast]]()
+    var cowls = List[List[FootLast]]()
+    for i in range(len(order)):
+        ref garment = outfit.garments[order[i]]
+        var whole = garment_piece(skin, places[i], values[i], nothing)
+        var envelope = SkirtEnvelope(Vector3(0, top, 0), 0)
+        if garment.form == SKIRTED:
+            var cloth = fabric(garment.fabric)
+            envelope = skirt_envelope(
+                whole,
+                person.rig,
+                garment.flare,
+                skirts,
+                Float32(cloth.clearance.value + garment.ease.value),
+                Float32(cloth.thickness.value),
+                Float32(fold_depth(garment.fabric).value),
+            )
+            whole = hang_skirt(whole, envelope, person.rig, False)
+        var feet = List[FootLast]()
+        if garment.form == SHOD:
+            feet = foot_lasts(whole, person.rig)
+            whole = shoe(whole, feet, person.rig)
+        if garment.form == BANDED:
+            whole = belt_band(
+                garment_piece(skin, places[i], everything, nothing),
+                whole,
+                person.rig,
+                Float32(fabric(garment.fabric).thickness.value),
+            )
+        var head = List[FootLast]()
+        if garment.form == COWLED:
+            head = head_cowl(whole, person.rig)
+            whole = hang_cowl(
+                whole,
+                head,
+                person.rig,
+                garment.cover.face_open,
+                Float32(fabric(garment.fabric).thickness.value),
+            )
+        shells[order[i]] = whole^
+        skirts.append(envelope^)
+        lasts.append(feet^)
+        cowls.append(head^)
     for i in range(len(order)):
         var over = List[Float32](length=count, fill=0)
+        # A skirt over this one that falls as far hides its skirt, and a
+        # last over this one hides its lasts.
+        var shown = True
+        var feet = lasts[i].copy()
         for j in range(i + 1, len(order)):
             for v in range(count):
-                over[v] = max(over[v], values[j][v])
+                over[v] = max(over[v], hides[j][v])
+            if skirts[j].rings() > 1 and skirts[j].hem() <= skirts[i].hem():
+                shown = False
+            if len(lasts[j]) > 0:
+                feet.clear()
         for v in range(count):
-            over_skin[v] = max(over_skin[v], values[i][v])
-        pieces[order[i]] = garment_piece(skin, places[i], values[i], over)
-        shells[order[i]] = garment_piece(skin, places[i], values[i], nothing)
+            over_skin[v] = max(over_skin[v], hides[i][v])
+        ref garment = outfit.garments[order[i]]
+        # A band is drawn whole, over what lies under it.
+        if garment.form == BANDED:
+            pieces[order[i]] = shells[order[i]].clone()
+            continue
+        var piece = hang_skirt(
+            garment_piece(skin, places[i], values[i], over),
+            skirts[i],
+            person.rig,
+            True,
+            shown,
+        )
+        piece = shoe(piece, feet, person.rig)
+        pieces[order[i]] = hang_cowl(
+            piece,
+            cowls[i],
+            person.rig,
+            garment.cover.face_open,
+            Float32(fabric(garment.fabric).thickness.value),
+        )
     return pieces^
 
 
@@ -287,6 +410,8 @@ def dress(
     if hooded:
         if person.hair:
             scene.node(person.hair.value()).visible = False
+        if person.beard:
+            scene.node(person.beard.value()).visible = False
         for k in range(len(person.strands)):
             if person.strands[k].node:
                 scene.node(person.strands[k].node.value()).visible = False
@@ -306,6 +431,11 @@ def dress(
             meshes.append(-1)
             continue
         var piece = articulate(joined[g].take(), garment)
+        # A thick fabric shows its thickness at each hem and at each
+        # lame's edge.
+        var thick = Float32(fabric(garment.fabric).thickness.value)
+        if thick >= RIM_THINNEST:
+            piece = add_rim(piece, min(thick, RIM_DEEPEST))
         piece = dye_pattern(piece, person.rig, garment.pattern)
         paint(piece, garment.dyes)
         piece = garment_uvs(piece, person.rig)

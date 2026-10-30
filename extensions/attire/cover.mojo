@@ -182,11 +182,33 @@ def joint_cover(
     return value
 
 
-def face_opening(rig: HumanoidRig, p: Vector3) -> Float32:
-    """Return one away from the face and zero inside its opening.
+def face_oval(rig: HumanoidRig, p: Vector3) -> Float32:
+    """Return how far a point lies outside the face's opening.
 
     The opening is an oval in front of the head. It is sized for the
-    template's stature and scaled with the rig's.
+    template's stature and scaled with the rig's. The value is not
+    clamped, so a cut along its zero runs smoothly through triangles
+    larger than the opening's ramp.
+
+    Args:
+        rig: The rig.
+        p: The point, in the pelvis frame.
+
+    Returns:
+        Zero on the oval, negative inside it, in the oval's half sizes.
+        One behind the head's joint, where there is no opening.
+    """
+    var head = rig.joints[HEAD.value]
+    if p.z <= head.z:
+        return 1
+    var scale = rig.stature / TEMPLATE_STATURE
+    var dx = (p.x - head.x) / (FACE_HALF_WIDTH * scale)
+    var dy = (p.y - head.y - FACE_RISE * scale) / (FACE_HALF_HEIGHT * scale)
+    return sqrt(dx * dx + dy * dy) - 1
+
+
+def face_opening(rig: HumanoidRig, p: Vector3) -> Float32:
+    """Return one away from the face and zero inside its opening.
 
     Args:
         rig: The rig.
@@ -195,14 +217,7 @@ def face_opening(rig: HumanoidRig, p: Vector3) -> Float32:
     Returns:
         Zero inside the opening, one outside it, and a ramp between.
     """
-    var head = rig.joints[HEAD.value]
-    if p.z <= head.z:
-        return 1
-    var scale = rig.stature / TEMPLATE_STATURE
-    var dx = (p.x - head.x) / (FACE_HALF_WIDTH * scale)
-    var dy = (p.y - head.y - FACE_RISE * scale) / (FACE_HALF_HEIGHT * scale)
-    var distance = sqrt(dx * dx + dy * dy)
-    return _ramp((distance - 1) / FACE_RAMP)
+    return _ramp(face_oval(rig, p) / FACE_RAMP)
 
 
 def cover_values(
