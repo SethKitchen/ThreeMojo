@@ -24,7 +24,8 @@ from extensions.village.character import (
     no_input,
 )
 from extensions.village.day import DayCycle
-from extensions.village.gathering import HERBS, Spot
+from extensions.village.foes import Bandit, Den, Post
+from extensions.village.gathering import CHEST, HERBS, Spot
 from extensions.village.house import HouseParameters, house_lot
 from extensions.village.play import (
     FOCUS_HEIGHT,
@@ -123,7 +124,7 @@ def _village() raises -> VillageParameters:
 
 def _game_parameters() raises -> PlayParameters:
     """Return a game of the small village, one rabbit, nobody else, and a
-    small player."""
+    small player. Nobody fights."""
     var p = PlayParameters(game_quality(LOW))
     p.village = _village()
     var residents = ResidentsParameters()
@@ -136,6 +137,10 @@ def _game_parameters() raises -> PlayParameters:
     p.start_x = -4
     p.start_z = -2
     p.gathering.spots = [Spot(HERBS, -4, -3, Angle(0.0, RADIAN))]
+    p.battle.bandits = List[Bandit]()
+    p.battle.dens = List[Den]()
+    p.battle.posts = List[Post]()
+    p.battle.allies = List[Bandit]()
     return p^
 
 
@@ -456,6 +461,74 @@ def test_a_villager_moves_and_a_frame_one_row_short_is_stretched() raises:
     _ = game.tick(scene, assets, use, Duration(0.1, SECOND))
     assert_true(game.talk.speech != "")
     assert_true(game.residents.holds[0] > 0)
+
+
+def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var parameters = _game_parameters()
+    parameters.gathering.spots = []
+    parameters.battle.posts = [Post(-4, -3.5, Angle(180.0, DEGREE))]
+    var game = VillageGame(
+        scene,
+        assets,
+        Renderer(16, 16),
+        parameters,
+        pebble_bed(_bed()),
+        None,
+        64,
+        36,
+    )
+    assert_equal(len(game.battle.dummies), 1)
+    var step = Duration(0.1, SECOND)
+    var cut = no_input()
+    cut.light = True
+    _ = game.tick(scene, assets, cut, step)
+    for _ in range(4):
+        _ = game.tick(scene, assets, no_input(), step)
+    assert_equal(game.battle.fighter.combo, 1)
+    assert_true(game.battle.drawn)
+    # Locked on, the camera does not trail behind the player.
+    var lock = no_input()
+    lock.lock = True
+    _ = game.tick(scene, assets, lock, step)
+    assert_equal(game.battle.lock, 0)
+    # A stance's name is the note.
+    var high = no_input()
+    high.high = True
+    _ = game.tick(scene, assets, high, step)
+    assert_equal(game.note, "HIGH STANCE")
+    # A fallen bandit's coins go into the satchel.
+    game.battle.loot = 8
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_equal(game.gathering.satchel.count(CHEST), 8)
+    assert_equal(game.battle.loot, 0)
+    # A herb eaten to heal comes out of it.
+    game.gathering.satchel.counts[HERBS.value] = 1
+    game.battle.fighter.health = 100
+    var heal = no_input()
+    heal.heal = True
+    _ = game.tick(scene, assets, heal, step)
+    assert_equal(game.gathering.satchel.count(HERBS), 0)
+    assert_equal(game.battle.eaten, 0)
+    assert_true(game.battle.fighter.health > 200)
+    # A herb a bandit dropped goes into the satchel.
+    game.battle.found = 1
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_equal(game.gathering.satchel.count(HERBS), 1)
+    # Fighting trains swordplay; a new level is the note, and makes the
+    # blows stronger.
+    game.battle.trained = 50
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_equal(game.note, "SWORDPLAY LEVEL 2!")
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_almost_equal(game.battle.fighter.parameters.might, 1.05, atol=1e-5)
+    # A strong blow shakes the camera.
+    game.battle.shake = 0.05
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_true(game.battle.shake < 0.05)
+    game.render(scene, assets)
+    assert_equal(game.window.width, 64)
 
 
 def main() raises:

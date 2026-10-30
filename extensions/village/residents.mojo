@@ -701,6 +701,108 @@ struct Flipbook(Copyable, Movable):
         return self.frames[min(index, len(self.frames) - 1)]
 
 
+def animal_paints(mut assets: Assets) raises -> List[MaterialId]:
+    """Add the materials an animal's mesh wears.
+
+    Args:
+        assets: The stores the materials go into.
+
+    Returns:
+        The materials, in the order an animal's mesh names them.
+
+    Raises:
+        Error: If a material cannot be added.
+    """
+    var paints = List[MaterialId]()
+    for material in animal_materials():  # pragma: no branch
+        paints.append(assets.materials.add(material.copy()))
+    return paints^
+
+
+struct AnimalLook(Movable):
+    """An animal's flipbook, and how its character moves."""
+
+    var book: Flipbook
+    var walker: CharacterParameters
+
+    def __init__(out self, var book: Flipbook, walker: CharacterParameters):
+        """Hold an animal's flipbook and its pace.
+
+        Args:
+            book: Its meshes.
+            walker: How its character moves.
+        """
+        self.book = book^
+        self.walker = walker
+
+
+def animal_look(
+    mut assets: Assets,
+    species: SpeciesId,
+    seed: Int,
+    phases: Int,
+    quality: Quality,
+    coarseness: Float64,
+) raises -> AnimalLook:
+    """Mesh an animal as a flipbook, and pace its character.
+
+    Args:
+        assets: The stores the meshes go into.
+        species: The animal's species.
+        seed: The seed of its build.
+        phases: How many poses of its walk to mesh.
+        quality: How finely it is meshed.
+        coarseness: How many times its quality's cell its mesh's cell is.
+
+    Returns:
+        Its standing mesh and, for an animal on four legs, its walk's
+        meshes and its stride. Its character is as wide as the mesh,
+        does not jump, and walks at the pace of its stride: 0.3 meters a
+        second for an animal not on four legs. It runs at `FLEE_PACE`
+        times its walk.
+
+    Raises:
+        Error: If the animal cannot be built or meshed.
+    """
+    var animal = create_animal(
+        species,
+        animal_options(seed, quality=quality),
+    )
+    animal.cell *= coarseness
+    var stand = assets.geometries.add(
+        mesh_animal(animal, animal.bind_pose(), workers=0)
+    )
+    var box = assets.geometries.get(stand).bounding_box()
+    var frames = List[GeometryId]()
+    var stride = Float32(0)
+    var walker = CharacterParameters()
+    walker.radius = Length(
+        max(Float32(0.1), (box.max.x - box.min.x) * 0.5), METER
+    )
+    walker.jump_speed = Velocity(0.0, METER_PER_SECOND)
+    if is_quadruped(animal.rig):
+        stride = walk_stride(animal.rig).to(METER)
+        var hip = length_meters(animal.rig.j("hipL").y)
+        var pace = stride * stride_frequency(WALK_FROUDE, hip).value
+        walker.walk_speed = Velocity(max(Float32(0.2), pace), METER_PER_SECOND)
+        for phase in range(phases):  # pragma: no branch
+            var pose = walk_pose(
+                animal.rig,
+                Float64(phase) / Float64(phases),
+            )
+            frames.append(
+                assets.geometries.add(mesh_animal(animal, pose, workers=0))
+            )
+    else:
+        walker.walk_speed = Velocity(0.3, METER_PER_SECOND)
+    # An animal runs only when it flees, at three times its walk.
+    walker.run_speed = Velocity(
+        walker.walk_speed.to(METER_PER_SECOND) * FLEE_PACE,
+        METER_PER_SECOND,
+    )
+    return AnimalLook(Flipbook(stand, frames^, stride), walker)
+
+
 @fieldwise_init
 struct Beast(Copyable, Movable):
     """One animal in the scene."""
@@ -802,53 +904,21 @@ struct Residents(Movable):
             self.walks.append(route^)
         self.books = List[Flipbook]()
         self.beasts = List[Beast]()
-        var paints = List[MaterialId]()
-        for material in animal_materials():  # pragma: no branch
-            paints.append(assets.materials.add(material.copy()))
+        var paints = animal_paints(assets)
         for index in range(len(parameters.herds)):
             ref herd = parameters.herds[index]
-            var animal = create_animal(
+            var look = animal_look(
+                assets,
                 herd.species,
-                animal_options(herd.seed, quality=parameters.quality),
+                herd.seed,
+                parameters.phases,
+                parameters.quality,
+                parameters.animal_coarseness,
             )
-            animal.cell *= parameters.animal_coarseness
-            var stand = assets.geometries.add(
-                mesh_animal(animal, animal.bind_pose(), workers=0)
-            )
-            var box = assets.geometries.get(stand).bounding_box()
-            var frames = List[GeometryId]()
-            var stride = Float32(0)
-            var walker = CharacterParameters()
-            walker.radius = Length(
-                max(Float32(0.1), (box.max.x - box.min.x) * 0.5), METER
-            )
-            walker.jump_speed = Velocity(0.0, METER_PER_SECOND)
-            if is_quadruped(animal.rig):
-                stride = walk_stride(animal.rig).to(METER)
-                var hip = length_meters(animal.rig.j("hipL").y)
-                var pace = stride * stride_frequency(WALK_FROUDE, hip).value
-                walker.walk_speed = Velocity(
-                    max(Float32(0.2), pace), METER_PER_SECOND
-                )
-                for phase in range(parameters.phases):  # pragma: no branch
-                    var pose = walk_pose(
-                        animal.rig,
-                        Float64(phase) / Float64(parameters.phases),
-                    )
-                    frames.append(
-                        assets.geometries.add(
-                            mesh_animal(animal, pose, workers=0)
-                        )
-                    )
-            else:
-                walker.walk_speed = Velocity(0.3, METER_PER_SECOND)
-            # An animal runs only when it flees, at three times its walk.
-            walker.run_speed = Velocity(
-                walker.walk_speed.to(METER_PER_SECOND) * FLEE_PACE,
-                METER_PER_SECOND,
-            )
+            var stand = look.book.stand
+            var walker = look.walker
             var book = len(self.books)
-            self.books.append(Flipbook(stand, frames^, stride))
+            self.books.append(look.book.copy())
             for member in range(herd.count):  # pragma: no branch
                 var route = wander_route(
                     herd.seed * 64 + member,

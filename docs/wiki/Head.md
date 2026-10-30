@@ -99,12 +99,20 @@ The face is a scan. The skin of the head is the mean head of the ICT Face Model 
 
 1. The face shape genes weigh the scan's identity modes, so each face is a face of its own. The scan's eyes then land on the template's eyes. Each vertex then goes through the head's frame, as an authored point does. So the genome's face and head genes move the scan as they move the skull under it. See [Genome](Genome).
 2. The ear genes warp the ears. Each ear grows about its root, its back edge stands out, and its lobe hangs lower.
-3. The scan is pulled over the modeled solids like a sleeve. The solids are the vault, an ellipsoid a scalp's thickness outside the skull, and the neck, swept round its muscles. Each vertex inside them must move out along its normal. The moves are spread over the mesh until they are smooth, so the mesh stretches and does not fold.
+3. The scan is pulled over the modeled solids like a sleeve. The solids are the vault, an ellipsoid a scalp's thickness outside the skull, and the neck, swept round its muscles. Each vertex inside them must move out along its normal. The moves are spread over the mesh until they are smooth, so the mesh stretches and does not fold. Each normal is the mean of the normals four rings round it. Under the chin the mesh turns sharply over the sternocleidomastoid, and pushed along its own normals there, it folded in a crease. Then each corner of a fold that the fit pushed moves to the mean of its neighbors, and out of the solids again. The scan's own folds, at the lips and the eyelids, stay. Over ten people, the folded edges on the neck went from 82 to 13.
 4. The mouth and the eyes are open in the scan. The palate, the teeth and the orbits fill those spaces, so a fan of triangles closes each opening. The scan is kept as a `MeshField`, the signed distance to a mesh through a tree of boxes.
+
+A search for the nearest triangle starts from a triangle that the point itself picks. The search walks into the nearer box at each level, and starts from the first triangle of the leaf it reaches. So a distance is the same on any thread and in any order. A head and its hair are the same for any number of workers.
+
+Two triangles that meet at a corner can each put the nearest point one ulp nearer than the other. Earlier searches started from the triangle that the last search found, on any thread. The scalp's hair then changed in its last digits from run to run, and its decimated mesh changed more.
 
 `HeadSkinField` is the smooth union of the scan and the modeled solids. This fit does not test every anatomical part for containment.
 
 The skin's mesh is the scan's own mesh, not a mesh extracted from the field. Each vertex that the field's surface does not pass through is walked onto it. The mouth's and the eyes' sockets are drawn inside. Below the seam on the neck, 56.5 cm on the template, the skin is meshed by narrow-band surface nets, in `extensions/humanoid/skeleton/surface_nets.mojo`. The two meshes lie on one surface and overlap by a few millimeters. `add_body` joins the body's skin to the scan at the same seam.
+
+Each mesh of the seam ends in a level edge. A surface net ends in a ragged edge at its box, and the scan keeps only whole triangles above its floor. So the body is meshed 2 cm past its top, and the scan reaches 1.5 cm below its floor. `clip_level`, in `extensions/humanoid/skeleton/clip.mojo`, then cuts each one level. It clips each triangle that crosses the height, and it mixes every attribute onto the new vertices. A face with expressions keeps its scan's triangles whole, for its targets.
+
+The scan's triangles are large, and each one cuts in and out of the neck's curve by up to a millimeter. Where they overlap the body's finer mesh, they show through it in shards. So `sink_under_body` moves each scan vertex in the overlap 2 mm in along its normal. The move fades to nothing over 4 mm either side of the body's top edge.
 
 A box whose block count does not fit in an integer is refused.
 
@@ -198,6 +206,8 @@ The scalp's hair is strands over a shell. `add_groom` grows the strands. The she
 
 The shell lies over the skin itself: about seven millimeters deep at the sides and a centimeter on the crown. It follows every head a genome makes. Its hairline is level across the middle of the forehead, set back at each temple, and turns down past the temples to the sideburns. A male's temples are set back more than a female's. The shell is cut away round each ear and off above the nape.
 
+Each edge of the shell rises off the skin in a wedge. A cut stands 2 mm higher for each millimeter off the skin, so the hair thins to nothing at its edge, as real hair does. A level cut left a ledge as deep as the hair, and its underside faced down, away from the light. It drew a black line round the hairline, and the hair looked like a helmet. A closed shell keeps its edges two cells of its mesh deep, so the mesher can close it there. A game's shell keeps only its outer face, and that face thins to nothing over the skin.
+
 ### Strands
 
 `add_groom(scene, assets, parent, spec, guides, followers)` grows a groom, the way grooming tools grow one:
@@ -264,6 +274,22 @@ Each strand is then lifted out of the head's skin and the body's grid. A lifted 
 
 `examples/hairstyles.mojo` draws one woman in every style and writes `out/hairstyles.png`. Each head is seen from behind and to one side.
 
+#### A shell drawn alone
+
+A game humanoid with no strands draws only the hair's shell. A designed style's thin shell then looked the same for every style, so `HairSilhouette` gives the shell its style's shape. Pass `alone=True` to `head_hair_from_dimensions`. `add_game_humanoid` passes it when it grows no guides.
+
+| Style | The shell drawn alone |
+|---|---|
+| `BOB`, `LONG` | A fall to the jaw, as long grown hair has. Long hair also hangs down the back in a sheet, to the shoulder blades. |
+| `HALF_UP` | A shorter fall, and a short tail from its tie. |
+| `PONYTAIL`, `HIGH_PONYTAIL` | A tapered tail from the tie, out from the head and down behind it. |
+| `BRAID` | A narrower tail from the nape, down the back. |
+| `PIGTAILS` | A tail from each tie, behind each ear, down beside the neck. |
+| `BUN`, `SPACE_BUNS` | A ball on each tie, half as far out as the groom coils it, so it sits on the head. |
+| `PIXIE` | Cropped close, as it is under strands. |
+
+A tail and a bun take their ties from the groom, and join the shell in a smooth fillet. The tails pass behind the neck, but they do not know the body, so the lowest part of a braid can sink into the back. `GROWN`, `LAYERED` and `MOHAWK` are drawn as they are. `examples/game_hairstyles.mojo` draws the woman of `examples/hairstyles.mojo` in every style as a game humanoid, and writes `out/game_hairstyles.png`. A long tail stretches the shell's box. So the mesh takes more cells, up to 64, and each cell stays the size it is on the head alone.
+
 A style keeps no head of its own. Each root is a point of a unit cranium, and each strand is kept as offsets from its root in the cranium's frame there. So a style fits every head a genome makes. `HairStyleFile.strand` puts a strand on a person's cranium. The groom then walks its root onto the skin and lifts any point of it that would pass under the skin. The follow strands, the clumping and the shading are the grown hair's.
 
 A mohawk's shell covers only a strip along the midline, so the sides are bare.
@@ -275,6 +301,26 @@ Each guide is sampled at eight points a turn and wound round its own line. It sw
 `HAIR_LENGTH` below zero crops it close. Above zero it grows a fall that hangs over the ears and the nape toward the jaw, open over the face. `hair_albedo` maps its strands. Its mass is the volume of a dome over the cranium times `HAIR_PACKING`, one tenth, for the air between the shafts.
 
 Each eyebrow is an arc on the skin over its orbit, thick at its head and thin at its tail. `BROW_THICKNESS` makes it fuller or finer. `add_head` paints the brows into the skin's colors, hair by hair, in the hair's color. A solid strip stands off the curve of the brow ridge, so the brows are not a mesh. `head_hair` still meshes one, and its mass is its volume.
+
+### Facial hair
+
+A `Beard` says which facial hair a face grows. `BeardShape` draws it as its volume, as the scalp's shell is drawn: a shell over the skin, open at the mouth. The code is in `extensions/humanoid/skeleton/head/hair/beard.mojo`.
+
+| Style | Grows on | Depth |
+|---|---|---|
+| `CLEAN_SHAVEN` | nothing | |
+| `MUSTACHE` | the upper lip, arched down to the corners of the mouth | 4.5 mm |
+| `GOATEE` | the upper lip, round the mouth and down the chin | 6 mm |
+| `SHORT_BEARD` | the jaw, the chin, the cheeks and the upper lip | 4 mm |
+| `FULL_BEARD` | the same, and a mass that hangs below the chin | 7 mm on the cheeks, 14 mm at the chin |
+| `CHIN_STRAP` | a band 3 cm deep along the jaw, from sideburn to sideburn | 4 mm |
+| `MUTTON_CHOPS` | the sideburns and the cheeks, the chin and the lip bare | 6 mm |
+
+The zones are authored in template centimeters round the mouth. The lips part 65 cm above the hip joint centers, the chin's point stands at 62 cm, and the nose's base at 67 cm. A beard's upper line runs from under the nose to each corner of the mouth, then up across the cheek to the sideburn. Its lower line runs under the jaw, above the larynx, and up behind the jaw to the ear's lobe.
+
+The head's frame maps the zones onto each face. So a genome that widens the jaw or the mouth moves the beard with it. The hair thins toward each zone's edge, as a trimmed beard does.
+
+`beard_mesh` meshes the outer face of the shell. The inner face lies under the skin and never shows. Facial hair takes the scalp hair's material. Pass `beard` to `add_game_humanoid`; see [Game humanoid](Game-humanoid).
 
 ## Examples
 

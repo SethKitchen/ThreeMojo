@@ -229,6 +229,15 @@ def test_houses_trees_and_bounds_stop_a_character() raises:
         )
     assert_true(skipping.position.z < -4)
     assert_true(skipping.position.z > -6)
+    # One that stands inside an obstacle is pushed out of it, and gains no
+    # speed from the push.
+    var inside = _walker(ground)
+    var post: List[Obstacle] = [Obstacle(0.1, 0.1, 0.5)]
+    _run(inside, no_input(), 0.5, ground, List[Lot](), post)
+    var off = Vector3(inside.position.x - 0.1, 0, inside.position.z - 0.1)
+    assert_true(off.length() > 0.5)
+    assert_true(off.length() < 1.5)
+    assert_almost_equal(inside.velocity.length(), 0, atol=1e-4)
     var far = _walker(ground)
     far.parameters.bounds = Length(2.0, METER)
     _run(far, _ahead(), 4, ground)
@@ -538,6 +547,38 @@ def test_a_character_climbs_a_stair_and_comes_down() raises:
     _walk(walker, MoveInput(0, -1, 0, 0, False, False), 5, terrain)
     assert_true(walker.position.x < Float32(stair.x0))
     assert_almost_equal(walker.position.y, 0, atol=1e-4)
+
+
+def test_a_drive_carries_a_character_at_a_set_speed() raises:
+    var ground = _flat()
+    var walker = _walker(ground)
+    var none = List[Obstacle]()
+    # Three meters a second along +x, faster than a walk: the heading
+    # stays, and the character runs.
+    walker.drive(Vector3(3, 0, 0), Duration(1.0, SECOND), ground, none)
+    assert_almost_equal(walker.position.x, 3, atol=1e-4)
+    assert_almost_equal(walker.heading.to(RADIAN), 0, atol=1e-6)
+    assert_true(walker.stance == Stance(2))
+    # A trunk in the way stops it.
+    var trunk: List[Obstacle] = [Obstacle(5, 0, 0.5)]
+    walker.drive(Vector3(3, 0, 0), Duration(1.0, SECOND), ground, trunk)
+    assert_true(walker.position.x < 4.3)
+    # In the air, it falls as it is carried.
+    walker.velocity.y = 3
+    walker.grounded = False
+    walker.drive(Vector3(0, 0, 1), Duration(0.1, SECOND), ground, none)
+    assert_true(walker.position.y > 0)
+    with assert_raises(contains="frame"):
+        walker.drive(Vector3(0, 0, 0), Duration(-1.0, SECOND), ground, none)
+    with assert_raises(contains="frame"):
+        walker.drive(Vector3(0, 0, 0), Duration(2.0e9, SECOND), ground, none)
+    with assert_raises(contains="finite"):
+        walker.drive(
+            Vector3(Float32(1.0e38) * 10, 0, 0),
+            Duration(0.1, SECOND),
+            ground,
+            none,
+        )
 
 
 def main() raises:

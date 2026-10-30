@@ -211,6 +211,10 @@ def test_looks_follow_the_genome() raises:
     assert_true(skin_phong(TextureId(0)).color.r == 255)
     var black = Genome().with_gene(HAIR_MELANIN, Expression(1))
     assert_true(hair_phong(black).color.r < 40)
+    # With a map of its strands, the map carries the tone.
+    var strands = hair_phong(black, TextureId(3))
+    assert_true(strands.map == TextureId(3))
+    assert_equal(strands.color.r, 255)
     assert_true(hair_physical(black).color.r < 40)
     assert_equal(hair_physical(black, TextureId(2)).color.r, 255)
     with assert_raises(contains="depth"):

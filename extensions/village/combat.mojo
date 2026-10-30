@@ -1,0 +1,1617 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+"""Swordplay: a fighter's health, stamina and special gauge, its moves, and what a
+blow does to the fighter that it reaches.
+
+A `Fighter` does not know where it stands. The game finds the fighters
+that a swing reaches with `reaches`, and gives each one the blow that
+`Fighter.connect` returns. `Fighter.receive` says what the blow did, and
+`Fighter.landed` tells the attacker. The rules:
+
+- **Stamina.** Each light attack, heavy attack and dodge spends
+  stamina. Stamina comes back after `FighterParameters.stamina_delay` without spending.
+  A fighter that spends its last stamina is winded: it staggers when its move
+  ends. A guard takes a blow on stamina, not on health. A **stamina recovery**, a press
+  of the guard button just after a swing, gets back the stamina that the swing
+  spent: all of it in the first `PULSE_PERFECT` seconds after the swing,
+  and `PULSE_LATE` of it until `PULSE_WINDOW`. A blow that lands also takes
+  stamina. A fighter with no stamina left staggers, and a blow on a staggered fighter
+  is critical: it does `CRITICAL_BONUS` times its damage. A heavy attack
+  on a staggered fighter with `FINISH_SHARE` of its health or less is a
+  finisher: it fells the fighter at once.
+- **Stances.** The high stance hits harder and more slowly,
+  and costs more stamina. The low stance is quick and costs less stamina, and hits
+  less hard. The middle stance is between them, and guards best. A stance
+  changes the light and the heavy attacks, and the dodge's stamina and length.
+- **Specials.** A special is a strong move that spends
+  points of the special gauge, not stamina. The gauge fills by itself, and by
+  `SPECIAL_PER_HIT` for each blow that lands. The rising edge throws a foe
+  into the air. The whirlwind spins, and strikes all round four times. The
+  ground wave sends a wave of force along the ground: its cut strikes
+  nothing, and the wave carries its `blow`.
+- **The plunge.** A heavy attack
+  in the air is a plunge: the fighter dives, and slams the ground all
+  round. It has armor until it strikes, and it counters a piercing attack
+  as a heavy attack does.
+- **Dodges.** No blow can hit a dodge from
+  `DODGE_SAFE_FROM` to `DODGE_SAFE_TO` seconds into it. A blow that
+  reaches a dodge before `DODGE_SAFE_FROM + PERFECT_WINDOW` is a perfect
+  dodge. The dodger gets back the dodge's stamina and `PERFECT_SPECIAL` points of
+  the special gauge. Its next attack within `COUNTER_SECONDS` is a counter,
+  and does `COUNTER_BONUS` times its damage.
+- **Guards.** A guard stops a blow from the front, within the guard's
+  arc. A guard raised less than `FighterParameters.parry` before the blow
+  parries it: the guard loses no stamina, and the attacker loses the blow's stamina
+  and reels. As after a perfect dodge, the next attack within
+  `COUNTER_SECONDS` is a counter. The player parries within `PARRY`
+  seconds. Some moves have armor: a blow on them does its damage, and does
+  not make the fighter reel.
+- **Piercing attacks.** A foe's piercing attack glows red through
+  its start-up. A guard does not stop it, but a dodge does. The attack has
+  armor until it strikes, so a light attack does not stop it. A heavy
+  attack or a special that lands in the start-up is a pierce break. The
+  foe loses all its stamina and staggers.
+- **The surge.** A fighter's limit gauge fills
+  by `LIMIT_PER_HIT` for each blow that lands, `LIMIT_PER_BREAK` for each
+  that breaks a stamina, a guard or a piercing attack, `LIMIT_PER_PARRY` for each parry, and
+  `LIMIT_PER_PERFECT` for each perfect dodge, times its `limit_gain`.
+  When it reaches `LIMIT`, the fighter surges for
+  `OVER_SECONDS`: its special gauge fills, its specials cost nothing, no blow
+  makes it reel, and its blows do `OVER_BONUS` times their damage. The
+  gauge does not fill while it lasts. While a surge lasts, the fighter
+  can spend what is left of it on a **ultimate**: a leap and two
+  spins that strike all round six times. No blow can hit the fighter
+  through it.
+- **Rage.** A fighter whose `rage` is above
+  zero rages once its health falls to that share of its most. A raging
+  fighter's attacks take `RAGE_PACE` of their time.
+- **Combos.** The three light attacks chain. A press during a move waits,
+  and its move starts at the move's chain point: after the active part
+  and `CHAIN_SHARE` of the recovery. A dodge cuts the recovery of an
+  attack short. Each blow that lands adds one to the combo, and each blow
+  does `COMBO_STEP` more damage for each blow of the combo, up to
+  `COMBO_CAP` blows. The combo ends `COMBO_KEEP` seconds after its last
+  blow, or when the fighter is hit.
+
+Each move has a start-up, an active part and a recovery. Only the active
+part strikes. The times are for the middle stance:
+
+| Move | Start-up | Active | Recovery | Reach | Arc | Damage | Stamina damage | Stamina | Special points |
+|---|---|---|---|---|---|---|---|---|---|
+| `LIGHT_ONE` | 0.14 s | 0.10 s | 0.26 s | 2.0 m | 120 degrees | 30 | 8 | 9 | |
+| `LIGHT_TWO` | 0.12 s | 0.10 s | 0.28 s | 2.0 m | 120 degrees | 33 | 9 | 9 | |
+| `LIGHT_THREE` | 0.20 s | 0.12 s | 0.45 s | 2.3 m | 90 degrees | 54 | 16 | 12 | |
+| `HEAVY` | 0.40 s | 0.14 s | 0.55 s | 2.5 m | 80 degrees | 90 | 30 | 22 | |
+| `RISING_EDGE` | 0.16 s | 0.20 s | 0.45 s | 2.1 m | 100 degrees | 66 | 18 | | 2 |
+| `WHIRLWIND` | 0.18 s | 0.48 s | 0.40 s | 2.6 m | 360 degrees | 27, four times | 7 | | 3 |
+| `GROUND_WAVE` | 0.20 s | 0.10 s | 0.35 s | A wave | | 45 | 10 | | 1 |
+| `ULTIMATE` | 0.50 s | 1.00 s | 0.60 s | 4.5 m | 360 degrees | 70, six times | 20 | | A surge |
+| `PLUNGE` | 0.15 s | 0.15 s | 0.45 s | 2.6 m | 360 degrees | 70 | 25 | 18 | |
+| `BITE` | 0.35 s | 0.20 s | 0.45 s | 1.4 m | 70 degrees | 40 | 12 | | |
+| `PIERCE` | 0.70 s | 0.14 s | 0.60 s | 2.8 m | 70 degrees | 120 | 45 | 20 | |
+| `CAST` | 0.35 s | 0.10 s | 0.35 s | A bolt | | 28 | 10 | | |
+| `THROW` | 0.45 s | 0.10 s | 0.45 s | A knife | | 40 | 14 | | |
+| `DODGE` | | 0.32 s | 0.16 s | | | | | 14 | |
+"""
+
+from controls.third_person_controls import wrap_angle, yaw_of
+from core.ordinal import ordinal_valid
+from extensions.vegetation.checks import require_between
+from math.vector3 import Vector3
+from std.math import atan2, sqrt
+from units.si import (
+    DEGREE,
+    METER,
+    METER_PER_SECOND,
+    PER_SECOND,
+    RADIAN,
+    SECOND,
+    Angle,
+    Duration,
+    Frequency,
+    Length,
+    Velocity,
+)
+
+comptime MOVES = 18
+"""How many moves there are, `FREE` among them."""
+comptime DODGE_SAFE_FROM = Float32(0.02)
+"""How far into a dodge no blow can hit it any more, in seconds."""
+comptime DODGE_SAFE_TO = Float32(0.30)
+"""How far into a dodge a blow can hit it again, in seconds."""
+comptime PERFECT_WINDOW = Float32(0.15)
+"""How long after `DODGE_SAFE_FROM` a blow that reaches a dodge makes a
+perfect dodge, in seconds."""
+comptime PERFECT_SPECIAL = Float32(1.0)
+"""The points of the special gauge that a perfect dodge gives."""
+comptime COUNTER_SECONDS = Float32(1.2)
+"""How long after a perfect dodge an attack is a counter, in seconds."""
+comptime COUNTER_BONUS = Float32(2.0)
+"""How many times its damage a counter does."""
+comptime PARRY = Float32(0.15)
+"""How long after the player raises a guard it parries a blow, in
+seconds."""
+comptime CRITICAL_BONUS = Float32(1.5)
+"""How many times its damage a blow on a staggered fighter does."""
+comptime FINISH_SHARE = Float32(0.35)
+"""A heavy attack on a staggered fighter with this share of its health or
+less finishes it."""
+comptime PULSE_PERFECT = Float32(0.15)
+"""How long after a swing a stamina recovery gets back all its stamina, in seconds."""
+comptime PULSE_WINDOW = Float32(0.45)
+"""How long after a swing a stamina recovery can be made, in seconds."""
+comptime PULSE_LATE = Float32(0.5)
+"""The share of a swing's stamina that a late stamina recovery gets back."""
+comptime GUARD_REGAIN = Float32(0.5)
+"""The share of its usual pace at which stamina comes back during a guard."""
+comptime CHAIN_SHARE = Float32(0.3)
+"""The share of a move's recovery after which a waiting move starts."""
+comptime COMBO_STEP = Float32(0.02)
+"""How much more damage each blow of a combo adds to the next blow."""
+comptime COMBO_CAP = 25
+"""The most blows of a combo that add damage."""
+comptime COMBO_KEEP = Float32(2.5)
+"""How long a combo lasts after its last blow, in seconds."""
+comptime SPECIAL_PER_HIT = Float32(0.2)
+"""The points of the special gauge that each blow that lands gives."""
+comptime LIMIT = Float32(100)
+"""How full the limit gauge must be to surge."""
+comptime LIMIT_PER_HIT = Float32(4)
+"""How much each blow that lands fills the limit gauge."""
+comptime LIMIT_PER_BREAK = Float32(10)
+"""How much more a blow that breaks a stamina, a guard or a piercing attack
+fills it."""
+comptime LIMIT_PER_PARRY = Float32(15)
+"""How much a parry fills it."""
+comptime LIMIT_PER_PERFECT = Float32(20)
+"""How much a perfect dodge fills it."""
+comptime OVER_SECONDS = Float32(10)
+"""How long a surge lasts, in seconds."""
+comptime OVER_BONUS = Float32(1.25)
+"""How many times its damage a blow does in a surge."""
+comptime RAGE_PACE = Float32(0.8)
+"""How many times its time a raging fighter's attack takes."""
+comptime REACH_HEIGHT = Float32(1.8)
+"""How far above or below a swing a fighter can be and still be hit, in
+meters."""
+
+
+@fieldwise_init
+struct CombatMove(Equatable, ImplicitlyCopyable, Writable):
+    """What a fighter does, as a type rather than a bare int."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return whether this is one of the moves.
+
+        Returns:
+            True from `FREE` to `FALL`.
+        """
+        return ordinal_valid(self.value, MOVES - 1)
+
+
+comptime FREE = CombatMove(0)
+"""No move: the fighter walks, runs, jumps and guards."""
+comptime LIGHT_ONE = CombatMove(1)
+"""The first light attack: a cut from the right to the left."""
+comptime LIGHT_TWO = CombatMove(2)
+"""The second light attack: a backhand cut from the left to the right."""
+comptime LIGHT_THREE = CombatMove(3)
+"""The third light attack, which ends the chain: a cut down from over the
+head."""
+comptime HEAVY = CombatMove(4)
+"""The heavy attack: a cut with both hands from high on the right."""
+comptime RISING_EDGE = CombatMove(5)
+"""A special: a cut up from low, which throws the foe into the air."""
+comptime WHIRLWIND = CombatMove(6)
+"""A special: a spin that strikes all round the fighter four times."""
+comptime GROUND_WAVE = CombatMove(7)
+"""A special: a cut along the ground that sends a wave of force running
+before the fighter. The cut strikes nothing itself: the game sends the
+wave."""
+comptime ULTIMATE = CombatMove(8)
+"""The strongest special: a sword raised to the sky,
+and two spins that strike all round six times. Only a surging fighter
+can make it, and it spends what is left of its surge."""
+comptime PLUNGE = CombatMove(9)
+"""A heavy attack in the air: a dive, and a cut that slams the ground all
+round."""
+comptime BITE = CombatMove(10)
+"""A beast's attack: a crouch, and a leap forward that bites."""
+comptime PIERCE = CombatMove(11)
+"""A foe's piercing attack: a long wind-up that glows red, and a lunging
+thrust that no guard stops."""
+comptime CAST = CombatMove(12)
+"""A companion's spell: the sword pointed at the foe, which sends a bolt
+of light. The cast strikes nothing itself: the game sends the bolt."""
+comptime THROW = CombatMove(13)
+"""A thrower's knife: the free arm drawn back, and flung forward. The
+throw strikes nothing itself: the game sends the knife."""
+comptime DODGE = CombatMove(14)
+"""A quick step, which no blow can hit for a moment."""
+comptime FLINCH = CombatMove(15)
+"""A blow landed: the fighter reels for a moment."""
+comptime STAGGER = CombatMove(16)
+"""The fighter's stamina ran out: it stands open, and blows on it are
+critical."""
+comptime FALL = CombatMove(17)
+"""The fighter is defeated: it falls, and it stays down."""
+
+
+@fieldwise_init
+struct CombatStance(Equatable, ImplicitlyCopyable, Writable):
+    """How a fighter holds its sword, as a type rather than a bare int."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return whether this is one of the stances.
+
+        Returns:
+            True for `HIGH_STANCE`, `MID_STANCE` and `LOW_STANCE`.
+        """
+        return ordinal_valid(self.value, 2)
+
+
+comptime HIGH_STANCE = CombatStance(0)
+"""The sword over the head: strong, slow and costly."""
+comptime MID_STANCE = CombatStance(1)
+"""The sword before the body: even, and the best guard."""
+comptime LOW_STANCE = CombatStance(2)
+"""The sword low: quick and cheap, and weaker."""
+
+
+@fieldwise_init
+struct StrikeOutcome(Equatable, ImplicitlyCopyable, Writable):
+    """What a blow did, as a type rather than a bare int."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return whether this is one of the outcomes.
+
+        Returns:
+            True from `IGNORED` to `PIERCE_BREAK`.
+        """
+        return ordinal_valid(self.value, 11)
+
+
+comptime IGNORED = StrikeOutcome(0)
+"""The fighter is already down: the blow does nothing."""
+comptime EVADED = StrikeOutcome(1)
+"""A dodge let the blow pass."""
+comptime PERFECT_DODGE = StrikeOutcome(2)
+"""A dodge let the blow pass at the last moment: see `PERFECT_WINDOW`."""
+comptime BLOCKED = StrikeOutcome(3)
+"""A guard took the blow on stamina."""
+comptime PARRIED = StrikeOutcome(4)
+"""A fresh guard turned the blow, and the attacker reels."""
+comptime GUARD_BREAK = StrikeOutcome(5)
+"""A guard took the blow, and its stamina ran out: the fighter staggers."""
+comptime HIT = StrikeOutcome(6)
+"""The blow landed."""
+comptime CRITICAL = StrikeOutcome(7)
+"""The blow landed on a staggered fighter."""
+comptime STAMINA_BREAK = StrikeOutcome(8)
+"""The blow landed, and took the fighter's last stamina: it staggers."""
+comptime DEFEATED = StrikeOutcome(9)
+"""The blow landed, and took the fighter's last health: it falls."""
+comptime FINISHED = StrikeOutcome(10)
+"""A heavy attack finished a staggered, weakened fighter: it falls."""
+comptime PIERCE_BREAK = StrikeOutcome(11)
+"""A heavy attack or a special landed in a piercing attack's start-up: the
+fighter loses all its stamina, and staggers."""
+
+
+def move_name(move: CombatMove) raises -> String:
+    """Return a move's name, in capitals for the display.
+
+    Args:
+        move: The move.
+
+    Returns:
+        Such as "LIGHT 1", "HEAVY", "RISING EDGE", "GROUND WAVE", "BITE"
+        or "PIERCE".
+
+    Raises:
+        Error: If the move is not one.
+    """
+    if not move.is_valid():
+        raise Error("A combat move must be one of the eighteen")
+    var names: List[String] = [
+        "FREE",
+        "LIGHT 1",
+        "LIGHT 2",
+        "LIGHT 3",
+        "HEAVY",
+        "RISING EDGE",
+        "WHIRLWIND",
+        "GROUND WAVE",
+        "ULTIMATE",
+        "PLUNGE",
+        "BITE",
+        "PIERCE",
+        "CAST",
+        "THROW",
+        "DODGE",
+        "FLINCH",
+        "STAGGER",
+        "FALL",
+    ]
+    return names[move.value]
+
+
+def outcome_word(outcome: StrikeOutcome) raises -> String:
+    """Return what the display says of an outcome, over the fighter.
+
+    Args:
+        outcome: The outcome.
+
+    Returns:
+        "PERFECT DODGE", "BLOCKED", "PARRY", "GUARD BREAK", "CRITICAL",
+        "BREAK", "FINISHER" or "PIERCE BREAK", or an empty string for an
+        outcome that shows its damage alone, or nothing.
+
+    Raises:
+        Error: If the outcome is not one.
+    """
+    if not outcome.is_valid():
+        raise Error("A blow's outcome must be one of the twelve")
+    var words: List[String] = [
+        "",
+        "",
+        "PERFECT DODGE",
+        "BLOCKED",
+        "PARRY",
+        "GUARD BREAK",
+        "",
+        "CRITICAL",
+        "BREAK",
+        "",
+        "FINISHER",
+        "PIERCE BREAK",
+    ]
+    return words[outcome.value]
+
+
+def is_attack(move: CombatMove) -> Bool:
+    """Return whether a move strikes.
+
+    Args:
+        move: The move.
+
+    Returns:
+        True for the light and the heavy attacks, the specials, the plunge,
+        the bite, the piercing attack, the cast and the throw.
+    """
+    return move.value >= LIGHT_ONE.value and move.value <= THROW.value
+
+
+def is_special(move: CombatMove) -> Bool:
+    """Return whether a move is a special, which spends the special gauge.
+
+    Args:
+        move: The move.
+
+    Returns:
+        True for `RISING_EDGE`, `WHIRLWIND`, `GROUND_WAVE` and
+        `ULTIMATE`.
+    """
+    return move.value >= RISING_EDGE.value and move.value <= ULTIMATE.value
+
+
+def styled(move: CombatMove) -> Bool:
+    """Return whether a fighter's stance changes a move.
+
+    Args:
+        move: The move.
+
+    Returns:
+        True for the light and the heavy attacks.
+    """
+    return move.value >= LIGHT_ONE.value and move.value <= HEAVY.value
+
+
+def landed_blow(outcome: StrikeOutcome) -> Bool:
+    """Return whether an outcome is a blow that landed.
+
+    Args:
+        outcome: The outcome.
+
+    Returns:
+        True for `HIT`, `CRITICAL`, `STAMINA_BREAK`, `DEFEATED`, `FINISHED` and
+        `PIERCE_BREAK`.
+    """
+    return outcome.value >= HIT.value
+
+
+def next_light(move: CombatMove) -> CombatMove:
+    """Return the light attack that follows a move in the chain.
+
+    Args:
+        move: The move the fighter makes now.
+
+    Returns:
+        `LIGHT_TWO` after `LIGHT_ONE`, `LIGHT_THREE` after `LIGHT_TWO`,
+        and `LIGHT_ONE` after any other move.
+    """
+    if move == LIGHT_ONE:
+        return LIGHT_TWO
+    if move == LIGHT_TWO:
+        return LIGHT_THREE
+    return LIGHT_ONE
+
+
+@fieldwise_init
+struct MoveData(ImplicitlyCopyable):
+    """The times and the strength of a move, in the middle stance."""
+
+    # How long the move takes to strike, strikes, and takes to end.
+    var startup: Duration
+    var active: Duration
+    var recovery: Duration
+    # How far the swing reaches from the fighter's middle, and the angle
+    # of its arc round the fighter's heading.
+    var reach: Length
+    var arc: Angle
+    # The health and the stamina that a blow takes.
+    var damage: Float32
+    var stamina_damage: Float32
+    # The stamina and the points of the special gauge that the move spends.
+    var stamina_cost: Float32
+    var special_cost: Float32
+    # How far the fighter moves forward over the start-up and the active
+    # part. A dodge moves this far over its active part.
+    var lunge: Length
+    # How many times the active part strikes each fighter it reaches.
+    var hits: Int
+    # How fast a blow pushes the fighter it hits away, and throws it up.
+    var knockback: Velocity
+    var launch: Velocity
+
+
+def _data(
+    startup: Float32,
+    active: Float32,
+    recovery: Float32,
+    reach: Float32 = 0,
+    arc: Float32 = 0,
+    damage: Float32 = 0,
+    stamina_damage: Float32 = 0,
+    stamina_cost: Float32 = 0,
+    special_cost: Float32 = 0,
+    lunge: Float32 = 0,
+    hits: Int = 0,
+    knockback: Float32 = 0,
+    launch: Float32 = 0,
+) -> MoveData:
+    """Return a move's data from seconds, meters, degrees and meters a
+    second."""
+    return MoveData(
+        Duration(startup, SECOND),
+        Duration(active, SECOND),
+        Duration(recovery, SECOND),
+        Length(reach, METER),
+        Angle(arc, DEGREE),
+        damage,
+        stamina_damage,
+        stamina_cost,
+        special_cost,
+        Length(lunge, METER),
+        hits,
+        Velocity(knockback, METER_PER_SECOND),
+        Velocity(launch, METER_PER_SECOND),
+    )
+
+
+def move_data(move: CombatMove) raises -> MoveData:
+    """Return the times and the strength of a move, in the middle stance.
+
+    Args:
+        move: The move.
+
+    Returns:
+        The values in the table of the module's docstring. A flinch lasts
+        0.4 seconds, a stagger 1.6 and a fall 2. `FREE` lasts no time.
+
+    Raises:
+        Error: If the move is not one.
+    """
+    if move == LIGHT_ONE:
+        return _data(0.14, 0.1, 0.26, 2, 120, 30, 8, 9, 0, 0.35, 1, 1.5)
+    if move == LIGHT_TWO:
+        return _data(0.12, 0.1, 0.28, 2, 120, 33, 9, 9, 0, 0.35, 1, 1.5)
+    if move == LIGHT_THREE:
+        return _data(0.2, 0.12, 0.45, 2.3, 90, 54, 16, 12, 0, 0.6, 1, 4)
+    if move == HEAVY:
+        return _data(0.4, 0.14, 0.55, 2.5, 80, 90, 30, 22, 0, 0.8, 1, 5)
+    if move == RISING_EDGE:
+        return _data(0.16, 0.2, 0.45, 2.1, 100, 66, 18, 0, 2, 0.4, 1, 1, 6.5)
+    if move == WHIRLWIND:
+        return _data(0.18, 0.48, 0.4, 2.6, 360, 27, 7, 0, 3, 0, 4, 2.5)
+    if move == GROUND_WAVE:
+        return _data(0.2, 0.1, 0.35, 0, 0, 45, 10, 0, 1, 0.1, 0, 2)
+    if move == ULTIMATE:
+        return _data(0.5, 1.0, 0.6, 4.5, 360, 70, 20, 0, 0, 0, 6, 3, 2)
+    if move == PLUNGE:
+        return _data(0.15, 0.15, 0.45, 2.6, 360, 70, 25, 18, 0, 0, 1, 4)
+    if move == BITE:
+        return _data(0.35, 0.2, 0.45, 1.4, 70, 40, 12, 0, 0, 2.4, 1, 2.5)
+    if move == PIERCE:
+        return _data(0.7, 0.14, 0.6, 2.8, 70, 120, 45, 20, 0, 2.2, 1, 6)
+    if move == CAST:
+        return _data(
+            0.35, 0.1, 0.35, damage=28, stamina_damage=10, knockback=1.5
+        )
+    if move == THROW:
+        return _data(0.45, 0.1, 0.45, damage=40, stamina_damage=14, knockback=2)
+    if move == DODGE:
+        return _data(0, 0.32, 0.16, stamina_cost=14, lunge=3.2)
+    if move == FLINCH:
+        return _data(0, 0, 0.4)
+    if move == STAGGER:
+        return _data(0, 0, 1.6)
+    if move == FALL:
+        return _data(0, 0, 2)
+    if move == FREE:
+        return _data(0, 0, 0)
+    raise Error("A combat move must be one of the eighteen")
+
+
+def stance_power(stance: CombatStance) -> Float32:
+    """Return how many times its damage and its stamina damage a stance's
+    light and heavy attacks do.
+
+    Args:
+        stance: The stance.
+
+    Returns:
+        1.3 high, 1 in the middle and 0.75 low.
+    """
+    if stance == HIGH_STANCE:
+        return 1.3
+    if stance == LOW_STANCE:
+        return 0.75
+    return 1
+
+
+def stance_pace(stance: CombatStance) -> Float32:
+    """Return how many times its time a stance's light or heavy attack
+    takes.
+
+    Args:
+        stance: The stance.
+
+    Returns:
+        1.2 high, 1 in the middle and 0.8 low.
+    """
+    if stance == HIGH_STANCE:
+        return 1.2
+    if stance == LOW_STANCE:
+        return 0.8
+    return 1
+
+
+def stance_cost(stance: CombatStance) -> Float32:
+    """Return how many times its stamina a stance's light attack, heavy attack
+    or dodge spends.
+
+    Args:
+        stance: The stance.
+
+    Returns:
+        1.3 high, 1 in the middle and 0.7 low.
+    """
+    if stance == HIGH_STANCE:
+        return 1.3
+    if stance == LOW_STANCE:
+        return 0.7
+    return 1
+
+
+def stance_guard(stance: CombatStance) -> Float32:
+    """Return how many times a blow's stamina damage a guard in a stance loses.
+
+    Args:
+        stance: The stance.
+
+    Returns:
+        1.2 high, 0.75 in the middle and 1 low.
+    """
+    if stance == HIGH_STANCE:
+        return 1.2
+    if stance == LOW_STANCE:
+        return 1
+    return 0.75
+
+
+def stance_step(stance: CombatStance) -> Float32:
+    """Return how many times its length a dodge in a stance goes.
+
+    Args:
+        stance: The stance.
+
+    Returns:
+        0.9 high, 1 in the middle and 1.15 low.
+    """
+    if stance == HIGH_STANCE:
+        return 0.9
+    if stance == LOW_STANCE:
+        return 1.15
+    return 1
+
+
+def combo_bonus(combo: Int) -> Float32:
+    """Return how many times its damage a blow of a combo does.
+
+    Args:
+        combo: How many blows of the combo landed before it.
+
+    Returns:
+        One plus `COMBO_STEP` for each blow, up to `COMBO_CAP` blows.
+    """
+    return 1 + COMBO_STEP * Float32(max(0, min(combo, COMBO_CAP)))
+
+
+def faces(at: Vector3, heading: Angle, arc: Angle, toward: Vector3) -> Bool:
+    """Return whether a point lies within an arc round a heading.
+
+    Args:
+        at: Where the one who looks stands. Its y is not used.
+        heading: The way it faces, as a yaw: see `yaw_of`.
+        arc: The angle of the arc, centered on the heading.
+        toward: The point. A point on `at` lies within every arc.
+
+    Returns:
+        Whether the yaw from `at` to the point is within half the arc of
+        the heading.
+    """
+    var dx = toward.x - at.x
+    var dz = toward.z - at.z
+    if dx * dx + dz * dz < 1.0e-8:
+        return True
+    var off = wrap_angle(
+        Angle(
+            yaw_of(Vector3(dx, 0, dz)).to(RADIAN) - heading.to(RADIAN), RADIAN
+        )
+    )
+    return abs(off.to(RADIAN)) <= arc.to(RADIAN) / 2
+
+
+def reaches(
+    at: Vector3,
+    heading: Angle,
+    reach: Length,
+    arc: Angle,
+    target: Vector3,
+    radius: Length,
+) -> Bool:
+    """Return whether a swing reaches a round target.
+
+    Args:
+        at: Where the swinging fighter's feet are.
+        heading: The way it faces, as a yaw.
+        reach: How far the swing reaches from its middle.
+        arc: The angle of the swing's arc, centered on the heading.
+        target: Where the target's feet are.
+        radius: The target's radius.
+
+    Returns:
+        Whether the target's circle comes within `reach`, its feet are
+        less than `REACH_HEIGHT` above or below, and some of its circle
+        lies within the arc.
+    """
+    var dx = target.x - at.x
+    var dz = target.z - at.z
+    var gap = sqrt(dx * dx + dz * dz)
+    var r = radius.to(METER)
+    if gap > reach.to(METER) + r:
+        return False
+    if abs(target.y - at.y) > REACH_HEIGHT:
+        return False
+    # The target's own width widens the arc by the angle it fills.
+    var widen = Angle(2 * atan2(r, gap), RADIAN)
+    return faces(
+        at, heading, Angle(arc.to(RADIAN) + widen.to(RADIAN), RADIAN), target
+    )
+
+
+@fieldwise_init
+struct Swing(ImplicitlyCopyable):
+    """The part of a move that strikes now: how far and how wide it
+    reaches, and which of the move's hits it is."""
+
+    var reach: Length
+    var arc: Angle
+    # Which of the move's hits strikes now, from 0.
+    var slice: Int
+
+
+struct Blow(ImplicitlyCopyable):
+    """What a swing does to a fighter it reaches."""
+
+    var damage: Float32
+    var stamina_damage: Float32
+    # How fast it pushes the fighter away from the attacker, and throws it
+    # up.
+    var knockback: Velocity
+    var launch: Velocity
+    # Whether it can finish a staggered, weakened fighter; whether no
+    # guard stops it; and whether it counters a piercing attack.
+    var finish: Bool
+    var unblockable: Bool
+    var breaks_pierce: Bool
+
+    def __init__(
+        out self,
+        damage: Float32,
+        stamina_damage: Float32,
+        knockback: Velocity,
+        launch: Velocity,
+        finish: Bool = False,
+        unblockable: Bool = False,
+        breaks_pierce: Bool = False,
+    ):
+        """Hold a blow.
+
+        Args:
+            damage: The health it takes.
+            stamina_damage: The stamina it takes.
+            knockback: How fast it pushes the fighter away.
+            launch: How fast it throws the fighter up.
+            finish: Whether it can finish a staggered fighter with
+                `FINISH_SHARE` of its health or less.
+            unblockable: Whether it lands through a guard, as a piercing
+                attack does.
+            breaks_pierce: Whether it counters a piercing attack that it
+                lands on in its start-up.
+        """
+        self.damage = damage
+        self.stamina_damage = stamina_damage
+        self.knockback = knockback
+        self.launch = launch
+        self.finish = finish
+        self.unblockable = unblockable
+        self.breaks_pierce = breaks_pierce
+
+
+@fieldwise_init
+struct Struck(ImplicitlyCopyable):
+    """What a blow did to a fighter: the outcome, and the health and the
+    stamina it took. For `PARRIED`, `stamina` is what the attacker loses."""
+
+    var outcome: StrikeOutcome
+    var damage: Float32
+    var stamina: Float32
+
+
+struct FighterParameters(ImplicitlyCopyable):
+    """How strong a fighter is: its health, its stamina, its special gauge and its
+    blows."""
+
+    # The most health, and the most stamina.
+    var health: Float32
+    var stamina: Float32
+    # How fast stamina comes back, in points a second, and how long after the
+    # fighter last spent stamina it starts to.
+    var stamina_rate: Frequency
+    var stamina_delay: Duration
+    # The most points of the special gauge, and how fast they come back, in
+    # points a second.
+    var special_points: Float32
+    var special_rate: Frequency
+    # How many times a move's damage and stamina damage the fighter's blows do.
+    var might: Float32
+    # The arc in front of the fighter that its guard covers, and how long
+    # after the guard is raised it parries a blow.
+    var guard_arc: Angle
+    var parry: Duration
+    # How many times the gauge's gains fill the fighter's limit gauge;
+    # zero never surges.
+    var limit_gain: Float32
+    # The share of its health at or below which the fighter rages; zero
+    # never rages.
+    var rage: Float32
+
+    def __init__(out self):
+        """Create the player: 500 health, 100 stamina that comes back at 32 a
+        second after 0.6 seconds, a special gauge of 5 points that comes
+        back at half a point a second, blows of the moves' own strength,
+        a guard of 140 degrees that parries for `PARRY` seconds, a limit
+        gauge that fills at the gains' own pace, and no rage."""
+        self.health = 500
+        self.stamina = 100
+        self.stamina_rate = Frequency(32.0, PER_SECOND)
+        self.stamina_delay = Duration(0.6, SECOND)
+        self.special_points = 5
+        self.special_rate = Frequency(0.5, PER_SECOND)
+        self.might = 1
+        self.guard_arc = Angle(140.0, DEGREE)
+        self.parry = Duration(PARRY, SECOND)
+        self.limit_gain = 1
+        self.rage = 0
+
+    def check(self) raises:
+        """Refuse a fighter that cannot fight.
+
+        Raises:
+            Error: If the health, the stamina or the might is not above zero
+                and below a million; a rate or the special gauge is negative
+                or not below a million; the delay is negative or not below
+                10,000 seconds; the guard's arc is not from 0 to 360
+                degrees; the parry is not from 0 to 10 seconds; the limit
+                gain is not from 0 to 100; or the rage is not from 0 to 1.
+        """
+        for value in [
+            self.health,
+            self.stamina,
+            self.might,
+        ]:  # pragma: no branch
+            if not (value > 0 and value < 1.0e6):
+                raise Error(
+                    "A fighter's health, stamina and might must be above zero"
+                    " and below a million"
+                )
+        for value in [  # pragma: no branch
+            self.stamina_rate.to(PER_SECOND),
+            self.special_points,
+            self.special_rate.to(PER_SECOND),
+        ]:
+            require_between(
+                value,
+                0,
+                1.0e6,
+                (
+                    "A fighter's rates and special gauge must be from 0 to a"
+                    " million"
+                ),
+            )
+        require_between(
+            self.stamina_delay.to(SECOND),
+            0,
+            1.0e4,
+            "A fighter's stamina delay must be from 0 to 10,000 seconds",
+        )
+        require_between(
+            self.guard_arc.to(DEGREE),
+            0,
+            360,
+            "A fighter's guard must cover from 0 to 360 degrees",
+        )
+        require_between(
+            self.parry.to(SECOND),
+            0,
+            10,
+            "A fighter's parry must last from 0 to 10 seconds",
+        )
+        require_between(
+            self.limit_gain,
+            0,
+            100,
+            "A fighter's limit gain must be from 0 to 100",
+        )
+        require_between(
+            self.rage, 0, 1, "A fighter's rage must be a share from 0 to 1"
+        )
+
+
+struct Fighter(Copyable, Movable):
+    """One fighter's health, stamina and special gauge, its stance, and the move
+    it makes."""
+
+    var parameters: FighterParameters
+    var health: Float32
+    var stamina: Float32
+    # The points of the special gauge.
+    var special: Float32
+    var stance: CombatStance
+    var move: CombatMove
+    # How far into the move the fighter is, in seconds, now and before
+    # the last update.
+    var clock: Float32
+    var before: Float32
+    # How many times its time the move takes: see `stance_pace`.
+    var pace: Float32
+    # The move that waits for the chain point, or `FREE` for none.
+    var queued: CombatMove
+    # Whether the fighter guards, and for how long, in seconds.
+    var guarding: Bool
+    var guard_age: Float32
+    # How long ago the fighter last spent stamina, in seconds; and the stamina that
+    # the move spent.
+    var rest: Float32
+    var spent: Float32
+    # How long ago the last swing's active part ended, in seconds, or -1
+    # when no stamina recovery can be made; and the stamina a recovery gets back.
+    var pulse_age: Float32
+    var pulse_stamina: Float32
+    # How long an attack is still a counter, in seconds; whether the move
+    # is a counter; and whether its dodge was already perfect.
+    var counter: Float32
+    var countering: Bool
+    var perfected: Bool
+    # The targets that the move's present hit struck, and which hit that
+    # is.
+    var struck: List[Int]
+    var slice: Int
+    # How many blows of the combo landed, and how long ago the last did,
+    # in seconds.
+    var combo: Int
+    var combo_age: Float32
+    # Whether the fighter spent its last stamina: it staggers when its move
+    # ends.
+    var winded: Bool
+    # How full the limit gauge is, and how long the surge still lasts, in
+    # seconds.
+    var limit: Float32
+    var over: Float32
+
+    def __init__(out self, parameters: FighterParameters) raises:
+        """Create a fighter with full health, stamina and special gauge, in the
+        middle stance, free.
+
+        Args:
+            parameters: How strong it is.
+
+        Raises:
+            Error: If `parameters.check` refuses a value.
+        """
+        parameters.check()
+        self.parameters = parameters
+        self.health = parameters.health
+        self.stamina = parameters.stamina
+        self.special = parameters.special_points
+        self.stance = MID_STANCE
+        self.move = FREE
+        self.clock = 0
+        self.before = 0
+        self.pace = 1
+        self.queued = FREE
+        self.guarding = False
+        self.guard_age = 0
+        self.rest = 0
+        self.spent = 0
+        self.pulse_age = -1
+        self.pulse_stamina = 0
+        self.counter = 0
+        self.countering = False
+        self.perfected = False
+        self.struck = List[Int]()
+        self.slice = -1
+        self.combo = 0
+        self.combo_age = 0
+        self.winded = False
+        self.limit = 0
+        self.over = 0
+
+    def free(self) -> Bool:
+        """Return whether the fighter makes no move, so it can walk.
+
+        Returns:
+            True when the move is `FREE`.
+        """
+        return self.move == FREE
+
+    def defeated(self) -> Bool:
+        """Return whether the fighter is down.
+
+        Returns:
+            True when the move is `FALL`.
+        """
+        return self.move == FALL
+
+    def raging(self) -> Bool:
+        """Return whether the fighter rages: its attacks are quicker.
+
+        Returns:
+            True while the fighter has health, and no more than its
+            `rage` share of its most.
+        """
+        ref p = self.parameters
+        return self.health > 0 and self.health <= p.rage * p.health
+
+    def length(self) raises -> Float32:
+        """Return how long the move lasts, in seconds, at its pace.
+
+        Returns:
+            The start-up, the active part and the recovery, added.
+
+        Raises:
+            Error: Never: the move is one.
+        """
+        var data = move_data(self.move)
+        return (
+            data.startup.to(SECOND)
+            + data.active.to(SECOND)
+            + data.recovery.to(SECOND)
+        ) * self.pace
+
+    def active_end(self) raises -> Float32:
+        """Return how far into the move its active part ends, in seconds.
+
+        Returns:
+            The start-up and the active part, added, at the move's pace.
+
+        Raises:
+            Error: Never: the move is one.
+        """
+        var data = move_data(self.move)
+        return (data.startup.to(SECOND) + data.active.to(SECOND)) * self.pace
+
+    def chain_point(self) raises -> Float32:
+        """Return how far into the move a waiting move starts, in seconds.
+
+        Returns:
+            The end of the active part, and `CHAIN_SHARE` of the recovery
+            after it, at the move's pace.
+
+        Raises:
+            Error: Never: the move is one.
+        """
+        var data = move_data(self.move)
+        return (
+            self.active_end()
+            + data.recovery.to(SECOND) * CHAIN_SHARE * self.pace
+        )
+
+    def invulnerable(self) -> Bool:
+        """Return whether no blow can hit the fighter now.
+
+        Returns:
+            True from `DODGE_SAFE_FROM` to `DODGE_SAFE_TO` into a dodge,
+            and all through an ultimate.
+        """
+        if self.move == ULTIMATE:
+            return True
+        return (
+            self.move == DODGE
+            and self.clock >= DODGE_SAFE_FROM
+            and self.clock <= DODGE_SAFE_TO
+        )
+
+    def armored(self) raises -> Bool:
+        """Return whether a blow that lands now does not make the fighter
+        reel.
+
+        Returns:
+            True in a surge; else True for a heavy attack, a plunge, a
+            whirlwind or a piercing attack, until its active part ends.
+
+        Raises:
+            Error: Never: the move is one.
+        """
+        if self.over > 0:
+            return True
+        var heavy = self.move == HEAVY or self.move == PLUNGE
+        var spin = self.move == WHIRLWIND or self.move == PIERCE
+        return (heavy or spin) and self.clock < self.active_end()
+
+    def piercing(self) raises -> Bool:
+        """Return whether the fighter winds up a piercing attack, and glows
+        red.
+
+        Returns:
+            True through a piercing attack's start-up.
+
+        Raises:
+            Error: Never: a piercing attack is a move.
+        """
+        if self.move != PIERCE:
+            return False
+        return self.clock < move_data(PIERCE).startup.to(SECOND) * self.pace
+
+    def stamina_price(self, move: CombatMove) raises -> Float32:
+        """Return the stamina that a move spends in the fighter's stance.
+
+        Args:
+            move: The move.
+
+        Returns:
+            The move's stamina, times `stance_cost` for a light attack, a
+            heavy attack or a dodge.
+
+        Raises:
+            Error: If the move is not one.
+        """
+        var cost = move_data(move).stamina_cost
+        if styled(move) or move == DODGE:
+            cost *= stance_cost(self.stance)
+        return cost
+
+    def drive(self) raises -> Velocity:
+        """Return how fast the move carries the fighter along its heading,
+        or along the dodge's way.
+
+        Returns:
+            For an attack, its lunge over its start-up and active part;
+            for a dodge, its length in the stance over its active part.
+            Zero after the active part, and for every other move.
+
+        Raises:
+            Error: Never: the move is one.
+        """
+        if not (is_attack(self.move) or self.move == DODGE):
+            return Velocity(0.0, METER_PER_SECOND)
+        var end = self.active_end()
+        if self.clock >= end:
+            return Velocity(0.0, METER_PER_SECOND)
+        var data = move_data(self.move)
+        var far = data.lunge.to(METER)
+        var over = end
+        if self.move == DODGE:
+            far *= stance_step(self.stance)
+            over -= data.startup.to(SECOND)
+        return Velocity(far / over, METER_PER_SECOND)
+
+    def _begin(mut self, move: CombatMove):
+        """Start a move with no cost, at its start."""
+        self.move = move
+        self.clock = 0
+        self.before = 0
+        self.pace = stance_pace(self.stance) if styled(move) else 1
+        if is_attack(move) and self.raging():
+            self.pace *= RAGE_PACE
+        self.queued = FREE
+        self.guarding = False
+        self.struck.clear()
+        self.slice = -1
+        self.countering = False
+        self.perfected = False
+        if is_attack(move) and self.counter > 0:
+            self.countering = True
+            self.counter = 0
+
+    def _spend(mut self, cost: Float32):
+        """Spend stamina: a fighter that spends its last is winded."""
+        self.spent = cost
+        if cost <= 0:
+            return
+        self.stamina -= cost
+        self.rest = 0
+        if self.stamina <= 0:
+            self.stamina = 0
+            self.winded = True
+
+    def _start(mut self, move: CombatMove) raises -> Bool:
+        """Start a move if the fighter has the stamina and the special points it
+        spends, and an ultimate only in a surge; return whether it
+        started. An ultimate ends the surge."""
+        if move == ULTIMATE:
+            if self.over <= 0:
+                return False
+            self.over = 0
+        var cost = self.stamina_price(move)
+        if cost > 0 and self.stamina <= 0:
+            return False
+        var points = move_data(move).special_cost
+        if self.over > 0:
+            points = 0
+        if self.special < points:
+            return False
+        self._begin(move)
+        self.special -= points
+        self._spend(cost)
+        return True
+
+    def _finish(mut self):
+        """End the move: a winded fighter staggers, and any other is free."""
+        if self.winded:
+            self.winded = False
+            self._begin(STAGGER)
+            return
+        self._begin(FREE)
+
+    def charge(mut self, amount: Float32):
+        """Fill the limit gauge, and surge when it is full.
+
+        Args:
+            amount: How much, before the fighter's `limit_gain`. Nothing
+                fills while a surge lasts.
+        """
+        if self.over > 0:
+            return
+        self.limit += amount * self.parameters.limit_gain
+        if self.limit >= LIMIT:
+            self.limit = 0
+            self.over = OVER_SECONDS
+            self.special = self.parameters.special_points
+
+    def request(mut self, move: CombatMove) raises -> Bool:
+        """Ask the fighter to make a move.
+
+        A free fighter starts it at once, if it has the stamina and the special
+        points. During an attack or a dodge, the move waits for the chain
+        point; a dodge in an attack's recovery starts at once. A later
+        request replaces a waiting one. A fighter that reels, staggers or
+        is down cannot make a move.
+
+        Args:
+            move: An attack or `DODGE`.
+
+        Returns:
+            Whether the move started or waits.
+
+        Raises:
+            Error: If the move is not an attack or a dodge.
+        """
+        if not (is_attack(move) or move == DODGE):
+            raise Error("A fighter can only ask for an attack or a dodge")
+        if self.move == FREE:
+            return self._start(move)
+        if not (is_attack(self.move) or self.move == DODGE):
+            return False
+        if (
+            move == DODGE
+            and is_attack(self.move)
+            and self.clock >= self.active_end()
+        ):
+            return self._start(move)
+        self.queued = move
+        return True
+
+    def press_light(mut self) raises -> Bool:
+        """Ask for the next light attack of the chain.
+
+        Returns:
+            Whether it started or waits: see `request`.
+
+        Raises:
+            Error: Never: a light attack is an attack.
+        """
+        return self.request(next_light(self.move))
+
+    def hold_guard(mut self, held: Bool):
+        """Guard while the guard button is held and the fighter is free.
+
+        Args:
+            held: Whether the guard button is held.
+        """
+        if not held:
+            self.guarding = False
+            return
+        if self.move != FREE or self.guarding:
+            return
+        self.guarding = True
+        self.guard_age = 0
+
+    def pulse(mut self) -> Float32:
+        """Make a stamina recovery: get back the stamina that the last swing spent.
+
+        Returns:
+            The stamina it got back: the swing's stamina within `PULSE_PERFECT`
+            seconds of its active part's end, `PULSE_LATE` of it within
+            `PULSE_WINDOW`, and zero otherwise. A pulse that gets stamina back
+            also catches the fighter's breath: it is not winded any more.
+        """
+        if self.pulse_age < 0:
+            return 0
+        var share = (
+            Float32(1) if self.pulse_age <= PULSE_PERFECT else PULSE_LATE
+        )
+        var back = self.pulse_stamina * share
+        self.stamina = min(self.parameters.stamina, self.stamina + back)
+        self.pulse_age = -1
+        if back > 0:
+            self.winded = False
+        return back
+
+    def set_stance(mut self, stance: CombatStance) raises -> Bool:
+        """Change the stance, while the fighter is free.
+
+        Args:
+            stance: The new stance.
+
+        Returns:
+            Whether the stance changed.
+
+        Raises:
+            Error: If the stance is not one.
+        """
+        if not stance.is_valid():
+            raise Error("A combat stance must be high, middle or low")
+        if self.move != FREE or stance == self.stance:
+            return False
+        self.stance = stance
+        return True
+
+    def update(mut self, delta: Duration) raises:
+        """Move the fighter on by one frame.
+
+        The move's clock runs. At the chain point a waiting move starts,
+        and at its end the move ends. Stamina comes back after the fighter's
+        delay, at half pace while it guards. The special gauge fills. The
+        combo ends `COMBO_KEEP` after its last blow.
+
+        Args:
+            delta: The frame's time.
+
+        Raises:
+            Error: If the time is negative or above a billion seconds.
+        """
+        var seconds = delta.to(SECOND)
+        if not (seconds >= 0 and seconds < 1.0e9):
+            raise Error("A frame's time must not be negative or endless")
+        if self.pulse_age >= 0:
+            self.pulse_age += seconds
+            if self.pulse_age > PULSE_WINDOW:
+                self.pulse_age = -1
+        self.before = self.clock
+        if self.move != FREE:
+            self.clock += seconds
+            var swung = self.active_end()
+            if (
+                is_attack(self.move)
+                and self.before < swung
+                and self.clock >= swung
+            ):
+                self.pulse_age = self.clock - swung
+                self.pulse_stamina = self.spent
+            if self.queued != FREE and self.clock >= self.chain_point():
+                var next = self.queued
+                self.queued = FREE
+                _ = self._start(next)
+            if self.move != FALL and self.clock >= self.length():
+                self._finish()
+        ref p = self.parameters
+        self.rest += seconds
+        if self.rest >= p.stamina_delay.to(SECOND):
+            var regain = p.stamina_rate.to(PER_SECOND) * seconds
+            if self.guarding:
+                regain *= GUARD_REGAIN
+            self.stamina = min(p.stamina, self.stamina + regain)
+        self.special = min(
+            p.special_points,
+            self.special + p.special_rate.to(PER_SECOND) * seconds,
+        )
+        self.combo_age += seconds
+        if self.combo_age > COMBO_KEEP:
+            self.combo = 0
+        self.counter = max(Float32(0), self.counter - seconds)
+        self.over = max(Float32(0), self.over - seconds)
+        self.guard_age += seconds
+
+    def swing(self) raises -> Optional[Swing]:
+        """Return the part of the move that strikes in the last update.
+
+        Returns:
+            The swing, if the move is an attack that strikes, and the last
+            update reached its active part; else None. Its slice is the
+            hit of the active part that the update ended in, or the last.
+
+        Raises:
+            Error: Never: the move is one.
+        """
+        if not is_attack(self.move):
+            return None
+        var data = move_data(self.move)
+        if data.hits == 0:
+            return None
+        var start = data.startup.to(SECOND) * self.pace
+        var end = self.active_end()
+        if self.clock < start or self.before >= end:
+            return None
+        var share = (min(self.clock, end) - start) / (end - start)
+        var slice = min(data.hits - 1, Int(share * Float32(data.hits)))
+        return Swing(data.reach, data.arc, slice)
+
+    def connect(mut self, target: Int) raises -> Optional[Blow]:
+        """Return the blow that the swing gives a target it reaches.
+
+        Each hit of a move strikes each target once.
+
+        Args:
+            target: Which target, as the game numbers them.
+
+        Returns:
+            The blow, or None if no swing strikes now, or the present hit
+            already struck the target.
+
+        Raises:
+            Error: Never: the move is one.
+        """
+        var swing = self.swing()
+        if not swing:
+            return None
+        var slice = swing.value().slice
+        if slice != self.slice:
+            self.slice = slice
+            self.struck.clear()
+        for index in self.struck:
+            if index == target:
+                return None
+        self.struck.append(target)
+        return self.blow()
+
+    def launched(self) raises -> Bool:
+        """Return whether the last update reached the start of the move's
+        active part: where a ground wave sends its wave.
+
+        Returns:
+            True for an attack whose start-up ended within the update: a
+            ground wave sends its wave then, a cast its bolt, and a throw
+            its knife.
+
+        Raises:
+            Error: Never: the move is one.
+        """
+        if not is_attack(self.move):
+            return False
+        var start = move_data(self.move).startup.to(SECOND) * self.pace
+        return self.before < start and self.clock >= start
+
+    def blow(self) raises -> Blow:
+        """Return what the move does to a fighter it strikes.
+
+        Returns:
+            The move's damage times the fighter's might, its stance's
+            power for a light or a heavy attack, the combo's bonus, and
+            `COUNTER_BONUS` for a counter and `OVER_BONUS` in a surge; its
+            stamina damage times the might and the power; its push and its
+            throw. A heavy attack's blow can finish. A piercing attack's blow
+            lands through a guard. A heavy attack's, a plunge's or an
+            special's blow counters a piercing attack.
+
+        Raises:
+            Error: Never: the move is one.
+        """
+        var data = move_data(self.move)
+        var power = stance_power(self.stance) if styled(self.move) else 1
+        var damage = (
+            data.damage
+            * self.parameters.might
+            * power
+            * combo_bonus(self.combo)
+        )
+        if self.countering:
+            damage *= COUNTER_BONUS
+        if self.over > 0:
+            damage *= OVER_BONUS
+        return Blow(
+            damage,
+            data.stamina_damage * self.parameters.might * power,
+            data.knockback,
+            data.launch,
+            self.move == HEAVY,
+            self.move == PIERCE,
+            self.move == HEAVY or self.move == PLUNGE or is_special(self.move),
+        )
+
+    def receive(mut self, blow: Blow, front: Bool) raises -> Struck:
+        """Take a blow.
+
+        Args:
+            blow: The blow.
+            front: Whether the attacker stands within the guard's arc in
+                front of the fighter: see `faces`.
+
+        Returns:
+            What the blow did. A dodge or an ultimate evades it. A guard takes it from the
+            front on stamina, or parries it when it was raised less than the
+            fighter's parry before; a guard does not stop a piercing attack.
+            Any other blow takes health and stamina, and makes the fighter reel
+            unless it has armor. A blow on a staggered fighter is
+            critical, and takes no stamina; a heavy one on a staggered fighter
+            with `FINISH_SHARE` of its health or less finishes it. A heavy
+            attack or a special on a fighter that winds up a piercing attack
+            takes all its stamina, and staggers it.
+
+        Raises:
+            Error: Never: each move is one.
+        """
+        if self.move == FALL:
+            return Struck(IGNORED, 0, 0)
+        if self.invulnerable():
+            if (
+                self.move == DODGE
+                and self.clock < DODGE_SAFE_FROM + PERFECT_WINDOW
+                and not self.perfected
+            ):
+                self.perfected = True
+                self.stamina = min(
+                    self.parameters.stamina, self.stamina + self.spent
+                )
+                self.special = min(
+                    self.parameters.special_points,
+                    self.special + PERFECT_SPECIAL,
+                )
+                self.counter = COUNTER_SECONDS
+                self.charge(LIMIT_PER_PERFECT)
+                return Struck(PERFECT_DODGE, 0, 0)
+            return Struck(EVADED, 0, 0)
+        if self.guarding and front and not blow.unblockable:
+            if self.guard_age < self.parameters.parry.to(SECOND):
+                self.charge(LIMIT_PER_PARRY)
+                self.counter = COUNTER_SECONDS
+                return Struck(PARRIED, 0, blow.stamina_damage)
+            var lost = blow.stamina_damage * stance_guard(self.stance)
+            self.stamina -= lost
+            self.rest = 0
+            if self.stamina <= 0:
+                self.stamina = 0
+                self._begin(STAGGER)
+                return Struck(GUARD_BREAK, 0, lost)
+            return Struck(BLOCKED, 0, lost)
+        self.combo = 0
+        var damage = blow.damage
+        var critical = self.move == STAGGER
+        var weak = self.health <= FINISH_SHARE * self.parameters.health
+        if critical and blow.finish and weak:
+            var rest = self.health
+            self.health = 0
+            self._begin(FALL)
+            return Struck(FINISHED, rest, 0)
+        if critical:
+            damage *= CRITICAL_BONUS
+        self.health -= damage
+        if self.health <= 0:
+            self.health = 0
+            self._begin(FALL)
+            return Struck(DEFEATED, damage, 0)
+        if critical:
+            return Struck(CRITICAL, damage, 0)
+        if blow.breaks_pierce and self.piercing():
+            var lost = self.stamina
+            self.stamina = 0
+            self.rest = 0
+            self._begin(STAGGER)
+            return Struck(PIERCE_BREAK, damage, lost)
+        self.stamina -= blow.stamina_damage
+        self.rest = 0
+        if self.stamina <= 0:
+            self.stamina = 0
+            self._begin(STAGGER)
+            return Struck(STAMINA_BREAK, damage, blow.stamina_damage)
+        if not self.armored():
+            self._begin(FLINCH)
+        return Struck(HIT, damage, blow.stamina_damage)
+
+    def landed(mut self, struck: Struck):
+        """Learn what the fighter's blow did.
+
+        A blow that landed adds to the combo and fills the special gauge and
+        the limit gauge; one that broke a stamina, a guard or a piercing attack
+        fills the limit gauge more. A parried blow costs the attacker the stamina that `struck`
+        names, and makes it reel, or stagger when its stamina runs out.
+
+        Args:
+            struck: What the blow did.
+        """
+        if struck.outcome == PARRIED:
+            self.stamina -= struck.stamina
+            self.rest = 0
+            if self.stamina <= 0:
+                self.stamina = 0
+                self._begin(STAGGER)
+                return
+            self._begin(FLINCH)
+            return
+        var broke = (
+            struck.outcome == STAMINA_BREAK or struck.outcome == GUARD_BREAK
+        )
+        if broke or struck.outcome == PIERCE_BREAK:
+            self.charge(LIMIT_PER_BREAK)
+        if landed_blow(struck.outcome):
+            self.combo += 1
+            self.combo_age = 0
+            self.special = min(
+                self.parameters.special_points, self.special + SPECIAL_PER_HIT
+            )
+            self.charge(LIMIT_PER_HIT)
+
+    def revive(mut self):
+        """Stand the fighter up with full health, stamina and special gauge, an
+        empty limit gauge, free."""
+        self.health = self.parameters.health
+        self.stamina = self.parameters.stamina
+        self.special = self.parameters.special_points
+        self.winded = False
+        self.combo = 0
+        self.counter = 0
+        self.pulse_age = -1
+        self.limit = 0
+        self.over = 0
+        self._begin(FREE)

@@ -6,7 +6,7 @@
 """Tests for the stature-scaled torso and the body it completes."""
 
 from core.assets import Assets
-from core.buffer_geometry import COLOR
+from core.buffer_geometry import COLOR, POSITION
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.humanoid.athleticism import Athleticism
@@ -45,6 +45,7 @@ from extensions.humanoid.skeleton.torso.body import (
     BodySkinField,
     add_body,
     body_skin_mesh,
+    body_skin_parts,
 )
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     ARM_ABDUCTION,
@@ -980,6 +981,22 @@ def test_body_skin_is_one_surface() raises:
     var skin = body_skin_mesh(person, 8)
     assert_true(skin.has_attribute(String(COLOR)))
     assert_true(field.head_split > field.head.low.y)
+    # The body's mesh and the scan's meet in a band at the neck, each cut
+    # level: the body's top and the scan's floor are straight.
+    var parts = body_skin_parts(person, 8)
+    var body_top = Float32(-1)
+    for v in range(parts[0].vertex_count()):
+        body_top = max(
+            body_top, parts[0].attribute_view(String(POSITION)).vector3(v).y
+        )
+    assert_true(abs(body_top - (field.head_split + field.head_lap)) < 1e-4)
+    var scan_floor = Float32(10)
+    ref scan = parts[1].attribute_view(String(POSITION))
+    for v in range(scan.count()):
+        scan_floor = min(scan_floor, scan.vector3(v).y)
+    # The scan sinks under the body there, along its normals, by at most
+    # 2 mm.
+    assert_true(abs(scan_floor - (field.head_split - field.head_lap)) < 0.0021)
 
 
 def main() raises:

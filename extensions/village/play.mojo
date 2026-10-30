@@ -10,14 +10,21 @@ and its animals, seen by a third-person camera.
 
 1. The look stick turns the camera round the player: see
    `ThirdPersonControls`.
-2. The player's `Character` steps by the move stick, relative to the
-   camera's yaw, on the village's `Terrain`. The walls, the furniture,
-   the trees, the pond and every resident stop it. A door's gap lets it
-   into a house, and its floor carries it there.
+2. The fight runs: see `extensions.village.battle`. The player's
+   `Character` steps by the move stick, relative to the camera's yaw, on
+   the village's `Terrain`, or an attack, a dodge or a blow carries it.
+   The walls, the furniture, the trees, the pond, every resident, the
+   bandits and the dummies stop it. A door's gap lets it into a house,
+   and its floor carries it there. The bandits think and move, and the
+   blows land. The player's `Body` stands where the character stands and
+   plays its stance's clip, or its sword's. The coins and the herbs a
+   fallen bandit gives go into the satchel, and the herbs the player eats
+   to heal come out of it. Fighting trains the player's swordplay, and
+   its level makes the player's blows stronger: see
+   `extensions.village.skills`.
 3. While the player moves and the look stick rests, the camera comes
    round behind the player.
-4. The player's `Body` stands where the character stands and plays its
-   stance's clip.
+4. The camera turns toward the target the player locks on to.
 5. Each resident steps along its route and is posed: see `Residents`.
 6. Each door swings open while someone stands near it, and shut after.
 7. A new press of the use button uses the spot of `Gathering` in reach:
@@ -38,7 +45,7 @@ and its animals, seen by a third-person camera.
 `VillageGame.render` then draws the frame with `GameRenderer` at the
 quality's size, composes the pond's water into it, and stretches it to the
 window, and writes the heads-up display over it: see
-`extensions.village.hud`. `GameQuality` says how finely each part of the frame is drawn: see
+`extensions.village.hud` and `extensions.village.battle_hud`. `GameQuality` says how finely each part of the frame is drawn: see
 `extensions.village.quality`.
 """
 
@@ -71,17 +78,26 @@ from extensions.village.character import (
     MoveInput,
     Obstacle,
 )
-from extensions.village.gathering import GatherParameters, Gathering
+from extensions.village.battle import Battle, BattleParameters
+from extensions.village.battle_hud import draw_battle
+from extensions.village.gathering import (
+    CHEST,
+    HERBS,
+    GatherParameters,
+    Gathering,
+)
 from extensions.village.hud import draw_hud, note_text, use_prompt
 from extensions.village.skills import (
     FISHING,
     FORAGING,
     MINING,
+    SWORDPLAY,
     Skills,
     fish_haste,
     forage_bonus,
     ore_strikes,
     skill_name,
+    sword_might,
 )
 from extensions.village.critters import Critters, Haunt, default_haunts
 from extensions.village.day import DayCycle, dim_water
@@ -123,7 +139,7 @@ from render.game_smooth import smooth_edges
 from render.game_upscale import upscale_into
 from renderers.game_renderer import FULL_SHADOWS, GameRenderer
 from renderers.renderer import Renderer, available_workers
-from std.math import exp
+from std.math import cos, exp, sin
 from std.time import perf_counter_ns
 from units.si import (
     DEGREE,
@@ -151,6 +167,8 @@ comptime INSIDE_REACH = Float32(18)
 drawn, in meters."""
 comptime ARM_MARGIN = Float32(0.3)
 """How far before a wall the camera's eye stops, in meters."""
+comptime SHAKEN = Float32(1.0e-3)
+"""A camera's shake of less than this, in meters, is not seen."""
 comptime ARM_EASE = Float32(3)
 """How fast the eye goes back out once a wall is passed: each second it
 closes all but `exp(-ARM_EASE)` of its gap."""
@@ -275,6 +293,8 @@ struct PlayParameters(Copyable, Movable):
     # The hour the game begins at, and how fast the day moves on: see
     # `extensions.village.day`.
     var day: DayCycle
+    # Who fights in the village: see `extensions.village.battle`.
+    var battle: BattleParameters
 
     def __init__(out self, quality: GameQuality) raises:
         """Create the default game at a quality: the village with the
@@ -285,7 +305,9 @@ struct PlayParameters(Copyable, Movable):
         the heads-up display is on. Its villagers talk and give errands.
         Fireflies and butterflies keep to its default haunts. The
         weather is clear, and stays so. It is two in the afternoon, and
-        stays so.
+        stays so. Three bandits and their captain keep a camp to the
+        north-west, three wolves keep a den east of the pond, and two
+        straw dummies stand east of the start.
 
         Args:
             quality: How finely each part of a frame is drawn.
@@ -311,6 +333,8 @@ struct PlayParameters(Copyable, Movable):
         self.weather = CLEAR
         self.weather_cycle = False
         self.day = DayCycle()
+        self.battle = BattleParameters()
+        self.battle.coarseness = Float64(quality.animal_coarseness)
 
 
 def tree_obstacles(
@@ -395,6 +419,8 @@ struct VillageGame(Movable):
     var weather_ms: Float64
     # The hour of the day.
     var day: DayCycle
+    # The fight: the player's sword, the bandits and the dummies.
+    var battle: Battle
 
     def __init__(
         out self,
@@ -474,6 +500,18 @@ struct VillageGame(Movable):
             parameters.heading,
             self.terrain,
         )
+        self.battle = Battle(
+            scene,
+            assets,
+            parameters.battle,
+            self.village.looks,
+            self.terrain,
+            keep_off,
+            self.body,
+            self.player.position,
+            parameters.residents.triangles,
+            parameters.residents.detail,
+        )
         self.village.meadow.grass_wind_every = self.quality.grass_wind_every
         # A still shadow map is drawn once, and the grass changes as the
         # player walks, so only full shadows take the grass.
@@ -541,6 +579,7 @@ struct VillageGame(Movable):
             movers.append(self.residents.bodies[index].carrier)
         for index in range(len(self.residents.beasts)):
             movers.append(self.residents.beasts[index].node)
+        movers.extend(self.battle.movers())
         scene.update()
         self.fast.set_moving(scene, movers)
 
@@ -569,14 +608,47 @@ struct VillageGame(Movable):
         self.view.turn(input.look_right, input.look_up, delta)
         var blocking = self.trees.copy()
         blocking.extend(self.residents.obstacles())
-        self.player.step(input, self.view.yaw, delta, self.terrain, blocking)
         var calm = abs(input.look_right) < CALM and abs(input.look_up) < CALM
-        if calm:
+        self.battle.herbs = self.gathering.satchel.count(HERBS)
+        self.battle.fighter.parameters.might = sword_might(
+            self.skills.level(SWORDPLAY)
+        )
+        self.battle.tick(
+            scene,
+            input,
+            self.view,
+            self.player,
+            self.body,
+            self.terrain,
+            blocking,
+            delta,
+        )
+        if calm and self.battle.lock < 0:
             var top = self.player.parameters.run_speed.to(METER_PER_SECOND)
             var share = self.player.speed().to(METER_PER_SECOND) / top
             self.view.trail(self.player.heading, share, delta)
-        self.body.pose(scene, self.player, delta)
+        # A fallen bandit's coins go into the satchel, and the fight's
+        # last word is the note.
+        self.gathering.satchel.counts[CHEST.value] += self.battle.loot
+        self.battle.loot = 0
+        self.gathering.satchel.counts[HERBS.value] += (
+            self.battle.found - self.battle.eaten
+        )
+        self.battle.found = 0
+        self.battle.eaten = 0
+        if len(self.battle.notes) > 0:
+            self.note = self.battle.notes[len(self.battle.notes) - 1]
+            self.note_age = 0
+            self.battle.notes.clear()
+        # Fighting trains swordplay, whose level makes the blows stronger.
+        if self.skills.train(SWORDPLAY, self.battle.trained):
+            self.note = String(
+                "SWORDPLAY LEVEL ", self.skills.level(SWORDPLAY), "!"
+            )
+            self.note_age = 0
+        self.battle.trained = 0
         var around = self.trees.copy()
+        around.extend(self.battle.obstacles())
         ref feet = self.player.position
         around.append(
             Obstacle(feet.x, feet.z, self.player.parameters.radius.to(METER))
@@ -658,6 +730,12 @@ struct VillageGame(Movable):
             Length(self.terrain.view_ceiling(focus, eye, feet.y), METER),
             self.reach,
         )
+        # A strong blow shakes the camera, and what it looks at with it.
+        var jolt = self.battle.shake
+        if jolt > SHAKEN:
+            var t = self.clock * 47
+            var off = Vector3(sin(t) * jolt, cos(t * 1.3) * jolt * 0.7, 0)
+            self.camera.place(self.camera.position + off, self.view.focus + off)
         # A house's inside shows only to a camera near it: from further
         # away, its windows show little of it.
         # The houses' lamps are lit from dusk to dawn.
@@ -704,7 +782,7 @@ struct VillageGame(Movable):
         the stretch, and the weather's rain falls over
         the window's frame after it, unless the camera's eye is under a
         roof. If `hud` is set, the satchel, the prompt and the last note
-        are written over the window's frame.
+        are written over the window's frame, and what the fight shows.
 
         Args:
             scene: The scene the game is in.
@@ -767,6 +845,9 @@ struct VillageGame(Movable):
                 self.talk.age,
                 self.talk.errands(self.gathering.satchel),
                 self.skills.lines(),
+            )
+            draw_battle(
+                self.window, self.battle, scene, self.camera, self.view.look()
             )
 
     def prompt(self) -> String:

@@ -6,13 +6,15 @@
 """Tests for outfits, and for dressing a game humanoid in one."""
 
 from core.assets import Assets
-from core.buffer_geometry import COLOR, NORMAL, UV, BufferGeometry
+from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from core.object3d import NodeId
 from core.scene import Scene
 from extensions.attire.dye import DYE
+from extensions.attire.band import BAND_HEIGHT
 from extensions.attire.cover import Cover, cover_of
 from extensions.attire.garment import (
     Garment,
+    belt,
     boots,
     coif,
     cuirass,
@@ -22,6 +24,7 @@ from extensions.attire.garment import (
     hauberk,
     hood,
     hose,
+    sabatons,
     shirt,
     surcoat,
     tunic,
@@ -29,12 +32,19 @@ from extensions.attire.garment import (
 from extensions.attire.kinds import (
     LINEN,
     OVER_LAYER,
+    SKIRTED,
     TORSO_SLOT,
     UNDER_LAYER,
     WOOL,
     Layer,
 )
-from extensions.humanoid.rig.joints import CHEST, HIPS, SPINE
+from extensions.humanoid.rig.joints import (
+    CHEST,
+    HIPS,
+    LEFT_THIGH,
+    RIGHT_THIGH,
+    SPINE,
+)
 from render.framebuffer import Color
 from extensions.attire.outfit import Outfit, dress, dress_pieces
 from objects.skinned_mesh import SKIN_INDEX
@@ -49,7 +59,10 @@ from std.testing import (
 from extensions.humanoid.rig.game import GameHumanoid
 from extensions.humanoid.skeleton.head.hair.strands import HairStrands
 from tests._attire_fixtures import empty_mesh, line_rig
-from tests._attire_people import coarse_person
+from core.object3d import Object3D
+from extensions.humanoid.rig.game import add_game_humanoid
+from extensions.humanoid.skeleton.head.hair.beard import GOATEE
+from tests._attire_people import coarse_person, coarse_spec
 
 
 def test_an_outfit_holds_one_garment_a_slot_and_layer() raises:
@@ -149,6 +162,109 @@ def test_a_person_is_dressed_from_the_skin_out() raises:
     assert_false(scene.node(person.strands[0].node.value()).visible)
 
 
+def _pieces(
+    scene: Scene, assets: Assets, person: GameHumanoid, outfit: Outfit
+) raises -> List[BufferGeometry]:
+    """Return the pieces of an outfit made from a person's body skin."""
+    var over = List[Float32]()
+    var shells = List[BufferGeometry]()
+    return dress_pieces(
+        assets.geometries.get(
+            scene.skinned_meshes[person.skins[0]].geometry
+        ).clone(),
+        person,
+        outfit,
+        over,
+        shells,
+    )
+
+
+def test_a_last_over_a_last_hides_it() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    var shod = Outfit()
+    shod.add(boots())
+    var alone = _pieces(scene, assets, person, shod)
+    shod.add(sabatons())
+    var over = List[Float32]()
+    var shells = List[BufferGeometry]()
+    var under = dress_pieces(
+        assets.geometries.get(
+            scene.skinned_meshes[person.skins[0]].geometry
+        ).clone(),
+        person,
+        shod,
+        over,
+        shells,
+    )
+    # The boots under the sabatons keep no last of their own; the whole
+    # shells keep theirs.
+    assert_true(under[0].vertex_count() < alone[0].vertex_count())
+    assert_true(under[1].triangle_count() > 0)
+    assert_true(shells[0].vertex_count() > under[0].vertex_count())
+
+
+def test_a_longer_skirt_over_a_skirt_hides_it() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    var cover = Cover()
+    cover.reach_to(HIPS)
+    cover.reach_to(SPINE)
+    cover.reach_to(CHEST)
+    cover.reach_to(RIGHT_THIGH, 0.12)
+    cover.reach_to(LEFT_THIGH, 0.12)
+    var short = Garment(
+        "short",
+        TORSO_SLOT,
+        OVER_LAYER,
+        WOOL,
+        cover^,
+        Color(90, 90, 90),
+        form=SKIRTED,
+        flare=0.2,
+    )
+    # A short skirt over the tunic's leaves the tunic's skirt to show
+    # below it; a surcoat that falls past it hides it.
+    var under_short = Outfit()
+    under_short.add(tunic())
+    under_short.add(short^)
+    var under_long = Outfit()
+    under_long.add(tunic())
+    under_long.add(surcoat())
+    var shown = _pieces(scene, assets, person, under_short)[0].triangle_count()
+    var hidden = _pieces(scene, assets, person, under_long)[0].triangle_count()
+    assert_true(shown > hidden)
+
+
+def test_a_belt_is_a_level_band_over_the_tunic() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    var belted = Outfit()
+    belted.add(tunic())
+    belted.add(belt())
+    var pieces = _pieces(scene, assets, person, belted)
+    # The belt's top and bottom edges are level: it spans no more than
+    # its own depth.
+    ref placed = pieces[1].attribute_view(String(POSITION))
+    var low = Float32(1e9)
+    var high = Float32(-1e9)
+    for v in range(placed.count()):
+        low = min(low, placed.vector3(v).y)
+        high = max(high, placed.vector3(v).y)
+    assert_true(placed.count() > 0)
+    assert_true(high - low <= BAND_HEIGHT * 1.01)
+    # The tunic shows whole under it.
+    var alone = Outfit()
+    alone.add(tunic())
+    assert_equal(
+        pieces[0].triangle_count(),
+        _pieces(scene, assets, person, alone)[0].triangle_count(),
+    )
+
+
 def test_a_garment_hidden_wholly_draws_nothing() raises:
     var scene = Scene()
     var assets = Assets()
@@ -192,6 +308,29 @@ def test_a_bare_head_keeps_its_hair_and_a_bald_one_is_fine() raises:
     hooded.add(hood())
     _ = dress(scene, assets, bald, hooded)
     assert_true(scene.node(hair).visible)
+
+
+def test_a_hood_hides_a_beard() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var bearded = add_game_humanoid(
+        scene,
+        assets,
+        root,
+        coarse_spec(),
+        3000,
+        12,
+        8,
+        8,
+        workers=1,
+        beard=GOATEE,
+    )
+    var hooded = Outfit()
+    hooded.add(hood())
+    _ = dress(scene, assets, bearded, hooded)
+    assert_false(scene.node(bearded.beard.value()).visible)
+    assert_false(scene.node(bearded.hair.value()).visible)
 
 
 def test_an_outfit_that_does_not_check_is_refused() raises:

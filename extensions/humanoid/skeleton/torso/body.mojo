@@ -27,7 +27,7 @@ is anterior.
 """
 
 from core.assets import Assets
-from core.buffer_geometry import POSITION, BufferGeometry
+from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
 from core.object3d import NodeId
 from core.scene import Scene
 from extensions.humanoid.spec import HumanoidSpec
@@ -36,6 +36,7 @@ from extensions.humanoid.skeleton.arm.assembly import add_arm
 from extensions.humanoid.skeleton.arm.contents import ArmContents
 from extensions.humanoid.skeleton.arm.frame import arm_muscle_dimensions
 from extensions.humanoid.skeleton.arm.skin.dimensions import ArmSkinField
+from extensions.humanoid.skeleton.clip import clip_level
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -91,7 +92,7 @@ from extensions.humanoid.skeleton.torso.muscles.dimensions import (
 from extensions.humanoid.skeleton.torso.skin.dimensions import TorsoSkinField
 from materials.material import MaterialId
 from math.smoothstep import hermite_fade
-from math.utils import max3, min3, mix_delta
+from math.utils import clamp, max3, min3, mix_delta
 from math.vector3 import Vector3, centroid
 from std.math import max, min
 
@@ -99,6 +100,15 @@ from std.math import max, min
 # centimeters: on the neck, below the chin, where the skin is upright
 # and a level cut crosses it cleanly.
 comptime HEAD_SPLIT = NECK_SEAM
+# How deep the scan sinks under the body's mesh where they overlap on the
+# neck, and over how far either side of the body's top edge the sink
+# fades, in meters. See `sink_under_body`.
+comptime SCAN_SINK = Float32(0.002)
+comptime SCAN_SINK_FADE = Float32(0.004)
+# How far past their seam the body's mesh and the scan's are meshed before
+# each is clipped level, in meters.
+comptime NECK_MARGIN = Float32(0.02)
+comptime SCAN_MARGIN = Float32(0.015)
 # The ridge of the upper trapezius, in template centimeters: its ends at
 # the neck and at the shoulder, their radii, its depth, and its fold.
 comptime RIDGE_NECK_X = Float32(4.5)
@@ -374,9 +384,10 @@ def body_skin_parts(
     check_detail(detail, "body skin")
     var field = BodySkinField(spec)
     var parts = List[BufferGeometry]()
-    var top = Vector3(
-        field.high.x, field.head_split + field.head_lap, field.high.z
-    )
+    # The body is meshed a little past its top, then clipped level there:
+    # a surface net ends in a ragged edge at its box.
+    var body_top = field.head_split + field.head_lap
+    var top = Vector3(field.high.x, body_top + NECK_MARGIN, field.high.z)
     if parted > 0:
         parts.append(
             mesh_surface(
@@ -393,19 +404,33 @@ def body_skin_parts(
         parts.append(
             mesh_surface(field, field.low, top, detail, "body skin", workers, 4)
         )
-    # The head is the scan's own mesh, on the same surface.
-    parts.append(
-        scan_skin_mesh(
-            field,
-            field.head.scan,
-            scan_model(),
-            field.head_split - field.head_lap,
-            field.low,
-            field.high,
-            field.epsilon,
-            shapes,
-        )
+    parts[0] = clip_level(parts[0], body_top, keep_above=False)
+    # The head is the scan's own mesh, on the same surface. It keeps only
+    # whole triangles above its floor, which leaves a ragged edge of its
+    # large triangles; it reaches a little lower and is clipped level. A
+    # face with expressions keeps its triangles whole, for its targets.
+    var floor = field.head_split - field.head_lap
+    var reach = Float32(0)
+    if len(shapes) == 0:
+        reach = SCAN_MARGIN
+    var scan = scan_skin_mesh(
+        field,
+        field.head.scan,
+        scan_model(),
+        floor - reach,
+        field.low,
+        field.high,
+        field.epsilon,
+        shapes,
+        seam=floor,
     )
+    if len(shapes) == 0:
+        scan = clip_level(scan, floor, keep_above=True)
+    # The scan's large triangles cut in and out of the neck's curve, where
+    # the body's finer mesh lies on the same surface. Sunk under the body
+    # there, they no longer show through it in shards.
+    sink_under_body(scan, body_top)
+    parts.append(scan^)
     # Past each wrist the hand's own mesh draws the skin.
     _leave_hands_out(parts[0], field)
     # The body branch and the head scan each appended a part.
@@ -413,6 +438,40 @@ def body_skin_parts(
         share_height(parts[i], field.low.y, field.high.y - field.low.y)
         tint_head_skin(parts[i], head_muscle_dimensions(spec), field.head)
     return parts^
+
+
+def sink_under_body(mut scan: BufferGeometry, body_top: Float32) raises:
+    """Sink the scan's part of the neck's overlap under the body's mesh.
+
+    The two meshes lie on one surface where they overlap, but the scan's
+    triangles are large, and each cuts in and out of the neck's curve by
+    up to a millimeter. The body's finer mesh lies on the surface, so the
+    scan's triangles show through it in shards. Each scan vertex below
+    the body's top edge sinks along its normal by `SCAN_SINK`, and the
+    sink fades to nothing over `SCAN_SINK_FADE` either side of that edge.
+    So the body's mesh draws the overlap, and above it the scan lies on
+    the surface again.
+
+    Args:
+        scan: The scan's mesh, with normals.
+        body_top: The height of the body mesh's top edge, in meters.
+
+    Raises:
+        Error: If the mesh has no positions or no normals.
+    """
+    ref normals = scan.attribute_view(String(NORMAL))
+    var placed = scan.clone_attribute(String(POSITION))
+    for v in range(placed.count()):  # pragma: no branch
+        var p = placed.vector3(v)
+        var share = clamp(
+            (body_top + SCAN_SINK_FADE - p.y) / (2 * SCAN_SINK_FADE), 0, 1
+        )
+        if share > 0:
+            p = p - normals.vector3(v) * (SCAN_SINK * share)
+            placed.set_component(v, 0, p.x)
+            placed.set_component(v, 1, p.y)
+            placed.set_component(v, 2, p.z)
+    scan.set_attribute(String(POSITION), placed^)
 
 
 def _leave_hands_out(mut geometry: BufferGeometry, field: BodySkinField) raises:

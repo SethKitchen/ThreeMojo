@@ -8,6 +8,9 @@ joint tissues and cartilages, the muscles, the vessels, the nerves, the
 lymph nodes, the skin and the hair."""
 
 from core.assets import Assets
+from core.buffer_attribute import BufferAttribute
+from core.buffer_geometry import POSITION, BufferGeometry
+from extensions.humanoid.genome import HAIR_LENGTH, Expression, Genome
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.humanoid.athleticism import Athleticism
@@ -71,6 +74,8 @@ from extensions.humanoid.skeleton.head.hair.dimensions import (
     named_head_hair,
 )
 from extensions.humanoid.skeleton.head.hair.geometry import (
+    INNER_DEPTH,
+    drop_inner_face,
     head_hair,
     head_hair_from_dimensions,
 )
@@ -789,10 +794,70 @@ def test_hair() raises:
     with assert_raises(contains="RIGHT or LEFT"):
         _ = head_hair_field(dims, SCALP_HAIR, BodySide(4))
     assert_true(head_hair(_person(), EYEBROWS, RIGHT, 8).triangle_count() > 0)
-    assert_true(
-        head_hair_from_dimensions(dims, SCALP_HAIR, RIGHT, 8).triangle_count()
-        > 0
+    var closed = head_hair_from_dimensions(dims, SCALP_HAIR, RIGHT, 8)
+    assert_true(closed.triangle_count() > 0)
+    # Its outer face alone: the inner face, under the scalp, is dropped,
+    # and every triangle left has a corner that is not under the skin.
+    var outer = head_hair_from_dimensions(
+        dims, SCALP_HAIR, RIGHT, 8, outer_only=True
     )
+    assert_true(outer.triangle_count() > closed.triangle_count() // 3)
+    assert_true(outer.triangle_count() < closed.triangle_count() * 3 // 4)
+    var skin = HeadSkinField(dims)
+    ref placed = outer.attribute_view(String(POSITION))
+    for t in range(outer.triangle_count()):
+        var shown = False
+        for c in range(3):
+            var p = placed.vector3(outer.corner_index(t, c))
+            if skin.distance(p) >= -INNER_DEPTH:
+                shown = True
+        assert_true(shown)
+    # An empty mesh has no inner face to drop.
+    var none = BufferGeometry()
+    none.set_attribute(String(POSITION), BufferAttribute(List[Float32](), 3))
+    none.set_index(List[Int]())
+    drop_inner_face(none, skin)
+    assert_equal(none.triangle_count(), 0)
+    # An eyebrow lies on the skin: it has no inner face to drop.
+    assert_equal(
+        head_hair_from_dimensions(
+            dims, EYEBROWS, RIGHT, 8, outer_only=True
+        ).triangle_count(),
+        head_hair_from_dimensions(dims, EYEBROWS, RIGHT, 8).triangle_count(),
+    )
+
+
+def _euler(mesh: BufferGeometry) raises -> Int:
+    """Return a mesh's Euler characteristic, its corners welded where
+    they meet: two for one closed shell, less for each hole through it."""
+    ref placed = mesh.attribute_view(String(POSITION))
+    var first = Dict[String, Int]()
+    var group = List[Int](capacity=placed.count())
+    for v in range(placed.count()):
+        var p = placed.vector3(v)
+        group.append(first.setdefault(String(p.x, " ", p.y, " ", p.z), v))
+    var edges = Dict[Int, Int]()
+    var count = placed.count()
+    for t in range(mesh.triangle_count()):
+        for c in range(3):
+            var a = group[mesh.corner_index(t, c)]
+            var b = group[mesh.corner_index(t, (c + 1) % 3)]
+            edges[min(a, b) * count + max(a, b)] = 1
+    return len(first) - len(edges) + mesh.triangle_count()
+
+
+def test_short_hair_is_meshed_whole() raises:
+    # Cropped close, the shell is thinner than two cells of a coarse mesh.
+    # It is meshed no thinner than that, so no hole opens through it.
+    var cropped = HumanoidSpec(
+        Length(6.0, FOOT),
+        MALE,
+        genome=Genome().with_gene(HAIR_LENGTH, Expression(-1)),
+    )
+    var dims = head_muscle_dimensions(cropped)
+    var shell = head_hair_from_dimensions(dims, SCALP_HAIR, RIGHT, 16)
+    # One closed shell, with no hole through it.
+    assert_equal(_euler(shell), 2)
 
 
 def test_contents_bits() raises:

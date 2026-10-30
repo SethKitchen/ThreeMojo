@@ -154,6 +154,41 @@ def fabric(kind: FabricKind) raises -> Fabric:
     )
 
 
+def fold_depth(kind: FabricKind) raises -> Length:
+    """Return how deep a skirt of a fabric folds at its hem.
+
+    | Kind | Fold |
+    |---|---|
+    | `LINEN`, `SILK` | 18 mm |
+    | `WOOL`, `VELVET` | 25 mm |
+    | `LEATHER`, `MAIL` | 6 mm |
+    | `PADDING` | 4 mm |
+    | `PLATE` | none |
+
+    Thin, soft cloth hangs in deep folds; stiff fabric hardly folds, and
+    plate not at all. These are design values for the look, not measured.
+
+    Args:
+        kind: A named fabric kind.
+
+    Returns:
+        The depth of the folds at the hem.
+
+    Raises:
+        Error: If `kind` is not named.
+    """
+    require_fabric_kind(kind)
+    if kind == LINEN or kind == SILK:
+        return _mm(18)
+    if kind == WOOL or kind == VELVET:
+        return _mm(25)
+    if kind == LEATHER or kind == MAIL:
+        return _mm(6)
+    if kind == PADDING:
+        return _mm(4)
+    return _mm(0)
+
+
 def fabric_material(kind: FabricKind, tint: Color) raises -> Material:
     """Return a physically based look for a fabric.
 

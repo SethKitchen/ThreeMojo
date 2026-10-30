@@ -9,7 +9,9 @@ A slot says where a garment goes. A layer says how far from the skin it
 sits: padding under mail under plate. A fabric kind selects the look and
 the physical constants. A dye channel and a dye pattern say how a
 garment takes color. A wear kind names one channel of dirt, blood, wet
-or damage.
+or damage. A form says how a garment's shell is shaped where it does not
+follow the skin: a skirt round both legs, a last round each foot, a
+cowl round the head, or a taut band round the body.
 
 Each kind is a type, so a bare integer does not compile. A value that
 is not named is still constructible, and the boundary that reads it
@@ -534,6 +536,88 @@ def require_articulation(articulation: Articulation) raises:
     require_valid(
         articulation.is_valid(), "An articulation must be a named one"
     )
+
+
+@fieldwise_init
+struct Form(Equatable, ImplicitlyCopyable, Writable):
+    """How a garment's shell is shaped where it does not follow the skin."""
+
+    var value: Int
+    """Its index among the named values."""
+
+    def is_valid(self) -> Bool:
+        """Return whether this is a named form.
+
+        Returns:
+            True for `FITTED`, `SKIRTED`, `SHOD`, `COWLED` and `BANDED`.
+        """
+        return ordinal_valid(self.value, FORM_COUNT - 1)
+
+
+comptime FITTED = Form(0)
+"""It follows the skin everywhere: a shirt, hose, a coif."""
+comptime SKIRTED = Form(1)
+"""Below the hips it hangs as one skirt round both legs: a tunic, a
+hauberk, a surcoat, a fauld."""
+comptime SHOD = Form(2)
+"""It closes each foot in a smooth last, over the toes and the arch: a
+boot or a shoe."""
+comptime COWLED = Form(3)
+"""Above the neck it closes round the head in one loose cowl, open at the
+face: a hood."""
+comptime BANDED = Form(4)
+"""It is drawn as a taut band round the body where its cover lies, level
+at its top and its bottom: a belt."""
+comptime FORM_COUNT = 5
+"""How many forms there are."""
+
+
+def _form_names() -> List[String]:
+    """Return the form names, in order."""
+    return ["fitted", "skirted", "shod", "cowled", "banded"]
+
+
+def form_label(form: Form) -> String:
+    """Return the name of a form.
+
+    Args:
+        form: A form, named or not.
+
+    Returns:
+        Its name, as `"skirted"`, or `"form"` when it is not named.
+    """
+    return ordinal_label(form.is_valid(), form.value, _form_names(), "form")
+
+
+def form_named(name: String) raises -> Form:
+    """Return the form that `name` names.
+
+    Args:
+        name: `fitted`, `skirted`, `shod`, `cowled` or `banded`.
+
+    Returns:
+        The named form.
+
+    Raises:
+        Error: If `name` names no form.
+    """
+    var names = _form_names()
+    for k in range(len(names)):  # pragma: no branch
+        if names[k] == name:
+            return Form(k)
+    raise Error("No form is named " + name)
+
+
+def require_form(form: Form) raises:
+    """Refuse a form that is not named.
+
+    Args:
+        form: The form.
+
+    Raises:
+        Error: If the form is not named.
+    """
+    require_valid(form.is_valid(), "A form must be a named one")
 
 
 @fieldwise_init

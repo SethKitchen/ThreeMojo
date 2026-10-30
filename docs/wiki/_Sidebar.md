@@ -87,6 +87,7 @@
   - [Village day and night](Village-day)
   - [Village critters](Village-critters)
   - [Village skills](Village-skills)
+  - [Village combat](Village-combat)
   - [Game renderer](Game-renderer)
 - [Streamline](Streamline)
 - [Animals](Animals)

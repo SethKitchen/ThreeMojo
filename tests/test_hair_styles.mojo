@@ -6,6 +6,7 @@
 """Tests for the hairstyles artists groomed, laid on any head."""
 
 from core.binary import append_little_endian_u32
+from core.buffer_geometry import POSITION, BufferGeometry
 from extensions.humanoid.genome import Expression, Genome, HAIR_CURL
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT
@@ -14,17 +15,27 @@ from extensions.humanoid.skeleton.head.frame import (
     head_muscle_dimensions,
 )
 from extensions.humanoid.skeleton.head.hair.dimensions import (
+    EYEBROWS,
     SCALP_HAIR,
     HairShape,
+    _on_skin,
 )
 from extensions.humanoid.skeleton.head.hair.geometry import (
     head_hair_from_dimensions,
 )
 from extensions.humanoid.skeleton.head.hair.groom import (
+    BUN_TIE_Y,
+    BUN_TIE_Z,
     GroomSpec,
     HairBody,
     HairGroom,
+    TAIL_TIE_Y,
+    TAIL_TIE_Z,
     groom_hair,
+)
+from extensions.humanoid.skeleton.head.hair.silhouette import (
+    HairSilhouette,
+    style_length,
 )
 from extensions.humanoid.skeleton.head.hair.styles import (
     BOB,
@@ -52,7 +63,7 @@ from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
 from test_scratch import TestScratch, temporary_path
 from std.pathlib import Path
-from std.math import max
+from std.math import max, min
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -391,6 +402,105 @@ def test_a_mohawk_shaves_the_sides() raises:
         _ = HairShape(dims, SCALP_HAIR, RIGHT, skin, HairStyle(99))
     var shell = head_hair_from_dimensions(dims, SCALP_HAIR, RIGHT, 8, 1, MOHAWK)
     assert_true(shell.triangle_count() > 0)
+
+
+def _thickness(hair: HairShape, skin: HeadSkinField, at: Vector3) -> Float32:
+    """Return how far the hair stands off the skin at a point on it, out
+    along the skin's normal, to a quarter of a millimeter."""
+    var normal = skin.gradient(at)
+    var off = Float32(0)
+    while off < 0.03 and hair.distance(at + normal * off) < 0:
+        off += 0.00025
+    return off
+
+
+def test_the_hair_thins_to_nothing_at_its_hairline() raises:
+    var dims = _dims()
+    var skin = HeadSkinField(dims)
+    var hair = HairShape(dims, SCALP_HAIR, RIGHT, skin)
+    # On the forehead's midline, 4 mm above the hairline, the hair is
+    # thin: a level cut left it 8.75 mm deep there, in a ledge. Two
+    # centimeters up it is as deep as on the crown's front.
+    var near = _on_skin(
+        skin, Vector3(hair.line_center, hair.line_middle + 0.004, 0.2)
+    )
+    var far = _on_skin(
+        skin, Vector3(hair.line_center, hair.line_middle + 0.024, 0.2)
+    )
+    assert_true(_thickness(hair, skin, near) < 0.003)
+    assert_true(_thickness(hair, skin, far) > 0.009)
+
+
+def _lowest(mesh: BufferGeometry) raises -> Float32:
+    """Return the height of a mesh's lowest vertex."""
+    ref placed = mesh.attribute_view(String(POSITION))
+    var lowest = Float32(1.0e9)
+    for v in range(placed.count()):  # pragma: no branch
+        lowest = min(lowest, placed.vector3(v).y)
+    return lowest
+
+
+def test_a_shell_drawn_alone_takes_its_style_s_shape() raises:
+    var dims = _dims()
+    var h = dims.head.copy()
+    var skin = HeadSkinField(dims)
+    # Each designed style but the pixie, drawn alone, reaches past the
+    # close crop it has under strands: a fall, a tail, a bun.
+    for style in named_hair_styles():  # pragma: no branch
+        var alone = HairSilhouette(dims, skin, style)
+        var under = HairShape(dims, SCALP_HAIR, RIGHT, skin, style)
+        var reaches = alone.low.y < under.low.y or alone.high.y > under.high.y
+        assert_equal(reaches, style.is_designed() and style != PIXIE)
+    assert_equal(style_length(BOB).value(), 1)
+    assert_equal(style_length(LONG).value(), 1)
+    assert_true(style_length(HALF_UP).value() < 1)
+    assert_false(style_length(PONYTAIL))
+    # A ponytail hangs behind the nape, and a bun stands out from its tie;
+    # under strands the shell has neither.
+    var tail = h.at(0, TAIL_TIE_Y - 12.0, TAIL_TIE_Z - 2.0)
+    assert_true(HairSilhouette(dims, skin, PONYTAIL).distance(tail) < 0)
+    assert_true(
+        HairShape(dims, SCALP_HAIR, RIGHT, skin, PONYTAIL).distance(tail) > 0
+    )
+    var bun = h.at(0, BUN_TIE_Y + 3.0, BUN_TIE_Z - 2.0)
+    assert_true(HairSilhouette(dims, skin, BUN).distance(bun) < 0)
+    assert_true(HairSilhouette(dims, skin, PONYTAIL).distance(bun) > 0)
+    # A bob falls to the jaw.
+    var jaw = h.at(8.5, 66.0, -1.0)
+    assert_true(HairSilhouette(dims, skin, BOB).distance(jaw) < 0)
+    assert_true(HairShape(dims, SCALP_HAIR, RIGHT, skin, BOB).distance(jaw) > 0)
+
+
+def test_a_braid_s_shell_drawn_alone_hangs_down_the_back() raises:
+    var dims = _dims()
+    var braid = head_hair_from_dimensions(
+        dims, SCALP_HAIR, RIGHT, 8, 1, BRAID, alone=True
+    )
+    var cropped = head_hair_from_dimensions(
+        dims, SCALP_HAIR, RIGHT, 8, 1, BRAID
+    )
+    assert_true(_lowest(braid) < _lowest(cropped) - dims.head.cm(15.0))
+    # A style that is not designed, and an eyebrow, are drawn as they are.
+    var grown = head_hair_from_dimensions(
+        dims, SCALP_HAIR, RIGHT, 8, 1, GROWN, alone=True
+    )
+    assert_equal(
+        grown.triangle_count(),
+        head_hair_from_dimensions(dims, SCALP_HAIR, RIGHT, 8).triangle_count(),
+    )
+    var brow = head_hair_from_dimensions(
+        dims, EYEBROWS, RIGHT, 8, 1, BRAID, alone=True
+    )
+    assert_equal(
+        brow.triangle_count(),
+        head_hair_from_dimensions(dims, EYEBROWS, RIGHT, 8).triangle_count(),
+    )
+    # A detail out of range is refused before the tails stretch it.
+    for detail in [6, 200]:
+        with assert_raises(contains="detail"):
+            _ = head_hair_from_dimensions(
+                dims, SCALP_HAIR, RIGHT, detail, 1, BRAID, alone=True
+            )
 
 
 def main() raises:

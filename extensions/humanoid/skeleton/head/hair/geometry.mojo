@@ -12,7 +12,7 @@ The solid lives in `dimensions`. This file extracts the zero set with
 marching tetrahedra.
 """
 
-from core.buffer_geometry import BufferGeometry
+from core.buffer_geometry import POSITION, BufferGeometry
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.head.frame import (
     HeadMuscleDimensions,
@@ -23,9 +23,20 @@ from extensions.humanoid.skeleton.head.hair.dimensions import (
     HeadHair,
     head_hair_label,
 )
+from extensions.humanoid.skeleton.head.hair.silhouette import HairSilhouette
 from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
-from extensions.humanoid.skeleton.surface_nets import mesh_surface
+from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
+from extensions.humanoid.skeleton.isosurface import MAX_DETAIL, check_detail
+from extensions.humanoid.skeleton.surface_nets import REFINE, mesh_surface
 from extensions.humanoid.spec import HumanoidSpec
+from std.math import ceil
+
+comptime MIN_SHELL_CELLS = Float32(2.2)
+"""The fewest cells of its mesh a scalp hair shell stands deep."""
+comptime INNER_DEPTH = Float32(0.0004)
+"""How far under the skin a hair shell's corner must lie to be on its
+inner face, in meters. The inner face lies 0.8 mm under it, on the
+template, and the outer face stands off it."""
 
 
 def head_hair(
@@ -64,6 +75,8 @@ def head_hair_from_dimensions(
     detail: Int = 16,
     workers: Int = 1,
     style: HairStyle = GROWN,
+    outer_only: Bool = False,
+    alone: Bool = False,
 ) raises -> BufferGeometry:
     """Return one hair group's mesh for already-computed dimensions.
 
@@ -74,6 +87,13 @@ def head_hair_from_dimensions(
         detail: Cells along the solid.
         workers: How many threads mesh it. One by default.
         style: How the scalp's hair is cut; `GROWN` by default.
+        outer_only: Whether to drop the scalp hair's inner face, which
+            lies under the skin and never shows. False by default, for
+            a closed solid.
+        alone: Whether the scalp's hair is drawn with no strands over
+            it, so its shell takes its style's shape; see
+            `HairSilhouette`. False by default, for a shell that strands
+            cover.
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes.
@@ -83,6 +103,83 @@ def head_hair_from_dimensions(
             not named, if `side` or `style` is not valid, if `detail` is
             out of range, or if the field produces no surface.
     """
-    var field = HairShape(dimensions, part, side, style)
+    var skin = HeadSkinField(dimensions)
+    var field = HairShape(dimensions, part, side, skin, style)
     var label = head_hair_label(part)
-    return mesh_surface(field, field.low, field.high, detail, label, workers)
+    var mesh: BufferGeometry
+    if alone and field.scalp and style.is_designed():
+        # The detail asked for is checked before the tails stretch it.
+        check_detail(detail, label)
+        var shaped = HairSilhouette(dimensions, skin, style)
+        # The style's tails stretch the box: more cells keep each one
+        # the size it is on the head alone.
+        var stretch = (shaped.high.y - shaped.low.y) / (
+            field.high.y - field.low.y
+        )
+        var finer = min(MAX_DETAIL, Int(ceil(Float32(detail) * stretch)))
+        _no_thinner(
+            shaped.hair, shaped.high.y - shaped.low.y, finer, outer_only
+        )
+        mesh = mesh_surface(
+            shaped, shaped.low, shaped.high, finer, label, workers
+        )
+    else:
+        _no_thinner(field, field.high.y - field.low.y, detail, outer_only)
+        mesh = mesh_surface(
+            field, field.low, field.high, detail, label, workers
+        )
+    if outer_only and field.scalp:
+        drop_inner_face(mesh, skin)
+    return mesh^
+
+
+def _no_thinner(
+    mut field: HairShape, span: Float32, detail: Int, outer_only: Bool
+):
+    """Deepen a shell to `MIN_SHELL_CELLS` of a mesh `detail` cells over
+    `span`.
+
+    A shell thinner than two cells breaks into patches: the mesher
+    cannot close it. Very short hair is cut no thinner than that, and a
+    closed shell keeps its edges that deep, where they thin. The outer
+    face alone may thin to nothing: the skin lies under it.
+    """
+    var cell = span / Float32(detail * REFINE)
+    field.side_depth = max(field.side_depth, MIN_SHELL_CELLS * cell)
+    field.crown_depth = max(field.crown_depth, MIN_SHELL_CELLS * cell)
+    if not outer_only:
+        field.edge = MIN_SHELL_CELLS * cell
+
+
+def drop_inner_face(mut mesh: BufferGeometry, skin: HeadSkinField) raises:
+    """Drop the triangles of a hair shell that lie under the skin.
+
+    The scalp's hair is a shell over the skin: its inner face lies
+    `INNER_DEPTH` or more inside the skin, under the scalp, and its
+    outer face stands off it. A triangle whose three corners all lie
+    deeper than `INNER_DEPTH` is on the inner face. A game draws the
+    shell over the skin, so the inner face never shows, and dropping it
+    leaves the shell's whole triangle budget to the face that shows.
+
+    Args:
+        mesh: A hair shell. It is indexed after, if it was not before.
+        skin: The head's skin the shell was made over.
+
+    Raises:
+        Error: If the mesh has no positions.
+    """
+    ref placed = mesh.attribute_view(String(POSITION))
+    var under = List[Bool](capacity=placed.count())
+    for v in range(placed.count()):
+        under.append(skin.distance(placed.vector3(v)) < -INNER_DEPTH)
+    var index = List[Int]()
+    for t in range(mesh.triangle_count()):
+        var a = mesh.corner_index(t, 0)
+        var b = mesh.corner_index(t, 1)
+        var c = mesh.corner_index(t, 2)
+        if under[a] and under[b] and under[c]:
+            continue
+        index.append(a)
+        index.append(b)
+        index.append(c)
+    mesh.set_index(index^)

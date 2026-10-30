@@ -63,7 +63,7 @@ comptime _HEX: List[String] = [
 ]
 # These are recipe versions, not upstream commit or checksum claims.
 comptime CANONICAL_RECIPE = "threemojo-canonical-inputs-v1"
-comptime GAME_RECIPE = "threemojo-game-skin-19-joints-v1"
+comptime GAME_RECIPE = "threemojo-game-skin-19-joints-v2"
 comptime SCAN_RECIPE = "threemojo-ict-identity-expression-v1"
 # The generator of canonical parts and the canonical-to-visual map rules.
 # See `extensions.humanoid.canonical` and `.correspondence`.

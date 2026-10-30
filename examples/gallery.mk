@@ -170,6 +170,9 @@ $(call gallery,village,village,assets/pebbles.jpg)
 # A player walks, runs and jumps through the village by a scripted gamepad,
 # among people and animals, seen by a third-person camera.
 $(call gallery,village_walk,village_walk,assets/pebbles.jpg)
+# A player locks on to the bandits of the village, guards, cuts, dodges,
+# and makes the rising edge and the whirlwind, by a scripted gamepad.
+$(call gallery,village_combat,village_combat,assets/pebbles.jpg)
 # The village's houses as the game draws them: the street, a framed house,
 # the brick house, and a player inside the stone cottage.
 $(call gallery,village_houses,village_houses,assets/pebbles.jpg)
@@ -187,10 +190,14 @@ $(call gallery,walk,walk)
 $(call gallery,animal_anatomy,animal_anatomy)
 $(call gallery,game_humanoid,game_humanoid)
 $(call gallery,hairstyles,hairstyles)
+# The same woman in every style as a game humanoid: the hair is its shell alone.
+$(call gallery,game_hairstyles,game_hairstyles)
 $(call gallery,genomes,genomes)
 $(call gallery,family,family)
 # Three people dressed from the skin out walk: cloth, mail, plate, a cloak and a sword.
 $(call gallery,armory,armory)
+# Eight people of eight callings, each of a genome and an outfit picked by a seed.
+$(call gallery,crowd,crowd)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.

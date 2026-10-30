@@ -5,6 +5,7 @@
 
 """Tests for the sculpting kit and the surface-nets skin mesher."""
 
+from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from extensions.humanoid.skeleton.field import DistanceField
 from extensions.humanoid.skeleton.sculpt import Sculpt
@@ -14,9 +15,12 @@ from extensions.humanoid.skeleton.surface_nets import (
     UNSAMPLED,
     mesh_surface,
     project_to_surface,
+    reproject_uvs,
     surface_gradient,
 )
+from extensions.humanoid.skeleton.simplify import simplify
 from math.vector3 import Vector3
+from std.math import atan2, pi
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -89,6 +93,47 @@ def test_a_ball_meshes_onto_its_surface() raises:
         if uvs.component(index, 0) > 1:
             past += 1
     assert_true(past > 0)
+
+
+def test_a_decimated_mesh_lays_its_texture_where_it_stands() raises:
+    var full = _ball_mesh(1)
+    var fewer = simplify(full, 60)
+    reproject_uvs(fewer, full)
+    ref points = fewer.attribute_view(String(POSITION))
+    ref uvs = fewer.attribute_view(String(UV))
+    # `v` runs up the ball as the mesher ran it, from its lowest vertex
+    # at nought to its highest at one, and `u` round it.
+    var past = 0
+    for index in range(points.count()):  # pragma: no branch
+        var p = points.vector3(index)
+        assert_true(abs(uvs.component(index, 1) - (p.y + 0.1) / 0.2) < 0.02)
+        var u = atan2(p.x, p.z) / (2 * pi) + 0.5
+        var turns = uvs.component(index, 0) - u
+        assert_true(abs(turns - Float32(Int(turns + 0.5))) < 1e-5)
+        if uvs.component(index, 0) > 1:
+            past += 1
+    # The copies on the far side of the seam stay there.
+    assert_true(past > 0)
+    var empty = BufferGeometry()
+    empty.set_attribute(String(POSITION), BufferAttribute(List[Float32](), 3))
+    empty.set_attribute(String(UV), BufferAttribute(List[Float32](), 2))
+    with assert_raises(contains="source vertex"):
+        reproject_uvs(fewer, empty)
+    # A source with no height, or whose v does not rise, gives no scale.
+    var flat = BufferGeometry()
+    flat.set_attribute(
+        String(POSITION), BufferAttribute([Float32(0), 0, 0, 1, 0, 0], 3)
+    )
+    flat.set_attribute(String(UV), BufferAttribute([Float32(0), 0, 1, 1], 2))
+    with assert_raises(contains="rises with its height"):
+        reproject_uvs(fewer, flat)
+    var falling = BufferGeometry()
+    falling.set_attribute(
+        String(POSITION), BufferAttribute([Float32(0), 0, 0, 0, 1, 0], 3)
+    )
+    falling.set_attribute(String(UV), BufferAttribute([Float32(0), 1, 0, 0], 2))
+    with assert_raises(contains="rises with its height"):
+        reproject_uvs(fewer, falling)
 
 
 def test_smoothing_is_optional() raises:

@@ -19,6 +19,18 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_beard_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 19,
+        "message": "invalid call to 'require_beard': value passed to 'beard' cannot be converted from 'IntLiteral[1]' to 'Beard'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_behavior_type_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -279,6 +291,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_calling_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'require_calling': value passed to 'calling' cannot be converted from 'IntLiteral[1]' to 'Calling'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_camera_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -464,6 +488,30 @@
         "column": 64,
         "line": 14,
         "message": "invalid call to 'checkerboard': value passed to 'color_space' cannot be converted from 'IntLiteral[0]' to 'ColorSpace'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_combat_move_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'move_name': value passed to 'move' cannot be converted from 'IntLiteral[1]' to 'CombatMove'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_combat_stance_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "invalid call to 'stance_power': value passed to 'stance' cannot be converted from 'IntLiteral[1]' to 'CombatStance'"
       }
     ],
     "notes": [
@@ -1475,6 +1523,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_garment_form_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 18,
+        "message": "invalid call to 'require_form': value passed to 'form' cannot be converted from 'IntLiteral[1]' to 'Form'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/a_garment_layer_is_not_a_bare_int.mojo": {
     "errors": [
@@ -3781,6 +3841,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_strike_outcome_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "invalid call to 'outcome_word': value passed to 'outcome' cannot be converted from 'IntLiteral[1]' to 'StrikeOutcome'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/a_structural_node_id_is_not_a_bare_int.mojo": {
     "errors": [
