@@ -40,7 +40,7 @@ from core.buffer_geometry import BufferGeometry
 from core.scene import Scene
 from extensions.attire.cover import cover_values
 from extensions.attire.dye import dye_pattern, paint
-from extensions.attire.fabric import fabric, fabric_material
+from extensions.attire.fabric import fabric, fabric_material, fold_depth
 from extensions.attire.garment import Garment
 from extensions.attire.cowl import hang_cowl, head_cowl
 from extensions.attire.kinds import (
@@ -265,6 +265,7 @@ def dress_pieces(
                 skirts,
                 Float32(cloth.clearance.value + garment.ease.value),
                 Float32(cloth.thickness.value),
+                Float32(fold_depth(garment.fabric).value),
             )
             whole = hang_skirt(whole, envelope, person.rig, False)
         var feet = List[FootLast]()
