@@ -12,8 +12,10 @@ outer two thirds sweeps, as the move's clip swings it: across at the
 chest for the light cuts, down from over the head for the third, high
 to low for the heavy cut, low to high for the rising edge, and a whole
 ring for the tempest. A ribbon shows while its move strikes, and for
-`TRAIL_LINGER` after. It is drawn unlit and half clear, brighter at the
-end the blade reaches last, as Tales of Arise draws its swings.
+`TRAIL_LINGER` after. The tempest's ribbon is the last 150 degrees of
+the blade's turn, and turns with the body as the clip spins it. A ribbon
+is drawn unlit and half clear, brighter at the end the blade reaches
+last, as Tales of Arise draws its swings.
 
 **Sparks.** `Sparks` keeps `SPARKS` bursts of gold rays. A blow puts the
 oldest at the place it lands; it grows and shows for `SPARK_SECONDS`.
@@ -35,13 +37,14 @@ from extensions.village.combat import (
     is_attack,
     move_data,
 )
+from extensions.humanoid.rig.sword_clips import tempest_twist
 from extensions.village.sheet import Sheet
 from materials.material import BASIC, DOUBLE_SIDE, Material, MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
 from std.math import cos, pi, sin
-from units.si import SECOND, Duration
+from units.si import DEGREE, SECOND, Angle, Duration
 
 comptime TRAIL_LINGER = Float32(0.06)
 """How long a trail shows after its move's active part, in seconds."""
@@ -109,8 +112,8 @@ def arc(
         var d0 = first * cos(a0) + second * sin(a0)
         var d1 = first * cos(a1) + second * sin(a1)
         # Fade in from the start, and stay bright to the end.
-        var c0 = color * (0.15 + 0.85 * t0 * t0)
-        var c1 = color * (0.15 + 0.85 * t1 * t1)
+        var c0 = color * (0.35 + 0.65 * t0 * t0)
+        var c1 = color * (0.35 + 0.65 * t1 * t1)
         var i0 = sheet.vertex(center + d0 * inner, normal, c0, 0, 0)
         var i1 = sheet.vertex(center + d1 * inner, normal, c1, 0, 0)
         var i2 = sheet.vertex(center + d1 * outer, normal, c1, 0, 0)
@@ -131,13 +134,13 @@ def trail_sheet(move: CombatMove, scale: Float32, color: Vector3) -> Sheet:
         color: The ribbon's color.
 
     Returns:
-        The ribbon's triangles, from 0.55 to 1.5 meters round the sword's
+        The ribbon's triangles, from 0.8 to 1.45 meters round the sword's
         shoulder for a person of six feet.
     """
     var sheet = Sheet(1)
     var s = scale
-    var inner = Float32(0.55) * s
-    var outer = Float32(1.5) * s
+    var inner = Float32(0.8) * s
+    var outer = Float32(1.45) * s
     var sword = Vector3(-1, 0, 0)
     var ahead = Vector3(0, 0, 1)
     var up = Vector3(0, 1, 0)
@@ -196,14 +199,15 @@ def trail_sheet(move: CombatMove, scale: Float32, color: Vector3) -> Sheet:
             color,
         )
     elif move == TEMPEST:
-        # A whole ring at the waist.
+        # The last 150 degrees of the blade's turn at the waist, behind
+        # the blade: `Trail.show` turns it with the body.
         arc(
             sheet,
             Vector3(0, 0.3 * s, 0),
             sword,
             ahead,
+            -150 * degree,
             0,
-            360 * degree,
             inner,
             outer * 1.1,
             color,
@@ -228,7 +232,7 @@ def slash_material(mut assets: Assets) raises -> MaterialId:
         Material(
             Color(255, 255, 255),
             side=DOUBLE_SIDE,
-            opacity=0.6,
+            opacity=0.55,
             transparent=True,
             kind=BASIC,
             vertex_colors=True,
@@ -287,7 +291,8 @@ struct Trail(Movable):
             self.ribbons.append(node)
 
     def show(mut self, mut scene: Scene, fighter: Fighter) raises:
-        """Show the ribbon of the attack that strikes now, and hide the rest.
+        """Show the ribbon of the attack that strikes now, and hide the
+        rest. The tempest's ribbon turns with the body.
 
         Args:
             scene: The scene the trail is in.
@@ -303,6 +308,11 @@ struct Trail(Movable):
             var end = fighter.active_end() + TRAIL_LINGER
             if fighter.clock >= begin and fighter.clock <= end:
                 want = fighter.move.value
+        if want == TEMPEST.value:
+            var share = fighter.clock / fighter.length()
+            scene.node(self.ribbons[want].value()).set_rotation_from_axis_angle(
+                Vector3(0, 1, 0), Angle(-tempest_twist(share), DEGREE)
+            )
         if want == self.shown:
             return
         if self.shown >= 0:

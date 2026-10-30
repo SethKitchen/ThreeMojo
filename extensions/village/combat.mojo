@@ -35,9 +35,9 @@ that a swing reaches with `reaches`, and gives each one the blow that
   the arte gauge. Its next attack within `COUNTER_SECONDS` is a counter,
   and does `COUNTER_BONUS` times its damage.
 - **Guards.** A guard stops a blow from the front, within the guard's
-  arc. A guard raised less than `PARRY` seconds before the blow parries
-  it: the guard loses no ki, and the attacker loses the blow's ki and
-  reels. Some moves have armor: a blow on them does its damage, and does
+  arc. A guard raised less than `FighterParameters.parry` before the blow
+  parries it: the guard loses no ki, and the attacker loses the blow's ki
+  and reels. The player parries within `PARRY` seconds. Some moves have armor: a blow on them does its damage, and does
   not make the fighter reel.
 - **Combos.** The three light attacks chain. A press during a move waits,
   and its move starts at the move's chain point: after the active part
@@ -96,7 +96,7 @@ comptime COUNTER_SECONDS = Float32(1.2)
 comptime COUNTER_BONUS = Float32(2.0)
 """How many times its damage a counter does."""
 comptime PARRY = Float32(0.15)
-"""A guard raised at most this long before a blow parries it, in
+"""How long after the player raises a guard it parries a blow, in
 seconds."""
 comptime CRITICAL_BONUS = Float32(1.5)
 """How many times its damage a blow on a staggered fighter does."""
@@ -658,14 +658,16 @@ struct FighterParameters(ImplicitlyCopyable):
     var arte_rate: Frequency
     # How many times a move's damage and ki damage the fighter's blows do.
     var might: Float32
-    # The arc in front of the fighter that its guard covers.
+    # The arc in front of the fighter that its guard covers, and how long
+    # after the guard is raised it parries a blow.
     var guard_arc: Angle
+    var parry: Duration
 
     def __init__(out self):
         """Create the player: 500 health, 100 ki that comes back at 32 a
         second after 0.6 seconds, an arte gauge of 5 points that comes
         back at half a point a second, blows of the moves' own strength,
-        and a guard of 140 degrees."""
+        and a guard of 140 degrees that parries for `PARRY` seconds."""
         self.health = 500
         self.ki = 100
         self.ki_rate = Frequency(32.0, PER_SECOND)
@@ -674,6 +676,7 @@ struct FighterParameters(ImplicitlyCopyable):
         self.arte_rate = Frequency(0.5, PER_SECOND)
         self.might = 1
         self.guard_arc = Angle(140.0, DEGREE)
+        self.parry = Duration(PARRY, SECOND)
 
     def check(self) raises:
         """Refuse a fighter that cannot fight.
@@ -682,8 +685,8 @@ struct FighterParameters(ImplicitlyCopyable):
             Error: If the health, the ki or the might is not above zero
                 and below a million; a rate or the arte gauge is negative
                 or not below a million; the delay is negative or not below
-                10,000 seconds; or the guard's arc is not from 0 to 360
-                degrees.
+                10,000 seconds; the guard's arc is not from 0 to 360
+                degrees; or the parry is not from 0 to 10 seconds.
         """
         for value in [self.health, self.ki, self.might]:  # pragma: no branch
             if not (value > 0 and value < 1.0e6):
@@ -713,6 +716,12 @@ struct FighterParameters(ImplicitlyCopyable):
             0,
             360,
             "A fighter's guard must cover from 0 to 360 degrees",
+        )
+        require_between(
+            self.parry.to(SECOND),
+            0,
+            10,
+            "A fighter's parry must last from 0 to 10 seconds",
         )
 
 
@@ -1205,7 +1214,8 @@ struct Fighter(Copyable, Movable):
 
         Returns:
             What the blow did. A dodge evades it. A guard takes it from the
-            front on ki, or parries it when fresh. Any other blow takes
+            front on ki, or parries it when it was raised less than the
+            fighter's parry before. Any other blow takes
             health and ki, and makes the fighter reel unless it has
             armor. A blow on a staggered fighter is critical, and takes no
             ki.
@@ -1229,7 +1239,7 @@ struct Fighter(Copyable, Movable):
                 return Struck(PERFECT_DODGE, 0, 0)
             return Struck(EVADED, 0, 0)
         if self.guarding and front:
-            if self.guard_age <= PARRY:
+            if self.guard_age < self.parameters.parry.to(SECOND):
                 return Struck(PARRIED, 0, blow.ki_damage)
             var lost = blow.ki_damage * stance_guard(self.stance)
             self.ki -= lost

@@ -317,6 +317,7 @@ def test_bandits_and_dummies_have_their_strength() raises:
     bandit.check()
     assert_almost_equal(bandit.health, 300, atol=1e-6)
     assert_almost_equal(bandit.might, 0.55, atol=1e-6)
+    assert_almost_equal(bandit.parry.to(SECOND), 0, atol=1e-6)
     var dummy = dummy_fighter()
     dummy.check()
     assert_almost_equal(dummy.guard_arc.to(DEGREE), 0, atol=1e-6)

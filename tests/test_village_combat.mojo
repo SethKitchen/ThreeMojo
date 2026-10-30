@@ -267,6 +267,10 @@ def test_a_fighter_refuses_parameters_that_cannot_fight() raises:
     p.guard_arc = Angle(400.0, DEGREE)
     with assert_raises(contains="guard"):
         _ = Fighter(p)
+    p = FighterParameters()
+    p.parry = Duration(-1.0, SECOND)
+    with assert_raises(contains="parry"):
+        p.check()
 
 
 def test_three_light_attacks_chain_and_spend_ki() raises:
@@ -492,6 +496,12 @@ def test_a_guard_blocks_from_the_front_and_parries_when_fresh() raises:
     assert_true(f.guarding)
     f.hold_guard(False)
     assert_false(f.guarding)
+    # A fighter without a parry only blocks.
+    var p = FighterParameters()
+    p.parry = Duration(0.0, SECOND)
+    var blocker = Fighter(p)
+    blocker.hold_guard(True)
+    assert_true(blocker.receive(_blow(30, 12), True).outcome == BLOCKED)
     # A guard whose ki runs out breaks.
     var g = _fighter()
     g.hold_guard(True)

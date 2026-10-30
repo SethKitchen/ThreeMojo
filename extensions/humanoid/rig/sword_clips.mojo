@@ -68,6 +68,12 @@ from std.math import sin, pi
 
 comptime SAMPLES = 30
 """How many poses a clip samples a second."""
+comptime TEMPEST_SECONDS = Float32(1.06)
+"""How long the tempest's clip lasts, in seconds."""
+comptime TEMPEST_BEGIN = Float32(0.18)
+"""When the tempest's spin begins, in seconds."""
+comptime TEMPEST_END = Float32(0.66)
+"""When the tempest's spin ends, in seconds."""
 
 
 @fieldwise_init
@@ -479,6 +485,25 @@ def rising_edge_clip(
     return _cut("rising_edge", bones, rig, keys^, at^, 0.81)
 
 
+def tempest_twist(share: Float32) -> Float32:
+    """Return how far the tempest turns the hips about plus y, as its
+    poses are written, before `mirrored` turns them the other way.
+
+    Args:
+        share: How far through the clip, from 0 to 1.
+
+    Returns:
+        The twist, in degrees: 40 wound back by `TEMPEST_BEGIN`, then a
+        turn of 400 the other way by `TEMPEST_END`, ending a whole turn
+        round.
+    """
+    var begin = TEMPEST_BEGIN / TEMPEST_SECONDS
+    var end = TEMPEST_END / TEMPEST_SECONDS
+    var wind = hermite_fade(clamp(share / begin, 0, 1))
+    var spin = hermite_fade(clamp((share - begin) / (end - begin), 0, 1))
+    return 40 * wind - 400 * spin
+
+
 def tempest_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
     """Return the tempest: the sword arm out, and a whole turn of the body,
     1.06 seconds.
@@ -493,12 +518,12 @@ def tempest_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
     Raises:
         Error: If there is not one bone per joint.
     """
-    var seconds = Float32(1.06)
+    var seconds = TEMPEST_SECONDS
     var scale = _scale(rig)
-    # The spin turns the hips a whole turn over the active part, from
-    # 0.18 to 0.66 seconds; before and after, the body winds and unwinds.
-    var begin = Float32(0.18) / seconds
-    var end = Float32(0.66) / seconds
+    # The body winds and unwinds before and after the spin: see
+    # `tempest_twist`.
+    var begin = TEMPEST_BEGIN / seconds
+    var end = TEMPEST_END / seconds
     var poses = List[Pose]()
     var count = Int(seconds * SAMPLES) + 1
     for k in range(count):  # pragma: no branch
@@ -506,12 +531,9 @@ def tempest_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
         var out = clamp(t / begin, 0, 1)
         var back = clamp((t - end) / (1 - end), 0, 1)
         var share = hermite_fade(out) * (1 - hermite_fade(back))
-        # The hips wind 40 degrees back, then turn 400 degrees through the
-        # active part, and end a whole turn round, facing forward again.
-        var turn = 400 * hermite_fade(clamp((t - begin) / (end - begin), 0, 1))
         var pose = _ready(scale).blend(Pose(), share)
         _legs(pose, 0, 0, 0.55 * share, scale)
-        pose.turn(HIPS, 0, 40 * hermite_fade(out) - turn)
+        pose.turn(HIPS, 0, tempest_twist(t))
         pose.turn(SPINE, 8 * share)
         _arm(
             pose,

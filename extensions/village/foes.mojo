@@ -444,7 +444,8 @@ def bandit_fighter() -> FighterParameters:
 
     Returns:
         300 health, 70 ki that comes back at 26 a second after 0.8
-        seconds, no arte gauge, and blows of 0.55 times a move's own.
+        seconds, no arte gauge, blows of 0.55 times a move's own, and a
+        guard that blocks and never parries.
     """
     var p = FighterParameters()
     p.health = 300
@@ -454,6 +455,7 @@ def bandit_fighter() -> FighterParameters:
     p.arte_points = 0
     p.arte_rate = Frequency(0.0, PER_SECOND)
     p.might = 0.55
+    p.parry = Duration(0.0, SECOND)
     return p
 
 
@@ -462,7 +464,7 @@ def dummy_fighter() -> FighterParameters:
 
     Returns:
         A great deal of health, 120 ki that comes back at 40 a second
-        after a second, and a guard that covers nothing.
+        after a second, and a guard that covers nothing and never parries.
     """
     var p = FighterParameters()
     p.health = 1.0e5
@@ -472,6 +474,7 @@ def dummy_fighter() -> FighterParameters:
     p.arte_points = 0
     p.arte_rate = Frequency(0.0, PER_SECOND)
     p.guard_arc = Angle(0.0, DEGREE)
+    p.parry = Duration(0.0, SECOND)
     return p
 
 

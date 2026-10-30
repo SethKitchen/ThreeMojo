@@ -20,10 +20,19 @@ from controls.input import (
 )
 from extensions.gamepad.web import WebGamepadState, WebHub
 from extensions.village.character import MoveInput, no_input
+from controls.input import KEY_F, Key
 from extensions.village.pad_input import (
+    KEY_C,
     KEY_E,
+    KEY_G,
+    KEY_SIX,
     KEY_SPACE,
+    KEY_T,
+    KEY_V,
+    KEY_X,
+    KEY_Z,
     combined,
+    fight_input,
     gamepad_input,
     keyboard_input,
     stick,
@@ -163,6 +172,168 @@ def test_two_inputs_add() raises:
     var second = no_input()
     second.use = True
     assert_true(combined(no_input(), second).use)
+
+
+def _fight(
+    south: Bool = False,
+    west: Bool = False,
+    north: Bool = False,
+    east: Bool = False,
+    right_shoulder: Bool = False,
+    left_shoulder: Bool = False,
+    left_trigger: Bool = False,
+    right_stick: Bool = False,
+) -> MoveInput:
+    """Return the input of some gamepad buttons held."""
+    return fight_input(
+        no_input(),
+        south,
+        west,
+        north,
+        east,
+        right_shoulder,
+        left_shoulder,
+        left_trigger,
+        right_stick,
+    )
+
+
+def _all(input: MoveInput) -> List[Bool]:
+    """Return each of an input's buttons."""
+    return [
+        input.run,
+        input.jump,
+        input.use,
+        input.light,
+        input.heavy,
+        input.rising,
+        input.tempest,
+        input.dodge,
+        input.guard,
+        input.lock,
+        input.high,
+        input.middle,
+        input.low,
+    ]
+
+
+def test_the_shoulders_and_the_trigger_fight() raises:
+    for held in _all(_fight()):
+        assert_false(held)
+    # The south button jumps; with the guard held it takes the low stance.
+    var jump = _fight(south=True)
+    assert_true(jump.jump)
+    assert_false(jump.low)
+    var low = _fight(south=True, left_shoulder=True)
+    assert_false(low.jump)
+    assert_true(low.low)
+    assert_true(low.guard)
+    # The west button uses, or takes the middle stance.
+    assert_true(_fight(west=True).use)
+    var middle = _fight(west=True, left_shoulder=True)
+    assert_false(middle.use)
+    assert_true(middle.middle)
+    # The north button: the heavy attack, the tempest, or the high stance.
+    var heavy = _fight(north=True)
+    assert_true(heavy.heavy)
+    assert_false(heavy.tempest)
+    var tempest = _fight(north=True, left_trigger=True)
+    assert_false(tempest.heavy)
+    assert_true(tempest.tempest)
+    var high = _fight(north=True, left_shoulder=True)
+    assert_false(high.heavy)
+    assert_true(high.high)
+    var both = _fight(north=True, left_shoulder=True, left_trigger=True)
+    assert_true(both.tempest)
+    assert_false(both.high)
+    # The right shoulder: a light attack, or the rising edge.
+    var light = _fight(right_shoulder=True)
+    assert_true(light.light)
+    assert_false(light.rising)
+    var rising = _fight(right_shoulder=True, left_trigger=True)
+    assert_false(rising.light)
+    assert_true(rising.rising)
+    assert_true(_fight(east=True).dodge)
+    assert_true(_fight(right_stick=True).lock)
+
+
+def test_a_pad_reads_its_fight_buttons() raises:
+    # The right shoulder is button 5 of the browser's layout, the left
+    # trigger 6, the left shoulder 4, the north button 3 and the right
+    # stick 11.
+    var light = _state()
+    light.digital_buttons[5] = True
+    light.analog_buttons[5] = 1
+    assert_true(_pad(light).light)
+    var rising = light.copy()
+    rising.digital_buttons[6] = True
+    rising.analog_buttons[6] = 1
+    assert_true(_pad(rising).rising)
+    var high = _state()
+    for button in [3, 4]:
+        high.digital_buttons[button] = True
+        high.analog_buttons[button] = 1
+    var stance = _pad(high)
+    assert_true(stance.high)
+    assert_true(stance.guard)
+    var lock = _state()
+    lock.digital_buttons[11] = True
+    lock.analog_buttons[11] = 1
+    assert_true(_pad(lock).lock)
+
+
+def test_the_keyboard_fights() raises:
+    var keys = HeldKeys()
+    for key in [
+        KEY_F,
+        KEY_G,
+        KEY_Z,
+        KEY_X,
+        KEY_C,
+        KEY_V,
+        KEY_T,
+        KEY_SIX,
+        Key(KEY_SIX.value + 1),
+        Key(KEY_SIX.value + 2),
+    ]:
+        keys.press(key)
+    var input = keyboard_input(keys, False)
+    var fights = _all(input)
+    for k in range(3, len(fights)):
+        assert_true(fights[k])
+    for k in range(3, len(fights)):
+        assert_false(_all(keyboard_input(HeldKeys(), False))[k])
+
+
+def test_the_fight_buttons_add() raises:
+    var held = MoveInput(
+        0,
+        0,
+        0,
+        0,
+        False,
+        False,
+        light=True,
+        heavy=True,
+        rising=True,
+        tempest=True,
+        dodge=True,
+        guard=True,
+        lock=True,
+        high=True,
+        middle=True,
+        low=True,
+    )
+    for pair in [
+        combined(held, no_input()),
+        combined(no_input(), held),
+    ]:
+        var buttons = _all(pair)
+        for k in range(3, len(buttons)):
+            assert_true(buttons[k])
+    var none = _all(combined(no_input(), no_input()))
+    for k in range(3, len(none)):
+        assert_false(none[k])
 
 
 def main() raises:

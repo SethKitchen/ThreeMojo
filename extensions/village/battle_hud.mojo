@@ -181,17 +181,16 @@ def _gauges(mut frame: Framebuffer, battle: Battle, scale: Int):
     draw_bar(frame, x, y, width, 4 * scale, health, color)
     draw_text(frame, x - 16 * scale, y - scale, "HP", scale, color, 1)
     var count = String(Int(f.health + 0.5), "/", Int(f.parameters.health))
+    var right = x + width
     y -= 10 * scale
     draw_text(
-        frame,
-        x + width - text_width(count, scale),
-        y,
-        count,
-        scale,
-        WHITE_TEXT,
-        1,
+        frame, right - text_width(count, scale), y, count, scale, WHITE_TEXT, 1
     )
-    draw_text(frame, x, y, stance_label(f.stance), scale, GOLD_TEXT, 1)
+    var stance = stance_label(f.stance)
+    y -= 10 * scale
+    draw_text(
+        frame, right - text_width(stance, scale), y, stance, scale, GOLD_TEXT, 1
+    )
 
 
 def draw_battle(

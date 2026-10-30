@@ -40,6 +40,7 @@ from extensions.humanoid.rig.sword_clips import (
     rising_edge_clip,
     stagger_clip,
     tempest_clip,
+    tempest_twist,
     twin_joint,
 )
 from extensions.humanoid.sex import MALE
@@ -195,6 +196,13 @@ def test_the_sword_arm_cuts_and_the_tempest_turns_round() raises:
     # It ends facing forward again.
     _play(scene, tempest_clip(bones, rig), 1.06)
     assert_true(_turn(scene.node(hips).quaternion, start) < 0.01)
+
+
+def test_the_tempest_winds_back_and_turns_round() raises:
+    assert_almost_equal(tempest_twist(0), 0, atol=1e-5)
+    # Wound back as the spin begins, and a whole turn round at its end.
+    assert_almost_equal(tempest_twist(0.17), 40, atol=0.5)
+    assert_almost_equal(tempest_twist(1), -360, atol=1e-3)
 
 
 def test_a_fall_ends_on_the_ground() raises:

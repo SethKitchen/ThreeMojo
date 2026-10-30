@@ -6,7 +6,8 @@
 """A fight on flat ground: the player against a bandit and a straw dummy.
 
 The player stands at the middle and faces -z. The dummy stands 1.5
-meters before them, and the bandit 6 meters before them."""
+meters before them, and the bandit 6 meters before them: see
+`tests/_village_arena.mojo`."""
 
 from controls.third_person_controls import ThirdPersonControls
 from core.assets import Assets
@@ -15,6 +16,13 @@ from extensions.attire.outfit import Outfit
 from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.vegetation.ground import Ground, Lot, Pond
+from tests._village_arena import (
+    Arena,
+    arena_parameters,
+    flat_ground,
+    holds_text,
+    popup_texts,
+)
 from extensions.village.battle import (
     BLOCK_PUSH,
     CALM_SECONDS,
@@ -77,117 +85,6 @@ from units.si import (
     Length,
     Velocity,
 )
-
-
-def _flat() raises -> Ground:
-    """Return level ground with no pond."""
-    return Ground(hill_height=Length(0.0, METER))
-
-
-def _parameters(
-    bandits: Int = 1, dummies: Int = 1, far: Float32 = 6
-) raises -> BattleParameters:
-    """Return a fight of a bandit `far` meters before the player and a
-    dummy 1.5 meters before them, bare and lightly built."""
-    var p = BattleParameters()
-    p.bandits = List[Bandit]()
-    for k in range(bandits):
-        p.bandits.append(
-            Bandit(
-                HumanoidSpec(Length(66.0, INCH), MALE),
-                Outfit(),
-                Float32(k) * 3,
-                -far,
-                Angle(180.0, DEGREE),
-                5 + k,
-            )
-        )
-    p.posts = List[Post]()
-    for k in range(dummies):
-        p.posts.append(Post(Float32(k) * 3, -1.5, Angle(180.0, DEGREE)))
-    p.linger = Duration(1.0, SECOND)
-    p.respawn = Duration(2.0, SECOND)
-    p.revive = Duration(0.5, SECOND)
-    return p^
-
-
-struct Arena(Movable):
-    """A fight, and everything it moves."""
-
-    var assets: Assets
-    var scene: Scene
-    var body: Body
-    var terrain: Terrain
-    var player: Character
-    var view: ThirdPersonControls
-    var battle: Battle
-
-    def __init__(out self, parameters: BattleParameters) raises:
-        self.assets = Assets()
-        self.scene = Scene()
-        self.body = Body(
-            self.scene,
-            self.assets,
-            HumanoidSpec(Length(60.0, INCH), FEMALE),
-            Outfit(),
-            500,
-            8,
-        )
-        self.terrain = Terrain(_flat())
-        self.player = Character(
-            CharacterParameters(), 0, 0, Angle(0.0, RADIAN), self.terrain
-        )
-        self.view = ThirdPersonControls(Angle(0.0, RADIAN))
-        var looks = house_looks(self.assets, 4, 1)
-        self.battle = Battle(
-            self.scene,
-            self.assets,
-            parameters,
-            looks,
-            self.terrain,
-            List[Lot](),
-            self.body,
-            self.player.position,
-            500,
-            8,
-        )
-
-    def tick(mut self, input: MoveInput, seconds: Float32 = 0.05) raises:
-        self.battle.tick(
-            self.scene,
-            input,
-            self.view,
-            self.player,
-            self.body,
-            self.terrain,
-            List[Obstacle](),
-            Duration(seconds, SECOND),
-        )
-
-    def run(mut self, seconds: Float32, input: MoveInput = no_input()) raises:
-        for _ in range(Int(seconds * 20 + 0.5)):
-            self.tick(input)
-
-    def press(mut self, input: MoveInput) raises:
-        """Press for a frame, and let go for a frame."""
-        self.tick(input)
-        self.tick(no_input())
-
-
-def _texts(battle: Battle) -> List[String]:
-    """Return the text of each number and word that shows."""
-    var out = List[String]()
-    for popup in battle.popups:
-        out.append(popup.text)
-    return out^
-
-
-def _has(texts: List[String], text: String) -> Bool:
-    """Return whether a list holds a text."""
-    for t in texts:
-        if t == text:
-            return True
-    return False
 
 
 def test_a_press_is_a_button_held_now_and_not_before() raises:
@@ -285,7 +182,7 @@ def test_a_blow_pushes_and_throws() raises:
     assert_almost_equal(
         push_of(Struck(EVADED, 0, 0), blow, way).x, 0, atol=1e-6
     )
-    var ground = _flat()
+    var ground = flat_ground()
     var walker = Character(
         CharacterParameters(), 0, 0, Angle(0.0, RADIAN), ground
     )
@@ -310,7 +207,7 @@ def test_a_blow_pushes_and_throws() raises:
 
 
 def test_the_player_cuts_a_dummy() raises:
-    var arena = Arena(_parameters(0, 1))
+    var arena = Arena(arena_parameters(0, 1))
     assert_equal(len(arena.battle.dummies), 1)
     assert_equal(arena.battle.targets(), 1)
     assert_true(arena.battle.standing(0))
@@ -325,7 +222,7 @@ def test_the_player_cuts_a_dummy() raises:
     assert_true(arena.battle.drawn)
     arena.run(0.3)
     assert_equal(arena.battle.fighter.combo, 1)
-    assert_true(_has(_texts(arena.battle), "30"))
+    assert_true(holds_text(popup_texts(arena.battle), "30"))
     # The dummy rocks, and keeps its health.
     var rocked = arena.battle.dummies[0].dummy.spin.length()
     assert_true(rocked > 0)
@@ -344,7 +241,7 @@ def test_the_player_cuts_a_dummy() raises:
 
 def test_the_lock_turns_the_camera_and_faces_the_player() raises:
     # The bandit stands too far to notice the player.
-    var arena = Arena(_parameters(1, 1, 15))
+    var arena = Arena(arena_parameters(1, 1, 15))
     arena.view.yaw = Angle(90.0, DEGREE)
     # The dummy lies nearer the middle of the view than the bandit.
     assert_equal(
@@ -401,7 +298,7 @@ def test_the_lock_turns_the_camera_and_faces_the_player() raises:
 
 
 def test_a_bandit_comes_and_strikes_and_a_guard_blocks() raises:
-    var arena = Arena(_parameters(1, 0))
+    var arena = Arena(arena_parameters(1, 0))
     assert_equal(len(arena.battle.foes), 1)
     arena.run(9)
     # It noticed the player, took the token and struck.
@@ -416,7 +313,7 @@ def test_a_bandit_comes_and_strikes_and_a_guard_blocks() raises:
     var blocked = False
     for _ in range(200):
         arena.tick(guard)
-        if _has(_texts(arena.battle), "BLOCKED"):
+        if holds_text(popup_texts(arena.battle), "BLOCKED"):
             blocked = True
     assert_true(blocked)
     assert_almost_equal(arena.battle.fighter.health, health, atol=1e-3)
@@ -433,21 +330,21 @@ def _swinging(mut arena: Arena, clock: Float32) raises:
 
 
 def test_a_fresh_guard_parries_and_a_late_dodge_is_perfect() raises:
-    var arena = Arena(_parameters(1, 0))
+    var arena = Arena(arena_parameters(1, 0))
     _swinging(arena, 0.1)
     var guard = no_input()
     guard.guard = True
     arena.tick(guard)
-    assert_true(_has(_texts(arena.battle), "PARRY"))
+    assert_true(holds_text(popup_texts(arena.battle), "PARRY"))
     assert_true(arena.battle.foes[0].fighter.move == FLINCH)
-    var dodger = Arena(_parameters(1, 0))
+    var dodger = Arena(arena_parameters(1, 0))
     dodger.battle.drawn = True
     _swinging(dodger, 0.1)
     var dodge = no_input()
     dodge.dodge = True
     dodger.tick(dodge)
     assert_true(dodger.battle.fighter.move == DODGE)
-    assert_true(_has(_texts(dodger.battle), "PERFECT DODGE"))
+    assert_true(holds_text(popup_texts(dodger.battle), "PERFECT DODGE"))
     assert_almost_equal(dodger.battle.slow, SLOW_SECONDS - 0.05, atol=1e-4)
     # The bandit moves slowly while the dodge's time lasts.
     var clock = dodger.battle.foes[0].fighter.clock
@@ -456,7 +353,7 @@ def test_a_fresh_guard_parries_and_a_late_dodge_is_perfect() raises:
 
 
 def test_a_dodge_goes_the_way_of_the_stick_or_back() raises:
-    var arena = Arena(_parameters(0, 0))
+    var arena = Arena(arena_parameters(0, 0))
     # A sheathed sword does not dodge.
     var dodge = no_input()
     dodge.dodge = True
@@ -468,7 +365,7 @@ def test_a_dodge_goes_the_way_of_the_stick_or_back() raises:
     assert_true(arena.battle.fighter.move == DODGE)
     arena.run(0.4)
     assert_true(arena.player.position.x > 2)
-    var back = Arena(_parameters(0, 0))
+    var back = Arena(arena_parameters(0, 0))
     back.battle.drawn = True
     var plain = no_input()
     plain.dodge = True
@@ -478,7 +375,7 @@ def test_a_dodge_goes_the_way_of_the_stick_or_back() raises:
 
 
 def test_the_player_defeats_a_bandit_who_comes_back() raises:
-    var arena = Arena(_parameters(1, 0))
+    var arena = Arena(arena_parameters(1, 0))
     _swinging(arena, 0)
     ref foe = arena.battle.foes[0]
     foe.fighter.move = FLINCH
@@ -506,7 +403,7 @@ def test_the_player_defeats_a_bandit_who_comes_back() raises:
 
 
 def test_a_fallen_player_comes_to_at_the_start() raises:
-    var arena = Arena(_parameters(1, 0))
+    var arena = Arena(arena_parameters(1, 0))
     arena.battle.lock = 0
     _ = arena.battle.fighter.receive(
         Blow(
@@ -524,21 +421,21 @@ def test_a_fallen_player_comes_to_at_the_start() raises:
     arena.tick(cut)
     assert_true(arena.battle.fighter.defeated())
     assert_equal(arena.battle.lock, -1)
-    assert_true(_has(arena.battle.notes, "YOU FALL"))
+    assert_true(holds_text(arena.battle.notes, "YOU FALL"))
     assert_true(arena.player.position.x > 0)
     arena.run(0.6)
     assert_true(arena.battle.fighter.free())
     assert_almost_equal(arena.player.position.x, 0, atol=1e-4)
-    assert_true(_has(arena.battle.notes, "YOU COME TO BY THE TRAIL"))
+    assert_true(holds_text(arena.battle.notes, "YOU COME TO BY THE TRAIL"))
 
 
 def test_stances_pulses_artes_and_heavy_attacks() raises:
-    var arena = Arena(_parameters(0, 0))
+    var arena = Arena(arena_parameters(0, 0))
     var high = no_input()
     high.high = True
     arena.press(high)
     assert_true(arena.battle.fighter.stance == HIGH_STANCE)
-    assert_true(_has(arena.battle.notes, "HIGH STANCE"))
+    assert_true(holds_text(arena.battle.notes, "HIGH STANCE"))
     arena.battle.notes.clear()
     arena.press(high)
     assert_equal(len(arena.battle.notes), 0)
@@ -559,14 +456,14 @@ def test_stances_pulses_artes_and_heavy_attacks() raises:
     var pulse = no_input()
     pulse.guard = True
     arena.press(pulse)
-    assert_true(_has(_texts(arena.battle), "KI PULSE"))
+    assert_true(holds_text(popup_texts(arena.battle), "KI PULSE"))
     arena.run(1.5)
     # The rising edge says its name; the tempest without its points does
     # not start.
     var rising = no_input()
     rising.rising = True
     arena.press(rising)
-    assert_true(_has(arena.battle.notes, "RISING EDGE!"))
+    assert_true(holds_text(arena.battle.notes, "RISING EDGE!"))
     arena.run(1)
     arena.battle.notes.clear()
     arena.battle.fighter.arte = 0
@@ -578,7 +475,7 @@ def test_stances_pulses_artes_and_heavy_attacks() raises:
 
 
 def test_an_attack_in_the_air_hangs_and_a_push_carries() raises:
-    var arena = Arena(_parameters(0, 0))
+    var arena = Arena(arena_parameters(0, 0))
     _ = arena.battle.fighter.request(RISING_EDGE)
     arena.battle.fighter.clock = 0.17
     arena.player.grounded = False
@@ -587,7 +484,7 @@ def test_an_attack_in_the_air_hangs_and_a_push_carries() raises:
     arena.tick(no_input())
     assert_true(arena.player.velocity.y > -1)
     # A free player that a blow pushes slides with it.
-    var pushed = Arena(_parameters(0, 0))
+    var pushed = Arena(arena_parameters(0, 0))
     pushed.battle.shove = Vector3(3, 0, 0)
     pushed.tick(no_input())
     assert_true(pushed.player.position.x > 0.1)
@@ -617,7 +514,7 @@ def test_a_fighter_on_a_lot_or_in_the_water_is_left_out() raises:
     var battle = Battle(
         scene,
         assets,
-        _parameters(1, 1),
+        arena_parameters(1, 1),
         house_looks(assets, 4, 1),
         Terrain(ground),
         lots,
