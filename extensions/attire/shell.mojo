@@ -59,9 +59,9 @@ from extensions.humanoid.skeleton.head.skin.tint import THINNESS
 from math.utils import clamp
 from math.vector3 import Vector3
 
-comptime UNDER_REACH = Float32(0.65)
+comptime UNDER_REACH = Float32(0.75)
 """A garment is cut where a layer over it covers it past this level. That
-layer's hem lies at one half, so the garment ends just under it."""
+layer's hem lies at one half, so the garment ends under it."""
 comptime OVER = "over"
 """The name of the attribute that carries, while a garment is cut, the
 greatest cover value of any layer over it."""
