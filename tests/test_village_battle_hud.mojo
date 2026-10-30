@@ -9,10 +9,12 @@ bars, the lock's mark and the blows' numbers."""
 from cameras.perspective_camera import PerspectiveCamera
 from extensions.village.battle import CHEST, Bolt, Popup, Wave
 from extensions.village.battle_hud import (
+    HURT_TINT,
     draw_bar,
     draw_battle,
     on_screen,
     stance_label,
+    tint_edges,
 )
 from extensions.village.combat import (
     BURST,
@@ -22,6 +24,7 @@ from extensions.village.combat import (
     HIGH_STANCE,
     LOW_STANCE,
     MID_STANCE,
+    FREE,
     MYSTIC_ARTE,
     PLUNGE,
     STAGGER,
@@ -253,6 +256,55 @@ def test_the_companion_shows_her_bolts_and_her_gauge() raises:
     var ready = _frame()
     draw_battle(ready, arena.battle, arena.scene, camera, look)
     assert_true(_changed(ready) > _changed(plain))
+
+
+def test_the_edges_tint_and_a_ki_pulse_rings() raises:
+    var arena = Arena(arena_parameters(0, 0))
+    var camera = _camera()
+    var look = Vector3(0, -1, -6) / Vector3(0, -1, -6).length()
+    arena.scene.update()
+    var plain = _frame()
+    draw_battle(plain, arena.battle, arena.scene, camera, look)
+    # A perfect dodge's slow tints the corners blue.
+    arena.battle.slow = 0.5
+    var slowed = _frame()
+    draw_battle(slowed, arena.battle, arena.scene, camera, look)
+    assert_true(Int(slowed.pixels[2]) > Int(slowed.pixels[0]) + 20)
+    # A mystic arte tints them gold.
+    arena.battle.fighter.move = MYSTIC_ARTE
+    arena.battle.fighter.clock = 0.7
+    var mystic = _frame()
+    draw_battle(mystic, arena.battle, arena.scene, camera, look)
+    assert_true(Int(mystic.pixels[0]) > Int(mystic.pixels[2]) + 20)
+    arena.battle.fighter.move = FREE
+    arena.battle.slow = 0
+    # Low health tints them red; a fallen player's do not.
+    arena.battle.fighter.health = 50
+    var hurt = _frame()
+    draw_battle(hurt, arena.battle, arena.scene, camera, look)
+    assert_true(Int(hurt.pixels[0]) > Int(hurt.pixels[1]) + 20)
+    arena.battle.fighter.health = 0
+    var fallen = _frame()
+    draw_battle(fallen, arena.battle, arena.scene, camera, look)
+    assert_equal(Int(fallen.pixels[0]), 0)
+    arena.battle.fighter.health = 500
+    # A ki pulse rings the player's feet, and the ring fades.
+    arena.battle.pulsed = 0.1
+    var pulse = _frame()
+    draw_battle(pulse, arena.battle, arena.scene, camera, look)
+    assert_true(_changed(pulse) > _changed(plain))
+    arena.battle.pulsed = 0.5
+    var gone = _frame()
+    draw_battle(gone, arena.battle, arena.scene, camera, look)
+    assert_equal(_changed(gone), _changed(plain))
+    # No strength tints nothing; the middle of the frame is never tinted.
+    var none = _frame()
+    tint_edges(none, HURT_TINT, 0)
+    assert_equal(_changed(none), 0)
+    var full = _frame()
+    tint_edges(full, HURT_TINT, 1)
+    assert_equal(Int(full.pixels[(90 * 320 + 160) * 4]), 0)
+    assert_true(Int(full.pixels[0]) > 150)
 
 
 def main() raises:

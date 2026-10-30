@@ -196,6 +196,7 @@ The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these o
 - **A dummy's ki**, over its head, while its ki is not full.
 - **The lock's mark**: four gold dots round the locked target's chest.
 - **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `BURST COUNTER`. They rise and fade.
+- **The edges of the frame**, tinted. They turn blue while the player's perfect dodge slows the foes, as Tales of Arise's perfect evade does. They turn gold through a mystic arte, and red below a quarter of the player's health. A ki pulse rings the player's feet with blue light, as in Nioh.
 
 The note over the prompt names each arte as it starts, and each new stance. It says `OVER LIMIT!` when Over Limit begins, and `BOOST ATTACK!` when the companion makes one. The companion's bolts are blue stars, and her boost attack's is gold. A blow that lands bursts in sparks.
 

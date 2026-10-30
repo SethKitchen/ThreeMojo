@@ -6,7 +6,7 @@
 """What a fight writes over the frame, with the font of
 `extensions.village.hud`.
 
-`draw_battle` draws seven things:
+`draw_battle` draws eight things:
 
 1. **The trails** of the swings, the demon fang's waves, the
    companion's bolts and a plunge's ring, as light added to the frame:
@@ -33,6 +33,11 @@
 5. **A dummy's ki**, over its head, while its ki is not full.
 6. **The lock's mark**: four gold dots round the locked target's chest.
 7. **The numbers and the words** of the blows, which rise and fade.
+8. **The edges of the frame**, tinted: blue while the player's perfect
+   dodge slows the foes, as Tales of Arise's perfect evade does; gold
+   through a mystic arte; and red below a quarter of the player's
+   health. A ki pulse rings the player's feet with blue light, as Nioh's
+   does.
 
 A point behind the camera is not drawn.
 """
@@ -56,6 +61,7 @@ from extensions.village.combat import (
     PLUNGE,
     HEAVY,
     HIGH_STANCE,
+    LIGHT_ONE,
     LOW_STANCE,
     STAGGER,
     CombatStance,
@@ -83,6 +89,7 @@ from extensions.village.hud import (
     text_width,
 )
 from math.vector3 import Vector3
+from std.math import sqrt
 from render.framebuffer import Framebuffer
 from units.si import METER, SECOND
 
@@ -106,6 +113,17 @@ comptime BOLT_COLOR = Vector3(140, 210, 255)
 """The light of a companion's bolt."""
 comptime BOLT_GLOW = Float32(0.3)
 """How far a bolt's star reaches, in meters."""
+comptime SLOW_TINT = Rgb(70, 140, 255)
+"""The tint of the frame's edges while a perfect dodge slows the foes."""
+comptime MYSTIC_TINT = Rgb(255, 200, 80)
+"""The tint of the frame's edges through a mystic arte."""
+comptime HURT_TINT = Rgb(200, 20, 20)
+"""The tint of the frame's edges below a quarter of health."""
+comptime EDGE = Float32(0.55)
+"""How far from the middle of the frame its edges' tint begins, as a share
+of the way to a corner."""
+comptime PULSE_FLASH = Float32(0.3)
+"""How long a ki pulse's ring spreads and fades, in seconds."""
 comptime RING_SECONDS = Float32(0.3)
 """How long a plunge's ring spreads and fades, in seconds."""
 comptime GLOW_REACH = Float32(0.35)
@@ -282,6 +300,62 @@ def _ring(
     draw_ring(frame, camera, look, at, radius, 1 - share)
 
 
+def tint_edges(mut frame: Framebuffer, color: Rgb, strength: Float32):
+    """Tint the edges of a frame toward a color, more toward its corners.
+
+    Args:
+        frame: The frame.
+        color: The tint.
+        strength: How much of the tint covers the corners, from 0 to 1.
+            Nothing is tinted within `EDGE` of the way from the middle to
+            a corner.
+    """
+    var cx = Float32(frame.width) / 2
+    var cy = Float32(frame.height) / 2
+    var tint: List[Float32] = [
+        Float32(color.r),
+        Float32(color.g),
+        Float32(color.b),
+    ]
+    # A frame's width and height are positive.
+    for y in range(frame.height):  # pragma: no branch
+        var dy = (Float32(y) + 0.5 - cy) / cy
+        for x in range(frame.width):  # pragma: no branch
+            var dx = (Float32(x) + 0.5 - cx) / cx
+            var reach = sqrt((dx * dx + dy * dy) / 2)
+            if reach <= EDGE:
+                continue
+            var share = (reach - EDGE) / (1 - EDGE)
+            var w = min(Float32(1), share * share) * strength
+            var at = (y * frame.width + x) * 4
+            for k in range(3):  # pragma: no branch
+                var mixed = Float32(frame.pixels[at + k]) * (1 - w)
+                frame.pixels[at + k] = UInt8(Int(mixed + tint[k] * w + 0.5))
+
+
+def _edges(
+    mut frame: Framebuffer,
+    battle: Battle,
+    scene: Scene,
+    camera: PerspectiveCamera,
+    look: Vector3,
+) raises:
+    """Tint the edges of the frame for the slowed foes, a mystic arte or
+    low health, and ring the player's feet after a ki pulse."""
+    ref f = battle.fighter
+    if f.move == MYSTIC_ARTE:
+        tint_edges(frame, MYSTIC_TINT, 0.35)
+    elif battle.slow > 0:
+        tint_edges(frame, SLOW_TINT, 0.4 * min(Float32(1), battle.slow * 5))
+    if f.health > 0 and f.health < 0.25 * f.parameters.health:
+        tint_edges(frame, HURT_TINT, 0.3)
+    if battle.pulsed >= 0 and battle.pulsed < PULSE_FLASH:
+        var share = battle.pulsed / PULSE_FLASH
+        var node = battle.trail.nodes[LIGHT_ONE.value].value()
+        var feet = scene.world_matrix(node).transform_point(Vector3(0, 0.05, 0))
+        draw_ring(frame, camera, look, feet, 0.6 + share, 1 - share)
+
+
 def _boost(mut frame: Framebuffer, battle: Battle, scale: Int):
     """Draw the companion's boost gauge, in the bottom left."""
     for k in range(len(battle.allies)):
@@ -407,6 +481,7 @@ def draw_battle(
         var color = OVER_TRAIL if bolt.boosted else BOLT_COLOR
         glow_star(frame, Vector3(center.x, center.y, 1), reach, color)
     _ring(frame, battle, scene, camera, look)
+    _edges(frame, battle, scene, camera, look)
     _gauges(frame, battle, scale)
     _boost(frame, battle, scale)
     ref f = battle.fighter

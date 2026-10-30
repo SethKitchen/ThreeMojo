@@ -674,8 +674,11 @@ def test_stances_pulses_artes_and_heavy_attacks() raises:
     arena.run(0.45)
     var pulse = no_input()
     pulse.guard = True
+    assert_almost_equal(arena.battle.pulsed, -1, atol=1e-6)
     arena.press(pulse)
     assert_true(holds_text(popup_texts(arena.battle), "KI PULSE"))
+    # The pulse's ring has started, and ages.
+    assert_true(arena.battle.pulsed > 0)
     arena.run(1.5)
     # The rising edge says its name; the tempest without its points does
     # not start.

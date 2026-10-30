@@ -639,6 +639,9 @@ struct Battle(Movable):
     var calm: Float32
     # How long the foes are still slowed, in seconds.
     var slow: Float32
+    # How long ago the player last made a ki pulse that got ki back, in
+    # seconds, or -1 if they never did.
+    var pulsed: Float32
     # How long the player has lain fallen, in seconds, or -1.
     var down: Float32
     # Whether the player was Over Limit at the end of the last frame.
@@ -850,6 +853,7 @@ struct Battle(Movable):
         self.drawn = False
         self.calm = CALM_SECONDS
         self.slow = 0
+        self.pulsed = -1
         self.down = -1
         self.limited = False
         self.freeze = 0
@@ -1089,6 +1093,7 @@ struct Battle(Movable):
             var back = self.fighter.pulse()
             if back > 0:
                 self._popup(player.position, "KI PULSE", CALM_TEXT)
+                self.pulsed = 0
         self.fighter.hold_guard(input.guard)
         self.called = presses.boost
         var fought = input.guard or presses.lock
@@ -1665,6 +1670,8 @@ struct Battle(Movable):
         var fade = exp(-SHOVE_FADE * seconds)
         self.shove = self.shove * fade
         self.slow = max(Float32(0), self.slow - seconds)
+        if self.pulsed >= 0:
+            self.pulsed += seconds
         self.token_rest -= seconds
         ref p = self.parameters
         var engaged = not self.fighter.free() or self.fighter.guarding
