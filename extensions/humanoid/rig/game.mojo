@@ -379,8 +379,15 @@ def add_game_humanoid(
         facial_meshes.append(mouth_mesh(dims, GUMS_AND_TONGUE, shapes))
     else:
         body = body_skin_mesh(spec, detail, workers, gap)
+    # The shell's inner face lies under the scalp: a game never sees it.
     var shell = head_hair_from_dimensions(
-        dims, SCALP_HAIR, RIGHT, hair_detail, workers, hair_style
+        dims,
+        SCALP_HAIR,
+        RIGHT,
+        hair_detail,
+        workers,
+        hair_style,
+        outer_only=True,
     )
     var eyes = List[BufferGeometry]()
     # Both named sides receive an eye.

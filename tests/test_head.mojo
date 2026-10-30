@@ -8,6 +8,7 @@ joint tissues and cartilages, the muscles, the vessels, the nerves, the
 lymph nodes, the skin and the hair."""
 
 from core.assets import Assets
+from core.buffer_geometry import POSITION
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.humanoid.athleticism import Athleticism
@@ -71,6 +72,7 @@ from extensions.humanoid.skeleton.head.hair.dimensions import (
     named_head_hair,
 )
 from extensions.humanoid.skeleton.head.hair.geometry import (
+    INNER_DEPTH,
     head_hair,
     head_hair_from_dimensions,
 )
@@ -789,9 +791,30 @@ def test_hair() raises:
     with assert_raises(contains="RIGHT or LEFT"):
         _ = head_hair_field(dims, SCALP_HAIR, BodySide(4))
     assert_true(head_hair(_person(), EYEBROWS, RIGHT, 8).triangle_count() > 0)
-    assert_true(
-        head_hair_from_dimensions(dims, SCALP_HAIR, RIGHT, 8).triangle_count()
-        > 0
+    var closed = head_hair_from_dimensions(dims, SCALP_HAIR, RIGHT, 8)
+    assert_true(closed.triangle_count() > 0)
+    # Its outer face alone: the inner face, under the scalp, is dropped,
+    # and every triangle left has a corner that is not under the skin.
+    var outer = head_hair_from_dimensions(
+        dims, SCALP_HAIR, RIGHT, 8, outer_only=True
+    )
+    assert_true(outer.triangle_count() > closed.triangle_count() // 3)
+    assert_true(outer.triangle_count() < closed.triangle_count() * 3 // 4)
+    var skin = HeadSkinField(dims)
+    ref placed = outer.attribute_view(String(POSITION))
+    for t in range(outer.triangle_count()):
+        var shown = False
+        for c in range(3):
+            var p = placed.vector3(outer.corner_index(t, c))
+            if skin.distance(p) >= -INNER_DEPTH:
+                shown = True
+        assert_true(shown)
+    # An eyebrow lies on the skin: it has no inner face to drop.
+    assert_equal(
+        head_hair_from_dimensions(
+            dims, EYEBROWS, RIGHT, 8, outer_only=True
+        ).triangle_count(),
+        head_hair_from_dimensions(dims, EYEBROWS, RIGHT, 8).triangle_count(),
     )
 
 
