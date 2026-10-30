@@ -54,6 +54,7 @@ from extensions.attire.cover import Cover
 from extensions.attire.kinds import (
     ARMOR_LAYER,
     ARMS_SLOT,
+    BANDED,
     COWLED,
     DYE_CHANNEL_COUNT,
     FEET_SLOT,
@@ -806,7 +807,7 @@ def belt() raises -> Garment:
     # A band from the top of the pelvis to just above the waist.
     cover.reach_to(HIPS, 1, 0.82)
     cover.reach_to(SPINE, 0.14, 0)
-    # Stiff leather spans the hollow of the back.
+    # Stiff leather spans the hollow of the back: a taut band.
     return Garment(
         "belt",
         WAIST_SLOT,
@@ -815,6 +816,7 @@ def belt() raises -> Garment:
         cover^,
         Color(58, 38, 24),
         drape=12,
+        form=BANDED,
     )
 
 

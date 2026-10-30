@@ -28,6 +28,7 @@ from extensions.attire.garment import (
     wardrobe,
 )
 from extensions.attire.kinds import (
+    BANDED,
     ARMOR_LAYER,
     COWLED,
     FITTED,
@@ -137,7 +138,7 @@ def test_the_wardrobe_checks() raises:
     assert_equal(gorget().anchor, CHEST)
     assert_equal(gauntlets().articulation, RIGID)
     assert_true(breeches().ease.value > 0)
-    assert_equal(belt().form, FITTED)
+    assert_equal(belt().form, BANDED)
     assert_equal(hood().form, COWLED)
 
 
