@@ -83,6 +83,8 @@ These were measured on four cores. Most of the build is the hair's shell, at `ha
 
 `triangles` sets the skin's budget. The body's skin takes 76 % of it, the hair's shell 12 % and each hand 6 %. A decimated skin keeps its colors: each vertex takes those of the nearest vertex of the full skin. At 20,000 triangles a frame takes 52 ms. A material with textures and light through thin skin costs about twice the time of the default Phong.
 
+A decimated skin keeps the normals of the full skin too, so it shades as the full skin does. The body, the head and the hands then shade alike across their seams. A vertex keeps its own normal where the nearest full vertex faces more than 60° away, as across the gap between the lips. The hair's shell keeps the normals the simplifier makes.
+
 ## Example
 
 `examples/game_humanoid.mojo` bakes `out/humanoid.glb` once, then loads it and plays idle, walk, run, jump and wave, each fading into the next. It writes `out/game_humanoid.png` and prints the frame rate.

@@ -8,7 +8,7 @@
 from animation.animation_mixer import AnimationAction, AnimationMixer
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, POSITION, BufferGeometry
+from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.rig.clips import (
@@ -419,6 +419,32 @@ def test_colors_are_carried_to_a_decimated_skin() raises:
     assert_equal(carried.component(1, 0), 1)
 
 
+def _facing(mut mesh: BufferGeometry, var normals: List[Float32]) raises:
+    """Give a mesh a normal at each vertex."""
+    mesh.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+
+
+def test_normals_are_carried_where_they_face_the_same_way() raises:
+    var source = _mesh([Vector3(0, 0, 0), Vector3(0.5, 0, 0)], [])
+    _facing(source, [0, 1, 0, 0, 0, 1])
+    # The first faces nearly as its nearest full vertex does, and takes
+    # its normal; the second faces across, and keeps its own.
+    var target = _mesh([Vector3(0.001, 0, 0), Vector3(0.499, 0, 0)], [])
+    _facing(target, [0, 0.8, 0.6, 0, 1, 0])
+    carry_attributes(source, target)
+    ref carried = target.attribute_view(String(NORMAL))
+    assert_equal(carried.packed(), [0, 1, 0, 0, 1, 0])
+    # A mesh with no normals gives none and takes none.
+    var bare = _mesh([Vector3(0.001, 0, 0)], [])
+    carry_attributes(source, bare)
+    assert_false(bare.has_attribute(String(NORMAL)))
+    var plain = _mesh([Vector3(0, 0, 0)], [])
+    var kept = _mesh([Vector3(0.001, 0, 0)], [])
+    _facing(kept, [1, 0, 0])
+    carry_attributes(plain, kept)
+    assert_equal(kept.attribute_view(String(NORMAL)).packed(), [1, 0, 0])
+
+
 def test_weld_hash_collisions_do_not_join_distinct_positions() raises:
     var p = Vector3(0.00001001, 0.00001001, 0.00108001)
     var graph = _welded_edges([Vector3(0, 0, 0), p, p], List[Int]())
@@ -566,7 +592,9 @@ def test_attribute_transfer_searches_past_the_first_populated_ring() raises:
 def test_attribute_transfer_accepts_two_empty_meshes() raises:
     var source = _mesh([], [])
     source.set_attribute(String(COLOR), BufferAttribute(List[Float32](), 3))
+    _facing(source, List[Float32]())
     var target = _mesh([], [])
+    _facing(target, List[Float32]())
     carry_attributes(source, target)
     assert_equal(target.attribute_view(String(POSITION)).count(), 0)
     ref colors = target.attribute_view(String(COLOR))

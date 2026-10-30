@@ -25,7 +25,7 @@ This is not a three.js port. See Extensions.
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, POSITION, BufferGeometry
+from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.fidelity import (
@@ -117,6 +117,10 @@ comptime CROTCH = Float32(0.06)
 # The cell a nearest point is sought in when carrying colors over, in
 # meters.
 comptime CARRY_CELL = Float32(0.01)
+# A decimated vertex takes the normal of the nearest full vertex only if
+# the two turn apart by less than this, as the cosine between them: not
+# from across a thin gap, as between the lips, where the two face apart.
+comptime CARRY_FACING = Float32(0.5)
 
 
 struct GameHumanoid(Movable):
@@ -175,13 +179,21 @@ def _key(p: Vector3) -> Int:
 
 
 def carry_attributes(source: BufferGeometry, mut target: BufferGeometry) raises:
-    """Give a decimated mesh the colors and the thinness of the mesh it
-    was decimated from, each vertex those of the nearest source vertex.
+    """Give a decimated mesh the colors, the thinness and the normals of
+    the mesh it was decimated from, each vertex those of the nearest
+    source vertex.
+
+    A normal is carried only where the two meshes face the same way, to
+    within `CARRY_FACING`. A full mesh's normals are those of its smooth
+    surface, so the decimated mesh shades as it does. Two meshes that
+    meet at a seam then shade alike across it, where the normals the
+    simplifier makes from the faces on one side would not.
 
     Args:
-        source: The full mesh, with `position` and any of `color` and
-            `thinness`.
-        target: The decimated mesh, in the same frame.
+        source: The full mesh, with `position` and any of `color`,
+            `thinness` and `normal`.
+        target: The decimated mesh, in the same frame. Its normals, if
+            it has them, are replaced.
 
     Raises:
         Error: If either mesh has no positions, or a nonempty target
@@ -244,6 +256,18 @@ def carry_attributes(source: BufferGeometry, mut target: BufferGeometry) raises:
             for c in range(size):  # pragma: no branch
                 data.append(values.component(nearest[v], c))
         target.set_attribute(name, BufferAttribute(data^, size))
+    if source.has_attribute(String(NORMAL)) and target.has_attribute(
+        String(NORMAL)
+    ):
+        ref smooth = source.attribute_view(String(NORMAL))
+        var normals = target.clone_attribute(String(NORMAL))
+        for v in range(len(nearest)):
+            var n = smooth.vector3(nearest[v])
+            if n.dot(normals.vector3(v)) > CARRY_FACING:
+                normals.set_component(v, 0, n.x)
+                normals.set_component(v, 1, n.y)
+                normals.set_component(v, 2, n.z)
+        target.set_attribute(String(NORMAL), normals^)
 
 
 def _outline(mut points: List[Float32], mesh: BufferGeometry) raises:
