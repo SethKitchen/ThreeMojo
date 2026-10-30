@@ -12,7 +12,8 @@ peasant, a goodwife, an archer, a monk, a merchant, a noblewoman, a
 man-at-arms and a knight. Each person's seed picks a genome and a
 stature, and `calling_outfit` dresses them for their calling, dyed by
 the seed. Soldiers are toned, and one in three of the others. The women wear their
-hair long, in a braid or in a bun. The crowd stands in two rows and
+hair long, in a braid or in a bun. Each man's seed picks a beard, or
+none. The crowd stands in two rows and
 walks in place, each at a pace of their own, while the camera passes
 along the front row. It writes `out/crowd.png` and prints how long the
 building, the dressing and the frames took.
@@ -47,6 +48,11 @@ from extensions.attire.mix import (
 from extensions.attire.outfit import dress
 from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.genome import random_genome
+from extensions.humanoid.skeleton.head.hair.beard import (
+    BEARD_COUNT,
+    CLEAN_SHAVEN,
+    Beard,
+)
 from extensions.humanoid.rig.clips import idle_clip, walk_clip
 from extensions.humanoid.rig.game import add_game_humanoid
 from extensions.humanoid.sex import FEMALE, MALE
@@ -129,9 +135,11 @@ def main() raises:
         var calling = Calling(index)
         var sex = MALE
         var style = GROWN
+        var beard = Beard(seed % BEARD_COUNT)
         if calling == GOODWIFE or calling == NOBLEWOMAN:
             sex = FEMALE
             style = long_hair[seed % len(long_hair)]
+            beard = CLEAN_SHAVEN
         var genome = random_genome(seed)
         # Soldiers are trained; of the others, one in three.
         var build = UNTONED
@@ -158,6 +166,7 @@ def main() raises:
             TRIANGLES,
             hair_style=style,
             workers=workers,
+            beard=beard,
         )
         building += _seconds_since(start)
         # Stand the soles on the floor.
