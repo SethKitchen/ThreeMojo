@@ -4,7 +4,7 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """Sword clips: each plays on a rig's bones for its move's time, the sword
-arm is the arm on minus x, the tempest turns the body round, and the fall
+arm is the arm on minus x, the whirlwind turns the body round, and the fall
 ends on the ground."""
 
 from animation.animation_clip import AnimationClip
@@ -27,10 +27,10 @@ from extensions.humanoid.rig.joints import (
     named_joints,
 )
 from extensions.humanoid.rig.sword_clips import (
-    burst_clip,
+    pierce_clip,
     cast_clip,
     dodge_clip,
-    fang_clip,
+    ground_wave_clip,
     fall_clip,
     flinch_clip,
     guard_clip,
@@ -39,14 +39,14 @@ from extensions.humanoid.rig.sword_clips import (
     light_three_clip,
     light_two_clip,
     mirrored,
-    mystic_clip,
-    mystic_twist,
+    ultimate_clip,
+    ultimate_twist,
     plunge_clip,
     ready_clip,
     rising_edge_clip,
     stagger_clip,
-    tempest_clip,
-    tempest_twist,
+    whirlwind_clip,
+    whirlwind_twist,
     throw_clip,
     twin_joint,
 )
@@ -119,11 +119,11 @@ def test_each_clip_lasts_as_long_as_its_move() raises:
         "light_three",
         "heavy",
         "rising_edge",
-        "tempest",
-        "fang",
-        "mystic",
+        "whirlwind",
+        "ground_wave",
+        "ultimate",
         "plunge",
-        "burst",
+        "pierce",
         "cast",
         "throw",
         "dodge",
@@ -159,11 +159,11 @@ def test_each_clip_lasts_as_long_as_its_move() raises:
     clips.append(light_three_clip(bones, rig))
     clips.append(heavy_clip(bones, rig))
     clips.append(rising_edge_clip(bones, rig))
-    clips.append(tempest_clip(bones, rig))
-    clips.append(fang_clip(bones, rig))
-    clips.append(mystic_clip(bones, rig))
+    clips.append(whirlwind_clip(bones, rig))
+    clips.append(ground_wave_clip(bones, rig))
+    clips.append(ultimate_clip(bones, rig))
     clips.append(plunge_clip(bones, rig))
-    clips.append(burst_clip(bones, rig))
+    clips.append(pierce_clip(bones, rig))
     clips.append(cast_clip(bones, rig))
     clips.append(throw_clip(bones, rig))
     clips.append(dodge_clip(bones, rig))
@@ -202,7 +202,7 @@ def test_a_pose_mirrors_onto_its_twin_joints() raises:
     assert_almost_equal(turned.lift.z, 0.3, atol=1e-6)
 
 
-def test_the_sword_arm_cuts_and_the_tempest_turns_round() raises:
+def test_the_sword_arm_cuts_and_the_whirlwind_turns_round() raises:
     var rig = _rig()
     var scene = Scene()
     var bones = _bones(scene, rig)
@@ -213,30 +213,30 @@ def test_the_sword_arm_cuts_and_the_tempest_turns_round() raises:
     # The wind-up of the first cut swings the sword arm far.
     _play(scene, light_one_clip(bones, rig), 0.12)
     assert_true(_turn(scene.node(sword).quaternion, ready_sword) > 0.1)
-    # Halfway through its spin, the tempest faces the hips about.
-    _play(scene, tempest_clip(bones, rig), 0)
+    # Halfway through its spin, the whirlwind faces the hips about.
+    _play(scene, whirlwind_clip(bones, rig), 0)
     var start = scene.node(hips).quaternion
-    _play(scene, tempest_clip(bones, rig), 0.42)
+    _play(scene, whirlwind_clip(bones, rig), 0.42)
     assert_true(_turn(scene.node(hips).quaternion, start) > 0.5)
     # It ends facing forward again.
-    _play(scene, tempest_clip(bones, rig), 1.06)
+    _play(scene, whirlwind_clip(bones, rig), 1.06)
     assert_true(_turn(scene.node(hips).quaternion, start) < 0.01)
 
 
-def test_the_tempest_winds_back_and_turns_round() raises:
-    assert_almost_equal(tempest_twist(0), 0, atol=1e-5)
+def test_the_whirlwind_winds_back_and_turns_round() raises:
+    assert_almost_equal(whirlwind_twist(0), 0, atol=1e-5)
     # Wound back as the spin begins, and a whole turn round at its end.
-    assert_almost_equal(tempest_twist(0.17), 40, atol=0.5)
-    assert_almost_equal(tempest_twist(1), -360, atol=1e-3)
+    assert_almost_equal(whirlwind_twist(0.17), 40, atol=0.5)
+    assert_almost_equal(whirlwind_twist(1), -360, atol=1e-3)
 
 
-def test_the_mystic_arte_turns_round_twice() raises:
+def test_the_ultimate_turns_round_twice() raises:
     # Still while the sword rises, then two whole turns, and still again.
-    assert_almost_equal(mystic_twist(0), 0, atol=1e-5)
-    assert_almost_equal(mystic_twist(0.2), 0, atol=1e-5)
-    assert_almost_equal(mystic_twist(1000.0 / 2100), -360, atol=1e-2)
-    assert_almost_equal(mystic_twist(0.8), -720, atol=1e-3)
-    assert_almost_equal(mystic_twist(1), -720, atol=1e-3)
+    assert_almost_equal(ultimate_twist(0), 0, atol=1e-5)
+    assert_almost_equal(ultimate_twist(0.2), 0, atol=1e-5)
+    assert_almost_equal(ultimate_twist(1000.0 / 2100), -360, atol=1e-2)
+    assert_almost_equal(ultimate_twist(0.8), -720, atol=1e-3)
+    assert_almost_equal(ultimate_twist(1), -720, atol=1e-3)
 
 
 def test_a_fall_ends_on_the_ground() raises:

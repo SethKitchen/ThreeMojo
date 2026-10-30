@@ -17,7 +17,7 @@ from extensions.village.battle_hud import (
     tint_edges,
 )
 from extensions.village.combat import (
-    BURST,
+    PIERCE,
     Blow,
     HEAVY,
     LIGHT_ONE,
@@ -25,7 +25,7 @@ from extensions.village.combat import (
     LOW_STANCE,
     MID_STANCE,
     FREE,
-    MYSTIC_ARTE,
+    ULTIMATE,
     PLUNGE,
     STAGGER,
 )
@@ -99,10 +99,10 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     b.fighter.combo = 5
     b.fighter.health = 50
     b.foes[0].brain.state = CIRCLING
-    b.dummies[0].fighter.ki = 10
+    b.dummies[0].fighter.stamina = 10
     b.lock = 0
     b.popups.append(Popup(Vector3(0, 2, -3), "30", WHITE_TEXT, 0.1))
-    # And a demon fang's wave.
+    # And a ground wave's wave.
     b.waves.append(
         Wave(
             Vector3(0, 0, -3),
@@ -131,7 +131,7 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     arena.battle.foes[0].brain.state = POSTED
     arena.battle.foes[0].fighter.health = 200
     arena.battle.foes[0].fighter.move = STAGGER
-    # Over Limit, the limit gauge says so.
+    # In a surge, the limit gauge says so.
     arena.battle.fighter.over = 5
     var broken = _frame()
     draw_battle(broken, arena.battle, arena.scene, camera, look)
@@ -147,8 +147,8 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     var struck = _frame()
     draw_battle(struck, arena.battle, arena.scene, camera, look)
     assert_true(_changed(warned) > _changed(struck))
-    # A burst's wind-up glows red at the chest, and the glow grows.
-    arena.battle.foes[0].fighter.move = BURST
+    # A piercing attack's wind-up glows red at the chest, and the glow grows.
+    arena.battle.foes[0].fighter.move = PIERCE
     arena.battle.foes[0].fighter.clock = 0.1
     var glowing = _frame()
     draw_battle(glowing, arena.battle, arena.scene, camera, look)
@@ -176,10 +176,10 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     assert_equal(_changed(close), _changed(plain))
     assert_true(on_screen(under, up, chest + Vector3(0, 0.9, 0), 320, 180))
     # Behind the camera, a bandit, a dummy and the lock's mark are not
-    # drawn; nor is a fallen bandit, nor a gauge of no arte points.
+    # drawn; nor is a fallen bandit, nor a gauge of no special points.
     arena.battle.foes[0].character.position = Vector3(0, 0, 9)
     arena.battle.dummies[0].dummy.post.z = 9
-    arena.battle.fighter.parameters.arte_points = 0
+    arena.battle.fighter.parameters.special_points = 0
     var behind = _frame()
     draw_battle(behind, arena.battle, arena.scene, camera, look)
     arena.battle.foes[0].down = 0
@@ -187,9 +187,9 @@ def test_the_fight_writes_its_gauges_bars_mark_and_numbers() raises:
     var fallen = _frame()
     draw_battle(fallen, arena.battle, arena.scene, camera, look)
     assert_true(_changed(fallen) <= _changed(behind))
-    # A mystic arte's start-up writes its name large, and a gold star grows
+    # An ultimate's start-up writes its name large, and a gold star grows
     # at the sword hand. After the start-up, neither shows.
-    arena.battle.fighter.move = MYSTIC_ARTE
+    arena.battle.fighter.move = ULTIMATE
     arena.battle.fighter.clock = 0.3
     arena.scene.update()
     var rising = _frame()
@@ -230,7 +230,7 @@ def test_the_companion_shows_her_bolts_and_her_gauge() raises:
     arena.scene.update()
     var plain = _frame()
     draw_battle(plain, arena.battle, arena.scene, camera, look)
-    # A bolt before the camera shows as a star, and a boost attack's too.
+    # A bolt before the camera shows as a star, and a assist attack's too.
     var blow = Blow(
         28,
         10,
@@ -242,7 +242,7 @@ def test_the_companion_shows_her_bolts_and_her_gauge() raises:
     var lit = _frame()
     draw_battle(lit, arena.battle, arena.scene, camera, look)
     assert_true(_changed(lit) > _changed(plain))
-    arena.battle.bolts[0].boosted = True
+    arena.battle.bolts[0].assisted = True
     var gold = _frame()
     draw_battle(gold, arena.battle, arena.scene, camera, look)
     assert_true(_changed(gold) > _changed(plain))
@@ -257,7 +257,7 @@ def test_the_companion_shows_her_bolts_and_her_gauge() raises:
     var behind = _frame()
     draw_battle(behind, arena.battle, arena.scene, camera, look)
     assert_equal(_changed(behind), _changed(plain))
-    # A full boost gauge says so.
+    # A full assist gauge says so.
     arena.battle.allies[0].mind.charge(1000)
     var ready = _frame()
     draw_battle(ready, arena.battle, arena.scene, camera, look)
@@ -276,12 +276,12 @@ def test_the_edges_tint_and_a_ki_pulse_rings() raises:
     var slowed = _frame()
     draw_battle(slowed, arena.battle, arena.scene, camera, look)
     assert_true(Int(slowed.pixels[2]) > Int(slowed.pixels[0]) + 20)
-    # A mystic arte tints them gold.
-    arena.battle.fighter.move = MYSTIC_ARTE
+    # An ultimate tints them gold.
+    arena.battle.fighter.move = ULTIMATE
     arena.battle.fighter.clock = 0.7
-    var mystic = _frame()
-    draw_battle(mystic, arena.battle, arena.scene, camera, look)
-    assert_true(Int(mystic.pixels[0]) > Int(mystic.pixels[2]) + 20)
+    var ultimate = _frame()
+    draw_battle(ultimate, arena.battle, arena.scene, camera, look)
+    assert_true(Int(ultimate.pixels[0]) > Int(ultimate.pixels[2]) + 20)
     arena.battle.fighter.move = FREE
     arena.battle.slow = 0
     # Low health tints them red; a fallen player's do not.
@@ -294,7 +294,7 @@ def test_the_edges_tint_and_a_ki_pulse_rings() raises:
     draw_battle(fallen, arena.battle, arena.scene, camera, look)
     assert_equal(Int(fallen.pixels[0]), 0)
     arena.battle.fighter.health = 500
-    # A ki pulse rings the player's feet, and the ring fades.
+    # A stamina recovery rings the player's feet, and the ring fades.
     arena.battle.pulsed = 0.1
     var pulse = _frame()
     draw_battle(pulse, arena.battle, arena.scene, camera, look)

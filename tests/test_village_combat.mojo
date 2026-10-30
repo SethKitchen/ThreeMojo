@@ -3,16 +3,16 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Swordplay: the moves, the stances, ki, the arte gauge, guards, dodges
+"""Swordplay: the moves, the stances, stamina, the special gauge, guards, dodges
 and what each blow does."""
 
 from extensions.village.combat import (
-    ARTE_PER_HIT,
+    SPECIAL_PER_HIT,
     BITE,
-    BURST,
-    BURST_COUNTER,
+    PIERCE,
+    PIERCE_BREAK,
     CAST,
-    DEMON_FANG,
+    GROUND_WAVE,
     FINISHED,
     FINISH_SHARE,
     LIMIT,
@@ -44,16 +44,16 @@ from extensions.village.combat import (
     HIGH_STANCE,
     HIT,
     IGNORED,
-    KI_BREAK,
+    STAMINA_BREAK,
     LIGHT_ONE,
     LIGHT_THREE,
     LIGHT_TWO,
     LOW_STANCE,
     MID_STANCE,
-    MYSTIC_ARTE,
+    ULTIMATE,
     StrikeOutcome,
     PARRIED,
-    PERFECT_ARTE,
+    PERFECT_SPECIAL,
     PERFECT_DODGE,
     PLUNGE,
     PULSE_LATE,
@@ -61,12 +61,12 @@ from extensions.village.combat import (
     RISING_EDGE,
     STAGGER,
     Struck,
-    TEMPEST,
+    WHIRLWIND,
     THROW,
     Blow,
     combo_bonus,
     faces,
-    is_arte,
+    is_special,
     is_attack,
     landed_blow,
     move_data,
@@ -121,11 +121,11 @@ def _step(mut fighter: Fighter, seconds: Float32) raises:
     fighter.update(Duration(seconds, SECOND))
 
 
-def _blow(damage: Float32, ki: Float32) -> Blow:
+def _blow(damage: Float32, stamina: Float32) -> Blow:
     """Return a blow that pushes and throws nothing."""
     return Blow(
         damage,
-        ki,
+        stamina,
         Velocity(0.0, METER_PER_SECOND),
         Velocity(0.0, METER_PER_SECOND),
     )
@@ -152,9 +152,9 @@ def test_moves_and_outcomes_have_names_for_the_display() raises:
     assert_equal(move_name(RISING_EDGE), "RISING EDGE")
     assert_equal(move_name(FALL), "FALL")
     assert_equal(move_name(BITE), "BITE")
-    assert_equal(move_name(DEMON_FANG), "DEMON FANG")
-    assert_equal(move_name(BURST), "BURST")
-    assert_equal(move_name(MYSTIC_ARTE), "MYSTIC ARTE")
+    assert_equal(move_name(GROUND_WAVE), "GROUND WAVE")
+    assert_equal(move_name(PIERCE), "PIERCE")
+    assert_equal(move_name(ULTIMATE), "ULTIMATE")
     assert_equal(move_name(CAST), "CAST")
     assert_equal(move_name(PLUNGE), "PLUNGE")
     assert_equal(move_name(THROW), "THROW")
@@ -163,34 +163,34 @@ def test_moves_and_outcomes_have_names_for_the_display() raises:
     assert_equal(outcome_word(PERFECT_DODGE), "PERFECT DODGE")
     assert_equal(outcome_word(PARRIED), "PARRY")
     assert_equal(outcome_word(GUARD_BREAK), "GUARD BREAK")
-    assert_equal(outcome_word(KI_BREAK), "BREAK")
+    assert_equal(outcome_word(STAMINA_BREAK), "BREAK")
     assert_equal(outcome_word(HIT), "")
     assert_equal(outcome_word(FINISHED), "FINISHER")
-    assert_equal(outcome_word(BURST_COUNTER), "BURST COUNTER")
+    assert_equal(outcome_word(PIERCE_BREAK), "PIERCE BREAK")
     with assert_raises(contains="twelve"):
         _ = outcome_word(StrikeOutcome(-1))
 
 
-def test_moves_are_sorted_into_attacks_artes_and_styles() raises:
+def test_moves_are_sorted_into_attacks_specials_and_styles() raises:
     assert_false(is_attack(FREE))
     assert_true(is_attack(LIGHT_ONE))
-    assert_true(is_attack(TEMPEST))
+    assert_true(is_attack(WHIRLWIND))
     assert_true(is_attack(BITE))
-    assert_true(is_attack(BURST))
+    assert_true(is_attack(PIERCE))
     assert_true(is_attack(CAST))
     assert_true(is_attack(PLUNGE))
     assert_true(is_attack(THROW))
-    assert_false(is_arte(PLUNGE))
+    assert_false(is_special(PLUNGE))
     assert_false(styled(PLUNGE))
     assert_false(is_attack(DODGE))
-    assert_true(is_arte(RISING_EDGE))
-    assert_true(is_arte(TEMPEST))
-    assert_true(is_arte(DEMON_FANG))
-    assert_false(is_arte(LIGHT_ONE))
-    assert_false(is_arte(BITE))
-    assert_false(is_arte(BURST))
-    assert_true(is_arte(MYSTIC_ARTE))
-    assert_false(styled(BURST))
+    assert_true(is_special(RISING_EDGE))
+    assert_true(is_special(WHIRLWIND))
+    assert_true(is_special(GROUND_WAVE))
+    assert_false(is_special(LIGHT_ONE))
+    assert_false(is_special(BITE))
+    assert_false(is_special(PIERCE))
+    assert_true(is_special(ULTIMATE))
+    assert_false(styled(PIERCE))
     assert_false(styled(FREE))
     assert_true(styled(LIGHT_ONE))
     assert_true(styled(HEAVY))
@@ -198,7 +198,7 @@ def test_moves_are_sorted_into_attacks_artes_and_styles() raises:
     assert_false(landed_blow(PARRIED))
     assert_true(landed_blow(HIT))
     assert_true(landed_blow(DEFEATED))
-    assert_true(landed_blow(BURST_COUNTER))
+    assert_true(landed_blow(PIERCE_BREAK))
     assert_true(next_light(FREE) == LIGHT_ONE)
     assert_true(next_light(LIGHT_ONE) == LIGHT_TWO)
     assert_true(next_light(LIGHT_TWO) == LIGHT_THREE)
@@ -213,17 +213,17 @@ def test_each_move_has_its_times_and_its_strength() raises:
     assert_almost_equal(light.damage, 30, atol=1e-6)
     assert_equal(light.hits, 1)
     assert_almost_equal(move_data(LIGHT_TWO).damage, 33, atol=1e-6)
-    assert_almost_equal(move_data(LIGHT_THREE).ki_cost, 12, atol=1e-6)
-    assert_almost_equal(move_data(HEAVY).ki_damage, 30, atol=1e-6)
+    assert_almost_equal(move_data(LIGHT_THREE).stamina_cost, 12, atol=1e-6)
+    assert_almost_equal(move_data(HEAVY).stamina_damage, 30, atol=1e-6)
     var rising = move_data(RISING_EDGE)
-    assert_almost_equal(rising.arte_cost, 2, atol=1e-6)
+    assert_almost_equal(rising.special_cost, 2, atol=1e-6)
     assert_almost_equal(rising.launch.to(METER_PER_SECOND), 6.5, atol=1e-6)
-    var tempest = move_data(TEMPEST)
-    assert_equal(tempest.hits, 4)
-    assert_almost_equal(tempest.arc.to(DEGREE), 360, atol=1e-4)
+    var whirlwind = move_data(WHIRLWIND)
+    assert_equal(whirlwind.hits, 4)
+    assert_almost_equal(whirlwind.arc.to(DEGREE), 360, atol=1e-4)
     var dodge = move_data(DODGE)
     assert_almost_equal(dodge.lunge.to(METER), 3.2, atol=1e-6)
-    assert_almost_equal(dodge.ki_cost, 14, atol=1e-6)
+    assert_almost_equal(dodge.stamina_cost, 14, atol=1e-6)
     assert_equal(dodge.hits, 0)
     assert_almost_equal(move_data(FLINCH).recovery.to(SECOND), 0.4, atol=1e-6)
     assert_almost_equal(move_data(STAGGER).recovery.to(SECOND), 1.6, atol=1e-6)
@@ -231,23 +231,23 @@ def test_each_move_has_its_times_and_its_strength() raises:
     assert_almost_equal(move_data(FREE).recovery.to(SECOND), 0, atol=1e-6)
     var bite = move_data(BITE)
     assert_almost_equal(bite.lunge.to(METER), 2.4, atol=1e-6)
-    assert_almost_equal(bite.ki_cost, 0, atol=1e-6)
-    var fang = move_data(DEMON_FANG)
-    assert_equal(fang.hits, 0)
-    assert_almost_equal(fang.arte_cost, 1, atol=1e-6)
-    var burst = move_data(BURST)
-    assert_almost_equal(burst.startup.to(SECOND), 0.7, atol=1e-6)
-    assert_almost_equal(burst.damage, 120, atol=1e-6)
-    assert_almost_equal(burst.ki_cost, 20, atol=1e-6)
-    var mystic = move_data(MYSTIC_ARTE)
-    assert_equal(mystic.hits, 6)
-    assert_almost_equal(mystic.reach.to(METER), 4.5, atol=1e-6)
+    assert_almost_equal(bite.stamina_cost, 0, atol=1e-6)
+    var ground_wave = move_data(GROUND_WAVE)
+    assert_equal(ground_wave.hits, 0)
+    assert_almost_equal(ground_wave.special_cost, 1, atol=1e-6)
+    var pierce = move_data(PIERCE)
+    assert_almost_equal(pierce.startup.to(SECOND), 0.7, atol=1e-6)
+    assert_almost_equal(pierce.damage, 120, atol=1e-6)
+    assert_almost_equal(pierce.stamina_cost, 20, atol=1e-6)
+    var ultimate = move_data(ULTIMATE)
+    assert_equal(ultimate.hits, 6)
+    assert_almost_equal(ultimate.reach.to(METER), 4.5, atol=1e-6)
     var cast = move_data(CAST)
     assert_equal(cast.hits, 0)
     assert_almost_equal(cast.damage, 28, atol=1e-6)
     var plunge = move_data(PLUNGE)
     assert_almost_equal(plunge.arc.to(DEGREE), 360, atol=1e-4)
-    assert_almost_equal(plunge.ki_cost, 18, atol=1e-6)
+    assert_almost_equal(plunge.stamina_cost, 18, atol=1e-6)
     var throw = move_data(THROW)
     assert_equal(throw.hits, 0)
     assert_almost_equal(throw.damage, 40, atol=1e-6)
@@ -318,11 +318,11 @@ def test_a_fighter_refuses_parameters_that_cannot_fight() raises:
     with assert_raises(contains="above zero"):
         p.check()
     p = FighterParameters()
-    p.ki_rate = Frequency(-1.0, PER_SECOND)
+    p.stamina_rate = Frequency(-1.0, PER_SECOND)
     with assert_raises(contains="rates"):
         p.check()
     p = FighterParameters()
-    p.ki_delay = Duration(-1.0, SECOND)
+    p.stamina_delay = Duration(-1.0, SECOND)
     with assert_raises(contains="delay"):
         p.check()
     p = FighterParameters()
@@ -335,13 +335,13 @@ def test_a_fighter_refuses_parameters_that_cannot_fight() raises:
         p.check()
 
 
-def test_three_light_attacks_chain_and_spend_ki() raises:
+def test_three_light_attacks_chain_and_spend_stamina() raises:
     var f = _fighter()
     assert_true(f.free())
     assert_true(f.press_light())
     assert_true(f.move == LIGHT_ONE)
     assert_false(f.free())
-    assert_almost_equal(f.ki, 91, atol=1e-4)
+    assert_almost_equal(f.stamina, 91, atol=1e-4)
     assert_almost_equal(f.length(), 0.5, atol=1e-5)
     assert_almost_equal(f.active_end(), 0.24, atol=1e-5)
     assert_almost_equal(f.chain_point(), 0.318, atol=1e-5)
@@ -352,7 +352,7 @@ def test_three_light_attacks_chain_and_spend_ki() raises:
     assert_true(f.move == LIGHT_ONE)
     _step(f, 0.02)
     assert_true(f.move == LIGHT_TWO)
-    assert_almost_equal(f.ki, 82, atol=1e-4)
+    assert_almost_equal(f.stamina, 82, atol=1e-4)
     _ = f.press_light()
     _run(f, 0.4)
     assert_true(f.move == LIGHT_THREE)
@@ -375,20 +375,20 @@ def test_a_stance_changes_the_pace_the_ki_and_the_blow() raises:
     assert_true(f.request(HEAVY))
     # A stance does not change during a move.
     assert_false(f.set_stance(LOW_STANCE))
-    assert_almost_equal(f.ki, 100 - 22 * 1.3, atol=1e-4)
+    assert_almost_equal(f.stamina, 100 - 22 * 1.3, atol=1e-4)
     assert_almost_equal(f.length(), 1.09 * 1.2, atol=1e-5)
-    assert_almost_equal(f.ki_price(DODGE), 14 * 1.3, atol=1e-4)
-    # An arte costs no ki in any stance, and the stance does not slow it.
-    assert_almost_equal(f.ki_price(RISING_EDGE), 0, atol=1e-6)
+    assert_almost_equal(f.stamina_price(DODGE), 14 * 1.3, atol=1e-4)
+    # A special costs no stamina in any stance, and the stance does not slow it.
+    assert_almost_equal(f.stamina_price(RISING_EDGE), 0, atol=1e-6)
     _run(f, 0.5)
     var blow = f.connect(0)
     assert_true(blow)
     assert_almost_equal(blow.value().damage, 90 * 1.3, atol=1e-3)
-    assert_almost_equal(blow.value().ki_damage, 30 * 1.3, atol=1e-3)
+    assert_almost_equal(blow.value().stamina_damage, 30 * 1.3, atol=1e-3)
     _run(f, 1.0)
     assert_true(f.free())
     assert_true(f.set_stance(LOW_STANCE))
-    _ = f.request(TEMPEST)
+    _ = f.request(WHIRLWIND)
     assert_almost_equal(f.pace, 1, atol=1e-6)
 
 
@@ -420,10 +420,10 @@ def test_a_swing_strikes_each_target_once_a_hit() raises:
     _step(f, 0.01)
     # The active part is over.
     assert_false(f.swing())
-    # A tempest strikes the same target four times, once each hit.
+    # A whirlwind strikes the same target four times, once each hit.
     var t = _fighter()
-    assert_true(t.request(TEMPEST))
-    assert_almost_equal(t.arte, 2, atol=1e-5)
+    assert_true(t.request(WHIRLWIND))
+    assert_almost_equal(t.special, 2, atol=1e-5)
     var hits = 0
     for _ in range(120):
         t.update(Duration(Float32(1) / 120, SECOND))
@@ -448,7 +448,7 @@ def test_a_blow_grows_with_might_combo_and_counter() raises:
     assert_almost_equal(
         blow.value().damage, 30 * 0.5 * (1 + 10 * COMBO_STEP), atol=1e-3
     )
-    assert_almost_equal(blow.value().ki_damage, 4, atol=1e-4)
+    assert_almost_equal(blow.value().stamina_damage, 4, atol=1e-4)
     var c = _fighter()
     c.counter = 1
     _ = c.press_light()
@@ -463,16 +463,18 @@ def test_a_blow_grows_with_might_combo_and_counter() raises:
 def test_a_dodge_evades_and_a_late_one_is_perfect() raises:
     var f = _fighter()
     assert_true(f.request(DODGE))
-    assert_almost_equal(f.ki, 86, atol=1e-4)
+    assert_almost_equal(f.stamina, 86, atol=1e-4)
     # Not yet safe at its very start.
     assert_false(f.invulnerable())
     _step(f, 0.05)
     assert_true(f.invulnerable())
-    var arte = f.arte
+    var special = f.special
     var struck = f.receive(_blow(30, 10), True)
     assert_true(struck.outcome == PERFECT_DODGE)
-    assert_almost_equal(f.ki, 100, atol=1e-4)
-    assert_almost_equal(f.arte, min(Float32(5), arte + PERFECT_ARTE), atol=1e-4)
+    assert_almost_equal(f.stamina, 100, atol=1e-4)
+    assert_almost_equal(
+        f.special, min(Float32(5), special + PERFECT_SPECIAL), atol=1e-4
+    )
     assert_almost_equal(f.counter, COUNTER_SECONDS, atol=1e-6)
     # A dodge is perfect only once.
     assert_true(f.receive(_blow(30, 10), True).outcome == EVADED)
@@ -508,7 +510,7 @@ def test_a_dodge_carries_the_fighter_and_cuts_an_attack_short() raises:
     _ = low.set_stance(LOW_STANCE)
     _ = low.request(DODGE)
     assert_almost_equal(low.drive().to(METER_PER_SECOND), 11.5, atol=1e-3)
-    assert_almost_equal(low.ki, 100 - 14 * 0.7, atol=1e-4)
+    assert_almost_equal(low.stamina, 100 - 14 * 0.7, atol=1e-4)
     # A light attack asked for in a recovery waits for the chain point.
     var g = _fighter()
     _ = g.press_light()
@@ -538,16 +540,16 @@ def test_a_guard_blocks_from_the_front_and_parries_when_fresh() raises:
     # A fresh guard parries.
     var parried = f.receive(_blow(30, 12), True)
     assert_true(parried.outcome == PARRIED)
-    assert_almost_equal(parried.ki, 12, atol=1e-6)
+    assert_almost_equal(parried.stamina, 12, atol=1e-6)
     # A parry opens a counter, as a perfect dodge does.
     assert_almost_equal(f.counter, COUNTER_SECONDS, atol=1e-6)
-    assert_almost_equal(f.ki, 100, atol=1e-6)
+    assert_almost_equal(f.stamina, 100, atol=1e-6)
     _step(f, 0.2)
     # Holding on does not raise it afresh.
     f.hold_guard(True)
     var blocked = f.receive(_blow(30, 12), True)
     assert_true(blocked.outcome == BLOCKED)
-    assert_almost_equal(f.ki, 100 - 12 * 0.75, atol=1e-4)
+    assert_almost_equal(f.stamina, 100 - 12 * 0.75, atol=1e-4)
     assert_almost_equal(f.health, 500, atol=1e-6)
     # From behind, the guard does not help.
     assert_true(f.receive(_blow(30, 12), False).outcome == HIT)
@@ -566,33 +568,33 @@ def test_a_guard_blocks_from_the_front_and_parries_when_fresh() raises:
     var blocker = Fighter(p)
     blocker.hold_guard(True)
     assert_true(blocker.receive(_blow(30, 12), True).outcome == BLOCKED)
-    # A guard whose ki runs out breaks.
+    # A guard whose stamina runs out breaks.
     var g = _fighter()
     g.hold_guard(True)
     _step(g, 0.2)
-    g.ki = 5
+    g.stamina = 5
     var broken = g.receive(_blow(30, 12), True)
     assert_true(broken.outcome == GUARD_BREAK)
     assert_true(g.move == STAGGER)
-    assert_almost_equal(g.ki, 0, atol=1e-6)
+    assert_almost_equal(g.stamina, 0, atol=1e-6)
 
 
 def test_a_parried_attacker_reels_or_staggers() raises:
     var f = _fighter()
     f.landed(Struck(PARRIED, 0, 12))
     assert_true(f.move == FLINCH)
-    assert_almost_equal(f.ki, 88, atol=1e-4)
+    assert_almost_equal(f.stamina, 88, atol=1e-4)
     var g = _fighter()
-    g.ki = 5
+    g.stamina = 5
     g.landed(Struck(PARRIED, 0, 12))
     assert_true(g.move == STAGGER)
-    assert_almost_equal(g.ki, 0, atol=1e-6)
-    # A blow that lands adds to the combo and fills the arte gauge.
+    assert_almost_equal(g.stamina, 0, atol=1e-6)
+    # A blow that lands adds to the combo and fills the special gauge.
     var h = _fighter()
-    h.arte = 1
+    h.special = 1
     h.landed(Struck(HIT, 30, 8))
     assert_equal(h.combo, 1)
-    assert_almost_equal(h.arte, 1 + ARTE_PER_HIT, atol=1e-6)
+    assert_almost_equal(h.special, 1 + SPECIAL_PER_HIT, atol=1e-6)
     h.landed(Struck(BLOCKED, 0, 8))
     assert_equal(h.combo, 1)
 
@@ -605,11 +607,11 @@ def test_blows_wound_break_ki_and_defeat() raises:
     assert_true(f.move == FLINCH)
     assert_equal(f.combo, 0)
     assert_almost_equal(f.health, 460, atol=1e-4)
-    assert_almost_equal(f.ki, 80, atol=1e-4)
-    # A blow that takes the last ki breaks it: the fighter staggers.
-    f.ki = 10
+    assert_almost_equal(f.stamina, 80, atol=1e-4)
+    # A blow that takes the last stamina breaks it: the fighter staggers.
+    f.stamina = 10
     var broke = f.receive(_blow(40, 20), False)
-    assert_true(broke.outcome == KI_BREAK)
+    assert_true(broke.outcome == STAMINA_BREAK)
     assert_true(f.move == STAGGER)
     # A blow on a staggered fighter is critical.
     var crit = f.receive(_blow(40, 20), False)
@@ -630,7 +632,7 @@ def test_blows_wound_break_ki_and_defeat() raises:
     assert_almost_equal(f.health, 500, atol=1e-6)
 
 
-def test_heavy_attacks_and_tempests_have_armor() raises:
+def test_heavy_attacks_and_whirlwinds_have_armor() raises:
     var f = _fighter()
     _ = f.request(HEAVY)
     assert_true(f.armored())
@@ -639,13 +641,13 @@ def test_heavy_attacks_and_tempests_have_armor() raises:
     _run(f, 0.6)
     assert_false(f.armored())
     var t = _fighter()
-    _ = t.request(TEMPEST)
+    _ = t.request(WHIRLWIND)
     assert_true(t.armored())
-    # A plunge has armor, and its blow counters a burst.
+    # A plunge has armor, and its blow breaks a piercing attack.
     var p = _fighter()
     _ = p.request(PLUNGE)
     assert_true(p.armored())
-    assert_true(p.blow().breaks_burst)
+    assert_true(p.blow().breaks_pierce)
     assert_false(p.blow().finish)
     var l = _fighter()
     _ = l.press_light()
@@ -654,48 +656,48 @@ def test_heavy_attacks_and_tempests_have_armor() raises:
 
 def test_ki_comes_back_and_a_winded_fighter_staggers() raises:
     var f = _fighter()
-    f.ki = 50
+    f.stamina = 50
     f.rest = 0
     _step(f, 0.5)
-    assert_almost_equal(f.ki, 50, atol=1e-6)
+    assert_almost_equal(f.stamina, 50, atol=1e-6)
     _step(f, 0.5)
-    assert_almost_equal(f.ki, 66, atol=1e-4)
+    assert_almost_equal(f.stamina, 66, atol=1e-4)
     f.hold_guard(True)
     _step(f, 0.5)
-    assert_almost_equal(f.ki, 74, atol=1e-4)
+    assert_almost_equal(f.stamina, 74, atol=1e-4)
     _run(f, 5)
-    assert_almost_equal(f.ki, 100, atol=1e-6)
-    # Spending the last ki winds the fighter: it staggers after the move.
+    assert_almost_equal(f.stamina, 100, atol=1e-6)
+    # Spending the last stamina winds the fighter: it staggers after the move.
     f.hold_guard(False)
-    f.ki = 5
+    f.stamina = 5
     assert_true(f.press_light())
     assert_true(f.winded)
-    assert_almost_equal(f.ki, 0, atol=1e-6)
-    # With no ki, no costly move starts.
+    assert_almost_equal(f.stamina, 0, atol=1e-6)
+    # With no stamina, no costly move starts.
     _ = f.request(HEAVY)
     _run(f, 0.55)
     assert_true(f.move == STAGGER)
     assert_false(f.winded)
     var g = _fighter()
-    g.ki = 0
+    g.stamina = 0
     assert_false(g.press_light())
-    # An arte costs no ki, and starts.
+    # A special costs no stamina, and starts.
     assert_true(g.request(RISING_EDGE))
-    # Without the points, an arte does not start.
+    # Without the points, a special does not start.
     var h = _fighter()
-    h.arte = 1
-    assert_false(h.request(TEMPEST))
+    h.special = 1
+    assert_false(h.request(WHIRLWIND))
     assert_true(h.free())
 
 
-def test_a_ki_pulse_gets_back_the_swings_ki() raises:
+def test_a_ki_pulse_gets_back_the_swings_stamina() raises:
     var f = _fighter()
     assert_almost_equal(f.pulse(), 0, atol=1e-6)
     _ = f.request(HEAVY)
     _step(f, 0.6)
     assert_almost_equal(f.pulse_age, 0.06, atol=1e-5)
     assert_almost_equal(f.pulse(), 22, atol=1e-4)
-    assert_almost_equal(f.ki, 100, atol=1e-4)
+    assert_almost_equal(f.stamina, 100, atol=1e-4)
     # A pulse is made once.
     assert_almost_equal(f.pulse(), 0, atol=1e-6)
     # A late pulse gets back part of it.
@@ -712,7 +714,7 @@ def test_a_ki_pulse_gets_back_the_swings_ki() raises:
     assert_almost_equal(gone.pulse_age, -1, atol=1e-6)
     # A pulse catches a winded fighter's breath.
     var w = _fighter()
-    w.ki = 5
+    w.stamina = 5
     _ = w.press_light()
     assert_true(w.winded)
     _step(w, 0.25)
@@ -720,7 +722,7 @@ def test_a_ki_pulse_gets_back_the_swings_ki() raises:
     assert_false(w.winded)
     _run(w, 0.4)
     assert_true(w.free())
-    # An arte spends no ki, so its pulse gets none back and leaves the
+    # A special spends no stamina, so its pulse gets none back and leaves the
     # breath as it was.
     var a = _fighter()
     _ = a.request(RISING_EDGE)
@@ -739,11 +741,11 @@ def test_a_frame_moves_the_clocks_on() raises:
     f.combo = 3
     f.combo_age = 0
     f.counter = 1
-    f.arte = 0
+    f.special = 0
     _step(f, 1)
     assert_equal(f.combo, 3)
     assert_almost_equal(f.counter, 0, atol=1e-6)
-    assert_almost_equal(f.arte, 0.5, atol=1e-5)
+    assert_almost_equal(f.special, 0.5, atol=1e-5)
     _step(f, COMBO_KEEP)
     assert_equal(f.combo, 0)
     # A dodge's clock runs, and it makes no pulse.
@@ -759,7 +761,7 @@ def test_over_limit_fills_and_unleashes() raises:
     # Each landed blow, break, parry and perfect dodge fills the gauge.
     f.landed(Struck(HIT, 30, 8))
     assert_almost_equal(f.limit, LIMIT_PER_HIT, atol=1e-6)
-    f.landed(Struck(KI_BREAK, 30, 8))
+    f.landed(Struck(STAMINA_BREAK, 30, 8))
     assert_almost_equal(f.limit, 2 * LIMIT_PER_HIT + LIMIT_PER_BREAK, atol=1e-5)
     f.landed(Struck(GUARD_BREAK, 0, 8))
     assert_almost_equal(
@@ -778,23 +780,23 @@ def test_over_limit_fills_and_unleashes() raises:
     _step(dodger, 0.05)
     _ = dodger.receive(_blow(30, 8), True)
     assert_almost_equal(dodger.limit, LIMIT_PER_PERFECT, atol=1e-5)
-    # Full, the fighter goes Over Limit: a full arte gauge, armor, free
-    # artes and stronger blows.
-    f.arte = 0
+    # Full, the fighter surges: a full special gauge, armor, free
+    # specials and stronger blows.
+    f.special = 0
     f.charge(LIMIT)
     assert_almost_equal(f.limit, 0, atol=1e-6)
     assert_almost_equal(f.over, OVER_SECONDS, atol=1e-6)
-    assert_almost_equal(f.arte, 5, atol=1e-6)
+    assert_almost_equal(f.special, 5, atol=1e-6)
     assert_true(f.armored())
     # Nothing fills it while it lasts.
     f.charge(50)
     assert_almost_equal(f.limit, 0, atol=1e-6)
-    f.arte = 0
+    f.special = 0
     f.combo = 0
     # The parry above opened a counter; this is not one.
     f.counter = 0
-    assert_true(f.request(TEMPEST))
-    assert_almost_equal(f.arte, 0, atol=1e-6)
+    assert_true(f.request(WHIRLWIND))
+    assert_almost_equal(f.special, 0, atol=1e-6)
     _step(f, 0.25)
     assert_almost_equal(f.connect(0).value().damage, 27 * OVER_BONUS, atol=1e-3)
     _run(f, 1)
@@ -857,11 +859,11 @@ def test_a_heavy_blow_finishes_a_staggered_weakened_fighter() raises:
     assert_false(light.connect(0).value().finish)
 
 
-def test_a_demon_fang_launches_its_blow_and_strikes_nothing_itself() raises:
+def test_a_ground_wave_launches_its_blow_and_strikes_nothing_itself() raises:
     var f = _fighter()
     assert_false(f.launched())
-    assert_true(f.request(DEMON_FANG))
-    assert_almost_equal(f.arte, 4, atol=1e-5)
+    assert_true(f.request(GROUND_WAVE))
+    assert_almost_equal(f.special, 4, atol=1e-5)
     _step(f, 0.1)
     assert_false(f.launched())
     _step(f, 0.15)
@@ -871,23 +873,23 @@ def test_a_demon_fang_launches_its_blow_and_strikes_nothing_itself() raises:
     assert_false(f.connect(0))
     var blow = f.blow()
     assert_almost_equal(blow.damage, 45, atol=1e-4)
-    assert_almost_equal(blow.ki_damage, 10, atol=1e-4)
+    assert_almost_equal(blow.stamina_damage, 10, atol=1e-4)
     assert_false(blow.finish)
     _step(f, 0.05)
     assert_false(f.launched())
 
 
-def test_a_burst_goes_through_a_guard_and_a_heavy_blow_counters_it() raises:
-    var burster = _fighter()
-    assert_false(burster.bursting())
-    assert_true(burster.request(BURST))
-    assert_true(burster.bursting())
-    assert_true(burster.armored())
-    _step(burster, 0.75)
-    assert_false(burster.bursting())
-    var thrust = burster.connect(0).value()
+def test_a_pierce_goes_through_a_guard_and_a_heavy_blow_counters_it() raises:
+    var piercer = _fighter()
+    assert_false(piercer.piercing())
+    assert_true(piercer.request(PIERCE))
+    assert_true(piercer.piercing())
+    assert_true(piercer.armored())
+    _step(piercer, 0.75)
+    assert_false(piercer.piercing())
+    var thrust = piercer.connect(0).value()
     assert_true(thrust.unblockable)
-    assert_false(thrust.breaks_burst)
+    assert_false(thrust.breaks_pierce)
     # Not even a fresh guard stops it.
     var guard = _fighter()
     guard.hold_guard(True)
@@ -895,47 +897,47 @@ def test_a_burst_goes_through_a_guard_and_a_heavy_blow_counters_it() raises:
     assert_almost_equal(guard.health, 380, atol=1e-3)
     # A light blow in its wind-up does not stop it.
     var b = _fighter()
-    _ = b.request(BURST)
+    _ = b.request(PIERCE)
     _step(b, 0.2)
     assert_true(b.receive(_blow(30, 8), True).outcome == HIT)
-    assert_true(b.move == BURST)
-    assert_almost_equal(b.ki, 72, atol=1e-4)
-    # A heavy attack's blow in the wind-up counters it: all its ki goes,
+    assert_true(b.move == PIERCE)
+    assert_almost_equal(b.stamina, 72, atol=1e-4)
+    # A heavy attack's blow in the wind-up counters it: all its stamina goes,
     # and it staggers.
     var heavy = _fighter()
     _ = heavy.request(HEAVY)
     _step(heavy, 0.45)
     var cut = heavy.connect(0).value()
-    assert_true(cut.breaks_burst)
+    assert_true(cut.breaks_pierce)
     assert_false(cut.unblockable)
     var countered = b.receive(cut, True)
-    assert_true(countered.outcome == BURST_COUNTER)
+    assert_true(countered.outcome == PIERCE_BREAK)
     assert_almost_equal(countered.damage, 90, atol=1e-3)
-    assert_almost_equal(countered.ki, 72, atol=1e-4)
+    assert_almost_equal(countered.stamina, 72, atol=1e-4)
     assert_true(b.move == STAGGER)
-    assert_almost_equal(b.ki, 0, atol=1e-6)
+    assert_almost_equal(b.stamina, 0, atol=1e-6)
     # The counter fills the counterer's limit gauge as a break does.
     heavy.landed(countered)
     assert_almost_equal(heavy.limit, LIMIT_PER_HIT + LIMIT_PER_BREAK, atol=1e-4)
     # After the wind-up, the same blow only hits, and the armor holds.
     var late = _fighter()
-    _ = late.request(BURST)
+    _ = late.request(PIERCE)
     _step(late, 0.75)
     assert_true(late.receive(cut, True).outcome == HIT)
-    assert_true(late.move == BURST)
-    # An arte's blow counters too.
-    var arte = _fighter()
-    _ = arte.request(DEMON_FANG)
-    assert_true(arte.blow().breaks_burst)
+    assert_true(late.move == PIERCE)
+    # A special's blow counters too.
+    var special = _fighter()
+    _ = special.request(GROUND_WAVE)
+    assert_true(special.blow().breaks_pierce)
 
 
-def test_a_mystic_arte_spends_over_limit_and_strikes_all_round() raises:
+def test_a_ultimate_spends_over_limit_and_strikes_all_round() raises:
     var f = _fighter()
-    # Only a fighter Over Limit can make it.
-    assert_false(f.request(MYSTIC_ARTE))
+    # Only a surging fighter can make it.
+    assert_false(f.request(ULTIMATE))
     assert_true(f.free())
     f.over = 5
-    assert_true(f.request(MYSTIC_ARTE))
+    assert_true(f.request(ULTIMATE))
     assert_almost_equal(f.over, 0, atol=1e-6)
     # No blow hits it, and none is a perfect dodge.
     assert_true(f.invulnerable())
@@ -946,7 +948,7 @@ def test_a_mystic_arte_spends_over_limit_and_strikes_all_round() raises:
     var hits = 0
     for _ in range(260):
         f.update(Duration(Float32(1) / 120, SECOND))
-        if f.move == MYSTIC_ARTE and f.swing():
+        if f.move == ULTIMATE and f.swing():
             assert_almost_equal(
                 f.swing().value().arc.to(DEGREE), 360, atol=1e-3
             )

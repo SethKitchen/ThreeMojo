@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Sword clips for a game humanoid: a ready stance, cuts, artes, a dodge,
+"""Sword clips for a game humanoid: a ready stance, cuts, specials, a dodge,
 a guard, and the reels and the fall of a fighter who is hit.
 
 The sword is in the hand on minus x: `LEFT_HAND` by the rig's names. The
@@ -26,13 +26,13 @@ side and the other side:
 | `light_three_clip` | 0.77 | A step and a cut down from over the head |
 | `heavy_clip` | 1.09 | A long wind-up high on the right, and a lunge that cuts down to the left |
 | `rising_edge_clip` | 0.81 | A crouch with the sword low on the left, and a cut up that rises onto the toes |
-| `tempest_clip` | 1.06 | The sword arm out, and a whole turn of the body |
-| `fang_clip` | 0.65 | A crouch with the sword low behind, and a cut along the ground and up |
-| `mystic_clip` | 2.1 | The sword raised to the sky, two whole turns of the body with the sword arm out, and a cut down |
+| `whirlwind_clip` | 1.06 | The sword arm out, and a whole turn of the body |
+| `ground_wave_clip` | 0.65 | A crouch with the sword low behind, and a cut along the ground and up |
+| `ultimate_clip` | 2.1 | The sword raised to the sky, two whole turns of the body with the sword arm out, and a cut down |
 | `cast_clip` | 0.8 | The sword raised, and pointed at the foe with the free hand beside it |
 | `plunge_clip` | 0.75 | The sword raised over the head, and a cut down to the ground in a deep crouch |
 | `throw_clip` | 1.0 | The free arm drawn back over the shoulder, and flung forward to throw a knife |
-| `burst_clip` | 1.44 | A long coil with the sword drawn back at the hip, and a lunge that thrusts it straight ahead |
+| `pierce_clip` | 1.44 | A long coil with the sword drawn back at the hip, and a lunge that thrusts it straight ahead |
 | `dodge_clip` | 0.48 | A low, quick crouch with the sword held in |
 | `guard_clip` | 1.0, loops | The blade upright before the face, the knees bent |
 | `flinch_clip` | 0.4 | The head and the chest thrown back |
@@ -74,18 +74,18 @@ from std.math import sin, pi
 
 comptime SAMPLES = 30
 """How many poses a clip samples a second."""
-comptime TEMPEST_SECONDS = Float32(1.06)
-"""How long the tempest's clip lasts, in seconds."""
-comptime TEMPEST_BEGIN = Float32(0.18)
-"""When the tempest's spin begins, in seconds."""
-comptime TEMPEST_END = Float32(0.66)
-"""When the tempest's spin ends, in seconds."""
-comptime MYSTIC_SECONDS = Float32(2.1)
-"""How long the mystic arte lasts, in seconds."""
-comptime MYSTIC_BEGIN = Float32(0.5)
-"""When the mystic arte's spins begin, in seconds."""
-comptime MYSTIC_END = Float32(1.5)
-"""When the mystic arte's spins end, in seconds."""
+comptime WHIRLWIND_SECONDS = Float32(1.06)
+"""How long the whirlwind's clip lasts, in seconds."""
+comptime WHIRLWIND_BEGIN = Float32(0.18)
+"""When the whirlwind's spin begins, in seconds."""
+comptime WHIRLWIND_END = Float32(0.66)
+"""When the whirlwind's spin ends, in seconds."""
+comptime ULTIMATE_SECONDS = Float32(2.1)
+"""How long the ultimate lasts, in seconds."""
+comptime ULTIMATE_BEGIN = Float32(0.5)
+"""When the ultimate's spins begin, in seconds."""
+comptime ULTIMATE_END = Float32(1.5)
+"""When the ultimate's spins end, in seconds."""
 
 
 @fieldwise_init
@@ -497,27 +497,29 @@ def rising_edge_clip(
     return _cut("rising_edge", bones, rig, keys^, at^, 0.81)
 
 
-def tempest_twist(share: Float32) -> Float32:
-    """Return how far the tempest turns the hips about plus y, as its
+def whirlwind_twist(share: Float32) -> Float32:
+    """Return how far the whirlwind turns the hips about plus y, as its
     poses are written, before `mirrored` turns them the other way.
 
     Args:
         share: How far through the clip, from 0 to 1.
 
     Returns:
-        The twist, in degrees: 40 wound back by `TEMPEST_BEGIN`, then a
-        turn of 400 the other way by `TEMPEST_END`, ending a whole turn
+        The twist, in degrees: 40 wound back by `WHIRLWIND_BEGIN`, then a
+        turn of 400 the other way by `WHIRLWIND_END`, ending a whole turn
         round.
     """
-    var begin = TEMPEST_BEGIN / TEMPEST_SECONDS
-    var end = TEMPEST_END / TEMPEST_SECONDS
+    var begin = WHIRLWIND_BEGIN / WHIRLWIND_SECONDS
+    var end = WHIRLWIND_END / WHIRLWIND_SECONDS
     var wind = hermite_fade(clamp(share / begin, 0, 1))
     var spin = hermite_fade(clamp((share - begin) / (end - begin), 0, 1))
     return 40 * wind - 400 * spin
 
 
-def tempest_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
-    """Return the tempest: the sword arm out, and a whole turn of the body,
+def whirlwind_clip(
+    bones: List[NodeId], rig: HumanoidRig
+) raises -> AnimationClip:
+    """Return the whirlwind: the sword arm out, and a whole turn of the body,
     1.06 seconds.
 
     Args:
@@ -525,17 +527,17 @@ def tempest_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
         rig: The rig the bones were placed from.
 
     Returns:
-        The clip, named `"tempest"`.
+        The clip, named `"whirlwind"`.
 
     Raises:
         Error: If there is not one bone per joint.
     """
-    var seconds = TEMPEST_SECONDS
+    var seconds = WHIRLWIND_SECONDS
     var scale = _scale(rig)
     # The body winds and unwinds before and after the spin: see
-    # `tempest_twist`.
-    var begin = TEMPEST_BEGIN / seconds
-    var end = TEMPEST_END / seconds
+    # `whirlwind_twist`.
+    var begin = WHIRLWIND_BEGIN / seconds
+    var end = WHIRLWIND_END / seconds
     var poses = List[Pose]()
     var count = Int(seconds * SAMPLES) + 1
     for k in range(count):  # pragma: no branch
@@ -545,7 +547,7 @@ def tempest_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
         var share = hermite_fade(out) * (1 - hermite_fade(back))
         var pose = _ready(scale).blend(Pose(), share)
         _legs(pose, 0, 0, 0.55 * share, scale)
-        pose.turn(HIPS, 0, tempest_twist(t))
+        pose.turn(HIPS, 0, whirlwind_twist(t))
         pose.turn(SPINE, 8 * share)
         _arm(
             pose,
@@ -553,11 +555,13 @@ def tempest_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
         )
         pose.turn(LEFT_UPPER_ARM, 0, 0, -60 * share)
         poses.append(pose^)
-    return _clip("tempest", bones, rig, poses, seconds)
+    return _clip("whirlwind", bones, rig, poses, seconds)
 
 
-def fang_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
-    """Return the demon fang: a crouch with the sword low behind on its
+def ground_wave_clip(
+    bones: List[NodeId], rig: HumanoidRig
+) raises -> AnimationClip:
+    """Return the ground wave: a crouch with the sword low behind on its
     side, and a cut along the ground and up, 0.65 seconds.
 
     Args:
@@ -565,7 +569,7 @@ def fang_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
         rig: The rig the bones were placed from.
 
     Returns:
-        The clip, named `"fang"`.
+        The clip, named `"ground_wave"`.
 
     Raises:
         Error: If there is not one bone per joint.
@@ -589,27 +593,29 @@ def fang_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
     _free_hand(up, 20, -30, -30)
     var keys: List[Pose] = [low^, along^, up^]
     var at: List[Float32] = [0.28, 0.38, 0.48]
-    return _cut("fang", bones, rig, keys^, at^, 0.65)
+    return _cut("ground_wave", bones, rig, keys^, at^, 0.65)
 
 
-def mystic_twist(share: Float32) -> Float32:
-    """Return how far the mystic arte's spins turn the hips about plus y,
+def ultimate_twist(share: Float32) -> Float32:
+    """Return how far the ultimate's spins turn the hips about plus y,
     as its poses are written, before `mirrored` turns them the other way.
 
     Args:
         share: How far through the clip, from 0 to 1.
 
     Returns:
-        The twist, in degrees: none until `MYSTIC_BEGIN`, then two whole
-        turns by `MYSTIC_END`.
+        The twist, in degrees: none until `ULTIMATE_BEGIN`, then two whole
+        turns by `ULTIMATE_END`.
     """
-    var begin = MYSTIC_BEGIN / MYSTIC_SECONDS
-    var end = MYSTIC_END / MYSTIC_SECONDS
+    var begin = ULTIMATE_BEGIN / ULTIMATE_SECONDS
+    var end = ULTIMATE_END / ULTIMATE_SECONDS
     return -720 * hermite_fade(clamp((share - begin) / (end - begin), 0, 1))
 
 
-def mystic_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
-    """Return the mystic arte: the sword raised to the sky, two whole turns
+def ultimate_clip(
+    bones: List[NodeId], rig: HumanoidRig
+) raises -> AnimationClip:
+    """Return the ultimate: the sword raised to the sky, two whole turns
     of the body with the sword arm out, and a cut down, 2.1 seconds.
 
     Args:
@@ -617,12 +623,12 @@ def mystic_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
         rig: The rig the bones were placed from.
 
     Returns:
-        The clip, named `"mystic"`.
+        The clip, named `"ultimate"`.
 
     Raises:
         Error: If there is not one bone per joint.
     """
-    var seconds = MYSTIC_SECONDS
+    var seconds = ULTIMATE_SECONDS
     var scale = _scale(rig)
     var sky = Pose()
     _legs(sky, 5, 5, 0.3, scale)
@@ -662,9 +668,9 @@ def mystic_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
         var u = clamp((t - at[span]) / (at[span + 1] - at[span]), 0, 1)
         var pose = keys[span].blend(keys[span + 1], hermite_fade(u))
         var hips = pose.angles[HIPS.value]
-        pose.turn(HIPS, hips.x, hips.y + mystic_twist(t), hips.z)
+        pose.turn(HIPS, hips.x, hips.y + ultimate_twist(t), hips.z)
         poses.append(pose^)
-    return _clip("mystic", bones, rig, poses, seconds)
+    return _clip("ultimate", bones, rig, poses, seconds)
 
 
 def plunge_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
@@ -767,8 +773,8 @@ def cast_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
     return _cut("cast", bones, rig, keys^, at^, 0.8)
 
 
-def burst_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
-    """Return the burst attack: a long coil with the sword drawn back at
+def pierce_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
+    """Return the piercing attack: a long coil with the sword drawn back at
     the hip, point forward, and a lunge that thrusts it straight ahead,
     1.44 seconds.
 
@@ -777,7 +783,7 @@ def burst_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
         rig: The rig the bones were placed from.
 
     Returns:
-        The clip, named `"burst"`.
+        The clip, named `"pierce"`.
 
     Raises:
         Error: If there is not one bone per joint.
@@ -806,7 +812,7 @@ def burst_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
     var hold = thrust.copy()
     var keys: List[Pose] = [coil^, deeper^, thrust^, hold^]
     var at: List[Float32] = [0.18, 0.44, 0.56, 0.68]
-    return _cut("burst", bones, rig, keys^, at^, 1.44)
+    return _cut("pierce", bones, rig, keys^, at^, 1.44)
 
 
 def dodge_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:

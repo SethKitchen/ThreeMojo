@@ -4,7 +4,7 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """The player's companion in a fight: a swordswoman who keeps back, casts bolts of light at the player's foe,
-heals the player, and makes a boost attack when the player calls for it.
+heals the player, and makes a assist attack when the player calls for it.
 
 A `Companion` is her mind. `Companion.think` decides what she does, frame
 by frame, from an `AllySight`:
@@ -21,10 +21,10 @@ by frame, from an `AllySight`:
 3. **She heals.** When the player's health falls below `MEND_BELOW` of
    its most, she heals `MEND_SHARE` of it. Then she waits `MEND_EVERY`
    seconds before she heals again.
-4. **The boost gauge** fills by `BOOST_RATE` a second while the fight
-   lasts, and by `BOOST_PER_HIT` for each bolt that lands. When it is
-   full, the player can call for a boost attack: a bolt that no guard
-   stops, and that breaks a burst attack. See `boost_blow`.
+4. **The assist gauge** fills by `ASSIST_RATE` a second while the fight
+   lasts, and by `ASSIST_PER_HIT` for each bolt that lands. When it is
+   full, the player can call for a assist attack: a bolt that no guard
+   stops, and that breaks a piercing attack. See `assist_blow`.
 
 The foes do not attack her: she keeps out of their way. The game moves
 her bolts: see `extensions.village.battle`.
@@ -75,12 +75,12 @@ comptime MEND_SHARE = Float32(0.15)
 """The share of the player's health that her heal gives back."""
 comptime MEND_EVERY = Float32(15)
 """How long she waits between two heals, in seconds."""
-comptime BOOST_FULL = Float32(100)
-"""How much the boost gauge holds."""
-comptime BOOST_RATE = Float32(4)
-"""How fast the boost gauge fills while the fight lasts, a second."""
-comptime BOOST_PER_HIT = Float32(10)
-"""How much each bolt that lands fills the boost gauge."""
+comptime ASSIST_FULL = Float32(100)
+"""How much the assist gauge holds."""
+comptime ASSIST_RATE = Float32(4)
+"""How fast the assist gauge fills while the fight lasts, a second."""
+comptime ASSIST_PER_HIT = Float32(10)
+"""How much each bolt that lands fills the assist gauge."""
 comptime ALLY_X = Float32(1.5)
 """How far to the side of the player's start she starts, in meters."""
 comptime ALLY_Z = Float32(1.5)
@@ -157,39 +157,39 @@ struct AllyIntent(ImplicitlyCopyable):
 
 
 struct Companion(Copyable, Movable):
-    """The companion's mind: her waits, and her boost gauge."""
+    """The companion's mind: her waits, and her assist gauge."""
 
     # How long until she can cast again, and heal again, in seconds.
     var cast_wait: Float32
     var mend_wait: Float32
-    # How full the boost gauge is.
-    var boost: Float32
+    # How full the assist gauge is.
+    var assist: Float32
 
     def __init__(out self):
         """Make a companion who can heal at once, casts after a second, and
-        has an empty boost gauge."""
+        has an empty assist gauge."""
         self.cast_wait = 1
         self.mend_wait = 0
-        self.boost = 0
+        self.assist = 0
 
     def charge(mut self, amount: Float32):
-        """Fill the boost gauge, up to `BOOST_FULL`.
+        """Fill the assist gauge, up to `ASSIST_FULL`.
 
         Args:
             amount: How much.
         """
-        self.boost = min(BOOST_FULL, self.boost + amount)
+        self.assist = min(ASSIST_FULL, self.assist + amount)
 
     def ready(self) -> Bool:
-        """Return whether the boost gauge is full.
+        """Return whether the assist gauge is full.
 
         Returns:
-            True at `BOOST_FULL`.
+            True at `ASSIST_FULL`.
         """
-        return self.boost >= BOOST_FULL
+        return self.assist >= ASSIST_FULL
 
     def spend(mut self) -> Bool:
-        """Spend a full boost gauge on a boost attack.
+        """Spend a full assist gauge on a assist attack.
 
         Returns:
             Whether the gauge was full. A full gauge empties, and the next
@@ -197,7 +197,7 @@ struct Companion(Copyable, Movable):
         """
         if not self.ready():
             return False
-        self.boost = 0
+        self.assist = 0
         self.cast_wait = CAST_EVERY
         return True
 
@@ -218,7 +218,7 @@ struct Companion(Copyable, Movable):
         var near = _flat_gap(sight.at, sight.player)
         var home = _toward(sight.at, sight.player)
         if sight.fighting:
-            self.charge(BOOST_RATE * seconds)
+            self.charge(ASSIST_RATE * seconds)
         if sight.fighting and sight.target:
             var target = sight.target.value()
             var gap = _flat_gap(sight.at, target)
@@ -248,26 +248,26 @@ def ally_fighter() -> FighterParameters:
     """Return how strong the companion is.
 
     Returns:
-        400 health, 100 ki, no arte gauge, bolts of the cast's own
-        strength, and no Over Limit. The foes do not attack her.
+        400 health, 100 stamina, no special gauge, bolts of the cast's own
+        strength, and no surge. The foes do not attack her.
     """
     var p = FighterParameters()
     p.health = 400
-    p.arte_points = 0
-    p.arte_rate = Frequency(0.0, PER_SECOND)
+    p.special_points = 0
+    p.special_rate = Frequency(0.0, PER_SECOND)
     p.limit_gain = 0
     return p
 
 
-def boost_blow(might: Float32) -> Blow:
-    """Return what a boost attack's bolt does.
+def assist_blow(might: Float32) -> Blow:
+    """Return what a assist attack's bolt does.
 
     Args:
-        might: How many times its damage and ki damage the bolt does.
+        might: How many times its damage and stamina damage the bolt does.
 
     Returns:
-        70 damage and 50 ki damage, times the might; a push of 5 meters a
-        second; and a blow that no guard stops, and that breaks a burst
+        70 damage and 50 stamina damage, times the might; a push of 5 meters a
+        second; and a blow that no guard stops, and that breaks a piercing
         attack.
     """
     return Blow(

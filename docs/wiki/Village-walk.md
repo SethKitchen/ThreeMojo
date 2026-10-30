@@ -27,11 +27,11 @@ The window is 1920 by 1080 pixels by default. Give a width and a height for a di
 | Light attack | The right shoulder | `F` |
 | Heavy attack | The north button | `G` |
 | Plunge, in the air | Jump, and press the north button | Jump, and press `G` |
-| Rising edge, tempest and demon fang | Hold the left trigger, and press the right shoulder, the north or the west button | `Z`, `X` and `B` |
-| Mystic arte, Over Limit | Hold the left trigger, and press the right shoulder and the north button together | `M` |
-| The companion's boost attack | Hold the left trigger, and press the left shoulder | `Q` |
+| Rising edge, whirlwind and ground wave | Hold the left trigger, and press the right shoulder, the north or the west button | `Z`, `X` and `B` |
+| Ultimate, in a surge | Hold the left trigger, and press the right shoulder and the north button together | `M` |
+| The companion's assist attack | Hold the left trigger, and press the left shoulder | `Q` |
 | Dodge | The east button | `C` |
-| Guard, and a ki pulse | The left shoulder | `V` |
+| Guard, and a stamina recovery | The left shoulder | `V` |
 | Lock on | The right stick | `T` |
 | Stance | Hold the left shoulder, and press the north, the west or the south button | `6`, `7` and `8` |
 | Eat herbs to heal | The back button | `H` |

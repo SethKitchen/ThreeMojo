@@ -11,8 +11,8 @@ The page is Village combat. The player stands on the meadow north-west
 of the trail, six meters from the bandits' camp, with the companion
 beside them. The bandits notice the player and come. The script locks on
 to the nearest, guards as they come, steps in and cuts three times,
-dodges, makes the rising edge and the tempest, cuts once heavily, and
-ends with the demon fang. The companion casts at the locked bandit. The
+dodges, makes the rising edge and the whirlwind, cuts once heavily, and
+ends with the ground wave. The companion casts at the locked bandit. The
 camera follows the lock.
 
 The program needs no window and no pad. A pad of the web backend plays
@@ -94,7 +94,7 @@ def _script(mut state: WebGamepadState, t: Float32):
     # A dodge back.
     if _tap(t, 4.75):
         _hold(state, EAST)
-    # The rising edge; a step in, and the tempest.
+    # The rising edge; a step in, and the whirlwind.
     if t >= 5.5 and t < 5.75:
         _hold(state, LEFT_TRIGGER)
         if _tap(t, 5.5):
@@ -105,7 +105,7 @@ def _script(mut state: WebGamepadState, t: Float32):
         _hold(state, LEFT_TRIGGER)
         if _tap(t, 6.5):
             _hold(state, NORTH)
-    # A heavy cut, and the demon fang.
+    # A heavy cut, and the ground wave.
     if _tap(t, 7.75):
         _hold(state, NORTH)
     if t >= 8.75 and t < 9.0:

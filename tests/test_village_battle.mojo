@@ -25,7 +25,7 @@ from tests._village_arena import (
 )
 from extensions.village.battle import (
     CHEST,
-    FANG_RANGE,
+    WAVE_RANGE,
     FINISH_STOP,
     HIT_STOP,
     SHAKE,
@@ -52,7 +52,7 @@ from extensions.village.character import (
 )
 from extensions.village.combat import (
     BLOCKED,
-    BURST,
+    PIERCE,
     CAST,
     FALL,
     FINISHED,
@@ -70,7 +70,7 @@ from extensions.village.combat import (
     LIGHT_ONE,
     LOW_STANCE,
     MID_STANCE,
-    MYSTIC_ARTE,
+    ULTIMATE,
     PLUNGE,
     RISING_EDGE,
     Blow,
@@ -134,8 +134,8 @@ def test_a_press_is_a_button_held_now_and_not_before() raises:
         light=True,
         heavy=True,
         rising=True,
-        tempest=True,
-        fang=True,
+        whirlwind=True,
+        ground_wave=True,
         dodge=True,
         guard=True,
         lock=True,
@@ -154,8 +154,8 @@ def test_a_press_is_a_button_held_now_and_not_before() raises:
         fresh.light,
         fresh.heavy,
         fresh.rising,
-        fresh.tempest,
-        fresh.fang,
+        fresh.whirlwind,
+        fresh.ground_wave,
         fresh.dodge,
         fresh.guard,
         fresh.lock,
@@ -173,8 +173,8 @@ def test_a_press_is_a_button_held_now_and_not_before() raises:
             held.light,
             held.heavy,
             held.rising,
-            held.tempest,
-            held.fang,
+            held.whirlwind,
+            held.ground_wave,
             held.dodge,
             held.guard,
             held.lock,
@@ -414,7 +414,7 @@ def test_a_bandit_comes_and_strikes_and_a_guard_blocks() raises:
     assert_true(arena.battle.foes[0].brain.state != POSTED)
     assert_true(arena.battle.fighter.health < 500)
     assert_true(arena.battle.drawn)
-    # Locked on and guarding, the player takes its blows on ki.
+    # Locked on and guarding, the player takes its blows on stamina.
     var guard = no_input()
     guard.guard = True
     guard.lock = True
@@ -438,19 +438,19 @@ def _swinging(mut arena: Arena, clock: Float32) raises:
     foe.fighter.clock = clock
 
 
-def _bursting(mut arena: Arena, clock: Float32) raises:
+def _piercing(mut arena: Arena, clock: Float32) raises:
     """Stand the bandit 1.5 meters before the player, facing them, in a
-    burst attack `clock` seconds in."""
+    piercing attack `clock` seconds in."""
     ref foe = arena.battle.foes[0]
     foe.character.position = Vector3(0, 0, -1.5)
     foe.character.heading = Angle(180.0, DEGREE)
-    _ = foe.fighter.request(BURST)
+    _ = foe.fighter.request(PIERCE)
     foe.fighter.clock = clock
 
 
-def test_a_burst_goes_through_a_guard_and_a_heavy_cut_counters_it() raises:
+def test_a_pierce_goes_through_a_guard_and_a_heavy_cut_counters_it() raises:
     var arena = Arena(arena_parameters(1, 0))
-    _bursting(arena, 0.6)
+    _piercing(arena, 0.6)
     var guard = no_input()
     guard.guard = True
     for _ in range(6):
@@ -461,14 +461,14 @@ def test_a_burst_goes_through_a_guard_and_a_heavy_cut_counters_it() raises:
     # A heavy cut that lands in the wind-up counters it.
     var counter = Arena(arena_parameters(1, 0))
     counter.battle.drawn = True
-    _bursting(counter, 0.1)
+    _piercing(counter, 0.1)
     var heavy = no_input()
     heavy.heavy = True
     counter.tick(heavy)
     counter.run(0.5)
-    assert_true(holds_text(popup_texts(counter.battle), "BURST COUNTER"))
+    assert_true(holds_text(popup_texts(counter.battle), "PIERCE BREAK"))
     assert_true(counter.battle.foes[0].fighter.move == STAGGER)
-    assert_almost_equal(counter.battle.foes[0].fighter.ki, 0, atol=1e-6)
+    assert_almost_equal(counter.battle.foes[0].fighter.stamina, 0, atol=1e-6)
 
 
 def test_a_fresh_guard_parries_and_a_late_dodge_is_perfect() raises:
@@ -649,7 +649,7 @@ def test_a_fallen_player_comes_to_at_the_start() raises:
     assert_true(holds_text(arena.battle.notes, "YOU COME TO BY THE TRAIL"))
 
 
-def test_stances_pulses_artes_and_heavy_attacks() raises:
+def test_stances_pulses_specials_and_heavy_attacks() raises:
     var arena = Arena(arena_parameters(0, 0))
     var high = no_input()
     high.high = True
@@ -667,7 +667,7 @@ def test_stances_pulses_artes_and_heavy_attacks() raises:
     low.low = True
     arena.press(low)
     assert_true(arena.battle.fighter.stance == LOW_STANCE)
-    # A heavy attack, then a ki pulse just after its swing.
+    # A heavy attack, then a stamina recovery just after its swing.
     var heavy = no_input()
     heavy.heavy = True
     arena.tick(heavy)
@@ -677,11 +677,11 @@ def test_stances_pulses_artes_and_heavy_attacks() raises:
     pulse.guard = True
     assert_almost_equal(arena.battle.pulsed, -1, atol=1e-6)
     arena.press(pulse)
-    assert_true(holds_text(popup_texts(arena.battle), "KI PULSE"))
+    assert_true(holds_text(popup_texts(arena.battle), "RECOVERED"))
     # The pulse's ring has started, and ages.
     assert_true(arena.battle.pulsed > 0)
     arena.run(1.5)
-    # The rising edge says its name; the tempest without its points does
+    # The rising edge says its name; the whirlwind without its points does
     # not start.
     var rising = no_input()
     rising.rising = True
@@ -689,10 +689,10 @@ def test_stances_pulses_artes_and_heavy_attacks() raises:
     assert_true(holds_text(arena.battle.notes, "RISING EDGE!"))
     arena.run(1)
     arena.battle.notes.clear()
-    arena.battle.fighter.arte = 0
-    var tempest = no_input()
-    tempest.tempest = True
-    arena.press(tempest)
+    arena.battle.fighter.special = 0
+    var whirlwind = no_input()
+    whirlwind.whirlwind = True
+    arena.press(whirlwind)
     assert_equal(len(arena.battle.notes), 0)
     assert_true(arena.battle.fighter.free())
 
@@ -833,7 +833,7 @@ def test_over_limit_is_announced_and_turns_the_trails_gold() raises:
     arena.tick(cut)
     arena.run(0.3)
     assert_true(arena.battle.fighter.over > 0)
-    assert_true(holds_text(arena.battle.notes, "OVER LIMIT!"))
+    assert_true(holds_text(arena.battle.notes, "SURGE!"))
     assert_true(arena.battle.trail.color.x == OVER_TRAIL.x)
     arena.battle.notes.clear()
     arena.run(0.5)
@@ -998,7 +998,7 @@ def test_wolves_close_in_bite_and_lie_down_when_felled() raises:
     assert_true(arena.battle.foes[0].down < 0)
 
 
-def test_a_demon_fang_sends_a_wave_along_the_ground() raises:
+def test_a_ground_wave_sends_a_wave_along_the_ground() raises:
     # Two dummies in a line before the player, a fallen bandit beyond
     # them, and a third dummy raised far above the ground.
     var arena = Arena(arena_parameters(1, 3, 4))
@@ -1009,10 +1009,10 @@ def test_a_demon_fang_sends_a_wave_along_the_ground() raises:
     arena.battle.dummies[1].dummy.foot = 5
     arena.battle.dummies[2].dummy.post.x = 0
     arena.battle.dummies[2].dummy.post.z = -3
-    var fang = no_input()
-    fang.fang = True
-    arena.tick(fang)
-    assert_true(holds_text(arena.battle.notes, "DEMON FANG!"))
+    var ground_wave = no_input()
+    ground_wave.ground_wave = True
+    arena.tick(ground_wave)
+    assert_true(holds_text(arena.battle.notes, "GROUND WAVE!"))
     arena.run(0.3)
     assert_equal(len(arena.battle.waves), 1)
     arena.run(0.3)
@@ -1021,7 +1021,7 @@ def test_a_demon_fang_sends_a_wave_along_the_ground() raises:
     assert_true(holds_text(popup_texts(arena.battle), "45"))
     arena.run(1)
     assert_equal(len(arena.battle.waves), 0)
-    assert_true(FANG_RANGE > 4)
+    assert_true(WAVE_RANGE > 4)
     # A bolt strikes the dummy it flies at, with no companion to fill.
     var at = arena.battle.target_at(1) + Vector3(0, CHEST, 0)
     var bolt = Blow(
@@ -1036,11 +1036,11 @@ def test_a_demon_fang_sends_a_wave_along_the_ground() raises:
     assert_true(holds_text(popup_texts(arena.battle), "28"))
 
 
-def test_a_demon_fang_with_no_one_before_it_fades_out() raises:
+def test_a_ground_wave_with_no_one_before_it_fades_out() raises:
     var arena = Arena(arena_parameters(0, 0))
-    var fang = no_input()
-    fang.fang = True
-    arena.tick(fang)
+    var ground_wave = no_input()
+    ground_wave.ground_wave = True
+    arena.tick(ground_wave)
     arena.run(0.3)
     assert_equal(len(arena.battle.waves), 1)
     arena.run(1.2)
@@ -1134,23 +1134,23 @@ def test_a_heavy_attack_in_the_air_plunges() raises:
     assert_true(holds_text(popup_texts(arena.battle), "70"))
 
 
-def test_over_limit_spends_itself_on_a_mystic_arte() raises:
-    # Two dummies within the arte's reach, and one beyond it.
+def test_over_limit_spends_itself_on_a_ultimate() raises:
+    # Two dummies within the special's reach, and one beyond it.
     var arena = Arena(arena_parameters(0, 3))
     var both = no_input()
-    both.mystic = True
+    both.ultimate = True
     both.rising = True
-    both.tempest = True
-    # Without Over Limit, its buttons make the rising edge.
+    both.whirlwind = True
+    # Without a surge, its buttons make the rising edge.
     arena.press(both)
     assert_true(arena.battle.fighter.move == RISING_EDGE)
     arena.run(1.5)
-    # Over Limit, they make the mystic arte, and the foes slow.
+    # In a surge, they make the ultimate, and the foes slow.
     arena.battle.fighter.over = 5
     var before = arena.battle.fighter.combo
     arena.press(both)
-    assert_true(arena.battle.fighter.move == MYSTIC_ARTE)
-    assert_true(holds_text(arena.battle.notes, "MYSTIC ARTE!"))
+    assert_true(arena.battle.fighter.move == ULTIMATE)
+    assert_true(holds_text(arena.battle.notes, "ULTIMATE!"))
     assert_true(arena.battle.slow > 0)
     assert_almost_equal(arena.battle.fighter.over, 0, atol=1e-6)
     arena.run(3)
@@ -1163,20 +1163,20 @@ def test_over_limit_spends_itself_on_a_mystic_arte() raises:
     arena.battle.fighter.move = FLINCH
     arena.battle.fighter.clock = 0
     arena.press(both)
-    assert_false(holds_text(arena.battle.notes, "MYSTIC ARTE!"))
+    assert_false(holds_text(arena.battle.notes, "ULTIMATE!"))
 
 
-def test_a_companion_casts_heals_and_makes_a_boost_attack() raises:
+def test_a_companion_casts_heals_and_makes_a_assist_attack() raises:
     var arena = Arena(arena_parameters(0, 1, ally=True))
     assert_equal(len(arena.battle.allies), 1)
     assert_equal(len(arena.battle.movers()), 2)
     # Out of a fight, she stays near the player; with nobody to cast at, a
-    # call for the boost attack does nothing.
-    var boost = no_input()
-    boost.boost = True
-    arena.press(boost)
+    # call for the assist attack does nothing.
+    var assist = no_input()
+    assist.assist = True
+    arena.press(assist)
     arena.run(1)
-    assert_false(holds_text(arena.battle.notes, "BOOST ATTACK!"))
+    assert_false(holds_text(arena.battle.notes, "ASSIST ATTACK!"))
     # Locked on the dummy, she casts bolts that strike it.
     var lock = no_input()
     lock.lock = True
@@ -1186,19 +1186,19 @@ def test_a_companion_casts_heals_and_makes_a_boost_attack() raises:
     arena.run(1)
     assert_true(holds_text(popup_texts(arena.battle), "28"))
     arena.run(2)
-    assert_true(arena.battle.allies[0].mind.boost > 0)
-    # Before her gauge is full, the boost button does nothing.
-    arena.press(boost)
-    assert_false(holds_text(arena.battle.notes, "BOOST ATTACK!"))
+    assert_true(arena.battle.allies[0].mind.assist > 0)
+    # Before her gauge is full, the assist button does nothing.
+    arena.press(assist)
+    assert_false(holds_text(arena.battle.notes, "ASSIST ATTACK!"))
     # She heals a wounded player.
     arena.battle.fighter.health = 100
     arena.run(1)
     assert_almost_equal(arena.battle.fighter.health, 175, atol=1e-3)
     assert_true(holds_text(arena.battle.notes, "YOUR COMPANION HEALS 75"))
-    # With a full gauge, the boost button sends her boost attack.
+    # With a full gauge, the assist button sends her assist attack.
     arena.battle.allies[0].mind.charge(1000)
-    arena.press(boost)
-    assert_true(holds_text(arena.battle.notes, "BOOST ATTACK!"))
+    arena.press(assist)
+    assert_true(holds_text(arena.battle.notes, "ASSIST ATTACK!"))
     assert_true(arena.battle.allies[0].fighter.move == CAST)
     # Let go of the lock in her cast: she casts at nobody.
     arena.battle.lock = -1
@@ -1234,7 +1234,7 @@ def test_a_bolt_fades_and_a_fallen_foe_takes_nothing() raises:
     b.bolts.append(Bolt(at, at, 1, faint, False, 0))
     arena.tick(no_input())
     assert_equal(len(arena.battle.bolts), 0)
-    assert_almost_equal(arena.battle.allies[0].mind.boost, 0, atol=1e-6)
+    assert_almost_equal(arena.battle.allies[0].mind.assist, 0, atol=1e-6)
     assert_almost_equal(arena.battle.foes[1].fighter.health, 300, atol=1e-6)
 
 

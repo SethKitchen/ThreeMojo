@@ -171,7 +171,7 @@ $(call gallery,village,village,assets/pebbles.jpg)
 # among people and animals, seen by a third-person camera.
 $(call gallery,village_walk,village_walk,assets/pebbles.jpg)
 # A player locks on to the bandits of the village, guards, cuts, dodges,
-# and makes the rising edge and the tempest, by a scripted gamepad.
+# and makes the rising edge and the whirlwind, by a scripted gamepad.
 $(call gallery,village_combat,village_combat,assets/pebbles.jpg)
 # The village's houses as the game draws them: the street, a framed house,
 # the brick house, and a player inside the stone cottage.

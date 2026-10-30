@@ -10,7 +10,7 @@ from core.assets import Assets
 from core.scene import Scene
 from extensions.village.combat import (
     BITE,
-    BURST,
+    PIERCE,
     FREE,
     THROW,
     HEAVY,
@@ -130,9 +130,9 @@ def test_a_plan_follows_the_roll() raises:
     var both = plan_for(0.85)
     assert_true(both[0] == LIGHT_ONE)
     assert_true(both[1] == HEAVY)
-    var burst = plan_for(0.95)
-    assert_equal(len(burst), 1)
-    assert_true(burst[0] == BURST)
+    var pierce = plan_for(0.95)
+    assert_equal(len(pierce), 1)
+    assert_true(pierce[0] == PIERCE)
 
 
 def test_a_posted_bandit_notices_the_player_and_comes() raises:
