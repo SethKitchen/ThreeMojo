@@ -1,6 +1,8 @@
 # Village combat
 
-A player of the [Village walk](Village-walk) carries a sword, and can fight. Three bandits keep a camp on the meadow, and two straw dummies stand near the start for practice. The rules come from two games. Ki, stances and the ki pulse come from Nioh. Artes, perfect dodges, Over Limit and long combos come from Tales of Arise.
+A player of the [Village walk](Village-walk) carries a sword, and can fight. Three bandits and their captain keep a camp on the meadow. A pack of three wolves keeps a den east of the pond. Two straw dummies stand near the start for practice.
+
+The rules come from two games. Ki, stances and the ki pulse come from Nioh. Artes, perfect dodges, Over Limit and long combos come from Tales of Arise.
 
 ![Seen from behind, a man in a red tunic locks on to a hooded bandit, guards, cuts, dodges, and spins with his sword](out/village_combat.png)
 
@@ -96,6 +98,7 @@ The three light attacks chain. A press during a move waits for the chain point: 
 | `HEAVY` | 0.40 s | 0.14 s | 0.55 s | 2.5 m | 80 degrees | 90 | 30 | 22 | |
 | `RISING_EDGE` | 0.16 s | 0.20 s | 0.45 s | 2.1 m | 100 degrees | 66 | 18 | | 2 |
 | `TEMPEST` | 0.18 s | 0.48 s | 0.40 s | 2.6 m | 360 degrees | 27, four times | 7 | | 3 |
+| `BITE` | 0.35 s | 0.20 s | 0.45 s | 1.4 m | 70 degrees | 40 | 12 | | |
 | `DODGE` | | 0.32 s | 0.16 s | | | | | 14 | |
 
 An attack carries its fighter forward through its start-up and its active part. A blow pushes the fighter that it hits away. The player has 500 health and 100 ki.
@@ -128,6 +131,14 @@ A bandit returns to its post when the player falls. It also returns when the pla
 A fallen bandit gives 8 coins, which go into the satchel. One time in two, it also drops a herb. It lies for 10 seconds, and comes back to its post after a minute.
 
 Fighting trains the player's swordplay. Each level over 1 makes the player's blows 5 percent stronger: see [Village skills](Village-skills).
+
+## The wolves
+
+Three wolves keep a den about 30 meters east of the pond. A wolf is an animal of the village, meshed as a flipbook of its walk, as the herds are. It has 160 health and 60 ki, and no guard. Its one attack is the `BITE`: a crouch of 0.35 seconds, and a leap of 2.4 meters that bites. A bite does 60 percent of 40 damage.
+
+A wolf's brain is a bandit's with a beast's temper. It notices the player from 18 meters, waits its turn 4.5 meters away, and leaps to bite from 3.2 meters. It runs at 7 meters a second. Where a bandit would guard an attack, a wolf leaps back from it. The wolves take turns with the bandits, by the same attack token.
+
+A fallen wolf lies on its side. It gives no coins, but it trains swordplay as a bandit does. It comes back to its den after a minute.
 
 ## The dummies
 
@@ -189,8 +200,8 @@ The rig faces plus z, and calls the side on plus x its right. A camera behind th
 | Module | Holds |
 |---|---|
 | `combat.mojo` | `CombatMove`, `CombatStance`, `StrikeOutcome`, `MoveData`, `FighterParameters`, `Fighter`, `reaches` and `faces`. |
-| `battle.mojo` | `BattleParameters`, `Battle`, `pressed`, `push_of` and `throw_up`. |
-| `foes.mojo` | `FoeState`, `Brain`, `Sight`, `Intent`, `Bandit`, `Post` and `Dummy`. |
+| `battle.mojo` | `BattleParameters`, `Foe`, `Person`, `Pelt`, `Battle`, `pressed`, `push_of`, `throw_up` and `strong_blow`. |
+| `foes.mojo` | `FoeState`, `Brain`, `Sight`, `Intent`, `Bandit`, `Den`, `Post` and `Dummy`. |
 | `arms.mojo` | `Arms`: a body's swords and sword clips. |
 | `blade.mojo` | `SwordLooks`, `add_sword` and `add_scabbard`. |
 | `slashes.mojo` | `Trail`, `Sparks`, `glow_triangle` and `slash_material`. |

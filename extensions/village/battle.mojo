@@ -3,8 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Swordplay in the village: the player against bandits and straw dummies,
-as in Tales of Arise and Nioh.
+"""Swordplay in the village: the player against bandits, wolves and straw
+dummies, as in Tales of Arise and Nioh.
 
 `Battle.tick` runs the fight for one frame, in place of the player's own
 step and pose:
@@ -25,8 +25,9 @@ step and pose:
    the nearest within `AIM_RANGE` before them, else the stick. A dodge
    goes the way of the stick, or back. The push of a blow carries the
    player too, and fades at `SHOVE_FADE`.
-3. **The foes think and move.** See `extensions.village.foes`. One bandit
-   at a time holds the attack token. A perfect dodge slows the foes to
+3. **The foes think and move.** See `extensions.village.foes`. One foe
+   at a time holds the attack token. A bandit plays its sword's clips; a
+   wolf shows the pose of its walk, and lies on its side when it falls. A perfect dodge slows the foes to
    `SLOW_SHARE` of the time for `SLOW_SECONDS`.
 4. **The blows.** In steps of at most `COMBAT_STEP`, each fighter's clock
    runs, and each swing gives its blow to the fighters that it reaches. A
@@ -58,7 +59,7 @@ from controls.third_person_controls import (
     yaw_of,
 )
 from core.assets import Assets
-from core.object3d import NodeId
+from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.vegetation.ground import Lot, lot_openness
 from extensions.village.arms import Arms
@@ -100,21 +101,33 @@ from extensions.village.combat import (
     outcome_word,
     reaches,
 )
+from extensions.animals.options import CROWD
+from extensions.animals.registry import WOLF
 from extensions.village.foes import (
     POSTED,
     RETURNING,
+    WOLF_RUN,
     Bandit,
     Brain,
     DUMMY_RADIUS,
+    Den,
     Dummy,
     Post,
     Sight,
     default_bandits,
+    default_dens,
     default_posts,
+    den_places,
     dummy_fighter,
 )
 from extensions.village.hud import GOLD_TEXT, WHITE_TEXT, Rgb
-from extensions.village.residents import Body
+from extensions.village.residents import (
+    Body,
+    Flipbook,
+    animal_look,
+    animal_paints,
+    facing_turn,
+)
 from extensions.village.skills import (
     BLOW_EXPERIENCE,
     DEFEAT_EXPERIENCE,
@@ -130,7 +143,9 @@ from extensions.village.slashes import (
 )
 from extensions.village.surfaces import HouseLooks
 from extensions.village.terrain import Terrain
+from math.quaternion import Quaternion
 from math.vector3 import Vector3
+from objects.mesh import Mesh
 from std.math import ceil, exp, sqrt
 from units.si import (
     DEGREE,
@@ -141,6 +156,7 @@ from units.si import (
     Angle,
     Duration,
     Length,
+    Velocity,
 )
 
 comptime COMBAT_STEP = Float32(1.0 / 60.0)
@@ -349,18 +365,23 @@ struct BattleParameters(Copyable, Movable):
     var player: FighterParameters
     var dummy: FighterParameters
     var bandits: List[Bandit]
+    var dens: List[Den]
     var posts: List[Post]
     # How long a fallen player lies before they come to; how long a fallen
-    # bandit lies before it is gone, and comes back to its post.
+    # foe lies before it is gone, and comes back to its post.
     var revive: Duration
     var linger: Duration
     var respawn: Duration
+    # How many poses of its walk each wolf is meshed in, and how many
+    # times its quality's cell its mesh's cell is.
+    var phases: Int
+    var coarseness: Float64
 
     def __init__(out self) raises:
         """Hold the default village's fight: the player's strength, the
-        bandits' camp and its captain, and the dummies, a revive of 4
-        seconds, and bandits that lie for 10 seconds and come back after
-        a minute.
+        bandits' camp and its captain, the wolves' den, and the dummies,
+        a revive of 4 seconds, foes that lie for 10 seconds and come back
+        after a minute, and wolves of six poses at their quality's cell.
 
         Raises:
             Error: Never: the outfits check.
@@ -368,25 +389,41 @@ struct BattleParameters(Copyable, Movable):
         self.player = FighterParameters()
         self.dummy = dummy_fighter()
         self.bandits = default_bandits()
+        self.dens = default_dens()
         self.posts = default_posts()
         self.revive = Duration(4.0, SECOND)
         self.linger = Duration(10.0, SECOND)
         self.respawn = Duration(60.0, SECOND)
+        self.phases = 6
+        self.coarseness = 1
 
     def check(self) raises:
         """Refuse a fight that cannot be held.
 
         Raises:
-            Error: If the player's, a bandit's or the dummies' parameters
-                do not check, there are more than 16 bandits or 16 dummies,
-                or a time is negative or not below 10,000 seconds.
+            Error: If the player's, a bandit's, a den's or the dummies'
+                parameters do not check; a den holds not from 1 to 8
+                wolves; there are more than 16 bandits, 16 dummies or 4
+                dens; a time is negative or not below 10,000 seconds; a
+                wolf's walk has not from 1 to 32 poses; or its coarseness
+                is not from 1 to 8.
         """
         self.player.check()
         self.dummy.check()
         for bandit in self.bandits:
             bandit.fighter.check()
+        for den in self.dens:
+            den.fighter.check()
+            if not (den.count >= 1 and den.count <= 8):
+                raise Error("A den holds from 1 to 8 wolves")
         if len(self.bandits) > 16 or len(self.posts) > 16:
             raise Error("A fight holds at most 16 bandits and 16 dummies")
+        if len(self.dens) > 4:
+            raise Error("A fight holds at most 4 dens")
+        if not (self.phases >= 1 and self.phases <= 32):
+            raise Error("A wolf's walk must have from 1 to 32 poses")
+        if not (self.coarseness >= 1 and self.coarseness <= 8):
+            raise Error("A wolf's coarseness must be from 1 to 8")
         for time in [  # pragma: no branch
             self.revive,
             self.linger,
@@ -402,13 +439,11 @@ struct BattleParameters(Copyable, Movable):
 
 @fieldwise_init
 struct Foe(Movable):
-    """A bandit in the scene: its character, fighter, body and brain."""
+    """A bandit or a wolf in the scene: its character, fighter and brain,
+    and where its looks are."""
 
     var character: Character
     var fighter: Fighter
-    var body: Body
-    var arms: Arms
-    var trail: Trail
     var brain: Brain
     # Its post, and the way it faces there.
     var home: Vector3
@@ -417,6 +452,29 @@ struct Foe(Movable):
     var shove: Vector3
     # How long it has lain fallen, in seconds, or -1 while it stands.
     var down: Float32
+    # Whether it is a wolf; and its looks: its index in the battle's
+    # `people` for a bandit, or in its `pelts` for a wolf.
+    var beast: Bool
+    var look: Int
+
+
+@fieldwise_init
+struct Person(Movable):
+    """A bandit's looks: its body, its sword and its trail."""
+
+    var body: Body
+    var arms: Arms
+    var trail: Trail
+
+
+@fieldwise_init
+struct Pelt(ImplicitlyCopyable):
+    """A wolf's looks: its node, its mesh in `scene.meshes`, and its
+    flipbook's index in the battle's `books`."""
+
+    var node: NodeId
+    var mesh: Int
+    var book: Int
 
 
 @fieldwise_init
@@ -436,6 +494,9 @@ struct Battle(Movable):
     var arms: Arms
     var trail: Trail
     var foes: List[Foe]
+    var people: List[Person]
+    var pelts: List[Pelt]
+    var books: List[Flipbook]
     var dummies: List[Practice]
     var sparks: Sparks
     var popups: List[Popup]
@@ -497,10 +558,11 @@ struct Battle(Movable):
         triangles: Int,
         detail: Int,
     ) raises:
-        """Arm the player's body, and build the bandits and the dummies.
+        """Arm the player's body, and build the bandits, the wolves and the
+        dummies.
 
-        A bandit or a dummy on a lot or its apron, or in the water, is
-        left out.
+        A bandit, a wolf or a dummy on a lot or its apron, or in the
+        water, is left out.
 
         Args:
             scene: The scene.
@@ -527,6 +589,9 @@ struct Battle(Movable):
         var scale = body.person.rig.stature / Float32(1.8288)
         self.trail = Trail(scene, body.carrier, scale, PLAYER_TRAIL)
         self.foes = List[Foe]()
+        self.people = List[Person]()
+        self.pelts = List[Pelt]()
+        self.books = List[Flipbook]()
         ref ground = terrain.ground
         for bandit in parameters.bandits:
             if lot_openness(lots, bandit.x, bandit.z) < 1:
@@ -547,20 +612,69 @@ struct Battle(Movable):
                 terrain,
             )
             var home = character.position
+            self.people.append(Person(person^, arms^, trail^))
             self.foes.append(
                 Foe(
                     character^,
                     Fighter(bandit.fighter),
-                    person^,
-                    arms^,
-                    trail^,
                     Brain(bandit.seed),
                     home,
                     bandit.heading,
                     Vector3(0, 0, 0),
                     -1,
+                    False,
+                    len(self.people) - 1,
                 )
             )
+        var paints = animal_paints(assets)
+        for den in parameters.dens:
+            var look = animal_look(
+                assets,
+                WOLF,
+                den.seed,
+                parameters.phases,
+                CROWD,
+                parameters.coarseness,
+            )
+            var walker = look.walker
+            walker.run_speed = Velocity(WOLF_RUN, METER_PER_SECOND)
+            self.books.append(look.book.copy())
+            var places = den_places(den)
+            for k in range(len(places)):  # pragma: no branch
+                var at = places[k]
+                if lot_openness(lots, at.x, at.z) < 1:
+                    continue
+                if ground.wet(at.x, at.z):
+                    continue
+                var node = scene.add(Object3D())
+                self.pelts.append(
+                    Pelt(node, len(scene.meshes), len(self.books) - 1)
+                )
+                scene.add_mesh(
+                    Mesh(
+                        look.book.stand,
+                        paints,
+                        node,
+                        cast_shadow=True,
+                        receive_shadow=True,
+                    )
+                )
+                var heading = Angle(Float32(k) * 2.1, RADIAN)
+                var character = Character(walker, at.x, at.z, heading, terrain)
+                var home = character.position
+                self.foes.append(
+                    Foe(
+                        character^,
+                        Fighter(den.fighter),
+                        Brain.wolf(den.seed * 16 + k),
+                        home,
+                        heading,
+                        Vector3(0, 0, 0),
+                        -1,
+                        True,
+                        len(self.pelts) - 1,
+                    )
+                )
         self.dummies = List[Practice]()
         for post in parameters.posts:
             if lot_openness(lots, post.x, post.z) < 1:
@@ -600,15 +714,29 @@ struct Battle(Movable):
         self.found = 0
         self.trained = 0
 
-    def movers(self) -> List[NodeId]:
-        """Return the nodes that move: each bandit's and each dummy's.
+    def node_of(self, index: Int) -> NodeId:
+        """Return the node a foe's looks hang from.
+
+        Args:
+            index: The foe's index.
 
         Returns:
-            Each bandit's carrier, then each dummy's pivot.
+            A bandit's body's carrier, or a wolf's node.
+        """
+        ref foe = self.foes[index]
+        if foe.beast:
+            return self.pelts[foe.look].node
+        return self.people[foe.look].body.carrier
+
+    def movers(self) -> List[NodeId]:
+        """Return the nodes that move: each foe's and each dummy's.
+
+        Returns:
+            Each foe's node, then each dummy's pivot.
         """
         var out = List[NodeId]()
         for index in range(len(self.foes)):
-            out.append(self.foes[index].body.carrier)
+            out.append(self.node_of(index))
         for index in range(len(self.dummies)):
             out.append(self.dummies[index].dummy.pivot)
         return out^
@@ -1046,9 +1174,11 @@ struct Battle(Movable):
                     self.token_rest = TOKEN_REST
                 if landed_blow(struck.outcome):
                     self.trained += BLOW_EXPERIENCE
-                if struck.outcome == DEFEATED or struck.outcome == FINISHED:
-                    self.loot += LOOT
+                var fell = struck.outcome == DEFEATED
+                if fell or struck.outcome == FINISHED:
                     self.trained += DEFEAT_EXPERIENCE
+                if (fell or struck.outcome == FINISHED) and not foe.beast:
+                    self.loot += LOOT
                     var note = String("+", LOOT, " COINS")
                     if foe.brain.roll(6) < HERB_CHANCE:
                         self.found += 1
@@ -1146,6 +1276,7 @@ struct Battle(Movable):
         ref p = self.parameters
         var engaged = not self.fighter.free() or self.fighter.guarding
         for index in range(len(self.foes)):
+            var node = self.node_of(index)
             ref foe = self.foes[index]
             foe.shove = foe.shove * fade
             if not foe.fighter.defeated():
@@ -1162,14 +1293,14 @@ struct Battle(Movable):
                     self.lock = -1
             foe.down += seconds
             if foe.down > p.linger.to(SECOND):
-                scene.node(foe.body.carrier).visible = False
+                scene.node(node).visible = False
             if foe.down > p.respawn.to(SECOND):
                 foe.character.position = foe.home
                 foe.character.heading = foe.heading
                 foe.fighter.revive()
                 foe.brain = Brain(foe.brain.seed)
                 foe.down = -1
-                scene.node(foe.body.carrier).visible = True
+                scene.node(node).visible = True
         if (
             self.lock >= 0
             and _flat(player.position, self.target_at(self.lock)) > LOCK_BREAK
@@ -1199,6 +1330,29 @@ struct Battle(Movable):
             self.calm += seconds
             if self.calm > CALM_SECONDS:
                 self.drawn = False
+
+    def _pose_beast(self, mut scene: Scene, index: Int) raises:
+        """Stand a wolf where its character stands, in the pose of its
+        walk; on its side, once it falls."""
+        ref foe = self.foes[index]
+        ref pelt = self.pelts[foe.look]
+        ref at = foe.character.position
+        ref node = scene.node(pelt.node)
+        var turn = Quaternion.from_axis_angle(
+            Vector3(0, 1, 0), facing_turn(foe.character.heading)
+        )
+        if foe.fighter.defeated():
+            var ahead = _ahead(foe.character.heading)
+            var side = Quaternion.from_axis_angle(ahead, Angle(90.0, DEGREE))
+            var r = foe.character.parameters.radius.to(METER)
+            node.set_position(at.x, at.y + r, at.z)
+            node.quaternion = side * turn
+        else:
+            node.set_position(at.x, at.y, at.z)
+            node.quaternion = turn
+        scene.meshes[pelt.mesh].geometry = self.books[pelt.book].frame(
+            foe.character
+        )
 
     def tick(
         mut self,
@@ -1266,8 +1420,12 @@ struct Battle(Movable):
         self.arms.pose(scene, body, player, self.fighter, self.drawn, still)
         self.trail.show(scene, self.fighter)
         for index in range(len(self.foes)):
+            if self.foes[index].beast:
+                self._pose_beast(scene, index)
+                continue
             ref foe = self.foes[index]
-            foe.arms.pose(
-                scene, foe.body, foe.character, foe.fighter, True, slowed
+            ref person = self.people[foe.look]
+            person.arms.pose(
+                scene, person.body, foe.character, foe.fighter, True, slowed
             )
-            foe.trail.show(scene, foe.fighter)
+            person.trail.show(scene, foe.fighter)

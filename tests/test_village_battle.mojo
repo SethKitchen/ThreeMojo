@@ -190,6 +190,30 @@ def test_a_fight_refuses_what_cannot_be_held() raises:
     with assert_raises(contains="health"):
         p.check()
     p = BattleParameters()
+    p.dens[0].fighter.health = 0
+    with assert_raises(contains="health"):
+        p.check()
+    for count in [0, 9]:
+        p = BattleParameters()
+        p.dens[0].count = count
+        with assert_raises(contains="den"):
+            p.check()
+    p = BattleParameters()
+    for _ in range(4):
+        p.dens.append(p.dens[0].copy())
+    with assert_raises(contains="4 dens"):
+        p.check()
+    for phases in [0, 33]:
+        p = BattleParameters()
+        p.phases = phases
+        with assert_raises(contains="poses"):
+            p.check()
+    for coarseness in [Float64(0.5), Float64(9)]:
+        p = BattleParameters()
+        p.coarseness = coarseness
+        with assert_raises(contains="coarseness"):
+            p.check()
+    p = BattleParameters()
     p.revive = Duration(-1.0, SECOND)
     with assert_raises(contains="revive"):
         p.check()
@@ -462,11 +486,11 @@ def test_the_player_defeats_a_bandit_who_comes_back() raises:
     assert_equal(arena.battle.found, 1)
     assert_equal(arena.battle.trained, BLOW_EXPERIENCE + DEFEAT_EXPERIENCE)
     arena.run(1.2)
-    assert_false(arena.scene.node(arena.battle.foes[0].body.carrier).visible)
+    assert_false(arena.scene.node(arena.battle.node_of(0)).visible)
     arena.run(1.2)
     assert_true(arena.battle.foes[0].fighter.free())
     assert_true(arena.battle.foes[0].down < 0)
-    assert_true(arena.scene.node(arena.battle.foes[0].body.carrier).visible)
+    assert_true(arena.scene.node(arena.battle.node_of(0)).visible)
 
 
 def _seed(drops: Bool) -> Int:
@@ -705,6 +729,43 @@ def test_a_fighter_on_a_lot_or_in_the_water_is_left_out() raises:
     )
     assert_equal(len(other.foes), 0)
     assert_equal(len(other.dummies), 0)
+    # A wolf on a lot, or in the water, is left out too.
+    var den: List[Lot] = [Lot(-3, -6, 0.5, 0.5, 0)]
+    var pack = Battle(
+        scene,
+        assets,
+        arena_parameters(0, 0, 6, 1),
+        house_looks(assets, 4, 1),
+        flat_ground(),
+        den,
+        body,
+        Vector3(0, 0, 0),
+        500,
+        8,
+    )
+    assert_equal(len(pack.foes), 0)
+    var marsh = Ground(
+        hill_height=Length(0.0, METER),
+        pond=Pond(
+            Length(-3.0, METER),
+            Length(-6.0, METER),
+            Length(1.0, METER),
+            Length(1.0, METER),
+        ),
+    )
+    var drowned = Battle(
+        scene,
+        assets,
+        arena_parameters(0, 0, 6, 1),
+        house_looks(assets, 4, 1),
+        Terrain(marsh),
+        List[Lot](),
+        body,
+        Vector3(0, 0, 0),
+        500,
+        8,
+    )
+    assert_equal(len(drowned.foes), 0)
 
 
 def test_over_limit_is_announced_and_turns_the_trails_gold() raises:
@@ -850,6 +911,34 @@ def test_a_heavy_cut_finishes_a_broken_bandit() raises:
     assert_equal(arena.battle.loot, LOOT)
     assert_almost_equal(arena.battle.shake, 2 * SHAKE, atol=1e-6)
     assert_true(arena.battle.freeze > HIT_STOP)
+
+
+def test_wolves_close_in_bite_and_lie_down_when_felled() raises:
+    var arena = Arena(arena_parameters(0, 0, 8, 3))
+    assert_equal(len(arena.battle.foes), 3)
+    assert_equal(len(arena.battle.pelts), 3)
+    assert_true(arena.battle.foes[0].beast)
+    assert_equal(arena.battle.node_of(1), arena.battle.pelts[1].node)
+    assert_equal(len(arena.battle.movers()), 3)
+    # They notice the player, close in, take turns and bite.
+    arena.run(8)
+    assert_true(arena.battle.fighter.health < 500)
+    # A wolf felled gives no coins, but trains the sword; it lies on its
+    # side, and comes back to the den.
+    _facing(arena, 0)
+    arena.battle.foes[0].fighter.move = FLINCH
+    arena.battle.foes[0].fighter.health = 1
+    arena.battle.fighter.revive()
+    arena.battle.loot = 0
+    arena.battle.trained = 0
+    _cut(arena)
+    assert_true(arena.battle.foes[0].fighter.defeated())
+    assert_equal(arena.battle.loot, 0)
+    assert_true(arena.battle.trained >= DEFEAT_EXPERIENCE)
+    var lying = arena.scene.node(arena.battle.pelts[0].node).quaternion
+    assert_true(abs(lying.x) + abs(lying.z) > 0.5)
+    arena.run(2.5)
+    assert_true(arena.battle.foes[0].down < 0)
 
 
 def main() raises:

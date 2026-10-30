@@ -244,8 +244,8 @@ def draw_battle(
     var w = frame.width
     var h = frame.height
     battle.trail.draw(frame, scene, camera, look)
-    for index in range(len(battle.foes)):
-        battle.foes[index].trail.draw(frame, scene, camera, look)
+    for index in range(len(battle.people)):
+        battle.people[index].trail.draw(frame, scene, camera, look)
     _gauges(frame, battle, scale)
     ref f = battle.fighter
     if f.combo >= 2:

@@ -133,13 +133,14 @@ def trail_points(move: CombatMove, scale: Float32) -> List[Vector3]:
     and the hips at the origin.
 
     Args:
-        move: The attack. A move that is not an attack has no ribbon.
+        move: The attack. A move that is not an attack has no ribbon, and
+            nor does a beast's bite.
         scale: The fighter's height over six feet.
 
     Returns:
         The ribbon's corners, as `arc_points` gives them, from 1.0 to 1.45
         meters round the sword's shoulder for a person of six feet; none
-        for a move that is not an attack.
+        for a move that is not a cut.
     """
     var s = scale
     var inner = Float32(1.0) * s

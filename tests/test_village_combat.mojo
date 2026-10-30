@@ -8,6 +8,7 @@ and what each blow does."""
 
 from extensions.village.combat import (
     ARTE_PER_HIT,
+    BITE,
     FINISHED,
     FINISH_SHARE,
     LIMIT,
@@ -123,9 +124,9 @@ def _blow(damage: Float32, ki: Float32) -> Blow:
 
 
 def test_each_kind_knows_its_values() raises:
-    for value in [-1, 11]:
+    for value in [-1, 12]:
         assert_false(CombatMove(value).is_valid())
-    for value in [0, 10]:
+    for value in [0, 11]:
         assert_true(CombatMove(value).is_valid())
     for value in [-1, 3]:
         assert_false(CombatStance(value).is_valid())
@@ -142,8 +143,9 @@ def test_moves_and_outcomes_have_names_for_the_display() raises:
     assert_equal(move_name(LIGHT_TWO), "LIGHT 2")
     assert_equal(move_name(RISING_EDGE), "RISING EDGE")
     assert_equal(move_name(FALL), "FALL")
-    with assert_raises(contains="eleven"):
-        _ = move_name(CombatMove(11))
+    assert_equal(move_name(BITE), "BITE")
+    with assert_raises(contains="twelve"):
+        _ = move_name(CombatMove(12))
     assert_equal(outcome_word(PERFECT_DODGE), "PERFECT DODGE")
     assert_equal(outcome_word(PARRIED), "PARRY")
     assert_equal(outcome_word(GUARD_BREAK), "GUARD BREAK")
@@ -158,6 +160,7 @@ def test_moves_are_sorted_into_attacks_artes_and_styles() raises:
     assert_false(is_attack(FREE))
     assert_true(is_attack(LIGHT_ONE))
     assert_true(is_attack(TEMPEST))
+    assert_true(is_attack(BITE))
     assert_false(is_attack(DODGE))
     assert_true(is_arte(RISING_EDGE))
     assert_true(is_arte(TEMPEST))
@@ -199,8 +202,11 @@ def test_each_move_has_its_times_and_its_strength() raises:
     assert_almost_equal(move_data(STAGGER).recovery.to(SECOND), 1.6, atol=1e-6)
     assert_almost_equal(move_data(FALL).recovery.to(SECOND), 2, atol=1e-6)
     assert_almost_equal(move_data(FREE).recovery.to(SECOND), 0, atol=1e-6)
-    with assert_raises(contains="eleven"):
-        _ = move_data(CombatMove(11))
+    var bite = move_data(BITE)
+    assert_almost_equal(bite.lunge.to(METER), 2.4, atol=1e-6)
+    assert_almost_equal(bite.ki_cost, 0, atol=1e-6)
+    with assert_raises(contains="twelve"):
+        _ = move_data(CombatMove(12))
 
 
 def test_each_stance_changes_strength_pace_cost_guard_and_step() raises:

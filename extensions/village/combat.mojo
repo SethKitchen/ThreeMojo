@@ -69,6 +69,7 @@ part strikes. The times are for the middle stance:
 | `HEAVY` | 0.40 s | 0.14 s | 0.55 s | 2.5 m | 80 degrees | 90 | 30 | 22 | |
 | `RISING_EDGE` | 0.16 s | 0.20 s | 0.45 s | 2.1 m | 100 degrees | 66 | 18 | | 2 |
 | `TEMPEST` | 0.18 s | 0.48 s | 0.40 s | 2.6 m | 360 degrees | 27, four times | 7 | | 3 |
+| `BITE` | 0.35 s | 0.20 s | 0.45 s | 1.4 m | 70 degrees | 40 | 12 | | |
 | `DODGE` | | 0.32 s | 0.16 s | | | | | 14 | |
 """
 
@@ -91,7 +92,7 @@ from units.si import (
     Velocity,
 )
 
-comptime MOVES = 11
+comptime MOVES = 12
 """How many moves there are, `FREE` among them."""
 comptime DODGE_SAFE_FROM = Float32(0.02)
 """How far into a dodge no blow can hit it any more, in seconds."""
@@ -181,14 +182,16 @@ comptime RISING_EDGE = CombatMove(5)
 """An arte: a cut up from low, which throws the foe into the air."""
 comptime TEMPEST = CombatMove(6)
 """An arte: a spin that strikes all round the fighter four times."""
-comptime DODGE = CombatMove(7)
+comptime BITE = CombatMove(7)
+"""A beast's attack: a crouch, and a leap forward that bites."""
+comptime DODGE = CombatMove(8)
 """A quick step, which no blow can hit for a moment."""
-comptime FLINCH = CombatMove(8)
+comptime FLINCH = CombatMove(9)
 """A blow landed: the fighter reels for a moment."""
-comptime STAGGER = CombatMove(9)
+comptime STAGGER = CombatMove(10)
 """The fighter's ki ran out: it stands open, and blows on it are
 critical."""
-comptime FALL = CombatMove(10)
+comptime FALL = CombatMove(11)
 """The fighter is defeated: it falls, and it stays down."""
 
 
@@ -261,13 +264,13 @@ def move_name(move: CombatMove) raises -> String:
         move: The move.
 
     Returns:
-        Such as "LIGHT 1", "HEAVY", "RISING EDGE" or "TEMPEST".
+        Such as "LIGHT 1", "HEAVY", "RISING EDGE", "TEMPEST" or "BITE".
 
     Raises:
         Error: If the move is not one.
     """
     if not move.is_valid():
-        raise Error("A combat move must be one of the eleven")
+        raise Error("A combat move must be one of the twelve")
     var names: List[String] = [
         "FREE",
         "LIGHT 1",
@@ -276,6 +279,7 @@ def move_name(move: CombatMove) raises -> String:
         "HEAVY",
         "RISING EDGE",
         "TEMPEST",
+        "BITE",
         "DODGE",
         "FLINCH",
         "STAGGER",
@@ -323,9 +327,9 @@ def is_attack(move: CombatMove) -> Bool:
         move: The move.
 
     Returns:
-        True for the light and the heavy attacks and the artes.
+        True for the light and the heavy attacks, the artes and the bite.
     """
-    return move.value >= LIGHT_ONE.value and move.value <= TEMPEST.value
+    return move.value >= LIGHT_ONE.value and move.value <= BITE.value
 
 
 def is_arte(move: CombatMove) -> Bool:
@@ -468,6 +472,8 @@ def move_data(move: CombatMove) raises -> MoveData:
         return _data(0.16, 0.2, 0.45, 2.1, 100, 66, 18, 0, 2, 0.4, 1, 1, 6.5)
     if move == TEMPEST:
         return _data(0.18, 0.48, 0.4, 2.6, 360, 27, 7, 0, 3, 0, 4, 2.5)
+    if move == BITE:
+        return _data(0.35, 0.2, 0.45, 1.4, 70, 40, 12, 0, 0, 2.4, 1, 2.5)
     if move == DODGE:
         return _data(0, 0.32, 0.16, ki_cost=14, lunge=3.2)
     if move == FLINCH:
@@ -478,7 +484,7 @@ def move_data(move: CombatMove) raises -> MoveData:
         return _data(0, 0, 2)
     if move == FREE:
         return _data(0, 0, 0)
-    raise Error("A combat move must be one of the eleven")
+    raise Error("A combat move must be one of the twelve")
 
 
 def stance_power(stance: CombatStance) -> Float32:

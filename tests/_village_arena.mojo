@@ -25,7 +25,13 @@ from extensions.village.character import (
     Obstacle,
     no_input,
 )
-from extensions.village.foes import Bandit, Post, bandit_fighter
+from extensions.village.foes import (
+    Bandit,
+    Den,
+    Post,
+    bandit_fighter,
+    wolf_fighter,
+)
 from extensions.village.residents import Body
 from extensions.village.surfaces import house_looks
 from extensions.village.terrain import Terrain
@@ -54,7 +60,7 @@ def flat_ground() raises -> Ground:
 
 
 def arena_parameters(
-    bandits: Int = 1, dummies: Int = 1, far: Float32 = 6
+    bandits: Int = 1, dummies: Int = 1, far: Float32 = 6, wolves: Int = 0
 ) raises -> BattleParameters:
     """Return a fight of bandits and dummies before the player.
 
@@ -64,9 +70,11 @@ def arena_parameters(
         dummies: How many dummies, three meters apart along x, 1.5 meters
             before the player.
         far: How far before the player the bandits stand, in meters.
+        wolves: How many wolves keep a den `far` meters before the player
+            and three meters to its left, meshed in two poses.
 
     Returns:
-        The fight. A fallen bandit lingers a second and comes back after
+        The fight. A fallen foe lingers a second and comes back after
         two; a fallen player comes to after half a second.
 
     Raises:
@@ -86,6 +94,10 @@ def arena_parameters(
                 bandit_fighter(),
             )
         )
+    p.dens = List[Den]()
+    if wolves > 0:
+        p.dens.append(Den(-3, -far, wolves, 9, wolf_fighter()))
+    p.phases = 2
     p.posts = List[Post]()
     for k in range(dummies):
         p.posts.append(Post(Float32(k) * 3, -1.5, Angle(180.0, DEGREE)))

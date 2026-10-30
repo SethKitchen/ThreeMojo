@@ -305,7 +305,8 @@ struct PlayParameters(Copyable, Movable):
         the heads-up display is on. Its villagers talk and give errands.
         Fireflies and butterflies keep to its default haunts. The
         weather is clear, and stays so. It is two in the afternoon, and
-        stays so. Three bandits keep a camp to the north-west, and two
+        stays so. Three bandits and their captain keep a camp to the
+        north-west, three wolves keep a den east of the pond, and two
         straw dummies stand east of the start.
 
         Args:
@@ -333,6 +334,7 @@ struct PlayParameters(Copyable, Movable):
         self.weather_cycle = False
         self.day = DayCycle()
         self.battle = BattleParameters()
+        self.battle.coarseness = Float64(quality.animal_coarseness)
 
 
 def tree_obstacles(

@@ -9,6 +9,7 @@ dummies that rock as they are hit."""
 from core.assets import Assets
 from core.scene import Scene
 from extensions.village.combat import (
+    BITE,
     FREE,
     HEAVY,
     LIGHT_ONE,
@@ -16,6 +17,8 @@ from extensions.village.combat import (
     LIGHT_TWO,
 )
 from extensions.village.foes import (
+    WOLF_CIRCLE,
+    WOLF_NOTICE,
     ALERT,
     ALERTED,
     ATTACKING,
@@ -37,6 +40,9 @@ from extensions.village.foes import (
     Sight,
     bandit_fighter,
     captain_fighter,
+    den_places,
+    default_dens,
+    wolf_fighter,
     default_bandits,
     default_posts,
     dummy_fighter,
@@ -358,6 +364,47 @@ def test_a_dummy_rocks_back_upright() raises:
     for _ in range(300):
         dummy.rock(scene, Duration(0.02, SECOND))
     assert_true(dummy.tilt.length() < 0.01)
+
+
+def test_a_wolf_bites_and_leaps_back_from_attacks() raises:
+    var wolf = Brain.wolf(4)
+    assert_true(wolf.beast)
+    # It notices the player from further than a bandit does.
+    _ = wolf.think(_sight(Vector3(0, 0, WOLF_NOTICE - 1)), _frame())
+    assert_true(wolf.state == ALERTED)
+    # Its turn come, it bites.
+    var turn = Brain.wolf(4)
+    turn.state = CIRCLING
+    _ = turn.think(_sight(Vector3(0, 0, WOLF_CIRCLE)), _frame())
+    assert_true(turn.state == ATTACKING)
+    assert_equal(len(turn.plan), 1)
+    assert_true(turn.plan[0] == BITE)
+    # Where a bandit would guard, a wolf leaps back.
+    var leapt = 0
+    for seed in range(40):
+        var shy = Brain.wolf(seed)
+        shy.state = CIRCLING
+        shy.timer = 5
+        var intent = shy.think(_sight(Vector3(0, 0, 3), threat=True), _frame())
+        if shy.state == RETREATING:
+            leapt += 1
+            assert_false(intent.guard)
+            assert_true(intent.way.z < 0)
+    assert_true(leapt > 0)
+    # Wolves are wild and weaker than bandits, and keep a den.
+    var p = wolf_fighter()
+    p.check()
+    assert_true(p.health < bandit_fighter().health)
+    var dens = default_dens()
+    assert_equal(len(dens), 1)
+    var places = den_places(dens[0])
+    assert_equal(len(places), 3)
+    assert_almost_equal(places[0].x, dens[0].x, atol=1e-6)
+    assert_almost_equal((places[1] - places[0]).length(), 1.8, atol=1e-4)
+    # A den of no wolves has no places.
+    var empty = dens[0].copy()
+    empty.count = 0
+    assert_equal(len(den_places(empty)), 0)
 
 
 def main() raises:

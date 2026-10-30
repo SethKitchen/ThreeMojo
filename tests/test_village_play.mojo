@@ -24,7 +24,7 @@ from extensions.village.character import (
     no_input,
 )
 from extensions.village.day import DayCycle
-from extensions.village.foes import Bandit, Post
+from extensions.village.foes import Bandit, Den, Post
 from extensions.village.gathering import CHEST, HERBS, Spot
 from extensions.village.house import HouseParameters, house_lot
 from extensions.village.play import (
@@ -138,6 +138,7 @@ def _game_parameters() raises -> PlayParameters:
     p.start_z = -2
     p.gathering.spots = [Spot(HERBS, -4, -3, Angle(0.0, RADIAN))]
     p.battle.bandits = List[Bandit]()
+    p.battle.dens = List[Den]()
     p.battle.posts = List[Post]()
     return p^
 

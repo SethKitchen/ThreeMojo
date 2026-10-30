@@ -3,8 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The player's foes in the village: bandits who keep a camp, and straw
-dummies to practice on.
+"""The player's foes in the village: bandits who keep a camp, wolves who
+keep a den, and straw dummies to practice on.
 
 **Bandits.** A `Bandit` is a person with a sword, as the player is: a
 `Body` that plays the sword clips, and a `Fighter` with the moves of
@@ -30,6 +30,14 @@ most action games. A plan is two or three light attacks, a heavy attack,
 or a light and a heavy attack. The dice that choose come from the
 bandit's seed, so a fight plays the same way each time.
 
+**Wolves.** A wolf is an animal of the village's kind, meshed as a
+flipbook, with a `Fighter` whose one attack is the `BITE`: a crouch, and
+a leap that bites. Its brain is a bandit's with a beast's temper: see
+`Brain.wolf`. It notices the player from `WOLF_NOTICE`, waits its turn
+further off, at `WOLF_CIRCLE`, and leaps from `WOLF_STRIKE`. Where a
+bandit guards an attack, a wolf leaps back from it. A pack of `Den`'s
+wolves keeps east of the pond.
+
 **Dummies.** A dummy is a post with a crossbar, a body of straw and a
 sack for a head. It has a fighter too, so blows on it break its ki and
 are critical, but it never falls: each blow's health comes back at once.
@@ -54,6 +62,7 @@ from extensions.village.clothes import (
     village_outfit,
 )
 from extensions.village.combat import (
+    BITE,
     FREE,
     HEAVY,
     LIGHT_ONE,
@@ -105,6 +114,14 @@ comptime GUARD_CHANCE = Float32(0.35)
 comptime GUARD_REACH = Float32(3.5)
 """How near the player a bandit must be to guard their attack, in
 meters."""
+comptime WOLF_NOTICE = Float32(18)
+"""How near the player a wolf notices them, in meters."""
+comptime WOLF_CIRCLE = Float32(4.5)
+"""How far from the player a wolf waits its turn, in meters."""
+comptime WOLF_STRIKE = Float32(3.2)
+"""How near the player a wolf leaps to bite, in meters."""
+comptime WOLF_RUN = Float32(7)
+"""How fast a wolf runs, in meters a second."""
 comptime HOME_NEAR = Float32(0.8)
 """How near its post a returning bandit stops, in meters."""
 comptime FLIP_RATE = Float32(0.3)
@@ -274,9 +291,20 @@ struct Brain(Copyable, Movable):
     # How many times it rolled its dice, and its seed.
     var rolls: Int
     var seed: Int
+    # Its temper: how near it notices the player, waits its turn and
+    # strikes, in meters; the share of the player's attacks it answers;
+    # and whether it is a beast, which bites and leaps back rather than
+    # cutting and guarding.
+    var notice: Float32
+    var circle: Float32
+    var strike: Float32
+    var wary: Float32
+    var beast: Bool
 
     def __init__(out self, seed: Int):
-        """Post a bandit, with its dice's seed.
+        """Post a bandit, with its dice's seed: it notices the player from
+        `NOTICE`, waits at `CIRCLE`, strikes from `STRIKE` and guards one
+        attack in `GUARD_CHANCE`.
 
         Args:
             seed: The seed of its dice.
@@ -288,6 +316,30 @@ struct Brain(Copyable, Movable):
         self.step = 0
         self.rolls = 0
         self.seed = seed
+        self.notice = NOTICE
+        self.circle = CIRCLE
+        self.strike = STRIKE
+        self.wary = GUARD_CHANCE
+        self.beast = False
+
+    @staticmethod
+    def wolf(seed: Int) -> Brain:
+        """Return a wolf's brain: it notices the player from `WOLF_NOTICE`,
+        waits at `WOLF_CIRCLE`, bites from `WOLF_STRIKE`, and leaps back
+        from one attack in `GUARD_CHANCE`.
+
+        Args:
+            seed: The seed of its dice.
+
+        Returns:
+            The brain, at its post.
+        """
+        var brain = Brain(seed)
+        brain.notice = WOLF_NOTICE
+        brain.circle = WOLF_CIRCLE
+        brain.strike = WOLF_STRIKE
+        brain.beast = True
+        return brain^
 
     def roll(mut self, salt: Int) -> Float32:
         """Roll the dice.
@@ -336,7 +388,7 @@ struct Brain(Copyable, Movable):
             self.state = RETURNING
             out.release = True
         if self.state == POSTED:
-            if not sight.player_down and gap < NOTICE:
+            if not sight.player_down and gap < self.notice:
                 self.state = ALERTED
                 self.timer = ALERT
                 out.face = True
@@ -344,7 +396,7 @@ struct Brain(Copyable, Movable):
                 out.way = _toward(sight.at, sight.home) * 0.5
             return out
         if self.state == RETURNING:
-            if not sight.player_down and gap < NOTICE / 2:
+            if not sight.player_down and gap < self.notice / 2:
                 self.state = ALERTED
                 self.timer = ALERT
             elif away_home > HOME_NEAR:
@@ -361,7 +413,7 @@ struct Brain(Copyable, Movable):
             if self.timer <= 0:
                 self.state = CLOSING
         elif self.state == CLOSING:
-            if gap > CIRCLE:
+            if gap > self.circle:
                 out.way = toward
                 out.run = gap > RUN_GAP
             else:
@@ -378,7 +430,7 @@ struct Brain(Copyable, Movable):
                     self.state = RETREATING
                     self.timer = RETREAT
                     out.release = True
-            elif gap > STRIKE:
+            elif gap > self.strike:
                 out.way = toward
                 out.run = gap > 4
             elif sight.ready:
@@ -404,12 +456,18 @@ struct Brain(Copyable, Movable):
         seconds: Float32,
         mut out: Intent,
     ):
-        """Wait a turn round the player: step round them at `CIRCLE`, guard
-        an attack, or take the token and attack."""
-        if gap > CIRCLE + 2:
+        """Wait a turn round the player: step round them at its circle,
+        guard an attack or leap back from it, or take the token and
+        attack."""
+        if gap > self.circle + 2:
             self.state = CLOSING
             return
-        if sight.threat and gap < GUARD_REACH and self.roll(3) < GUARD_CHANCE:
+        if sight.threat and gap < GUARD_REACH and self.roll(3) < self.wary:
+            if self.beast:
+                self.state = RETREATING
+                self.timer = RETREAT
+                out.way = toward * -1
+                return
             self.state = GUARDING
             self.timer = GUARD_TIME
             out.guard = True
@@ -417,13 +475,16 @@ struct Brain(Copyable, Movable):
         if self.timer <= 0 and (sight.holds or sight.unclaimed):
             out.claim = True
             self.state = ATTACKING
-            self.plan = plan_for(self.roll(4))
+            if self.beast:
+                self.plan = [BITE]
+            else:
+                self.plan = plan_for(self.roll(4))
             self.step = 0
             return
         if self.roll(5) < FLIP_RATE * seconds:
             self.side = -self.side
         var round = Vector3(-toward.z, 0, toward.x) * (0.5 * self.side)
-        var closer = clamp((gap - CIRCLE) / 2, -0.5, 0.5)
+        var closer = clamp((gap - self.circle) / 2, -0.5, 0.5)
         out.way = round + toward * closer
 
 
@@ -477,6 +538,70 @@ def captain_fighter() -> FighterParameters:
     p.ki_rate = Frequency(30.0, PER_SECOND)
     p.might = 0.8
     return p
+
+
+def wolf_fighter() -> FighterParameters:
+    """Return how strong a wolf is.
+
+    Returns:
+        160 health, 60 ki that comes back at 30 a second after 0.6
+        seconds, no arte gauge, bites of 0.6 times the bite's own, no
+        guard, and no Over Limit.
+    """
+    var p = FighterParameters()
+    p.health = 160
+    p.ki = 60
+    p.ki_rate = Frequency(30.0, PER_SECOND)
+    p.ki_delay = Duration(0.6, SECOND)
+    p.arte_points = 0
+    p.arte_rate = Frequency(0.0, PER_SECOND)
+    p.might = 0.6
+    p.guard_arc = Angle(0.0, DEGREE)
+    p.parry = Duration(0.0, SECOND)
+    p.limit_gain = 0
+    return p
+
+
+@fieldwise_init
+struct Den(Copyable, Movable):
+    """Where a pack of wolves keeps, how many they are, and how strong."""
+
+    # The den's middle, in meters.
+    var x: Float32
+    var z: Float32
+    # How many wolves, and the seed of their build and their dice.
+    var count: Int
+    var seed: Int
+    var fighter: FighterParameters
+
+
+def den_places(den: Den) -> List[Vector3]:
+    """Return where each wolf of a den lies.
+
+    Args:
+        den: The den.
+
+    Returns:
+        One point a wolf, on the ground's plane: the first at the den's
+        middle, the rest on a ring 1.8 meters round it.
+    """
+    var out = List[Vector3]()
+    for k in range(den.count):
+        if k == 0:
+            out.append(Vector3(den.x, 0, den.z))
+            continue
+        var a = Float32(2 * pi) * Float32(k) / Float32(max(1, den.count - 1))
+        out.append(Vector3(den.x + 1.8 * cos(a), 0, den.z + 1.8 * sin(a)))
+    return out^
+
+
+def default_dens() -> List[Den]:
+    """Return the wolves of the default village.
+
+    Returns:
+        A pack of three wolves 30 meters east of the pond.
+    """
+    return [Den(38, 20, 3, 71, wolf_fighter())]
 
 
 def dummy_fighter() -> FighterParameters:
