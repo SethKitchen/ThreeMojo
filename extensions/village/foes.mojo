@@ -18,7 +18,7 @@ frame, as a state machine of `FoeState`:
 | `POSTED` | Stands at its post | The player comes within `NOTICE`: `ALERTED` |
 | `ALERTED` | Faces the player for `ALERT` seconds | The time is over: `CLOSING` |
 | `CLOSING` | Runs or walks at the player | It is within `CIRCLE`: `CIRCLING` |
-| `CIRCLING` | Steps round the player at `CIRCLE`, facing them | Its wait is over and it holds the attack token: `ATTACKING`. An attack of the player's starts near it: `GUARDING`, one time in `GUARD_CHANCE` |
+| `CIRCLING` | Steps round the player at `CIRCLE`, facing them | Its wait is over and it holds the attack token: `ATTACKING`. An attack of the player's starts near it: one time in `GUARD_CHANCE`, it answers. `SIDESTEP_SHARE` of its answers are a sidestep, and it keeps circling; the others are `GUARDING` |
 | `ATTACKING` | Comes within `STRIKE` and makes the attacks of its plan | The plan is done: `RETREATING`, and it gives the token back |
 | `RETREATING` | Backs away for `RETREAT` seconds | The time is over: `CIRCLING` |
 | `GUARDING` | Guards for `GUARD_TIME` seconds | The time is over: `CIRCLING` |
@@ -115,6 +115,9 @@ comptime GUARD_TIME = Float32(0.9)
 """How long a bandit guards, in seconds."""
 comptime GUARD_CHANCE = Float32(0.35)
 """The share of the player's attacks that a waiting bandit guards."""
+comptime SIDESTEP_SHARE = Float32(0.4)
+"""The share of a bandit's answers to an attack that are a sidestep, not
+a guard."""
 comptime GUARD_REACH = Float32(3.5)
 """How near the player a bandit must be to guard their attack, in
 meters."""
@@ -206,8 +209,10 @@ struct Intent(ImplicitlyCopyable):
     var face: Bool
     # The attack to ask for, or `FREE` for none.
     var attack: CombatMove
-    # Whether to guard.
+    # Whether to guard; and the way to sidestep, of length one, or of no
+    # length for none.
     var guard: Bool
+    var dodge: Vector3
     # Whether it takes the attack token, or gives it back.
     var claim: Bool
     var release: Bool
@@ -217,9 +222,19 @@ def still() -> Intent:
     """Return the intent of a bandit that does nothing.
 
     Returns:
-        No walk, no attack, no guard, and the token left as it is.
+        No walk, no attack, no guard, no sidestep, and the token left as
+        it is.
     """
-    return Intent(Vector3(0, 0, 0), False, False, FREE, False, False, False)
+    return Intent(
+        Vector3(0, 0, 0),
+        False,
+        False,
+        FREE,
+        False,
+        Vector3(0, 0, 0),
+        False,
+        False,
+    )
 
 
 @fieldwise_init
@@ -466,16 +481,23 @@ struct Brain(Copyable, Movable):
         mut out: Intent,
     ):
         """Wait a turn round the player: step round them at its circle,
-        guard an attack or leap back from it, or take the token and
-        attack."""
+        guard an attack, sidestep it or leap back from it, or take the
+        token and attack."""
         if gap > self.circle + 2:
             self.state = CLOSING
             return
-        if sight.threat and gap < GUARD_REACH and self.roll(3) < self.wary:
+        var answer = Float32(1)
+        if sight.threat and gap < GUARD_REACH:
+            answer = self.roll(3) / self.wary
+        if answer < 1:
             if self.beast:
                 self.state = RETREATING
                 self.timer = RETREAT
                 out.way = toward * -1
+                return
+            if answer < SIDESTEP_SHARE:
+                out.dodge = Vector3(-toward.z, 0, toward.x) * self.side
+                self.side = -self.side
                 return
             self.state = GUARDING
             self.timer = GUARD_TIME

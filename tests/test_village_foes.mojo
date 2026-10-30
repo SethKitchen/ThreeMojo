@@ -432,5 +432,28 @@ def test_a_raging_bandit_rolls_its_plans_high() raises:
     assert_almost_equal(bandit_fighter().rage, 0, atol=1e-6)
 
 
+def test_a_threatened_bandit_guards_or_sidesteps() raises:
+    var guards = 0
+    var steps = 0
+    for seed in range(60):
+        var brain = _brain(CIRCLING, 5)
+        brain.seed = seed
+        var intent = brain.think(
+            _sight(Vector3(0, 0, 3), threat=True), _frame()
+        )
+        if brain.state == GUARDING:
+            guards += 1
+            assert_true(intent.guard)
+        elif intent.dodge.length() > 0:
+            steps += 1
+            assert_true(brain.state == CIRCLING)
+            # Across the way to the player.
+            assert_almost_equal(intent.dodge.z, 0, atol=1e-6)
+            assert_almost_equal(abs(intent.dodge.x), 1, atol=1e-6)
+    assert_true(guards > 0)
+    assert_true(steps > 0)
+    assert_true(steps < guards)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

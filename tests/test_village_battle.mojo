@@ -79,6 +79,7 @@ from extensions.village.foes import (
     ALERTED,
     ATTACKING,
     CLOSING,
+    CIRCLING,
     GUARDING,
     RETREATING,
     RETURNING,
@@ -1056,6 +1057,37 @@ def test_a_foe_that_falls_below_its_rage_rages() raises:
     arena.run(0.5)
     assert_true(arena.battle.foes[0].fighter.raging())
     assert_true(holds_text(popup_texts(arena.battle), "RAGE"))
+
+
+def test_a_bandit_sidesteps_an_attack() raises:
+    var arena = Arena(arena_parameters(1, 0))
+    ref foe = arena.battle.foes[0]
+    foe.character.position = Vector3(0, 0, -2)
+    foe.character.heading = Angle(180.0, DEGREE)
+    foe.brain.state = CIRCLING
+    foe.brain.timer = 5
+    # It answers every attack, and with a sidestep.
+    foe.brain.wary = 100
+    var light = no_input()
+    light.light = True
+    arena.tick(light)
+    assert_true(arena.battle.foes[0].fighter.move == DODGE)
+    arena.run(0.4)
+    assert_true(abs(arena.battle.foes[0].character.position.x) > 1)
+    # Its dodge does not slow the foes, as the player's does, even when a
+    # blow reaches it at the last moment.
+    assert_almost_equal(arena.battle.slow, 0, atol=1e-6)
+    var late = Arena(arena_parameters(1, 0))
+    ref dodger = late.battle.foes[0]
+    dodger.character.position = Vector3(0, 0, -1.5)
+    dodger.character.heading = Angle(180.0, DEGREE)
+    _ = dodger.fighter.request(DODGE)
+    dodger.fighter.clock = 0.02
+    _ = late.battle.fighter.press_light()
+    late.battle.fighter.clock = 0.13
+    late.tick(no_input())
+    assert_true(holds_text(popup_texts(late.battle), "PERFECT DODGE"))
+    assert_almost_equal(late.battle.slow, 0, atol=1e-6)
 
 
 def test_a_heavy_attack_in_the_air_plunges() raises:

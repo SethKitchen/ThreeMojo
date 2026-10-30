@@ -532,6 +532,8 @@ struct Foe(Movable):
     # `people` for a bandit, or in its `pelts` for a wolf.
     var beast: Bool
     var look: Int
+    # The way its sidestep goes, of length one.
+    var dodge_way: Vector3
 
 
 @fieldwise_init
@@ -739,6 +741,7 @@ struct Battle(Movable):
                     -1,
                     False,
                     len(self.people) - 1,
+                    Vector3(0, 0, 1),
                 )
             )
         self.allies = List[Ally]()
@@ -814,6 +817,7 @@ struct Battle(Movable):
                         -1,
                         True,
                         len(self.pelts) - 1,
+                        Vector3(0, 0, 1),
                     )
                 )
         self.dummies = List[Practice]()
@@ -1222,6 +1226,9 @@ struct Battle(Movable):
             var intent = foe.brain.think(sight, delta)
             var toward = yaw_of(feet - foe.character.position)
             foe.fighter.hold_guard(intent.guard)
+            if intent.dodge.length() > 0:
+                _ = foe.fighter.request(DODGE)
+                foe.dodge_way = intent.dodge
             if intent.attack != FREE:
                 foe.character.heading = toward
                 _ = foe.fighter.request(intent.attack)
@@ -1251,8 +1258,11 @@ struct Battle(Movable):
                     )
             else:
                 var speed = foe.fighter.drive().to(METER_PER_SECOND)
+                var way = _ahead(foe.character.heading)
+                if foe.fighter.move == DODGE:
+                    way = foe.dodge_way
                 foe.character.drive(
-                    _ahead(foe.character.heading) * speed + foe.shove,
+                    way * speed + foe.shove,
                     delta,
                     terrain,
                     around,
@@ -1276,7 +1286,8 @@ struct Battle(Movable):
         mut self, mut scene: Scene, struck: Struck, at: Vector3, hurt: Bool
     ) raises:
         """Show what a blow did to the fighter whose feet are `at`: its
-        damage, its word and its sparks. `hurt` is True for the player."""
+        damage, its word and its sparks. `hurt` is True for the player: a
+        perfect dodge of theirs slows the foes."""
         var outcome = struck.outcome
         var word = outcome_word(outcome)
         if landed_blow(outcome):
@@ -1290,7 +1301,7 @@ struct Battle(Movable):
         if word.byte_length() > 0:
             var tone = GOLD_TEXT if landed_blow(outcome) else CALM_TEXT
             self._popup(at + Vector3(0, 0.35, 0), word, tone)
-        if outcome == PERFECT_DODGE:
+        if outcome == PERFECT_DODGE and hurt:
             self.slow = SLOW_SECONDS
 
     def _weigh(mut self, struck: Struck, blow: Blow):

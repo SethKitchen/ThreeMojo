@@ -153,7 +153,9 @@ A `Brain` decides what a bandit does, frame by frame. `FoeState` is a type with 
 | `GUARDING` | Guards for 0.9 seconds | The time is over: `CIRCLING` |
 | `RETURNING` | Walks back to its post | It is there: `POSTED` |
 
-Only the bandit that holds the attack token attacks. The others wait their turn round the player. A plan is two or three light attacks, a heavy attack, or a light and a heavy attack. One plan in ten is a burst attack. A waiting bandit guards about one attack of the player's in three. A blow that lands on an attacking bandit breaks off its plan.
+Only the bandit that holds the attack token attacks. The others wait their turn round the player. A plan is two or three light attacks, a heavy attack, or a light and a heavy attack. One plan in ten is a burst attack. A blow that lands on an attacking bandit breaks off its plan.
+
+A waiting bandit answers about one attack of the player's in three. Two answers in five are a sidestep, and the rest are a guard. A bandit's perfect dodge does not slow the fight.
 
 A bandit returns to its post when the player falls. It also returns when the player leads it more than 28 meters from its post. The dice that choose come from each bandit's seed, so a fight plays the same way each time.
 
