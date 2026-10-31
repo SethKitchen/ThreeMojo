@@ -74,8 +74,8 @@ def steel_tension_strength(
 
     Args:
         area: A_se,N, the effective area of the threaded rod.
-        tensile_strength: f_uta of the steel.
-        yield_strength: f_ya of the steel.
+        tensile_strength: `f_uta` of the steel.
+        yield_strength: `f_ya` of the steel.
 
     Returns:
         A_se,N f_uta.
@@ -98,8 +98,8 @@ def steel_shear_strength(
 
     Args:
         area: A_se,V, the effective area of the threaded rod.
-        tensile_strength: f_uta of the steel.
-        yield_strength: f_ya of the steel.
+        tensile_strength: `f_uta` of the steel.
+        yield_strength: `f_ya` of the steel.
 
     Returns:
         0.6 A_se,V f_uta.
@@ -157,12 +157,12 @@ def breakout_tension_strength(
 
     Args:
         kind: `CAST_IN` or `POST_INSTALLED`.
-        embedment: h_ef.
+        embedment: `h_ef`.
         x_minus: The distance to the edge on one side along x.
         x_plus: The distance to the edge on the other side along x.
         y_minus: The distance to the edge on one side along y.
         y_plus: The distance to the edge on the other side along y.
-        concrete_strength: f'c.
+        concrete_strength: `f'c`.
 
     Returns:
         (A_Nc / A_Nco) psi_ed,N N_b.
@@ -202,7 +202,7 @@ def pullout_strength(
 
     Args:
         bearing_area: A_brg, the net bearing area of the head or nut.
-        concrete_strength: f'c.
+        concrete_strength: `f'c`.
 
     Returns:
         8 A_brg f'c, cracked concrete.
@@ -233,10 +233,10 @@ def bond_tension_strength(
     evaluation report (ACI 355.4).
 
     Args:
-        diameter: d_a, the anchor diameter.
-        embedment: h_ef.
-        cracked_bond: tau_cr.
-        uncracked_bond: tau_uncr, which sets c_Na (17.6.5.1.2).
+        diameter: `d_a`, the anchor diameter.
+        embedment: `h_ef`.
+        cracked_bond: `tau_cr`.
+        uncracked_bond: `tau_uncr`, which sets c_Na (17.6.5.1.2).
         x_minus: The distance to the edge on one side along x.
         x_plus: The distance to the edge on the other side along x.
         y_minus: The distance to the edge on one side along y.
@@ -274,12 +274,12 @@ def pryout_shear_strength(
     """Return V_cp, the pryout strength of one anchor, 17.7.3.
 
     Args:
-        embedment: h_ef.
+        embedment: `h_ef`.
         tension_strength: N_cp: N_cb for a cast-in, expansion or undercut
             anchor, the lesser of N_a and N_cb for an adhesive anchor.
 
     Returns:
-        k_cp N_cp, with k_cp = 1.0 below 2.5 in. of embedment and 2.0
+        `k_cp N_cp`, with k_cp = 1.0 below 2.5 in. of embedment and 2.0
         otherwise.
 
     Raises:

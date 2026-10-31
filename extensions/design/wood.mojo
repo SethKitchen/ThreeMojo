@@ -387,9 +387,9 @@ def bolt_lateral_value(
 
     Args:
         diameter: D.
-        main_length: lm, the bearing length in the main member. For a
+        main_length: `lm`, the bearing length in the main member. For a
             sill on concrete, the embedment.
-        side_thickness: ls, the side member thickness.
+        side_thickness: `ls`, the side member thickness.
         main_bearing: Fem. NDS Table 12E uses 7,500 psi for concrete.
         side_bearing: Fes, from `dowel_bearing_strength` for wood.
         bolt_yield: Fyb, 45,000 psi for an A307 bolt.

@@ -148,7 +148,7 @@ struct WideFlange(Copyable, Movable):
         """Return r_x, the radius of gyration about the strong axis.
 
         Returns:
-            sqrt(I_x / A).
+            `sqrt(I_x / A)`.
         """
         return Length64(sqrt(self.strong_inertia.value / self.area.value))
 
@@ -668,7 +668,7 @@ def web_local_yielding(
     Args:
         shape: The shape.
         yield_strength: Fy of the web.
-        bearing_length: lb, the length of bearing along the beam.
+        bearing_length: `lb`, the length of bearing along the beam.
         at_end: True if the load is within the depth of the member end,
             as at a support.
 
@@ -697,7 +697,7 @@ def web_crippling(
     Args:
         shape: The shape.
         yield_strength: Fy of the web.
-        bearing_length: lb, the length of bearing along the beam.
+        bearing_length: `lb`, the length of bearing along the beam.
         at_end: True if the load is within half the depth of the member
             end, as at a support.
 
@@ -786,7 +786,7 @@ def compression_strength(
 
     Args:
         area: Ag.
-        radius_of_gyration: r about the buckling axis.
+        radius_of_gyration: `r` about the buckling axis.
         yield_strength: Fy.
         effective_length: Lc = K L.
 
@@ -821,7 +821,7 @@ def concrete_bearing(
     AISC J8.
 
     Args:
-        concrete_strength: f'c.
+        concrete_strength: `f'c`.
         plate_area: A1, the area of the plate.
         support_area: A2, the largest area of the support that is
             geometrically similar to and concentric with A1. At least A1.
@@ -876,7 +876,7 @@ def fillet_weld_strength(
     """Return the nominal strength of a fillet weld, AISC J2.4.
 
     Args:
-        size: w, the leg of an equal-leg fillet.
+        size: `w`, the leg of an equal-leg fillet.
         length: The effective length of the weld.
         electrode_strength: F_EXX, such as 70 ksi.
 
@@ -936,7 +936,7 @@ def base_plate_thickness(
         load: P_a, the ASD axial load.
         width: B, the plate width.
         length: N, the plate length.
-        cantilever: l, the largest of m, n and lambda n'. For a round
+        cantilever: `l`, the largest of m, n and lambda n'. For a round
             column of diameter D on a square plate, (N - 0.8 D) / 2.
         yield_strength: F_y of the plate.
 

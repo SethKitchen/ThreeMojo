@@ -228,7 +228,7 @@ def stress_block_factor(concrete_strength: Pressure64) raises -> Float64:
     """Return beta1 of ACI Table 22.2.2.4.3.
 
     Args:
-        concrete_strength: f'c.
+        concrete_strength: `f'c`.
 
     Returns:
         0.85 up to 4,000 psi, less 0.05 per 1,000 psi above, at least
@@ -282,13 +282,13 @@ def one_way_shear_strength(
     most 5 sqrt(f'c) b d, normal-weight concrete, no axial load.
 
     Args:
-        width: b, the width of the section.
-        depth: d, the effective depth.
+        width: `b`, the width of the section.
+        depth: `d`, the effective depth.
         steel_area: As, the tension steel in the width.
-        concrete_strength: f'c. Its root is taken at most 100 psi.
+        concrete_strength: `f'c`. Its root is taken at most 100 psi.
 
     Returns:
-        phi Vc with phi = 0.75.
+        `phi Vc` with phi = 0.75.
 
     Raises:
         Error: If a size or f'c is not positive, or As is negative.
@@ -322,15 +322,15 @@ def two_way_shear_stress(
     2 + alpha_s d / b_o, times lambda_s sqrt(f'c).
 
     Args:
-        depth: d, the effective depth.
-        perimeter: b_o, the critical perimeter at d / 2 from the column.
-        aspect: beta, the long over the short side of the column, 1 or
+        depth: `d`, the effective depth.
+        perimeter: `b_o`, the critical perimeter at d / 2 from the column.
+        aspect: `beta`, the long over the short side of the column, 1 or
             more.
-        location: alpha_s, 40 inside, 30 at an edge, 20 at a corner.
-        concrete_strength: f'c. Its root is taken at most 100 psi.
+        location: `alpha_s`, 40 inside, 30 at an edge, 20 at a corner.
+        concrete_strength: `f'c`. Its root is taken at most 100 psi.
 
     Returns:
-        phi vc with phi = 0.75.
+        `phi vc` with phi = 0.75.
 
     Raises:
         Error: If a value is not positive, or beta is under 1.
@@ -360,10 +360,10 @@ def plain_flexural_strength(
     Args:
         width: The width the moment acts on.
         thickness: The thickness used for the section modulus.
-        concrete_strength: f'c.
+        concrete_strength: `f'c`.
 
     Returns:
-        phi 5 sqrt(f'c) b h^2 / 6 over b, with phi = 0.60.
+        `phi 5 sqrt(f'c) b h^2 / 6 over b`, with phi = 0.60.
 
     Raises:
         Error: If a value is not positive.
@@ -417,7 +417,7 @@ def square_footing_side(
             over it.
 
     Returns:
-        sqrt(P / (q_a - w)).
+        `sqrt(P / (q_a - w))`.
 
     Raises:
         Error: If the load is negative, the allowable pressure is not
@@ -443,7 +443,7 @@ def strip_footing_width(
             over it.
 
     Returns:
-        w / (q_a - w_self).
+        `w / (q_a - w_self)`.
 
     Raises:
         Error: If the load is negative, the allowable pressure is not
@@ -472,10 +472,10 @@ def wall_in_plane_shear_strength(
 
     Args:
         thickness: The wall thickness.
-        aspect_ratio: h_w / l_w, the wall height over its length.
-        horizontal_ratio: rho_t, the distributed horizontal steel ratio.
-        concrete_strength: f'c.
-        yield_strength: f_y of the horizontal bars.
+        aspect_ratio: `h_w / l_w`, the wall height over its length.
+        horizontal_ratio: `rho_t`, the distributed horizontal steel ratio.
+        concrete_strength: `f'c`.
+        yield_strength: `f_y` of the horizontal bars.
 
     Returns:
         V_n per unit length of wall.
@@ -510,7 +510,7 @@ def plain_bearing_strength(
 
     Args:
         area: A1, the loaded area.
-        concrete_strength: f'c.
+        concrete_strength: `f'c`.
 
     Returns:
         0.85 f'c A1. Multiply by `PLAIN_PHI`.
@@ -535,11 +535,11 @@ def plain_two_way_shear_strength(
     14.5.5.1(b).
 
     Args:
-        perimeter: b_o, the critical perimeter at h / 2 from the load.
-        thickness: h.
-        aspect_ratio: beta, the long side over the short side of the
+        perimeter: `b_o`, the critical perimeter at h / 2 from the load.
+        thickness: `h`.
+        aspect_ratio: `beta`, the long side over the short side of the
             loaded area, 1 or more.
-        concrete_strength: f'c.
+        concrete_strength: `f'c`.
 
     Returns:
         (4/3 + 8 / (3 beta)) sqrt(f'c) b_o h, at most 2.66 sqrt(f'c)
