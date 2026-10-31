@@ -448,6 +448,11 @@ def test_a_cloak_suits_its_calling() raises:
         assert_false(Bool(cloak_of(ARCHER, seed).trim))
         var fur = cloak_of(BARBARIAN, seed)
         assert_true(fur.fabric == FUR)
+        # Each is lined but a monk's and a peasant's.
+        assert_true(Bool(royal.lining) and Bool(fur.lining))
+        assert_true(Bool(cloak_of(WARLOCK, seed).lining))
+        assert_false(Bool(cloak_of(MONK, seed).lining))
+        assert_false(Bool(cloak_of(PEASANT, seed).lining))
         # A barbarian's is short, a monk's long, and a peasant's between.
         var monk = cloak_of(MONK, seed)
         var peasant = cloak_of(PEASANT, seed)

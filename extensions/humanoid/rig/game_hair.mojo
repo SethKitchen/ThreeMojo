@@ -365,7 +365,7 @@ __async def _advance_task(
     ambient: Vector3,
 ):
     """Advance a run of grooms, keeping the error of each that fails."""
-    for j in range(first, past):
+    for j in range(first, past):  # pragma: no branch
         var p = jobs[unsafe_offset=j].person
         try:
             motions[unsafe_offset=p].advance(

@@ -80,20 +80,20 @@ The new callings take palettes of their own. `fur_dye` gives wolf gray, bear bro
 
 `calling_cloak(calling, sex, seed)` picks a cloak, or none. `cloak_of(calling, seed)` gives the cloak of a calling that wears one. Hang it over the outfit as [Cloth and spring bones](Cloth-and-spring-bones#over-garments) shows.
 
-| Calling | Wears one | Cloak |
-|---|---|---|
-| royal | 3 in 4 | velvet in a rich dye to the ankle, edged in ermine or gold |
-| warlock | 11 in 20 | wool in a shadow dye to the ankle, edged in red |
-| ranger | 11 in 20 | wool in a forest dye |
-| knight | 1 in 2 | wool in a rich dye, edged in a second |
-| wizard | 9 in 20 | wool in an arcane dye to the ankle, edged in gold or silver |
-| noblewoman | 2 in 5 | velvet in a rich dye, edged in gold |
-| warrior | 2 in 5 | wool in a rich dye |
-| archer | 7 in 20 | wool in a forest dye |
-| barbarian | 7 in 20 | a short cloak of fur |
-| merchant | 1 in 4 | wool in a rich dye |
-| monk | 1 in 4 | wool in the dye of his robe, to the ankle |
-| peasant, goodwife, man-at-arms, farmer | 3 in 20 | plain wool, to the knee |
+| Calling | Wears one | Cloak | Lining |
+|---|---|---|---|
+| royal | 3 in 4 | velvet in a rich dye to the ankle, edged in ermine or gold | gold, or a second rich dye |
+| warlock | 11 in 20 | wool in a shadow dye to the ankle, edged in red | red |
+| ranger | 11 in 20 | wool in a forest dye | a second forest dye |
+| knight | 1 in 2 | wool in a rich dye, edged in a second | the second |
+| wizard | 9 in 20 | wool in an arcane dye to the ankle, edged in gold or silver | a second arcane dye |
+| noblewoman | 2 in 5 | velvet in a rich dye, edged in gold | ermine |
+| warrior | 2 in 5 | wool in a rich dye | a second rich dye |
+| archer | 7 in 20 | wool in a forest dye | a second forest dye |
+| barbarian | 7 in 20 | a short cloak of fur | the hide |
+| merchant | 1 in 4 | wool in a rich dye | a second rich dye |
+| monk | 1 in 4 | wool in the dye of his robe, to the ankle | the same |
+| peasant, goodwife, man-at-arms, farmer | 3 in 20 | plain wool, to the knee | the same |
 
 The seed makes each cloak a little longer or shorter, and fuller or plainer.
 

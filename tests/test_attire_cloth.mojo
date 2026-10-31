@@ -7,10 +7,11 @@
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, POSITION, UV, BufferGeometry
+from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.attire.cloth import (
+    LINING_GAP,
     MAX_COLORS,
     Cloak,
     ClothSettings,
@@ -318,7 +319,7 @@ def test_a_cloak_falls_over_a_robe_and_is_trimmed() raises:
         person, outfit, dress(scene, assets, person, outfit)
     )
     scene.update()
-    var cut = CloakCut(trim=Color(214, 170, 64))
+    var cut = CloakCut(trim=Color(214, 170, 64), lining=Color(20, 200, 40))
     var cloak = add_cloak(scene, assets, person, cut, over)
     assert_equal(len(cloak.colliders), len(over))
     scene.update()
@@ -338,6 +339,20 @@ def test_a_cloak_falls_over_a_robe_and_is_trimmed() raises:
     var middle = cut.columns // 2
     assert_true(colors.component(edge, 0) > colors.component(middle, 0))
     assert_true(colors.component(edge, 2) < colors.component(middle, 2) + 0.2)
+    # The lining lies a little inside the face, in its own dye.
+    var count = cloak.solver.count()
+    assert_equal(mesh.vertex_count(), 2 * count)
+    ref placed = mesh.attribute_view(String(POSITION))
+    var gap = (placed.vector3(count + middle) - placed.vector3(middle)).length()
+    assert_almost_equal(gap, LINING_GAP, atol=1e-4)
+    assert_true(
+        colors.component(count + middle, 1) > colors.component(middle, 1)
+    )
+    # The face looks back, away from the body; the lining looks in.
+    var center = count // 2
+    ref normals = mesh.attribute_view(String(NORMAL))
+    assert_true(normals.vector3(center).z < 0)
+    assert_true(normals.vector3(count + center).z > 0)
     # The texture coordinates are in meters: the last column lies a
     # top's width from the first.
     assert_true(uv.component(cut.columns - 1, 0) > 0.2)
@@ -432,6 +447,8 @@ def test_a_crowd_s_cloaks_step_near_and_ride_far() raises:
         move_cloaks(cloaks, scene, assets, _frame(), eye, 0)
     with assert_raises(contains="above zero"):
         move_cloaks(cloaks, scene, assets, Duration(0.0, SECOND), eye)
+    with assert_raises(contains="above zero"):
+        move_cloaks(cloaks, scene, assets, Duration(2.0e6, SECOND), eye)
 
 
 def test_a_cut_s_folds_and_flare_are_checked() raises:

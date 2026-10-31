@@ -40,7 +40,7 @@ __async def _bake_task[
     past: Int,
 ):
     """Sample the planes from `first` up to `past` of a baked grid."""
-    for k in range(first, past):
+    for k in range(first, past):  # pragma: no branch
         for j in range(cells):  # pragma: no branch
             for i in range(cells):  # pragma: no branch
                 values[

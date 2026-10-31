@@ -88,6 +88,7 @@ A cloak of a few hundred particles steps in well under a millisecond on the CPU.
 
 - The top is no wider than the span between the shoulders' joints.
 - A trim dyes the hem and the two edges.
+- A cloak is two sheets: its face, and its lining 3 mm inside it, wound the other way. Each shows from its own side alone, so a fold never shows the face's back. The lining takes its own dye, or the cloak's.
 - Each fold stands out of the cone, 3.5 cm deep at the hem on the template. Each constraint keeps its length in the folded cloth, so the cloak keeps its folds.
 - Each fold needs six columns or more. With fewer, alternate columns hang apart and the hem is jagged. `add_cloak` refuses such a cut.
 - The texture coordinates are in meters, so the fabric's weave lies on the cloak as on a garment.

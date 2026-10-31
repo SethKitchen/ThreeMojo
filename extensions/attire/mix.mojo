@@ -989,17 +989,17 @@ def _cloak_share(calling: Calling) -> Int:
 def cloak_of(calling: Calling, seed: Int) raises -> CloakCut:
     """Return the cloak a calling wears, when it wears one, by a seed.
 
-    | Callings | Cloak |
-    |---|---|
-    | royal | velvet in a rich dye to the ankle, edged in ermine or gold |
-    | noblewoman | velvet in a rich dye, edged in gold |
-    | wizard | wool in an arcane dye to the ankle, edged in gold or silver |
-    | warlock | wool in a shadow dye to the ankle, edged in a red |
-    | knight, warrior, merchant | wool in a rich dye; a knight's is edged in a second |
-    | ranger, archer | wool in a forest dye |
-    | monk | wool in the plain dye of his robe, to the ankle |
-    | barbarian | a short cloak of fur |
-    | the rest | plain wool, to the knee |
+    | Callings | Cloak | Lining |
+    |---|---|---|
+    | royal | velvet in a rich dye to the ankle, edged in ermine or gold | gold, or a second rich dye |
+    | noblewoman | velvet in a rich dye, edged in gold | ermine |
+    | wizard | wool in an arcane dye to the ankle, edged in gold or silver | a second arcane dye |
+    | warlock | wool in a shadow dye to the ankle, edged in a red | the same red |
+    | knight, warrior, merchant | wool in a rich dye; a knight's is edged in a second | the second rich dye |
+    | ranger, archer | wool in a forest dye | a second forest dye |
+    | monk | wool in the plain dye of his robe, to the ankle | the same |
+    | barbarian | a short cloak of fur | the hide |
+    | the rest | plain wool, to the knee | the same |
 
     Each cloak's length and flare vary a little by the seed.
 
@@ -1023,28 +1023,38 @@ def cloak_of(calling: Calling, seed: Int) raises -> CloakCut:
         cut.fabric = VELVET
         cut.dye = rich_dye(_mixed(seed, 64))
         cut.trim = ERMINE if _chance(seed, 65, 70) else GILT
+        # Gold silk inside, or a second rich dye.
+        cut.lining = GILT if _chance(seed, 74, 50) else rich_dye(
+            _mixed(seed, 75)
+        )
         cut.flare = 1.3
     elif calling == NOBLEWOMAN:
         length = 1.25
         cut.fabric = VELVET
         cut.dye = rich_dye(_mixed(seed, 64))
         cut.trim = GILT
+        cut.lining = ERMINE
     elif calling == WIZARD:
         length = 1.3
         cut.dye = arcane_dye(_mixed(seed, 66))
         cut.trim = GILT if _chance(seed, 21, 60) else SILVERED
+        cut.lining = arcane_dye(_mixed(seed, 76))
     elif calling == WARLOCK:
         length = 1.3
         cut.dye = shadow_dye(_mixed(seed, 67))
         cut.trim = Color(110, 18, 24)
+        cut.lining = Color(110, 18, 24)
         cut.flare = 1.2
     elif calling == KNIGHT or calling == WARRIOR or calling == MERCHANT:
         var rich = _mixed(seed, 68)
         cut.dye = rich_dye(rich)
+        cut.lining = rich_dye(rich + 3)
         if calling == KNIGHT:
             cut.trim = rich_dye(rich + 3)
     elif calling == RANGER or calling == ARCHER:
-        cut.dye = forest_dye(_mixed(seed, 69))
+        var green = _mixed(seed, 69)
+        cut.dye = forest_dye(green)
+        cut.lining = forest_dye(green + 2)
         length = 1.0
     elif calling == MONK:
         length = 1.3
@@ -1053,6 +1063,8 @@ def cloak_of(calling: Calling, seed: Int) raises -> CloakCut:
         length = 0.8
         cut.fabric = FUR
         cut.dye = fur_dye(_mixed(seed, 70))
+        # The hide shows inside.
+        cut.lining = plain_dye(3)
         cut.flare = 0.7
     else:
         length = 0.9

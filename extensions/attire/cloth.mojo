@@ -47,13 +47,14 @@ from std.math import isfinite, pi, sin, sqrt
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import POSITION, BufferGeometry
+from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.attire.dye import paint, DYE
 from extensions.attire.fabric import dye_sheen, fabric_material
 from extensions.attire.kinds import (
+    SECONDARY_DYE,
     TRIM_DYE,
     WOOL,
     FabricKind,
@@ -68,7 +69,6 @@ from extensions.humanoid.rig.joints import (
     NECK,
     RIGHT_UPPER_ARM,
 )
-from materials.material import DOUBLE_SIDE
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -80,6 +80,8 @@ comptime MAX_COLORS = 62
 """The most colors the coloring can use; a grid's constraints need few."""
 comptime TASK_CONSTRAINTS = 256
 """The fewest constraints a task takes, below which one thread is faster."""
+comptime LINING_GAP = Float32(0.003)
+"""How far inside a cloak's face its lining lies, in meters."""
 comptime CLOAK_REACH = Float32(15.0)
 """How far from the camera `move_cloaks` steps a cloak, in meters, by
 default."""
@@ -441,7 +443,7 @@ struct ClothSolver(Movable):
         Args:
             move: An affine move.
         """
-        for k in range(self.count()):
+        for k in range(self.count()):  # pragma: no branch
             self.points[k] = move.transform_point(self.points[k])
             self.previous[k] = move.transform_point(self.previous[k])
             self.targets[k] = move.transform_point(self.targets[k])
@@ -697,6 +699,8 @@ struct CloakCut(Copyable, Movable):
     """Its color, sRGB."""
     var trim: Optional[Color]
     """The color of its hem and its two edges, sRGB, or none."""
+    var lining: Optional[Color]
+    """The color of its inside, sRGB, or none for its dye."""
     var folds: Int
     """The folds across it, zero for a flat cloak."""
     var flare: Float32
@@ -715,6 +719,7 @@ struct CloakCut(Copyable, Movable):
         trim: Optional[Color] = None,
         folds: Int = 3,
         flare: Float32 = 1.0,
+        lining: Optional[Color] = None,
     ):
         """Describe a cloak. A wool cloak to below the knee by default.
 
@@ -732,6 +737,7 @@ struct CloakCut(Copyable, Movable):
             flare: How much wider its hem is than its top, zero or more.
                 One, the default, makes the hem twice as wide: there is
                 cloth to spare round the legs, so it falls in folds.
+            lining: The color of its inside, or none for its dye.
         """
         self.length = length
         self.width = width
@@ -742,6 +748,7 @@ struct CloakCut(Copyable, Movable):
         self.trim = trim
         self.folds = folds
         self.flare = flare
+        self.lining = lining
         self.settings = ClothSettings()
 
 
@@ -886,19 +893,38 @@ struct Cloak(Movable):
             assets: The store of the cloak's mesh.
 
         Returns:
-            The mesh, with fresh positions and normals.
+            The mesh, with fresh positions and normals: the face, one
+            vertex for each particle, then the lining.
 
         Raises:
             Error: If the mesh is not in the store.
         """
         var mesh = assets.geometries.get(self.geometry).clone()
-        var flat = List[Float32](capacity=3 * self.solver.count())
-        for p in self.solver.points:
-            flat.append(p.x)
-            flat.append(p.y)
-            flat.append(p.z)
+        var count = self.solver.count()
+        var flat = List[Float32](capacity=6 * count)
+        for _ in range(2):  # pragma: no branch
+            for p in self.solver.points:
+                flat.append(p.x)
+                flat.append(p.y)
+                flat.append(p.z)
         mesh.set_attribute(String(POSITION), BufferAttribute(flat^, 3))
         mesh.compute_vertex_normals()
+        # The lining's normals look in: it lies `LINING_GAP` along them,
+        # inside the face. Its normals stay as they are.
+        var lined = List[Float32](capacity=6 * count)
+        for p in self.solver.points:
+            lined.append(p.x)
+            lined.append(p.y)
+            lined.append(p.z)
+        ref normals = mesh.attribute_view(String(NORMAL))
+        for k in range(count):
+            var p = self.solver.points[k] + normals.vector3(count + k) * (
+                LINING_GAP
+            )
+            lined.append(p.x)
+            lined.append(p.y)
+            lined.append(p.z)
+        mesh.set_attribute(String(POSITION), BufferAttribute(lined^, 3))
         return mesh^
 
 
@@ -1028,46 +1054,65 @@ def add_cloak(
     var locals = List[Vector3]()
     for p in pins:  # pragma: no branch
         locals.append(into.transform_point(points[p]))
+    # The cloak is two sheets: its face, and its lining a little inside
+    # it, wound the other way. Each shows from its own side alone.
+    var count = len(points)
     var mesh = BufferGeometry()
     var flat = List[Float32]()
     var uv = List[Float32]()
-    for r in range(cut.rows):  # pragma: no branch
-        for c in range(cut.columns):  # pragma: no branch
-            var p = points[r * cut.columns + c]
-            flat.append(p.x)
-            flat.append(p.y)
-            flat.append(p.z)
-            uv.append(width * Float32(c) / Float32(cut.columns - 1))
-            uv.append(long * Float32(r) / Float32(cut.rows - 1))
+    for _ in range(2):  # pragma: no branch
+        for r in range(cut.rows):  # pragma: no branch
+            for c in range(cut.columns):  # pragma: no branch
+                var p = points[r * cut.columns + c]
+                flat.append(p.x)
+                flat.append(p.y)
+                flat.append(p.z)
+                uv.append(width * Float32(c) / Float32(cut.columns - 1))
+                uv.append(long * Float32(r) / Float32(cut.rows - 1))
     mesh.set_attribute(String(POSITION), BufferAttribute(flat^, 3))
     mesh.set_attribute("uv", BufferAttribute(uv^, 2))
-    # The hem and the two edges take the trim's dye.
+    # The face takes the dye and the lining its own. The hem and the two
+    # edges take the trim's dye on both.
     var weights = List[Float32]()
-    for r in range(cut.rows):  # pragma: no branch
-        for c in range(cut.columns):  # pragma: no branch
-            var edge = (
-                c == 0 or c == cut.columns - 1 or r == cut.rows - 1
-            ) and Bool(cut.trim)
-            weights.append(Float32(0) if edge else Float32(1))
-            weights.append(0)
-            weights.append(Float32(1) if edge else Float32(0))
-            weights.append(0)
+    for layer in range(2):  # pragma: no branch
+        for r in range(cut.rows):  # pragma: no branch
+            for c in range(cut.columns):  # pragma: no branch
+                var edge = (
+                    c == 0 or c == cut.columns - 1 or r == cut.rows - 1
+                ) and Bool(cut.trim)
+                var body = Float32(0) if edge else Float32(1)
+                weights.append(body if layer == 0 else Float32(0))
+                weights.append(body if layer == 1 else Float32(0))
+                weights.append(Float32(1) if edge else Float32(0))
+                weights.append(0)
     mesh.set_attribute(String(DYE), BufferAttribute(weights^, 4))
-    mesh.set_index(grid[3].copy())
-    mesh.compute_vertex_normals()
+    # `cloth_grid` winds each triangle down, then across, from the right
+    # shoulder toward the left: so wound, it looks forward, into the
+    # body. The face is wound the other way, to look back; the lining as
+    # the grid is.
+    ref triangles = grid[3]
+    var index = List[Int](capacity=2 * len(triangles))
+    for t in range(len(triangles) // 3):  # pragma: no branch
+        index.append(triangles[3 * t])
+        index.append(triangles[3 * t + 2])
+        index.append(triangles[3 * t + 1])
+    for k in triangles:  # pragma: no branch
+        index.append(count + k)
+    mesh.set_index(index^)
     var dyes = List[Color](length=4, fill=cut.dye)
     if cut.trim:
         dyes[TRIM_DYE.value] = cut.trim.value()
+    if cut.lining:
+        dyes[SECONDARY_DYE.value] = cut.lining.value()
     paint(mesh, dyes)
     var look = fabric_material(cut.fabric, Color(255, 255, 255))
     dye_sheen(look, cut.dye)
     var maps = SurfaceMaps()
     maps.apply(look, assets, cut.fabric)
-    look.side = DOUBLE_SIDE
     var node = scene.add(Object3D())
     var geometry = assets.geometries.add(mesh^)
     scene.add_mesh(Mesh(geometry, assets.materials.add(look), node))
-    return Cloak(
+    var cloak = Cloak(
         solver^,
         geometry,
         node,
@@ -1078,6 +1123,9 @@ def add_cloak(
         grid[3].copy(),
         anchored^,
     )
+    # The lining stands in from the face from the first frame.
+    assets.geometries.replace(geometry, cloak.mesh(assets))
+    return cloak^
 
 
 __async def _advance_task(
@@ -1088,7 +1136,7 @@ __async def _advance_task(
     dt: Float32,
 ):
     """Step the cloths of a run of the near cloaks, one thread each."""
-    for k in range(first, past):
+    for k in range(first, past):  # pragma: no branch
         cloaks[unsafe_offset=near[unsafe_offset=k]].solver._advance(dt, 1)
 
 
