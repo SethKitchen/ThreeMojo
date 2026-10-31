@@ -11,12 +11,13 @@ The page is Outfits and armor. The eight callings stand together: a
 peasant, a goodwife, an archer, a monk, a merchant, a noblewoman, a
 man-at-arms and a knight. Each person's seed picks a genome and a
 stature, and `calling_outfit` dresses them for their calling, dyed by
-the seed. Soldiers are toned, and one in three of the others. The women wear their
-hair long, in a braid or in a bun. Each man's seed picks a beard, or
-none. The crowd stands in two rows and
-walks in place, each at a pace of their own, while the camera passes
-along the front row. It writes `out/crowd.png` and prints how long the
-building, the dressing and the frames took.
+the seed. Soldiers are toned, and one in three of the others.
+`calling_hair` and `calling_beard` pick each person's hairstyle and
+beard. The hair is cards, moved and shaded by `GameHairMotion`. The
+crowd stands in two rows and walks in place, each at a pace of their
+own, while the camera passes along the front row. It writes
+`out/crowd.png` and prints how long the building, the dressing and the
+frames took.
 
 The optional second argument is how many frames to draw, one or more.
 The default is 48.
@@ -37,32 +38,23 @@ from core.scene import Scene
 from environments.room_environment import room_environment
 from extensions.attire.mix import (
     ARCHER,
-    GOODWIFE,
     KNIGHT,
     MAN_AT_ARMS,
-    NOBLEWOMAN,
     Calling,
+    calling_beard,
+    calling_hair,
     calling_label,
     calling_outfit,
+    calling_sex,
 )
 from extensions.attire.outfit import dress
 from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.genome import random_genome
-from extensions.humanoid.skeleton.head.hair.beard import (
-    BEARD_COUNT,
-    CLEAN_SHAVEN,
-    Beard,
-)
 from extensions.humanoid.rig.clips import idle_clip, walk_clip
-from extensions.humanoid.rig.game import add_game_humanoid
-from extensions.humanoid.sex import FEMALE, MALE
-from extensions.humanoid.skeleton.head.hair.styles import (
-    BRAID,
-    BUN,
-    GROWN,
-    LONG,
-    HairStyle,
-)
+from extensions.humanoid.rig.game import GameHumanoid, add_game_humanoid
+from extensions.humanoid.rig.game_hair import GameHairMotion
+from extensions.humanoid.skeleton.head.hair.shading import HairLight
+from extensions.humanoid.skeleton.head.hair.simulation import HairWind
 from extensions.humanoid.spec import HumanoidSpec
 from lights.light import ambient_light
 from lights.shadow import PCF_SOFT_SHADOW_MAP
@@ -93,6 +85,7 @@ comptime FPS = 24
 comptime DEFAULT_FRAMES = 48
 comptime PEOPLE = 8
 comptime TRIANGLES = 14000
+comptime CARDS = 400
 # The seed of the first person; each next one adds seven.
 comptime FIRST_SEED = 3
 
@@ -129,17 +122,12 @@ def main() raises:
     var mixer = AnimationMixer()
     var building = Float64(0)
     var dressing = Float64(0)
-    var long_hair: List[HairStyle] = [LONG, BRAID, BUN]
+    var people = List[GameHumanoid]()
+    var specs = List[HumanoidSpec]()
     for index in range(PEOPLE):
         var seed = _seed_of(index)
         var calling = Calling(index)
-        var sex = MALE
-        var style = GROWN
-        var beard = Beard(seed % BEARD_COUNT)
-        if calling == GOODWIFE or calling == NOBLEWOMAN:
-            sex = FEMALE
-            style = long_hair[seed % len(long_hair)]
-            beard = CLEAN_SHAVEN
+        var sex = calling_sex(calling)
         var genome = random_genome(seed)
         # Soldiers are trained; of the others, one in three.
         var build = UNTONED
@@ -164,9 +152,10 @@ def main() raises:
             at,
             HumanoidSpec(stature, sex, build, genome),
             TRIANGLES,
-            hair_style=style,
+            hair_style=calling_hair(calling, sex, seed),
             workers=workers,
-            beard=beard,
+            beard=calling_beard(calling, sex, seed),
+            cards=CARDS,
         )
         building += _seconds_since(start)
         # Stand the soles on the floor.
@@ -192,12 +181,22 @@ def main() raises:
         action.phase = 0.37 * Float32(index)
         var k = mixer.add(action^)
         mixer.action(k).play()
+        people.append(person^)
+        specs.append(HumanoidSpec(stature, sex, build, genome))
     print("Built the crowd in", building, "s and dressed it in", dressing, "s")
 
     cast_received_shadows(scene)
     studio_floor(scene, assets, Length(14.0, METER))
     studio_sun(scene, 1.4, 3.6, 3.0, Length(6.0, METER))
     scene.add_light(ambient_light(Color(200, 210, 255), 0.1))
+    scene.update()
+    var motions = List[GameHairMotion]()
+    for index in range(len(people)):
+        motions.append(GameHairMotion(scene, people[index], specs[index]))
+    var sun = Vector3(1.4, 3.6, 3.0)
+    sun.normalize()
+    var lights = List[HairLight]()
+    lights.append(HairLight(sun, Vector3(2.3, 2.2, 2.0)))
 
     var step = Duration(Float32(1) / Float32(FPS), SECOND)
     var frames = List[Framebuffer]()
@@ -209,6 +208,16 @@ def main() raises:
         var share = Float32(frame) / Float32(max(1, frames_wanted - 1))
         var turn = Float32(-0.45) + Float32(0.9) * share
         var eye = Vector3(5.2 * sin(turn) + 0.25, 1.35, 5.2 * cos(turn) - 0.4)
+        for index in range(len(people)):
+            motions[index].update(
+                scene,
+                assets,
+                people[index],
+                lights,
+                eye,
+                Vector3(0.12, 0.12, 0.13),
+                HairWind(Vector3(1, 0, 0), 0.2),
+            )
         var camera = gallery_camera(
             WIDTH,
             HEIGHT,

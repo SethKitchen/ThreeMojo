@@ -82,7 +82,7 @@ Each calling of the seven has about a dozen choices of cut, dye, metal and headw
 
 Some garments are parti-colored: four merchants' tunics in ten and three women's gowns in ten take a second dye on the left side. Three men-at-arms' surcoats in ten are quartered.
 
-`examples/crowd.mojo` draws the eight callings side by side, each with a genome and a stature of their own. It writes `out/crowd.png`.
+`examples/crowd.mojo` draws the eight callings side by side, each with a genome and a stature of their own. Each person's hair and beard suit their calling, and the hair is 400 cards. It writes `out/crowd.png`.
 
 ![Eight people of eight callings walk and stand in a studio](out/crowd.png)
 
