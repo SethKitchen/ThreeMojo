@@ -219,7 +219,7 @@ $(call gallery,designs,designs)
 $(call gallery,fabrics,fabrics)
 # Two forest outlaws in hoods and hood capes, with longbows and quivers.
 $(call gallery,outlaws,outlaws)
-# Four people in plate and mail of four metals: full and half helmets, plate skirts.
+# Eight people in four kits of plate and mail, each kit on a man and a woman.
 $(call gallery,plate_and_mail,plate_and_mail)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
