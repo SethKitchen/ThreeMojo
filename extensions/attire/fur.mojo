@@ -92,6 +92,20 @@ def fur_test(shell: Int, shells: Int) -> Float32:
     return Float32(shell + 1) / Float32(shells + 1)
 
 
+def fur_shade(shell: Int, shells: Int) -> Float32:
+    """Return how dark one shell is drawn, as a share of its dye.
+
+    Args:
+        shell: Which shell, from zero, the lowest.
+        shells: How many there are.
+
+    Returns:
+        `FUR_ROOT` at the root, rising to one at the highest shell.
+    """
+    var height = Float32(shell + 1) / Float32(shells)
+    return FUR_ROOT + (1 - FUR_ROOT) * height
+
+
 def _scramble(a: Int, b: Int) -> Float32:
     """Return a fixed number from zero to one for two integers."""
     var h = UInt64(a * 73856093 + b * 19349663 + 83492791)
@@ -236,7 +250,7 @@ def fur_shells(
     var made = List[BufferGeometry]()
     for k in range(shells):  # pragma: no branch
         var height = Float32(k + 1) / Float32(shells)
-        var shade = FUR_ROOT + (1 - FUR_ROOT) * height
+        var shade = fur_shade(k, shells)
         var points = List[Float32](capacity=3 * placed.count())
         var tints = List[Float32](capacity=3 * placed.count())
         for v in range(placed.count()):  # pragma: no branch
