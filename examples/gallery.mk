@@ -211,6 +211,8 @@ $(call gallery,tailoring,tailoring)
 $(call gallery,designs,designs)
 # Five people whose cloth shows its character: frills, fur, folds and leather.
 $(call gallery,fabrics,fabrics)
+# Two forest outlaws in hoods and hood capes, with longbows and quivers.
+$(call gallery,outlaws,outlaws)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.

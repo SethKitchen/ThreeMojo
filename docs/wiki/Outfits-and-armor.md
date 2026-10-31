@@ -209,6 +209,10 @@ if carries_bow(calling):
 
 In `examples/archetypes.mojo`, each ranger carries a bow, and a ranger with no cloak wears the quiver.
 
+`examples/outlaws.mojo` dresses two forest outlaws and writes `out/outlaws.png`. A man wears a hood and a hood cape, and a woman a feathered cap and a hood cape. Each holds a longbow and wears a quiver on the back.
+
+![Two forest outlaws from behind, with longbows in hand and quivers on their backs](out/outlaws.png)
+
 ## Saved outfits and dressed bakes
 
 A player saves a look and puts it on again, on the same body or another. `outfit_json` writes an outfit as one JSON object. `outfit_from_json` reads it back. Slots, layers, fabrics, articulations, patterns and forms are written by name, anchors by joint name, dyes as sRGB bytes, and the flare as a number. A garment saved without a form reads as fitted, with no flare.
