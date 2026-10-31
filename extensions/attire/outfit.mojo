@@ -99,6 +99,13 @@ from extensions.attire.skirt import (
     skirt_top,
 )
 from extensions.attire.surface import SurfaceMaps, garment_uvs
+from materials.material import Material
+from extensions.attire.design import (
+    DesignMaps,
+    design_dyes,
+    design_parts,
+    worn_design,
+)
 from extensions.humanoid.rig.joints import HEAD, LEFT_THIGH, RIGHT_THIGH
 from extensions.humanoid.rig.game import GameHumanoid
 from extensions.humanoid.skeleton.head.hair.shading import HairLight
@@ -184,11 +191,15 @@ struct Dressed(Movable):
     """Each garment's whole shell, with nothing hidden, bound to its
     bones: what it weighs is its shell's. Empty for a garment that
     covers none of the person."""
+    var parts: List[List[Int]]
+    """Every skinned mesh of each garment, its `meshes` entry first. A
+    garment in a design is drawn in up to three parts, one texture
+    each; see `extensions.attire.design`."""
 
     def __init__(
         out self, var meshes: List[Int], var shells: List[BufferGeometry]
     ) raises:
-        """Hold the garments' meshes and shells.
+        """Hold the garments' meshes and shells, each garment in one part.
 
         Args:
             meshes: One skinned mesh index, or -1, per garment.
@@ -199,6 +210,12 @@ struct Dressed(Movable):
         """
         if len(meshes) != len(shells):
             raise Error("A dressed outfit needs one shell per garment")
+        self.parts = List[List[Int]]()
+        for mesh in meshes:
+            if mesh >= 0:
+                self.parts.append([mesh])
+            else:
+                self.parts.append(List[Int]())
         self.meshes = meshes^
         self.shells = shells^
 
@@ -290,7 +307,7 @@ def dress_pieces(
         # A neckline or an opening cuts the cover away, so what is under
         # it shows there.
         if is_cut(garment.neckline, garment.opening):
-            for v in range(count):
+            for v in range(count):  # pragma: no branch
                 mine[v] *= opening_mask(
                     person.rig,
                     garment.neckline,
@@ -550,6 +567,31 @@ def _press_under_hats(
             )
 
 
+def _add_part(
+    mut scene: Scene,
+    mut assets: Assets,
+    person: GameHumanoid,
+    var piece: BufferGeometry,
+    look: Material,
+) raises -> Int:
+    """Add one part of a garment to the scene, on the person's skeleton,
+    and return its skinned mesh."""
+    ref body = scene.skinned_meshes[person.skins[0]]
+    var skeleton = body.skeleton.copy()
+    var bind = body.bind_matrix
+    var at = len(scene.skinned_meshes)
+    scene.add_skinned_mesh(
+        SkinnedMesh(
+            assets.geometries.add(piece^),
+            assets.materials.add(look),
+            person.root,
+            skeleton^,
+            bind,
+        )
+    )
+    return at
+
+
 def dress(
     mut scene: Scene,
     mut assets: Assets,
@@ -617,14 +659,14 @@ def dress(
         for k in range(len(person.cards)):
             if person.cards[k].node:
                 scene.node(person.cards[k].node.value()).visible = False
-    ref body = scene.skinned_meshes[person.skins[0]]
-    var skeleton = body.skeleton.copy()
-    var bind = body.bind_matrix
     var meshes = List[Int]()
     var shells = List[BufferGeometry]()
+    var parts = List[List[Int]]()
     var maps = SurfaceMaps()
+    var designs = DesignMaps()
     for g in range(count):
         ref garment = outfit.garments[g]
+        parts.append(List[Int]())
         if wholes[g]:
             shells.append(articulate(wholes[g].take(), garment))
         else:
@@ -639,7 +681,8 @@ def dress(
         if thick >= RIM_THINNEST:
             piece = add_rim(piece, min(thick, RIM_DEEPEST))
         piece = dye_pattern(piece, person.rig, garment.pattern)
-        paint(piece, garment.dyes)
+        var design = worn_design(garment.design, garment.fabric)
+        paint(piece, design_dyes(design, garment.dyes))
         piece = garment_uvs(piece, person.rig)
         normalize_normals(piece)
         var material = fabric_material(
@@ -647,15 +690,15 @@ def dress(
         )
         dye_sheen(material, garment.dyes[PRIMARY_DYE.value])
         maps.apply(material, assets, garment.fabric)
-        var look = assets.materials.add(material)
+        var cut = design_parts(piece, design)
+        var drawn = cut.drawn(designs, assets, design, garment.dyes)
         meshes.append(len(scene.skinned_meshes))
-        scene.add_skinned_mesh(
-            SkinnedMesh(
-                assets.geometries.add(piece^),
-                look,
-                person.root,
-                skeleton.copy(),
-                bind,
+        for k in range(len(drawn.maps)):  # pragma: no branch
+            var look = material.copy()
+            look.map = drawn.maps[k]
+            parts[g].append(
+                _add_part(scene, assets, person, drawn.pieces.pop(0), look)
             )
-        )
-    return Dressed(meshes^, shells^)
+    var dressed = Dressed(meshes^, shells^)
+    dressed.parts = parts^
+    return dressed^

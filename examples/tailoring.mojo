@@ -13,7 +13,10 @@ shirt and trousers; a merchant in a doublet and breeches over hose; a
 courtier in a waistcoat under a frock coat; a lady in a ball gown over
 a chemise; a gentleman in a waistcoat under a long coat; a lady in a
 gown with banded sleeves; and a prince in a doublet under an open robe.
-Each person's seed picks a genome. It writes `out/tailoring.png`.
+Most wear a design over their dyes: a floral bodice, tartan
+trousers, pinstripe breeches, brocade and damask coats and gowns, a
+diaper waistcoat and a herringbone coat. Each person's seed picks a
+genome. It writes `out/tailoring.png`.
 
 The optional second argument turns every person about the vertical, in
 degrees. The default is 20.
@@ -42,7 +45,14 @@ from extensions.attire.garment import (
 )
 from extensions.attire.kinds import (
     BANDED_SLEEVES,
+    BROCADE,
+    DAMASK,
+    DIAPER,
+    FLORAL,
+    HERRINGBONE,
+    PINSTRIPE,
     PRIMARY_DYE,
+    TARTAN,
     SECONDARY_DYE,
     TRIM_DYE,
 )
@@ -97,38 +107,57 @@ def _outfit(index: Int) raises -> Outfit:
     var outfit = Outfit()
     if index == 0:
         outfit.add(chemise())
-        outfit.add(laced_bodice())
+        var laced = laced_bodice()
+        laced.design = FLORAL
+        outfit.add(laced^)
         outfit.add(skirt())
         outfit.add(apron())
         outfit.add(boots())
     elif index == 1:
         outfit.add(laced_shirt())
-        outfit.add(trousers())
+        var plaid = trousers()
+        plaid.design = TARTAN
+        plaid.dyes[SECONDARY_DYE.value] = Color(40, 70, 40)
+        plaid.dyes[TRIM_DYE.value] = Color(170, 40, 30)
+        outfit.add(plaid^)
         outfit.add(belt())
         outfit.add(tall_boots())
     elif index == 2:
         outfit.add(shirt())
         outfit.add(hose())
-        outfit.add(breeches())
-        outfit.add(doublet())
+        var striped = breeches()
+        striped.design = PINSTRIPE
+        outfit.add(striped^)
+        var coat = doublet()
+        coat.design = BROCADE
+        outfit.add(coat^)
         outfit.add(boots())
     elif index == 3:
         outfit.add(shirt())
         outfit.add(trousers())
-        outfit.add(waistcoat())
-        outfit.add(frock_coat())
+        var vest = waistcoat()
+        vest.design = FLORAL
+        outfit.add(vest^)
+        var coat = frock_coat()
+        coat.design = DAMASK
+        outfit.add(coat^)
         outfit.add(tall_boots())
     elif index == 4:
         outfit.add(chemise())
-        outfit.add(ball_gown())
+        var gown_ = ball_gown()
+        gown_.design = BROCADE
+        outfit.add(gown_^)
         outfit.add(boots())
     elif index == 5:
         outfit.add(shirt())
         outfit.add(trousers())
         var vest = waistcoat()
         vest.dyes[PRIMARY_DYE.value] = Color(196, 160, 72)
+        vest.design = DIAPER
         outfit.add(vest^)
-        outfit.add(long_coat())
+        var coat = long_coat()
+        coat.design = HERRINGBONE
+        outfit.add(coat^)
         outfit.add(tall_boots())
     elif index == 6:
         outfit.add(shirt())
@@ -137,6 +166,7 @@ def _outfit(index: Int) raises -> Outfit:
         dress_.dyes[PRIMARY_DYE.value] = Color(32, 96, 112)
         dress_.dyes[SECONDARY_DYE.value] = GOLD_LACE
         dress_.dyes[TRIM_DYE.value] = GOLD_LACE
+        dress_.design = DAMASK
         outfit.add(dress_^)
         outfit.add(belt())
         outfit.add(boots())
@@ -146,9 +176,11 @@ def _outfit(index: Int) raises -> Outfit:
         outfit.add(breeches())
         var coat = doublet()
         coat.dyes[PRIMARY_DYE.value] = Color(150, 150, 170)
+        coat.design = DIAPER
         outfit.add(coat^)
         var robe = open_robe()
         robe.dyes[PRIMARY_DYE.value] = Color(132, 150, 176)
+        robe.design = BROCADE
         outfit.add(robe^)
         outfit.add(boots())
     return outfit^

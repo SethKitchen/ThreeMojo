@@ -15,7 +15,8 @@ is written by name and its flare as a number; a garment saved without
 them is read as fitted, with no flare. Its metal and its headwear are
 written by name; a garment saved without them is read as steel, with no
 headwear. Its neckline, opening and sleeve are written by name; a
-garment saved without them is read round-necked, closed and fitted.
+garment saved without them is read round-necked, closed and fitted. Its
+design is written by name; a garment saved without one is read plain.
 
 `outfit_named` gives three outfits ready to wear: a peasant's, a
 man-at-arms's in mail, and a knight's full harness under a surcoat.
@@ -76,6 +77,8 @@ from extensions.attire.kinds import (
     opening_named,
     sleeve_label,
     sleeve_named,
+    design_label,
+    design_named,
     layer_label,
     layer_named,
     pattern_label,
@@ -239,6 +242,7 @@ def garment_record(garment: Garment) raises -> UserData:
     record.set_string("neckline", neckline_label(garment.neckline))
     record.set_string("opening", opening_label(garment.opening))
     record.set_string("sleeve", sleeve_label(garment.sleeve))
+    record.set_string("design", design_label(garment.design))
     record.set_json("starts", _numbers(garment.cover.starts))
     record.set_json("ends", _numbers(garment.cover.ends))
     return record^
@@ -374,6 +378,8 @@ def garment_from(document: JsonDocument, node: Int) raises -> Garment:
             document.optional_string(node, "opening", "closed")
         ),
         sleeve=sleeve_named(document.optional_string(node, "sleeve", "fitted")),
+        # One saved before designs is plain.
+        design=design_named(document.optional_string(node, "design", "plain")),
     )
     garment.dyes = colors^
     garment.check()

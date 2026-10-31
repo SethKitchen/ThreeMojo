@@ -31,6 +31,12 @@ from extensions.attire.garment import (
     tunic,
 )
 from extensions.attire.kinds import (
+    ARMOR_LAYER,
+    LEGS_SLOT,
+    PLATE,
+    BROCADE,
+    DAMASK,
+    TARTAN,
     LINEN,
     OVER_LAYER,
     SKIRTED,
@@ -58,12 +64,14 @@ from extensions.attire.armory import (
 )
 from extensions.attire.mesh_ops import ACCENT
 from extensions.attire.outfit import (
+    Dressed,
     Outfit,
     dress,
     dress_pieces,
     garment_detail,
 )
 from objects.skinned_mesh import SKIN_INDEX
+from extensions.attire.tailor import doublet, skirt
 from render.texture_store import NO_TEXTURE
 from std.testing import (
     TestSuite,
@@ -493,6 +501,99 @@ def test_a_coarse_skin_s_garments_take_less_detail() raises:
     )
     between.set_index(List[Int](length=3 * 4900, fill=0))
     assert_almost_equal(garment_detail(between), 0.7, atol=1e-4)
+
+
+def test_a_design_draws_a_garment_in_parts() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    var outfit = Outfit()
+    outfit.add(shirt())
+    var coat = doublet()
+    coat.design = BROCADE
+    outfit.add(coat^)
+    var legs = hose()
+    legs.design = TARTAN
+    outfit.add(legs^)
+    outfit.add(boots())
+    var dressed = dress(scene, assets, person, outfit)
+    # A plain shirt is one part, drawn without a map.
+    assert_equal(len(dressed.parts[0]), 1)
+    assert_equal(dressed.parts[0][0], dressed.meshes[0])
+    ref linen = scene.skinned_meshes[dressed.meshes[0]]
+    assert_equal(assets.materials.get(linen.material).map, NO_TEXTURE)
+    # A brocade doublet: the brocade, its plain panel, its braided trim.
+    assert_equal(len(dressed.parts[1]), 3)
+    assert_equal(dressed.parts[1][0], dressed.meshes[1])
+    var maps = List[Int]()
+    for k in dressed.parts[1]:
+        var id = assets.materials.get(scene.skinned_meshes[k].material).map
+        maps.append(id.value)
+    assert_true(maps[0] != NO_TEXTURE.value)
+    assert_equal(maps[1], NO_TEXTURE.value)
+    assert_true(maps[2] != NO_TEXTURE.value and maps[2] != maps[0])
+    # The brocade's vertex colors are white but for wear.
+    ref brocade = assets.geometries.get(
+        scene.skinned_meshes[dressed.meshes[1]].geometry
+    )
+    ref colors = brocade.attribute_view(String(COLOR))
+    assert_almost_equal(colors.component(0, 1), 1, atol=0.01)
+    # Tartan braids nothing, and the boots hide the hose's hems.
+    assert_equal(len(dressed.parts[2]), 1)
+    # Leather boots wear hide.
+    ref hide = scene.skinned_meshes[dressed.meshes[3]]
+    assert_true(assets.materials.get(hide.material).map != NO_TEXTURE)
+    # Damask lies on the doublet's body and panel alike, and braids its
+    # trim.
+    var other = coarse_person(scene, assets)
+    var fine = Outfit()
+    var damask = doublet()
+    damask.design = DAMASK
+    fine.add(damask^)
+    assert_equal(len(dress(scene, assets, other, fine).parts[0]), 2)
+    # A garment hidden wholly has no parts.
+    var bare = Dressed([-1], [BufferGeometry()])
+    assert_equal(len(bare.parts[0]), 0)
+
+
+def test_a_garment_that_covers_nothing_draws_nothing() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    var outfit = Outfit()
+    outfit.add(
+        Garment(
+            "nothing", TORSO_SLOT, OVER_LAYER, LINEN, Cover(), Color(9, 9, 9)
+        )
+    )
+    var dressed = dress(scene, assets, person, outfit)
+    assert_equal(dressed.meshes[0], -1)
+    assert_false(dressed.shells[0].has_attribute(String(POSITION)))
+    assert_equal(len(dressed.parts[0]), 0)
+
+
+def test_a_skirt_hangs_clear_of_plate_on_one_thigh() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    var cuisse = Cover()
+    cuisse.reach_to(LEFT_THIGH, 0.8)
+    var plate = Garment(
+        "left cuisse",
+        LEGS_SLOT,
+        ARMOR_LAYER,
+        PLATE,
+        cuisse^,
+        Color(200, 200, 205),
+    )
+    var outfit = Outfit()
+    outfit.add(plate^)
+    outfit.add(skirt())
+    var dressed = dress(scene, assets, person, outfit)
+    assert_true(dressed.meshes[1] >= 0)
+    # The skirt stands out past the plate on the left thigh.
+    var reach = _skirt_reach(person, dressed.shells[1], 0.15)
+    assert_true(reach > _skirt_reach(person, dressed.shells[0], 0.15))
 
 
 def _skirt_reach(

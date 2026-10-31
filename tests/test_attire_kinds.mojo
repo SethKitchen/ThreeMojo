@@ -20,6 +20,19 @@ from extensions.attire.kinds import (
     NECKLINE_COUNT,
     OPENING_COUNT,
     SLEEVE_COUNT,
+    DESIGN_COUNT,
+    BROCADE,
+    DAMASK,
+    DIAPER,
+    FLORAL,
+    HERRINGBONE,
+    HIDE,
+    PLAIN,
+    TARTAN,
+    Design,
+    design_label,
+    design_named,
+    require_design,
     SQUARE_NECK,
     OPEN_BELOW,
     BISHOP_SLEEVE,
@@ -298,6 +311,31 @@ def test_necklines_openings_and_sleeves_are_named() raises:
         _ = opening_named("slashed")
     with assert_raises(contains="No sleeve"):
         _ = sleeve_named("leg-of-mutton")
+
+
+def test_designs_are_named_and_sorted_by_how_they_are_drawn() raises:
+    for k in range(DESIGN_COUNT):
+        assert_equal(design_named(design_label(Design(k))), Design(k))
+    assert_equal(design_label(BROCADE), "brocade")
+    assert_equal(design_label(Design(-1)), "design")
+    assert_false(Design(DESIGN_COUNT).is_valid())
+    require_design(HIDE)
+    with assert_raises(contains="design must"):
+        require_design(Design(40))
+    with assert_raises(contains="No design"):
+        _ = design_named("paisley")
+    # Each named design but plain is tonal or in colors, not both.
+    for k in range(1, DESIGN_COUNT):
+        assert_true(Design(k).is_tonal() != Design(k).is_colored())
+    assert_false(PLAIN.is_tonal() or PLAIN.is_colored())
+    assert_false(Design(40).is_colored())
+    assert_true(DAMASK.is_tonal() and HERRINGBONE.is_tonal())
+    assert_true(TARTAN.is_colored())
+    # The designs of fine cloth braid their trim.
+    for design in [DAMASK, BROCADE, DIAPER, FLORAL]:
+        assert_true(design.braids_trim())
+    for design in [PLAIN, TARTAN, HERRINGBONE, HIDE]:
+        assert_false(design.braids_trim())
 
 
 def main() raises:

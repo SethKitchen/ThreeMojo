@@ -29,8 +29,9 @@ A `Garment` holds no mesh. `dress` makes its mesh from the skin of the person wh
 | `pattern`, `dyes` | `DyePattern`, four `Color` values | How it is dyed. |
 | `drape`, `ease` | `Int`, `Length` | Smoothing passes of its shell, and how loose it is cut. |
 | `form`, `flare` | `Form`, `Float32` | How its shell is shaped where it does not follow the skin, and how far a skirt widens for each meter it falls. |
+| `design` | `Design` | The design woven or embroidered over its dyes. Plain by default. |
 
-Every slot, layer, fabric, articulation, pattern, form, dye channel and wear channel is a type with `is_valid`. A bare integer does not compile.
+Every slot, layer, fabric, articulation, pattern, form, design, dye channel and wear channel is a type with `is_valid`. A bare integer does not compile.
 
 ## Cover
 
@@ -317,6 +318,51 @@ soil(piece, Length(0.3, METER), 0.6)
 paint(piece, garment.dyes)
 ```
 
+## Designs
+
+A design is a texture that tiles over a garment's dyes. A dye pattern is cut on the skin's triangles, so it cannot show a detail smaller than a triangle. A design can show a flower 4 cm wide. It tiles in the garment's texture coordinates, which run in meters round its bones. See [Surface](#surface).
+
+```mojo
+var coat = doublet()
+coat.design = BROCADE
+```
+
+| Design | Tile | What it shows |
+|---|---|---|
+| `PLAIN` | | the dyes alone |
+| `DAMASK` | 14 cm | rosettes in an ogee lattice, lighter than the ground |
+| `BROCADE` | 12 cm | the same, in the trim's dye |
+| `TARTAN` | 16 cm | bands of the primary and secondary dyes, with thin lines of the trim's dye, in a twill |
+| `PINSTRIPE` | 8 cm | four thin stripes of the trim's dye in each tile |
+| `DIAPER` | 7 cm | a lattice of diamonds in the trim's dye, with a dot in each diamond |
+| `FLORAL` | 12 cm | three flowers of the trim's dye, with hearts of the secondary dye |
+| `CHECK` | 8 cm | checks of the trim's dye, and a blend where the bands cross |
+| `HERRINGBONE` | 4 cm | a zigzag twill, lighter and darker than the dye |
+| `HIDE` | 25 cm | the mottle and the creases of tanned hide |
+
+A tonal design is damask, herringbone or hide. It is a texture of shades, and the dye under it is multiplied by the shade. So it lightens and darkens every dye that it lies on. A tonal design shows less on a dark dye, as real damask does.
+
+A design in colors is drawn in the garment's own dyes. The primary dye is its ground, the trim's dye is its motif, and the secondary dye is its third color. A motif that is nearly the ground's color does not show. `contrast` then draws it in a lighter shade of a dark ground, or a darker shade of a light ground.
+
+`worn_design` says which design a fabric shows. Linen, wool, silk, velvet, padding and felt show their design. Plain leather shows hide. Mail, plate, scale, fur and straw show no design.
+
+### Parts and braids
+
+A skinned mesh has one material, and a material has one color map. So `dress` cuts a garment in a design into up to three parts, and adds each part as a skinned mesh. `Dressed.parts` holds every part of each garment. `Dressed.meshes` holds the first part.
+
+| Design | Designed part | Plain part | Braided part |
+|---|---|---|---|
+| `PLAIN`, `HERRINGBONE`, `HIDE` | all | none | none |
+| `DAMASK` | all but the trim | none | the trim |
+| `BROCADE`, `DIAPER`, `FLORAL` | the primary dye | the secondary and accent dyes | the trim |
+| `TARTAN`, `PINSTRIPE`, `CHECK` | the primary dye | the rest | none |
+
+A design in colors paints its primary part white, so the texture gives the color and the vertex colors give the wear. A braid is a tonal cable of two strands, 4 cm a tile. Only the designs of fine cloth braid their trim. `DesignMaps` makes each texture once for each call to `dress`. A texture in colors is made once for each set of three dyes.
+
+`examples/designs.mojo` dresses nine people, each in one design, and writes `out/designs.png`.
+
+![Nine people in damask, brocade, tartan, pinstripe, diaper, floral, check, herringbone and hide](out/designs.png)
+
 ## The wardrobe
 
 `wardrobe()` gives twenty-four medieval garments.
@@ -410,7 +456,7 @@ paint(piece, garment.dyes)
 
 A waistcoat's V shows the shirt under it, and a frock coat's parted skirts show the breeches. A ball gown's square neck shows the chemise, and so does its sleeve's end at the elbow.
 
-`examples/tailoring.mojo` dresses eight people in the tailor's garments, and writes `out/tailoring.png`.
+`examples/tailoring.mojo` dresses eight people in the tailor's garments, and writes `out/tailoring.png`. Most of the garments wear a design.
 
 ![Eight people in chemises, bodices, skirts, aprons, laced shirts, doublets, coats and gowns](out/tailoring.png)
 
@@ -434,4 +480,4 @@ Roblox's cages and MakeHuman's `mhclo` files bind a garment to a body mesh from 
 
 ## Tests
 
-`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_metal.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_skirt.mojo`, `test_attire_last.mojo`, `test_attire_cowl.mojo`, `test_attire_dome.mojo`, `test_attire_headwear.mojo`, `test_attire_surface.mojo`, `test_attire_dye.mojo`, `test_attire_garment.mojo`, `test_attire_armory.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.
+`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_metal.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_skirt.mojo`, `test_attire_last.mojo`, `test_attire_cowl.mojo`, `test_attire_dome.mojo`, `test_attire_headwear.mojo`, `test_attire_surface.mojo`, `test_attire_dye.mojo`, `test_attire_design.mojo`, `test_attire_garment.mojo`, `test_attire_armory.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.

@@ -28,6 +28,8 @@ from extensions.attire.garment import (
     vambraces,
 )
 from extensions.attire.kinds import (
+    BROCADE,
+    PLAIN,
     BISHOP_SLEEVE,
     CLOSED,
     FITTED,
@@ -309,6 +311,23 @@ def test_an_outfit_keeps_its_cuts_and_its_sleeves() raises:
     assert_equal(old.garments[0].neckline, ROUND_NECK)
     assert_equal(old.garments[1].opening, CLOSED)
     assert_equal(old.garments[0].sleeve, FITTED_SLEEVE)
+
+
+def test_an_outfit_keeps_its_designs() raises:
+    var outfit = Outfit()
+    outfit.add(chemise())
+    var coat = frock_coat()
+    coat.design = BROCADE
+    outfit.add(coat^)
+    var text = outfit_json(outfit)
+    assert_true(text.find('"design":"plain"') >= 0)
+    assert_true(text.find('"design":"brocade"') >= 0)
+    var again = outfit_from_json(text)
+    assert_equal(again.garments[0].design, PLAIN)
+    assert_equal(again.garments[1].design, BROCADE)
+    # One saved before designs is plain.
+    var old = outfit_from_json(_drop(_drop(text, "design"), "design"))
+    assert_equal(old.garments[1].design, PLAIN)
 
 
 def main() raises:

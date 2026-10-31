@@ -121,6 +121,17 @@ from extensions.attire.kinds import (
     ACCENT_DYE,
     BANDED_SLEEVES,
     BEND,
+    BROCADE,
+    CHECK,
+    DAMASK,
+    DIAPER,
+    FLORAL,
+    HERRINGBONE,
+    PINSTRIPE,
+    PLAIN,
+    TARTAN,
+    WOOL,
+    Design,
     CHECKY,
     CHEVRON,
     CROSS,
@@ -554,6 +565,15 @@ def _dyed(var garment: Garment, primary: Color, trim: Color) -> Garment:
     return garment^
 
 
+def _woven(
+    seed: Int, salt: Int, percent: Int, var choices: List[Design]
+) -> Design:
+    """Return one of some designs by a chance in a hundred, or plain."""
+    if not _chance(seed, salt, percent):
+        return PLAIN
+    return _pick(choices, seed, salt + 1000)
+
+
 def calling_outfit(calling: Calling, seed: Int) raises -> Outfit:
     """Return the outfit of a calling, dyed and chosen by a seed.
 
@@ -615,6 +635,7 @@ def dressed_as(calling: Calling, sex: Sex, seed: Int) raises -> Outfit:
                 made.dyes[SECONDARY_DYE.value] = rich_dye(rich + 3)
                 made.dyes[TRIM_DYE.value] = rich_dye(rich + 3)
                 made.pattern = heraldry(seed, 77)
+                made.design = _woven(seed, 105, 30, [DAMASK])
             elif made.name == "hose":
                 made = _dyed(made^, plain_dye(plain), plain_dye(plain))
             outfit.add(made^)
@@ -634,7 +655,9 @@ def dressed_as(calling: Calling, sex: Sex, seed: Int) raises -> Outfit:
         return outfit^
     if calling == MONK:
         outfit.add(shirt())
-        outfit.add(_dyed(robe(), plain_dye(3 + plain % 3 * 2), plain_dye(3)))
+        var habit = _dyed(robe(), plain_dye(3 + plain % 3 * 2), plain_dye(3))
+        habit.design = _woven(seed, 106, 30, [HERRINGBONE])
+        outfit.add(habit^)
         outfit.add(_dyed(hood(), plain_dye(3 + plain % 3 * 2), plain_dye(3)))
         outfit.add(belt())
         outfit.add(boots())
@@ -645,6 +668,7 @@ def dressed_as(calling: Calling, sex: Sex, seed: Int) raises -> Outfit:
         else:
             outfit.add(shirt())
             var dress = _dyed(gown(), plain_dye(plain), plain_dye(plain + 6))
+            dress.design = _woven(seed, 107, 35, [FLORAL, CHECK])
             # A gown can be parti-colored: a second dye on the left side.
             if _chance(seed, 8, 30):
                 dress.pattern = PARTY
@@ -663,6 +687,7 @@ def dressed_as(calling: Calling, sex: Sex, seed: Int) raises -> Outfit:
             _townsman(outfit, seed)
         elif not _has_top(outfit):
             var coat = _dyed(tunic(), plain_dye(plain), plain_dye(plain + 1))
+            coat.design = _woven(seed, 108, 25, [CHECK, HERRINGBONE])
             outfit.add(coat^)
         if _chance(seed, 5, 40):
             outfit.add(_dyed(hood(), plain_dye(plain + 2), plain_dye(plain)))
@@ -675,7 +700,7 @@ def dressed_as(calling: Calling, sex: Sex, seed: Int) raises -> Outfit:
 def _has_top(outfit: Outfit) -> Bool:
     """Return whether an outfit has a garment worn as a top: a laced
     shirt, which needs no tunic over it."""
-    for garment in outfit.garments:
+    for garment in outfit.garments:  # pragma: no branch
         if garment.name == "laced shirt":
             return True
     return False
@@ -692,12 +717,18 @@ def _trews(mut outfit: Outfit, calling: Calling, seed: Int) raises:
         outfit.add(linen^)
     else:
         outfit.add(shirt())
+    var weave = _woven(seed, 109, 35, [CHECK, TARTAN, HERRINGBONE])
     if calling == PEASANT and _chance(seed, 86, 50):
-        outfit.add(_dyed(trousers(), plain_dye(plain + 4), plain_dye(plain)))
+        var legs = _dyed(trousers(), plain_dye(plain + 4), plain_dye(plain))
+        legs.dyes[SECONDARY_DYE.value] = plain_dye(plain + 2)
+        legs.design = weave
+        outfit.add(legs^)
         return
     outfit.add(_dyed(hose(), plain_dye(plain + 3), plain_dye(plain + 3)))
     if calling == PEASANT:
-        outfit.add(_dyed(breeches(), plain_dye(plain + 4), plain_dye(plain)))
+        var seat = _dyed(breeches(), plain_dye(plain + 4), plain_dye(plain))
+        seat.design = weave
+        outfit.add(seat^)
 
 
 def _townsman(mut outfit: Outfit, seed: Int) raises:
@@ -712,9 +743,13 @@ def _townsman(mut outfit: Outfit, seed: Int) raises:
         if _chance(seed, 8, 40):
             coat.pattern = PARTY
             coat.dyes[SECONDARY_DYE.value] = plain_dye(plain + 4)
+        else:
+            coat.design = _woven(seed, 110, 40, [CHECK, PINSTRIPE])
         outfit.add(coat^)
         return
-    outfit.add(_dyed(breeches(), rich_dye(rich + 2), rich_dye(rich + 2)))
+    var seat = _dyed(breeches(), rich_dye(rich + 2), plain_dye(6))
+    seat.design = _woven(seed, 111, 40, [PINSTRIPE])
+    outfit.add(seat^)
     if pick < 6:
         var coat = doublet()
         coat.dyes[PRIMARY_DYE.value] = rich_dye(rich)
@@ -722,13 +757,16 @@ def _townsman(mut outfit: Outfit, seed: Int) raises:
         if _chance(seed, 88, 35):
             coat.pattern = SLEEVES if _chance(seed, 89, 50) else BANDED_SLEEVES
             coat.dyes[SECONDARY_DYE.value] = rich_dye(rich + 3)
+        coat.design = _woven(seed, 112, 60, [BROCADE, DAMASK, DIAPER])
         outfit.add(coat^)
         return
     var vest = waistcoat()
     vest.dyes[PRIMARY_DYE.value] = rich_dye(rich + 3)
+    vest.design = _woven(seed, 113, 60, [FLORAL, BROCADE, DIAPER])
     outfit.add(vest^)
     var coat = frock_coat() if pick < 8 else long_coat()
     coat.dyes[PRIMARY_DYE.value] = rich_dye(rich)
+    coat.design = _woven(seed, 114, 50, [DAMASK, HERRINGBONE])
     outfit.add(coat^)
 
 
@@ -737,9 +775,14 @@ def _skirted(mut outfit: Outfit, seed: Int) raises:
     an apron, each in a plain dye of its own."""
     outfit.add(chemise())
     var laced = plain_dye(_mixed(seed, 90))
-    outfit.add(_dyed(laced_bodice(), laced, laced))
+    var bodice_ = _dyed(laced_bodice(), laced, laced)
+    bodice_.design = _woven(seed, 115, 30, [FLORAL, DIAPER])
+    outfit.add(bodice_^)
     var hem = plain_dye(_mixed(seed, 91))
-    outfit.add(_dyed(skirt(), hem, hem))
+    var skirt_ = _dyed(skirt(), hem, plain_dye(_mixed(seed, 116)))
+    skirt_.dyes[SECONDARY_DYE.value] = plain_dye(_mixed(seed, 117))
+    skirt_.design = _woven(seed, 118, 40, [CHECK, TARTAN, FLORAL])
+    outfit.add(skirt_^)
     if _chance(seed, 92, 70):
         outfit.add(apron())
 
@@ -756,6 +799,7 @@ def _gowned(mut outfit: Outfit, seed: Int) raises:
         gown_.dyes[SECONDARY_DYE.value] = rich_dye(rich + 3) if _chance(
             seed, 94, 50
         ) else IVORY_SILK
+        gown_.design = _woven(seed, 119, 70, [BROCADE, DAMASK, FLORAL])
         outfit.add(gown_^)
         return
     outfit.add(shirt())
@@ -769,6 +813,7 @@ def _gowned(mut outfit: Outfit, seed: Int) raises:
         dress.dyes[SECONDARY_DYE.value] = GOLD_LACE if _chance(
             seed, 97, 50
         ) else rich_dye(rich + 3)
+    dress.design = _woven(seed, 120, 50, [DAMASK, BROCADE, FLORAL])
     outfit.add(dress^)
 
 
@@ -780,7 +825,9 @@ def _farmer(woman: Bool, seed: Int) raises -> Outfit:
         _skirted(outfit, seed)
     elif woman:
         outfit.add(_dyed(shirt(), plain_dye(6), plain_dye(6)))
-        outfit.add(_dyed(gown(), plain_dye(plain), plain_dye(_mixed(seed, 59))))
+        var frock = _dyed(gown(), plain_dye(plain), plain_dye(_mixed(seed, 59)))
+        frock.design = _woven(seed, 121, 30, [CHECK, FLORAL])
+        outfit.add(frock^)
         if _chance(seed, 12, 50):
             var laced = plain_dye(_mixed(seed, 60))
             outfit.add(_dyed(bodice(), laced, laced))
@@ -789,11 +836,15 @@ def _farmer(woman: Bool, seed: Int) raises -> Outfit:
             outfit.add(laced_shirt())
         else:
             outfit.add(_dyed(shirt(), plain_dye(6), plain_dye(6)))
-        outfit.add(_dyed(trousers(), plain_dye(plain + 3), plain_dye(3)))
+        var legs = _dyed(trousers(), plain_dye(plain + 3), plain_dye(3))
+        legs.design = _woven(seed, 122, 40, [HERRINGBONE, CHECK])
+        outfit.add(legs^)
         if _chance(seed, 12, 50):
             outfit.add(_dyed(smock(), plain_dye(6), plain_dye(plain)))
         else:
-            outfit.add(_dyed(tunic(), plain_dye(plain), plain_dye(plain + 1)))
+            var coat = _dyed(tunic(), plain_dye(plain), plain_dye(plain + 1))
+            coat.design = _woven(seed, 123, 30, [CHECK, HERRINGBONE])
+            outfit.add(coat^)
     if _chance(seed, 13, 70):
         outfit.add(straw_hat())
     if _chance(seed, 14, 50):
@@ -813,7 +864,18 @@ def _barbarian(woman: Bool, seed: Int) raises -> Outfit:
     elif woman:
         var hide = plain_dye(3) if _chance(seed, 61, 50) else fur_dye(1)
         outfit.add(_dyed(jerkin(), hide, hide))
-    outfit.add(_dyed(fur_kilt(), fur_dye(pelt), fur_dye(pelt + 1)))
+    if _chance(seed, 124, 35):
+        # A kilt of wool in a tartan of the clan's three dyes.
+        var plaid = _dyed(
+            fur_kilt(), forest_dye(pelt), plain_dye(_mixed(seed, 125))
+        )
+        plaid.name = "plaid kilt"
+        plaid.fabric = WOOL
+        plaid.design = TARTAN
+        plaid.dyes[SECONDARY_DYE.value] = plain_dye(_mixed(seed, 126))
+        outfit.add(plaid^)
+    else:
+        outfit.add(_dyed(fur_kilt(), fur_dye(pelt), fur_dye(pelt + 1)))
     outfit.add(_dyed(fur_boots(), fur_dye(pelt), fur_dye(pelt)))
     outfit.add(bracers())
     outfit.add(belt())
@@ -841,6 +903,8 @@ def _royal(woman: Bool, seed: Int) raises -> Outfit:
         gown_.dyes[SECONDARY_DYE.value] = IVORY_SILK if _chance(
             seed, 99, 50
         ) else GOLD_LACE
+        gown_.dyes[TRIM_DYE.value] = GOLD_LACE
+        gown_.design = _woven(seed, 127, 80, [BROCADE, DAMASK])
         outfit.add(gown_^)
     elif courtly:
         # A doublet and breeches over pale hose, under an open robe by
@@ -854,10 +918,12 @@ def _royal(woman: Bool, seed: Int) raises -> Outfit:
         coat.dyes[PRIMARY_DYE.value] = rich_dye(rich)
         if _chance(seed, 100, 40):
             coat.pattern = BANDED_SLEEVES
+        coat.design = _woven(seed, 128, 70, [BROCADE, DAMASK, DIAPER])
         outfit.add(coat^)
         if _chance(seed, 101, 50):
             var robe = open_robe()
             robe.dyes[PRIMARY_DYE.value] = rich_dye(_mixed(seed, 39))
+            robe.design = _woven(seed, 129, 60, [BROCADE, DAMASK])
             outfit.add(robe^)
     else:
         outfit.add(shirt())
@@ -872,6 +938,7 @@ def _royal(woman: Bool, seed: Int) raises -> Outfit:
         if _chance(seed, 38, 25):
             robe.pattern = PARTY
             robe.dyes[SECONDARY_DYE.value] = rich_dye(_mixed(seed, 39))
+        robe.design = _woven(seed, 130, 60, [DAMASK, BROCADE])
         outfit.add(robe^)
         if not woman:
             outfit.add(_dyed(hose(), rich_dye(rich + 3), rich_dye(rich + 3)))
@@ -882,6 +949,7 @@ def _royal(woman: Bool, seed: Int) raises -> Outfit:
     # Ermine, or a gold edge.
     if _chance(seed, 41, 30):
         mantle.dyes[TRIM_DYE.value] = Color(214, 170, 64)
+    mantle.design = _woven(seed, 131, 40, [DAMASK])
     outfit.add(mantle^)
     var girdle = rich_dye(_mixed(seed, 42))
     outfit.add(_dyed(sash(), girdle, girdle))
@@ -912,6 +980,9 @@ def _wizard(woman: Bool, seed: Int) raises -> Outfit:
     if _chance(seed, 44, 20):
         robe.pattern = STRIPES
         robe.dyes[SECONDARY_DYE.value] = arcane_dye(_mixed(seed, 45))
+    # Stars and diamonds of the trim's dye, or a damask.
+    var sign = _woven(seed, 132, 55, [FLORAL, DIAPER, DAMASK])
+    robe.design = sign
     outfit.add(robe^)
     var girdle = trim if _chance(seed, 46, 50) else arcane_dye(_mixed(seed, 47))
     outfit.add(_dyed(sash(), girdle, girdle))
@@ -922,7 +993,10 @@ def _wizard(woman: Bool, seed: Int) raises -> Outfit:
         var crown_dye = dye
         if _chance(seed, 48, 35):
             crown_dye = arcane_dye(_mixed(seed, 49))
-        outfit.add(_dyed(wizard_hat(), crown_dye, trim))
+        var hat = _dyed(wizard_hat(), crown_dye, trim)
+        if _chance(seed, 133, 50):
+            hat.design = sign
+        outfit.add(hat^)
     if _chance(seed, 50, 20):
         outfit.add(_dyed(fur_mantle(), fur_dye(0), fur_dye(3)))
     outfit.add(boots())
@@ -941,14 +1015,18 @@ def _warlock(woman: Bool, seed: Int) raises -> Outfit:
         outfit.add(_dyed(trousers(), shadow_dye(0), shadow_dye(0)))
         var vest = waistcoat()
         vest.dyes[PRIMARY_DYE.value] = Color(96, 14, 22)
+        vest.design = _woven(seed, 134, 60, [BROCADE, DAMASK])
         outfit.add(vest^)
         var coat = long_coat() if _chance(seed, 103, 50) else frock_coat()
         coat.fabric = VELVET
         coat.dyes[PRIMARY_DYE.value] = shadow_dye(dark)
         coat.dyes[TRIM_DYE.value] = edge
+        coat.design = _woven(seed, 135, 50, [DAMASK])
         outfit.add(coat^)
     else:
-        outfit.add(_dyed(cassock(), shadow_dye(dark), edge))
+        var robe = _dyed(cassock(), shadow_dye(dark), edge)
+        robe.design = _woven(seed, 136, 50, [DAMASK, DIAPER])
+        outfit.add(robe^)
     var girdle = shadow_dye(_mixed(seed, 52))
     outfit.add(_dyed(sash(), girdle, girdle))
     if _chance(seed, 23, 60):
@@ -976,6 +1054,7 @@ def _ranger(woman: Bool, seed: Int) raises -> Outfit:
     var legs = forest_dye(_mixed(seed, 54))
     outfit.add(_dyed(hose(), legs, legs))
     var coat = _dyed(tunic(), forest_dye(green), forest_dye(green + 1))
+    coat.design = _woven(seed, 137, 35, [HERRINGBONE])
     if woman:
         coat.flare = 0.32
     outfit.add(coat^)
@@ -1045,6 +1124,7 @@ def _warrior(woman: Bool, seed: Int) raises -> Outfit:
         coat.dyes[SECONDARY_DYE.value] = rich_dye(rich + 3)
         coat.dyes[TRIM_DYE.value] = rich_dye(rich + 3)
         coat.pattern = heraldry(seed, 80)
+        coat.design = _woven(seed, 138, 25, [DAMASK])
         outfit.add(coat^)
     outfit.add(belt())
     return outfit^

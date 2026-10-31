@@ -207,6 +207,8 @@ $(call gallery,headwear,headwear)
 $(call gallery,heraldry,heraldry)
 # Eight people in the tailor's shirts, bodices, skirts, coats and gowns.
 $(call gallery,tailoring,tailoring)
+# Nine people, each in one design woven or embroidered over the dyes.
+$(call gallery,designs,designs)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.

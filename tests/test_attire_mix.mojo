@@ -6,6 +6,9 @@
 """Tests for a crowd's clothes: outfits picked by a seed."""
 
 from extensions.attire.kinds import (
+    PLAIN,
+    TARTAN,
+    WOOL,
     DYE_PATTERN_COUNT,
     FRONT_PANEL,
     PARTY,
@@ -271,7 +274,9 @@ def test_each_archetype_dresses_either_sex() raises:
         # or scales.
         var barbarian = dressed_as(BARBARIAN, MALE, seed)
         assert_false(_has(barbarian, "shirt"))
-        assert_true(_has(barbarian, "fur kilt"))
+        assert_true(
+            _has(barbarian, "fur kilt") or _has(barbarian, "plaid kilt")
+        )
         var shieldmaiden = dressed_as(BARBARIAN, FEMALE, seed)
         assert_true(
             _has(shieldmaiden, "jerkin") or _has(shieldmaiden, "scale shirt")
@@ -603,6 +608,31 @@ def test_callings_wear_the_tailor_s_garments() raises:
         if _has(goodwife, "skirt"):
             assert_true(_has(goodwife, "chemise"))
             assert_true(_has(goodwife, "laced bodice"))
+
+
+def test_callings_wear_designs_by_chance() raises:
+    var designed = List[Int](length=CALLING_COUNT, fill=0)
+    var plaid = 0
+    for seed in range(100):
+        for k in range(CALLING_COUNT):
+            var outfit = dressed_as(Calling(k), calling_sex(Calling(k)), seed)
+            for garment in outfit.garments:
+                if garment.design != PLAIN:
+                    designed[k] += 1
+                    break
+            for garment in outfit.garments:
+                if garment.name == "plaid kilt":
+                    assert_true(garment.design == TARTAN)
+                    assert_true(garment.fabric == WOOL)
+                    plaid += 1
+    # Most royals and noblewomen wear a design; fewer peasants do; a
+    # warrior's is on his surcoat, now and then.
+    assert_true(designed[ROYAL.value] > 80)
+    assert_true(designed[NOBLEWOMAN.value] > 50)
+    assert_true(designed[PEASANT.value] > 20)
+    assert_true(designed[PEASANT.value] < designed[ROYAL.value])
+    assert_true(designed[WARRIOR.value] < 20)
+    assert_true(plaid > 15 and plaid < 60)
 
 
 def main() raises:

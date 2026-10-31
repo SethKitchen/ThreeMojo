@@ -1105,3 +1105,138 @@ def require_sleeve(sleeve: Sleeve) raises:
         Error: If the sleeve is not named.
     """
     require_valid(sleeve.is_valid(), "A sleeve must be a named one")
+
+
+@fieldwise_init
+struct Design(Equatable, ImplicitlyCopyable, Writable):
+    """A design woven or embroidered over a garment's dyes."""
+
+    var value: Int
+    """Its index among the named values."""
+
+    def is_valid(self) -> Bool:
+        """Return whether this is a named design.
+
+        Returns:
+            True for `PLAIN` through `HIDE`.
+        """
+        return ordinal_valid(self.value, DESIGN_COUNT - 1)
+
+    def is_tonal(self) -> Bool:
+        """Return whether the design is in the dye's own tones alone.
+
+        Returns:
+            True for damask, herringbone and hide, which lighten and
+            darken whatever dye lies under them; False for the rest.
+        """
+        return self == DAMASK or self == HERRINGBONE or self == HIDE
+
+    def is_colored(self) -> Bool:
+        """Return whether the design lays dyes of its own over the cloth.
+
+        Returns:
+            True for brocade, tartan, pinstripe, diaper, floral and
+            check; False for plain and the tonal designs.
+        """
+        return self.is_valid() and self != PLAIN and not self.is_tonal()
+
+    def braids_trim(self) -> Bool:
+        """Return whether the design's garment wears a braid on its trim.
+
+        Returns:
+            True for damask, brocade, diaper and floral, the designs of
+            fine cloth; False for the rest.
+        """
+        return (
+            self == DAMASK
+            or self == BROCADE
+            or self == DIAPER
+            or self == FLORAL
+        )
+
+
+comptime PLAIN = Design(0)
+"""No design: the dyes alone."""
+comptime DAMASK = Design(1)
+"""Medallions in an ogee lattice, woven a shade lighter than the dye."""
+comptime BROCADE = Design(2)
+"""Medallions in an ogee lattice, woven in the trim's dye over the dye."""
+comptime TARTAN = Design(3)
+"""Bands of the dye, the secondary and the trim crossing in a twill."""
+comptime PINSTRIPE = Design(4)
+"""Thin stripes of the trim's dye down the cloth."""
+comptime DIAPER = Design(5)
+"""A lattice of diamonds in the trim's dye, a dot in each."""
+comptime FLORAL = Design(6)
+"""Small flowers of the trim's dye strewn over the cloth."""
+comptime CHECK = Design(7)
+"""Small checks of the dye, the trim's dye, and a blend where they
+cross."""
+comptime HERRINGBONE = Design(8)
+"""A zigzag twill, a shade lighter and darker than the dye."""
+comptime HIDE = Design(9)
+"""The mottle and creases of tanned hide, a shade either side of the
+dye."""
+comptime DESIGN_COUNT = 10
+"""How many designs there are."""
+
+
+def _design_names() -> List[String]:
+    """Return the design names, in order."""
+    return [
+        "plain",
+        "damask",
+        "brocade",
+        "tartan",
+        "pinstripe",
+        "diaper",
+        "floral",
+        "check",
+        "herringbone",
+        "hide",
+    ]
+
+
+def design_label(design: Design) -> String:
+    """Return the name of a design.
+
+    Args:
+        design: A design, named or not.
+
+    Returns:
+        Its name, as `"brocade"`, or `"design"` when it is not named.
+    """
+    return ordinal_label(
+        design.is_valid(), design.value, _design_names(), "design"
+    )
+
+
+def design_named(name: String) raises -> Design:
+    """Return the design that `name` names.
+
+    Args:
+        name: A design's name, as `design_label` gives it.
+
+    Returns:
+        The named design.
+
+    Raises:
+        Error: If `name` names no design.
+    """
+    var names = _design_names()
+    for k in range(len(names)):  # pragma: no branch
+        if names[k] == name:
+            return Design(k)
+    raise Error("No design is named " + name)
+
+
+def require_design(design: Design) raises:
+    """Refuse a design that is not named.
+
+    Args:
+        design: The design.
+
+    Raises:
+        Error: If the design is not named.
+    """
+    require_valid(design.is_valid(), "A design must be a named one")
