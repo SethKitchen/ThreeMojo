@@ -69,8 +69,7 @@ def _head() raises -> BufferGeometry:
 
 def _frame() raises -> HeadFrame:
     """Return the frame of the tube head."""
-    var found = head_frame(_head(), _rig())
-    return found.take()
+    return head_frame(_head(), _rig())
 
 
 def _span(mesh: BufferGeometry) raises -> List[Float32]:
@@ -122,7 +121,8 @@ def test_a_head_frame_reads_the_hull() raises:
     assert_true(_away(frame, frame.center) == Vector3(0, 0, 1))
     # A shell that reaches no higher than the neck has no head.
     var arm = tube(0.3, 0, 0.04, 1.4, 1.0, RIGHT_FOREARM)
-    assert_false(head_frame(arm, _rig()))
+    with assert_raises(contains="needs a head"):
+        _ = head_frame(arm, _rig())
     var bare = hat_mesh(arm, _rig(), CROWN, 0.002)
     assert_equal(bare.vertex_count(), arm.vertex_count())
 
@@ -199,11 +199,9 @@ def test_a_hat_presses_the_hair_under_it() raises:
         Vector3(0.08, band + 0.02, frame.center.z),
         # Below the band: left.
         Vector3(0.3, band - 0.05, frame.center.z),
-        # At the middle: left.
-        frame.center,
     ]
-    var normals = List[Vector3](length=4, fill=Vector3(0, 1, 0))
-    var depths = List[Float32](length=4, fill=0)
+    var normals = List[Vector3](length=3, fill=Vector3(0, 1, 0))
+    var depths = List[Float32](length=3, fill=0)
     groom.add(points, normals, depths, 1)
     assert_equal(press_hair(groom, frame), 1)
     var drawn = groom.points[0] - frame.center

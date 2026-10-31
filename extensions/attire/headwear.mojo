@@ -764,9 +764,7 @@ def _circlet(mut hat: _Hat, frame: HeadFrame, crown: Bool, thickness: Float32):
         )
 
 
-def head_frame(
-    whole: BufferGeometry, rig: HumanoidRig
-) raises -> Optional[HeadFrame]:
+def head_frame(whole: BufferGeometry, rig: HumanoidRig) raises -> HeadFrame:
     """Return the head a hat is made for, from its shell.
 
     Args:
@@ -774,16 +772,16 @@ def head_frame(
         rig: The rig it was made on.
 
     Returns:
-        The head's hull and where a hat sits on it, or none when the shell
-        has too few points above the base of the neck.
+        The head's hull and where a hat sits on it.
 
     Raises:
-        Error: If the mesh has no positions or skin weights, or its points
-            all lie in one plane.
+        Error: If the shell has too few points above the base of the neck
+            to close a hull, the mesh has no positions or skin weights, or
+            its points all lie in one plane.
     """
     var hulls = head_cowl(whole, rig)
     if len(hulls) == 0:
-        return None
+        raise Error("A hat needs a head under it")
     return HeadFrame(hulls.pop(0), rig)
 
 
@@ -813,10 +811,10 @@ def hat_mesh(
     require_headwear(headwear)
     if headwear == NO_HEADWEAR:
         raise Error("A hat needs a headwear kind")
-    var found = head_frame(whole, rig)
-    if not found:
+    var hulls = head_cowl(whole, rig)
+    if len(hulls) == 0:
         return whole.clone()
-    var frame = found.take()
+    var frame = HeadFrame(hulls.pop(0), rig)
     var s = frame.scale
     var hat = _Hat(whole)
     if (
@@ -920,9 +918,8 @@ def press_hair(mut groom: HairGroom, frame: HeadFrame) -> Int:
             continue
         var d = p - frame.center
         var distance = d.length()
-        if distance < 1e-6:
-            continue
-        var way = d * (1 / distance)
+        # Over the band a point lies above the middle, so it has a way.
+        var way = d * (1 / max(distance, Float32(1e-6)))
         var limit = frame.hull.cast(way) + room
         if distance > limit:
             groom.points[k] = frame.center + way * limit

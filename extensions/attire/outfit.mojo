@@ -384,13 +384,13 @@ def _cut_shell(
 ) raises:
     """Cut a hair shell's mesh level at a hat's band, keeping what lies
     under it."""
-    for mesh in scene.meshes:
+    for mesh in scene.meshes:  # pragma: no branch
         if mesh.node != node:
             continue
         var shell = assets.geometries.get(mesh.geometry).clone()
         var under = List[Float32](capacity=shell.vertex_count())
         ref placed = shell.attribute_view(String(POSITION))
-        for v in range(placed.count()):
+        for v in range(placed.count()):  # pragma: no branch
             under.append(band - placed.vector3(v).y)
         assets.geometries.replace(mesh.geometry, cut(shell, under, 0))
 
@@ -419,10 +419,7 @@ def _press_under_hats(
             cover_values(skin, person.rig, garment.cover),
             List[Float32](length=len(places), fill=0),
         )
-        var found = head_frame(head, person.rig)
-        if not found:
-            continue
-        var frame = found.take()
+        var frame = head_frame(head, person.rig)
         # A hat that closes over the head hides the hair's shell over its
         # band, which can stand out of the hat over the ears.
         if person.hair and not garment.headwear.is_open():

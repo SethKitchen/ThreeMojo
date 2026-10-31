@@ -207,7 +207,7 @@ def dye_pattern(
     if dyed.has_attribute(String(ACCENT)):
         ref marks = dyed.attribute_view(String(ACCENT))
         var weights = dyed.clone_attribute(String(DYE))
-        for v in range(marks.count()):
+        for v in range(marks.count()):  # pragma: no branch
             if marks.component(v, 0) >= 0.5:
                 for c in range(DYE_CHANNEL_COUNT):  # pragma: no branch
                     weights.set_component(

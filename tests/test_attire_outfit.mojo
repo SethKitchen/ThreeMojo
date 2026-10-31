@@ -428,6 +428,13 @@ def test_a_great_helm_hides_the_hair() raises:
     _ = dress(scene, assets, person, outfit)
     assert_false(scene.node(person.hair.value()).visible)
     assert_false(scene.node(person.cards[0].node.value()).visible)
+    # A person whose hair has no shell still wears a closed hat.
+    var shorn = coarse_person(scene, assets, cards=6)
+    shorn.hair = None
+    var hatted = Outfit()
+    hatted.add(straw_hat())
+    _ = dress(scene, assets, shorn, hatted)
+    assert_true(scene.node(shorn.cards[0].node.value()).visible)
 
 
 def main() raises:
