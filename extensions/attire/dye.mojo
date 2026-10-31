@@ -117,10 +117,21 @@ def _linear(color: Color) -> Vector3:
     )
 
 
-def _with_channel(
+def with_channel(
     var piece: BufferGeometry, channel: DyeChannel
 ) raises -> BufferGeometry:
-    """Return `piece` with every vertex wholly in one dye channel."""
+    """Return `piece` with every vertex wholly in one dye channel.
+
+    Args:
+        piece: A mesh with positions.
+        channel: A named channel.
+
+    Returns:
+        The mesh, with a `dye` attribute of four weights a vertex.
+
+    Raises:
+        Error: If the mesh has no positions.
+    """
     var count = piece.vertex_count()
     var weights = List[Float32](capacity=4 * count)
     for _ in range(count):
@@ -138,16 +149,29 @@ def _negated(values: List[Float32]) -> List[Float32]:
     return out^
 
 
-def _split(
+def split_dyes(
     piece: BufferGeometry,
     values: List[Float32],
     above: DyeChannel,
     below: DyeChannel,
 ) raises -> BufferGeometry:
-    """Cut `piece` along the zero iso-line of `values`, and give each side
-    its own channel."""
-    var high = _with_channel(cut(piece, values, 0), above)
-    var low = _with_channel(cut(piece, _negated(values), 0), below)
+    """Cut a mesh along the zero line of `values`, and give each side its
+    own channel.
+
+    Args:
+        piece: A mesh with positions.
+        values: One value a vertex.
+        above: The channel of the side at or above zero.
+        below: The channel of the side below zero.
+
+    Returns:
+        Both sides, merged, with a `dye` attribute.
+
+    Raises:
+        Error: If the values do not match the vertices.
+    """
+    var high = with_channel(cut(piece, values, 0), above)
+    var low = with_channel(cut(piece, _negated(values), 0), below)
     return merge(high, low)
 
 
@@ -183,33 +207,69 @@ def pattern_values(
     var values = List[Float32](capacity=placed.count())
     for v in range(placed.count()):
         var p = placed.vector3(v)
-        # Across toward the wearer's right, and up from the chest.
-        var u = right * (p.x - middle)
-        var w = p.y - chest
-        var value = Float32(1)
-        if pattern == PARTY:
-            value = u
-        elif pattern == STRIPES:
-            value = sin(Float32(pi) * (p.y - waist) / stripe)
-        elif pattern == QUARTERLY:
-            value = u * (p.y - waist)
-        elif pattern == CHEVRON:
-            var line = CHEVRON_RISE * s - abs(u)
-            value = abs(w - line) * DIAGONAL - half
-        elif pattern == CROSS:
-            value = min(abs(u), abs(w)) - half
-        elif pattern == SALTIRE:
-            value = min(abs(u - w), abs(u + w)) * DIAGONAL - half
-        elif pattern == BEND:
-            value = abs(u - w) * DIAGONAL - half
-        elif pattern == PALY:
-            value = sin(Float32(pi) * u / stripe)
-        elif pattern == CHECKY:
-            value = sin(Float32(pi) * u / stripe) * sin(
-                Float32(pi) * (p.y - waist) / stripe
+        values.append(
+            charge_value(
+                pattern,
+                right * (p.x - middle),
+                p.y - chest,
+                p.y - waist,
+                CHEVRON_RISE * s,
+                half,
+                stripe,
             )
-        values.append(value)
+        )
     return values^
+
+
+def charge_value(
+    pattern: DyePattern,
+    across: Float32,
+    up: Float32,
+    over: Float32,
+    rise: Float32,
+    half: Float32,
+    stripe: Float32,
+) -> Float32:
+    """Return a value whose sign says which dye a point of a pattern takes.
+
+    A garment and a shield share it, each in its own lengths.
+
+    Args:
+        pattern: A named pattern.
+        across: How far toward the bearer's right the point lies from the
+            middle.
+        up: How far above the point where the charges cross it lies.
+        over: How far above the line where quarters, stripes and checks
+            cross it lies.
+        rise: How far above the crossing a chevron's point lies.
+        half: Half the width of a charge's band.
+        stripe: How wide a stripe, a pale or a check is.
+
+    Returns:
+        At or above zero for the primary dye, below it for the secondary.
+        One for `SOLID`, and for a pattern that is not named.
+    """
+    var u = across
+    var w = up
+    if pattern == PARTY:
+        return u
+    if pattern == STRIPES:
+        return sin(Float32(pi) * over / stripe)
+    if pattern == QUARTERLY:
+        return u * over
+    if pattern == CHEVRON:
+        return abs(w - (rise - abs(u))) * DIAGONAL - half
+    if pattern == CROSS:
+        return min(abs(u), abs(w)) - half
+    if pattern == SALTIRE:
+        return min(abs(u - w), abs(u + w)) * DIAGONAL - half
+    if pattern == BEND:
+        return abs(u - w) * DIAGONAL - half
+    if pattern == PALY:
+        return sin(Float32(pi) * u / stripe)
+    if pattern == CHECKY:
+        return sin(Float32(pi) * u / stripe) * sin(Float32(pi) * over / stripe)
+    return 1
 
 
 def dye_pattern(
@@ -238,9 +298,9 @@ def dye_pattern(
     for v in range(covered.count()):
         trim.append(covered.component(v, 0) - TRIM_LEVEL)
     var body = cut(piece, trim, 0)
-    var hem = _with_channel(cut(piece, _negated(trim), 0), TRIM_DYE)
+    var hem = with_channel(cut(piece, _negated(trim), 0), TRIM_DYE)
     var dyed = merge(
-        _split(
+        split_dyes(
             body,
             pattern_values(body, rig, pattern),
             PRIMARY_DYE,

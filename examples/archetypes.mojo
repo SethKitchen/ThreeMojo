@@ -12,7 +12,8 @@ The page is Outfits and armor. A farmer, a barbarian, a royal, a wizard,
 a warlock, a ranger and a warrior stand side by side, the men in front
 and the women behind. Each person's seed picks a genome, a stature, the
 dyes, the metals and the headwear of their calling, and a hairstyle,
-a beard and a cloak that suit it. Each person's hair is cards of fibers
+a beard and a cloak that suit it. A warrior with no cloak carries a
+shield on the back that bears the arms of the warrior's seed. Each person's hair is cards of fibers
 that `GameHairMotion` moves with the head and shades for the lights.
 Each cloak falls over capsules fit to its wearer's outfit. Half walk in
 place and half stand at ease while the camera passes along the front
@@ -48,6 +49,7 @@ from extensions.attire.mix import (
     WARRIOR,
     WIZARD,
     Calling,
+    calling_arms,
     calling_beard,
     calling_cloak,
     calling_hair,
@@ -55,6 +57,8 @@ from extensions.attire.mix import (
     dressed_as,
 )
 from extensions.attire.outfit import dress
+from extensions.attire.props import heraldic_shield
+from extensions.attire.sockets import BACK, attach
 from extensions.attire.springs import SpringCollider
 from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.genome import random_genome
@@ -66,8 +70,14 @@ from extensions.humanoid.skeleton.head.hair.shading import HairLight
 from extensions.humanoid.skeleton.head.hair.simulation import HairWind
 from extensions.humanoid.spec import HumanoidSpec
 from lights.light import ambient_light
+from materials.material import (
+    DOUBLE_SIDE,
+    SCENE_ENVIRONMENT,
+    physical_material,
+)
 from lights.shadow import PCF_SOFT_SHADOW_MAP
 from math.vector3 import Vector3
+from objects.mesh import Mesh
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
@@ -96,6 +106,8 @@ comptime DEFAULT_FRAMES = 48
 comptime SETTLE_STEPS = 40
 comptime DEFAULT_CARDS = 500
 comptime TRIANGLES = 16000
+# A shield's height for a person five feet ten tall, in meters.
+comptime SHIELD_HEIGHT = Float32(0.7)
 # The seed of the first person; each next one adds nine.
 comptime FIRST_SEED = 5
 # The sun, from where it shines, as the studio places it.
@@ -135,6 +147,14 @@ def main() raises:
     scene.environment_intensity = 0.7
 
     var mixer = AnimationMixer()
+    var painted = physical_material(
+        Color(255, 255, 255),
+        roughness=0.55,
+        side=DOUBLE_SIDE,
+        env_map=SCENE_ENVIRONMENT,
+    )
+    painted.vertex_colors = True
+    var shield_look = assets.materials.add(painted)
     var people = List[GameHumanoid]()
     var specs = List[HumanoidSpec]()
     var building = Float64(0)
@@ -192,10 +212,33 @@ def main() raises:
         var outfit = dressed_as(calling, sex, seed)
         var dressed = dress(scene, assets, person, outfit)
         var cut = calling_cloak(calling, sex, seed)
+        var arms = calling_arms(calling, seed)
         if cut:
             wearers.append(index)
             cuts.append(cut.take())
             overs.append(dressed_colliders(person, outfit, dressed))
+        elif arms:
+            # A soldier with no cloak carries a shield on the back, its
+            # face turned out, bearing the arms of the soldier's seed.
+            var bears = arms.value()
+            var slung = Object3D()
+            slung.rotate_y(Angle(180.0, DEGREE))
+            var back = attach(scene, person, BACK, slung^)
+            scene.add_mesh(
+                Mesh(
+                    assets.geometries.add(
+                        heraldic_shield(
+                            Length(SHIELD_HEIGHT * Float32(inches) / 70, METER),
+                            bears.pattern,
+                            bears.field,
+                            bears.charge,
+                            bears.rim,
+                        )
+                    ),
+                    shield_look,
+                    back,
+                )
+            )
         dressing += _seconds_since(start)
         print(index, calling_label(calling), "woman" if woman else "man")
         # Half walk in place and half stand at ease, each at a pace and

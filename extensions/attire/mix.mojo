@@ -133,6 +133,7 @@ from extensions.attire.metal import (
     SILVER,
     STEEL,
     Metal,
+    metal_color,
 )
 from extensions.attire.outfit import Outfit
 from extensions.attire.preset import outfit_named
@@ -1009,6 +1010,73 @@ def calling_beard(calling: Calling, sex: Sex, seed: Int) raises -> Beard:
     else:
         beards = [MUSTACHE, STUBBLE, MUTTON_CHOPS, SHORT_BEARD, CLEAN_SHAVEN]
     return _pick(beards, seed, 37)
+
+
+@fieldwise_init
+struct Arms(Copyable, ImplicitlyCopyable, Movable):
+    """The arms a shield bears: a pattern, its two dyes and a rim."""
+
+    var pattern: DyePattern
+    """The pattern."""
+    var field: Color
+    """The primary dye, sRGB."""
+    var charge: Color
+    """The secondary dye, sRGB."""
+    var rim: Color
+    """The rim's color, sRGB."""
+
+
+def calling_arms(calling: Calling, seed: Int) raises -> Optional[Arms]:
+    """Return the arms a soldier of a calling bears on a shield, or none.
+
+    A knight and a warrior bear the arms of their surcoat, in the same
+    dyes and pattern by the same seed, whether or not they wear one this
+    time. A man-at-arms bears his company's plain dyes, quartered or
+    with a cross or a saltire by the same chances as his surcoat. A rim
+    is the warrior's harness's trim metal, or its metal; a knight's is
+    gold, and a man-at-arms's iron. The other callings bear none.
+
+    Args:
+        calling: A named calling.
+        seed: Any integer: the seed of the person's outfit.
+
+    Returns:
+        The arms, or none.
+
+    Raises:
+        Error: If the calling is not named.
+    """
+    require_calling(calling)
+    if calling == KNIGHT:
+        var rich = _mixed(seed, 2)
+        return Arms(
+            heraldry(seed, 77),
+            rich_dye(rich),
+            rich_dye(rich + 3),
+            metal_color(GOLD),
+        )
+    if calling == WARRIOR:
+        var rich = _mixed(seed, 2)
+        var rim = metal_color(warrior_metal(seed))
+        if _chance(seed, 29, 25):
+            rim = metal_color(GOLD)
+        elif _chance(seed, 30, 25):
+            rim = metal_color(BRASS)
+        return Arms(heraldry(seed, 80), rich_dye(rich), rich_dye(rich + 3), rim)
+    if calling == MAN_AT_ARMS:
+        var plain = _mixed(seed, 1)
+        var pattern = SOLID
+        if _chance(seed, 7, 30):
+            pattern = QUARTERLY
+        elif _chance(seed, 78, 30):
+            pattern = CROSS if _chance(seed, 79, 50) else SALTIRE
+        return Arms(
+            pattern,
+            plain_dye(plain + 1),
+            plain_dye(plain + 2),
+            metal_color(IRON),
+        )
+    return None
 
 
 comptime ERMINE = Color(236, 232, 222)

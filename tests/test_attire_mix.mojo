@@ -29,6 +29,7 @@ from extensions.attire.mix import (
     WARRIOR,
     WIZARD,
     arcane_dye,
+    calling_arms,
     calling_beard,
     calling_cloak,
     calling_hair,
@@ -488,6 +489,34 @@ def test_heraldry_bears_every_charge() raises:
             if garment.name == "surcoat":
                 charges.add(garment.pattern.value)
     assert_true(len(charges) >= 5)
+
+
+def test_soldiers_bear_the_arms_of_their_surcoats() raises:
+    for seed in range(30):
+        var arms = calling_arms(KNIGHT, seed)
+        assert_true(Bool(arms))
+        var outfit = dressed_as(KNIGHT, MALE, seed)
+        for garment in outfit.garments:
+            if garment.name == "surcoat":
+                assert_true(garment.pattern == arms.value().pattern)
+                assert_true(
+                    garment.dyes[PRIMARY_DYE.value] == arms.value().field
+                )
+        var warrior = calling_arms(WARRIOR, seed)
+        var harness = dressed_as(WARRIOR, FEMALE, seed)
+        for garment in harness.garments:
+            if garment.name == "surcoat":
+                assert_true(garment.pattern == warrior.value().pattern)
+        var company = calling_arms(MAN_AT_ARMS, seed)
+        assert_true(company.value().pattern.is_valid())
+        assert_false(Bool(calling_arms(WIZARD, seed)))
+    # Rims of gold, brass, or the harness's own metal.
+    var rims = Set[Int]()
+    for seed in range(60):
+        rims.add(Int(calling_arms(WARRIOR, seed).value().rim.r))
+    assert_true(len(rims) >= 3)
+    with assert_raises(contains="calling"):
+        _ = calling_arms(Calling(99), 1)
 
 
 def main() raises:

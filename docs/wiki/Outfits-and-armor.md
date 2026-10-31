@@ -170,6 +170,14 @@ A socket is a named place on the body that rides one bone. Each socket is placed
 
 `heater_shield(height, dexter, sinister)` gives a flat-topped shield, curved across and painted per pale. `sword_in_scabbard(length)` gives the leather and the steel of a sword in its scabbard, as two meshes.
 
+`heraldic_shield(height, pattern, field, charge, rim)` gives the same shield bearing arms. It lays any dye pattern on its face, in the shield's own lengths:
+
+- The charges cross at the fess point, 40 % of the height down from the top.
+- A band of a cross, a saltire, a chevron or a bend is a fifth of the width wide. Six pales, stripes or checks run across the width.
+- The face is cut along each boundary, so each edge is crisp. A rim of metal runs round the edge.
+
+`calling_arms(calling, seed)` gives the arms of a soldier of a calling, or none. A knight and a warrior bear the arms of their surcoat, by the same seed. A man-at-arms bears his company's plain dyes. In `examples/archetypes.mojo`, a warrior with no cloak carries a shield of arms on the back.
+
 ```mojo
 var slung = Object3D()
 slung.rotate_y(Angle(180.0, DEGREE))
