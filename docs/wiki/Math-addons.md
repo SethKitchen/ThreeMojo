@@ -172,7 +172,7 @@ three.js decodes the first and the last sample from sRGB, and it does not decode
 
 `color_space(id)` gives the definition: the primaries, the white point, the `ColorTransfer`, the matrices to and from XYZ, and the luminance coefficients. The matrices are the matrices of three.js, to seven places.
 
-`conversion_matrix(source, target)` is the target's matrix from XYZ times the source's matrix to XYZ. three.js's internal `_getMatrix` multiplies the two in the other order.
+`conversion_matrix(source, target)` is the target's matrix from XYZ times the source's matrix to XYZ. three.js r187's internal `_getMatrix` gives the same matrix. Before r187 it multiplied the two in the other order.
 
 `srgb_to_linear_three` and `linear_to_srgb_three` are three.js's transfer functions, with the constants of three.js. `render/srgb.mojo` holds the transfer functions that the renderer uses, written from the definition.
 

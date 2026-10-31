@@ -7,8 +7,10 @@
 `outputColorSpace`: the encoding of each space, and the images it gives.
 
 `assets/output_color_space/three_output.mjs` makes the reference with
-three.js 0.180: the shader's matrix for each space, whether it applies
-sRGB's curve, and the bytes a few linear colors come out as.
+three.js r187: the shader's matrix for each space, whether it applies
+sRGB's curve, and the bytes a few linear colors come out as. r187 fixed
+the order of the matrix, so a wide gamut output's bytes are not those of
+three.js 0.180.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
