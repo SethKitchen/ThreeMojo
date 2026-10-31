@@ -1588,6 +1588,11 @@ struct WaterScene(Movable):
     # next call.
     var _surface_next: Optional[SurfaceField]
     var _composed: Int
+    # How many times the kept surface and caustics were replaced, and how
+    # many times the ripple window changed: a GPU that holds copies of
+    # them looks at these to see if its copies are old.
+    var _kept_made: Int
+    var _ripples_made: Int
     # The radiance that `compose` shades and the mix it fills, kept from
     # frame to frame so that a frame does not fault in fresh pages. A
     # frame reads only the pixels it writes.
@@ -1632,6 +1637,8 @@ struct WaterScene(Movable):
         self._caustics_kept = None
         self._surface_next = None
         self._composed = 0
+        self._kept_made = 0
+        self._ripples_made = 0
         self._hdr = List[Float32]()
         self._mixed = List[Float32]()
         self._spectrum = build_spectrum(
@@ -1650,6 +1657,7 @@ struct WaterScene(Movable):
             Error: If the ripple window cannot be allocated.
         """
         self._ripples = RippleField(self.ocean, clearwater_ripple_size())
+        self._ripples_made += 1
         self._calm = False
         self.clock = self.start
         self.steps = 0
@@ -1714,6 +1722,7 @@ struct WaterScene(Movable):
         if drop or not self._calm:
             var strength = Float32(0.07) if drop else Float32(0.0)
             step_ripple(self._ripples, 0.0, 0.0, 0.5, 0.5, 0.022, strength)
+            self._ripples_made += 1
             self._calm = _at_rest(self._ripples)
         self.clock = Duration(next_clock, SECOND)
         self.steps += 1
@@ -1842,19 +1851,7 @@ struct WaterScene(Movable):
             raise Error("The water's shade step must be from 1 to 64 pixels")
         if self.refresh_every < 1:
             raise Error("The water's refresh must come every frame or more")
-        var phase = self._composed % self.refresh_every
-        # The kept surface and its caustics are set together.
-        if self.refresh_every == 1 or not self._surface_kept:
-            var fresh = self._surface()
-            self._caustics_kept = self._caustics(fresh)
-            self._surface_kept = fresh^
-        elif phase == 0:
-            self._surface_next = self._surface()
-        elif phase == 1 and self._surface_next:
-            var fresh = self._surface_next.take()
-            self._caustics_kept = self._caustics(fresh)
-            self._surface_kept = fresh^
-        self._composed += 1
+        self._refresh_kept()
         ref surface = self._surface_kept.value()
         ref caustics = self._caustics_kept.value()
         var shown = self._compose_depth(image, plan, surface)
@@ -1902,6 +1899,26 @@ struct WaterScene(Movable):
             self.workers,
         )
         return self._compose_write(image, self._mixed, shown)
+
+    def _refresh_kept(mut self) raises:
+        """Find the surface and the caustics that this `compose` call shows,
+        or keep the ones it showed last. `refresh_every` must be one or more.
+        """
+        var phase = self._composed % self.refresh_every
+        # The kept surface and its caustics are set together.
+        if self.refresh_every == 1 or not self._surface_kept:
+            var fresh = self._surface()
+            self._caustics_kept = self._caustics(fresh)
+            self._surface_kept = fresh^
+            self._kept_made += 1
+        elif phase == 0:
+            self._surface_next = self._surface()
+        elif phase == 1 and self._surface_next:
+            var fresh = self._surface_next.take()
+            self._caustics_kept = self._caustics(fresh)
+            self._surface_kept = fresh^
+            self._kept_made += 1
+        self._composed += 1
 
     def _compose_depth(
         self, mut image: Framebuffer, plan: _ComposePlan, surface: SurfaceField

@@ -92,6 +92,25 @@ The bench walks a scripted player through the village. It prints the median, the
 
 The pond's water is composed into the frame before it is stretched, because the water needs the depth.
 
+## Draw on the GPU
+
+`GameRenderer.prepare_gpu` does the first half of a frame and stops. It draws the shadow maps, gathers the meshes, lights the vertices and sets up the triangles. It also fills a grid of sky colors. `gpu_frame` then describes the arrays to a GPU. A host draws the triangles, and `VillageGame.finish_gpu` adds what the GPU did not draw.
+
+The GPU does the work of the bins, the raster, the sky and the resolve. Its raster is the hardware's, with a depth test. Its pixel shader does the arithmetic of the CPU resolve: the shadow lookup, the map at the pixel, the fog, ACES and the sRGB encoding. The vertex layout is the same, and a clip depth from -1 to 1 becomes 0 to 1 for Metal.
+
+The sky is the CPU's grid, mixed between samples. The GPU path draws at the window's size, so the sky and the water steps grow by the render scale. This keeps the sampling density of the CPU path.
+
+A host can also take the passes that follow the triangles. Call `VillageGame.prepare_gpu` with `passes` set. `GpuPost` in `extensions/village/gpu_post.mojo` then holds the numbers of four passes. They are the weather's clouds and fog, the night's darkness and stars, the pond's water, and the smoothing of edges. `finish_gpu` leaves them out, and the host need not return the depths.
+
+The order on the GPU is not the order on the CPU, and the frame is the same. The weather and the night change only the pixels of the sky. The water replaces whole pixels. So the GPU can mix the weather and the night into the sky, compose the water over the triangles, and smooth last.
+
+The water uses the same arithmetic as the CPU. The CPU still finds the surface and the caustics, because they need an FFT. `ComposeUpload` in `extensions/water/upload.mojo` packs them and counts each change. The GPU shades a grid of samples and fills the pixels between them, so the water's step must be from 2 to 64 pixels.
+
+`window/threemojo.h` and `renderers/game_gpu.mojo` give the layout. See [C ABI and hosts](C-ABI-and-hosts#draw-the-village-on-the-gpu) for the host's side. Two stages still run on the CPU, and they cost most of a GPU frame:
+
+- The preparation takes about 8 ms at `MEDIUM`, and the gathering alone takes 14 ms at `HIGH`.
+- The readback, the rain and the heads-up display take about 5 ms at `MEDIUM`.
+
 ## Maps at each pixel
 
 By default the renderer reads a material's map at each vertex. Set `pixel_maps` to read it at each pixel instead:
@@ -153,4 +172,5 @@ The two renderers differ in one way. `GameRenderer` lights each vertex and mixes
 
 - The renderer draws no transparent or alpha-tested surface.
 - Without `pixel_maps`, a map is read at the vertices, so a map's detail between the vertices is lost.
-- The frame is drawn on the CPU. There is no GPU path for the game renderer yet.
+- The GPU path runs on Metal only, and in the macOS window only. The CPU still prepares each frame, draws the rain and the heads-up display, and finds the water's surface.
+- The water on a GPU needs a shade step of 2 pixels or more.

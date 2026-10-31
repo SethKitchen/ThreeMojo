@@ -106,6 +106,7 @@ from extensions.village.progress import Progress
 from extensions.village.styles import STYLES, FightingStyle
 from extensions.village.critters import Critters, Haunt, default_haunts
 from extensions.village.day import DayCycle, dim_water
+from extensions.village.gpu_post import GpuPost
 from extensions.village.talk import (
     SPEECH_SECONDS,
     Speaker,
@@ -408,6 +409,14 @@ struct VillageGame(Movable):
     var upscale_ms: Float64
     # The last frame, the window's size: `render` draws into it.
     var window: Framebuffer
+    # The image that a GPU draws into, between `prepare_gpu` and
+    # `finish_gpu`: the renderer's size, which is the window's for a game
+    # that a GPU draws. And when `prepare_gpu` began, in nanoseconds.
+    var gpu_image: Framebuffer
+    var gpu_began: Int
+    # What a GPU draws after the triangles, when it does: the weather, the
+    # night, the pond's water and the smoothing of edges.
+    var gpu_post: GpuPost
     # What the player can gather, and what the player has.
     var gathering: Gathering
     # Whether `render` writes the heads-up display; the last note, and how
@@ -473,6 +482,13 @@ struct VillageGame(Movable):
         self.window = Framebuffer(
             width, height, List[UInt8](length=width * height * 4, fill=0)
         )
+        self.gpu_image = Framebuffer(
+            size[0],
+            size[1],
+            List[UInt8](length=size[0] * size[1] * 4, fill=0),
+        )
+        self.gpu_began = 0
+        self.gpu_post = GpuPost()
         self.village = Village(
             scene, assets, renderer, parameters.village, bed^, scan^
         )
@@ -855,32 +871,124 @@ struct VillageGame(Movable):
         var image = self.fast.render(
             scene, assets, self.camera, Duration(self.clock, SECOND)
         )
-        var drawn = perf_counter_ns()
-        # Water that the camera cannot see is not composed: its surface
-        # and caustics cost most of the composition.
-        if self.village.pond_seen(self.camera):
-            # The water is lit by its own sky: it darkens with the night.
-            var share = self.day.water_light()
-            var dark = share < 1
-            var before = image.depth.copy() if dark else List[Float32]()
-            _ = self.village.water.compose(
-                image, scene, self.camera, self.village.level, self.village.bed
+        self._finish(scene, assets, image, began, perf_counter_ns(), False)
+
+    def prepare_gpu(
+        mut self, scene: Scene, assets: Assets, passes: Bool = False
+    ) raises:
+        """Begin the frame that `tick` prepared, for a GPU to draw.
+
+        The shadow maps, the gathering, the light at the vertices, the setup
+        of each triangle and the sky are done here, on the CPU. The GPU then
+        draws the frame as `fast.gpu_frame` describes it, into `gpu_image`,
+        and `finish_gpu` ends the frame. The frame is drawn at the quality's
+        size, so a game that a GPU draws should have a render scale of one.
+
+        With `passes`, the GPU also does what follows the triangles: the
+        weather and the night over the sky, the pond's water, and the
+        smoothing of edges. `gpu_post` then holds their numbers, and
+        `finish_gpu` leaves them out. The pond's water must have a shade
+        step from 2 to 64.
+
+        Args:
+            scene: The scene the game is in.
+            assets: The stores.
+            passes: Whether the GPU draws the weather, the night, the water
+                and the smoothing too.
+
+        Raises:
+            Error: If the scene cannot be drawn, or the passes cannot be
+                prepared.
+        """
+        self.gpu_began = perf_counter_ns()
+        self.gpu_post.on = False
+        self.fast.prepare_gpu(
+            scene, assets, self.camera, Duration(self.clock, SECOND)
+        )
+        if passes:
+            self.gpu_post.prepare(
+                self.village,
+                self.weather,
+                self.day,
+                self.camera,
+                scene,
+                self.gpu_image,
+                self.quality.smooth_edges,
             )
-            if dark:
-                dim_water(image, before, share)
+
+    def finish_gpu(mut self, scene: Scene, assets: Assets) raises:
+        """End the frame that `prepare_gpu` began, once a GPU has drawn it
+        into `gpu_image`.
+
+        The pond's water, the weather, the night, the smoothing of the
+        edges, the rain and the heads-up display are done as `render` does
+        them, on the GPU's image. The frame is then in `window`, and
+        `gpu_image` is free for the next frame.
+
+        Args:
+            scene: The scene the game is in.
+            assets: The stores.
+
+        Raises:
+            Error: If the scene cannot be drawn.
+        """
+        var drawn = perf_counter_ns()
+        var image = Framebuffer(
+            1, 1, List[UInt8](length=4, fill=0), List[Float32](length=1, fill=0)
+        )
+        swap(image, self.gpu_image)
+        try:
+            self._finish(
+                scene, assets, image, self.gpu_began, drawn, self.gpu_post.on
+            )
+        finally:
+            swap(image, self.gpu_image)
+
+    def _finish(
+        mut self,
+        scene: Scene,
+        assets: Assets,
+        mut image: Framebuffer,
+        began: Int,
+        drawn: Int,
+        passes: Bool,
+    ) raises:
+        """Do what follows the draw of a frame, on its image, and leave the
+        frame in `window`. An image of the window's size is swapped with it,
+        so `image` holds the window's last frame after. With `passes`, a GPU
+        has drawn the weather, the night, the water and the smoothing."""
         var watered = perf_counter_ns()
-        self.weather.cover(image, self.camera)
-        self.day.night_sky(image, self.camera, 1 - self.weather.look.clouds)
-        var covered = perf_counter_ns()
+        var covered = watered
+        if not passes:
+            # Water that the camera cannot see is not composed: its surface
+            # and caustics cost most of the composition.
+            if self.village.pond_seen(self.camera):
+                # The water is lit by its own sky: it darkens with the night.
+                var share = self.day.water_light()
+                var dark = share < 1
+                var before = image.depth.copy() if dark else List[Float32]()
+                _ = self.village.water.compose(
+                    image,
+                    scene,
+                    self.camera,
+                    self.village.level,
+                    self.village.bed,
+                )
+                if dark:
+                    dim_water(image, before, share)
+            watered = perf_counter_ns()
+            self.weather.cover(image, self.camera)
+            self.day.night_sky(image, self.camera, 1 - self.weather.look.clouds)
+            covered = perf_counter_ns()
         self.render_ms = Float64(drawn - began) / 1.0e6
         self.water_ms = Float64(watered - drawn) / 1.0e6
         self.smooth_ms = 0
-        if self.quality.smooth_edges:
+        if self.quality.smooth_edges and not passes:
             smooth_edges(image, available_workers())
             self.smooth_ms = Float64(perf_counter_ns() - covered) / 1.0e6
         self.upscale_ms = 0
         if image.width == self.width and image.height == self.height:
-            self.window = image^
+            swap(self.window, image)
         else:
             var smoothed = perf_counter_ns()
             upscale_into(image, self.window, available_workers())

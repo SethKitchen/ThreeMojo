@@ -12,6 +12,7 @@ from core.object3d import Object3D
 from core.scene import Scene
 from extensions.village.weather import (
     CLEAR,
+    CLOUD_STEP,
     CYCLE_SECONDS,
     DROPS,
     FOG,
@@ -225,6 +226,53 @@ def test_clouds_cover_only_the_sky() raises:
     flat.depth = List[Float32]()
     with assert_raises(contains="depth for each pixel"):
         weather.cover(flat, _camera())
+
+
+def test_the_cover_look_follows_the_weather_and_the_flash() raises:
+    var scene = _scene()
+    var clear = Weather(scene, CLEAR).cover_look()
+    var rain = Weather(scene, RAIN)
+    var stormy = rain.cover_look()
+    # Rain clouds are darker than a clear sky's, and hide more of it.
+    assert_true(stormy.gloom > clear.gloom)
+    assert_true(stormy.gray.x < clear.gray.x)
+    assert_true(stormy.veil > clear.veil)
+    assert_almost_equal(clear.bright, 1)
+    assert_almost_equal(clear.gray.z, clear.gray.x + 6)
+    # The mist is the fog's share, and a flash of lightning brightens.
+    var misty = Weather(scene, FOG).cover_look()
+    assert_true(misty.mist > clear.mist)
+    rain.flash = 1
+    assert_almost_equal(rain.cover_look().bright, 2.5)
+
+
+def test_the_cloud_grid_holds_the_cover_of_the_sky() raises:
+    var scene = _scene()
+    var weather = Weather(scene, OVERCAST)
+    var grid = weather.cloud_grid(_camera(), 64, 32)
+    assert_equal(grid.columns, (64 + CLOUD_STEP - 1) // CLOUD_STEP + 1)
+    assert_equal(grid.rows, (32 + CLOUD_STEP - 1) // CLOUD_STEP + 1)
+    assert_equal(len(grid.cover), grid.columns * grid.rows)
+    # The row at the top of the frame sees cloud. The bottom row looks
+    # at the ground, and sees none.
+    var top = 0.0
+    for column in range(grid.columns):
+        top += Float64(grid.cover[column])
+    assert_true(top > 1)
+    var last = (grid.rows - 1) * grid.columns
+    for column in range(grid.columns):
+        assert_equal(grid.cover[last + column], 0)
+    for value in grid.cover:
+        assert_true(value >= 0 and value <= 1)
+    # A clear sky has less cloud than an overcast one.
+    var clear = Weather(scene, CLEAR).cloud_grid(_camera(), 64, 32)
+    var thin = Float32(0)
+    for value in clear.cover:
+        thin += value
+    var thick = Float32(0)
+    for value in grid.cover:
+        thick += value
+    assert_true(thin < thick)
 
 
 def test_rain_streaks_the_window_and_clear_skies_do_not() raises:

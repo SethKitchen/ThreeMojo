@@ -20,7 +20,22 @@ The title bar and a label in the corner show the frame rate. They also show the 
 
 The window scales the frame to its size with smoothing. `--crisp` keeps hard pixels. The library runs on a thread of its own and draws one frame after another. The display shows the newest frame. The loop must not wait for the display. A GPU that idles between frames lowers its clock, and a frame then takes about 50 percent longer.
 
+`--scale N` makes the frame N times as wide and as high as the window. `--scale native` uses the screen's pixels for each point, which is 2 on a Retina display. A CPU app pays for every pixel that it draws.
+
 The script starts `out/capi/ThreeMojo.app` through Launch Services. A program that a shell starts cannot take focus on macOS 14 and later, so its window would open behind the terminal. macOS can still refuse the focus to a new app. Then the host says so, and a click on the ThreeMojo icon in the Dock brings the window forward.
+
+The village is the game of [Village walk](Village-walk). Walk, run, jump and fight in it with the keyboard:
+
+```bash
+examples/capi/run.sh native village
+examples/capi/run.sh native village 1280 720 --quality low
+```
+
+The window is 1280 by 720 points by default, and the frame is as large as its pixels: see `--scale native` above. The CPU pays for every pixel, so `--scale 1` is faster and blurry on a Retina display. The script builds the library first. The library builds the village for about 10 seconds, and then the window shows its first frame.
+
+`--quality` takes `low`, `medium`, `high` or `ultra`, and `medium` is the default. See [Game renderer](Game-renderer). The keys are in [Village walk](Village-walk#play-the-game). A mouse or a gamepad does nothing yet.
+
+`--gpu` draws the village on Metal: see [Draw the village on the GPU](#draw-the-village-on-the-gpu). The frame then has the size of the window's pixels. `--hour H` and `--weather NAME` set the hour and the weather where the game begins. They set `THREEMOJO_HOUR` and `THREEMOJO_WEATHER` before `tm_create`.
 
 The splats are Gaussian splats, a scan of three tomatoes. The window draws them on the GPU, at the size of the window in pixels:
 
@@ -64,9 +79,34 @@ Each script builds first when a source is newer than its output. Run `examples/c
 | Node | `run.sh check` only. |
 | Chrome or Chromium | The WebGPU check in `run.sh check`. Without one, the check is skipped. Set `CHROME` to name one. |
 
-## The five apps
+## Draw the village on the GPU
 
-Give `run.sh` one of five names. Each name is a library that exports the same functions.
+A host can draw the village on its GPU. The library prepares the frame. The host draws it. The library then adds the rain and the heads-up display. The macOS host does this when you give it `--gpu`. It sets `THREEMOJO_GPU=1` before `tm_create`, and the library then makes a frame for a GPU.
+
+Six functions make the loop. All six are in `window/threemojo.h`.
+
+| Function | What it does |
+|---|---|
+| `tm_village_passes` | Takes more of the frame for the host: the weather, the night, the water and the smoothing. Call it once, before the first frame. Returns 0 on a CPU app. |
+| `tm_village_prepare` | Builds the shadow maps, the triangles and the sky grid. Returns 1 when there is a frame to draw. Returns 0 on a CPU app or on an error. |
+| `tm_village_ints` | Returns the counts and the sizes, as 64-bit integers. |
+| `tm_village_floats` | Returns the exposure, the shadow bias, the fog, the weather, the night and the water's camera, as 32-bit floats. |
+| `tm_village_pointers` | Returns the addresses of the arrays: the vertices, the triangles, the sky, the shadow maps, the maps, the clouds and the water's tables. |
+| `tm_village_finish` | Takes the host's color image, adds the rain and the HUD, and returns the window's pixels. |
+
+The `TM_VILLAGE_INT_*`, `TM_VILLAGE_FLOAT_*` and `TM_VILLAGE_POINTER_*` names number the three arrays. The same numbers are in `renderers/game_gpu.mojo`, and a test compares the two. The arrays stay valid until the next `tm_village_prepare`. Two of the addresses name the images that the host fills. They are an RGBA8 color image and a 32-bit float depth image.
+
+`examples/capi/macos_village.m` is the macOS code. `examples/capi/village.metal` holds its shaders. `examples/capi/village_water.metal` holds the water's functions, which a script translated once from `examples/capi/web/water.wgsl`. `build.sh` joins the two files and turns them into a C string, as it does for the splats. Metal compiles them when the window opens. A Mac that has no Metal device falls back to `tm_frame`.
+
+The GPU draws one render pass. It draws the sky as a full-screen triangle, and then the triangles with a depth test. The sky shader mixes in the clouds, the fog and the stars. A fragment shader looks up the sun's shadow, reads the map at the pixel, applies the fog, and tone maps with ACES.
+
+Three compute passes follow the render pass. The first shades the pond's water on a grid of samples. The second fills the pixels between the samples, grades them and dims them at night. The third smooths the edges, as the CPU's smoothing does. A blit then copies the color into a shared buffer, and the host copies it into the library's image.
+
+With the passes taken, `TM_VILLAGE_INT_DEPTH` is 0, and the host need not return the depths. The `TM_VILLAGE_INT_NIGHT_ON`, `_WATER_ON` and `_SMOOTH_ON` entries tell the host which passes have work. The `_MADE` entries change when the library packs a table again, so the host uploads a table only then. `run.sh check` compares the frame with the CPU's by day, by night and in the rain. The mean difference is under 0.5 of 255, and only thin edges differ.
+
+## The six apps
+
+Give `run.sh` one of six names. Each name is a library that exports the same functions.
 
 | App | Library | What it draws | Browser |
 |---|---|---|---|
@@ -75,6 +115,7 @@ Give `run.sh` one of five names. Each name is a library that exports the same fu
 | `water` | `window/capi_water.mojo` | The Clearwater [Water](Water) over a pebble bed. | Yes, on the CPU or on WebGPU |
 | `water-gpu` | `window/capi_water_gpu.mojo` | The same water. A GPU shades the pixels. | No. Use `water`. |
 | `splat` | `window/capi_splat.mojo` | Three tomatoes, 445,409 [Gaussian splats](Gaussian-splats#three-tomatoes), or a scanned building. | Yes, on WebGPU or on the CPU |
+| `village` | `window/capi_village.mojo` | The [village](Village-walk), with a player to walk, run, jump and fight. The whole renderer runs. | No |
 
 Options follow the app name, as in `run.sh native water 640 360 --frames 300`. The width and the height come first. `--frames N` quits after N frames. `--dump file.ppm` writes the last frame. `--headless` opens no window and steps with a fixed 1/60 second.
 
@@ -87,6 +128,8 @@ Controls of `scene`: drag to orbit, drag with the right button to pan, turn the 
 Controls of `water` and `water-gpu`: press to drop a pebble in, and drag up or down to tilt the camera. Press the space bar to pause.
 
 Controls of `splat`: drag to orbit, drag with the right button to pan, and turn the wheel to zoom. The camera turns by itself until you press the space bar. The controls are those of the three.js example.
+
+Controls of `village`: `W`, `A`, `S` and `D` move, the arrows look, Shift runs and the space bar jumps. The fight's keys are in [Village combat](Village-combat#the-controls). The space bar does not pause this app. Escape and Command+Q quit.
 
 `water-gpu` needs MAX and a GPU, and it runs in the macOS window only. `run.sh native water-gpu` builds it. The first build on Apple Metal can take many minutes. Later builds use the cache. The default size is 1280 by 720.
 
@@ -158,7 +201,7 @@ The frame is RGBA, eight bits for each channel, row by row from the top. It has 
 | Wheel | 4 | The notches. Positive is toward the user. |
 | Key up | 6 | The key code. |
 
-A printable key is its ASCII code. The arrow keys are 256 for up, 257 for down, 258 for left and 259 for right. The kinds are the values of `InputKind` in `controls/input.mojo`.
+A printable key is its ASCII code. The arrow keys are 256 for up, 257 for down, 258 for left and 259 for right. Shift is 260, because a key event has no modifiers. A library that has no use for Shift drops it. The kinds are the values of `InputKind` in `controls/input.mojo`.
 
 ### Files
 

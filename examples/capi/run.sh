@@ -6,12 +6,23 @@
 #
 # Run the C ABI examples. Each run builds first if a source is newer.
 #
-#   run.sh native [core|scene|water|water-gpu|splat] [WIDTH HEIGHT] [--frames N] [--dump F.ppm] [--headless] [--crisp] [--cpu] [--scan FILE]
+#   run.sh native [core|scene|water|water-gpu|splat|village] [WIDTH HEIGHT] [--frames N] [--dump F.ppm] [--headless] [--crisp] [--cpu] [--gpu] [--scan FILE] [--quality NAME] [--hour H] [--weather NAME]
 #       Open a macOS window. The title and a label show the frame rate.
 #       The window scales the frame smoothly. --crisp keeps hard pixels.
 #       The splats are drawn on Metal at the window's size in pixels. --cpu
 #       draws them on the CPU. --scan FILE gives the splat app another scan,
 #       such as one that tools/building_scans.mojo fetched.
+#       village is the village game. Play it with the keyboard: W A S D move,
+#       the arrows look, Shift runs and the space bar jumps. --quality sets
+#       how finely it draws: low, medium (the default), high or ultra.
+#       --scale N|native makes the frame N times the window's size. The
+#       village uses native, so a Retina display gets a sharp frame; give
+#       --scale 1 to draw the window's own size, which is faster and blurry.
+#       --gpu draws the village on Metal: the sky, the clouds, the stars, the
+#       triangles, the pond's water and the smoothing of edges. The CPU
+#       prepares the frame and adds the rain and the HUD. --hour H and
+#       --weather NAME (clear, overcast, rain or fog) set where the game
+#       begins, which shows the night and the rain at once.
 #       Escape, Command+Q or Control-C in the terminal quits it.
 #   run.sh web [core|water|splat] [PORT]
 #       Serve the WebAssembly build on localhost and open it in a browser.
@@ -26,7 +37,9 @@
 # core is a triangle that the three builds draw the same way. scene is the
 # full renderer, and the native host only. water is the Clearwater water.
 # water-gpu is the same water shaded on a GPU: it needs MAX and a GPU. splat
-# is the scan of three tomatoes, 445,409 Gaussian splats.
+# is the scan of three tomatoes, 445,409 Gaussian splats. village is the
+# village of examples/village_walk.mojo, with a player to walk, run, jump and
+# fight. It takes seconds to build before the window shows a frame.
 set -eu
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -58,11 +71,12 @@ usage() {
 
 native() {
   app=core
-  case ${1:-} in core | scene | water | water-gpu | splat) app=$1 && shift ;; esac
+  case ${1:-} in core | scene | water | water-gpu | splat | village) app=$1 && shift ;; esac
   app=$(echo "$app" | tr - _)
   width=480
   height=320
   [ "$app" = water ] && width=320 && height=180
+  [ "$app" = village ] && width=1280 && height=720
   [ "$app" = water_gpu ] && width=1280 && height=720
   # Points. A Retina display makes the splat frame twice as many pixels.
   [ "$app" = splat ] && width=960 && height=540
@@ -74,12 +88,21 @@ native() {
     if [ "$app" = water_gpu ]; then "$HERE/build.sh" gpu; else APPS=$app "$HERE/build.sh" native; fi
   fi
   if stale "$OUT/ThreeMojo.app/Contents/MacOS/threemojo_host"; then "$HERE/build.sh" host; fi
+  # The village draws a frame as large as the window's pixels, unless asked not.
+  scale=""
+  if [ "$app" = village ]; then
+    scale="--scale native"
+    for argument in "$@"; do
+      if [ "$argument" = --scale ]; then scale=""; fi
+    done
+  fi
   # No window: run it here. The water reads assets/pebbles.jpg from the folder
   # it runs in.
   for argument in "$@"; do
     if [ "$argument" = --headless ]; then
       cd "$REPO"
-      exec "$OUT/threemojo_host" "$lib" "$width" "$height" "$@"
+      # shellcheck disable=SC2086
+      exec "$OUT/threemojo_host" "$lib" "$width" "$height" $scale "$@"
     fi
   done
   # A window: start the bundle through Launch Services, which makes it the
@@ -91,7 +114,7 @@ native() {
   fi
   trap 'pkill -f "ThreeMojo.app/Contents/MacOS/threemojo_host" 2>/dev/null' INT TERM
   # shellcheck disable=SC2086
-  open -n -W $streams "$OUT/ThreeMojo.app" --args "$lib" "$width" "$height" --chdir "$REPO" "$@"
+  open -n -W $streams "$OUT/ThreeMojo.app" --args "$lib" "$width" "$height" --chdir "$REPO" $scale "$@"
 }
 
 web() {
@@ -132,15 +155,37 @@ check() {
     case $line in *"frame hash 658073559776311977") echo "ok   the native hash" ;; *) echo "FAIL the native hash"; failed=1 ;; esac
     echo "== native host, water, 30 frames"
     "$OUT/threemojo_host" "$OUT/libthreemojo_water.$EXT" 64 36 --headless --frames 30 | tail -n 1
-    echo "== native host, splat, 12 frames: Metal must match the CPU"
+    echo "== native host, village, 3 frames: the game must build and draw"
+    "$OUT/threemojo_host" "$OUT/libthreemojo_village.$EXT" 160 90 --headless --frames 3 --quality low | tail -n 1
     scratch=$(mktemp -d)
     trap 'rm -rf "$scratch"' EXIT
+    MOJO=${MOJO:-$REPO/.venv/bin/mojo}
+    [ -x "$MOJO" ] || MOJO=mojo
+    # The CPU draws the same frame at the window's size, so the two are
+    # compared pixel for pixel. The night and the rain test the passes that
+    # come after the triangles: the stars, the clouds and the pond's water.
+    for look in "day:" "night:--hour 22" "rain:--hour 12 --weather rain"; do
+      name=${look%%:*}
+      flags=${look#*:}
+      echo "== native host, village, $name, 3 frames: Metal must match the CPU at the window's size"
+      # shellcheck disable=SC2086
+      THREEMOJO_GPU=1 "$OUT/threemojo_host" "$OUT/libthreemojo_village.$EXT" 320 180 --headless --frames 3 \
+        --quality low $flags --dump "$scratch/village_cpu.ppm" | tail -n 1
+      # shellcheck disable=SC2086
+      "$OUT/threemojo_host" "$OUT/libthreemojo_village.$EXT" 320 180 --headless --frames 3 --gpu \
+        --quality low $flags --dump "$scratch/village_metal.ppm" | tail -n 1
+      if "$MOJO" run -I "$REPO" "$REPO/tools/capi_compare_ppm.mojo" "$scratch/village_metal.ppm" "$scratch/village_cpu.ppm" 0.5 24 0.01; then
+        echo "ok   the Metal village, $name"
+      else
+        echo "FAIL the Metal village, $name"
+        failed=1
+      fi
+    done
+    echo "== native host, splat, 12 frames: Metal must match the CPU"
     "$OUT/threemojo_host" "$OUT/libthreemojo_splat.$EXT" 320 180 --headless --frames 12 \
       --dump "$scratch/metal.ppm" | tail -n 1
     "$OUT/threemojo_host" "$OUT/libthreemojo_splat.$EXT" 320 180 --headless --frames 12 --cpu \
       --dump "$scratch/cpu.ppm" | tail -n 1
-    MOJO=${MOJO:-$REPO/.venv/bin/mojo}
-    [ -x "$MOJO" ] || MOJO=mojo
     if "$MOJO" run -I "$REPO" "$REPO/tools/capi_compare_ppm.mojo" "$scratch/metal.ppm" "$scratch/cpu.ppm" 0.3 32 0.001; then
       echo "ok   the Metal splats"
     else
