@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Seth Kitchen, PE
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 //
-// Writes output.json: how three.js 0.180 writes linear light out in each
+// Writes output.json: how three.js r187 writes linear light out in each
 // `outputColorSpace`, for `tests/test_output_color_space.mojo`. Run it with
-// three 0.180 installed beside it: `node three_output.mjs > output.json`.
+// three 0.187 installed beside it: `node three_output.mjs > output.json`.
 //
 // For each space: the `mat3` elements `getEncodingComponents` puts in the
 // shader, rounded by `toFixed( 4 )`, whether it applies sRGB's curve, and
@@ -30,8 +30,8 @@ const out = spaces.map( ( space ) => {
 	const elements = m.elements.map( ( v ) => + v.toFixed( 4 ) );
 	const srgb = THREE.ColorManagement.getTransfer( space ) === THREE.SRGBTransfer;
 	const bytes = colors.map( ( c ) => {
-		// GLSL's `value.rgb * mat3( elements )`: the color dotted with each column.
-		const rgb = [ 0, 1, 2 ].map( ( j ) => c[ 0 ] * elements[ j * 3 ] + c[ 1 ] * elements[ j * 3 + 1 ] + c[ 2 ] * elements[ j * 3 + 2 ] );
+		// GLSL's `mat3( elements ) * value.rgb`: the columns weighted by the color.
+		const rgb = [ 0, 1, 2 ].map( ( i ) => c[ 0 ] * elements[ i ] + c[ 1 ] * elements[ 3 + i ] + c[ 2 ] * elements[ 6 + i ] );
 		return rgb.map( ( v ) => byte( srgb ? oetf( v ) : v ) );
 	} );
 	return { space, elements, srgb, bytes };

@@ -34,9 +34,11 @@ The arithmetic is in `Float64`, as JavaScript's is, and the answer is stored
 in a `FloatColor`. Each product is rounded before it is added, as JavaScript
 rounds it: Mojo fuses a multiply and an add by default, which rounds once.
 
-**Difference from three.js.** `conversion_matrix` is the target's matrix from
-XYZ times the source's matrix to XYZ, the matrix that `convert` applies.
-three.js's internal `_getMatrix` multiplies the two the other way round.
+`conversion_matrix` is the target's matrix from XYZ times the source's matrix
+to XYZ, the matrix that `convert` applies. three.js r187's internal
+`_getMatrix` gives the same matrix. Before r187 it multiplied the two the
+other way round, and its shader multiplied the color on the left, so a wide
+gamut output had the wrong colors. `output_encoding` follows r187.
 """
 from core.ordinal import ordinal_valid
 
@@ -574,7 +576,7 @@ struct OutputEncoding(ImplicitlyCopyable):
     a matrix, then applies the output space's transfer function. The
     matrix is `ColorManagement._getMatrix`, each number rounded to four
     places as `WebGLProgram` writes it into the shader, and it multiplies
-    the color as the shader does, `value.rgb * mat3( ... )`. For an output
+    the color as the shader does, `mat3( ... ) * value.rgb`. For an output
     space with sRGB's primaries it is the identity, and it is skipped.
     """
 
@@ -607,11 +609,12 @@ struct OutputEncoding(ImplicitlyCopyable):
         """
         if self.identity:
             return color
+        # The columns, weighted by the color: `mat3( m ) * value.rgb`.
         ref m = self.elements
         return FloatColor(
-            color.r * m[0] + color.g * m[1] + color.b * m[2],
-            color.r * m[3] + color.g * m[4] + color.b * m[5],
-            color.r * m[6] + color.g * m[7] + color.b * m[8],
+            color.r * m[0] + color.g * m[3] + color.b * m[6],
+            color.r * m[1] + color.g * m[4] + color.b * m[7],
+            color.r * m[2] + color.g * m[5] + color.b * m[8],
             color.a,
         )
 
@@ -710,13 +713,11 @@ def output_encoding(space: ColorSpaceId) raises -> OutputEncoding:
     check_color_space(space)
     if space == NO_COLOR_SPACE:
         raise Error("The output must be a color space, not NO_COLOR_SPACE")
-    # three.js's `_getMatrix`: the working space's `toXYZ` times the
-    # output's `fromXYZ`, in that order.
-    var matrix = color_space(LINEAR_SRGB_COLOR_SPACE).to_xyz.times(
-        color_space(space).from_xyz
-    )
+    # three.js r187's `_getMatrix`: the output's `fromXYZ` times the
+    # working space's `toXYZ`.
+    var matrix = conversion_matrix(LINEAR_SRGB_COLOR_SPACE, space)
     # The shader's `mat3` takes three.js's `elements`, column by column,
-    # and `value.rgb * m` dots the color with each column.
+    # and `m * value.rgb` weights each column by the color.
     var elements = SIMD[DType.float32, 16](0)
     var identity = True
     for column in range(3):  # pragma: no branch
