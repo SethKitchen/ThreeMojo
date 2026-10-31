@@ -173,7 +173,7 @@ struct GameHairMotion(Movable):
             self.poses[k] = pose^
             var local = wind
             local.direction = _toward(back, wind.direction)
-            for _ in range(self.steps):
+            for _ in range(self.steps):  # pragma: no branch
                 self.simulations[k].step(self.body, local)
             var seen = List[HairLight](capacity=len(lights))
             for light in lights:

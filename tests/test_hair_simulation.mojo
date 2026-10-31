@@ -150,6 +150,14 @@ def test_a_moved_frame_carries_the_loose_points() raises:
     broken.put(0, 0, nan[DType.float32]())
     with assert_raises(contains="finite and affine"):
         motion.carry(broken)
+    # A groom of no strands, and a strand of one point, carry nothing.
+    var nothing = HairSimulation(HairGroom())
+    nothing.carry(move)
+    var roots = HairGroom()
+    _strand(roots, [Vector3(0.1, 0.2, 0.3)])
+    var root = HairSimulation(roots)
+    root.carry(move)
+    assert_true(root.now[0] == Vector3(0.1, 0.2, 0.3))
 
 
 def test_gravity_pulls_the_way_the_frame_says() raises:

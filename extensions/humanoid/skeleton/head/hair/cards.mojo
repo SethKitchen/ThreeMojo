@@ -128,18 +128,18 @@ def fiber_heights(seed: Int = 1) -> List[Float32]:
     """
     var alpha = List[Float32](length=FIBER_TEXELS * FIBER_TEXELS, fill=0)
     var lane = Float32(FIBER_TEXELS) / Float32(FIBERS)
-    for fiber in range(FIBERS):
+    for fiber in range(FIBERS):  # pragma: no branch
         var middle = (Float32(fiber) + 0.25 + 0.5 * _hash(seed, fiber)) * lane
         var half = lane * (0.55 + 0.3 * _hash(seed, fiber + 100))
         var gap_at = Int(_hash(seed, fiber + 200) * Float32(FIBER_TEXELS))
         var gap = 0
         if _hash(seed, fiber + 300) < 0.25:
             gap = 4 + Int(_hash(seed, fiber + 400) * 8)
-        for row in range(FIBER_TEXELS):
+        for row in range(FIBER_TEXELS):  # pragma: no branch
             var since = (row - gap_at + FIBER_TEXELS) % FIBER_TEXELS
             if since < gap:
                 continue
-            for column in range(FIBER_TEXELS):
+            for column in range(FIBER_TEXELS):  # pragma: no branch
                 var d = abs(Float32(column) + 0.5 - middle)
                 # The tile wraps across, as the fibers of the card next
                 # to it would.
@@ -172,8 +172,8 @@ def fiber_texture(seed: Int = 1) raises -> Texture:
     var alpha = fiber_heights(seed)
     var lane = Float32(FIBER_TEXELS) / Float32(FIBERS)
     var pixels = List[UInt8](capacity=4 * FIBER_TEXELS * FIBER_TEXELS)
-    for row in range(FIBER_TEXELS):
-        for column in range(FIBER_TEXELS):
+    for row in range(FIBER_TEXELS):  # pragma: no branch
+        for column in range(FIBER_TEXELS):  # pragma: no branch
             var fiber = Int(Float32(column) / lane) % FIBERS
             var a = alpha[row * FIBER_TEXELS + column]
             var shade = (0.7 + 0.3 * _hash(seed, fiber + 500)) * (
@@ -228,7 +228,7 @@ def card_groom(groom: HairGroom, most: Int = CARD_POINTS) raises -> HairGroom:
         var points = List[Vector3](capacity=keep)
         var normals = List[Vector3](capacity=keep)
         var depths = List[Float32](capacity=keep)
-        for k in range(keep):
+        for k in range(keep):  # pragma: no branch
             var index = first + (k * (count - 1) + (keep - 1) // 2) // (
                 keep - 1
             )
@@ -347,13 +347,13 @@ struct HairCards(Movable):
         var colors = List[Float32](capacity=6 * count)
         var uvs = List[Float32](capacity=4 * count)
         var index = List[Int]()
-        for strand in range(len(self.groom)):
+        for strand in range(len(self.groom)):  # pragma: no branch
             var first = self.groom.starts[strand]
             var last = self.groom.starts[strand + 1] - 1
             if last <= first:
                 raise Error("Each card needs two points of its strand")
             var along = Float32(0)
-            for k in range(first, last + 1):
+            for k in range(first, last + 1):  # pragma: no branch
                 var p = self.groom.points[k]
                 if k > first:
                     along += (p - self.groom.points[k - 1]).length()
@@ -506,7 +506,7 @@ def add_cards(
     var lights = List[HairLight]()
     lights.append(HairLight(key, Vector3(2, 2, 2)))
     var center = Vector3(0, 0, 0)
-    for p in cards.groom.points:
+    for p in cards.groom.points:  # pragma: no branch
         center = center + p
     center = center * (1 / Float32(len(cards.groom.points)))
     cards.shade(

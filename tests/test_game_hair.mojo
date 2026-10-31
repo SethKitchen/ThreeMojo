@@ -13,11 +13,12 @@ from extensions.humanoid.rig.game import (
     add_game_humanoid,
     game_build_settings,
 )
-from extensions.humanoid.rig.game_hair import GameHairMotion
+from extensions.humanoid.rig.game_hair import GameHairMotion, _toward
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.skeleton.head.hair.shading import HairLight
 from extensions.humanoid.skeleton.head.hair.simulation import HairWind
 from extensions.humanoid.spec import HumanoidSpec
+from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from std.sys import num_logical_cores
 from std.testing import (
@@ -36,7 +37,7 @@ def _spec() -> HumanoidSpec:
 
 
 def _person(
-    mut scene: Scene, mut assets: Assets, cards: Int = 12
+    mut scene: Scene, mut assets: Assets, cards: Int = 12, guides: Int = 6
 ) raises -> GameHumanoid:
     """Return a coarse person with a few strands and a few cards."""
     var root = scene.add(Object3D())
@@ -49,8 +50,8 @@ def _person(
         12,
         8,
         8,
-        guides=6,
-        followers=1,
+        guides=guides,
+        followers=1 if guides > 0 else 0,
         workers=num_logical_cores(),
         cards=cards,
     )
@@ -116,6 +117,41 @@ def test_the_hair_swings_as_the_head_moves() raises:
         scene, assets, person, _lights(), eye, Vector3(0.1, 0.1, 0.1), still
     )
     assert_true(person.cards[0].groom.points == hidden)
+
+
+def test_a_person_with_cards_alone_or_no_hair_moves() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var carded = _person(scene, assets, 8, 0)
+    var bald = _person(scene, assets, 0, 0)
+    scene.update()
+    var motion = GameHairMotion(scene, carded, _spec())
+    assert_equal(len(motion.simulations), 1)
+    var still = HairWind(Vector3(1, 0, 0), 0)
+    # No lights: the hair is lit from all round alone.
+    motion.update(
+        scene,
+        assets,
+        carded,
+        List[HairLight](),
+        Vector3(0, 1.6, 2),
+        Vector3(0.1, 0.1, 0.1),
+        still,
+    )
+    var none = GameHairMotion(scene, bald, _spec())
+    assert_equal(len(none.simulations), 0)
+    none.update(
+        scene,
+        assets,
+        bald,
+        _lights(),
+        Vector3(0, 1.6, 2),
+        Vector3(0.1, 0.1, 0.1),
+        still,
+    )
+    # A direction with no length is kept as it is.
+    var flat = _toward(Matrix4(), Vector3(0, 0, 0))
+    assert_true(flat == Vector3(0, 0, 0))
 
 
 def test_hair_motion_refuses_what_it_cannot_move() raises:

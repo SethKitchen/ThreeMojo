@@ -107,6 +107,8 @@ def test_a_card_groom_keeps_the_guides() raises:
     _strand(single, 0, 1)
     with assert_raises(contains="needs a guide strand"):
         _ = card_groom(single)
+    with assert_raises(contains="needs a guide strand"):
+        _ = card_groom(HairGroom())
 
 
 def test_a_card_is_as_wide_as_its_share_of_the_scalp() raises:
