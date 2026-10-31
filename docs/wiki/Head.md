@@ -241,6 +241,23 @@ Pass a `HairBody` as the collider. The skins' own fields are too slow to read fo
 
 `HairCollider` bakes any other field. `HairWind` blows one way, in gusts. Each strand's strength flutters, out of phase with its neighbors'. The simulation is ported from Frostbitten Hair WebGPU, with its defaults. Its grids of density and velocity are left out.
 
+The strands lie in the frame of the node they hang from. A game humanoid's head moves that frame. `carry(move)` moves each point but the root back by the frame's move, so the point keeps its place and its speed in the world. Give it the frame's new world matrix, inverted, times its old one. The next step then swings the hair as the head speeds up, slows or turns. A move that takes a root more than half a meter is a jump, and the hair is not carried through it.
+
+`down` is the way gravity pulls in the frame, so the hair falls toward the ground when the head bows. `GameHairMotion` sets both for a game humanoid; see [Game humanoid](Game-humanoid).
+
+### Hair cards
+
+A strand drawn as a wide line costs a quad and two round caps for each segment, about 54 raster corners. A head of a few thousand strands then costs gigabytes of raster corners a frame. Games draw hair as cards: ribbons laid on the hair, each textured with many fibers. `add_hair_cards(scene, assets, parent, spec, cards, style=style)` grows a groom of `cards` guide strands and no followers, and draws each guide as a card:
+
+1. `card_groom` keeps each guide strand, with at most 16 of its points, evenly spaced along it. The fibers of each card stand for the followers.
+2. Each card is a ribbon along its strand. It lies flat on the hair, across the strand. `card_width` makes it wide enough that the cards cover the scalp and overlap: 2.2 cm at the root for 600 cards on the template. It narrows to a fifth of that at the tip.
+3. `fiber_texture` gives twelve fibers across each card. Each fiber is a ridge of alpha in a shade of its own, darker at its edges. About one in four ends and starts again. The material cuts away alpha below one half. About two thirds of each tile is above the cutoff, so a card seen from far off stays whole when its mipmaps average its texels.
+4. Each point is shaded as a strand's point is, with its depth in the hair toward each light. The density counts each card as 60 fibers. A card is darker at its root, and lifts to its full shading over the first third of its length.
+
+The cards move under `HairSimulation`, as strands do, with fewer points to move. `HairCards.shade` writes the moved points into the ribbons and lights them.
+
+`examples/game_hairstyles.mojo` draws one woman in every style as a game humanoid with 700 cards. It writes `out/game_hairstyles.png`. The 13 heads take about half a gigabyte of memory to draw. The same heads in strands of 100 guides and four followers each took 3.5 GB.
+
 ### Hairstyles
 
 A `HairStyle` says how the hair is cut and laid. Pass the same style to `add_groom` as `style` and to `add_head` or `add_body` as `hair_style`.
@@ -288,7 +305,7 @@ A game humanoid with no strands draws only the hair's shell. A designed style's 
 | `BUN`, `SPACE_BUNS` | A ball on each tie, half as far out as the groom coils it, so it sits on the head. |
 | `PIXIE` | Cropped close, as it is under strands. |
 
-A tail and a bun take their ties from the groom, and join the shell in a smooth fillet. The tails pass behind the neck, but they do not know the body, so the lowest part of a braid can sink into the back. `GROWN`, `LAYERED` and `MOHAWK` are drawn as they are. `examples/game_hairstyles.mojo` draws the woman of `examples/hairstyles.mojo` in every style as a game humanoid, and writes `out/game_hairstyles.png`. A long tail stretches the shell's box. So the mesh takes more cells, up to 64, and each cell stays the size it is on the head alone.
+A tail and a bun take their ties from the groom, and join the shell in a smooth fillet. The tails pass behind the neck, but they do not know the body, so the lowest part of a braid can sink into the back. `GROWN`, `LAYERED` and `MOHAWK` are drawn as they are. Run `examples/game_hairstyles.mojo` with zero cards to draw each style's shell alone: `mojo run -I . examples/game_hairstyles.mojo out/shells.png 140 0`. A long tail stretches the shell's box. So the mesh takes more cells, up to 64, and each cell stays the size it is on the head alone.
 
 A style keeps no head of its own. Each root is a point of a unit cranium, and each strand is kept as offsets from its root in the cranium's frame there. So a style fits every head a genome makes. `HairStyleFile.strand` puts a strand on a person's cranium. The groom then walks its root onto the skin and lifts any point of it that would pass under the skin. The follow strands, the clumping and the shading are the grown hair's.
 

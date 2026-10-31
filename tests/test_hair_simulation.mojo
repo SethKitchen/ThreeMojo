@@ -19,8 +19,9 @@ from extensions.humanoid.skeleton.head.hair.simulation import (
     HairSimulation,
     HairWind,
 )
+from math.matrix4 import Matrix4
 from math.vector3 import Vector3
-from std.math import max, min, sqrt
+from std.math import max, min, nan, sqrt
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
@@ -123,6 +124,44 @@ def test_the_wind_blows_the_hair_and_the_root_holds() raises:
     var other = HairGroom()
     with assert_raises(contains="not the one"):
         blown.write(other)
+
+
+def test_a_moved_frame_carries_the_loose_points() raises:
+    var groom = _hanging(0.25)
+    var motion = HairSimulation(groom)
+    var move = Matrix4()
+    move.set_position(Vector3(0.1, 0, 0))
+    motion.carry(move)
+    # The root rides the frame; the rest keeps its place in the world,
+    # which is a tenth of a meter over in the frame's new pose.
+    assert_true(motion.now[0] == groom.points[0])
+    assert_true(abs(motion.now[7].x - 0.35) < 1e-6)
+    assert_true(abs(motion.previous[7].x - 0.35) < 1e-6)
+    # A jump is not motion: nothing is carried through it.
+    var jump = Matrix4()
+    jump.set_position(Vector3(0.6, 0, 0))
+    motion.carry(jump)
+    assert_true(abs(motion.now[7].x - 0.35) < 1e-6)
+    var skewed = Matrix4()
+    skewed.put(3, 0, 1)
+    with assert_raises(contains="finite and affine"):
+        motion.carry(skewed)
+    var broken = Matrix4()
+    broken.put(0, 0, nan[DType.float32]())
+    with assert_raises(contains="finite and affine"):
+        motion.carry(broken)
+
+
+def test_gravity_pulls_the_way_the_frame_says() raises:
+    var groom = _hanging(0.25)
+    var upright = HairSimulation(groom)
+    var bowed = HairSimulation(groom)
+    bowed.down = Vector3(0, 0, 1)
+    var collider = _collider()
+    for _ in range(30):  # pragma: no branch
+        upright.step(collider, HairWind(Vector3(1, 0, 0), 0))
+        bowed.step(collider, HairWind(Vector3(1, 0, 0), 0))
+    assert_true(bowed.now[7].z > upright.now[7].z + 0.0005)
 
 
 def test_the_head_pushes_the_hair_out() raises:

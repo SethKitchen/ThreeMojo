@@ -423,6 +423,9 @@ def dress(
         for k in range(len(person.strands)):
             if person.strands[k].node:
                 scene.node(person.strands[k].node.value()).visible = False
+        for k in range(len(person.cards)):
+            if person.cards[k].node:
+                scene.node(person.cards[k].node.value()).visible = False
     ref body = scene.skinned_meshes[person.skins[0]]
     var skeleton = body.skeleton.copy()
     var bind = body.bind_matrix

@@ -82,6 +82,10 @@ from extensions.humanoid.skeleton.head.hair.beard import (
     beard_mesh,
     require_beard,
 )
+from extensions.humanoid.skeleton.head.hair.cards import (
+    HairCards,
+    add_hair_cards,
+)
 from extensions.humanoid.skeleton.head.hair.geometry import (
     head_hair_from_dimensions,
 )
@@ -156,6 +160,8 @@ struct GameHumanoid(Movable):
     """The node of the scalp hair's shell, which a hood or a helmet hides."""
     var beard: Optional[NodeId]
     """The node of the facial hair's shell, if the face grows any."""
+    var cards: List[HairCards]
+    """The scalp's hair as cards, if any were grown."""
 
     def __init__(
         out self,
@@ -167,6 +173,7 @@ struct GameHumanoid(Movable):
         var face: Optional[GameFace] = None,
         hair: Optional[NodeId] = None,
         beard: Optional[NodeId] = None,
+        var cards: List[HairCards] = List[HairCards](),
     ):
         """Hold a humanoid's parts.
 
@@ -179,6 +186,7 @@ struct GameHumanoid(Movable):
             face: Preserved face and mouth binding, or no facial animation.
             hair: The node of the scalp hair's shell, if it has one.
             beard: The node of the facial hair's shell, if it has one.
+            cards: Its hair's cards, or none.
         """
         self.rig = rig^
         self.root = root
@@ -188,6 +196,7 @@ struct GameHumanoid(Movable):
         self.face = face^
         self.hair = hair
         self.beard = beard
+        self.cards = cards^
 
 
 def _key(p: Vector3) -> Int:
@@ -398,6 +407,7 @@ def add_game_humanoid(
     use: HumanoidUse = VISUAL_USE,
     facial_animation: Bool = False,
     beard: Beard = CLEAN_SHAVEN,
+    cards: Int = 0,
 ) raises -> GameHumanoid:
     """Build one person's skin on a skeleton under `parent`.
 
@@ -428,6 +438,10 @@ def add_game_humanoid(
         beard: The facial hair the face grows. Clean-shaven by default.
             A beard takes `BEARD_SHARE` of the budget, and 32 triangles
             at least, from the body's.
+        cards: Cards of hair to grow over the shell, or none. Each is a
+            guide strand drawn as a ribbon of fibers; see
+            `extensions.humanoid.skeleton.head.hair.cards`. Cards cost far
+            less to draw than strands, so a crowd can wear them.
 
     Returns:
         The humanoid: its rig, its bones and its meshes.
@@ -435,9 +449,9 @@ def add_game_humanoid(
     Raises:
         Error: If the spec, a detail, style or visual use is refused; if
             the budget is negative or cannot preserve the facial and body
-            requirements; if facial animation requests strand guides or a
-            beard; if the beard is not named; or if a scene node, mesh or
-            geometry operation fails.
+            requirements; if facial animation requests strand guides,
+            cards or a beard; if the beard is not named; if the cards are
+            negative; or if a scene node, mesh or geometry operation fails.
     """
     require_humanoid_use(use)
     var settings = game_build_settings(
@@ -453,6 +467,7 @@ def add_game_humanoid(
         eye_paint,
         facial_animation,
         beard,
+        cards,
     )
     var node = Object3D()
     node.user_data.set_json(
@@ -500,7 +515,7 @@ def add_game_humanoid(
         workers,
         hair_style,
         outer_only=True,
-        alone=guides == 0,
+        alone=guides == 0 and cards == 0,
     )
     # Decimation bends the strands laid round the shell; they are laid
     # again where its vertices end up.
@@ -727,6 +742,13 @@ def add_game_humanoid(
                 style=hair_style,
             )
         )
+    var card_grooms = List[HairCards]()
+    if cards > 0:
+        card_grooms.append(
+            add_hair_cards(
+                scene, assets, holder_id, spec, cards, style=hair_style
+            )
+        )
     return GameHumanoid(
         rig^,
         root,
@@ -736,6 +758,7 @@ def add_game_humanoid(
         face^,
         Optional(hair_node),
         beard_node,
+        card_grooms^,
     )
 
 
@@ -752,6 +775,7 @@ def game_build_settings(
     eye_paint: MaterialId = UNSET_PAINT,
     facial_animation: Bool = False,
     beard: Beard = CLEAN_SHAVEN,
+    cards: Int = 0,
 ) raises -> UserData:
     """Record every game-builder option that changes a visual recipe.
 
@@ -772,17 +796,20 @@ def game_build_settings(
         facial_animation: Preserve original face correspondence for audio playback.
         beard: The facial hair. Recorded only when the face grows some, so
             a clean-shaven recipe is as it was before beards.
+        cards: Cards of hair. Recorded only when there are some, so a
+            recipe with none is as it was before cards.
 
     Returns:
         A value snapshot independent of the canonical spec.
 
     Raises:
         Error: If the hair style or the beard is unnamed, the triangle
-            budget is negative, or facial animation requests guide strands
-            or a beard.
+            budget or the cards are negative, or facial animation requests
+            guide strands, cards or a beard.
     """
     require_non_negative(triangles, "Game triangle budget must be nonnegative")
-    if facial_animation and guides > 0:
+    require_non_negative(cards, "A game humanoid's cards must be nonnegative")
+    if facial_animation and (guides > 0 or cards > 0):
         raise Error(
             "Facial triangle budgets do not support strand hair; use the shell"
         )
@@ -804,6 +831,8 @@ def game_build_settings(
         settings.set_string("beard", beard_label(beard))
     settings.set_string("guides", String(guides))
     settings.set_string("followers", String(followers))
+    if cards > 0:
+        settings.set_string("cards", String(cards))
     settings.set_string("skin_material_id", String(skin_paint.value))
     settings.set_string("hair_material_id", String(hair_paint.value))
     settings.set_string("eye_material_id", String(eye_paint.value))

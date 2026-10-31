@@ -88,7 +88,7 @@ def test_an_outfit_holds_one_garment_a_slot_and_layer() raises:
 def test_a_person_is_dressed_from_the_skin_out() raises:
     var scene = Scene()
     var assets = Assets()
-    var person = coarse_person(scene, assets, guides=6)
+    var person = coarse_person(scene, assets, guides=6, cards=6)
     var skin_before = assets.geometries.get(
         scene.skinned_meshes[person.skins[0]].geometry
     ).triangle_count()
@@ -160,6 +160,7 @@ def test_a_person_is_dressed_from_the_skin_out() raises:
     # The coif covers the head: the hair hides.
     assert_false(scene.node(person.hair.value()).visible)
     assert_false(scene.node(person.strands[0].node.value()).visible)
+    assert_false(scene.node(person.cards[0].node.value()).visible)
 
 
 def _pieces(
@@ -300,10 +301,11 @@ def test_a_bare_head_keeps_its_hair_and_a_bald_one_is_fine() raises:
     _ = dress(scene, assets, person, outfit)
     assert_true(scene.node(person.hair.value()).visible)
     # A person with no hair shell and strands with no node still dress.
-    var bald = coarse_person(scene, assets, guides=6)
+    var bald = coarse_person(scene, assets, guides=6, cards=6)
     var hair = bald.hair.value()
     bald.hair = None
     bald.strands[0].node = None
+    bald.cards[0].node = None
     var hooded = Outfit()
     hooded.add(hood())
     _ = dress(scene, assets, bald, hooded)

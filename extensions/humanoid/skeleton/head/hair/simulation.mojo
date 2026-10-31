@@ -23,6 +23,13 @@ The wind blows in one direction, in gusts: each strand's strength
 flutters, out of phase with its neighbors'. Friction takes part of each
 point's motion away every step.
 
+The strands lie in the frame of the node they hang from. When that node
+moves, as a game humanoid's head does when it walks or turns, `carry`
+moves each loose point back by the same move, so it keeps going where it
+was going in the world. The next step then swings the hair as the head
+speeds up, slows or turns. `down` says which way gravity pulls in that
+frame, so hair falls toward the ground when the head bows.
+
 This ports the hair simulation of Frostbitten Hair WebGPU by Marcin
 Matuszczyk, MIT license, copyright 2024, and keeps its defaults, which
 are tuned to its fixed step of a thirtieth of a second. Its grids of
@@ -46,6 +53,7 @@ from math.sine import fraction
 from math.utils import clamp, clamp_unit
 from math.vector3 import Vector3, centroid
 from math.finite import require_finite_group
+from math.matrix4 import Matrix4
 from render.tasks import TaskGroup
 from std.math import max, min
 from std.sys import num_logical_cores
@@ -78,6 +86,10 @@ struct HairWind(ImplicitlyCopyable):
         self.jitter = Float32(0.7)
         self.phase = Float32(0.45)
 
+
+# How far a carried move may take a strand's root, in meters. A move
+# past it is a jump, not motion: the hair is not carried through it.
+comptime MAX_CARRY = Float32(0.5)
 
 # The most settles one step runs on a strand. `range` of `Int.MAX`
 # never ends, and a larger count is not an exact `Float32` divisor.
@@ -182,6 +194,8 @@ struct HairSimulation(Movable):
     var guides: List[Int]
     var follow_across: List[Float32]
     var follow_up: List[Float32]
+    # The unit direction gravity pulls in, in the strands' frame.
+    var down: Vector3
 
     def __init__(
         out self,
@@ -262,6 +276,38 @@ struct HairSimulation(Movable):
             ).length()
         self.physics = physics
         self.frame = 0
+        self.down = Vector3(0, -1, 0)
+
+    def carry(mut self, move: Matrix4) raises:
+        """Carry the loose points through a move of the strands' frame.
+
+        The roots ride the frame. Each other point, and where it was a
+        step ago, are moved by `move`, so the point keeps its place and
+        its speed in the world. Pass the frame's new world matrix
+        inverted, times its old one. A move that takes a root further
+        than `MAX_CARRY` is a jump, and nothing is carried through it.
+
+        Args:
+            move: From the frame's old pose into its new one.
+
+        Raises:
+            Error: If the move is not a finite affine matrix.
+        """
+        if not move.is_finite() or not move.is_affine():
+            raise Error("A hair frame's move must be finite and affine")
+        var strands = len(self.starts) - 1
+        for strand in range(strands):
+            var root = self.now[self.starts[strand]]
+            if (move.transform_point(root) - root).length() > MAX_CARRY:
+                return
+        for strand in range(strands):
+            for index in range(
+                self.starts[strand] + 1, self.starts[strand + 1]
+            ):
+                self.now[index] = move.transform_point(self.now[index])
+                self.previous[index] = move.transform_point(
+                    self.previous[index]
+                )
 
     def step[F: DistanceField](mut self, collider: F, wind: HairWind) raises:
         """Move every strand one step, and settle it.
@@ -317,7 +363,7 @@ struct HairSimulation(Movable):
             var flutter = timer * wind.frequency
             flutter = fraction(flutter)
             var gust = 1 + wind.jitter * (flutter - Float32(0.5))
-            var force = Vector3(0, -p.gravity, 0) + wind.direction * abs(
+            var force = self.down * p.gravity + wind.direction * abs(
                 wind.strength * gust
             )
             # Reuse the particle arrays. No per-strand work list or
