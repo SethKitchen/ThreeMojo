@@ -69,7 +69,10 @@ from extensions.attire.kinds import (
     COWLED,
     DOMED,
     FITTED_SLEEVE,
+    FUR,
     HATTED,
+    HIDE,
+    NO_RUFFLES,
     PRIMARY_DYE,
     SHOD,
     SKIRTED,
@@ -78,6 +81,16 @@ from extensions.attire.kinds import (
 )
 from extensions.attire.last import FootLast, foot_lasts, shoe
 from extensions.attire.mesh_ops import add_rim, cut, merge, normalize_normals
+from extensions.attire.ruffle import ruffle_mesh
+from extensions.attire.fur import (
+    outer_face,
+    fur_shell_count,
+    fur_shells,
+    fur_test,
+    fur_texture,
+)
+from extensions.attire.skirt import FLARE_FOLDS
+from render.texture_store import NO_TEXTURE
 from extensions.attire.plates import articulate
 from extensions.attire.shell import (
     COVER_SMOOTHING,
@@ -377,7 +390,8 @@ def dress_pieces(
                 under,
                 Float32(cloth.clearance.value + garment.ease.value),
                 Float32(cloth.thickness.value),
-                Float32(fold_depth(garment.fabric).value),
+                Float32(fold_depth(garment.fabric).value)
+                * (1 + FLARE_FOLDS * garment.flare),
                 detail,
             )
             whole = hang_skirt(whole, envelope, person.rig, False)
@@ -622,6 +636,9 @@ def dress(
     if len(person.skins) == 0:
         raise Error("Only a person with a skin can be dressed")
     var count = len(outfit.garments)
+    var detail = garment_detail(
+        assets.geometries.get(scene.skinned_meshes[person.skins[0]].geometry)
+    )
     var joined = List[Optional[BufferGeometry]]()
     var wholes = List[Optional[BufferGeometry]]()
     for _ in range(count):
@@ -664,6 +681,7 @@ def dress(
     var parts = List[List[Int]]()
     var maps = SurfaceMaps()
     var designs = DesignMaps()
+    var strands = NO_TEXTURE
     for g in range(count):
         ref garment = outfit.garments[g]
         parts.append(List[Int]())
@@ -675,6 +693,13 @@ def dress(
             meshes.append(-1)
             continue
         var piece = articulate(joined[g].take(), garment)
+        # A frill grows from each cuff, collar or hem that shows, before
+        # the garment is dyed, so it takes the trim's dye.
+        if garment.ruffles != NO_RUFFLES:
+            piece = merge(
+                piece,
+                ruffle_mesh(piece, shells[g], person.rig, garment.ruffles),
+            )
         # A thick fabric shows its thickness at each hem and at each
         # lame's edge.
         var thick = Float32(fabric(garment.fabric).thickness.value)
@@ -690,14 +715,32 @@ def dress(
         )
         dye_sheen(material, garment.dyes[PRIMARY_DYE.value])
         maps.apply(material, assets, garment.fabric)
+        # Fur stands in strands over its garment.
+        var pile = List[BufferGeometry]()
+        if garment.fabric == FUR:
+            pile = fur_shells(
+                outer_face(piece, person.rig), fur_shell_count(detail)
+            )
         var cut = design_parts(piece, design)
         var drawn = cut.drawn(designs, assets, design, garment.dyes)
         meshes.append(len(scene.skinned_meshes))
         for k in range(len(drawn.maps)):  # pragma: no branch
             var look = material.copy()
             look.map = drawn.maps[k]
+            # Hide's mottle shines where it is dark and worn smooth.
+            if design == HIDE:
+                look.roughness_map = drawn.maps[k]
             parts[g].append(
                 _add_part(scene, assets, person, drawn.pieces.pop(0), look)
+            )
+        for k in range(len(pile)):
+            if strands == NO_TEXTURE:
+                strands = assets.textures.add(fur_texture())
+            var look = material.copy()
+            look.alpha_map = strands
+            look.alpha_test = fur_test(k, len(pile))
+            parts[g].append(
+                _add_part(scene, assets, person, pile[k].clone(), look)
             )
     var dressed = Dressed(meshes^, shells^)
     dressed.parts = parts^

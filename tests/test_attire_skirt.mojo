@@ -10,9 +10,9 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
 from extensions.attire.mesh_ops import COVER, merge
 from extensions.attire.skirt import (
-    SKIRT_FOLDS,
     SKIRT_LEG_SHARE,
     SKIRT_SIDES,
+    fold_profile,
     SkirtEnvelope,
     hang_skirt,
     hull_radii,
@@ -219,11 +219,43 @@ def test_a_skirt_folds_deeper_toward_its_hem() raises:
     for side in range(SKIRT_SIDES):
         assert_almost_equal(folded.radii[side], plain.radii[side])
         assert_true(folded.radii[hem + side] >= plain.radii[hem + side])
-    assert_almost_equal(folded.radii[hem], plain.radii[hem] + 0.01, atol=1e-5)
-    var trough = SKIRT_SIDES // (2 * SKIRT_FOLDS)
-    assert_almost_equal(
-        folded.radii[hem + trough], plain.radii[hem + trough], atol=1e-5
-    )
+    var deepest = Float32(0)
+    var shallowest = Float32(1)
+    for side in range(SKIRT_SIDES):
+        var stood = folded.radii[hem + side] - plain.radii[hem + side]
+        assert_almost_equal(stood, 0.01 * fold_profile(side), atol=1e-5)
+        deepest = max(deepest, stood)
+        shallowest = min(shallowest, stood)
+    assert_almost_equal(deepest, 0.01, atol=1e-5)
+    assert_true(shallowest < 0.001)
+
+
+def test_a_skirt_s_folds_bunch_and_vary() raises:
+    var crests = List[Float32]()
+    var gaps = List[Int]()
+    var last = -1
+    for side in range(SKIRT_SIDES):
+        var here = fold_profile(side)
+        var before = fold_profile((side + SKIRT_SIDES - 1) % SKIRT_SIDES)
+        var after = fold_profile((side + 1) % SKIRT_SIDES)
+        assert_true(here >= 0 and here <= 1)
+        if here > before and here >= after:
+            crests.append(here)
+            if last >= 0:
+                gaps.append(side - last)
+            last = side
+    # About ten folds, some deeper than others, some closer together.
+    assert_true(len(crests) >= 8 and len(crests) <= 12)
+    var low = Float32(1)
+    for crest in crests:
+        low = min(low, crest)
+    assert_true(low < 0.85)
+    var narrow = SKIRT_SIDES
+    var wide = 0
+    for gap in gaps:
+        narrow = min(narrow, gap)
+        wide = max(wide, gap)
+    assert_true(wide > narrow)
 
 
 def test_a_short_skirt_does_not_lift_a_long_one() raises:

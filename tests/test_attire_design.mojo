@@ -240,6 +240,13 @@ def test_a_design_in_colors_paints_its_region_white() raises:
     assert_true(painted[SECONDARY_DYE.value] == GREEN)
     var kept = design_dyes(DAMASK, dyes)
     assert_true(kept[PRIMARY_DYE.value] == CRIMSON)
+    # Hide's edges are burnished darker, unless the trim is dyed apart.
+    var tan = Color(132, 86, 48)
+    var hide = design_dyes(HIDE, [tan, tan, tan, tan])
+    assert_true(hide[TRIM_DYE.value].r < tan.r)
+    assert_true(hide[PRIMARY_DYE.value] == tan)
+    var edged = design_dyes(HIDE, [tan, tan, GOLD, tan])
+    assert_true(edged[TRIM_DYE.value] == GOLD)
     with assert_raises(contains="four dyes"):
         _ = design_dyes(BROCADE, [CRIMSON])
     with assert_raises(contains="design must"):

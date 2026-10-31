@@ -13,6 +13,8 @@ from extensions.attire.apparel import apparel, trousers
 from extensions.attire.armory import armory
 from extensions.attire.garment import shirt, wardrobe
 from extensions.attire.kinds import (
+    COLLAR_RUFFLE,
+    CUFF_RUFFLES,
     BISHOP_SLEEVE,
     FRONT_ONLY,
     FRONT_PANEL,
@@ -96,6 +98,8 @@ def test_each_garment_checks_and_is_shaped_as_its_table_says() raises:
     assert_true(open_robe().opening == OPEN_FRONT)
     assert_true(ball_gown().neckline == SQUARE_NECK)
     assert_true(ball_gown().flare > 0.5)
+    assert_true(chemise().ruffles == CUFF_RUFFLES | COLLAR_RUFFLE)
+    assert_true(ball_gown().ruffles == CUFF_RUFFLES)
 
 
 def test_an_apron_covers_the_front_alone() raises:

@@ -17,6 +17,7 @@ written by name; a garment saved without them is read as steel, with no
 headwear. Its neckline, opening and sleeve are written by name; a
 garment saved without them is read round-necked, closed and fitted. Its
 design is written by name; a garment saved without one is read plain.
+Its ruffles are written by name; a garment saved without them has none.
 
 `outfit_named` gives three outfits ready to wear: a peasant's, a
 man-at-arms's in mail, and a knight's full harness under a surcoat.
@@ -79,6 +80,8 @@ from extensions.attire.kinds import (
     sleeve_named,
     design_label,
     design_named,
+    ruffles_label,
+    ruffles_named,
     layer_label,
     layer_named,
     pattern_label,
@@ -243,6 +246,7 @@ def garment_record(garment: Garment) raises -> UserData:
     record.set_string("opening", opening_label(garment.opening))
     record.set_string("sleeve", sleeve_label(garment.sleeve))
     record.set_string("design", design_label(garment.design))
+    record.set_string("ruffles", ruffles_label(garment.ruffles))
     record.set_json("starts", _numbers(garment.cover.starts))
     record.set_json("ends", _numbers(garment.cover.ends))
     return record^
@@ -380,6 +384,9 @@ def garment_from(document: JsonDocument, node: Int) raises -> Garment:
         sleeve=sleeve_named(document.optional_string(node, "sleeve", "fitted")),
         # One saved before designs is plain.
         design=design_named(document.optional_string(node, "design", "plain")),
+        ruffles=ruffles_named(
+            document.optional_string(node, "ruffles", "none")
+        ),
     )
     garment.dyes = colors^
     garment.check()

@@ -209,6 +209,8 @@ $(call gallery,heraldry,heraldry)
 $(call gallery,tailoring,tailoring)
 # Nine people, each in one design woven or embroidered over the dyes.
 $(call gallery,designs,designs)
+# Five people whose cloth shows its character: frills, fur, folds and leather.
+$(call gallery,fabrics,fabrics)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.

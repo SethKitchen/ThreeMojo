@@ -9364,5 +9364,17 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/ruffles_are_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'require_ruffles': value passed to 'ruffles' cannot be converted from 'IntLiteral[1]' to 'Ruffles'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   }
 }

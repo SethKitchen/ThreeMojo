@@ -19,8 +19,10 @@ part of a garment's shell below the hips with such a tube:
    a convex hull, so it spans the gap between the thighs. Each ring is at
    least as wide as the ring above it, plus the flare, so the cloth falls
    and does not tuck in between the legs. A skirt under it lifts it.
-   Folds stand out of the rings, `SKIRT_FOLDS` of them round the skirt,
-   from none at the top to their whole depth at the hem.
+   Folds stand out of the rings, about `SKIRT_FOLDS` of them round the
+   skirt, from none at the top to their whole depth at the hem. They
+   bunch and spread, and some stand out further than others, as
+   `fold_profile` says.
 3. `skirt_mesh` lofts the rings into a tube on `SKIRT_SIDES` sides. The
    top of the tube reaches up inside the shell, so no gap opens at the
    cut. A lined skirt has an inner face one fabric thickness inside, and
@@ -64,10 +66,14 @@ comptime SKIRT_STATURE = Float32(1.8288)
 comptime SKIRT_TOP = Float32(0.03)
 """How far below the hip joints a skirt hangs from, in meters on the
 template. The legs part 6 cm below them."""
-comptime SKIRT_SIDES = 40
+comptime SKIRT_SIDES = 48
 """How many sides a skirt's tube has."""
 comptime SKIRT_FOLDS = 10
-"""How many folds run down a skirt."""
+"""How many folds run down a skirt, on the mean."""
+comptime FLARE_FOLDS = Float32(2)
+"""How much deeper a skirt's folds stand for each unit of its flare: a
+wide skirt has more cloth to fold. A skirt that flares 0.5 folds twice as
+deep as a straight one."""
 comptime SKIRT_RING = Float32(0.03)
 """The most a skirt's rings lie apart, in meters on the template."""
 comptime SKIRT_TUCK = Float32(0.015)
@@ -159,18 +165,47 @@ struct SkirtEnvelope(Copyable, Movable):
         return 0
 
 
+def _crest(side: Int) -> Float32:
+    """Return how far a side stands out in its fold, before the deepest
+    crest is scaled to one."""
+    var turn = 2 * Float32(pi) * Float32(side) / Float32(SKIRT_SIDES)
+    # Folds bunch and spread round the skirt, and some stand out further
+    # than others, as cloth falls.
+    var bunched = Float32(SKIRT_FOLDS) * turn + 0.9 * sin(3 * turn)
+    var main = Float32(0.5) + Float32(0.5) * cos(bunched)
+    var swell = Float32(0.5) + Float32(0.5) * cos(7 * turn + 1.7)
+    return main * (Float32(0.55) + Float32(0.45) * swell)
+
+
+def fold_profile(side: Int) -> Float32:
+    """Return how far a side of a skirt stands out in its fold at the hem,
+    in the depth of the deepest fold.
+
+    About `SKIRT_FOLDS` folds run round the skirt. They bunch and spread,
+    and some stand out further than others. Every skirt's folds lie at
+    the same sides, so a skirt over another folds over its folds.
+
+    Args:
+        side: A side, zero through `SKIRT_SIDES - 1`.
+
+    Returns:
+        Zero through one: one on the deepest crest, near zero in the
+        troughs.
+    """
+    var deepest = Float32(0)
+    for k in range(SKIRT_SIDES):  # pragma: no branch
+        deepest = max(deepest, _crest(k))
+    return _crest(side) / deepest
+
+
 def _fold(side: Int, fall: Float32) -> Float32:
     """Return how far a side stands out in its fold, in a fold's depth.
 
     The folds deepen as the cloth falls, from none at the top to their
     whole depth at the hem, and stand only out, so no fold dips into a
-    skirt under it. Every skirt's folds lie at the same sides, so a skirt
-    over another folds over its folds.
+    skirt under it.
     """
-    var turn = (
-        2 * Float32(pi) * Float32(SKIRT_FOLDS * side) / Float32(SKIRT_SIDES)
-    )
-    return fall * sqrt(fall) * (Float32(0.5) + Float32(0.5) * cos(turn))
+    return fall * sqrt(fall) * fold_profile(side)
 
 
 def skirt_scale(rig: HumanoidRig) -> Float32:

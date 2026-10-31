@@ -42,6 +42,8 @@ from extensions.attire.cover import Cover
 from extensions.attire.garment import Garment
 from extensions.attire.kinds import (
     BISHOP_SLEEVE,
+    COLLAR_RUFFLE,
+    CUFF_RUFFLES,
     FRONT_ONLY,
     FRONT_PANEL,
     LEGS_SLOT,
@@ -140,6 +142,7 @@ def chemise() raises -> Garment:
         ease=Length(4, MILLIMETER),
         neckline=SCOOP_NECK,
         sleeve=BISHOP_SLEEVE,
+        ruffles=CUFF_RUFFLES | COLLAR_RUFFLE,
     )
 
 
@@ -426,6 +429,7 @@ def ball_gown() raises -> Garment:
         flare=0.6,
         neckline=SQUARE_NECK,
         sleeve=PUFFED_SHOULDER,
+        ruffles=CUFF_RUFFLES,
     )
     gown.dyes[SECONDARY_DYE.value] = Color(214, 206, 230)
     gown.dyes[TRIM_DYE.value] = Color(232, 226, 210)

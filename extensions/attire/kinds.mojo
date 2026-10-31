@@ -1240,3 +1240,116 @@ def require_design(design: Design) raises:
         Error: If the design is not named.
     """
     require_valid(design.is_valid(), "A design must be a named one")
+
+
+@fieldwise_init
+struct Ruffles(Equatable, ImplicitlyCopyable, Writable):
+    """Where a garment wears a frill: at its cuffs, its collar or its hem,
+    or a union of them."""
+
+    var value: Int
+    """One bit for each place: one the cuffs, two the collar, four the
+    hem."""
+
+    def is_valid(self) -> Bool:
+        """Return whether this is a union of the named places.
+
+        Returns:
+            True for zero through seven.
+        """
+        return ordinal_valid(self.value, RUFFLES_COUNT - 1)
+
+    def __or__(self, other: Self) -> Self:
+        """Return the union of two sets of places.
+
+        Args:
+            other: Another set.
+
+        Returns:
+            The places either names.
+        """
+        return Self(self.value | other.value)
+
+    def has(self, place: Self) -> Bool:
+        """Return whether every place of `place` is one of these.
+
+        Args:
+            place: A place, or a union of them.
+
+        Returns:
+            True when this set holds all of them.
+        """
+        return place.value != 0 and (self.value & place.value) == place.value
+
+
+comptime NO_RUFFLES = Ruffles(0)
+"""No frill."""
+comptime CUFF_RUFFLES = Ruffles(1)
+"""A frill at the end of each sleeve, falling over the hand."""
+comptime COLLAR_RUFFLE = Ruffles(2)
+"""A frill round the neckline, standing up and out."""
+comptime HEM_RUFFLE = Ruffles(4)
+"""A flounce along the hem, below it."""
+comptime RUFFLES_COUNT = 8
+"""How many sets of places there are."""
+
+
+def _ruffles_names() -> List[String]:
+    """Return the names of the sets of places, in order."""
+    var places: List[String] = ["cuffs", "collar", "hem"]
+    var names: List[String] = ["none"]
+    for value in range(1, RUFFLES_COUNT):  # pragma: no branch
+        var name = String()
+        for bit in range(3):
+            if value & (1 << bit):
+                if name:
+                    name += "+"
+                name += places[bit]
+        names.append(name)
+    return names^
+
+
+def ruffles_label(ruffles: Ruffles) -> String:
+    """Return the name of a set of places.
+
+    Args:
+        ruffles: A set, named or not.
+
+    Returns:
+        Its name, as `"cuffs+collar"`, or `"ruffles"` when it is not
+        named.
+    """
+    return ordinal_label(
+        ruffles.is_valid(), ruffles.value, _ruffles_names(), "ruffles"
+    )
+
+
+def ruffles_named(name: String) raises -> Ruffles:
+    """Return the set of places that `name` names.
+
+    Args:
+        name: A name, as `ruffles_label` gives it.
+
+    Returns:
+        The named set.
+
+    Raises:
+        Error: If `name` names no set.
+    """
+    var names = _ruffles_names()
+    for k in range(len(names)):  # pragma: no branch
+        if names[k] == name:
+            return Ruffles(k)
+    raise Error("No ruffles are named " + name)
+
+
+def require_ruffles(ruffles: Ruffles) raises:
+    """Refuse a set of places that is not named.
+
+    Args:
+        ruffles: The set.
+
+    Raises:
+        Error: If the set is not named.
+    """
+    require_valid(ruffles.is_valid(), "Ruffles must be a named set")

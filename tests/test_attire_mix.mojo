@@ -6,6 +6,8 @@
 """Tests for a crowd's clothes: outfits picked by a seed."""
 
 from extensions.attire.kinds import (
+    CUFF_RUFFLES,
+    HEM_RUFFLE,
     PLAIN,
     TARTAN,
     WOOL,
@@ -633,6 +635,25 @@ def test_callings_wear_designs_by_chance() raises:
     assert_true(designed[PEASANT.value] < designed[ROYAL.value])
     assert_true(designed[WARRIOR.value] < 20)
     assert_true(plaid > 15 and plaid < 60)
+
+
+def test_callings_wear_frills_by_chance() raises:
+    var royal_shirts = 0
+    var flounces = 0
+    var frilled_gowns = 0
+    for seed in range(100):
+        for garment in dressed_as(ROYAL, MALE, seed).garments:
+            if garment.name == "shirt" and garment.ruffles.has(CUFF_RUFFLES):
+                royal_shirts += 1
+        for garment in calling_outfit(GOODWIFE, seed).garments:
+            if garment.name == "skirt" and garment.ruffles.has(HEM_RUFFLE):
+                flounces += 1
+        for garment in calling_outfit(NOBLEWOMAN, seed).garments:
+            if garment.name == "gown" and garment.ruffles.has(CUFF_RUFFLES):
+                frilled_gowns += 1
+    assert_true(royal_shirts > 15)
+    assert_true(flounces > 3 and flounces < 30)
+    assert_true(frilled_gowns > 3)
 
 
 def main() raises:

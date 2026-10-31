@@ -30,8 +30,9 @@ A `Garment` holds no mesh. `dress` makes its mesh from the skin of the person wh
 | `drape`, `ease` | `Int`, `Length` | Smoothing passes of its shell, and how loose it is cut. |
 | `form`, `flare` | `Form`, `Float32` | How its shell is shaped where it does not follow the skin, and how far a skirt widens for each meter it falls. |
 | `design` | `Design` | The design woven or embroidered over its dyes. Plain by default. |
+| `ruffles` | `Ruffles` | Where it wears frills: at its cuffs, its collar or its hem. None by default. |
 
-Every slot, layer, fabric, articulation, pattern, form, design, dye channel and wear channel is a type with `is_valid`. A bare integer does not compile.
+Every slot, layer, fabric, articulation, pattern, form, design, set of ruffles, dye channel and wear channel is a type with `is_valid`. A bare integer does not compile.
 
 ## Cover
 
@@ -107,9 +108,11 @@ A band hides nothing under it: the tunic under a belt is drawn whole.
 1. `skirt_top` is 3 cm below the hip joints on the template, above the crotch. There the shell is one tube round the pelvis. The shell of the trunk and the legs is cut there.
 2. `skirt_envelope` slices the garment's own shell at rings 3 cm apart, from the top to the lowest point of the shell on the legs. That point is the hem. Each slice is closed as a convex hull, so it spans the gap between the thighs.
 3. Each ring is at least as wide as the ring above it, plus the flare times the drop. So the cloth falls straight or flares, and does not tuck in between the legs. A skirt under it lifts it by that skirt's thickness and this garment's clearance. So does metal on the legs under it, such as plate legs, which stands off the thighs.
-4. `skirt_mesh` lofts the rings on 40 sides. The top ring reaches 1.5 cm up inside the shell, so no gap opens at the cut.
+4. `skirt_mesh` lofts the rings on 48 sides. The top ring reaches 1.5 cm up inside the shell, so no gap opens at the cut.
 
-Ten folds run down each skirt. They stand only out of the rings, so no fold dips into a skirt under it. They deepen as the cloth falls, from none at the top to their whole depth at the hem. Every skirt's folds lie at the same sides, so a skirt over another folds over its folds. `fold_depth` gives the depth at the hem.
+About ten folds run down each skirt. They bunch together and spread apart round the skirt, and some stand out further than others, as cloth falls. `fold_profile` gives each side's share of the deepest fold. The folds stand only out of the rings, so no fold dips into a skirt under it. They deepen as the cloth falls, from none at the top to their whole depth at the hem. Every skirt's folds lie at the same sides, so a skirt over another folds over its folds.
+
+`fold_depth` gives the depth of a straight skirt's deepest fold at the hem. A wide skirt has more cloth to fold, so its folds stand `FLARE_FOLDS` times its flare deeper. A skirt that flares 0.5 folds twice as deep as a straight one.
 
 | Fabric | Fold at the hem |
 |---|---|
@@ -186,6 +189,33 @@ A neckline and an opening are one field over space, positive where the garment s
 A sleeve's lift is added to the garment's standoff at each vertex of the skin, shared by the skin weights. So it fades into the shoulder and the hand.
 
 A cut narrower than the skin's triangles cannot be drawn: a triangle whose corners all lie outside it bridges it. At a 9,000-triangle budget the last few centimeters of a V's point are bridged so.
+
+### Ruffles
+
+A ruffle is a frill: a strip of cloth gathered along one edge. A garment's `ruffles` name where it wears frills. Join places with `|`.
+
+```mojo
+var linen = shirt()
+linen.ruffles = CUFF_RUFFLES | COLLAR_RUFFLE
+```
+
+| Place | Where | How it grows | Width | Flutes |
+|---|---|---|---|---|
+| `CUFF_RUFFLES` | the end of each sleeve | down the arm, over the hand | 4.5 cm | 2.6 cm apart, 8 mm deep |
+| `COLLAR_RUFFLE` | the neckline | out and down, over the shoulders and the chest | 5 cm | 3 cm apart, 1 cm deep |
+| `HEM_RUFFLE` | a hem below the hips | down from the hem | 7 cm | 4.5 cm apart, 1.4 cm deep |
+
+`ruffle_mesh` grows a frill from each open edge at a named place. An edge is a cuff when an arm weighs most on it and it runs across the bone. An edge is a collar when it is about level, above the waist joint and close to the neck. An edge is a hem when it is about level, below the hip joints and in the lowest 35% of the garment. So the front edges of a coat grow no frill.
+
+A frill grows only from an edge that shows. When a garment over it hides the edge, the edge grows no frill. A lined skirt's hem is closed, so the frill grows from the hem of the garment's whole shell.
+
+The frill flares as it grows. Its flutes deepen from none at the seam to their whole depth at its edge, and each loop holds a whole number of flutes. The frill is two sheets back to back, so it draws from both sides. It takes the skin weights of the edge it grows from, so it moves with the garment. Its cover value is below the trim's level, so it takes the trim's dye.
+
+A chemise has frills at its cuffs and its collar. A ball gown has frills at the ends of its sleeves. Some callings add frills to a shirt, a gown or a skirt; see [Outfits and armor](Outfits-and-armor#crowds).
+
+`examples/fabrics.mojo` dresses five people whose cloth shows its character, and writes `out/fabrics.png`. A barbarian wears fur. A goodwife wears a frilled chemise and a skirt with a flounce at its hem. A lady wears lace at her elbows, and a courtier wears a frilled shirt. A hunter wears leather of hide under a pale fur mantle.
+
+![Five people in fur, frills, a flounced skirt, a damask ball gown and leather](out/fabrics.png)
 
 ### Hats and helmets
 
@@ -280,6 +310,20 @@ var helm = forged(bascinet(), BLUED, GOLD)
 
 So `v` runs on across the elbow and the knee, and no triangle mixes two chains. A pattern meets itself at the back seams and where a sleeve meets the body, as the panels of a sewn garment do.
 
+### Fur
+
+A fur garment stands in strands. `fur_shells` stacks copies of the garment's `outer_face` over it, each farther out along the normals, up to a pile of 1.6 cm. The outer face is where the normals point away from the bones, so no strands stand on a skirt's lining. Each copy draws only the strands that reach it. Its `alpha_map` is `fur_texture`, a tile of strands, and its `alpha_test` is its height in the pile. A strand is a cone, so a higher copy draws it thinner, and it ends in a point.
+
+| Value | Size |
+|---|---|
+| Pile | 1.6 cm |
+| Shells | 3 at full detail, 2 at the least, as `fur_shell_count` says |
+| Strands | 10 across a 3 cm tile, 3 mm apart |
+| Comb | the tips fall 40% of the pile down |
+| Root | the root is drawn at 55% of the dye's shade |
+
+The roots are darker than the tips, because the strands around a root shade it. The strand texture has no mip chain. Averaged strands turn to a haze that falls under the test, and the fur goes bald at a distance.
+
 `SurfaceMaps` makes each bump map once and gives it to every material that needs it. Each map is a 64-texel height image with a mip chain. In a full-body view a ring of mail is smaller than a pixel, and the mip chain turns the rings into a fine glint.
 
 ## Dyes and wear
@@ -345,6 +389,8 @@ A tonal design is damask, herringbone or hide. It is a texture of shades, and th
 A design in colors is drawn in the garment's own dyes. The primary dye is its ground, the trim's dye is its motif, and the secondary dye is its third color. A motif that is nearly the ground's color does not show. `contrast` then draws it in a lighter shade of a dark ground, or a darker shade of a light ground.
 
 `worn_design` says which design a fabric shows. Linen, wool, silk, velvet, padding and felt show their design. Plain leather shows hide. Mail, plate, scale, fur and straw show no design.
+
+Hide's mottle is also the roughness map of its material, so leather shines where it is dark and worn smooth. A hide's edges are burnished 30% darker than its face, unless its trim has a dye of its own.
 
 ### Parts and braids
 
@@ -480,4 +526,4 @@ Roblox's cages and MakeHuman's `mhclo` files bind a garment to a body mesh from 
 
 ## Tests
 
-`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_metal.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_skirt.mojo`, `test_attire_last.mojo`, `test_attire_cowl.mojo`, `test_attire_dome.mojo`, `test_attire_headwear.mojo`, `test_attire_surface.mojo`, `test_attire_dye.mojo`, `test_attire_design.mojo`, `test_attire_garment.mojo`, `test_attire_armory.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.
+`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_metal.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_skirt.mojo`, `test_attire_last.mojo`, `test_attire_cowl.mojo`, `test_attire_dome.mojo`, `test_attire_headwear.mojo`, `test_attire_surface.mojo`, `test_attire_fur.mojo`, `test_attire_ruffle.mojo`, `test_attire_dye.mojo`, `test_attire_design.mojo`, `test_attire_garment.mojo`, `test_attire_armory.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.

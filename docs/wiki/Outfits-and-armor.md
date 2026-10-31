@@ -99,6 +99,8 @@ The seed makes each cloak a little longer or shorter, and fuller or plainer.
 
 Many garments of a calling also take a [design](Garments#designs) by chance. Most royals and noblewomen wear brocade, damask or flowers. A merchant wears pinstripe breeches or a brocade doublet. A peasant or a farmer wears checks, tartan or herringbone. A wizard's robe and hat take flowers, diamonds or damask. About one barbarian in three wears a plaid kilt of wool in place of fur.
 
+Frills come by chance too. A courtly royal mostly wears a shirt with frilled cuffs and collar, and so do some merchants and warlocks. Some ladies' gowns have frilled sleeve ends, and one skirted woman in four has a flounce at her hem.
+
 Each garment of a calling takes its dye by a pick of its own. So the dyes of a robe, its mantle and its sash vary apart. A test dresses 120 seeds of each of the seven callings as a man and as a woman. Of the 1,680 people, more than 1,500 differ in their garments, dyes, metals, hair or beard. The genome and the stature make each person differ further.
 
 Some garments are parti-colored: four merchants' tunics in ten and three women's gowns in ten take a second dye on the left side. Three men-at-arms' surcoats in ten are quartered, and two in ten bear a cross or a saltire.

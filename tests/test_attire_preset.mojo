@@ -28,6 +28,9 @@ from extensions.attire.garment import (
     vambraces,
 )
 from extensions.attire.kinds import (
+    COLLAR_RUFFLE,
+    CUFF_RUFFLES,
+    NO_RUFFLES,
     BROCADE,
     PLAIN,
     BISHOP_SLEEVE,
@@ -328,6 +331,21 @@ def test_an_outfit_keeps_its_designs() raises:
     # One saved before designs is plain.
     var old = outfit_from_json(_drop(_drop(text, "design"), "design"))
     assert_equal(old.garments[1].design, PLAIN)
+
+
+def test_an_outfit_keeps_its_ruffles() raises:
+    var outfit = Outfit()
+    outfit.add(chemise())
+    outfit.add(frock_coat())
+    var text = outfit_json(outfit)
+    assert_true(text.find('"ruffles":"cuffs+collar"') >= 0)
+    assert_true(text.find('"ruffles":"none"') >= 0)
+    var again = outfit_from_json(text)
+    assert_equal(again.garments[0].ruffles, CUFF_RUFFLES | COLLAR_RUFFLE)
+    assert_equal(again.garments[1].ruffles, NO_RUFFLES)
+    # One saved before ruffles has none.
+    var old = outfit_from_json(_drop(_drop(text, "ruffles"), "ruffles"))
+    assert_equal(old.garments[0].ruffles, NO_RUFFLES)
 
 
 def main() raises:

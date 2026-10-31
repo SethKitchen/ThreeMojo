@@ -636,6 +636,8 @@ from its ground. A motif closer than this is drawn in a shade of the
 ground."""
 comptime CREAM = Color(236, 222, 184)
 """The color a dark ground's motif is lightened toward."""
+comptime BURNISH = Float32(0.3)
+"""How much darker hide's edges are than its face."""
 
 
 def worn_design(design: Design, kind: FabricKind) raises -> Design:
@@ -726,6 +728,12 @@ def design_dyes(design: Design, dyes: List[Color]) raises -> List[Color]:
     var painted = dyes.copy()
     if design.is_colored():
         painted[PRIMARY_DYE.value] = Color(255, 255, 255)
+    # Hide's edges are burnished darker than its face, unless its trim is
+    # dyed apart.
+    if design == HIDE and dyes[TRIM_DYE.value] == dyes[PRIMARY_DYE.value]:
+        painted[TRIM_DYE.value] = _mix(
+            dyes[TRIM_DYE.value], Color(0, 0, 0), BURNISH
+        )
     return painted^
 
 

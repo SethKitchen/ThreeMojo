@@ -31,6 +31,7 @@ from extensions.attire.garment import (
     tunic,
 )
 from extensions.attire.kinds import (
+    NO_RUFFLES,
     ARMOR_LAYER,
     LEGS_SLOT,
     PLATE,
@@ -71,7 +72,9 @@ from extensions.attire.outfit import (
     garment_detail,
 )
 from objects.skinned_mesh import SKIN_INDEX
-from extensions.attire.tailor import doublet, skirt
+from extensions.attire.tailor import chemise, doublet, skirt
+from extensions.attire.apparel import fur_mantle
+from extensions.attire.garment import jerkin
 from render.texture_store import NO_TEXTURE
 from std.testing import (
     TestSuite,
@@ -554,6 +557,54 @@ def test_a_design_draws_a_garment_in_parts() raises:
     # A garment hidden wholly has no parts.
     var bare = Dressed([-1], [BufferGeometry()])
     assert_equal(len(bare.parts[0]), 0)
+
+
+def test_frills_fur_and_hide_each_draw_their_part() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var plain = coarse_person(scene, assets)
+    var frilled = coarse_person(scene, assets)
+    var bare = Outfit()
+    var linen = chemise()
+    linen.ruffles = NO_RUFFLES
+    bare.add(linen^)
+    var frills = Outfit()
+    frills.add(chemise())
+    var one = dress(scene, assets, plain, bare)
+    var two = dress(scene, assets, frilled, frills)
+    var smooth = _mesh_of(scene, assets, one.meshes[0]).triangle_count()
+    var ruffled = _mesh_of(scene, assets, two.meshes[0]).triangle_count()
+    assert_true(ruffled > smooth + 100)
+    # Fur stands in shells, each testing a higher share of its strands.
+    var furred = coarse_person(scene, assets)
+    var pelts = Outfit()
+    pelts.add(fur_mantle())
+    pelts.add(jerkin())
+    var worn = dress(scene, assets, furred, pelts)
+    assert_true(len(worn.parts[0]) > 2)
+    var strands = NO_TEXTURE
+    var last = Float32(0)
+    for k in range(1, len(worn.parts[0])):
+        ref look = assets.materials.get(
+            scene.skinned_meshes[worn.parts[0][k]].material
+        )
+        assert_true(look.alpha_test > last)
+        last = look.alpha_test
+        if k == 1:
+            strands = look.alpha_map
+        assert_equal(look.alpha_map, strands)
+    assert_true(strands != NO_TEXTURE)
+    # Leather's hide mottles its sheen too.
+    ref hide = assets.materials.get(
+        scene.skinned_meshes[worn.meshes[1]].material
+    )
+    assert_true(hide.roughness_map != NO_TEXTURE)
+    assert_equal(hide.roughness_map, hide.map)
+
+
+def _mesh_of(scene: Scene, assets: Assets, mesh: Int) raises -> BufferGeometry:
+    """Return the geometry a garment draws, in its bind pose."""
+    return assets.geometries.get(scene.skinned_meshes[mesh].geometry).clone()
 
 
 def test_a_garment_that_covers_nothing_draws_nothing() raises:

@@ -118,6 +118,10 @@ from extensions.attire.garment import (
     tunic,
 )
 from extensions.attire.kinds import (
+    COLLAR_RUFFLE,
+    CUFF_RUFFLES,
+    HEM_RUFFLE,
+    Ruffles,
     ACCENT_DYE,
     BANDED_SLEEVES,
     BEND,
@@ -574,6 +578,15 @@ def _woven(
     return _pick(choices, seed, salt + 1000)
 
 
+def _frilled(
+    var garment: Garment, seed: Int, salt: Int, percent: Int, ruffles: Ruffles
+) -> Garment:
+    """Return a garment with frills by a chance in a hundred."""
+    if _chance(seed, salt, percent):
+        garment.ruffles = ruffles
+    return garment^
+
+
 def calling_outfit(calling: Calling, seed: Int) raises -> Outfit:
     """Return the outfit of a calling, dyed and chosen by a seed.
 
@@ -716,7 +729,11 @@ def _trews(mut outfit: Outfit, calling: Calling, seed: Int) raises:
             linen.dyes[PRIMARY_DYE.value] = plain_dye(6)
         outfit.add(linen^)
     else:
-        outfit.add(shirt())
+        # A merchant's shirt is frilled now and then.
+        var percent = 40 if calling == MERCHANT else 0
+        outfit.add(
+            _frilled(shirt(), seed, 140, percent, CUFF_RUFFLES | COLLAR_RUFFLE)
+        )
     var weave = _woven(seed, 109, 35, [CHECK, TARTAN, HERRINGBONE])
     if calling == PEASANT and _chance(seed, 86, 50):
         var legs = _dyed(trousers(), plain_dye(plain + 4), plain_dye(plain))
@@ -780,6 +797,7 @@ def _skirted(mut outfit: Outfit, seed: Int) raises:
     outfit.add(bodice_^)
     var hem = plain_dye(_mixed(seed, 91))
     var skirt_ = _dyed(skirt(), hem, plain_dye(_mixed(seed, 116)))
+    skirt_ = _frilled(skirt_^, seed, 143, 25, HEM_RUFFLE)
     skirt_.dyes[SECONDARY_DYE.value] = plain_dye(_mixed(seed, 117))
     skirt_.design = _woven(seed, 118, 40, [CHECK, TARTAN, FLORAL])
     outfit.add(skirt_^)
@@ -814,6 +832,7 @@ def _gowned(mut outfit: Outfit, seed: Int) raises:
             seed, 97, 50
         ) else rich_dye(rich + 3)
     dress.design = _woven(seed, 120, 50, [DAMASK, BROCADE, FLORAL])
+    dress = _frilled(dress^, seed, 142, 40, CUFF_RUFFLES)
     outfit.add(dress^)
 
 
@@ -908,8 +927,10 @@ def _royal(woman: Bool, seed: Int) raises -> Outfit:
         outfit.add(gown_^)
     elif courtly:
         # A doublet and breeches over pale hose, under an open robe by
-        # chance.
-        outfit.add(shirt())
+        # chance, and mostly a frilled shirt.
+        outfit.add(
+            _frilled(shirt(), seed, 139, 70, CUFF_RUFFLES | COLLAR_RUFFLE)
+        )
         outfit.add(_dyed(hose(), IVORY_SILK, IVORY_SILK))
         outfit.add(_dyed(breeches(), rich_dye(rich), GOLD_LACE))
         var coat = doublet()
@@ -1008,7 +1029,15 @@ def _warlock(woman: Bool, seed: Int) raises -> Outfit:
     pauldrons."""
     var dark = _mixed(seed, 4)
     var outfit = Outfit()
-    outfit.add(_dyed(shirt(), shadow_dye(0), shadow_dye(0)))
+    outfit.add(
+        _frilled(
+            _dyed(shirt(), shadow_dye(0), shadow_dye(0)),
+            seed,
+            141,
+            40,
+            CUFF_RUFFLES | COLLAR_RUFFLE,
+        )
+    )
     var edge = shadow_dye(_mixed(seed, 51))
     if _chance(seed, 102, 35):
         # A long dark coat over a waistcoat the red of old blood.

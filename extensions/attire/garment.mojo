@@ -69,6 +69,9 @@ from extensions.attire.kinds import (
     require_opening,
     require_sleeve,
     require_design,
+    require_ruffles,
+    NO_RUFFLES,
+    Ruffles,
     ARMOR_LAYER,
     ARMS_SLOT,
     BANDED,
@@ -195,6 +198,8 @@ struct Garment(Copyable, Movable):
     """How full its sleeves are."""
     var design: Design
     """The design woven or embroidered over its dyes."""
+    var ruffles: Ruffles
+    """Where it wears frills: at its cuffs, its collar or its hem."""
 
     def __init__(
         out self,
@@ -218,6 +223,7 @@ struct Garment(Copyable, Movable):
         opening: Opening = CLOSED,
         sleeve: Sleeve = FITTED_SLEEVE,
         design: Design = PLAIN,
+        ruffles: Ruffles = NO_RUFFLES,
     ):
         """Describe a garment, dyed one color.
 
@@ -243,6 +249,7 @@ struct Garment(Copyable, Movable):
             opening: Where it is open. Closed by default.
             sleeve: How full its sleeves are. Fitted by default.
             design: The design over its dyes. Plain by default.
+            ruffles: Where it wears frills. None by default.
         """
         self.name = name
         self.slot = slot
@@ -264,6 +271,7 @@ struct Garment(Copyable, Movable):
         self.opening = opening
         self.sleeve = sleeve
         self.design = design
+        self.ruffles = ruffles
 
     def check(self) raises:
         """Refuse a garment that cannot be made.
@@ -274,8 +282,8 @@ struct Garment(Copyable, Movable):
                 anchor is not a named joint, there are not four dyes, the
                 drape is below -1, the ease is negative or not finite, the
                 flare is not zero through one, the metal, the headwear,
-                the neckline, the opening, the sleeve or the design is not
-                named, or
+                the neckline, the opening, the sleeve, the design or the
+                ruffles are not named, or
                 a `HATTED` garment names no headwear or another names
                 one.
         """
@@ -306,6 +314,7 @@ struct Garment(Copyable, Movable):
         require_opening(self.opening)
         require_sleeve(self.sleeve)
         require_design(self.design)
+        require_ruffles(self.ruffles)
         if (self.form == HATTED) != (self.headwear != NO_HEADWEAR):
             raise Error("A hatted garment, and it alone, names its headwear")
 
