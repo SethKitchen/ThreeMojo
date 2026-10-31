@@ -17,6 +17,24 @@ from extensions.attire.kinds import (
     Headwear,
     headwear_label,
     headwear_named,
+    NECKLINE_COUNT,
+    OPENING_COUNT,
+    SLEEVE_COUNT,
+    SQUARE_NECK,
+    OPEN_BELOW,
+    BISHOP_SLEEVE,
+    Neckline,
+    Opening,
+    Sleeve,
+    neckline_label,
+    neckline_named,
+    opening_label,
+    opening_named,
+    require_neckline,
+    require_opening,
+    require_sleeve,
+    sleeve_label,
+    sleeve_named,
     require_headwear,
     ACCENT_DYE,
     BUMP_COUNT,
@@ -247,6 +265,39 @@ def test_bump_maps_are_named() raises:
     require_bump(NO_BUMP)
     with assert_raises(contains="bump map"):
         require_bump(Bump(BUMP_COUNT))
+
+
+def test_necklines_openings_and_sleeves_are_named() raises:
+    for k in range(NECKLINE_COUNT):
+        assert_equal(neckline_named(neckline_label(Neckline(k))), Neckline(k))
+    for k in range(OPENING_COUNT):
+        assert_equal(opening_named(opening_label(Opening(k))), Opening(k))
+    for k in range(SLEEVE_COUNT):
+        assert_equal(sleeve_named(sleeve_label(Sleeve(k))), Sleeve(k))
+    assert_equal(neckline_label(SQUARE_NECK), "square")
+    assert_equal(opening_label(OPEN_BELOW), "open below")
+    assert_equal(sleeve_label(BISHOP_SLEEVE), "bishop")
+    assert_equal(neckline_label(Neckline(40)), "neckline")
+    assert_equal(opening_label(Opening(40)), "opening")
+    assert_equal(sleeve_label(Sleeve(-1)), "sleeve")
+    assert_false(Neckline(NECKLINE_COUNT).is_valid())
+    assert_false(Opening(-1).is_valid())
+    assert_false(Sleeve(SLEEVE_COUNT).is_valid())
+    require_neckline(SQUARE_NECK)
+    require_opening(OPEN_BELOW)
+    require_sleeve(BISHOP_SLEEVE)
+    with assert_raises(contains="neckline must"):
+        require_neckline(Neckline(40))
+    with assert_raises(contains="opening must"):
+        require_opening(Opening(40))
+    with assert_raises(contains="sleeve must"):
+        require_sleeve(Sleeve(40))
+    with assert_raises(contains="No neckline"):
+        _ = neckline_named("boat")
+    with assert_raises(contains="No opening"):
+        _ = opening_named("slashed")
+    with assert_raises(contains="No sleeve"):
+        _ = sleeve_named("leg-of-mutton")
 
 
 def main() raises:

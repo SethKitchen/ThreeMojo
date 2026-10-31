@@ -14,7 +14,8 @@ and its cover as two lists of nineteen fractions, one per joint. Its form
 is written by name and its flare as a number; a garment saved without
 them is read as fitted, with no flare. Its metal and its headwear are
 written by name; a garment saved without them is read as steel, with no
-headwear.
+headwear. Its neckline, opening and sleeve are written by name; a
+garment saved without them is read round-necked, closed and fitted.
 
 `outfit_named` gives three outfits ready to wear: a peasant's, a
 man-at-arms's in mail, and a knight's full harness under a surcoat.
@@ -69,6 +70,12 @@ from extensions.attire.kinds import (
     form_named,
     headwear_label,
     headwear_named,
+    neckline_label,
+    neckline_named,
+    opening_label,
+    opening_named,
+    sleeve_label,
+    sleeve_named,
     layer_label,
     layer_named,
     pattern_label,
@@ -229,6 +236,9 @@ def garment_record(garment: Garment) raises -> UserData:
     record.set_number("flare", Float64(garment.flare))
     record.set_string("metal", metal_label(garment.metal))
     record.set_string("headwear", headwear_label(garment.headwear))
+    record.set_string("neckline", neckline_label(garment.neckline))
+    record.set_string("opening", opening_label(garment.opening))
+    record.set_string("sleeve", sleeve_label(garment.sleeve))
     record.set_json("starts", _numbers(garment.cover.starts))
     record.set_json("ends", _numbers(garment.cover.ends))
     return record^
@@ -355,6 +365,15 @@ def garment_from(document: JsonDocument, node: Int) raises -> Garment:
         headwear=headwear_named(
             document.optional_string(node, "headwear", "none")
         ),
+        # One saved before necklines, openings and sleeves is round-necked,
+        # closed and fitted.
+        neckline=neckline_named(
+            document.optional_string(node, "neckline", "round")
+        ),
+        opening=opening_named(
+            document.optional_string(node, "opening", "closed")
+        ),
+        sleeve=sleeve_named(document.optional_string(node, "sleeve", "fitted")),
     )
     garment.dyes = colors^
     garment.check()

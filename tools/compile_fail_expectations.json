@@ -9316,5 +9316,41 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_neckline_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'require_neckline': value passed to 'neckline' cannot be converted from 'IntLiteral[1]' to 'Neckline'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_opening_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'require_opening': value passed to 'opening' cannot be converted from 'IntLiteral[1]' to 'Opening'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_sleeve_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 20,
+        "message": "invalid call to 'require_sleeve': value passed to 'sleeve' cannot be converted from 'IntLiteral[1]' to 'Sleeve'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   }
 }

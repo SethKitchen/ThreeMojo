@@ -57,11 +57,18 @@ from extensions.attire.garment import Garment
 from extensions.attire.cowl import hang_cowl, head_cowl
 from extensions.attire.band import belt_band
 from extensions.attire.dome import dome_shoulders
+from extensions.attire.opening import (
+    cut_open,
+    is_cut,
+    opening_mask,
+    sleeve_lifts,
+)
 from extensions.attire.headwear import head_frame, hat_mesh, press_hair
 from extensions.attire.kinds import (
     BANDED,
     COWLED,
     DOMED,
+    FITTED_SLEEVE,
     HATTED,
     PRIMARY_DYE,
     SHOD,
@@ -280,6 +287,19 @@ def dress_pieces(
             cover_values(skin, person.rig, garment.cover),
             COVER_SMOOTHING,
         )
+        # A neckline or an opening cuts the cover away, so what is under
+        # it shows there.
+        if is_cut(garment.neckline, garment.opening):
+            for v in range(count):
+                mine[v] *= opening_mask(
+                    person.rig,
+                    garment.neckline,
+                    garment.opening,
+                    frame.points[v],
+                )
+        var lifts = List[Float32](length=count, fill=0)
+        if garment.sleeve != FITTED_SLEEVE:
+            lifts = sleeve_lifts(skin, person.rig, garment.sleeve)
         var standoffs = List[Float32](capacity=count)
         for v in range(count):
             standoffs.append(
@@ -289,6 +309,7 @@ def dress_pieces(
                     faces,
                     v,
                 )
+                + lifts[v]
             )
         var shell = shell_positions(frame, standoffs, mine, drape)
         faces.append(outer_faces(frame, shell, Float32(cloth.thickness.value)))
@@ -343,6 +364,10 @@ def dress_pieces(
                 detail,
             )
             whole = hang_skirt(whole, envelope, person.rig, False)
+            if is_cut(garment.neckline, garment.opening):
+                whole = cut_open(
+                    whole, person.rig, garment.neckline, garment.opening, top
+                )
         elif garment.fabric.is_metal() and (
             garment.cover.covers(RIGHT_THIGH)
             or garment.cover.covers(LEFT_THIGH)
@@ -438,6 +463,12 @@ def dress_pieces(
             True,
             shown,
         )
+        if garment.form == SKIRTED and is_cut(
+            garment.neckline, garment.opening
+        ):
+            piece = cut_open(
+                piece, person.rig, garment.neckline, garment.opening, top
+            )
         piece = shoe(piece, feet, person.rig)
         pieces[order[i]] = hang_cowl(
             piece,

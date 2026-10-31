@@ -28,6 +28,9 @@ from extensions.attire.garment import (
     wardrobe,
 )
 from extensions.attire.kinds import (
+    Neckline,
+    Opening,
+    Sleeve,
     CROWN,
     HATTED,
     Headwear,
@@ -209,6 +212,18 @@ def test_a_garment_refuses_what_cannot_be_made() raises:
     bad = good.copy()
     bad.headwear = Headwear(30)
     with assert_raises(contains="headwear kind must"):
+        bad.check()
+    bad = good.copy()
+    bad.neckline = Neckline(30)
+    with assert_raises(contains="neckline must"):
+        bad.check()
+    bad = good.copy()
+    bad.opening = Opening(30)
+    with assert_raises(contains="opening must"):
+        bad.check()
+    bad = good.copy()
+    bad.sleeve = Sleeve(30)
+    with assert_raises(contains="sleeve must"):
         bad.check()
     # A hat names its headwear, and nothing else does.
     bad = good.copy()

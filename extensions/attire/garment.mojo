@@ -53,10 +53,19 @@ This is not a three.js port. See Extensions.
 
 from extensions.attire.cover import Cover
 from extensions.attire.kinds import (
+    CLOSED,
+    FITTED_SLEEVE,
     HATTED,
     NO_HEADWEAR,
+    ROUND_NECK,
     Headwear,
+    Neckline,
+    Opening,
+    Sleeve,
     require_headwear,
+    require_neckline,
+    require_opening,
+    require_sleeve,
     ARMOR_LAYER,
     ARMS_SLOT,
     BANDED,
@@ -175,6 +184,12 @@ struct Garment(Copyable, Movable):
     var headwear: Headwear
     """Which hat or helmet a `HATTED` garment is drawn as, or
     `NO_HEADWEAR`."""
+    var neckline: Neckline
+    """How it is cut at the front of the neck."""
+    var opening: Opening
+    """Where it is open, so the garment under it shows."""
+    var sleeve: Sleeve
+    """How full its sleeves are."""
 
     def __init__(
         out self,
@@ -194,6 +209,9 @@ struct Garment(Copyable, Movable):
         flare: Float32 = 0,
         metal: Metal = STEEL,
         headwear: Headwear = NO_HEADWEAR,
+        neckline: Neckline = ROUND_NECK,
+        opening: Opening = CLOSED,
+        sleeve: Sleeve = FITTED_SLEEVE,
     ):
         """Describe a garment, dyed one color.
 
@@ -215,6 +233,9 @@ struct Garment(Copyable, Movable):
                 falls.
             metal: What mail or plate is made of. Steel by default.
             headwear: Which hat or helmet a `HATTED` garment is.
+            neckline: How it is cut at the neck. Round by default.
+            opening: Where it is open. Closed by default.
+            sleeve: How full its sleeves are. Fitted by default.
         """
         self.name = name
         self.slot = slot
@@ -232,6 +253,9 @@ struct Garment(Copyable, Movable):
         self.flare = flare
         self.metal = metal
         self.headwear = headwear
+        self.neckline = neckline
+        self.opening = opening
+        self.sleeve = sleeve
 
     def check(self) raises:
         """Refuse a garment that cannot be made.
@@ -241,9 +265,10 @@ struct Garment(Copyable, Movable):
                 has no anchor or not two through `MAX_LAMES` lames, an
                 anchor is not a named joint, there are not four dyes, the
                 drape is below -1, the ease is negative or not finite, the
-                flare is not zero through one, the metal or the headwear
-                is not named, or a `HATTED` garment names no headwear or
-                another names one.
+                flare is not zero through one, the metal, the headwear,
+                the neckline, the opening or the sleeve is not named, or
+                a `HATTED` garment names no headwear or another names
+                one.
         """
         require_slot(self.slot)
         require_layer(self.layer)
@@ -268,6 +293,9 @@ struct Garment(Copyable, Movable):
             raise Error("A flare must be zero through one")
         require_metal(self.metal)
         require_headwear(self.headwear)
+        require_neckline(self.neckline)
+        require_opening(self.opening)
+        require_sleeve(self.sleeve)
         if (self.form == HATTED) != (self.headwear != NO_HEADWEAR):
             raise Error("A hatted garment, and it alone, names its headwear")
 

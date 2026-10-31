@@ -161,6 +161,31 @@ A pauldron made from the skin follows the shoulder's muscles, and reads as a sle
 
 Each vertex takes the skin weights of the nearest vertex of the shell. So a lamed dome rides the chest at its top and opens as the arm rises. A dome hides none of the skin or the garments under it.
 
+### Necklines, openings and sleeves
+
+A cover says which bones a garment covers. It cannot leave the front of the neck bare, part a coat's skirts or swell a sleeve. Three kinds on a garment do, in `extensions/attire/opening.mojo`.
+
+| Kind | Values | Shape on the template |
+|---|---|---|
+| `Neckline` | `ROUND_NECK` | as the cover cuts it |
+| | `V_NECK` | a V to 17 cm below the neck's joint, 14 cm wide at the neck |
+| | `SQUARE_NECK` | 14 cm below the neck's joint, 22 cm wide |
+| | `SCOOP_NECK` | an oval 30 cm wide and 13 cm deep under the neck |
+| | `SLIT_NECK` | a slit 14 cm deep, 5 cm wide at the top |
+| `Opening` | `CLOSED` | closed all round |
+| | `OPEN_FRONT` | a gap 12 cm wide down the front, from the neck to the hem |
+| | `OPEN_BELOW` | open below the waist, 6 cm wide there and parting by a quarter of the fall |
+| | `FRONT_ONLY` | the part 3 cm or more in front of the trunk's middle |
+| `Sleeve` | `FITTED_SLEEVE` | as the arm is |
+| | `BISHOP_SLEEVE` | 3.5 cm fuller round the forearm at most, gathered at the cuff |
+| | `PUFFED_SHOULDER` | 2.4 cm fuller round the top two fifths of the upper arm at most |
+
+A neckline and an opening are one field over space, positive where the garment stays. `dress` multiplies the garment's cover by `opening_mask`, which falls from one to nothing over 12 cm into the cut. So the garment is cut on the field's line, and the garment under it shows through. Its cover falls to the trim's level along the cut, so the trim runs round a neckline and down an opening. A skirt's tube is cut on the same line by `cut_open`.
+
+A sleeve's lift is added to the garment's standoff at each vertex of the skin, shared by the skin weights. So it fades into the shoulder and the hand.
+
+A cut narrower than the skin's triangles cannot be drawn: a triangle whose corners all lie outside it bridges it. At a 9,000-triangle budget the last few centimeters of a V's point are bridged so.
+
 ### Hats and helmets
 
 A garment made from the skin follows the face and the ears. A hat stands on the head, over the hair. `extensions/attire/headwear.mojo` draws a `HATTED` garment as the hat or the helmet its `headwear` names.
@@ -272,8 +297,11 @@ A garment has four dye channels: primary, secondary, trim and accent. A pattern 
 | `BEND` | the field | a band from the right shoulder to the left hip |
 | `PALY` | even upright bands | odd upright bands |
 | `CHECKY` | even squares | odd squares |
+| `FRONT_PANEL` | the rest | a panel down the front, 11 cm wide over the chest and widening down a skirt |
+| `SLEEVES` | the body | the sleeves |
+| `BANDED_SLEEVES` | the body, and even bands of the sleeves | odd bands of the sleeves |
 
-A charge lies on the front and the back alike, as a tabard's does. Each band of a cross, a saltire, a chevron or a bend is 11 cm wide on the template. A pattern is a field over the body whose sign says the dye, so each charge has a crisp edge.
+A charge lies on the front and the back alike, as a tabard's does. A front panel lies on the front alone, and the skin weights of the arms say where the sleeves are. Each band of a cross, a saltire, a chevron or a bend is 11 cm wide on the template. A pattern is a field over the body whose sign says the dye, so each charge has a crisp edge.
 
 `examples/heraldry.mojo` dresses ten men in surcoats, one in each pattern, and writes `out/heraldry.png`.
 
@@ -361,6 +389,30 @@ paint(piece, garment.dyes)
 | `feathered_cap` | head | over | felt, a red feather | hatted |
 | `crown` | head | over | gold plate, rubies | hatted |
 | `circlet` | head | over | silver plate, a sapphire | hatted |
+
+### The tailor
+
+`extensions/attire/tailor.mojo` cuts and shapes tops and bottoms.
+
+| Garment | Slot | Layer | Fabric | Shape |
+|---|---|---|---|---|
+| `chemise` | torso | under | linen | scoop neck, bishop sleeves, to mid-thigh |
+| `laced_shirt` | torso | under | linen | slit neck, bishop sleeves, to the hip |
+| `skirt` | legs | mid | wool | skirted from the waist to the ankle, flare 0.28 |
+| `apron` | waist | outer | linen | skirted, the front alone, to mid-calf |
+| `laced_bodice` | torso | outer | wool | square neck, from the waist to under the arms, no sleeves |
+| `doublet` | torso | mid | wool | a high collar, puffed shoulders, a placket of gold lace, to the hip |
+| `waistcoat` | torso | mid | silk | V neck, no sleeves, to below the waist |
+| `frock_coat` | torso | outer | wool | a collar, to below the knee, open below the waist, flare 0.22 |
+| `long_coat` | torso | outer | velvet | a collar, to below the knee, open down the front, flare 0.25 |
+| `open_robe` | torso | over | velvet | open down the front, to the ankle, flare 0.3 |
+| `ball_gown` | torso | mid | silk | square neck, puffed shoulders, sleeves to the elbow, to the floor, flare 0.6, a front panel |
+
+A waistcoat's V shows the shirt under it, and a frock coat's parted skirts show the breeches. A ball gown's square neck shows the chemise, and so does its sleeve's end at the elbow.
+
+`examples/tailoring.mojo` dresses eight people in the tailor's garments, and writes `out/tailoring.png`.
+
+![Eight people in chemises, bodices, skirts, aprons, laced shirts, doublets, coats and gowns](out/tailoring.png)
 
 ## Garments made elsewhere
 

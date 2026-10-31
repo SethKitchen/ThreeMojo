@@ -29,20 +29,20 @@ seed gives the same outfit, on every machine.
 
 | Calling | Garments |
 |---|---|
-| `PEASANT` | shirt, breeches over hose, tunic, boots; a hood and a belt by chance |
-| `GOODWIFE` | shirt, gown, boots, a belt; a hood by chance |
+| `PEASANT` | shirt and tunic, or a laced shirt alone; breeches over hose, or trousers; boots; a hood and a belt by chance |
+| `GOODWIFE` | shirt and gown, or a chemise, laced bodice, skirt and mostly an apron; boots, a belt; a hood by chance |
 | `ARCHER` | shirt, hose, gambeson, jerkin, belt, boots; a hood by chance |
 | `MONK` | shirt, robe, hood, belt, boots |
-| `MERCHANT` | shirt, hose, tunic, belt, boots; a hood by chance |
-| `NOBLEWOMAN` | shirt, gown, belt, boots |
+| `MERCHANT` | shirt and hose under a tunic, a doublet and breeches, or a waistcoat under a frock coat or a long coat; belt, boots; a hood by chance |
+| `NOBLEWOMAN` | a chemise under a ball gown, or a shirt under a gown, its sleeves in a second dye by chance; belt, boots |
 | `MAN_AT_ARMS` | `outfit_named("man-at-arms")`, a belt, and a surcoat by chance, quartered or bearing a cross or a saltire by chance |
 | `KNIGHT` | `outfit_named("knight")` and a belt, its surcoat in two rich dyes, bearing arms by `heraldry` |
-| `FARMER` | a shirt; a smock or a tunic over trousers, or a gown and a bodice; a straw hat by chance; boots |
+| `FARMER` | a shirt or a laced shirt, a smock or a tunic over trousers; a gown and a bodice, or a chemise, laced bodice, skirt and apron; a straw hat by chance; boots |
 | `BARBARIAN` | a fur kilt, fur boots, bracers and a belt; a fur mantle, a horned or half helm, or a shirt of scales by chance; a woman wears a jerkin or scales |
-| `ROYAL` | a velvet robe or gown in a rich dye, a royal mantle edged in white fur, a sash, boots; a crown, or a circlet for some queens |
+| `ROYAL` | a velvet doublet, breeches and pale hose, an open robe by chance, or a ball gown; or a velvet robe or gown in a rich dye, a royal mantle edged in white fur, a sash, boots; a crown, or a circlet for some queens |
 | `WIZARD` | a wizard's robe and hat in an arcane dye, trimmed in gold or silver, a sash, boots |
-| `WARLOCK` | a black cassock trimmed in red; a hood or a dark mantle by chance; tall boots |
-| `RANGER` | hose, a tunic in forest green, a jerkin by chance, bracers, tall boots, a belt, and a hood or a feathered cap |
+| `WARLOCK` | a black cassock trimmed in red, or a dark coat over a blood-red waistcoat; a hood or a dark mantle by chance; tall boots |
+| `RANGER` | a shirt or a laced shirt, hose, a tunic in forest green, a jerkin by chance, bracers, tall boots, a belt, and a hood or a feathered cap |
 | `WARRIOR` | a full harness of plate forged of one metal, gilt or brassed by chance: a platebody, or a shirt of scales by chance, plate legs, arm harness, pauldrons, gauntlets, sabatons, a plate skirt or a fauld under a platebody, and a helm |
 
 This is not a three.js port. See Extensions.
@@ -71,6 +71,20 @@ from extensions.attire.apparel import (
     wizard_robe,
 )
 from extensions.attire.cloth import CloakCut
+from extensions.attire.tailor import (
+    GOLD_LACE,
+    apron,
+    ball_gown,
+    chemise,
+    doublet,
+    frock_coat,
+    laced_bodice,
+    laced_shirt,
+    long_coat,
+    open_robe,
+    skirt,
+    waistcoat,
+)
 from extensions.attire.armory import (
     arm_harness,
     bracers,
@@ -105,6 +119,7 @@ from extensions.attire.garment import (
 )
 from extensions.attire.kinds import (
     ACCENT_DYE,
+    BANDED_SLEEVES,
     BEND,
     CHECKY,
     CHEVRON,
@@ -112,6 +127,7 @@ from extensions.attire.kinds import (
     FUR,
     PALY,
     SALTIRE,
+    SLEEVES,
     SOLID,
     DyePattern,
     PARTY,
@@ -616,45 +632,37 @@ def dressed_as(calling: Calling, sex: Sex, seed: Int) raises -> Outfit:
             outfit.add(coat^)
         outfit.add(belt())
         return outfit^
-    outfit.add(shirt())
     if calling == MONK:
+        outfit.add(shirt())
         outfit.add(_dyed(robe(), plain_dye(3 + plain % 3 * 2), plain_dye(3)))
         outfit.add(_dyed(hood(), plain_dye(3 + plain % 3 * 2), plain_dye(3)))
         outfit.add(belt())
         outfit.add(boots())
         return outfit^
-    if calling == GOODWIFE or calling == NOBLEWOMAN:
-        var dye = plain_dye(plain)
-        var trim = plain_dye(plain + 6)
-        if calling == NOBLEWOMAN:
-            dye = rich_dye(rich)
-            trim = rich_dye(rich + 3)
-        var dress = _dyed(gown(), dye, trim)
-        # A gown can be parti-colored: a second dye on the left side.
-        if _chance(seed, 8, 30):
-            dress.pattern = PARTY
-            dress.dyes[SECONDARY_DYE.value] = trim
-        outfit.add(dress^)
-        if calling == GOODWIFE and _chance(seed, 5, 50):
+    if calling == GOODWIFE:
+        if _chance(seed, 83, 50):
+            _skirted(outfit, seed)
+        else:
+            outfit.add(shirt())
+            var dress = _dyed(gown(), plain_dye(plain), plain_dye(plain + 6))
+            # A gown can be parti-colored: a second dye on the left side.
+            if _chance(seed, 8, 30):
+                dress.pattern = PARTY
+                dress.dyes[SECONDARY_DYE.value] = plain_dye(plain + 6)
+            outfit.add(dress^)
+        if _chance(seed, 5, 50):
             outfit.add(_dyed(hood(), plain_dye(plain + 5), plain_dye(plain)))
+    elif calling == NOBLEWOMAN:
+        _gowned(outfit, seed)
     else:
-        outfit.add(_dyed(hose(), plain_dye(plain + 3), plain_dye(plain + 3)))
+        _trews(outfit, calling, seed)
         if calling == ARCHER:
             outfit.add(gambeson())
             outfit.add(_dyed(jerkin(), plain_dye(3), plain_dye(7)))
-        else:
-            if calling == PEASANT:
-                outfit.add(
-                    _dyed(breeches(), plain_dye(plain + 4), plain_dye(plain))
-                )
-            var trim = plain_dye(plain + 1)
-            if calling == MERCHANT:
-                trim = rich_dye(rich)
-            var coat = _dyed(tunic(), plain_dye(plain), trim)
-            # Townsmen liked a tunic parti-colored, a dye on each side.
-            if calling == MERCHANT and _chance(seed, 8, 40):
-                coat.pattern = PARTY
-                coat.dyes[SECONDARY_DYE.value] = plain_dye(plain + 4)
+        elif calling == MERCHANT:
+            _townsman(outfit, seed)
+        elif not _has_top(outfit):
+            var coat = _dyed(tunic(), plain_dye(plain), plain_dye(plain + 1))
             outfit.add(coat^)
         if _chance(seed, 5, 40):
             outfit.add(_dyed(hood(), plain_dye(plain + 2), plain_dye(plain)))
@@ -664,17 +672,123 @@ def dressed_as(calling: Calling, sex: Sex, seed: Int) raises -> Outfit:
     return outfit^
 
 
+def _has_top(outfit: Outfit) -> Bool:
+    """Return whether an outfit has a garment worn as a top: a laced
+    shirt, which needs no tunic over it."""
+    for garment in outfit.garments:
+        if garment.name == "laced shirt":
+            return True
+    return False
+
+
+def _trews(mut outfit: Outfit, calling: Calling, seed: Int) raises:
+    """Dress a common man from the skin out to his legs: a shirt, or a
+    laced shirt worn alone; and hose under breeches, or trousers."""
+    var plain = _mixed(seed, 1)
+    if calling != MERCHANT and _chance(seed, 84, 45):
+        var linen = laced_shirt()
+        if _chance(seed, 85, 40):
+            linen.dyes[PRIMARY_DYE.value] = plain_dye(6)
+        outfit.add(linen^)
+    else:
+        outfit.add(shirt())
+    if calling == PEASANT and _chance(seed, 86, 50):
+        outfit.add(_dyed(trousers(), plain_dye(plain + 4), plain_dye(plain)))
+        return
+    outfit.add(_dyed(hose(), plain_dye(plain + 3), plain_dye(plain + 3)))
+    if calling == PEASANT:
+        outfit.add(_dyed(breeches(), plain_dye(plain + 4), plain_dye(plain)))
+
+
+def _townsman(mut outfit: Outfit, seed: Int) raises:
+    """Dress a merchant over his shirt and hose: a tunic, a doublet, or a
+    waistcoat under a coat."""
+    var plain = _mixed(seed, 1)
+    var rich = _mixed(seed, 2)
+    var pick = _mixed(seed, 87) % 10
+    if pick < 3:
+        var coat = _dyed(tunic(), plain_dye(plain), rich_dye(rich))
+        # Townsmen liked a tunic parti-colored, a dye on each side.
+        if _chance(seed, 8, 40):
+            coat.pattern = PARTY
+            coat.dyes[SECONDARY_DYE.value] = plain_dye(plain + 4)
+        outfit.add(coat^)
+        return
+    outfit.add(_dyed(breeches(), rich_dye(rich + 2), rich_dye(rich + 2)))
+    if pick < 6:
+        var coat = doublet()
+        coat.dyes[PRIMARY_DYE.value] = rich_dye(rich)
+        # A placket of lace, or the sleeves in a second dye.
+        if _chance(seed, 88, 35):
+            coat.pattern = SLEEVES if _chance(seed, 89, 50) else BANDED_SLEEVES
+            coat.dyes[SECONDARY_DYE.value] = rich_dye(rich + 3)
+        outfit.add(coat^)
+        return
+    var vest = waistcoat()
+    vest.dyes[PRIMARY_DYE.value] = rich_dye(rich + 3)
+    outfit.add(vest^)
+    var coat = frock_coat() if pick < 8 else long_coat()
+    coat.dyes[PRIMARY_DYE.value] = rich_dye(rich)
+    outfit.add(coat^)
+
+
+def _skirted(mut outfit: Outfit, seed: Int) raises:
+    """Dress a woman in a chemise, a laced bodice, a skirt and, mostly,
+    an apron, each in a plain dye of its own."""
+    outfit.add(chemise())
+    var laced = plain_dye(_mixed(seed, 90))
+    outfit.add(_dyed(laced_bodice(), laced, laced))
+    var hem = plain_dye(_mixed(seed, 91))
+    outfit.add(_dyed(skirt(), hem, hem))
+    if _chance(seed, 92, 70):
+        outfit.add(apron())
+
+
+def _gowned(mut outfit: Outfit, seed: Int) raises:
+    """Dress a lady in a gown over her chemise or shirt: a ball gown with
+    a panel down its front, or a gown, its sleeves in a second dye by
+    chance."""
+    var rich = _mixed(seed, 2)
+    if _chance(seed, 93, 50):
+        outfit.add(chemise())
+        var gown_ = ball_gown()
+        gown_.dyes[PRIMARY_DYE.value] = rich_dye(rich)
+        gown_.dyes[SECONDARY_DYE.value] = rich_dye(rich + 3) if _chance(
+            seed, 94, 50
+        ) else IVORY_SILK
+        outfit.add(gown_^)
+        return
+    outfit.add(shirt())
+    var dress = _dyed(gown(), rich_dye(rich), rich_dye(rich + 3))
+    # A gown can be parti-colored, or its sleeves dyed apart.
+    if _chance(seed, 8, 30):
+        dress.pattern = PARTY
+        dress.dyes[SECONDARY_DYE.value] = rich_dye(rich + 3)
+    elif _chance(seed, 95, 40):
+        dress.pattern = BANDED_SLEEVES if _chance(seed, 96, 50) else SLEEVES
+        dress.dyes[SECONDARY_DYE.value] = GOLD_LACE if _chance(
+            seed, 97, 50
+        ) else rich_dye(rich + 3)
+    outfit.add(dress^)
+
+
 def _farmer(woman: Bool, seed: Int) raises -> Outfit:
     """Return a farmer's work clothes."""
     var plain = _mixed(seed, 1)
     var outfit = Outfit()
-    outfit.add(_dyed(shirt(), plain_dye(6), plain_dye(6)))
-    if woman:
+    if woman and _chance(seed, 83, 50):
+        _skirted(outfit, seed)
+    elif woman:
+        outfit.add(_dyed(shirt(), plain_dye(6), plain_dye(6)))
         outfit.add(_dyed(gown(), plain_dye(plain), plain_dye(_mixed(seed, 59))))
         if _chance(seed, 12, 50):
             var laced = plain_dye(_mixed(seed, 60))
             outfit.add(_dyed(bodice(), laced, laced))
     else:
+        if _chance(seed, 84, 50):
+            outfit.add(laced_shirt())
+        else:
+            outfit.add(_dyed(shirt(), plain_dye(6), plain_dye(6)))
         outfit.add(_dyed(trousers(), plain_dye(plain + 3), plain_dye(3)))
         if _chance(seed, 12, 50):
             outfit.add(_dyed(smock(), plain_dye(6), plain_dye(plain)))
@@ -717,21 +831,50 @@ def _royal(woman: Bool, seed: Int) raises -> Outfit:
     """Return a king's or a queen's robes, mantle and crown."""
     var rich = _mixed(seed, 2)
     var outfit = Outfit()
-    outfit.add(shirt())
-    var robe = _dyed(
-        wizard_robe() if not woman else gown(),
-        rich_dye(rich),
-        Color(236, 232, 222),
-    )
-    robe.name = "royal robe" if not woman else "royal gown"
-    robe.fabric = VELVET
-    # Some robes are parti-colored, a second rich dye on the left side.
-    if _chance(seed, 38, 25):
-        robe.pattern = PARTY
-        robe.dyes[SECONDARY_DYE.value] = rich_dye(_mixed(seed, 39))
-    outfit.add(robe^)
-    if not woman:
-        outfit.add(_dyed(hose(), rich_dye(rich + 3), rich_dye(rich + 3)))
+    var courtly = _chance(seed, 98, 45)
+    if woman and courtly:
+        # A ball gown with a panel down its front, over a chemise.
+        outfit.add(chemise())
+        var gown_ = ball_gown()
+        gown_.name = "royal gown"
+        gown_.dyes[PRIMARY_DYE.value] = rich_dye(rich)
+        gown_.dyes[SECONDARY_DYE.value] = IVORY_SILK if _chance(
+            seed, 99, 50
+        ) else GOLD_LACE
+        outfit.add(gown_^)
+    elif courtly:
+        # A doublet and breeches over pale hose, under an open robe by
+        # chance.
+        outfit.add(shirt())
+        outfit.add(_dyed(hose(), IVORY_SILK, IVORY_SILK))
+        outfit.add(_dyed(breeches(), rich_dye(rich), GOLD_LACE))
+        var coat = doublet()
+        coat.name = "royal doublet"
+        coat.fabric = VELVET
+        coat.dyes[PRIMARY_DYE.value] = rich_dye(rich)
+        if _chance(seed, 100, 40):
+            coat.pattern = BANDED_SLEEVES
+        outfit.add(coat^)
+        if _chance(seed, 101, 50):
+            var robe = open_robe()
+            robe.dyes[PRIMARY_DYE.value] = rich_dye(_mixed(seed, 39))
+            outfit.add(robe^)
+    else:
+        outfit.add(shirt())
+        var robe = _dyed(
+            wizard_robe() if not woman else gown(),
+            rich_dye(rich),
+            Color(236, 232, 222),
+        )
+        robe.name = "royal robe" if not woman else "royal gown"
+        robe.fabric = VELVET
+        # Some robes are parti-colored, a second rich dye on the left side.
+        if _chance(seed, 38, 25):
+            robe.pattern = PARTY
+            robe.dyes[SECONDARY_DYE.value] = rich_dye(_mixed(seed, 39))
+        outfit.add(robe^)
+        if not woman:
+            outfit.add(_dyed(hose(), rich_dye(rich + 3), rich_dye(rich + 3)))
     var mantle = royal_mantle()
     var cloak = rich_dye(_mixed(seed, 40))
     mantle.dyes[PRIMARY_DYE.value] = cloak
@@ -793,7 +936,19 @@ def _warlock(woman: Bool, seed: Int) raises -> Outfit:
     var outfit = Outfit()
     outfit.add(_dyed(shirt(), shadow_dye(0), shadow_dye(0)))
     var edge = shadow_dye(_mixed(seed, 51))
-    outfit.add(_dyed(cassock(), shadow_dye(dark), edge))
+    if _chance(seed, 102, 35):
+        # A long dark coat over a waistcoat the red of old blood.
+        outfit.add(_dyed(trousers(), shadow_dye(0), shadow_dye(0)))
+        var vest = waistcoat()
+        vest.dyes[PRIMARY_DYE.value] = Color(96, 14, 22)
+        outfit.add(vest^)
+        var coat = long_coat() if _chance(seed, 103, 50) else frock_coat()
+        coat.fabric = VELVET
+        coat.dyes[PRIMARY_DYE.value] = shadow_dye(dark)
+        coat.dyes[TRIM_DYE.value] = edge
+        outfit.add(coat^)
+    else:
+        outfit.add(_dyed(cassock(), shadow_dye(dark), edge))
     var girdle = shadow_dye(_mixed(seed, 52))
     outfit.add(_dyed(sash(), girdle, girdle))
     if _chance(seed, 23, 60):
@@ -814,7 +969,10 @@ def _ranger(woman: Bool, seed: Int) raises -> Outfit:
     """Return a ranger's greens of the forest."""
     var green = _mixed(seed, 5)
     var outfit = Outfit()
-    outfit.add(shirt())
+    if _chance(seed, 104, 40):
+        outfit.add(laced_shirt())
+    else:
+        outfit.add(shirt())
     var legs = forest_dye(_mixed(seed, 54))
     outfit.add(_dyed(hose(), legs, legs))
     var coat = _dyed(tunic(), forest_dye(green), forest_dye(green + 1))
@@ -1091,6 +1249,8 @@ def calling_arms(calling: Calling, seed: Int) raises -> Optional[Arms]:
     return None
 
 
+comptime IVORY_SILK = Color(236, 230, 214)
+"""The color of ivory silk."""
 comptime ERMINE = Color(236, 232, 222)
 """The white of an ermine edge."""
 comptime GILT = Color(214, 170, 64)

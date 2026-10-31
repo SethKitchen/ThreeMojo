@@ -30,8 +30,11 @@ from extensions.attire.kinds import (
     STRIPES,
     TRIM_DYE,
     WET,
+    BANDED_SLEEVES,
     BEND,
     CHECKY,
+    FRONT_PANEL,
+    SLEEVES,
     CHEVRON,
     CROSS,
     PALY,
@@ -52,7 +55,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from tests._attire_fixtures import empty_mesh, line_rig, strip
+from tests._attire_fixtures import empty_mesh, line_rig, strip, tube
 from units.si import Length, METER
 
 
@@ -127,6 +130,47 @@ def test_charges_lie_on_the_chest() raises:
     assert_true(paly[6] > 0 and paly[7] < 0)
     var checky = pattern_values(mesh, rig, CHECKY)
     assert_true(checky[6] > 0 and checky[7] < 0 and checky[8] < 0)
+
+
+def test_a_front_panel_and_sleeves_take_the_second_dye() raises:
+    var rig = line_rig()
+    var at: List[Vector3] = [
+        Vector3(0, 0.1, 0.1),
+        Vector3(0.4, 0.1, 0.1),
+        Vector3(0.15, -0.5, 0.1),
+        Vector3(0, 0.1, -0.1),
+    ]
+    var flat = List[Float32]()
+    for p in at:
+        flat.append(p.x)
+        flat.append(p.y)
+        flat.append(p.z)
+    var mesh = BufferGeometry()
+    mesh.set_attribute(String(POSITION), BufferAttribute(flat^, 3))
+    # A panel down the middle of the front, wider down a skirt, and none
+    # behind.
+    var panel = pattern_values(mesh, rig, FRONT_PANEL)
+    assert_true(panel[0] < 0 and panel[1] > 0)
+    assert_true(panel[2] < 0 and panel[3] > 0)
+    # A mesh with no skin weights has no sleeves.
+    for value in pattern_values(mesh, rig, SLEEVES):
+        assert_true(value > 0)
+    # The arm's skin takes the second dye; the trunk's does not.
+    var arm = tube(0, 0, 0.05, 0, -0.4, RIGHT_UPPER_ARM, 8, 6)
+    for value in pattern_values(arm, rig, SLEEVES):
+        assert_true(value < 0)
+    var trunk = tube(0, 0, 0.15, 0, -0.4, HIPS, 8, 6)
+    for value in pattern_values(trunk, rig, SLEEVES):
+        assert_true(value > 0)
+    # Banded sleeves: both dyes down the arm, the trunk plain.
+    var low = Float32(1)
+    var high = Float32(-1)
+    for value in pattern_values(arm, rig, BANDED_SLEEVES):
+        low = min(low, value)
+        high = max(high, value)
+    assert_true(low < 0 and high > 0)
+    for value in pattern_values(trunk, rig, BANDED_SLEEVES):
+        assert_true(value >= 0)
 
 
 def test_a_pattern_cuts_crisp_boundaries_and_trims_hems() raises:

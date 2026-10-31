@@ -205,6 +205,8 @@ $(call gallery,archetypes,archetypes)
 $(call gallery,headwear,headwear)
 # Ten surcoats, one in each dye pattern: party, quartered and charged.
 $(call gallery,heraldry,heraldry)
+# Eight people in the tailor's shirts, bodices, skirts, coats and gowns.
+$(call gallery,tailoring,tailoring)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.

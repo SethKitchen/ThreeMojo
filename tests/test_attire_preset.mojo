@@ -27,7 +27,17 @@ from extensions.attire.garment import (
     surcoat,
     vambraces,
 )
-from extensions.attire.kinds import FITTED, NO_HEADWEAR
+from extensions.attire.kinds import (
+    BISHOP_SLEEVE,
+    CLOSED,
+    FITTED,
+    FITTED_SLEEVE,
+    NO_HEADWEAR,
+    OPEN_BELOW,
+    ROUND_NECK,
+    SCOOP_NECK,
+)
+from extensions.attire.tailor import chemise, frock_coat
 from extensions.attire.outfit import Outfit, dress
 from extensions.attire.preset import (
     OUTFIT_KEY,
@@ -275,6 +285,30 @@ def test_a_dressed_bake_remembers_its_outfit_and_its_body() raises:
     )
     with assert_raises(contains="needs an outfit"):
         _ = stored_outfit(hollow, coarse_spec())
+
+
+def test_an_outfit_keeps_its_cuts_and_its_sleeves() raises:
+    var outfit = Outfit()
+    outfit.add(chemise())
+    outfit.add(frock_coat())
+    var text = outfit_json(outfit)
+    assert_true(text.find('"neckline":"scoop"') >= 0)
+    assert_true(text.find('"opening":"open below"') >= 0)
+    assert_true(text.find('"sleeve":"bishop"') >= 0)
+    var again = outfit_from_json(text)
+    assert_equal(again.garments[0].neckline, SCOOP_NECK)
+    assert_equal(again.garments[0].sleeve, BISHOP_SLEEVE)
+    assert_equal(again.garments[1].opening, OPEN_BELOW)
+    # One saved before cuts and sleeves is round-necked, closed and
+    # fitted.
+    var stripped = text
+    for key in ["neckline", "opening", "sleeve"]:
+        # Each garment carries its own: drop both.
+        stripped = _drop(_drop(stripped, key), key)
+    var old = outfit_from_json(stripped)
+    assert_equal(old.garments[0].neckline, ROUND_NECK)
+    assert_equal(old.garments[1].opening, CLOSED)
+    assert_equal(old.garments[0].sleeve, FITTED_SLEEVE)
 
 
 def main() raises:

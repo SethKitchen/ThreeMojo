@@ -364,7 +364,7 @@ struct DyePattern(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is a named pattern.
 
         Returns:
-            True for `SOLID` through `CHECKY`.
+            True for `SOLID` through `BANDED_SLEEVES`.
         """
         return ordinal_valid(self.value, DYE_PATTERN_COUNT - 1)
 
@@ -391,7 +391,15 @@ comptime PALY = DyePattern(8)
 """Upright bands of the primary and secondary dye."""
 comptime CHECKY = DyePattern(9)
 """A checkerboard of the primary and secondary dye."""
-comptime DYE_PATTERN_COUNT = 10
+comptime FRONT_PANEL = DyePattern(10)
+"""A panel down the front in the secondary dye, narrow over the chest and
+widening down a skirt, as a stomacher and a petticoat show."""
+comptime SLEEVES = DyePattern(11)
+"""The sleeves in the secondary dye, the body in the primary."""
+comptime BANDED_SLEEVES = DyePattern(12)
+"""Sleeves banded in the primary and secondary dye, the body in the
+primary."""
+comptime DYE_PATTERN_COUNT = 13
 """How many dye patterns there are."""
 
 
@@ -408,6 +416,9 @@ def _pattern_names() -> List[String]:
         "bend",
         "paly",
         "checky",
+        "front panel",
+        "sleeves",
+        "banded sleeves",
     ]
 
 
@@ -429,8 +440,7 @@ def pattern_named(name: String) raises -> DyePattern:
     """Return the dye pattern that `name` names.
 
     Args:
-        name: `solid`, `party`, `stripes`, `quarterly`, `chevron`,
-            `cross`, `saltire`, `bend`, `paly` or `checky`.
+        name: A pattern's name, as `pattern_label` gives it.
 
     Returns:
         The named pattern.
@@ -859,3 +869,239 @@ def require_headwear(headwear: Headwear) raises:
         Error: If the kind is not named.
     """
     require_valid(headwear.is_valid(), "A headwear kind must be a named one")
+
+
+@fieldwise_init
+struct Neckline(Equatable, ImplicitlyCopyable, Writable):
+    """How a garment is cut at the front of the neck."""
+
+    var value: Int
+    """Its index among the named values."""
+
+    def is_valid(self) -> Bool:
+        """Return whether this is a named neckline.
+
+        Returns:
+            True for `ROUND_NECK` through `SLIT_NECK`.
+        """
+        return ordinal_valid(self.value, NECKLINE_COUNT - 1)
+
+
+comptime ROUND_NECK = Neckline(0)
+"""Round the base of the neck, as the cover cuts it."""
+comptime V_NECK = Neckline(1)
+"""A V down the front, to the top of the chest."""
+comptime SQUARE_NECK = Neckline(2)
+"""Square across the top of the chest, as a gown's is."""
+comptime SCOOP_NECK = Neckline(3)
+"""A wide, low curve across the chest, as a chemise's is."""
+comptime SLIT_NECK = Neckline(4)
+"""A narrow slit down the front from the neck, as a laced shirt's is."""
+comptime NECKLINE_COUNT = 5
+"""How many necklines there are."""
+
+
+def _neckline_names() -> List[String]:
+    """Return the neckline names, in order."""
+    return ["round", "v", "square", "scoop", "slit"]
+
+
+def neckline_label(neckline: Neckline) -> String:
+    """Return the name of a neckline.
+
+    Args:
+        neckline: A neckline, named or not.
+
+    Returns:
+        Its name, as `"square"`, or `"neckline"` when it is not named.
+    """
+    return ordinal_label(
+        neckline.is_valid(), neckline.value, _neckline_names(), "neckline"
+    )
+
+
+def neckline_named(name: String) raises -> Neckline:
+    """Return the neckline that `name` names.
+
+    Args:
+        name: A neckline's name, as `neckline_label` gives it.
+
+    Returns:
+        The named neckline.
+
+    Raises:
+        Error: If `name` names no neckline.
+    """
+    var names = _neckline_names()
+    for k in range(len(names)):  # pragma: no branch
+        if names[k] == name:
+            return Neckline(k)
+    raise Error("No neckline is named " + name)
+
+
+def require_neckline(neckline: Neckline) raises:
+    """Refuse a neckline that is not named.
+
+    Args:
+        neckline: The neckline.
+
+    Raises:
+        Error: If the neckline is not named.
+    """
+    require_valid(neckline.is_valid(), "A neckline must be a named one")
+
+
+@fieldwise_init
+struct Opening(Equatable, ImplicitlyCopyable, Writable):
+    """Where a garment is open, so the garment under it shows."""
+
+    var value: Int
+    """Its index among the named values."""
+
+    def is_valid(self) -> Bool:
+        """Return whether this is a named opening.
+
+        Returns:
+            True for `CLOSED` through `FRONT_ONLY`.
+        """
+        return ordinal_valid(self.value, OPENING_COUNT - 1)
+
+
+comptime CLOSED = Opening(0)
+"""Closed all round."""
+comptime OPEN_FRONT = Opening(1)
+"""Open down the front from the neck to the hem, as an open robe is."""
+comptime OPEN_BELOW = Opening(2)
+"""Closed to the waist and open below it, its skirts parted, as a frock
+coat's are."""
+comptime FRONT_ONLY = Opening(3)
+"""The front alone, as an apron or a tabard's front is."""
+comptime OPENING_COUNT = 4
+"""How many openings there are."""
+
+
+def _opening_names() -> List[String]:
+    """Return the opening names, in order."""
+    return ["closed", "open front", "open below", "front only"]
+
+
+def opening_label(opening: Opening) -> String:
+    """Return the name of an opening.
+
+    Args:
+        opening: An opening, named or not.
+
+    Returns:
+        Its name, as `"open below"`, or `"opening"` when it is not named.
+    """
+    return ordinal_label(
+        opening.is_valid(), opening.value, _opening_names(), "opening"
+    )
+
+
+def opening_named(name: String) raises -> Opening:
+    """Return the opening that `name` names.
+
+    Args:
+        name: An opening's name, as `opening_label` gives it.
+
+    Returns:
+        The named opening.
+
+    Raises:
+        Error: If `name` names no opening.
+    """
+    var names = _opening_names()
+    for k in range(len(names)):  # pragma: no branch
+        if names[k] == name:
+            return Opening(k)
+    raise Error("No opening is named " + name)
+
+
+def require_opening(opening: Opening) raises:
+    """Refuse an opening that is not named.
+
+    Args:
+        opening: The opening.
+
+    Raises:
+        Error: If the opening is not named.
+    """
+    require_valid(opening.is_valid(), "An opening must be a named one")
+
+
+@fieldwise_init
+struct Sleeve(Equatable, ImplicitlyCopyable, Writable):
+    """How full a garment's sleeves are."""
+
+    var value: Int
+    """Its index among the named values."""
+
+    def is_valid(self) -> Bool:
+        """Return whether this is a named sleeve.
+
+        Returns:
+            True for `FITTED_SLEEVE` through `PUFFED_SHOULDER`.
+        """
+        return ordinal_valid(self.value, SLEEVE_COUNT - 1)
+
+
+comptime FITTED_SLEEVE = Sleeve(0)
+"""As the arm is, at the garment's ease."""
+comptime BISHOP_SLEEVE = Sleeve(1)
+"""Full round the forearm and gathered at the cuff, as a chemise's and a
+peasant shirt's are."""
+comptime PUFFED_SHOULDER = Sleeve(2)
+"""Puffed round the top of the arm, as a gown's and a doublet's are."""
+comptime SLEEVE_COUNT = 3
+"""How many sleeves there are."""
+
+
+def _sleeve_names() -> List[String]:
+    """Return the sleeve names, in order."""
+    return ["fitted", "bishop", "puffed shoulder"]
+
+
+def sleeve_label(sleeve: Sleeve) -> String:
+    """Return the name of a sleeve.
+
+    Args:
+        sleeve: A sleeve, named or not.
+
+    Returns:
+        Its name, as `"bishop"`, or `"sleeve"` when it is not named.
+    """
+    return ordinal_label(
+        sleeve.is_valid(), sleeve.value, _sleeve_names(), "sleeve"
+    )
+
+
+def sleeve_named(name: String) raises -> Sleeve:
+    """Return the sleeve that `name` names.
+
+    Args:
+        name: A sleeve's name, as `sleeve_label` gives it.
+
+    Returns:
+        The named sleeve.
+
+    Raises:
+        Error: If `name` names no sleeve.
+    """
+    var names = _sleeve_names()
+    for k in range(len(names)):  # pragma: no branch
+        if names[k] == name:
+            return Sleeve(k)
+    raise Error("No sleeve is named " + name)
+
+
+def require_sleeve(sleeve: Sleeve) raises:
+    """Refuse a sleeve that is not named.
+
+    Args:
+        sleeve: The sleeve.
+
+    Raises:
+        Error: If the sleeve is not named.
+    """
+    require_valid(sleeve.is_valid(), "A sleeve must be a named one")

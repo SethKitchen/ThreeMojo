@@ -20,8 +20,13 @@ pattern says where each lies:
 | `BEND` | the field | a band from the right shoulder to the left hip |
 | `PALY` | even upright bands | odd upright bands |
 | `CHECKY` | even squares | odd squares |
+| `FRONT_PANEL` | the rest | a panel down the front, widening down a skirt |
+| `SLEEVES` | the body | the sleeves |
+| `BANDED_SLEEVES` | the body, and even bands of the sleeves | odd bands of the sleeves |
 
-The charges lie on the front and the back alike, as a tabard's do. Each
+The charges lie on the front and the back alike, as a tabard's do. A
+front panel lies on the front alone. The sleeves are found by the skin
+weights of the arms, so they part from the body at the shoulder's seam. Each
 band is `CHARGE` wide on the template, about a hand's breadth.
 
 Every pattern puts the trim dye along each hem. A vertex whose `accent`
@@ -54,8 +59,11 @@ from extensions.attire.kinds import (
     ACCENT_DYE,
     DIRT,
     DYE_CHANNEL_COUNT,
+    BANDED_SLEEVES,
     BEND,
     CHECKY,
+    FRONT_PANEL,
+    SLEEVES,
     CHEVRON,
     CROSS,
     PALY,
@@ -78,11 +86,13 @@ from extensions.attire.shell import COVER
 from extensions.humanoid.rig.joints import (
     CHEST,
     HIPS,
+    LEFT_HAND,
     RIGHT_UPPER_ARM,
     SPINE,
     HumanoidRig,
 )
 from math.utils import clamp
+from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
 from math.vector3 import Vector3
 from render.framebuffer import Color
 from render.srgb import srgb_to_linear
@@ -100,6 +110,13 @@ comptime PATTERN_STATURE = Float32(1.8288)
 """The template stature patterns are sized for, in meters."""
 comptime DIAGONAL = Float32(0.70710678)
 """One over the square root of two: a distance across a diagonal line."""
+comptime PANEL = Float32(0.11)
+"""How wide a front panel is above the waist, in meters on the template."""
+comptime PANEL_FLARE = Float32(0.55)
+"""How much wider a front panel grows for each meter it falls below the
+waist."""
+comptime SLEEVE_BANDS = Float32(0.6)
+"""How tall a band of a banded sleeve is, as a share of a stripe."""
 comptime CHARGE = Float32(0.11)
 """How wide a cross's, a saltire's, a chevron's or a bend's band is, in
 meters on the template."""
@@ -175,6 +192,25 @@ def split_dyes(
     return merge(high, low)
 
 
+def _arm_weights(piece: BufferGeometry) raises -> List[Float32]:
+    """Return how much the arms weigh on each vertex of a piece, or zero
+    for each when it has no skin weights."""
+    ref placed = piece.attribute_view(String(POSITION))
+    var arms = List[Float32](length=placed.count(), fill=0)
+    if not piece.has_attribute(String(SKIN_WEIGHT)):
+        return arms^
+    ref bones = piece.attribute_view(String(SKIN_INDEX))
+    ref weights = piece.attribute_view(String(SKIN_WEIGHT))
+    for v in range(placed.count()):
+        for k in range(4):  # pragma: no branch
+            # The arms' bones run from the right upper arm to the left
+            # hand.
+            var joint = Int(bones.component(v, k))
+            if joint >= RIGHT_UPPER_ARM.value and joint <= LEFT_HAND.value:
+                arms[v] += weights.component(v, k)
+    return arms^
+
+
 def pattern_values(
     piece: BufferGeometry, rig: HumanoidRig, pattern: DyePattern
 ) raises -> List[Float32]:
@@ -204,9 +240,26 @@ def pattern_values(
     var s = rig.stature / PATTERN_STATURE
     var stripe = STRIPE * s
     var half = CHARGE * s / 2
+    var front = rig.joints[HIPS.value].z
+    var arms = _arm_weights(piece)
     var values = List[Float32](capacity=placed.count())
     for v in range(placed.count()):
         var p = placed.vector3(v)
+        if pattern == FRONT_PANEL:
+            var wide = PANEL * s + PANEL_FLARE * max(Float32(0), waist - p.y)
+            values.append(max(abs(p.x - middle) - wide / 2, front - p.z))
+            continue
+        if pattern == SLEEVES:
+            values.append(0.5 - arms[v])
+            continue
+        if pattern == BANDED_SLEEVES:
+            values.append(
+                max(
+                    0.5 - arms[v],
+                    sin(Float32(pi) * (p.y - waist) / (stripe * SLEEVE_BANDS)),
+                )
+            )
+            continue
         values.append(
             charge_value(
                 pattern,
