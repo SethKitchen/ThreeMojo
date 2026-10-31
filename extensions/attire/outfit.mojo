@@ -428,7 +428,7 @@ def _press_under_hats(
         ).clone()
         var places = List[Vector3]()
         ref placed = skin.attribute_view(String(POSITION))
-        for v in range(placed.count()):
+        for v in range(placed.count()):  # pragma: no branch
             places.append(placed.vector3(v))
         var head = garment_piece(
             skin,
