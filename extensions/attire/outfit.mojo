@@ -451,7 +451,9 @@ def dress(
         paint(piece, garment.dyes)
         piece = garment_uvs(piece, person.rig)
         normalize_normals(piece)
-        var material = fabric_material(garment.fabric, Color(255, 255, 255))
+        var material = fabric_material(
+            garment.fabric, Color(255, 255, 255), garment.metal
+        )
         maps.apply(material, assets, garment.fabric)
         var look = assets.materials.add(material)
         meshes.append(len(scene.skinned_meshes))

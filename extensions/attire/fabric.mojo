@@ -15,6 +15,9 @@
 | `PADDING` | 2.4 kg/m² | 15 mm | 6 | Many layers of linen; Wikipedia, Gambeson |
 | `MAIL` | 8.5 kg/m² | 3 mm | 3 | Set so the template's hauberk weighs 9.3 kg, as one at the Cleveland Museum of Art does |
 | `PLATE` | 15.7 kg/m² | 2 mm | 24 | 2 mm of steel at 7,850 kg/m³; breastplates 1 to 2.5 mm |
+| `FUR` | 1.4 kg/m² | 12 mm | 6 | A sheepskin with its fleece on, 1 to 1.5 kg/m² |
+| `FELT` | 600 g/m² | 3 mm | 4 | 3 mm of wool felt at about 200 kg/m³ |
+| `STRAW` | 350 g/m² | 2 mm | 6 | Plaited wheat straw |
 
 The drape is how many smoothing passes the shell takes. One pass keeps
 the skin's shape under a thin cloth. Many passes span the hollows, as a
@@ -29,20 +32,31 @@ This is not a three.js port. See Extensions.
 
     var mail = fabric(MAIL)
     var look = fabric_material(MAIL, Color(255, 255, 255))
+
+The look of mail and plate follows its metal: see `extensions.attire.metal`.
 """
 
 from extensions.anatomy.evidence import DESIGN, FROM_TEXT, Cited
 from extensions.attire.kinds import (
+    FELT,
+    FUR,
     LEATHER,
     LINEN,
     MAIL,
     PADDING,
     PLATE,
     SILK,
+    STRAW,
     VELVET,
     WOOL,
     FabricKind,
     require_fabric_kind,
+)
+from extensions.attire.metal import (
+    STEEL,
+    Metal,
+    metal_metalness,
+    metal_roughness,
 )
 from extensions.attire.quantities import (
     ArealDensity,
@@ -144,6 +158,12 @@ def fabric(kind: FabricKind) raises -> Fabric:
             3,
             Cited(DESIGN, "ClevelandHauberk"),
         )
+    if kind == FUR:
+        return Fabric(kind, _gsm(1400), _mm(12), _mm(3), 6, practice^)
+    if kind == FELT:
+        return Fabric(kind, _gsm(600), _mm(3), _mm(2), 4, practice^)
+    if kind == STRAW:
+        return Fabric(kind, _gsm(350), _mm(2), _mm(2), 6, practice^)
     return Fabric(
         kind,
         ArealDensity(15.7, KILOGRAM_PER_SQUARE_METER),
@@ -162,7 +182,8 @@ def fold_depth(kind: FabricKind) raises -> Length:
     | `LINEN`, `SILK` | 18 mm |
     | `WOOL`, `VELVET` | 25 mm |
     | `LEATHER`, `MAIL` | 6 mm |
-    | `PADDING` | 4 mm |
+    | `PADDING`, `STRAW` | 4 mm |
+    | `FUR`, `FELT` | 10 mm |
     | `PLATE` | none |
 
     Thin, soft cloth hangs in deep folds; stiff fabric hardly folds, and
@@ -184,18 +205,25 @@ def fold_depth(kind: FabricKind) raises -> Length:
         return _mm(25)
     if kind == LEATHER or kind == MAIL:
         return _mm(6)
-    if kind == PADDING:
+    if kind == PADDING or kind == STRAW:
         return _mm(4)
+    if kind == FUR or kind == FELT:
+        return _mm(10)
     return _mm(0)
 
 
-def fabric_material(kind: FabricKind, tint: Color) raises -> Material:
+def fabric_material(
+    kind: FabricKind, tint: Color, metal: Metal = STEEL
+) raises -> Material:
     """Return a physically based look for a fabric.
 
     Cloth takes a sheen, the lobe of cloth and velvet. Leather takes a
-    faint clear coat. Mail is a rough metal; its rings scatter the light.
-    Plate is a polished metal under a thin clear coat. Every look reads
-    the garment's vertex colors, which carry its dyes and its wear. Every
+    faint clear coat. Mail is a rough metal; its rings scatter the light,
+    so it is a quarter rougher than its metal's polished surface. Plate is
+    its metal, polished, under a thin clear coat. Fur is matte, with a
+    broad sheen of its own color; felt is matte with a faint sheen;
+    straw is a dull, faintly shiny surface. Every look reads the
+    garment's vertex colors, which carry its dyes and its wear. Every
     look reflects the scene's environment; a metal shows little else, so
     give the scene one.
 
@@ -203,31 +231,61 @@ def fabric_material(kind: FabricKind, tint: Color) raises -> Material:
         kind: A named fabric kind.
         tint: The base color, multiplied by the vertex colors. White
             leaves the dyes as they are.
+        metal: What mail or plate is made of. Steel by default. Other
+            fabrics ignore it.
 
     Returns:
         A `PHYSICAL` material with vertex colors on.
 
     Raises:
-        Error: If `kind` is not named, or the material constructor
-            refuses the values.
+        Error: If `kind` or `metal` is not named, or the material
+            constructor refuses the values.
     """
     require_fabric_kind(kind)
+    var rough = metal_roughness(metal)
+    var shine = metal_metalness(metal)
     var look: Material
     if kind == MAIL:
         look = physical_material(
             tint,
-            roughness=0.55,
-            metalness=0.85,
+            roughness=min(Float32(1), rough + 0.25),
+            metalness=shine * 0.95,
             env_map=SCENE_ENVIRONMENT,
         )
     elif kind == PLATE:
         look = physical_material(
             tint,
-            roughness=0.32,
-            metalness=0.9,
+            roughness=rough,
+            metalness=shine,
             env_map=SCENE_ENVIRONMENT,
             clearcoat=0.2,
             clearcoat_roughness=0.2,
+        )
+    elif kind == FUR:
+        look = physical_material(
+            tint,
+            roughness=1.0,
+            env_map=SCENE_ENVIRONMENT,
+            sheen=1.0,
+            sheen_color=Color(200, 190, 170),
+            sheen_roughness=0.8,
+        )
+    elif kind == FELT:
+        look = physical_material(
+            tint,
+            roughness=0.95,
+            env_map=SCENE_ENVIRONMENT,
+            sheen=0.35,
+            sheen_color=Color(200, 200, 200),
+            sheen_roughness=0.7,
+        )
+    elif kind == STRAW:
+        look = physical_material(
+            tint,
+            roughness=0.6,
+            env_map=SCENE_ENVIRONMENT,
+            clearcoat=0.15,
+            clearcoat_roughness=0.5,
         )
     elif kind == LEATHER:
         look = physical_material(

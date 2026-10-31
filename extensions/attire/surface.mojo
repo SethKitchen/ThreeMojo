@@ -24,9 +24,11 @@ The bump maps are height images, one tile each:
 | `mail_heights` | 4 cm, four rows of four rings | riveted rings, each row of rings set half a ring over the last |
 | `quilt_heights` | 6 cm | the diamond quilting of a gambeson: grooves along both diagonals |
 | `weave_heights` | 4 mm | a two-over-two twill of warp and weft |
+| `fur_heights` | 3 cm | the locks of a pelt, each a tuft that falls down the garment |
+| `plait_heights` | 1.2 cm | flat straws plaited over and under, two each way |
 
 `surface_look` gives a fabric's bump map, its scale and how many tiles a
-meter, or no map for leather and plate. `SurfaceMaps` makes each map once
+meter, or no map for leather, plate and felt. `SurfaceMaps` makes each map once
 and gives it to every material that needs it.
 
 This is not a three.js port. See Extensions.
@@ -43,13 +45,17 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, UV, BufferGeometry
 from extensions.attire.kinds import (
     BUMP_COUNT,
+    FUR,
+    FUR_LOCKS,
     LINEN,
     MAIL,
     MAIL_RINGS,
     NO_BUMP,
     PADDING,
+    PLAIT,
     QUILTING,
     SILK,
+    STRAW,
     TWILL,
     VELVET,
     WOOL,
@@ -80,6 +86,12 @@ comptime QUILT_TILE = Float32(0.06)
 """The side of one diamond of quilting, in meters."""
 comptime WEAVE_TILE = Float32(0.004)
 """The side of one repeat of a twill weave, in meters."""
+comptime FUR_TILE = Float32(0.03)
+"""The side of one tile of fur's locks, in meters."""
+comptime PLAIT_TILE = Float32(0.012)
+"""The side of one repeat of plaited straw, in meters."""
+comptime FUR_LOCKS_A_TILE = 14
+"""How many locks of fur one tile holds."""
 comptime TEXELS = 64
 """The side of each bump map, in texels."""
 comptime CHAIN_BEND = Float32(0.7)
@@ -115,7 +127,7 @@ struct SurfaceLook(ImplicitlyCopyable):
         """Return whether the fabric has a bump map.
 
         Returns:
-            False for leather and plate, which are smooth.
+            False for leather, plate and felt, which are smooth.
         """
         return self.kind != NO_BUMP
 
@@ -127,8 +139,8 @@ def surface_look(kind: FabricKind) raises -> SurfaceLook:
         kind: A named fabric kind.
 
     Returns:
-        Mail's rings, padding's quilting, cloth's weave, or none for
-        leather and plate.
+        Mail's rings, padding's quilting, cloth's weave, fur's locks,
+        straw's plait, or none for leather, plate and felt.
 
     Raises:
         Error: If the kind is not named.
@@ -140,6 +152,10 @@ def surface_look(kind: FabricKind) raises -> SurfaceLook:
         return SurfaceLook(QUILTING, 1.0, 1 / QUILT_TILE)
     if kind == LINEN or kind == WOOL or kind == SILK or kind == VELVET:
         return SurfaceLook(TWILL, 0.15, 1 / WEAVE_TILE)
+    if kind == FUR:
+        return SurfaceLook(FUR_LOCKS, 1.6, 1 / FUR_TILE)
+    if kind == STRAW:
+        return SurfaceLook(PLAIT, 0.5, 1 / PLAIT_TILE)
     return SurfaceLook(NO_BUMP, 0, 1)
 
 
@@ -251,6 +267,77 @@ def weave_heights() -> List[Float32]:
     return heights^
 
 
+def _scramble(a: Int, b: Int) -> Float32:
+    """Return a number from zero to one that two integers pick."""
+    var x = UInt64(a) * 0x9E3779B97F4A7C15 + UInt64(b) * 0xBF58476D1CE4E5B9
+    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9
+    x = (x ^ (x >> 27)) * 0x94D049BB133111EB
+    return Float32(Int((x ^ (x >> 31)) >> 40)) / Float32(1 << 24)
+
+
+def fur_heights() -> List[Float32]:
+    """Return the heights of one tile of fur: locks that fall down it.
+
+    Each of `FUR_LOCKS_A_TILE` locks is a tuft, long down the tile and
+    narrow across it, highest at its root and thinning to its tip. Fine
+    hairs run down each lock. The tile wraps both ways, as the locks of
+    the next tile would.
+
+    Returns:
+        `TEXELS` by `TEXELS` heights, row by row, zero through one.
+    """
+    var heights = List[Float32](length=TEXELS * TEXELS, fill=0)
+    var size = Float32(TEXELS)
+    for lock in range(FUR_LOCKS_A_TILE):  # pragma: no branch
+        var cx = _scramble(lock, 1) * size
+        var cy = _scramble(lock, 2) * size
+        var across = size * (0.07 + 0.05 * _scramble(lock, 3))
+        var down = size * (0.22 + 0.12 * _scramble(lock, 4))
+        for y in range(TEXELS):  # pragma: no branch
+            for x in range(TEXELS):  # pragma: no branch
+                var dx = Float32(x) + 0.5 - cx
+                var dy = Float32(y) + 0.5 - cy
+                # The nearest copy of the lock, as the tile wraps.
+                dx -= size * floor(dx / size + 0.5)
+                dy -= size * floor(dy / size + 0.5)
+                var t = dy / down
+                if t < 0 or t > 1:
+                    continue
+                var width = across * (1 - 0.7 * t)
+                var off = abs(dx) / width
+                if off >= 1:
+                    continue
+                var hair = 0.75 + 0.25 * sin(Float32(pi) * dx * 1.7)
+                var h = (1 - off * off) * (1 - t * 0.6) * hair
+                heights[y * TEXELS + x] = max(heights[y * TEXELS + x], h)
+    return heights^
+
+
+def plait_heights() -> List[Float32]:
+    """Return the heights of one repeat of plaited straw.
+
+    Two flat straws run each way across the tile. Each passes over one
+    straw that crosses it and under the next, and each is rounded across
+    its width, as a flattened straw is.
+
+    Returns:
+        `TEXELS` by `TEXELS` heights, row by row, zero through one.
+    """
+    var heights = List[Float32](capacity=TEXELS * TEXELS)
+    var cell = Float32(TEXELS) / 2
+    for y in range(TEXELS):  # pragma: no branch
+        for x in range(TEXELS):  # pragma: no branch
+            var column = Int(Float32(x) / cell)
+            var row = Int(Float32(y) / cell)
+            var across = (Float32(x) + 0.5) / cell - Float32(column)
+            var along = (Float32(y) + 0.5) / cell - Float32(row)
+            var warp_over = (row + column) % 2 == 0
+            var t = across if warp_over else along
+            var round = sin(Float32(pi) * t)
+            heights.append(0.55 + 0.45 * round if warp_over else 0.45 * round)
+    return heights^
+
+
 def bump_texture(look: SurfaceLook) raises -> Texture:
     """Return a fabric's bump map, tiled at its true size.
 
@@ -271,6 +358,10 @@ def bump_texture(look: SurfaceLook) raises -> Texture:
         heights = quilt_heights()
     elif look.kind == TWILL:
         heights = weave_heights()
+    elif look.kind == FUR_LOCKS:
+        heights = fur_heights()
+    elif look.kind == PLAIT:
+        heights = plait_heights()
     else:
         raise Error("This fabric has no bump map")
     var texture = _height_texture(heights)

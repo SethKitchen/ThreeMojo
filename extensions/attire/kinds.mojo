@@ -11,7 +11,8 @@ the physical constants. A dye channel and a dye pattern say how a
 garment takes color. A wear kind names one channel of dirt, blood, wet
 or damage. A form says how a garment's shell is shaped where it does not
 follow the skin: a skirt round both legs, a last round each foot, a
-cowl round the head, or a taut band round the body.
+cowl round the head, a taut band round the body, or a hat or a helmet
+shaped round the head. A headwear kind says which hat or helmet.
 
 Each kind is a type, so a bare integer does not compile. A value that
 is not named is still constructible, and the boundary that reads it
@@ -207,7 +208,7 @@ struct FabricKind(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is a named fabric kind.
 
         Returns:
-            True for `LINEN` through `PLATE`.
+            True for `LINEN` through `STRAW`.
         """
         return ordinal_valid(self.value, FABRIC_KIND_COUNT - 1)
 
@@ -235,8 +236,14 @@ comptime PADDING = FabricKind(5)
 comptime MAIL = FabricKind(6)
 """Riveted rings of iron or steel."""
 comptime PLATE = FabricKind(7)
-"""Hammered steel."""
-comptime FABRIC_KIND_COUNT = 8
+"""Hammered metal, steel unless a garment names another."""
+comptime FUR = FabricKind(8)
+"""A pelt with its hair on: a mantle, a barbarian's kilt, boots' cuffs."""
+comptime FELT = FabricKind(9)
+"""Wool matted into a stiff cloth: hats and caps."""
+comptime STRAW = FabricKind(10)
+"""Plaited straw: a farmer's hat."""
+comptime FABRIC_KIND_COUNT = 11
 """How many fabric kinds there are."""
 
 
@@ -251,6 +258,9 @@ def _fabric_names() -> List[String]:
         "padding",
         "mail",
         "plate",
+        "fur",
+        "felt",
+        "straw",
     ]
 
 
@@ -271,7 +281,7 @@ def fabric_named(name: String) raises -> FabricKind:
 
     Args:
         name: `linen`, `wool`, `silk`, `velvet`, `leather`, `padding`,
-            `mail` or `plate`.
+            `mail`, `plate`, `fur`, `felt` or `straw`.
 
     Returns:
         The named fabric kind.
@@ -549,7 +559,8 @@ struct Form(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is a named form.
 
         Returns:
-            True for `FITTED`, `SKIRTED`, `SHOD`, `COWLED` and `BANDED`.
+            True for `FITTED`, `SKIRTED`, `SHOD`, `COWLED`, `BANDED` and
+            `HATTED`.
         """
         return ordinal_valid(self.value, FORM_COUNT - 1)
 
@@ -568,13 +579,16 @@ face: a hood."""
 comptime BANDED = Form(4)
 """It is drawn as a taut band round the body where its cover lies, level
 at its top and its bottom: a belt."""
-comptime FORM_COUNT = 5
+comptime HATTED = Form(5)
+"""It is drawn as a hat or a helmet shaped round the head, which its
+headwear kind names: a great helm, a crown, a wizard's hat."""
+comptime FORM_COUNT = 6
 """How many forms there are."""
 
 
 def _form_names() -> List[String]:
     """Return the form names, in order."""
-    return ["fitted", "skirted", "shod", "cowled", "banded"]
+    return ["fitted", "skirted", "shod", "cowled", "banded", "hatted"]
 
 
 def form_label(form: Form) -> String:
@@ -593,7 +607,8 @@ def form_named(name: String) raises -> Form:
     """Return the form that `name` names.
 
     Args:
-        name: `fitted`, `skirted`, `shod`, `cowled` or `banded`.
+        name: `fitted`, `skirted`, `shod`, `cowled`, `banded` or
+            `hatted`.
 
     Returns:
         The named form.
@@ -631,20 +646,24 @@ struct Bump(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is a named bump map.
 
         Returns:
-            True for `NO_BUMP`, `MAIL_RINGS`, `QUILTING` and `TWILL`.
+            True for `NO_BUMP` through `PLAIT`.
         """
         return ordinal_valid(self.value, BUMP_COUNT - 1)
 
 
 comptime NO_BUMP = Bump(0)
-"""A smooth surface: leather and plate."""
+"""A smooth surface: leather, plate and felt."""
 comptime MAIL_RINGS = Bump(1)
 """The riveted rings of mail."""
 comptime QUILTING = Bump(2)
 """The diamond quilting of a gambeson."""
 comptime TWILL = Bump(3)
 """The two-over-two twill of woven cloth."""
-comptime BUMP_COUNT = 4
+comptime FUR_LOCKS = Bump(4)
+"""The locks of a pelt's hair."""
+comptime PLAIT = Bump(5)
+"""Flat straws plaited over and under each other."""
+comptime BUMP_COUNT = 6
 """How many bump maps there are, the smooth one with them."""
 
 
@@ -678,3 +697,110 @@ def slot_named(name: String) raises -> Slot:
         if names[k] == name:
             return Slot(k)
     raise Error("No slot is named " + name)
+
+
+@fieldwise_init
+struct Headwear(Equatable, ImplicitlyCopyable, Writable):
+    """Which hat or helmet a `HATTED` garment is drawn as."""
+
+    var value: Int
+    """Its index among the named values."""
+
+    def is_valid(self) -> Bool:
+        """Return whether this is a named headwear kind.
+
+        Returns:
+            True for `NO_HEADWEAR` through `CIRCLET`.
+        """
+        return ordinal_valid(self.value, HEADWEAR_COUNT - 1)
+
+    def keeps_hair(self) -> Bool:
+        """Return whether the hair shows under it.
+
+        Returns:
+            False for a great helm, which closes the head; True for the
+            rest, which leave the hair below their brim or band.
+        """
+        return self != GREAT_HELM
+
+
+comptime NO_HEADWEAR = Headwear(0)
+"""Not a hat: the garment is shaped by its form."""
+comptime GREAT_HELM = Headwear(1)
+"""A closed helmet over the whole head, with a slit for the eyes."""
+comptime HALF_HELM = Headwear(2)
+"""An open helmet over the crown, with a bar down the nose."""
+comptime HORNED_HELM = Headwear(3)
+"""An open helmet with a horn on each side."""
+comptime WIZARD_HAT = Headwear(4)
+"""A tall pointed hat with a wide brim, its tip bent back."""
+comptime STRAW_HAT = Headwear(5)
+"""A low round hat with a wide brim."""
+comptime FEATHERED_CAP = Headwear(6)
+"""A peaked cap, its brim turned up behind, with a feather."""
+comptime CROWN = Headwear(7)
+"""A band of metal with points, set with stones."""
+comptime CIRCLET = Headwear(8)
+"""A thin band of metal round the brow, with one stone."""
+comptime HEADWEAR_COUNT = 9
+"""How many headwear kinds there are, no headwear with them."""
+
+
+def _headwear_names() -> List[String]:
+    """Return the headwear names, in order."""
+    return [
+        "none",
+        "great helm",
+        "half helm",
+        "horned helm",
+        "wizard hat",
+        "straw hat",
+        "feathered cap",
+        "crown",
+        "circlet",
+    ]
+
+
+def headwear_label(headwear: Headwear) -> String:
+    """Return the name of a headwear kind.
+
+    Args:
+        headwear: A headwear kind, named or not.
+
+    Returns:
+        Its name, as `"crown"`, or `"headwear"` when it is not named.
+    """
+    return ordinal_label(
+        headwear.is_valid(), headwear.value, _headwear_names(), "headwear"
+    )
+
+
+def headwear_named(name: String) raises -> Headwear:
+    """Return the headwear kind that `name` names.
+
+    Args:
+        name: A headwear kind's name, as `headwear_label` gives it.
+
+    Returns:
+        The named headwear kind.
+
+    Raises:
+        Error: If `name` names no headwear kind.
+    """
+    var names = _headwear_names()
+    for k in range(len(names)):  # pragma: no branch
+        if names[k] == name:
+            return Headwear(k)
+    raise Error("No headwear is named " + name)
+
+
+def require_headwear(headwear: Headwear) raises:
+    """Refuse a headwear kind that is not named.
+
+    Args:
+        headwear: The headwear kind.
+
+    Raises:
+        Error: If the kind is not named.
+    """
+    require_valid(headwear.is_valid(), "A headwear kind must be a named one")

@@ -8,7 +8,9 @@
 from core.assets import Assets
 from core.scene import Scene
 from core.user_data import UserData
+from extensions.attire.metal import BRONZE, STEEL
 from extensions.attire.garment import (
+    forged,
     bascinet,
     boots,
     coif,
@@ -25,7 +27,7 @@ from extensions.attire.garment import (
     surcoat,
     vambraces,
 )
-from extensions.attire.kinds import FITTED
+from extensions.attire.kinds import FITTED, NO_HEADWEAR
 from extensions.attire.outfit import Outfit, dress
 from extensions.attire.preset import (
     OUTFIT_KEY,
@@ -210,6 +212,26 @@ def test_an_outfit_saved_before_forms_is_fitted() raises:
     var again = outfit_from_json(old)
     assert_equal(again.garments[0].form, FITTED)
     assert_equal(again.garments[0].flare, 0)
+
+
+def test_an_outfit_keeps_its_metals_and_its_headwear() raises:
+    var outfit = Outfit()
+    outfit.add(forged(hauberk(), BRONZE))
+    var text = outfit_json(outfit)
+    assert_true(text.find('"metal":"bronze"') >= 0)
+    assert_true(text.find('"headwear":"none"') >= 0)
+    var again = outfit_from_json(text)
+    assert_equal(again.garments[0].metal, BRONZE)
+    assert_equal(again.garments[0].headwear, NO_HEADWEAR)
+    # One saved before metals and headwear is steel and bareheaded.
+    var old = outfit_from_json(_drop(_drop(text, "metal"), "headwear"))
+    assert_equal(old.garments[0].metal, STEEL)
+    with assert_raises(contains="No metal"):
+        _ = outfit_from_json(_swap(text, '"metal":"bronze"', '"metal":"tin"'))
+    with assert_raises(contains="No headwear"):
+        _ = outfit_from_json(
+            _swap(text, '"headwear":"none"', '"headwear":"fez"')
+        )
 
 
 def test_a_dressed_bake_remembers_its_outfit_and_its_body() raises:

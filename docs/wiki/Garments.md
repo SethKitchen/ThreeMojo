@@ -105,7 +105,8 @@ Ten folds run down each skirt. They stand only out of the rings, so no fold dips
 | `LINEN`, `SILK` | 18 mm |
 | `WOOL`, `VELVET` | 25 mm |
 | `LEATHER`, `MAIL` | 6 mm |
-| `PADDING` | 4 mm |
+| `PADDING`, `STRAW` | 4 mm |
+| `FUR`, `FELT` | 10 mm |
 | `PLATE` | none |
 
 A drawn skirt is lined: it has an inner face one fabric thickness inside, and a strip across its hem. So the hem shows its thickness, and the inside of the skirt draws when it is seen from below.
@@ -152,8 +153,33 @@ Each vertex of a last takes the weights of the nearest vertex of the shell. So t
 | `PADDING` | 2.4 kg/m² | 15 mm | 6 | sheen |
 | `MAIL` | 8.5 kg/m² | 3 mm | 3 | rough metal |
 | `PLATE` | 15.7 kg/m² | 2 mm | 24 | polished metal under a clear coat |
+| `FUR` | 1.4 kg/m² | 12 mm | 6 | matte, with a broad sheen |
+| `FELT` | 600 g/m² | 3 mm | 4 | matte, with a faint sheen |
+| `STRAW` | 350 g/m² | 2 mm | 6 | dull, with a faint clear coat |
 
 `ArealDensity` is a `Quantity[-2, 1, 0, 0]`, in `extensions/attire/quantities.mojo`. Its units are `KILOGRAM_PER_SQUARE_METER`, `GRAM_PER_SQUARE_METER` and `OUNCE_PER_SQUARE_YARD`. A metal shows what it reflects, so give the scene an environment.
+
+### Metals
+
+Mail and plate are made of a `Metal`. A garment's `metal` is steel unless it names another. The metal sets the look: plate takes the metal's roughness and metalness, and mail is a quarter rougher, because its rings scatter the light. The code is in `extensions/attire/metal.mojo`.
+
+| Metal | Color | Roughness | Metalness |
+|---|---|---|---|
+| `IRON` | dark gray | 0.5 | 0.9 |
+| `STEEL` | bright gray | 0.3 | 0.9 |
+| `BLACKENED` | near black | 0.55 | 0.7 |
+| `BLUED` | deep blue | 0.28 | 0.9 |
+| `BRONZE` | brown gold | 0.35 | 0.9 |
+| `COPPER` | red brown | 0.35 | 0.9 |
+| `BRASS` | pale gold | 0.3 | 0.9 |
+| `SILVER` | white | 0.18 | 0.95 |
+| `GOLD` | deep yellow | 0.2 | 0.95 |
+
+`forged(garment, metal, trim)` makes a mail or plate garment of a metal. Its primary and secondary dyes take the metal's color. Its trim takes the color of the trim's metal, or of its own metal when no trim is given. Its accent dye is left for stones and horns. `forged` refuses cloth.
+
+```mojo
+var helm = forged(bascinet(), BLUED, GOLD)
+```
 
 ## Surface
 
@@ -164,7 +190,9 @@ Each vertex of a last takes the weights of the nearest vertex of the shell. So t
 | `MAIL` | riveted rings, four in one | 4 cm | 0.6 |
 | `PADDING` | diamond quilting | 6 cm | 1.0 |
 | `LINEN`, `WOOL`, `SILK`, `VELVET` | two-over-two twill | 4 mm | 0.15 |
-| `LEATHER`, `PLATE` | none | | |
+| `FUR` | locks that fall down the garment | 3 cm | 1.6 |
+| `STRAW` | flat straws plaited over and under | 1.2 cm | 0.5 |
+| `LEATHER`, `PLATE`, `FELT` | none | | |
 
 `garment_uvs(piece, rig)` makes the coordinates in three steps.
 

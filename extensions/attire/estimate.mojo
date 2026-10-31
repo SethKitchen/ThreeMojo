@@ -53,11 +53,14 @@ from extensions.anatomy.inertia import InertiaTally
 from extensions.attire.cover import cover_values, dominant_joints, joint_cover
 from extensions.attire.fabric import Fabric, fabric
 from extensions.attire.kinds import (
+    FELT,
+    FUR,
     LEATHER,
     MAIL,
     PADDING,
     PLATE,
     SILK,
+    STRAW,
     SLOT_COUNT,
     VELVET,
     WOOL,
@@ -409,6 +412,12 @@ def piercing_energy(cloth: Fabric) raises -> Energy:
     elif cloth.kind == PLATE:
         var t = Float32(cloth.thickness.to(MILLIMETER)) / PLATE_REFERENCE_MM
         joules = 175 * t * t
+    elif cloth.kind == FUR:
+        joules = 15
+    elif cloth.kind == FELT:
+        joules = 10
+    elif cloth.kind == STRAW:
+        joules = 3
     return Energy(joules, JOULE)
 
 

@@ -12,7 +12,9 @@ reads it back. A garment's slot, layer, fabric, articulation and pattern
 are written by name, its anchor by joint name, its dyes as sRGB bytes
 and its cover as two lists of nineteen fractions, one per joint. Its form
 is written by name and its flare as a number; a garment saved without
-them is read as fitted, with no flare.
+them is read as fitted, with no flare. Its metal and its headwear are
+written by name; a garment saved without them is read as steel, with no
+headwear.
 
 `outfit_named` gives three outfits ready to wear: a peasant's, a
 man-at-arms's in mail, and a knight's full harness under a surcoat.
@@ -65,6 +67,8 @@ from extensions.attire.kinds import (
     fabric_named,
     form_label,
     form_named,
+    headwear_label,
+    headwear_named,
     layer_label,
     layer_named,
     pattern_label,
@@ -72,6 +76,7 @@ from extensions.attire.kinds import (
     slot_label,
     slot_named,
 )
+from extensions.attire.metal import metal_label, metal_named
 from extensions.attire.outfit import Outfit
 from extensions.humanoid.bake import write_sealed_bake
 from extensions.humanoid.fidelity import spec_fingerprint
@@ -222,6 +227,8 @@ def garment_record(garment: Garment) raises -> UserData:
     record.set_boolean("face_open", garment.cover.face_open)
     record.set_string("form", form_label(garment.form))
     record.set_number("flare", Float64(garment.flare))
+    record.set_string("metal", metal_label(garment.metal))
+    record.set_string("headwear", headwear_label(garment.headwear))
     record.set_json("starts", _numbers(garment.cover.starts))
     record.set_json("ends", _numbers(garment.cover.ends))
     return record^
@@ -340,9 +347,14 @@ def garment_from(document: JsonDocument, node: Int) raises -> Garment:
             Float32(document.number(_field(document, node, "ease_m"))),
             METER,
         ),
-        # An outfit saved before garments had forms is fitted.
+        # An outfit saved before garments had forms is fitted, and one
+        # saved before metals and headwear is steel and bareheaded.
         form=form_named(document.optional_string(node, "form", "fitted")),
         flare=Float32(document.optional_number(node, "flare", 0)),
+        metal=metal_named(document.optional_string(node, "metal", "steel")),
+        headwear=headwear_named(
+            document.optional_string(node, "headwear", "none")
+        ),
     )
     garment.dyes = colors^
     garment.check()

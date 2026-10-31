@@ -6,6 +6,17 @@
 """Tests for the named kinds of `extensions.attire`."""
 
 from extensions.attire.kinds import (
+    CIRCLET,
+    GREAT_HELM,
+    HALF_HELM,
+    HATTED,
+    HEADWEAR_COUNT,
+    NO_HEADWEAR,
+    STRAW,
+    Headwear,
+    headwear_label,
+    headwear_named,
+    require_headwear,
     ACCENT_DYE,
     BUMP_COUNT,
     MAIL_RINGS,
@@ -168,15 +179,37 @@ def test_forms_are_named() raises:
         assert_true(form.is_valid())
         assert_equal(form_named(form_label(form)), form)
     assert_equal(form_label(SKIRTED), "skirted")
-    assert_equal(form_label(Form(7)), "form")
+    assert_equal(form_label(Form(9)), "form")
+    assert_equal(form_label(HATTED), "hatted")
     assert_false(Form(-1).is_valid())
     assert_false(Form(FORM_COUNT).is_valid())
     require_form(FITTED)
     require_form(SHOD)
     with assert_raises(contains="named one"):
-        require_form(Form(7))
+        require_form(Form(9))
     with assert_raises(contains="No form"):
         _ = form_named("baggy")
+
+
+def test_headwear_is_named() raises:
+    for k in range(HEADWEAR_COUNT):
+        var headwear = Headwear(k)
+        assert_true(headwear.is_valid())
+        assert_equal(headwear_named(headwear_label(headwear)), headwear)
+    assert_equal(headwear_label(GREAT_HELM), "great helm")
+    assert_equal(headwear_label(Headwear(40)), "headwear")
+    assert_false(Headwear(-1).is_valid())
+    assert_false(Headwear(HEADWEAR_COUNT).is_valid())
+    # A great helm closes the head; the rest leave the hair below them.
+    assert_false(GREAT_HELM.keeps_hair())
+    assert_true(HALF_HELM.keeps_hair())
+    assert_true(CIRCLET.keeps_hair())
+    require_headwear(NO_HEADWEAR)
+    with assert_raises(contains="named one"):
+        require_headwear(Headwear(40))
+    with assert_raises(contains="No headwear"):
+        _ = headwear_named("turban")
+    assert_equal(fabric_label(STRAW), "straw")
 
 
 def test_articulations_are_named() raises:

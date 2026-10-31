@@ -9,6 +9,9 @@ from extensions.anatomy.evidence import DESIGN, FROM_TEXT
 from extensions.attire.fabric import fabric, fabric_material, fold_depth
 from extensions.attire.kinds import (
     FABRIC_KIND_COUNT,
+    FELT,
+    FUR,
+    STRAW,
     LEATHER,
     LINEN,
     MAIL,
@@ -19,6 +22,7 @@ from extensions.attire.kinds import (
     WOOL,
     FabricKind,
 )
+from extensions.attire.metal import BLACKENED, GOLD, IRON, Metal
 from extensions.attire.quantities import (
     ArealDensity,
     GRAM_PER_SQUARE_METER,
@@ -87,6 +91,24 @@ def test_each_fabric_has_a_physical_look() raises:
     assert_true(fabric_material(SILK, white).sheen > 0)
     assert_true(fabric_material(VELVET, white).sheen > 0)
     assert_true(fabric_material(LEATHER, white).clearcoat > 0)
+    assert_true(fabric_material(FUR, white).sheen > 0.9)
+    assert_true(fabric_material(FELT, white).sheen > 0)
+    assert_true(fabric_material(STRAW, white).clearcoat > 0)
+    # Mail and plate take their metal's finish.
+    var gold = fabric_material(PLATE, white, GOLD)
+    var iron = fabric_material(PLATE, white, IRON)
+    assert_true(gold.roughness < iron.roughness)
+    assert_true(gold.metalness > fabric_material(PLATE, white).metalness)
+    assert_true(
+        fabric_material(MAIL, white, BLACKENED).metalness
+        < fabric_material(MAIL, white).metalness
+    )
+    assert_true(
+        fabric_material(MAIL, white, IRON).roughness
+        > fabric_material(PLATE, white, IRON).roughness
+    )
+    with assert_raises(contains="metal must"):
+        _ = fabric_material(PLATE, white, Metal(77))
     with assert_raises(contains="named kind"):
         _ = fabric_material(FabricKind(-1), white)
 
@@ -98,6 +120,9 @@ def test_soft_cloth_folds_and_plate_does_not() raises:
     assert_true(fold_depth(LEATHER).value > fold_depth(PADDING).value)
     assert_equal(fold_depth(MAIL).value, fold_depth(LEATHER).value)
     assert_equal(fold_depth(PLATE).value, 0)
+    assert_equal(fold_depth(STRAW).value, fold_depth(PADDING).value)
+    assert_true(fold_depth(FUR).value > fold_depth(LEATHER).value)
+    assert_equal(fold_depth(FELT).value, fold_depth(FUR).value)
     with assert_raises(contains="named kind"):
         _ = fold_depth(FabricKind(99))
 

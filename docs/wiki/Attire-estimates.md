@@ -47,6 +47,9 @@ A load on the legs costs more than one on the trunk, as Askew, Formenti and Mine
 | `PADDING` | 40 J | from text | Williams |
 | `MAIL` | 80 J | from text | Williams |
 | `PLATE` | 175 J at 2 mm, with the square of the thickness | from text | Williams |
+| `STRAW` | 3 J | design | textile practice |
+| `FELT` | 10 J | design | textile practice |
+| `FUR` | 15 J | design | textile practice |
 
 Alan Williams's tests give 60 to 130 J for a hand blow and about 120 J for an arrow through mail over a padded jack. They give about 55 J at 1 mm and 175 J at 2 mm for mild steel plate. The square law is fitted to 2 mm, so it gives about 44 J at 1 mm. Secondary sources disagree on some of these figures. Check them against the original before you rely on them.
 

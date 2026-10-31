@@ -1893,6 +1893,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_headwear_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'require_headwear': value passed to 'headwear' cannot be converted from 'IntLiteral[1]' to 'Headwear'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_helper_size_is_not_a_bare_float.mojo": {
     "errors": [
       {
@@ -2417,6 +2429,18 @@
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'message_id' cannot be converted from 'IntLiteral[2]' to 'MessageId'"
+    ]
+  },
+  "tests/compile_fail/a_metal_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 19,
+        "message": "invalid call to 'require_metal': value passed to 'metal' cannot be converted from 'IntLiteral[1]' to 'Metal'"
+      }
+    ],
+    "notes": [
+      "function declared here"
     ]
   },
   "tests/compile_fail/a_mirror_side_is_not_a_bare_int.mojo": {

@@ -26,9 +26,18 @@ from extensions.attire.kinds import (
     SILK,
     VELVET,
     WOOL,
+    FELT,
+    FUR,
+    FUR_LOCKS,
+    PLAIT,
+    STRAW,
     FabricKind,
 )
 from extensions.attire.surface import (
+    FUR_TILE,
+    PLAIT_TILE,
+    fur_heights,
+    plait_heights,
     MAIL_TILE,
     QUILT_TILE,
     TEXELS,
@@ -191,6 +200,11 @@ def test_each_fabric_has_its_surface() raises:
         assert_almost_equal(look.tiles, 1 / WEAVE_TILE, atol=1e-2)
     assert_false(surface_look(LEATHER).has_map())
     assert_false(surface_look(PLATE).has_map())
+    assert_false(surface_look(FELT).has_map())
+    assert_true(surface_look(FUR).kind == FUR_LOCKS)
+    assert_almost_equal(surface_look(FUR).tiles, 1 / FUR_TILE, atol=1e-3)
+    assert_true(surface_look(STRAW).kind == PLAIT)
+    assert_almost_equal(surface_look(STRAW).tiles, 1 / PLAIT_TILE, atol=1e-3)
     with assert_raises(contains="fabric"):
         _ = surface_look(FabricKind(99))
 
@@ -200,8 +214,10 @@ def test_the_height_maps_tile_and_stay_in_range() raises:
         mail_heights(),
         quilt_heights(),
         weave_heights(),
+        fur_heights(),
+        plait_heights(),
     ]
-    for m in range(3):
+    for m in range(5):
         assert_equal(len(maps[m]), TEXELS * TEXELS)
         for h in maps[m]:
             assert_true(h >= 0 and h <= 1)
@@ -225,6 +241,19 @@ def test_the_height_maps_tile_and_stay_in_range() raises:
     var under = (cell // 2) * TEXELS + 2 * cell + cell // 2
     assert_true(maps[2][over] > 0.9)
     assert_true(maps[2][under] < 0.6)
+    # Fur's locks stand out of bare ground between them.
+    var lowest_fur = Float32(1)
+    var highest_fur = Float32(0)
+    for h in maps[3]:
+        lowest_fur = min(lowest_fur, h)
+        highest_fur = max(highest_fur, h)
+    assert_equal(lowest_fur, 0)
+    assert_true(highest_fur > 0.6)
+    # A straw is over in the first quarter of the plait and under in the
+    # quarter beside it.
+    var half = TEXELS // 2
+    assert_true(maps[4][(half // 2) * TEXELS + half // 2] > 0.9)
+    assert_true(maps[4][(half // 2) * TEXELS + half + half // 2] < 0.6)
 
 
 def test_a_bump_map_tiles_at_its_true_size() raises:
@@ -239,6 +268,8 @@ def test_a_bump_map_tiles_at_its_true_size() raises:
     assert_true(texture.levels > 1)
     _ = bump_texture(surface_look(PADDING))
     _ = bump_texture(surface_look(WOOL))
+    _ = bump_texture(surface_look(FUR))
+    _ = bump_texture(surface_look(STRAW))
     with assert_raises(contains="no bump map"):
         _ = bump_texture(SurfaceLook(NO_BUMP, 0, 1))
     with assert_raises(contains="named"):
