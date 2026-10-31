@@ -15,8 +15,9 @@ pattern says where each lies:
 | `STRIPES` | even bands round the body | odd bands |
 | `QUARTERLY` | upper right and lower left | upper left and lower right |
 
-Every pattern puts the trim dye along each hem. The accent dye is for a
-caller's own use.
+Every pattern puts the trim dye along each hem. A vertex whose `accent`
+attribute is one or more half takes the accent dye: a hat's stones, horns
+and feather.
 
 `dye_pattern` cuts the garment along each boundary of its pattern, so a
 boundary is a crisp line and not a blend across a triangle. Each vertex
@@ -41,6 +42,7 @@ from std.math import pi, sin
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from extensions.attire.kinds import (
+    ACCENT_DYE,
     DIRT,
     DYE_CHANNEL_COUNT,
     PARTY,
@@ -56,7 +58,7 @@ from extensions.attire.kinds import (
     require_dye_pattern,
     require_wear_kind,
 )
-from extensions.attire.mesh_ops import cut, merge
+from extensions.attire.mesh_ops import ACCENT, cut, merge
 from extensions.attire.shell import COVER
 from extensions.humanoid.rig.joints import (
     HIPS,
@@ -192,10 +194,27 @@ def dye_pattern(
         trim.append(covered.component(v, 0) - TRIM_LEVEL)
     var body = cut(piece, trim, 0)
     var hem = _with_channel(cut(piece, _negated(trim), 0), TRIM_DYE)
-    var dyed = _split(
-        body, pattern_values(body, rig, pattern), PRIMARY_DYE, SECONDARY_DYE
+    var dyed = merge(
+        _split(
+            body,
+            pattern_values(body, rig, pattern),
+            PRIMARY_DYE,
+            SECONDARY_DYE,
+        ),
+        hem,
     )
-    return merge(dyed, hem)
+    # A hat's stones, horns and feather take the accent dye.
+    if dyed.has_attribute(String(ACCENT)):
+        ref marks = dyed.attribute_view(String(ACCENT))
+        var weights = dyed.clone_attribute(String(DYE))
+        for v in range(marks.count()):
+            if marks.component(v, 0) >= 0.5:
+                for c in range(DYE_CHANNEL_COUNT):  # pragma: no branch
+                    weights.set_component(
+                        v, c, Float32(1) if c == ACCENT_DYE.value else 0
+                    )
+        dyed.set_attribute(String(DYE), weights^)
+    return dyed^
 
 
 def _wear_of(mut piece: BufferGeometry) raises:

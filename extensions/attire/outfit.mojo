@@ -27,7 +27,9 @@ garment from the person's own skin, from the skin out:
    skinned mesh on the person's own skeleton.
 
 `dress` changes the person's skin, and hides the scalp's hair under a
-garment that covers the head. Dress a person once.
+garment that covers the head. A hat or a helmet is drawn round the head
+as its headwear says; a great helm hides the hair, and every other hat
+leaves it below its brim. Dress a person once.
 
 This is not a three.js port. See Extensions.
 
@@ -38,7 +40,8 @@ This is not a three.js port. See Extensions.
 """
 
 from core.assets import Assets
-from core.buffer_geometry import BufferGeometry
+from core.object3d import NodeId
+from core.buffer_geometry import POSITION, BufferGeometry
 from core.scene import Scene
 from extensions.attire.cover import cover_values
 from extensions.attire.dye import dye_pattern, paint
@@ -46,16 +49,18 @@ from extensions.attire.fabric import fabric, fabric_material, fold_depth
 from extensions.attire.garment import Garment
 from extensions.attire.cowl import hang_cowl, head_cowl
 from extensions.attire.band import belt_band
+from extensions.attire.headwear import head_frame, hat_mesh, press_hair
 from extensions.attire.kinds import (
     BANDED,
     COWLED,
+    HATTED,
     SHOD,
     SKIRTED,
     layer_label,
     slot_label,
 )
 from extensions.attire.last import FootLast, foot_lasts, shoe
-from extensions.attire.mesh_ops import add_rim, merge, normalize_normals
+from extensions.attire.mesh_ops import add_rim, cut, merge, normalize_normals
 from extensions.attire.plates import articulate
 from extensions.attire.shell import (
     COVER_SMOOTHING,
@@ -79,6 +84,7 @@ from extensions.attire.skirt import (
 from extensions.attire.surface import SurfaceMaps, garment_uvs
 from extensions.humanoid.rig.joints import HEAD
 from extensions.humanoid.rig.game import GameHumanoid
+from extensions.humanoid.skeleton.head.hair.shading import HairLight
 from math.vector3 import Vector3
 from objects.skinned_mesh import SkinnedMesh
 from render.framebuffer import Color
@@ -246,8 +252,9 @@ def dress_pieces(
         places.append(shell^)
         var hide = mine.copy()
         # A band is drawn over the garments under it, so it hides none of
-        # them: they show round it whole.
-        if garment.form == BANDED:
+        # them: they show round it whole. A hat stands off the head, so it
+        # hides none of the face under it.
+        if garment.form == BANDED or garment.form == HATTED:
             hide = List[Float32](length=count, fill=0)
         if garment.form == SKIRTED:
             for v in range(count):
@@ -303,6 +310,13 @@ def dress_pieces(
                 person.rig,
                 Float32(fabric(garment.fabric).thickness.value),
             )
+        if garment.form == HATTED:
+            whole = hat_mesh(
+                whole,
+                person.rig,
+                garment.headwear,
+                Float32(fabric(garment.fabric).thickness.value),
+            )
         var head = List[FootLast]()
         if garment.form == COWLED:
             head = head_cowl(whole, person.rig)
@@ -333,8 +347,8 @@ def dress_pieces(
         for v in range(count):
             over_skin[v] = max(over_skin[v], hides[i][v])
         ref garment = outfit.garments[order[i]]
-        # A band is drawn whole, over what lies under it.
-        if garment.form == BANDED:
+        # A band and a hat are drawn whole, over what lies under them.
+        if garment.form == BANDED or garment.form == HATTED:
             pieces[order[i]] = shells[order[i]].clone()
             continue
         var piece = hang_skirt(
@@ -365,10 +379,73 @@ def _gather(mut joined: Optional[BufferGeometry], piece: BufferGeometry) raises:
         joined = piece.clone()
 
 
+def _cut_shell(
+    mut scene: Scene, mut assets: Assets, node: NodeId, band: Float32
+) raises:
+    """Cut a hair shell's mesh level at a hat's band, keeping what lies
+    under it."""
+    for mesh in scene.meshes:
+        if mesh.node != node:
+            continue
+        var shell = assets.geometries.get(mesh.geometry).clone()
+        var under = List[Float32](capacity=shell.vertex_count())
+        ref placed = shell.attribute_view(String(POSITION))
+        for v in range(placed.count()):
+            under.append(band - placed.vector3(v).y)
+        assets.geometries.replace(mesh.geometry, cut(shell, under, 0))
+
+
+def _press_under_hats(
+    mut scene: Scene,
+    mut assets: Assets,
+    mut person: GameHumanoid,
+    outfit: Outfit,
+) raises:
+    """Lay the person's strands and cards under each hat that keeps the
+    hair, and draw them where they now lie."""
+    for garment in outfit.garments:
+        if garment.form != HATTED:
+            continue
+        var skin = assets.geometries.get(
+            scene.skinned_meshes[person.skins[0]].geometry
+        ).clone()
+        var places = List[Vector3]()
+        ref placed = skin.attribute_view(String(POSITION))
+        for v in range(placed.count()):
+            places.append(placed.vector3(v))
+        var head = garment_piece(
+            skin,
+            places,
+            cover_values(skin, person.rig, garment.cover),
+            List[Float32](length=len(places), fill=0),
+        )
+        var found = head_frame(head, person.rig)
+        if not found:
+            continue
+        var frame = found.take()
+        # A hat that closes over the head hides the hair's shell over its
+        # band, which can stand out of the hat over the ears.
+        if person.hair and not garment.headwear.is_open():
+            _cut_shell(scene, assets, person.hair.value(), frame.band())
+        for k in range(len(person.strands)):
+            _ = press_hair(person.strands[k].groom, frame)
+            person.strands[k].shade(
+                assets,
+                List[HairLight](),
+                frame.center + Vector3(0, 0, 1),
+                Vector3(0.1, 0.1, 0.1),
+            )
+        for k in range(len(person.cards)):
+            _ = press_hair(person.cards[k].groom, frame)
+            assets.geometries.replace(
+                person.cards[k].geometry, person.cards[k].mesh()
+            )
+
+
 def dress(
     mut scene: Scene,
     mut assets: Assets,
-    person: GameHumanoid,
+    mut person: GameHumanoid,
     outfit: Outfit,
 ) raises -> Dressed:
     """Make an outfit for a game humanoid and add it to the scene.
@@ -380,7 +457,8 @@ def dress(
     Args:
         scene: The scene the person is in.
         assets: The store of the person's geometry and materials.
-        person: A game humanoid that has not been dressed.
+        person: A game humanoid that has not been dressed. Its strands and
+            cards are laid under a hat that keeps the hair.
         outfit: An outfit that checks.
 
     Returns:
@@ -410,11 +488,16 @@ def dress(
             _gather(wholes[g], shells[g])
         hide_under(skin, over_skin)
         assets.geometries.replace(id, skin^)
-    # A garment over the head hides the scalp's hair.
+    # A garment over the head hides the scalp's hair, but a hat that
+    # keeps the hair below its brim does not.
     var hooded = False
     for garment in outfit.garments:
-        if garment.cover.covers(HEAD):
+        if garment.cover.covers(HEAD) and not (
+            garment.form == HATTED and garment.headwear.keeps_hair()
+        ):
             hooded = True
+    if not hooded:
+        _press_under_hats(scene, assets, person, outfit)
     if hooded:
         if person.hair:
             scene.node(person.hair.value()).visible = False

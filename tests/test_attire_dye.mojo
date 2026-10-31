@@ -19,6 +19,7 @@ from extensions.attire.dye import (
     worn_color,
 )
 from extensions.attire.kinds import (
+    ACCENT_DYE,
     BLOOD,
     DIRT,
     PARTY,
@@ -32,6 +33,7 @@ from extensions.attire.kinds import (
     DyePattern,
     WearKind,
 )
+from extensions.attire.mesh_ops import ACCENT
 from extensions.attire.shell import COVER
 from extensions.humanoid.rig.joints import HIPS, RIGHT_UPPER_ARM
 from math.vector3 import Vector3
@@ -106,6 +108,23 @@ def test_a_pattern_cuts_crisp_boundaries_and_trims_hems() raises:
         assert_true(dye_pattern(_sheet(), rig, pattern).triangle_count() > 0)
     with assert_raises(contains="named pattern"):
         _ = dye_pattern(mesh, rig, DyePattern(-2))
+    # A vertex marked as an accent takes the accent dye.
+    var marked = _sheet()
+    var marks = List[Float32](length=marked.vertex_count(), fill=0)
+    marks[0] = 1
+    marks[1] = 1
+    marked.set_attribute(String(ACCENT), BufferAttribute(marks^, 1))
+    var accented = dye_pattern(marked, rig, SOLID)
+    ref accent_weights = accented.attribute_view(String(DYE))
+    ref accent_marks = accented.attribute_view(String(ACCENT))
+    var accents = 0
+    for v in range(accent_weights.count()):
+        if accent_marks.component(v, 0) >= 0.5:
+            assert_equal(accent_weights.component(v, ACCENT_DYE.value), 1)
+            accents += 1
+        else:
+            assert_equal(accent_weights.component(v, ACCENT_DYE.value), 0)
+    assert_true(accents >= 2)
 
 
 def test_stains_and_dirt_add_wear() raises:

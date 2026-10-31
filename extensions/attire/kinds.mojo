@@ -723,6 +723,15 @@ struct Headwear(Equatable, ImplicitlyCopyable, Writable):
         """
         return self != GREAT_HELM
 
+    def is_open(self) -> Bool:
+        """Return whether the hair shows over its top.
+
+        Returns:
+            True for a crown and a circlet, which are bands; False for
+            the rest, which close over the head.
+        """
+        return self == CROWN or self == CIRCLET
+
 
 comptime NO_HEADWEAR = Headwear(0)
 """Not a hat: the garment is shaped by its form."""

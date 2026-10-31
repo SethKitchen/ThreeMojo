@@ -38,6 +38,9 @@ from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
 
 comptime COVER = "cover"
 """The name of the attribute that carries each vertex's cover value."""
+comptime ACCENT = "accent"
+"""The name of the attribute that marks a hat's stones, horns and feather,
+which take the accent dye: one there, zero elsewhere."""
 
 
 def _bits(value: Float32) -> Int:

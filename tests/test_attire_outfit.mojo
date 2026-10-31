@@ -46,6 +46,9 @@ from extensions.humanoid.rig.joints import (
     SPINE,
 )
 from render.framebuffer import Color
+from extensions.attire.apparel import crown, straw_hat
+from extensions.attire.armory import great_helm
+from extensions.attire.mesh_ops import ACCENT
 from extensions.attire.outfit import Outfit, dress, dress_pieces
 from objects.skinned_mesh import SKIN_INDEX
 from render.texture_store import NO_TEXTURE
@@ -376,6 +379,55 @@ def test_nothing_to_wear_or_no_skin_makes_nothing() raises:
     )
     with assert_raises(contains="with a skin"):
         _ = dress(scene, assets, skinless, outfit)
+
+
+def _shell_triangles(scene: Scene, assets: Assets, node: NodeId) raises -> Int:
+    """Return how many triangles the mesh on a node draws."""
+    for mesh in scene.meshes:  # pragma: no branch
+        if mesh.node == node:
+            return assets.geometries.get(mesh.geometry).triangle_count()
+    return -1
+
+
+def test_a_hat_keeps_the_hair_and_lays_it_under_its_crown() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets, guides=6, cards=6)
+    var shell = person.hair.value()
+    var before = _shell_triangles(scene, assets, shell)
+    var cards = person.cards[0].groom.points.copy()
+    var outfit = Outfit()
+    outfit.add(straw_hat())
+    var dressed = dress(scene, assets, person, outfit)
+    # The hair shows under the hat; its shell over the band is cut away,
+    # and the cards over the band are laid under the hat.
+    assert_true(scene.node(shell).visible)
+    assert_true(scene.node(person.cards[0].node.value()).visible)
+    assert_true(_shell_triangles(scene, assets, shell) < before)
+    assert_false(person.cards[0].groom.points == cards)
+    ref hat = assets.geometries.get(
+        scene.skinned_meshes[dressed.meshes[0]].geometry
+    )
+    assert_true(hat.has_attribute(String(ACCENT)))
+    # A crown is open over the hair, so the shell stays whole.
+    var crowned = coarse_person(scene, assets)
+    var whole = crowned.hair.value()
+    var count = _shell_triangles(scene, assets, whole)
+    var regalia = Outfit()
+    regalia.add(crown())
+    _ = dress(scene, assets, crowned, regalia)
+    assert_equal(_shell_triangles(scene, assets, whole), count)
+
+
+def test_a_great_helm_hides_the_hair() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets, cards=6)
+    var outfit = Outfit()
+    outfit.add(great_helm())
+    _ = dress(scene, assets, person, outfit)
+    assert_false(scene.node(person.hair.value()).visible)
+    assert_false(scene.node(person.cards[0].node.value()).visible)
 
 
 def main() raises:

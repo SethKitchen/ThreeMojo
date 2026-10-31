@@ -6,6 +6,7 @@
 """Tests for the named kinds of `extensions.attire`."""
 
 from extensions.attire.kinds import (
+    CROWN,
     CIRCLET,
     GREAT_HELM,
     HALF_HELM,
@@ -204,6 +205,10 @@ def test_headwear_is_named() raises:
     assert_false(GREAT_HELM.keeps_hair())
     assert_true(HALF_HELM.keeps_hair())
     assert_true(CIRCLET.keeps_hair())
+    # A crown and a circlet are open over the hair; a hat is not.
+    assert_true(CIRCLET.is_open())
+    assert_true(CROWN.is_open())
+    assert_false(HALF_HELM.is_open())
     require_headwear(NO_HEADWEAR)
     with assert_raises(contains="named one"):
         require_headwear(Headwear(40))

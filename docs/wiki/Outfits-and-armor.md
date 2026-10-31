@@ -24,7 +24,7 @@ This is not a three.js port. The code is in `extensions/attire/`. See [Garments]
 2. It drops the skin triangles the outfit hides fully.
 3. It binds each garment to its bones, cuts it along its dye pattern and paints it. It gives the garment texture coordinates in meters.
 4. It adds each garment as a skinned mesh on the person's skeleton, with its fabric's look and bump map.
-5. It hides the scalp's hair under a garment that covers the head.
+5. It hides the scalp's hair under a garment that covers the head. A hat other than a great helm keeps the hair, and lays its strands and cards under its crown. See [Hats and helmets](Garments#hats-and-helmets).
 
 It returns a `Dressed` record: the skinned mesh of each garment, or -1, and each garment's whole shell. `dress` changes the person's skin, so dress a person once.
 
@@ -46,7 +46,11 @@ from extensions.attire.mix import mixed_outfit
 var dressed = dress(scene, assets, person, mixed_outfit(person_index))
 ```
 
-`mixed_calling(seed)` picks a `Calling`. Of each twenty seeds, about five are peasants, four goodwives, three archers, two monks, two merchants, one a noblewoman, two men-at-arms and one a knight. `calling_outfit(calling, seed)` dresses that calling. The same seed gives the same outfit on every machine.
+`mixed_calling(seed)` picks a `Calling`. Of each forty seeds, about eight are peasants, six goodwives, six farmers, three archers, three merchants, three men-at-arms, two monks and two rangers. One in forty is each of a noblewoman, a knight, a barbarian, a royal, a wizard, a warlock and a warrior. `mixed_sex(seed)` gives the person's sex.
+
+`calling_outfit(calling, seed)` dresses that calling. `dressed_as(calling, sex, seed)` dresses a person of either sex. The same seed gives the same outfit on every machine.
+
+The first eight callings dress as their own sex: a goodwife and a noblewoman as women, the rest as men. The last seven have clothes for each sex, and about two in five of them are women.
 
 | Calling | Garments |
 |---|---|
@@ -58,8 +62,21 @@ var dressed = dress(scene, assets, person, mixed_outfit(person_index))
 | `NOBLEWOMAN` | shirt, gown, belt and boots |
 | `MAN_AT_ARMS` | the man-at-arms's outfit and a belt; a surcoat by chance |
 | `KNIGHT` | the knight's outfit and a belt |
+| `FARMER` | shirt; a smock or a tunic over trousers, or a gown and by chance a bodice; a straw hat and a belt by chance; boots |
+| `BARBARIAN` | fur kilt, fur boots, bracers and belt, bare-chested; a woman wears a jerkin; a fur mantle, and a horned or half helm of iron or bronze, by chance |
+| `ROYAL` | a velvet robe or gown in a rich dye, edged in white fur, a royal mantle and a sash; a crown of gold or silver, or for some queens a circlet; boots |
+| `WIZARD` | a wizard's robe, sash and hat in an arcane dye, trimmed in gold or silver; some women wear a silver circlet; boots |
+| `WARLOCK` | a black cassock trimmed in red and a sash; a hood, or for some women a blackened circlet; a dark mantle by chance; tall boots |
+| `RANGER` | hose, a tunic in forest green, bracers and a belt; a jerkin by chance; a feathered cap with a red or white feather, or a hood; tall boots |
+| `WARRIOR` | a gambeson under a platebody, plate legs, arm harness, pauldrons or great pauldrons, a plate skirt or a fauld, gauntlets and sabatons, all of one metal; a great helm or a half helm, which some women leave off; a surcoat by chance |
 
 The poor wear the dyes of `plain_dye`: madder, woad, weld, walnut, nettle, gray and cream wool, russet and lichen purple. The rich wear the dyes of `rich_dye`: kermes crimson, deep woad, verdigris, saffron, black and murex violet. A merchant's trim is rich. A knight's surcoat takes two rich dyes per pale. Three plates in ten are blackened against rust.
+
+The new callings take palettes of their own. `fur_dye` gives wolf gray, bear brown, fox red, snow white, black and tawny pelts. `forest_dye` gives the greens and browns of a ranger. `arcane_dye` gives the deep blues, violets and crimsons of a wizard. `shadow_dye` gives the blacks and dark reds of a warlock.
+
+`warrior_metal(seed)` forges a warrior's harness. Of each twenty seeds, about six are steel, three iron and three blackened. Two are blued, two bronze, and one each copper, brass, silver and gold. A quarter of the harnesses are gilt at their edges, and a quarter of the rest brassed.
+
+Each calling of the seven has about a dozen choices of cut, dye, metal and headwear for each sex. With the genome, the stature, the hair and the beard of each person, a crowd of thousands has few twins.
 
 Some garments are parti-colored: four merchants' tunics in ten and three women's gowns in ten take a second dye on the left side. Three men-at-arms' surcoats in ten are quartered.
 
@@ -119,4 +136,4 @@ A player saves a look and puts it on again, on the same body or another. `outfit
 
 ## Tests
 
-`tests/test_attire_outfit.mojo`, `test_attire_preset.mojo`, `test_attire_mix.mojo` and `test_attire_sockets.mojo` cover this page.
+`tests/test_attire_outfit.mojo`, `test_attire_preset.mojo`, `test_attire_mix.mojo`, `test_attire_armory.mojo`, `test_attire_headwear.mojo` and `test_attire_sockets.mojo` cover this page.

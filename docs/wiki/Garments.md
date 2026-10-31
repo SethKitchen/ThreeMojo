@@ -78,6 +78,7 @@ A shell made from the skin follows each thigh and each toe. A skirt and a boot d
 | `SHOD` | closes each foot in a smooth last | boots, sabatons |
 | `COWLED` | closes the head in a loose cowl, open at the face | a hood |
 | `BANDED` | is drawn as a taut band round the body, level at its top and its bottom | a belt |
+| `HATTED` | is drawn as the hat or the helmet its headwear names, round the head | a great helm, a crown, a wizard's hat |
 
 ### Bands
 
@@ -138,6 +139,29 @@ Each vertex of a last takes the weights of the nearest vertex of the shell. So t
 4. The cowl is cut open along the face's oval and level at its bottom. A lining one fabric thickness inside it shows where the opening looks into the hood.
 
 `face_oval` gives the oval's distance without the clamp of `face_opening`. So the cut runs smoothly through triangles larger than the opening's ramp.
+
+### Hats and helmets
+
+A garment made from the skin follows the face and the ears. A hat stands on the head, over the hair. `extensions/attire/headwear.mojo` draws a `HATTED` garment as the hat or the helmet its `headwear` names.
+
+1. The shell's vertices above the base of the neck are closed in their convex hull, as a cowl's are.
+2. `HeadFrame` reads the hull: its middle, its top, and its width at each height and each way round. A hat's band lies 10 cm below the top of the head, just over the brows. It stands 1.2 cm out of the hull, so it sits over the hair.
+3. The hat is built round the band, scaled to the stature.
+
+| Headwear | Shape |
+|---|---|
+| `GREAT_HELM` | the hull, cast out of its middle 1.6 cm off it, down to the base of the neck; a flat top, a ridge down the front, and an eye slit on each side of it |
+| `HALF_HELM` | the same cast, 1.2 cm off the hull, cut level just over the brows, with a nasal and a ridge over the crown |
+| `HORNED_HELM` | a half helm with a horn on each side that curves out, up and forward |
+| `WIZARD_HAT` | a brim 8.5 cm wide that droops at its edge, and a cone 30 cm tall whose tip bends back and down |
+| `STRAW_HAT` | a brim 9.5 cm wide that turns up at its edge, and a round crown 2.5 cm over the head |
+| `FEATHERED_CAP` | a crown that rises 4 cm over the head to a point over the brow, a brim that turns up behind, and a feather |
+| `CROWN` | a band 4 cm deep that flares a little, with eight points, a stone at the foot of each and a larger one in front |
+| `CIRCLET` | a band 1.2 cm deep that dips to a point over the brow, with a stone there |
+
+Each hat has an inner face a fabric's thickness in, so it shows from below. A crown of a hat stands clear of the head under it at every height. Its band, rims and ridges take the trim dye. Its stones, horns and feather take the accent dye: their `accent` attribute is one. A hat rides the head, and hides none of the face under it.
+
+A great helm hides the hair. Every other hat keeps it: `press_hair` draws each point of the strands and cards over the band in under the hat. A hat that closes over the head cuts the hair's shell away over its band. The shell can stand out of the hat over the ears. A crown and a circlet are open over the hair, so they keep the shell whole.
 
 ## Fabrics
 
@@ -215,7 +239,7 @@ A garment has four dye channels: primary, secondary, trim and accent. A pattern 
 | `STRIPES` | even bands round the body | odd bands |
 | `QUARTERLY` | upper right and lower left | upper left and lower right |
 
-Every pattern puts the trim dye along each hem. `dye_pattern` cuts the garment along each boundary, so a boundary is a crisp line. Each vertex keeps its channel weights in a `dye` attribute.
+Every pattern puts the trim dye along each hem. `dye_pattern` cuts the garment along each boundary, so a boundary is a crisp line. A vertex whose `accent` attribute is one half or more takes the accent dye: a hat's stones, horns and feather. Each vertex keeps its channel weights in a `dye` attribute.
 
 Wear is four more channels in a `wear` attribute: dirt, blood, wet and damage. `soil` lays dirt from the lowest point up. `stain` lays any channel round a point. `paint` mixes the dyes, then the wear, into the `color` attribute.
 
@@ -256,6 +280,47 @@ paint(piece, garment.dyes)
 | `gauntlets` | hands | armor | plate, rigid on each hand | fitted |
 | `sabatons` | feet | armor | plate, rigid on each foot and its toes | shod |
 
+### The armory
+
+`armory()` in `extensions/attire/armory.mojo` gives more armor and three helmets. Each piece of plate replaces the wardrobe's piece in its slot and layer. Plate legs replace greaves, a platebody a cuirass, and a plate skirt a fauld.
+
+| Garment | Slot | Layer | Fabric | Articulation | Form |
+|---|---|---|---|---|---|
+| `platebody` | torso | armor | plate | five lames from the chest | fitted |
+| `plate_legs` | legs | armor | plate | rigid on each thigh and shin | fitted |
+| `plate_skirt` | waist | armor | plate | six lames from the hips | skirted, flare 0.18 |
+| `arm_harness` | arms | armor | plate | rigid on each upper arm and forearm | fitted |
+| `great_pauldrons` | shoulders | armor | plate | four lames from the chest, 2.5 cm loose | fitted |
+| `chain_shirt` | torso | outer | mail, short sleeves | flexible | skirted, flare 0.1 |
+| `mail_chausses` | legs | outer | mail | flexible | fitted |
+| `bracers` | arms | outer | leather | flexible | fitted |
+| `great_helm` | head | armor | plate, brass trim | rigid on the head | hatted |
+| `half_helm` | head | armor | plate | rigid on the head | hatted |
+| `horned_helm` | head | armor | plate, ivory horns | rigid on the head | hatted |
+
+### The apparel
+
+`apparel()` in `extensions/attire/apparel.mojo` gives work clothes, furs, robes, boots and five hats.
+
+| Garment | Slot | Layer | Fabric | Form |
+|---|---|---|---|---|
+| `smock` | torso | mid | linen, cut loose, to mid-thigh | skirted, flare 0.3 |
+| `bodice` | torso | outer | velvet, over a gown | fitted |
+| `trousers` | legs | mid | wool, cut loose, to the ankle | fitted |
+| `fur_kilt` | waist | outer | fur, to above the knee | skirted, flare 0.25 |
+| `fur_mantle` | shoulders | over | fur | fitted |
+| `royal_mantle` | shoulders | over | velvet, edged in white fur | fitted |
+| `wizard_robe` | torso | mid | wool, cut loose, to the floor | skirted, flare 0.35 |
+| `cassock` | torso | mid | wool, a high collar, to the ankles | skirted, flare 0.2 |
+| `tall_boots` | feet | outer | leather, to the knee | shod |
+| `fur_boots` | feet | outer | fur, to mid-shin | shod |
+| `sash` | waist | over | silk | banded |
+| `wizard_hat` | head | over | felt | hatted |
+| `straw_hat` | head | over | straw | hatted |
+| `feathered_cap` | head | over | felt, a red feather | hatted |
+| `crown` | head | over | gold plate, rubies | hatted |
+| `circlet` | head | over | silver plate, a sapphire | hatted |
+
 ## Garments made elsewhere
 
 An artist can model a garment on one body and export it to glTF. `bind_garment` reads where each vertex lies against that body's skin. It stores the joint that weighs most there and where the skin point stands from that joint, in statures. It also stores how far the vertex stands off the skin.
@@ -276,4 +341,4 @@ Roblox's cages and MakeHuman's `mhclo` files bind a garment to a body mesh from 
 
 ## Tests
 
-`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_skirt.mojo`, `test_attire_last.mojo`, `test_attire_cowl.mojo`, `test_attire_surface.mojo`, `test_attire_dye.mojo`, `test_attire_garment.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.
+`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_metal.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_skirt.mojo`, `test_attire_last.mojo`, `test_attire_cowl.mojo`, `test_attire_headwear.mojo`, `test_attire_surface.mojo`, `test_attire_dye.mojo`, `test_attire_garment.mojo`, `test_attire_armory.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.

@@ -9,8 +9,9 @@ A crowd in one outfit looks like a uniform. `mixed_outfit` gives each
 seed an outfit of its own, in three choices:
 
 1. A calling, which says what a person wears: a peasant, a goodwife, an
-   archer, a monk, a merchant, a noblewoman, a man-at-arms or a knight.
-   Common callings come up more often than rare ones.
+   archer, a monk, a merchant, a noblewoman, a man-at-arms, a knight, a
+   farmer, a barbarian, a royal, a wizard, a warlock, a ranger or a
+   warrior in plate. Common callings come up more often than rare ones.
 2. The dyes of each garment, from the calling's palette. The poor wear
    undyed wool and the dyes of common plants. The rich wear kermes
    crimson, deep woad and saffron. Armor is bright steel or blackened.
@@ -18,7 +19,9 @@ seed an outfit of its own, in three choices:
    parti-colored or quartered: a merchant's tunic, a woman's gown, a
    company's surcoat.
 
-`calling_outfit` gives the outfit of one calling for a seed. The same
+`calling_outfit` gives the outfit of one calling for a seed, and
+`dressed_as` for a person of either sex. The first eight callings dress
+as their calling's sex; the last seven have clothes for each. The same
 seed gives the same outfit, on every machine.
 
 | Calling | Garments |
@@ -31,6 +34,13 @@ seed gives the same outfit, on every machine.
 | `NOBLEWOMAN` | shirt, gown, belt, boots |
 | `MAN_AT_ARMS` | `outfit_named("man-at-arms")`, a belt, and a surcoat by chance |
 | `KNIGHT` | `outfit_named("knight")` and a belt, its surcoat in two rich dyes |
+| `FARMER` | a shirt; a smock or a tunic over trousers, or a gown and a bodice; a straw hat by chance; boots |
+| `BARBARIAN` | a fur kilt, fur boots, bracers and a belt; a fur mantle, a horned or half helm by chance; a woman wears a jerkin |
+| `ROYAL` | a velvet robe or gown in a rich dye, a royal mantle edged in white fur, a sash, boots; a crown, or a circlet for some queens |
+| `WIZARD` | a wizard's robe and hat in an arcane dye, trimmed in gold or silver, a sash, boots |
+| `WARLOCK` | a black cassock trimmed in red; a hood or a dark mantle by chance; tall boots |
+| `RANGER` | hose, a tunic in forest green, a jerkin by chance, bracers, tall boots, a belt, and a hood or a feathered cap |
+| `WARRIOR` | a full harness of plate forged of one metal, gilt or brassed by chance: a platebody, plate legs, arm harness, pauldrons, gauntlets, sabatons, a plate skirt or a fauld, and a helm |
 
 This is not a three.js port. See Extensions.
 
@@ -39,8 +49,42 @@ This is not a three.js port. See Extensions.
 """
 
 from core.ordinal import ordinal_label, ordinal_valid, require_valid
+from extensions.attire.apparel import (
+    bodice,
+    cassock,
+    circlet,
+    crown,
+    feathered_cap,
+    fur_boots,
+    fur_kilt,
+    fur_mantle,
+    royal_mantle,
+    sash,
+    smock,
+    straw_hat,
+    tall_boots,
+    trousers,
+    wizard_hat,
+    wizard_robe,
+)
+from extensions.attire.armory import (
+    arm_harness,
+    bracers,
+    great_helm,
+    great_pauldrons,
+    half_helm,
+    horned_helm,
+    plate_legs,
+    plate_skirt,
+    platebody,
+)
 from extensions.attire.garment import (
     Garment,
+    fauld,
+    forged,
+    gauntlets,
+    pauldrons,
+    sabatons,
     belt,
     boots,
     breeches,
@@ -55,21 +99,44 @@ from extensions.attire.garment import (
     tunic,
 )
 from extensions.attire.kinds import (
+    ACCENT_DYE,
     PARTY,
     PLATE,
     PRIMARY_DYE,
     QUARTERLY,
     SECONDARY_DYE,
     TRIM_DYE,
+    VELVET,
+)
+from extensions.attire.metal import (
+    BLACKENED,
+    BLUED,
+    BRASS,
+    BRONZE,
+    COPPER,
+    GOLD,
+    IRON,
+    SILVER,
+    STEEL,
+    Metal,
 )
 from extensions.attire.outfit import Outfit
 from extensions.attire.preset import outfit_named
+from extensions.humanoid.sex import FEMALE, MALE, Sex
 from render.framebuffer import Color
 
 comptime PLAIN_DYES = 9
 """How many dyes `plain_dye` gives."""
 comptime RICH_DYES = 6
 """How many dyes `rich_dye` gives."""
+comptime FUR_DYES = 6
+"""How many furs `fur_dye` gives."""
+comptime FOREST_DYES = 5
+"""How many dyes `forest_dye` gives."""
+comptime ARCANE_DYES = 6
+"""How many dyes `arcane_dye` gives."""
+comptime SHADOW_DYES = 5
+"""How many dyes `shadow_dye` gives."""
 
 
 @fieldwise_init
@@ -83,7 +150,7 @@ struct Calling(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is a named calling.
 
         Returns:
-            True for `PEASANT` through `KNIGHT`.
+            True for `PEASANT` through `WARRIOR`.
         """
         return ordinal_valid(self.value, CALLING_COUNT - 1)
 
@@ -104,7 +171,21 @@ comptime MAN_AT_ARMS = Calling(6)
 """A soldier in mail."""
 comptime KNIGHT = Calling(7)
 """A knight in a full harness of plate."""
-comptime CALLING_COUNT = 8
+comptime FARMER = Calling(8)
+"""A man or a woman who farms, in work clothes and a straw hat."""
+comptime BARBARIAN = Calling(9)
+"""A warrior of the north, in furs."""
+comptime ROYAL = Calling(10)
+"""A king or a queen, in velvet and ermine, crowned."""
+comptime WIZARD = Calling(11)
+"""A wizard in a long robe and a pointed hat."""
+comptime WARLOCK = Calling(12)
+"""A warlock in black, hooded or mantled."""
+comptime RANGER = Calling(13)
+"""An outlaw of the forest, in green, with a feathered cap or a hood."""
+comptime WARRIOR = Calling(14)
+"""A warrior in a full harness of plate of any metal."""
+comptime CALLING_COUNT = 15
 """How many callings there are."""
 
 
@@ -119,6 +200,13 @@ def _calling_names() -> List[String]:
         "noblewoman",
         "man-at-arms",
         "knight",
+        "farmer",
+        "barbarian",
+        "royal",
+        "wizard",
+        "warlock",
+        "ranger",
+        "warrior",
     ]
 
 
@@ -212,6 +300,133 @@ def rich_dye(index: Int) -> Color:
     return colors[index % RICH_DYES]
 
 
+def fur_dye(index: Int) -> Color:
+    """Return the color of one pelt.
+
+    Args:
+        index: Which pelt. Any integer: it is taken modulo `FUR_DYES`.
+
+    Returns:
+        Wolf gray, bear brown, fox red, snow white, black or tawny.
+    """
+    var colors: List[Color] = [
+        Color(124, 120, 112),
+        Color(80, 58, 42),
+        Color(150, 84, 42),
+        Color(226, 222, 212),
+        Color(36, 34, 32),
+        Color(168, 128, 82),
+    ]
+    return colors[index % FUR_DYES]
+
+
+def forest_dye(index: Int) -> Color:
+    """Return one of the greens and browns of the forest.
+
+    Args:
+        index: Which dye. Any integer: it is taken modulo `FOREST_DYES`.
+
+    Returns:
+        Lincoln green, dark forest green, olive, moss or russet brown.
+    """
+    var colors: List[Color] = [
+        Color(46, 86, 40),
+        Color(30, 58, 32),
+        Color(90, 96, 48),
+        Color(70, 94, 56),
+        Color(112, 70, 40),
+    ]
+    return colors[index % FOREST_DYES]
+
+
+def arcane_dye(index: Int) -> Color:
+    """Return one of the dyes a wizard wears.
+
+    Args:
+        index: Which dye. Any integer: it is taken modulo `ARCANE_DYES`.
+
+    Returns:
+        Deep blue, violet, midnight, crimson, ash gray or teal.
+    """
+    var colors: List[Color] = [
+        Color(32, 46, 122),
+        Color(78, 40, 122),
+        Color(26, 28, 60),
+        Color(132, 22, 38),
+        Color(102, 102, 110),
+        Color(24, 92, 98),
+    ]
+    return colors[index % ARCANE_DYES]
+
+
+def shadow_dye(index: Int) -> Color:
+    """Return one of the dark dyes a warlock wears.
+
+    Args:
+        index: Which dye. Any integer: it is taken modulo `SHADOW_DYES`.
+
+    Returns:
+        Black, dark purple, blood red, deep green or charcoal.
+    """
+    var colors: List[Color] = [
+        Color(26, 24, 28),
+        Color(50, 22, 62),
+        Color(92, 14, 24),
+        Color(20, 42, 30),
+        Color(52, 52, 58),
+    ]
+    return colors[index % SHADOW_DYES]
+
+
+def warrior_metal(seed: Int) -> Metal:
+    """Return the metal a warrior's harness is forged of.
+
+    Of each twenty seeds, about six are steel, three iron, three
+    blackened, two blued, two bronze, one copper, one brass, one silver
+    and one gold.
+
+    Args:
+        seed: Any integer.
+
+    Returns:
+        A named metal.
+    """
+    var roll = _mixed(seed, 11) % 20
+    var metals: List[Metal] = [
+        STEEL,
+        IRON,
+        BLACKENED,
+        BLUED,
+        BRONZE,
+        COPPER,
+        BRASS,
+        SILVER,
+        GOLD,
+    ]
+    var shares: List[Int] = [6, 3, 3, 2, 2, 1, 1, 1, 1]
+    var pick = 0
+    for k in range(len(shares)):  # pragma: no branch
+        if roll < shares[k]:
+            pick = k
+            break
+        roll -= shares[k]
+    return metals[pick]
+
+
+def calling_sex(calling: Calling) -> Sex:
+    """Return the sex a calling dresses as when none is asked for.
+
+    Args:
+        calling: A calling.
+
+    Returns:
+        `FEMALE` for a goodwife and a noblewoman; `MALE` for the rest.
+    """
+    if calling == GOODWIFE or calling == NOBLEWOMAN:
+        return FEMALE
+    return MALE
+
+
 def _mixed(seed: Int, salt: Int) -> Int:
     """Return a well-mixed non-negative integer from a seed and a salt.
 
@@ -242,6 +457,8 @@ def _dyed(var garment: Garment, primary: Color, trim: Color) -> Garment:
 def calling_outfit(calling: Calling, seed: Int) raises -> Outfit:
     """Return the outfit of a calling, dyed and chosen by a seed.
 
+    The person dresses as `calling_sex` says.
+
     Args:
         calling: A named calling.
         seed: Which dyes and which small choices. Any integer.
@@ -252,7 +469,31 @@ def calling_outfit(calling: Calling, seed: Int) raises -> Outfit:
     Raises:
         Error: If the calling is not named.
     """
+    return dressed_as(calling, calling_sex(calling), seed)
+
+
+def dressed_as(calling: Calling, sex: Sex, seed: Int) raises -> Outfit:
+    """Return the outfit of a calling for a person of a sex, by a seed.
+
+    The first eight callings dress as their own: a goodwife and a
+    noblewoman as women, the rest as men. Farmers, barbarians, royals,
+    wizards, warlocks, rangers and warriors have clothes for each sex.
+
+    Args:
+        calling: A named calling.
+        sex: `MALE` or `FEMALE`.
+        seed: Which dyes and which small choices. Any integer.
+
+    Returns:
+        The outfit.
+
+    Raises:
+        Error: If the calling or the sex is not named.
+    """
     require_calling(calling)
+    require_valid(sex.is_valid(), "A sex must be MALE or FEMALE")
+    if calling.value >= FARMER.value:
+        return _archetype(calling, sex == FEMALE, seed)
     var plain = _mixed(seed, 1)
     var rich = _mixed(seed, 2)
     var outfit = Outfit()
@@ -335,12 +576,211 @@ def calling_outfit(calling: Calling, seed: Int) raises -> Outfit:
     return outfit^
 
 
+def _farmer(woman: Bool, seed: Int) raises -> Outfit:
+    """Return a farmer's work clothes."""
+    var plain = _mixed(seed, 1)
+    var outfit = Outfit()
+    outfit.add(_dyed(shirt(), plain_dye(6), plain_dye(6)))
+    if woman:
+        outfit.add(_dyed(gown(), plain_dye(plain), plain_dye(plain + 6)))
+        if _chance(seed, 12, 50):
+            outfit.add(_dyed(bodice(), plain_dye(3), plain_dye(3)))
+    else:
+        outfit.add(_dyed(trousers(), plain_dye(plain + 3), plain_dye(3)))
+        if _chance(seed, 12, 50):
+            outfit.add(_dyed(smock(), plain_dye(6), plain_dye(plain)))
+        else:
+            outfit.add(_dyed(tunic(), plain_dye(plain), plain_dye(plain + 1)))
+    if _chance(seed, 13, 70):
+        outfit.add(straw_hat())
+    if _chance(seed, 14, 50):
+        outfit.add(belt())
+    outfit.add(boots())
+    return outfit^
+
+
+def _barbarian(woman: Bool, seed: Int) raises -> Outfit:
+    """Return a barbarian's furs, bare-chested for a man."""
+    var pelt = _mixed(seed, 1)
+    var outfit = Outfit()
+    if woman:
+        outfit.add(_dyed(jerkin(), plain_dye(3), plain_dye(3)))
+    outfit.add(_dyed(fur_kilt(), fur_dye(pelt), fur_dye(pelt + 1)))
+    outfit.add(_dyed(fur_boots(), fur_dye(pelt), fur_dye(pelt)))
+    outfit.add(bracers())
+    outfit.add(belt())
+    if _chance(seed, 15, 60):
+        outfit.add(_dyed(fur_mantle(), fur_dye(pelt + 3), fur_dye(pelt + 3)))
+    var metal = IRON if _chance(seed, 16, 50) else BRONZE
+    if _chance(seed, 17, 50):
+        outfit.add(forged(horned_helm(), metal))
+    elif _chance(seed, 18, 40):
+        outfit.add(forged(half_helm(), metal))
+    return outfit^
+
+
+def _royal(woman: Bool, seed: Int) raises -> Outfit:
+    """Return a king's or a queen's robes, mantle and crown."""
+    var rich = _mixed(seed, 2)
+    var outfit = Outfit()
+    outfit.add(shirt())
+    var robe = _dyed(
+        wizard_robe() if not woman else gown(),
+        rich_dye(rich),
+        Color(236, 232, 222),
+    )
+    robe.name = "royal robe" if not woman else "royal gown"
+    robe.fabric = VELVET
+    outfit.add(robe^)
+    if not woman:
+        outfit.add(_dyed(hose(), rich_dye(rich + 3), rich_dye(rich + 3)))
+    var mantle = royal_mantle()
+    mantle.dyes[PRIMARY_DYE.value] = rich_dye(rich + 2)
+    mantle.dyes[SECONDARY_DYE.value] = rich_dye(rich + 2)
+    outfit.add(mantle^)
+    outfit.add(_dyed(sash(), rich_dye(rich + 3), rich_dye(rich + 3)))
+    var gold = SILVER if _chance(seed, 19, 25) else GOLD
+    if woman and _chance(seed, 20, 40):
+        var band = forged(circlet(), gold)
+        band.dyes[ACCENT_DYE.value] = rich_dye(rich + 1)
+        outfit.add(band^)
+    else:
+        var made = forged(crown(), gold)
+        made.dyes[ACCENT_DYE.value] = rich_dye(rich + 1)
+        outfit.add(made^)
+    outfit.add(boots())
+    return outfit^
+
+
+def _wizard(woman: Bool, seed: Int) raises -> Outfit:
+    """Return a wizard's robe and pointed hat, in an arcane dye."""
+    var dye = arcane_dye(_mixed(seed, 3))
+    var trim = Color(214, 170, 64) if _chance(seed, 21, 60) else Color(
+        200, 204, 214
+    )
+    var outfit = Outfit()
+    outfit.add(shirt())
+    outfit.add(_dyed(wizard_robe(), dye, trim))
+    outfit.add(_dyed(sash(), trim, trim))
+    if woman and _chance(seed, 22, 25):
+        outfit.add(forged(circlet(), SILVER))
+    else:
+        outfit.add(_dyed(wizard_hat(), dye, trim))
+    outfit.add(boots())
+    return outfit^
+
+
+def _warlock(woman: Bool, seed: Int) raises -> Outfit:
+    """Return a warlock's black cassock, and a hood or a mantle."""
+    var dark = _mixed(seed, 4)
+    var outfit = Outfit()
+    outfit.add(_dyed(shirt(), shadow_dye(0), shadow_dye(0)))
+    outfit.add(_dyed(cassock(), shadow_dye(dark), shadow_dye(dark + 2)))
+    outfit.add(_dyed(sash(), shadow_dye(dark + 2), shadow_dye(dark + 2)))
+    if _chance(seed, 23, 60):
+        outfit.add(_dyed(hood(), shadow_dye(dark), shadow_dye(dark + 2)))
+    elif woman and _chance(seed, 24, 50):
+        outfit.add(forged(circlet(), BLACKENED))
+    if _chance(seed, 25, 50):
+        var mantle = royal_mantle()
+        mantle.name = "dark mantle"
+        outfit.add(_dyed(mantle^, shadow_dye(dark + 1), shadow_dye(dark + 2)))
+    outfit.add(_dyed(tall_boots(), shadow_dye(0), shadow_dye(0)))
+    return outfit^
+
+
+def _ranger(woman: Bool, seed: Int) raises -> Outfit:
+    """Return a ranger's greens of the forest."""
+    var green = _mixed(seed, 5)
+    var outfit = Outfit()
+    outfit.add(shirt())
+    outfit.add(_dyed(hose(), forest_dye(green + 4), forest_dye(green + 4)))
+    var coat = _dyed(tunic(), forest_dye(green), forest_dye(green + 1))
+    if woman:
+        coat.flare = 0.32
+    outfit.add(coat^)
+    if _chance(seed, 26, 60):
+        outfit.add(_dyed(jerkin(), plain_dye(3), plain_dye(7)))
+    outfit.add(bracers())
+    outfit.add(belt())
+    if _chance(seed, 27, 50):
+        var cap = feathered_cap()
+        cap.dyes[PRIMARY_DYE.value] = forest_dye(green + 1)
+        cap.dyes[SECONDARY_DYE.value] = forest_dye(green + 1)
+        if _chance(seed, 28, 50):
+            cap.dyes[ACCENT_DYE.value] = Color(232, 228, 214)
+        outfit.add(cap^)
+    else:
+        outfit.add(_dyed(hood(), forest_dye(green + 1), forest_dye(green)))
+    outfit.add(tall_boots())
+    return outfit^
+
+
+def _warrior(woman: Bool, seed: Int) raises -> Outfit:
+    """Return a full harness of plate, forged of one metal."""
+    var metal = warrior_metal(seed)
+    var trim = Optional[Metal](None)
+    if _chance(seed, 29, 25):
+        trim = GOLD
+    elif _chance(seed, 30, 25):
+        trim = BRASS
+    var outfit = Outfit()
+    outfit.add(shirt())
+    outfit.add(_dyed(hose(), plain_dye(_mixed(seed, 1)), plain_dye(3)))
+    outfit.add(gambeson())
+    outfit.add(forged(platebody(), metal, trim))
+    outfit.add(forged(plate_legs(), metal, trim))
+    outfit.add(forged(arm_harness(), metal, trim))
+    if _chance(seed, 31, 50):
+        outfit.add(forged(great_pauldrons(), metal, trim))
+    else:
+        outfit.add(forged(pauldrons(), metal, trim))
+    if _chance(seed, 32, 50):
+        outfit.add(forged(plate_skirt(), metal, trim))
+    else:
+        outfit.add(forged(fauld(), metal, trim))
+    outfit.add(forged(gauntlets(), metal, trim))
+    outfit.add(forged(sabatons(), metal, trim))
+    var helm = _mixed(seed, 33) % 10
+    if helm < 4:
+        outfit.add(forged(great_helm(), metal, trim))
+    elif helm < 7 or not woman:
+        outfit.add(forged(half_helm(), metal, trim))
+    if _chance(seed, 34, 30):
+        var coat = surcoat()
+        var rich = _mixed(seed, 2)
+        coat.dyes[PRIMARY_DYE.value] = rich_dye(rich)
+        coat.dyes[SECONDARY_DYE.value] = rich_dye(rich + 3)
+        coat.dyes[TRIM_DYE.value] = rich_dye(rich + 3)
+        outfit.add(coat^)
+    outfit.add(belt())
+    return outfit^
+
+
+def _archetype(calling: Calling, woman: Bool, seed: Int) raises -> Outfit:
+    """Return the outfit of one of the callings from `FARMER` on."""
+    if calling == FARMER:
+        return _farmer(woman, seed)
+    if calling == BARBARIAN:
+        return _barbarian(woman, seed)
+    if calling == ROYAL:
+        return _royal(woman, seed)
+    if calling == WIZARD:
+        return _wizard(woman, seed)
+    if calling == WARLOCK:
+        return _warlock(woman, seed)
+    if calling == RANGER:
+        return _ranger(woman, seed)
+    return _warrior(woman, seed)
+
+
 def mixed_calling(seed: Int) -> Calling:
     """Return the calling a seed picks.
 
-    Of each twenty seeds, about five are peasants, four goodwives, three
-    archers, two monks, two merchants, one a noblewoman, two men-at-arms
-    and one a knight.
+    Of each forty seeds, about eight are peasants, six goodwives, six
+    farmers, three archers, three merchants, three men-at-arms, two
+    monks, two rangers, and one each a noblewoman, a knight, a barbarian,
+    a royal, a wizard, a warlock and a warrior.
 
     Args:
         seed: Any integer.
@@ -348,8 +788,8 @@ def mixed_calling(seed: Int) -> Calling:
     Returns:
         A named calling.
     """
-    var roll = _mixed(seed, 0) % 20
-    var shares: List[Int] = [5, 4, 3, 2, 2, 1, 2, 1]
+    var roll = _mixed(seed, 0) % 40
+    var shares: List[Int] = [8, 6, 3, 2, 3, 1, 3, 1, 6, 1, 1, 1, 1, 2, 1]
     var calling = 0
     for k in range(CALLING_COUNT):  # pragma: no branch
         if roll < shares[k]:
@@ -359,6 +799,25 @@ def mixed_calling(seed: Int) -> Calling:
     return Calling(calling)
 
 
+def mixed_sex(seed: Int) -> Sex:
+    """Return the sex of the person a seed picks.
+
+    The first eight callings are their own sex, as `calling_sex` says. Of
+    the farmers, barbarians, royals, wizards, warlocks, rangers and
+    warriors, about two in five are women.
+
+    Args:
+        seed: Any integer.
+
+    Returns:
+        `MALE` or `FEMALE`.
+    """
+    var calling = mixed_calling(seed)
+    if calling.value < FARMER.value:
+        return calling_sex(calling)
+    return FEMALE if _chance(seed, 35, 40) else MALE
+
+
 def mixed_outfit(seed: Int) raises -> Outfit:
     """Return an outfit for one person of a crowd.
 
@@ -366,9 +825,10 @@ def mixed_outfit(seed: Int) raises -> Outfit:
         seed: Which person. Any integer.
 
     Returns:
-        The outfit of `mixed_calling(seed)`, dyed by the seed.
+        The outfit of `mixed_calling(seed)` for `mixed_sex(seed)`, dyed by
+        the seed.
 
     Raises:
         Error: Never: every calling is named.
     """
-    return calling_outfit(mixed_calling(seed), seed)
+    return dressed_as(mixed_calling(seed), mixed_sex(seed), seed)
