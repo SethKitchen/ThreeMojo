@@ -69,6 +69,7 @@ from extensions.village.combat import (
 )
 from extensions.village.companion import ASSIST_FULL
 from extensions.village.foes import POSTED
+from extensions.village.effects_hud import draw_effects
 from extensions.village.raid_hud import draw_raid
 from extensions.village.slashes import (
     PIERCE_TRAIL,
@@ -621,6 +622,7 @@ def draw_battle(
                 var cy = y + corner[1]
                 fill_box(frame, cx - d, cy - d, cx + d, cy + d, GOLD_TEXT, 1)
     draw_raid(frame, battle, camera, look, scale)
+    draw_effects(frame, battle, camera, look)
     for popup in battle.popups:
         var at = on_screen(camera, look, popup.at, w, h)
         if not at:

@@ -556,6 +556,18 @@
       "candidate not viable: value passed to 'combine' cannot be converted from 'IntLiteral[1]' to 'Combine'"
     ]
   },
+  "tests/compile_fail/a_combo_effect_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 23,
+        "message": "invalid call to 'effect_name': value passed to 'effect' cannot be converted from 'IntLiteral[3]' to 'ComboEffect'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_combo_key_is_not_a_bare_int.mojo": {
     "errors": [
       {

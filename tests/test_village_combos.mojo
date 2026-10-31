@@ -17,6 +17,8 @@ from extensions.village.combos import (
     BASIC,
     BEAT_EARLY,
     BEAT_LATE,
+    BLEED,
+    COMBO_EFFECTS,
     COMBO_GAP,
     COMBO_KEYS,
     COMBO_TIERS,
@@ -27,16 +29,20 @@ from extensions.village.combos import (
     HEAVY_KEY,
     JUMP_KEY,
     LIGHT_KEY,
+    MARK,
     MASTER,
     MAX_RANK,
     MOST_KEYS,
+    NO_EFFECT,
     RANK_POWER,
     Combo,
     ComboBook,
+    ComboEffect,
     ComboKey,
     ComboTier,
     ComboTracker,
     default_combos,
+    effect_name,
     key_name,
     on_beat,
     rank_mastery,
@@ -99,6 +105,20 @@ def test_keys_and_tiers_know_their_values() raises:
     assert_equal(tier_name(MASTER), "MASTER")
     with assert_raises(contains="four"):
         _ = tier_name(ComboTier(4))
+    for value in [-1, COMBO_EFFECTS]:
+        assert_false(ComboEffect(value).is_valid())
+    for value in [0, COMBO_EFFECTS - 1]:
+        assert_true(ComboEffect(value).is_valid())
+    assert_equal(effect_name(NO_EFFECT), "")
+    assert_equal(effect_name(BLEED), "BLEED")
+    assert_equal(effect_name(MARK), "MARK")
+    with assert_raises(contains="eight"):
+        _ = effect_name(ComboEffect(8))
+    with assert_raises(contains="eight"):
+        _ = Combo("ODD", SWORD, "L H", HEAVY, BASIC, 1, 1, ComboEffect(9))
+    assert_true(
+        Combo("PLAIN", SWORD, "L H", HEAVY, BASIC, 1, 1).effect == NO_EFFECT
+    )
 
 
 def test_a_combo_reads_its_pattern() raises:
@@ -219,17 +239,20 @@ def test_every_style_has_its_combos() raises:
     for style in styles:
         var basic = 0
         var master = 0
+        var count = 0
         for combo in combos:
             if combo.style != style:
                 continue
+            count += 1
             if combo.tier == BASIC:
                 basic += 1
                 assert_true(combo.level <= 2)
             if combo.tier == MASTER:
                 master += 1
                 assert_equal(combo.level, 9)
-        assert_true(basic >= 2)
-        assert_equal(master, 1)
+        assert_equal(basic, 2)
+        assert_equal(master, 2)
+        assert_equal(count, 10)
 
 
 def test_a_level_teaches_its_styles_combos() raises:
@@ -239,8 +262,8 @@ def test_a_level_teaches_its_styles_combos() raises:
     assert_equal(book.combos[first[0]].name, "RISING STRIKE")
     # Again, it teaches nothing new.
     assert_equal(len(book.teach(SWORD, 1)), 0)
-    assert_equal(len(book.teach(SWORD, 10)), 7)
-    assert_equal(len(book.known(SWORD)), 8)
+    assert_equal(len(book.teach(SWORD, 10)), 9)
+    assert_equal(len(book.known(SWORD)), 10)
     assert_equal(len(book.known(AXE)), 0)
     # A master combo is only the specialty's.
     _ = book.teach(AXE, 10)
@@ -297,6 +320,53 @@ def test_an_empty_book_teaches_and_knows_nothing() raises:
     assert_equal(len(book.teach(SWORD, 99)), 0)
     assert_equal(len(book.known(SWORD)), 0)
     assert_equal(book.match(_string("L H"), SWORD), -1)
+
+
+def test_every_combo_can_be_made_from_its_keys() raises:
+    var styles: List[FightingStyle] = [
+        SWORD,
+        HAND_TO_HAND,
+        AXE,
+        MACE,
+        MAGIC,
+        ARCHERY,
+    ]
+    for style in styles:
+        # The specialty knows every combo of its style.
+        var book = ComboBook(style)
+        _ = book.teach(style, 10)
+        for index in book.known(style):
+            ref combo = book.combos[index]
+            var tracker = ComboTracker()
+            for k in range(len(combo.keys)):
+                tracker.press(combo.keys[k], combo.beats[k])
+                var found = book.match(tracker, style)
+                if k < len(combo.keys) - 1:
+                    assert_equal(found, -1)
+                else:
+                    assert_equal(found, index)
+
+
+def test_a_tie_goes_to_the_beat_and_a_longer_combo_holds_back() raises:
+    var book = ComboBook(SWORD)
+    book.combos = [
+        Combo("BEAT", SWORD, "L L* H*", HEAVY, EXPERT, 1, 1),
+        Combo("PLAIN", SWORD, "L L H", HEAVY, BASIC, 1, 1),
+        Combo("SHORT", SWORD, "L H", HEAVY, BASIC, 1, 1),
+        Combo("LONG", SWORD, "D L* L* H*", HEAVY, EXPERT, 1, 1),
+    ]
+    book.learned = [True, True, True, True]
+    book.mastery = [0, 0, 0, 0]
+    # On the beat, the combo that asks for the beat wins the tie.
+    assert_equal(book.match(_string("L L* H*"), SWORD), 0)
+    assert_equal(book.match(_string("L L H"), SWORD), 1)
+    # With the keys on their way to a longer combo, beats and all, the
+    # shorter waits; off the beat, it does not.
+    assert_equal(book.match(_string("D L* L* H*"), SWORD), 3)
+    assert_equal(book.match(_string("D L* L*"), SWORD), -1)
+    book.combos[1] = Combo("PLAIN", SWORD, "L L", HEAVY, BASIC, 1, 1)
+    assert_equal(book.match(_string("D L* L*"), SWORD), -1)
+    assert_equal(book.match(_string("D L L"), SWORD), 1)
 
 
 def test_the_book_lists_the_routes_furthest_first() raises:

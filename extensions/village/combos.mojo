@@ -20,7 +20,26 @@ keys, and the hardest ask for each key in time.
 **The finisher.** When the keys end in a combo that the player knows, its
 finisher starts in place of the key's own move, at the combo's power, and
 free of its special points: see `Fighter.request`. The longest combo that
-matches wins, so a short combo can end a long string.
+matches wins, so a short combo can end a long string. Of two as long, the
+one with more keys on the beat wins. A longer combo that the keys are on
+their way to, beats and all, holds a shorter one back: see
+`ComboBook.match`.
+
+**Effects.** Each combo's `ComboEffect` is what its finisher does beside
+its blow, as it first lands:
+
+| Effect | What it does |
+|---|---|
+| `NO_EFFECT` | Nothing more |
+| `LAUNCH` | Throws the foe up into the air |
+| `SUNDER` | Breaks the foe's guard and empties its stamina; a boss loses poise |
+| `BLEED` | A wound that bleeds more of the blow's damage over a few seconds |
+| `DRAIN` | Heals the player by a share of the blow's damage |
+| `SHOCKWAVE` | Strikes each other target near the foe |
+| `CHAIN` | Sparks leap from the foe to the targets near it |
+| `MARK` | Each blow on the foe does more damage for a few seconds |
+
+`extensions.village.battle` gives each effect.
 
 **The tiers.** A `ComboTier` says how hard a combo is. The style's skill
 level teaches each combo: a `BASIC` combo from level 1 or 2, and a `MASTER`
@@ -48,8 +67,10 @@ from extensions.village.combat import (
     MEND,
     NOVA,
     PLUNGE,
+    QUICK_SHOT,
     RISING_EDGE,
     SPELL_BLAST,
+    SPELL_BOLT,
     VOLLEY,
     WHIRLWIND,
     CombatMove,
@@ -71,6 +92,8 @@ comptime COMBO_KEYS = 5
 """How many kinds of combo key there are."""
 comptime COMBO_TIERS = 4
 """How many tiers of combo there are."""
+comptime COMBO_EFFECTS = 8
+"""How many effects a combo's finisher can have."""
 comptime MOST_KEYS = 8
 """How many keys a tracker keeps, and a combo has at most."""
 comptime COMBO_GAP = Float32(1.0)
@@ -156,6 +179,67 @@ comptime MASTER = ComboTier(3)
 teaches it."""
 
 
+@fieldwise_init
+struct ComboEffect(Equatable, ImplicitlyCopyable, Writable):
+    """What a combo's finisher does beside its blow, as a type rather than
+    a bare int."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return whether this is one of the effects.
+
+        Returns:
+            True from `NO_EFFECT` to `MARK`.
+        """
+        return ordinal_valid(self.value, COMBO_EFFECTS - 1)
+
+
+comptime NO_EFFECT = ComboEffect(0)
+"""The finisher does nothing beside its blow."""
+comptime LAUNCH = ComboEffect(1)
+"""The finisher throws the foe up into the air."""
+comptime SUNDER = ComboEffect(2)
+"""The finisher breaks the foe's guard and empties its stamina."""
+comptime BLEED = ComboEffect(3)
+"""The finisher leaves a wound that bleeds over a few seconds."""
+comptime DRAIN = ComboEffect(4)
+"""The finisher heals the player by a share of its damage."""
+comptime SHOCKWAVE = ComboEffect(5)
+"""The finisher strikes each other target near the foe."""
+comptime CHAIN = ComboEffect(6)
+"""Sparks leap from the foe to the targets near it."""
+comptime MARK = ComboEffect(7)
+"""Each blow on the foe does more damage for a few seconds."""
+
+
+def effect_name(effect: ComboEffect) raises -> String:
+    """Return an effect's name, in capitals for the display.
+
+    Args:
+        effect: The effect.
+
+    Returns:
+        "" for `NO_EFFECT`, else such as "LAUNCH" or "BLEED".
+
+    Raises:
+        Error: If the effect is not one.
+    """
+    if not effect.is_valid():
+        raise Error("A combo effect must be one of the eight")
+    var names: List[String] = [
+        "",
+        "LAUNCH",
+        "SUNDER",
+        "BLEED",
+        "DRAIN",
+        "SHOCKWAVE",
+        "CHAIN",
+        "MARK",
+    ]
+    return names[effect.value]
+
+
 def key_name(key: ComboKey) raises -> String:
     """Return a key's letter for the display.
 
@@ -206,6 +290,8 @@ struct Combo(Copyable, Movable):
     # damage the finisher does at rank 1.
     var level: Int
     var power: Float32
+    # What its finisher does beside its blow.
+    var effect: ComboEffect
 
     def __init__(
         out self,
@@ -216,6 +302,7 @@ struct Combo(Copyable, Movable):
         tier: ComboTier,
         level: Int,
         power: Float32,
+        effect: ComboEffect = NO_EFFECT,
     ) raises:
         """Hold a combo, from a pattern of letters.
 
@@ -230,9 +317,11 @@ struct Combo(Copyable, Movable):
             level: The style's skill level that teaches it, from 1 to 10.
             power: How many times its damage the finisher does at rank 1,
                 from 0.5 to 5.
+            effect: What its finisher does beside its blow.
 
         Raises:
-            Error: If the style or the tier is not one; the pattern has a
+            Error: If the style, the tier or the effect is not one; the
+                pattern has a
                 letter that is not a key, fewer than two keys, more than
                 `MOST_KEYS`, or a first key on the beat; the finisher is
                 not an attack; the level is not from 1 to 10; or the power
@@ -242,6 +331,8 @@ struct Combo(Copyable, Movable):
             raise Error("A combo's style must be one of the six")
         if not tier.is_valid():
             raise Error("A combo's tier must be one of the four")
+        if not effect.is_valid():
+            raise Error("A combo's effect must be one of the eight")
         if not is_attack(finisher):
             raise Error("A combo's finisher must be an attack")
         if not (level >= 1 and level <= 10):
@@ -256,6 +347,7 @@ struct Combo(Copyable, Movable):
         self.tier = tier
         self.level = level
         self.power = power
+        self.effect = effect
         var letters: List[String] = ["L", "H", "D", "J", "G"]
         for word in pattern.split(" "):  # pragma: no branch
             if word.byte_length() == 0:
@@ -451,24 +543,51 @@ def default_combos() raises -> List[Combo]:
     """Return every style's combos.
 
     Returns:
-        Six to eight combos a style, from `BASIC` to `MASTER`: see the
-        catalog of Village combos.
+        Ten combos a style: two `BASIC`, three `ADVANCED`, three `EXPERT`
+        and two `MASTER`. See the catalog of Village combos.
 
     Raises:
         Error: Never: each combo checks.
     """
     var out = List[Combo]()
-    # The sword.
-    out.append(Combo("RISING STRIKE", SWORD, "L L H", RISING_EDGE, BASIC, 1, 1))
-    out.append(Combo("CROSS CUT", SWORD, "L H", HEAVY, BASIC, 2, 1.25))
-    out.append(Combo("TEMPEST", SWORD, "L L L H", WHIRLWIND, ADVANCED, 3, 1.2))
-    out.append(Combo("DASH CUT", SWORD, "D L", LIGHT_THREE, ADVANCED, 4, 1.5))
-    out.append(Combo("RIPOSTE", SWORD, "G L", LIGHT_THREE, ADVANCED, 5, 1.8))
     out.append(
-        Combo("RIVER OF STEEL", SWORD, "L L* H*", GROUND_WAVE, EXPERT, 6, 1.6)
+        Combo("RISING STRIKE", SWORD, "L L H", RISING_EDGE, BASIC, 1, 1, LAUNCH)
+    )
+    out.append(Combo("CROSS CUT", SWORD, "L H", HEAVY, BASIC, 2, 1.25, BLEED))
+    out.append(
+        Combo(
+            "TEMPEST", SWORD, "L L L H", WHIRLWIND, ADVANCED, 3, 1.2, SHOCKWAVE
+        )
     )
     out.append(
-        Combo("SKY BREAKER", SWORD, "L L* J L H", PLUNGE, EXPERT, 7, 1.8)
+        Combo("DASH CUT", SWORD, "D L", LIGHT_THREE, ADVANCED, 4, 1.5, MARK)
+    )
+    out.append(
+        Combo("RIPOSTE", SWORD, "G L", LIGHT_THREE, ADVANCED, 5, 1.8, SUNDER)
+    )
+    out.append(
+        Combo(
+            "RIVER OF STEEL",
+            SWORD,
+            "L L* H*",
+            GROUND_WAVE,
+            EXPERT,
+            6,
+            1.6,
+            BLEED,
+        )
+    )
+    out.append(
+        Combo(
+            "SKY BREAKER",
+            SWORD,
+            "L L* J L H",
+            PLUNGE,
+            EXPERT,
+            7,
+            1.8,
+            SHOCKWAVE,
+        )
     )
     out.append(
         Combo(
@@ -479,18 +598,40 @@ def default_combos() raises -> List[Combo]:
             MASTER,
             9,
             2.6,
+            BLEED,
         )
     )
-    # Hand to hand.
     out.append(
-        Combo("UPPERCUT", HAND_TO_HAND, "L L H", RISING_EDGE, BASIC, 1, 1)
-    )
-    out.append(Combo("BODY BLOW", HAND_TO_HAND, "L H", HEAVY, BASIC, 2, 1.3))
-    out.append(
-        Combo("FLURRY", HAND_TO_HAND, "L L L L", LIGHT_THREE, ADVANCED, 3, 1.5)
+        Combo(
+            "UPPERCUT", HAND_TO_HAND, "L L H", RISING_EDGE, BASIC, 1, 1, LAUNCH
+        )
     )
     out.append(
-        Combo("SPINNING HEEL", HAND_TO_HAND, "D H", WHIRLWIND, ADVANCED, 4, 1.3)
+        Combo("BODY BLOW", HAND_TO_HAND, "L H", HEAVY, BASIC, 2, 1.3, DRAIN)
+    )
+    out.append(
+        Combo(
+            "FLURRY",
+            HAND_TO_HAND,
+            "L L L L",
+            LIGHT_THREE,
+            ADVANCED,
+            3,
+            1.5,
+            MARK,
+        )
+    )
+    out.append(
+        Combo(
+            "SPINNING HEEL",
+            HAND_TO_HAND,
+            "D H",
+            WHIRLWIND,
+            ADVANCED,
+            4,
+            1.3,
+            SHOCKWAVE,
+        )
     )
     out.append(
         Combo(
@@ -501,10 +642,20 @@ def default_combos() raises -> List[Combo]:
             EXPERT,
             6,
             1.9,
+            LAUNCH,
         )
     )
     out.append(
-        Combo("EARTHSHAKER", HAND_TO_HAND, "J L H*", PLUNGE, EXPERT, 7, 1.7)
+        Combo(
+            "EARTHSHAKER",
+            HAND_TO_HAND,
+            "J L H*",
+            PLUNGE,
+            EXPERT,
+            7,
+            1.7,
+            SHOCKWAVE,
+        )
     )
     out.append(
         Combo(
@@ -515,56 +666,288 @@ def default_combos() raises -> List[Combo]:
             MASTER,
             9,
             2.8,
+            DRAIN,
         )
     )
-    # The axe.
-    out.append(Combo("CLEAVER", AXE, "L L H", HEAVY, BASIC, 1, 1.2))
-    out.append(Combo("HEWING ARC", AXE, "L H", WHIRLWIND, BASIC, 2, 1))
-    out.append(Combo("TIMBER", AXE, "H H", HEAVY, ADVANCED, 3, 1.5))
+    out.append(Combo("CLEAVER", AXE, "L L H", HEAVY, BASIC, 1, 1.2, BLEED))
     out.append(
-        Combo("REAVER SPIN", AXE, "L L L H", WHIRLWIND, ADVANCED, 5, 1.4)
+        Combo("HEWING ARC", AXE, "L H", WHIRLWIND, BASIC, 2, 1, NO_EFFECT)
     )
-    out.append(Combo("SPLITTER", AXE, "D H*", RISING_EDGE, EXPERT, 7, 1.8))
+    out.append(Combo("TIMBER", AXE, "H H", HEAVY, ADVANCED, 3, 1.5, SUNDER))
     out.append(
-        Combo("WORLD SPLITTER", AXE, "L L* H* H*", GROUND_WAVE, MASTER, 9, 2.6)
-    )
-    # The mace.
-    out.append(Combo("BONEBREAKER", MACE, "L H", HEAVY, BASIC, 1, 1.25))
-    out.append(Combo("BELL RINGER", MACE, "L L H", RISING_EDGE, BASIC, 2, 1))
-    out.append(Combo("QUAKE", MACE, "H H", GROUND_WAVE, ADVANCED, 4, 1.4))
-    out.append(Combo("IRON TIDE", MACE, "L L L H", WHIRLWIND, ADVANCED, 5, 1.3))
-    out.append(Combo("PILEDRIVER", MACE, "J H*", PLUNGE, EXPERT, 7, 2))
-    out.append(
-        Combo("JUDGMENT", MACE, "L L* H* G H*", GROUND_WAVE, MASTER, 9, 2.8)
-    )
-    # Magic.
-    out.append(Combo("SPARK CHAIN", MAGIC, "L L L", SPELL_BLAST, BASIC, 1, 1.2))
-    out.append(Combo("ARCANE RING", MAGIC, "L H", NOVA, BASIC, 2, 1))
-    out.append(
-        Combo("BLINK BLAST", MAGIC, "D L", SPELL_BLAST, ADVANCED, 3, 1.3)
-    )
-    out.append(Combo("SANCTUARY", MAGIC, "G H", MEND, ADVANCED, 5, 1.4))
-    out.append(Combo("STARBURST", MAGIC, "L L* L* H*", NOVA, EXPERT, 7, 1.9))
-    out.append(
-        Combo("COMET", MAGIC, "L L* D L* H* H*", SPELL_BLAST, MASTER, 9, 3)
-    )
-    # Archery.
-    out.append(
-        Combo("PINNING SHOT", ARCHERY, "L L H", AIMED_SHOT, BASIC, 1, 1.2)
-    )
-    out.append(Combo("SCATTER", ARCHERY, "L H", VOLLEY, BASIC, 2, 1))
-    out.append(
-        Combo("EVASIVE SHOT", ARCHERY, "D L", LEAP_SHOT, ADVANCED, 3, 1.3)
+        Combo("REAVER SPIN", AXE, "L L L H", WHIRLWIND, ADVANCED, 5, 1.4, BLEED)
     )
     out.append(
-        Combo("PIERCING GALE", ARCHERY, "H H", AIMED_SHOT, ADVANCED, 5, 1.5)
-    )
-    out.append(
-        Combo("HAILSTORM", ARCHERY, "L L* L* H*", ARROW_RAIN, EXPERT, 7, 1.6)
+        Combo("SPLITTER", AXE, "D H*", RISING_EDGE, EXPERT, 7, 1.8, LAUNCH)
     )
     out.append(
         Combo(
-            "HUNTER'S MOON", ARCHERY, "L L* D L* H*", AIMED_SHOT, MASTER, 9, 3
+            "WORLD SPLITTER",
+            AXE,
+            "L L* H* H*",
+            GROUND_WAVE,
+            MASTER,
+            9,
+            2.6,
+            SHOCKWAVE,
+        )
+    )
+    out.append(Combo("BONEBREAKER", MACE, "L H", HEAVY, BASIC, 1, 1.25, SUNDER))
+    out.append(
+        Combo("BELL RINGER", MACE, "L L H", RISING_EDGE, BASIC, 2, 1, MARK)
+    )
+    out.append(
+        Combo("QUAKE", MACE, "H H", GROUND_WAVE, ADVANCED, 4, 1.4, SHOCKWAVE)
+    )
+    out.append(
+        Combo("IRON TIDE", MACE, "L L L H", WHIRLWIND, ADVANCED, 5, 1.3, LAUNCH)
+    )
+    out.append(
+        Combo("PILEDRIVER", MACE, "J H*", PLUNGE, EXPERT, 7, 2, SHOCKWAVE)
+    )
+    out.append(
+        Combo(
+            "JUDGMENT",
+            MACE,
+            "L L* H* G H*",
+            GROUND_WAVE,
+            MASTER,
+            9,
+            2.8,
+            SUNDER,
+        )
+    )
+    out.append(
+        Combo("SPARK CHAIN", MAGIC, "L L L", SPELL_BLAST, BASIC, 1, 1.2, CHAIN)
+    )
+    out.append(Combo("ARCANE RING", MAGIC, "L H", NOVA, BASIC, 2, 1, NO_EFFECT))
+    out.append(
+        Combo(
+            "BLINK BLAST",
+            MAGIC,
+            "D L",
+            SPELL_BLAST,
+            ADVANCED,
+            3,
+            1.3,
+            SHOCKWAVE,
+        )
+    )
+    out.append(
+        Combo("SANCTUARY", MAGIC, "G H", MEND, ADVANCED, 5, 1.4, NO_EFFECT)
+    )
+    out.append(
+        Combo("STARBURST", MAGIC, "L L* L* H*", NOVA, EXPERT, 7, 1.9, SHOCKWAVE)
+    )
+    out.append(
+        Combo(
+            "COMET",
+            MAGIC,
+            "L L* D L* H* H*",
+            SPELL_BLAST,
+            MASTER,
+            9,
+            3,
+            SHOCKWAVE,
+        )
+    )
+    out.append(
+        Combo("PINNING SHOT", ARCHERY, "L L H", AIMED_SHOT, BASIC, 1, 1.2, MARK)
+    )
+    out.append(Combo("SCATTER", ARCHERY, "L H", VOLLEY, BASIC, 2, 1, NO_EFFECT))
+    out.append(
+        Combo(
+            "EVASIVE SHOT",
+            ARCHERY,
+            "D L",
+            LEAP_SHOT,
+            ADVANCED,
+            3,
+            1.3,
+            NO_EFFECT,
+        )
+    )
+    out.append(
+        Combo(
+            "PIERCING GALE", ARCHERY, "H H", AIMED_SHOT, ADVANCED, 5, 1.5, BLEED
+        )
+    )
+    out.append(
+        Combo(
+            "HAILSTORM",
+            ARCHERY,
+            "L L* L* H*",
+            ARROW_RAIN,
+            EXPERT,
+            7,
+            1.6,
+            SHOCKWAVE,
+        )
+    )
+    out.append(
+        Combo(
+            "HUNTER'S MOON",
+            ARCHERY,
+            "L L* D L* H*",
+            AIMED_SHOT,
+            MASTER,
+            9,
+            3,
+            MARK,
+        )
+    )
+    # The combos added later come last, so the mastery that a saved
+    # progress keeps, in this order, stays each combo's.
+    out.append(
+        Combo("CRESCENT", SWORD, "D L* H*", WHIRLWIND, EXPERT, 8, 1.9, LAUNCH)
+    )
+    out.append(
+        Combo(
+            "HEAVEN'S EDGE",
+            SWORD,
+            "G L* L* J H*",
+            PLUNGE,
+            MASTER,
+            9,
+            2.8,
+            SUNDER,
+        )
+    )
+    out.append(
+        Combo(
+            "PALM STRIKE", HAND_TO_HAND, "G H", HEAVY, ADVANCED, 5, 1.5, SUNDER
+        )
+    )
+    out.append(
+        Combo(
+            "TIGER CLAW",
+            HAND_TO_HAND,
+            "D L* H*",
+            GROUND_WAVE,
+            EXPERT,
+            8,
+            1.8,
+            BLEED,
+        )
+    )
+    out.append(
+        Combo(
+            "THUNDER PALMS",
+            HAND_TO_HAND,
+            "G L* L* L* H*",
+            WHIRLWIND,
+            MASTER,
+            9,
+            2.8,
+            CHAIN,
+        )
+    )
+    out.append(Combo("HEADSMAN", AXE, "G H", HEAVY, ADVANCED, 4, 1.6, MARK))
+    out.append(
+        Combo("BLOOD ARC", AXE, "L H* L*", RISING_EDGE, EXPERT, 6, 1.7, BLEED)
+    )
+    out.append(
+        Combo("TIMBERFALL", AXE, "J H*", PLUNGE, EXPERT, 8, 1.9, SHOCKWAVE)
+    )
+    out.append(
+        Combo(
+            "BUTCHER'S WALTZ",
+            AXE,
+            "D L* L* H* H*",
+            WHIRLWIND,
+            MASTER,
+            9,
+            2.8,
+            BLEED,
+        )
+    )
+    out.append(
+        Combo("CRUSHING BLOW", MACE, "G H", HEAVY, ADVANCED, 3, 1.6, SUNDER)
+    )
+    out.append(
+        Combo(
+            "THUNDERCLAP", MACE, "D H*", GROUND_WAVE, EXPERT, 6, 1.8, SHOCKWAVE
+        )
+    )
+    out.append(
+        Combo("SKULLCRACKER", MACE, "L H* H*", HEAVY, EXPERT, 8, 1.9, MARK)
+    )
+    out.append(
+        Combo(
+            "MOUNTAIN FALL",
+            MACE,
+            "G H* J H*",
+            PLUNGE,
+            MASTER,
+            9,
+            2.8,
+            SHOCKWAVE,
+        )
+    )
+    out.append(
+        Combo(
+            "WITHERING HEX", MAGIC, "H L", SPELL_BLAST, ADVANCED, 4, 1.3, MARK
+        )
+    )
+    out.append(
+        Combo(
+            "CHAIN LIGHTNING",
+            MAGIC,
+            "L L* H*",
+            SPELL_BOLT,
+            EXPERT,
+            6,
+            1.7,
+            CHAIN,
+        )
+    )
+    out.append(
+        Combo(
+            "SOUL SIPHON", MAGIC, "G L* H*", SPELL_BLAST, EXPERT, 8, 1.8, DRAIN
+        )
+    )
+    out.append(
+        Combo("STORM CALLER", MAGIC, "D L* L* H* H*", NOVA, MASTER, 9, 3, CHAIN)
+    )
+    out.append(
+        Combo(
+            "HUNTER'S MARK", ARCHERY, "G L", QUICK_SHOT, ADVANCED, 4, 1.4, MARK
+        )
+    )
+    out.append(
+        Combo(
+            "SERPENT ARROW",
+            ARCHERY,
+            "L H* L*",
+            AIMED_SHOT,
+            EXPERT,
+            6,
+            1.7,
+            BLEED,
+        )
+    )
+    out.append(
+        Combo(
+            "BURSTING VOLLEY",
+            ARCHERY,
+            "D H*",
+            VOLLEY,
+            EXPERT,
+            8,
+            1.8,
+            SHOCKWAVE,
+        )
+    )
+    out.append(
+        Combo(
+            "RAIN OF RUIN",
+            ARCHERY,
+            "G L* L* H* H*",
+            ARROW_RAIN,
+            MASTER,
+            9,
+            3,
+            SHOCKWAVE,
         )
     )
     return out^
@@ -688,20 +1071,46 @@ struct ComboBook(Copyable, Movable):
     def match(self, tracker: ComboTracker, style: FightingStyle) -> Int:
         """Return the known combo that the tracker's string ends in.
 
+        Of the combos it ends in, the longest wins; of two as long, the
+        one with more keys on the beat. A longer known combo that the
+        string is on its way to holds it back: one whose first keys, beats
+        and all, are as many of the string's last keys as the winner has,
+        or more. So a long combo is not cut short by a short one inside
+        it.
+
         Args:
             tracker: The string.
             style: The style the player fights in.
 
         Returns:
-            The longest such combo of the style, or -1 for none.
+            The winning combo of the style, or -1 for none or while a
+            longer one holds it back.
         """
         var best = -1
         var longest = 0
-        for k in self.known(style):
+        var beats = -1
+        var known = self.known(style)
+        for k in known:
             ref combo = self.combos[k]
-            if len(combo.keys) > longest and tracker.ends_with(combo):
-                longest = len(combo.keys)
+            if not tracker.ends_with(combo):
+                continue
+            var size = len(combo.keys)
+            var marked = 0
+            for beat in combo.beats:  # pragma: no branch
+                if beat:
+                    marked += 1
+            if size > longest or (size == longest and marked > beats):
                 best = k
+                longest = size
+                beats = marked
+        if best < 0:
+            return -1
+        # A winner was found, so some combo is known.
+        for k in known:  # pragma: no branch
+            ref combo = self.combos[k]
+            if len(combo.keys) > longest:
+                if tracker.progress(combo) >= longest:
+                    return -1
         return best
 
     def routes(self, tracker: ComboTracker, style: FightingStyle) -> List[Int]:

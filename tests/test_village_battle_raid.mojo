@@ -24,6 +24,7 @@ from tests._village_arena import (
     popup_texts,
 )
 from extensions.village.battle import (
+    SUNDER_POISE,
     RAID_HERBS,
     RAID_LOOT,
     TAUNT_RANGE,
@@ -41,7 +42,17 @@ from extensions.village.boss import (
 )
 from extensions.village.character import no_input
 from controls.third_person_controls import yaw_of
-from extensions.village.combat import BITE, DODGE, FALL, FREE, LIGHT_ONE
+from extensions.village.combat import (
+    BITE,
+    DODGE,
+    FALL,
+    FREE,
+    HIT,
+    LIGHT_ONE,
+    Blow,
+    Struck,
+)
+from extensions.village.combos import SUNDER
 from extensions.village.party import TAUNT_EVERY
 from extensions.village.foes import CIRCLING
 from extensions.village.raid import (
@@ -61,7 +72,15 @@ from std.testing import (
     assert_false,
     assert_true,
 )
-from units.si import INCH, METER, SECOND, Duration, Length
+from units.si import (
+    INCH,
+    METER,
+    METER_PER_SECOND,
+    SECOND,
+    Duration,
+    Length,
+    Velocity,
+)
 
 
 def _built(ground: Ground, lots: List[Lot]) raises -> Battle:
@@ -431,6 +450,24 @@ def test_the_raids_blows_and_heals_pass_by_the_fallen_and_the_far() raises:
     # With no foe at all, a summon calls nobody.
     arena.battle._summon(0)
     assert_true(holds_text(arena.battle.notes, "THE WARDEN CALLS ITS WOLVES!"))
+    # A sundering finisher takes the warden's poise; a wound bleeds it,
+    # and does not fell it.
+    for k in range(len(arena.battle.book.combos)):
+        if arena.battle.book.combos[k].effect == SUNDER:
+            arena.battle.finisher = k
+            break
+    var w = arena.battle.first_warden()
+    arena.battle.wardens[0].boss.poise = 700
+    var blow = Blow(
+        40, 10, Velocity(0.0, METER_PER_SECOND), Velocity(0.0, METER_PER_SECOND)
+    )
+    arena.battle._afflict(arena.scene, w, Struck(HIT, 40, 10), blow)
+    assert_almost_equal(
+        arena.battle.wardens[0].boss.poise, 700 - SUNDER_POISE, atol=1e-3
+    )
+    arena.battle.wardens[0].boss.health = 5
+    arena.battle._bleed(w, 50)
+    assert_equal(arena.battle.wardens[0].boss.health, 1)
 
 
 def test_raiders_see_the_mark_and_a_tired_one_cannot_dodge() raises:

@@ -27,12 +27,15 @@ font of `extensions.village.hud`. `extensions.village.battle_hud` calls
    in gray; a key that must be on the beat has a dot under it. A press on
    the beat flashes `ON BEAT`.
 7. **The book.** While the book shows: each combo of the style, its tier,
-   its keys and its rank; or the level that teaches it, or `SPECIALTY`.
+   its effect, its keys and its rank; or the level that teaches it, or
+   `SPECIALTY`.
 8. **The missiles.** Each arrow, spell bolt and orb as a star of light.
+   An arrow streaks back along its flight; a bolt or an orb trails fading
+   stars.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
-from extensions.village.battle import CHEST, Battle
+from extensions.village.battle import CHEST, EFFECT_TEXT, Battle
 from extensions.village.boss import (
     BOSS_POISE,
     CIRCLE,
@@ -46,6 +49,7 @@ from extensions.village.boss import (
 from extensions.village.combos import (
     MASTER,
     MAX_RANK,
+    effect_name,
     key_name,
     tier_name,
 )
@@ -92,6 +96,8 @@ comptime ZONE_EDGE = Float32(0.9)
 """The share of a zone's size at which its glowing edge begins."""
 comptime ROUTES = 3
 """How many routes the display lists at most."""
+comptime TAIL_STARS = 3
+"""How many fading stars trail a spell bolt or an orb."""
 
 
 def zone_corners(zone: Zone, inner: Float32, outer: Float32) -> List[Vector3]:
@@ -422,17 +428,17 @@ def _routes(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
 
 def _book(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
     """Show the combo book: each combo of the player's style, its tier, its
-    keys and its rank, or what teaches it."""
+    effect, its keys and its rank, or what teaches it."""
     ref book = battle.book
     var style = battle.fighter.style
-    var x = frame.width // 4
+    var x = frame.width // 8
     var y = frame.height // 6
     var title = style_name(style) + " COMBOS"
     fill_box(
         frame,
         x - 8 * scale,
         y - 6 * scale,
-        frame.width * 3 // 4 + 8 * scale,
+        frame.width * 7 // 8 + 8 * scale,
         frame.height * 5 // 6,
         SHADOW,
         0.7,
@@ -447,13 +453,16 @@ def _book(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
         var color = WHITE_TEXT if known else DIM_TEXT
         draw_text(frame, x, y, combo.name, scale, color, 1)
         draw_text(
-            frame, x + 90 * scale, y, tier_name(combo.tier), scale, color, 1
+            frame, x + 100 * scale, y, tier_name(combo.tier), scale, color, 1
         )
+        var shade = EFFECT_TEXT if known else DIM_TEXT
+        var effect = effect_name(combo.effect)
+        draw_text(frame, x + 158 * scale, y, effect, scale, shade, 1)
         var keys = String()
         for j in range(len(combo.keys)):  # pragma: no branch
             keys += key_name(combo.keys[j])
             keys += "' " if combo.beats[j] else " "
-        draw_text(frame, x + 150 * scale, y, keys, scale, color, 1)
+        draw_text(frame, x + 218 * scale, y, keys, scale, color, 1)
         var right = String("LEVEL ", combo.level)
         if known and book.rank(k) == MAX_RANK:
             right = "MASTERED"
@@ -463,7 +472,7 @@ def _book(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
             right = "SPECIALTY"
         draw_text(
             frame,
-            frame.width * 3 // 4 - text_width(right, scale),
+            frame.width * 7 // 8 - text_width(right, scale),
             y,
             right,
             scale,
@@ -479,7 +488,9 @@ def _missiles(
     camera: PerspectiveCamera,
     look: Vector3,
 ) raises:
-    """Draw each of the missiles as a star of light."""
+    """Draw each of the missiles as a star of light: an arrow with a
+    streak back along its flight, and a spell bolt or an orb with a tail
+    of `TAIL_STARS` fading stars behind it."""
     for shot in battle.shots:
         var off = shot.at - camera.position
         if off.x * look.x + off.y * look.y + off.z * look.z < 0.2:
@@ -498,7 +509,20 @@ def _missiles(
         )
         var radius = abs(at.y - edge.y)
         glow_star(frame, Vector3(at.x, at.y, 1), max(Float32(2), radius), color)
-        if shot.kind == ARROW:
+        if shot.kind != ARROW:
+            var speed = shot.velocity.length()
+            var back = shot.velocity * (-1 / max(speed, Float32(1.0e-3)))
+            for k in range(1, TAIL_STARS + 1):  # pragma: no branch
+                var fade = 1 - Float32(k) / Float32(TAIL_STARS + 1)
+                var behind = shot.at + back * (reach * 0.9 * Float32(k))
+                var dot = camera.project(behind, frame.width, frame.height)
+                glow_star(
+                    frame,
+                    Vector3(dot.x, dot.y, 0.7 * fade),
+                    max(Float32(1.5), radius * fade),
+                    color,
+                )
+        else:
             # A streak back along its flight.
             var tail = camera.project(shot.last, frame.width, frame.height)
             var mid = (at + tail) / 2

@@ -192,7 +192,12 @@ def test_a_string_of_presses_makes_a_combos_finisher() raises:
     # The finisher lands on the dummy, and that masters the combo more;
     # enough ranks the combo up, and says so.
     arena.battle.book.mastery[found] = 38
-    arena.run(1.5)
+    # Its effect's word shows over the dummy as it lands.
+    var launched = False
+    for _ in range(30):
+        arena.tick(no_input())
+        launched = launched or holds_text(popup_texts(arena.battle), "LAUNCH")
+    assert_true(launched)
     assert_equal(arena.battle.book.mastery[found], 38 + LAND_MASTERY)
     assert_true(holds_text(arena.battle.notes, "RISING STRIKE RANK 2!"))
     # At the last rank, the combo is mastered.

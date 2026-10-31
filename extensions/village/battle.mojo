@@ -186,9 +186,19 @@ from extensions.village.combos import (
     MASTERED_SPECIAL,
     MAX_RANK,
     PRACTICED_RANK,
+    BLEED,
+    CHAIN,
+    DRAIN,
+    LAUNCH,
+    MARK,
+    NO_EFFECT,
+    SHOCKWAVE,
+    SUNDER,
     ComboBook,
+    ComboEffect,
     ComboKey,
     ComboTracker,
+    effect_name,
     on_beat,
 )
 from extensions.village.missiles import (
@@ -332,6 +342,40 @@ comptime SLOW_SHARE = Float32(0.3)
 """The share of the time the foes move at while they are slowed."""
 comptime ULTIMATE_SLOW = Float32(2.1)
 """How long an ultimate slows the foes, in seconds: all through it."""
+comptime LAUNCH_SPEED = Float32(7)
+"""How fast a launching finisher throws its foe up, in meters a second."""
+comptime SUNDER_POISE = Float32(300)
+"""How much poise a sundering finisher takes from a boss."""
+comptime BLEED_SECONDS = Float32(4)
+"""How long a finisher's wound bleeds, in seconds."""
+comptime BLEED_SHARE = Float32(0.6)
+"""The share of its finisher's damage that a wound bleeds, all told."""
+comptime BLEED_TICK = Float32(0.5)
+"""How often a wound's bleeding shows as a number, in seconds."""
+comptime DRAIN_SHARE = Float32(0.35)
+"""The share of its damage that a draining finisher heals the player by."""
+comptime SHOCK_RADIUS = Float32(3.5)
+"""How near its foe a shockwave strikes the other targets, in meters."""
+comptime SHOCK_SHARE = Float32(0.5)
+"""The share of its finisher's blow that a shockwave strikes with."""
+comptime CHAIN_RANGE = Float32(8)
+"""How far a chaining finisher's sparks leap, in meters."""
+comptime CHAIN_TARGETS = 3
+"""How many other targets a chaining finisher's sparks leap to at most."""
+comptime CHAIN_SHARE = Float32(0.6)
+"""The share of its finisher's blow that each chained spark strikes with."""
+comptime CHAIN_SPEED = Float32(40)
+"""How fast a chained spark flies, in meters a second."""
+comptime MARK_SECONDS = Float32(6)
+"""How long a marking finisher's mark lasts, in seconds."""
+comptime MARK_BONUS = Float32(1.25)
+"""How many times its damage each blow on a marked target does."""
+comptime FLASH_SECONDS = Float32(0.6)
+"""How long an effect's flash of light shows, in seconds."""
+comptime EFFECT_TEXT = Rgb(200, 160, 255)
+"""The color of an effect's word over its foe."""
+comptime BLEED_TEXT = Rgb(220, 40, 50)
+"""The color of a wound's bleeding numbers."""
 comptime STORM_RANGE = Float32(18)
 """How near the player a target must stand for a ranged style's ultimate
 to fall on it, in meters."""
@@ -606,6 +650,34 @@ struct Wave(Copyable, Movable):
     # What it does to each target it strikes, and the targets it struck.
     var blow: Blow
     var struck: List[Int]
+
+
+@fieldwise_init
+struct Wound(Copyable, Movable):
+    """A finisher's wound, which bleeds its target's health away."""
+
+    # The target; how long it still bleeds, in seconds; and how much
+    # health it takes a second.
+    var index: Int
+    var left: Float32
+    var rate: Float32
+    # The health it has taken and not yet shown, and how long since it
+    # last showed, in seconds.
+    var owed: Float32
+    var since: Float32
+
+
+@fieldwise_init
+struct Flash(Copyable, Movable):
+    """A combo effect's flash of light, which the display draws."""
+
+    var effect: ComboEffect
+    # Where it starts and where it ends: the same place, but for a chain's
+    # spark and a drain's light, which run to the next target and to the
+    # player. Each is at chest height.
+    var at: Vector3
+    var to: Vector3
+    var age: Float32
 
 
 @fieldwise_init
@@ -923,6 +995,11 @@ struct Battle(Movable):
     # The member each foe goes for: -1 for the player, and `k` for the
     # raider `k`.
     var quarries: List[Int]
+    # The wounds that bleed; how long each target is still marked, in
+    # seconds; and the effects' flashes of light.
+    var wounds: List[Wound]
+    var marks: List[Float32]
+    var flashes: List[Flash]
     # The last frame's input, for new presses.
     var last: MoveInput
     # The way the player's dodge goes, and how fast a blow pushes them.
@@ -1195,6 +1272,9 @@ struct Battle(Movable):
         self.token = -1
         self.token_rest = 0
         self.quarries = List[Int](length=len(self.foes), fill=-1)
+        self.wounds = List[Wound]()
+        self.marks = List[Float32]()
+        self.flashes = List[Flash]()
         self.last = MoveInput(0, 0, 0, 0, False, False)
         self.dodge_way = Vector3(0, 0, 1)
         self.shove = Vector3(0, 0, 0)
@@ -1237,6 +1317,7 @@ struct Battle(Movable):
             self._raise_raid(
                 scene, assets, raid, looks, terrain, swords, triangles, detail
             )
+        self.marks = List[Float32](length=self.targets(), fill=0)
 
     def _raise_raid(
         mut self,
@@ -1689,6 +1770,124 @@ struct Battle(Movable):
         self._master(found, MAKE_MASTERY)
         return True
 
+    def _afflict(
+        mut self, mut scene: Scene, index: Int, struck: Struck, hit: Blow
+    ) raises:
+        """Give the combo's effect to the target that its finisher first
+        lands on: see `extensions.village.combos`. Its word shows over the
+        target, and its flash of light."""
+        var effect = self.book.combos[self.finisher].effect
+        if effect == NO_EFFECT:
+            return
+        var there = self.target_at(index)
+        var chest = there + Vector3(0, CHEST, 0)
+        self._popup(
+            there + Vector3(0, 0.7, 0), effect_name(effect), EFFECT_TEXT
+        )
+        self.flashes.append(Flash(effect, chest, chest, 0))
+        if effect == LAUNCH:
+            if index < len(self.foes):
+                ref body = self.foes[index].character
+                body.velocity.y = max(body.velocity.y, LAUNCH_SPEED)
+                body.grounded = False
+        elif effect == SUNDER:
+            if index < len(self.foes):
+                ref guard = self.foes[index].fighter
+                guard.stamina = 0
+                guard.hold_guard(False)
+            elif index >= self.first_warden():
+                ref boss = self.wardens[index - self.first_warden()].boss
+                boss.poise = max(Float32(0), boss.poise - SUNDER_POISE)
+        elif effect == BLEED:
+            var rate = struck.damage * BLEED_SHARE / BLEED_SECONDS
+            self.wounds.append(Wound(index, BLEED_SECONDS, rate, 0, 0))
+        elif effect == DRAIN:
+            ref f = self.fighter
+            var gain = min(
+                f.parameters.health - f.health, struck.damage * DRAIN_SHARE
+            )
+            f.health += gain
+            var feet = self.feet
+            self._popup(feet, "+" + String(Int(gain + 0.5)), HEAL_TEXT)
+            self.flashes[len(self.flashes) - 1].to = feet + Vector3(0, CHEST, 0)
+        elif effect == SHOCKWAVE:
+            var blow = hit
+            blow.damage *= SHOCK_SHARE
+            blow.stamina_damage *= SHOCK_SHARE
+            var tank = self.fighter.style == MACE
+            # The target the finisher landed on is one.
+            for other in range(self.targets()):  # pragma: no branch
+                if other == index or not self.standing(other):
+                    continue
+                if _flat(self.target_at(other), there) > SHOCK_RADIUS:
+                    continue
+                _ = self._strike(scene, other, blow, there, 0, tank)
+        elif effect == CHAIN:
+            var blow = hit
+            blow.damage *= CHAIN_SHARE
+            blow.stamina_damage *= CHAIN_SHARE
+            var sent = 0
+            # The target the finisher landed on is one.
+            for other in range(self.targets()):  # pragma: no branch
+                if sent == CHAIN_TARGETS:
+                    break
+                if other == index or not self.standing(other):
+                    continue
+                var to = self.target_at(other) + Vector3(0, CHEST, 0)
+                if _flat(to, chest) > CHAIN_RANGE:
+                    continue
+                var way = (to - chest) / max((to - chest).length(), 1.0e-3)
+                var spark = Missile(
+                    SPARK, chest, way * CHAIN_SPEED, other, -1, blow
+                )
+                spark.struck.append(index)
+                self.shots.append(spark^)
+                self.flashes.append(Flash(CHAIN, chest, to, 0))
+                sent += 1
+        else:
+            self.marks[index] = MARK_SECONDS
+
+    def _bleed(mut self, index: Int, amount: Float32):
+        """Take a wound's bleeding from its target, and show it: a wound
+        does not fell a target."""
+        if index < len(self.foes):
+            ref f = self.foes[index].fighter
+            f.health = max(Float32(1), f.health - amount)
+        elif index >= self.first_warden():
+            ref boss = self.wardens[index - self.first_warden()].boss
+            boss.health = max(Float32(1), boss.health - amount)
+        if amount >= 0.5:
+            var there = self.target_at(index)
+            self._popup(there, String(Int(amount + 0.5)), BLEED_TEXT)
+
+    def _effects_step(mut self, seconds: Float32):
+        """Age the effects' flashes and marks, and bleed each wound."""
+        var flashes = List[Flash]()
+        for flash in self.flashes:
+            if flash.age + seconds < FLASH_SECONDS:
+                var aged = flash.copy()
+                aged.age += seconds
+                flashes.append(aged^)
+        self.flashes = flashes^
+        for k in range(len(self.marks)):
+            self.marks[k] = max(Float32(0), self.marks[k] - seconds)
+        var wounds = List[Wound]()
+        for wound in self.wounds:
+            if not self.standing(wound.index):
+                continue
+            var w = wound.copy()
+            var step = min(seconds, w.left)
+            w.left -= step
+            w.owed += w.rate * step
+            w.since += step
+            if w.since >= BLEED_TICK or w.left <= 0:
+                self._bleed(w.index, w.owed)
+                w.owed = 0
+                w.since = 0
+            if w.left > 0:
+                wounds.append(w^)
+        self.wounds = wounds^
+
     def _master(mut self, index: Int, amount: Int) raises:
         """Give a combo mastery, and say so when its rank rises."""
         if self.book.practice(index, amount):
@@ -2060,6 +2259,7 @@ struct Battle(Movable):
         var finished = self.finisher >= 0 and not self.finisher_landed
         if finished and landed_blow(struck.outcome):
             self.finisher_landed = True
+            self._afflict(scene, index, struck, hit)
             self._perks(self.finisher)
             self._master(self.finisher, LAND_MASTERY)
         self.fighter.landed(struck)
@@ -2068,7 +2268,7 @@ struct Battle(Movable):
         mut self,
         mut scene: Scene,
         index: Int,
-        hit: Blow,
+        given: Blow,
         source: Vector3,
         member: Int = 0,
         tank: Bool = False,
@@ -2076,7 +2276,11 @@ struct Battle(Movable):
         """Give a blow from `source` to a target, show it, and weigh it; a
         felled foe gives its loot. `member` is who struck it, for a
         warden's threat: 0 for the player, and 1 and on for the raiders.
-        Return what the blow did."""
+        A marked target takes `MARK_BONUS` times the blow's damage. Return
+        what the blow did."""
+        var hit = given
+        if self.marks[index] > 0:
+            hit.damage *= MARK_BONUS
         var there = self.target_at(index)
         var way = _way(source, there)
         var struck: Struck
@@ -2717,6 +2921,7 @@ struct Battle(Movable):
                 )
         self.popups = kept^
         self.sparks.update(scene, delta)
+        self._effects_step(seconds)
         for index in range(len(self.dummies)):
             self.dummies[index].dummy.rock(scene, delta)
         var fade = exp(-SHOVE_FADE * seconds)
