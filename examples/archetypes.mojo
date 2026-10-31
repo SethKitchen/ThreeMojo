@@ -57,8 +57,9 @@ from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.skeleton.head.hair.beard import (
     CHIN_STRAP,
     CLEAN_SHAVEN,
-    FULL_BEARD,
+    FORKED_BEARD,
     GOATEE,
+    LONG_BEARD,
     MUSTACHE,
     SHORT_BEARD,
     Beard,
@@ -122,8 +123,10 @@ def _callings() -> List[Calling]:
 
 def _beard(calling: Calling) -> Beard:
     """Return the beard a man of a calling grows."""
-    if calling == WIZARD or calling == BARBARIAN:
-        return FULL_BEARD
+    if calling == WIZARD:
+        return LONG_BEARD
+    if calling == BARBARIAN:
+        return FORKED_BEARD
     if calling == ROYAL:
         return SHORT_BEARD
     if calling == RANGER or calling == WARLOCK:

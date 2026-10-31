@@ -17,12 +17,17 @@ skin, open at the mouth. Its style says where it grows and how deep:
 | `FULL_BEARD` | the same, and a mass that hangs below the chin | 7 mm on the cheeks, 14 mm at the chin |
 | `CHIN_STRAP` | a band 3 cm deep along the jaw, from sideburn to sideburn | 4 mm |
 | `MUTTON_CHOPS` | the sideburns and the cheeks, the chin and the lip bare | 6 mm |
+| `STUBBLE` | the zone of a short beard | 1.5 mm |
+| `LONG_BEARD` | a full beard's zone, and a mass that falls from the chin to the chest | 7 mm on the cheeks, 14 mm at the chin |
+| `FORKED_BEARD` | a full beard's zone, and two locks that fall from the chin and part | 7 mm on the cheeks, 14 mm at the chin |
 
 The zones are authored in template centimeters round the mouth: the
 lips part at 65 cm above the hip joint centers, the chin's point stands
 at 62 cm, the nose's base at 67 cm, and the jaw is 6.5 cm wide on each
 side. A beard's line runs from each corner of the mouth up across the
-cheek to the sideburn, in front of the ear. Its lower line runs under
+cheek to the sideburn, in front of the ear. A long beard falls in a
+tapered lock 17 cm below the chin, forward over the chest; a forked
+beard falls in two locks 12 cm long that part 5 cm at their tips. Its lower line runs under
 the jaw, above the larynx. The head's frame maps the zone onto each
 face, so a genome that widens the jaw or the mouth moves the beard with
 it. Facial hair takes the scalp's hair color.
@@ -45,6 +50,7 @@ from extensions.humanoid.skeleton.field import (
 )
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
+from extensions.humanoid.skeleton.sculpt import Sculpt
 from extensions.humanoid.skeleton.surface_nets import mesh_surface
 from math.utils import clamp
 from math.vector3 import Vector3
@@ -89,9 +95,17 @@ struct Beard(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is a named style.
 
         Returns:
-            True for `CLEAN_SHAVEN` through `MUTTON_CHOPS`.
+            True for `CLEAN_SHAVEN` through `FORKED_BEARD`.
         """
         return ordinal_valid(self.value, BEARD_COUNT - 1)
+
+    def hangs(self) -> Bool:
+        """Return whether the beard has a mass that hangs below the chin.
+
+        Returns:
+            True for a full, a long and a forked beard.
+        """
+        return self == FULL_BEARD or self == LONG_BEARD or self == FORKED_BEARD
 
 
 comptime CLEAN_SHAVEN = Beard(0)
@@ -109,7 +123,13 @@ comptime CHIN_STRAP = Beard(5)
 mustache."""
 comptime MUTTON_CHOPS = Beard(6)
 """Sideburns grown down over the cheeks, the chin bare."""
-comptime BEARD_COUNT = 7
+comptime STUBBLE = Beard(7)
+"""A day or two of growth over a short beard's zone."""
+comptime LONG_BEARD = Beard(8)
+"""A full beard that falls in a long tapered lock to the chest."""
+comptime FORKED_BEARD = Beard(9)
+"""A full beard that falls in two locks that part at their tips."""
+comptime BEARD_COUNT = 10
 """How many styles there are."""
 
 
@@ -123,6 +143,9 @@ def _beard_names() -> List[String]:
         "full beard",
         "chin strap",
         "mutton chops",
+        "stubble",
+        "long beard",
+        "forked beard",
     ]
 
 
@@ -240,6 +263,8 @@ struct BeardShape(Copyable, DistanceField, Movable):
     # A full beard's mass under the chin.
     var mass_center: Vector3
     var mass_radii: Vector3
+    # A long or a forked beard's locks below it.
+    var locks: Sculpt
     var low: Vector3
     var high: Vector3
 
@@ -297,9 +322,12 @@ struct BeardShape(Copyable, DistanceField, Movable):
         elif beard == GOATEE:
             side = 0.6
             chin = 0.6
-        elif beard == FULL_BEARD:
+        elif beard.hangs():
             side = 0.7
             chin = 1.4
+        elif beard == STUBBLE:
+            side = 0.15
+            chin = 0.15
         elif beard == MUTTON_CHOPS:
             side = 0.6
             chin = 0.6
@@ -307,8 +335,28 @@ struct BeardShape(Copyable, DistanceField, Movable):
         self.chin_depth = h.cm(chin)
         self.mass_center = h.at(0, 58.6, 7.6)
         self.mass_radii = Vector3(h.cm(5.0), h.cm(4.6), h.cm(4.2))
+        self.locks = Sculpt(self.soft, self.soft)
+        var lowest = Float32(56.0)
+        if beard == LONG_BEARD:
+            var run: List[Vector3] = [
+                h.at(0, 58.6, 7.6),
+                h.at(0, 54.0, 9.6),
+                h.at(0, 48.5, 11.4),
+                h.at(0, 42.5, 12.4),
+            ]
+            self.locks.chain(run, [h.cm(3.6), h.cm(3.0), h.cm(2.1), h.cm(0.7)])
+            lowest = 41.0
+        elif beard == FORKED_BEARD:
+            for side_sign in [Float32(1), Float32(-1)]:  # pragma: no branch
+                var run: List[Vector3] = [
+                    h.at(side_sign * 0.9, 58.0, 8.2),
+                    h.at(side_sign * 1.6, 53.0, 10.0),
+                    h.at(side_sign * 2.6, 47.5, 11.2),
+                ]
+                self.locks.chain(run, [h.cm(2.4), h.cm(1.7), h.cm(0.6)])
+            lowest = 46.0
         var reach = h.cm(2.0)
-        var front = h.at(0, 56.0, 13.5)
+        var front = h.at(0, lowest, 13.5)
         var back = h.at(0, 72.5, -4.0)
         self.low = Vector3(
             self.mouth.x - h.cm(9.0) - reach, front.y - reach, back.z - reach
@@ -414,7 +462,7 @@ struct BeardShape(Copyable, DistanceField, Movable):
         var skin = self.skin.distance(point)
         var d = max(skin - self.depth(t, zone), -skin - self.bury)
         d = smax(d, zone * self.cm, self.soft)
-        if self.beard == FULL_BEARD:
+        if self.beard.hangs():
             # The mass under the chin: outside the skin, inside its
             # ellipsoid, and below the mouth.
             var mass = max(
@@ -423,6 +471,10 @@ struct BeardShape(Copyable, DistanceField, Movable):
             )
             mass = smax(mass, (t.y - (MOUTH_Y - 1.4)) * self.cm, self.soft)
             d = smin(d, mass, self.soft)
+            if len(self.locks.pieces) > 0:
+                # The locks below it, outside the skin.
+                var locks = max(self.locks.union(point), -skin - self.bury)
+                d = smin(d, locks, self.soft)
         return d
 
 

@@ -332,8 +332,13 @@ A `Beard` says which facial hair a face grows. `BeardShape` draws it as its volu
 | `FULL_BEARD` | the same, and a mass that hangs below the chin | 7 mm on the cheeks, 14 mm at the chin |
 | `CHIN_STRAP` | a band 3 cm deep along the jaw, from sideburn to sideburn | 4 mm |
 | `MUTTON_CHOPS` | the sideburns and the cheeks, the chin and the lip bare | 6 mm |
+| `STUBBLE` | the zone of a short beard | 1.5 mm |
+| `LONG_BEARD` | a full beard's zone, and a mass that falls from the chin to the chest | 7 mm on the cheeks, 14 mm at the chin |
+| `FORKED_BEARD` | a full beard's zone, and two locks that fall from the chin and part | 7 mm on the cheeks, 14 mm at the chin |
 
 The zones are authored in template centimeters round the mouth. The lips part 65 cm above the hip joint centers, the chin's point stands at 62 cm, and the nose's base at 67 cm. A beard's upper line runs from under the nose to each corner of the mouth, then up across the cheek to the sideburn. Its lower line runs under the jaw, above the larynx, and up behind the jaw to the ear's lobe.
+
+A long beard falls in a tapered lock 17 cm below the chin, forward over the chest. A forked beard falls in two locks 12 cm long that part 5 cm at their tips. Each lock is a run of tapered capsules, joined to the beard's mass in a smooth fillet.
 
 The head's frame maps the zones onto each face. So a genome that widens the jaw or the mouth moves the beard with it. The hair thins toward each zone's edge, as a trimmed beard does.
 

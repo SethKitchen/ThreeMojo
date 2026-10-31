@@ -12,8 +12,11 @@ from extensions.humanoid.skeleton.head.hair.beard import (
     BEARD_COUNT,
     CHIN_STRAP,
     CLEAN_SHAVEN,
+    FORKED_BEARD,
     FULL_BEARD,
     GOATEE,
+    LONG_BEARD,
+    STUBBLE,
     MOUTH_Y,
     MOUTH_Z,
     MUSTACHE,
@@ -50,12 +53,12 @@ def test_beards_are_named() raises:
         assert_true(beard.is_valid())
         assert_equal(beard_named(beard_label(beard)), beard)
     assert_equal(beard_label(FULL_BEARD), "full beard")
-    assert_equal(beard_label(Beard(9)), "beard")
+    assert_equal(beard_label(Beard(40)), "beard")
     assert_false(Beard(-1).is_valid())
     assert_false(Beard(BEARD_COUNT).is_valid())
     require_beard(CLEAN_SHAVEN)
     with assert_raises(contains="named style"):
-        require_beard(Beard(9))
+        require_beard(Beard(40))
     with assert_raises(contains="No beard"):
         _ = beard_named("sideburns")
 
@@ -147,11 +150,28 @@ def test_a_beard_stands_on_the_skin() raises:
     var under = h.at(0, 57.0, 8.5)
     assert_true(full.distance(under) < 0)
     assert_true(short.distance(under) > 0)
+    # A long beard falls to the chest; a forked one parts in two locks;
+    # stubble lies close.
+    var long = BeardShape(dims, LONG_BEARD, skin)
+    var chest = h.at(0, 47.0, 11.6)
+    assert_true(long.distance(chest) < 0)
+    assert_true(full.distance(chest) > 0)
+    assert_true(long.distance(under) < 0)
+    var forked = BeardShape(dims, FORKED_BEARD, skin)
+    var lock = h.at(2.2, 49.5, 10.8)
+    var parting = h.at(0, 48.5, 10.8)
+    assert_true(forked.distance(lock) < 0)
+    assert_true(forked.distance(parting) > 0)
+    assert_true(LONG_BEARD.hangs() and FORKED_BEARD.hangs())
+    assert_false(STUBBLE.hangs() or SHORT_BEARD.hangs())
+    var stubble = BeardShape(dims, STUBBLE, skin)
+    assert_true(stubble.distance(chin + Vector3(0, 0, h.cm(0.05))) < 0)
+    assert_true(stubble.distance(out) > 0)
     # A clean-shaven face grows nothing.
     var bare = BeardShape(dims, CLEAN_SHAVEN, skin)
     assert_true(bare.distance(out) > 0)
     with assert_raises(contains="named style"):
-        _ = BeardShape(dims, Beard(9), skin)
+        _ = BeardShape(dims, Beard(40), skin)
 
 
 def test_a_mustache_is_meshed() raises:
@@ -174,10 +194,17 @@ def test_a_full_beard_is_meshed_without_its_inner_face() raises:
             if skin.distance(p) >= -h.cm(0.04):
                 shown = True
         assert_true(shown)
+    # A long beard's box reaches down to its tip.
+    ref long = beard_mesh(dims, LONG_BEARD, 12).attribute_view(String(POSITION))
+    var lowest = Float32(1e9)
+    for v in range(long.count()):
+        lowest = min(lowest, long.vector3(v).y)
+    assert_true(lowest < h.at(0, 45.0, 0).y)
+    assert_true(beard_mesh(dims, FORKED_BEARD, 12).triangle_count() > 0)
     with assert_raises(contains="no beard to mesh"):
         _ = beard_mesh(dims, CLEAN_SHAVEN)
     with assert_raises(contains="named style"):
-        _ = beard_mesh(dims, Beard(9))
+        _ = beard_mesh(dims, Beard(40))
 
 
 def main() raises:
