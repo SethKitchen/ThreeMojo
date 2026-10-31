@@ -47,7 +47,7 @@ from extensions.humanoid.rig.joints import (
 )
 from render.framebuffer import Color
 from extensions.attire.apparel import crown, straw_hat
-from extensions.attire.armory import great_helm
+from extensions.attire.armory import great_helm, great_pauldrons
 from extensions.attire.mesh_ops import ACCENT
 from extensions.attire.outfit import Outfit, dress, dress_pieces
 from objects.skinned_mesh import SKIN_INDEX
@@ -417,6 +417,30 @@ def test_a_hat_keeps_the_hair_and_lays_it_under_its_crown() raises:
     regalia.add(crown())
     _ = dress(scene, assets, crowned, regalia)
     assert_equal(_shell_triangles(scene, assets, whole), count)
+
+
+def test_great_pauldrons_dome_the_shoulders() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    var skin_before = assets.geometries.get(
+        scene.skinned_meshes[person.skins[0]].geometry
+    ).triangle_count()
+    var outfit = Outfit()
+    outfit.add(great_pauldrons())
+    var dressed = dress(scene, assets, person, outfit)
+    assert_true(dressed.meshes[0] >= 0)
+    # A dome hides none of the skin under it.
+    assert_equal(
+        assets.geometries.get(
+            scene.skinned_meshes[person.skins[0]].geometry
+        ).triangle_count(),
+        skin_before,
+    )
+    ref domes = assets.geometries.get(
+        scene.skinned_meshes[dressed.meshes[0]].geometry
+    )
+    assert_true(domes.triangle_count() > 200)
 
 
 def test_a_great_helm_hides_the_hair() raises:

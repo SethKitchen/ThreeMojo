@@ -49,10 +49,12 @@ from extensions.attire.fabric import fabric, fabric_material, fold_depth
 from extensions.attire.garment import Garment
 from extensions.attire.cowl import hang_cowl, head_cowl
 from extensions.attire.band import belt_band
+from extensions.attire.dome import dome_shoulders
 from extensions.attire.headwear import head_frame, hat_mesh, press_hair
 from extensions.attire.kinds import (
     BANDED,
     COWLED,
+    DOMED,
     HATTED,
     SHOD,
     SKIRTED,
@@ -254,7 +256,11 @@ def dress_pieces(
         # A band is drawn over the garments under it, so it hides none of
         # them: they show round it whole. A hat stands off the head, so it
         # hides none of the face under it.
-        if garment.form == BANDED or garment.form == HATTED:
+        if (
+            garment.form == BANDED
+            or garment.form == HATTED
+            or garment.form == DOMED
+        ):
             hide = List[Float32](length=count, fill=0)
         if garment.form == SKIRTED:
             for v in range(count):
@@ -310,6 +316,12 @@ def dress_pieces(
                 person.rig,
                 Float32(fabric(garment.fabric).thickness.value),
             )
+        if garment.form == DOMED:
+            whole = dome_shoulders(
+                whole,
+                person.rig,
+                Float32(fabric(garment.fabric).thickness.value),
+            )
         if garment.form == HATTED:
             whole = hat_mesh(
                 whole,
@@ -347,8 +359,13 @@ def dress_pieces(
         for v in range(count):
             over_skin[v] = max(over_skin[v], hides[i][v])
         ref garment = outfit.garments[order[i]]
-        # A band and a hat are drawn whole, over what lies under them.
-        if garment.form == BANDED or garment.form == HATTED:
+        # A band, a hat and a dome are drawn whole, over what lies under
+        # them.
+        if (
+            garment.form == BANDED
+            or garment.form == HATTED
+            or garment.form == DOMED
+        ):
             pieces[order[i]] = shells[order[i]].clone()
             continue
         var piece = hang_skirt(

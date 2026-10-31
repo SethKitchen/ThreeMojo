@@ -12,7 +12,8 @@ garment takes color. A wear kind names one channel of dirt, blood, wet
 or damage. A form says how a garment's shell is shaped where it does not
 follow the skin: a skirt round both legs, a last round each foot, a
 cowl round the head, a taut band round the body, or a hat or a helmet
-shaped round the head. A headwear kind says which hat or helmet.
+shaped round the head, or a dome over each shoulder. A headwear kind
+says which hat or helmet.
 
 Each kind is a type, so a bare integer does not compile. A value that
 is not named is still constructible, and the boundary that reads it
@@ -559,8 +560,8 @@ struct Form(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is a named form.
 
         Returns:
-            True for `FITTED`, `SKIRTED`, `SHOD`, `COWLED`, `BANDED` and
-            `HATTED`.
+            True for `FITTED`, `SKIRTED`, `SHOD`, `COWLED`, `BANDED`,
+            `HATTED` and `DOMED`.
         """
         return ordinal_valid(self.value, FORM_COUNT - 1)
 
@@ -582,13 +583,24 @@ at its top and its bottom: a belt."""
 comptime HATTED = Form(5)
 """It is drawn as a hat or a helmet shaped round the head, which its
 headwear kind names: a great helm, a crown, a wizard's hat."""
-comptime FORM_COUNT = 6
+comptime DOMED = Form(6)
+"""It closes each shoulder in one smooth dome, standing well off it: great
+pauldrons."""
+comptime FORM_COUNT = 7
 """How many forms there are."""
 
 
 def _form_names() -> List[String]:
     """Return the form names, in order."""
-    return ["fitted", "skirted", "shod", "cowled", "banded", "hatted"]
+    return [
+        "fitted",
+        "skirted",
+        "shod",
+        "cowled",
+        "banded",
+        "hatted",
+        "domed",
+    ]
 
 
 def form_label(form: Form) -> String:
@@ -607,8 +619,8 @@ def form_named(name: String) raises -> Form:
     """Return the form that `name` names.
 
     Args:
-        name: `fitted`, `skirted`, `shod`, `cowled`, `banded` or
-            `hatted`.
+        name: `fitted`, `skirted`, `shod`, `cowled`, `banded`, `hatted`
+            or `domed`.
 
     Returns:
         The named form.

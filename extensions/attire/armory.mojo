@@ -12,7 +12,7 @@ pauldrons, leather bracers, and three helmets.
 | `plate_legs` | legs | armor | plate | rigid on each thigh and shin | fitted |
 | `plate_skirt` | waist | armor | plate | six lames from the hips | skirted, flare 0.18 |
 | `arm_harness` | arms | armor | plate | rigid on each upper arm and forearm | fitted |
-| `great_pauldrons` | shoulders | armor | plate | four lames from the chest, cut 2.5 cm loose | fitted |
+| `great_pauldrons` | shoulders | armor | plate | four lames from the chest | domed |
 | `chain_shirt` | torso | outer | mail, short sleeves | flexible | skirted, flare 0.1 |
 | `mail_chausses` | legs | outer | mail | flexible | fitted |
 | `bracers` | arms | outer | leather | flexible | fitted |
@@ -25,8 +25,9 @@ lame rides the chest, and each lame below it bends more with the spine
 and the hips. Plate legs ride the thigh above the knee and the shin
 below it, so they part at the knee as a cuisse and a greave do. A plate
 skirt is a fauld that reaches to the middle of the thigh in six lames,
-as tassets do. Great pauldrons stand well off the shoulders, as the
-large pauldrons of a heroic harness do.
+as tassets do. Great pauldrons close each shoulder in a dome that stands
+well off it, as the large pauldrons of a heroic harness do; see
+`extensions.attire.dome`.
 
 Each garment is steel; `forged` makes it of another metal. A plate
 garment replaces the wardrobe's garment in its slot and layer: plate
@@ -45,6 +46,7 @@ from extensions.attire.kinds import (
     ACCENT_DYE,
     ARMOR_LAYER,
     ARMS_SLOT,
+    DOMED,
     GREAT_HELM,
     HALF_HELM,
     HATTED,
@@ -85,7 +87,6 @@ from extensions.humanoid.rig.joints import (
     Joint,
 )
 from render.framebuffer import Color
-from units.si import CENTIMETER, Length
 
 comptime STEEL_DYE = Color(198, 200, 206)
 """The dye of bright steel."""
@@ -227,7 +228,7 @@ def great_pauldrons() raises -> Garment:
         articulation=LAMED,
         anchor=CHEST,
         lames=4,
-        ease=Length(2.5, CENTIMETER),
+        form=DOMED,
     )
 
 

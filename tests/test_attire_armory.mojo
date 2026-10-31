@@ -30,6 +30,7 @@ from extensions.attire.kinds import (
     ACCENT_DYE,
     ARMOR_LAYER,
     CROWN,
+    DOMED,
     FUR,
     HATTED,
     HEAD_SLOT,
@@ -83,7 +84,7 @@ def test_plate_rides_its_bones() raises:
     assert_equal(skirt.form, SKIRTED)
     assert_true(skirt.flare > 0)
     assert_equal(plate_legs().articulation, RIGID)
-    assert_true(great_pauldrons().ease.value > 0.02)
+    assert_equal(great_pauldrons().form, DOMED)
     # Plate legs take the place of greaves.
     var outfit = Outfit()
     outfit.add(greaves())

@@ -79,6 +79,7 @@ A shell made from the skin follows each thigh and each toe. A skirt and a boot d
 | `COWLED` | closes the head in a loose cowl, open at the face | a hood |
 | `BANDED` | is drawn as a taut band round the body, level at its top and its bottom | a belt |
 | `HATTED` | is drawn as the hat or the helmet its headwear names, round the head | a great helm, a crown, a wizard's hat |
+| `DOMED` | closes each shoulder in one smooth dome that stands well off it | great pauldrons |
 
 ### Bands
 
@@ -139,6 +140,18 @@ Each vertex of a last takes the weights of the nearest vertex of the shell. So t
 4. The cowl is cut open along the face's oval and level at its bottom. A lining one fabric thickness inside it shows where the opening looks into the hood.
 
 `face_oval` gives the oval's distance without the clamp of `face_opening`. So the cut runs smoothly through triangles larger than the opening's ramp.
+
+### Domes
+
+A pauldron made from the skin follows the shoulder's muscles, and reads as a sleeve. `extensions/attire/dome.mojo` closes each shoulder of a `DOMED` garment in one dome, as a heroic harness's pauldrons are.
+
+1. The shell is split at the middle of the chest into each shoulder's part.
+2. Each part's vertices are closed in their convex hull.
+3. A sphere of 16 rings and 24 sectors, stretched to the part's box, is cast from the hull's middle. It stands 2.2 cm out of the hull.
+4. The dome is cut where it turns in toward the body, past a third of its half width from its middle, and under the armpit. The band along that edge takes the trim.
+5. A lining a fabric's thickness inside it shows under its edge.
+
+Each vertex takes the skin weights of the nearest vertex of the shell. So a lamed dome rides the chest at its top and opens as the arm rises. A dome hides none of the skin or the garments under it.
 
 ### Hats and helmets
 
@@ -290,7 +303,7 @@ paint(piece, garment.dyes)
 | `plate_legs` | legs | armor | plate | rigid on each thigh and shin | fitted |
 | `plate_skirt` | waist | armor | plate | six lames from the hips | skirted, flare 0.18 |
 | `arm_harness` | arms | armor | plate | rigid on each upper arm and forearm | fitted |
-| `great_pauldrons` | shoulders | armor | plate | four lames from the chest, 2.5 cm loose | fitted |
+| `great_pauldrons` | shoulders | armor | plate | four lames from the chest | domed |
 | `chain_shirt` | torso | outer | mail, short sleeves | flexible | skirted, flare 0.1 |
 | `mail_chausses` | legs | outer | mail | flexible | fitted |
 | `bracers` | arms | outer | leather | flexible | fitted |
@@ -341,4 +354,4 @@ Roblox's cages and MakeHuman's `mhclo` files bind a garment to a body mesh from 
 
 ## Tests
 
-`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_metal.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_skirt.mojo`, `test_attire_last.mojo`, `test_attire_cowl.mojo`, `test_attire_headwear.mojo`, `test_attire_surface.mojo`, `test_attire_dye.mojo`, `test_attire_garment.mojo`, `test_attire_armory.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.
+`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_metal.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_skirt.mojo`, `test_attire_last.mojo`, `test_attire_cowl.mojo`, `test_attire_dome.mojo`, `test_attire_headwear.mojo`, `test_attire_surface.mojo`, `test_attire_dye.mojo`, `test_attire_garment.mojo`, `test_attire_armory.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.
