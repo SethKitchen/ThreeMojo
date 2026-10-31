@@ -575,19 +575,19 @@
     {
       "family": "output_color_space",
       "generator": "assets/output_color_space/three_output.mjs",
-      "generator_sha256": "e719f77a8d6715b994671531bfcc5502947788c4cf2bba981ae77012c02caa60",
-      "three_version": "0.180.0",
+      "generator_sha256": "db10de8d1037ec8cc3a242939a8768e7b24859b00a87dabce91c58f31f1deb2e",
+      "three_version": "0.187.0",
       "version_evidence": "Generator header; abbreviated release normalized to an exact npm version.",
       "cwd": "assets/output_color_space",
       "commands": [
-        "npm install --no-save --package-lock=false three@0.180.0",
+        "npm install --no-save --package-lock=false three@0.187.0",
         "node three_output.mjs > output.json"
       ],
       "notes": [
         "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches."
       ],
       "artifacts": {
-        "assets/output_color_space/output.json": "1060406ce5cffcc10b3f5264cec04ce404837e553e465cf604bb8fe5a2f36bfc"
+        "assets/output_color_space/output.json": "3ee73e161552bb20759d2466d709c1ccdb570ca633a711bd16707ac257729498"
       }
     },
     {
@@ -1123,6 +1123,26 @@
         "assets/exr_codecs/c9_uppercase_rule.exr.rgba.hex": "5743bb830c485560053bbe16adc16de48dab3ec3a972c43408b2404e69b7d431",
         "assets/exr_codecs/three180-results.json": "4d58472e0053f6b28d389df749c69466c7b03ad0e89f086f9bfb95e8611b2fe8",
         "assets/exr_codecs/three186-results.json": "e45086f1b9517cc770f47dc98e28280b4492d1d3a028b6dc11822b0807483bd7"
+      }
+    },
+    {
+      "family": "exr_export",
+      "generator": "assets/exr_export/three_exr_export.mjs",
+      "generator_sha256": "09e699fedf71afde66d6ed2d693602d8edae1ac3aa3c8912fe43e25f4f6ca155",
+      "three_version": "0.187.0",
+      "version_evidence": "three_exr_export.mjs refuses any package version but 0.187.0.",
+      "cwd": ".",
+      "commands": [
+        "REF=$(mktemp -d)",
+        "npm install --prefix \"$REF\" --save-exact three@0.187.0",
+        "node assets/exr_export/three_exr_export.mjs \"$REF/node_modules/three\" assets/exr_export/three.json"
+      ],
+      "notes": [
+        "Artifact hashes cover the committed family inputs and expected results. They do not prove a fresh regeneration matches.",
+        "Run with three 0.180.0 and the version check removed, the first 49 entries are the bytes of the earlier 0.180.0 fixture."
+      ],
+      "artifacts": {
+        "assets/exr_export/three.json": "8cfd83f1fb224216b796c2b3d7fbd75d24093b1b460037e5a586edc52f0b44a9"
       }
     },
     {
