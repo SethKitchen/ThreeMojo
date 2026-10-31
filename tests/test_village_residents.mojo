@@ -232,9 +232,9 @@ def test_a_flipbook_shows_the_pose_of_the_stride() raises:
     )
     assert_equal(book.frame(walker).value, 9)
     walker.stance = WALKING
-    walker.travelled = 1.5 * 4 + 0.6
+    walker.traveled = 1.5 * 4 + 0.6
     assert_equal(book.frame(walker).value, 2)
-    walker.travelled = 1.5 * 4 + 1.49
+    walker.traveled = 1.5 * 4 + 1.49
     assert_equal(book.frame(walker).value, 3)
     var still = Flipbook(GeometryId(9), List[GeometryId](), 1.5)
     assert_equal(still.frame(walker).value, 9)
@@ -372,7 +372,7 @@ def test_a_body_stands_where_its_character_stands_and_plays_its_stance() raises:
 def test_a_garment_that_shows_nothing_casts_nothing() raises:
     var assets = Assets()
     var scene = Scene()
-    # A long coat over a narrow band round the waist hides the band.
+    # A long coat over a narrow band around the waist hides the band.
     var band = Cover()
     band.reach_to(SPINE, 0.7, 0.3)
     var coat = Cover()

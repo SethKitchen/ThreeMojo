@@ -21,6 +21,7 @@ each can be turned up or down alone:
 | `shadows` | `NO_SHADOWS` | `FULL_SHADOWS`: every caster every frame |
 | `shadow_size` | 64 texels | 8,192 texels |
 | `smooth_edges` | False: stair steps on the edges | True: FXAA smooths them |
+| `fight_reach` | Fighters past 12 meters posed every third frame | Every fighter every frame |
 
 `game_quality` gives the four presets. `LOW` is for four cores, and
 `ULTRA` draws the village as the still picture does.
@@ -119,6 +120,9 @@ struct GameQuality(ImplicitlyCopyable):
     var shadow_size: Int
     # Whether the frame's edges are smoothed before it is stretched.
     var smooth_edges: Bool
+    # How far from the player a fighter is posed every frame and leaves a
+    # trail, in meters: see `extensions.village.battle`.
+    var fight_reach: Float32
 
     def check(self) raises:
         """Refuse a quality that cannot be drawn.
@@ -129,8 +133,9 @@ struct GameQuality(ImplicitlyCopyable):
                 64 frames, the sky's step is not from 1 to 32 pixels, the
                 water's step is not from 1 to 64 pixels, its surface is
                 not found every 1 to 64 frames, the animals' coarseness
-                is not from 1 to 8, the shadow mode is not one, or the
-                shadow map has not from 64 to 8,192 texels on a side.
+                is not from 1 to 8, the shadow mode is not one, the
+                shadow map has not from 64 to 8,192 texels on a side, or
+                the fight's reach is not from 5 to 10,000 meters.
         """
         require_between(
             self.render_scale,
@@ -175,6 +180,12 @@ struct GameQuality(ImplicitlyCopyable):
             64,
             "The water's surface must be found every 1 to 64 frames",
         )
+        require_between(
+            self.fight_reach,
+            5,
+            1.0e4,
+            "A fight's reach must be from 5 to 10,000 meters",
+        )
 
     def frame_size(self, width: Int, height: Int) raises -> Tuple[Int, Int]:
         """Return the size the frame is drawn at, for a window.
@@ -210,15 +221,17 @@ def game_quality(preset: QualityPreset) raises -> GameQuality:
         `LOW`: a third of the window, the fewest plants, the grass's wind
         every fourth frame, a sky sample every 3 pixels, and a water
         sample every 8 pixels on a surface found every fourth frame,
-        animals three times coarser, and cached shadows on a map of 1,024
-        texels. Every preset smooths the frame's edges.
+        animals three times coarser, cached shadows on a map of 1,024
+        texels, and fighters posed every frame within 12 meters. Every
+        preset smooths the frame's edges.
         `MEDIUM`: half, fewer plants, every other frame, every 2 pixels,
         every 4 pixels, every other frame, twice as coarse, cached on
-        2,048. `HIGH`: two thirds, many plants, every frame, every 2
-        pixels, every 2 pixels, every frame, one and a half times as
-        coarse, cached on 2,048.
+        2,048, within 20 meters. `HIGH`: two thirds, many plants, every
+        frame, every 2 pixels, every 2 pixels, every frame, one and a half
+        times as coarse, cached on 2,048, within 32 meters.
         `ULTRA`: the window, every plant, everything every frame and
-        every pixel, and full shadows on 4,096.
+        every pixel, full shadows on 4,096, and every fighter every
+        frame.
 
     Raises:
         Error: If the preset is not one of the four.
@@ -235,10 +248,11 @@ def game_quality(preset: QualityPreset) raises -> GameQuality:
             CACHED_SHADOWS,
             1024,
             True,
+            12,
         )
     if preset == MEDIUM:
         return GameQuality(
-            0.5, FEWER_PLANTS, 2, 2, 4, 2, 2, CACHED_SHADOWS, 2048, True
+            0.5, FEWER_PLANTS, 2, 2, 4, 2, 2, CACHED_SHADOWS, 2048, True, 20
         )
     if preset == HIGH:
         return GameQuality(
@@ -252,10 +266,11 @@ def game_quality(preset: QualityPreset) raises -> GameQuality:
             CACHED_SHADOWS,
             2048,
             True,
+            32,
         )
     if preset == ULTRA:
         return GameQuality(
-            1, ALL_PLANTS, 1, 1, 1, 1, 1, FULL_SHADOWS, 4096, True
+            1, ALL_PLANTS, 1, 1, 1, 1, 1, FULL_SHADOWS, 4096, True, 1.0e4
         )
     raise Error("A quality preset must be one of the four")
 

@@ -9,7 +9,7 @@
     mojo run -I . examples/village_walk.mojo --play [WIDTH HEIGHT [QUALITY]]
 
 The page is Village walk. The village has people and animals: a woman by
-the brick house, a man on the trail, a child who runs round the pond,
+the brick house, a man on the trail, a child who runs around the pond,
 sheep, goats, cows, a horse, a pig, a dog, rabbits and deer. Each one
 wanders and rests. The player is a man of six feet, seen from behind by a
 third-person camera.
@@ -29,7 +29,12 @@ cores.
 | Use | The west button | `E` |
 | Weather | | `1` clear, `2` overcast, `3` rain, `4` fog |
 | Time | | `5` moves the day on three hours |
-| Quit | The start button | Escape or `q` |
+| Quit | The start button | Escape |
+
+With `--play`, the game keeps the player's progress in
+`out/village_progress.bin`: the skills, the satchel, the combos' mastery,
+the specialty and the style in hand. It reads the file as it begins, and
+writes it as the player quits. See `extensions.village.progress`.
 
 With `--play`, the weather turns by itself, a minute and a half each:
 see `extensions.village.weather`. A number key sets it. The day passes
@@ -41,7 +46,7 @@ player as far as many quick ones do. It prints the frames a second to the
 standard error.
 
 With a path, or no argument, the program needs no window and no pad. A
-pad of the web backend plays a fixed script: walk, run, jump, look round
+pad of the web backend plays a fixed script: walk, run, jump, look around
 and stop, at the `medium` quality in a window of 480 by 270. The program
 writes the frames as an animated PNG, and prints how long each step took,
 as JSON.
@@ -70,6 +75,7 @@ from extensions.village.pad_input import (
     keyboard_input,
 )
 from extensions.village.play import PlayParameters, VillageGame
+from extensions.village.progress import pack_progress, unpack_progress
 from extensions.village.day import DayCycle
 from extensions.village.weather import WeatherKind
 from extensions.village.quality import (
@@ -92,6 +98,8 @@ from window.x11 import X11Window
 
 comptime DEFAULT_OUTPUT = "out/village_walk.png"
 comptime PEBBLES = "assets/pebbles.jpg"
+comptime PROGRESS_FILE = "out/village_progress.bin"
+"""Where `--play` keeps the player's progress from one game to the next."""
 comptime WIDTH = 480
 comptime HEIGHT = 270
 comptime PLAY_WIDTH = 1920
@@ -100,7 +108,6 @@ comptime FPS = 8
 """The frames a second of the scripted walk."""
 comptime SECONDS = Float32(6)
 """How long the scripted walk lasts."""
-comptime QUIT = Key(113)
 comptime DAY_RATE = Float32(24.0 / 1200.0)
 """The hours a second that pass in play: a day in twenty minutes."""
 comptime KEY_ONE = Key(49)
@@ -135,7 +142,7 @@ def _script(mut state: WebGamepadState, t: Float32):
             state.digital_buttons[0] = True
             state.analog_buttons[0] = 1
     elif t < 4.8:
-        # Walk on, and look round to the right.
+        # Walk on, and look around to the right.
         state.axes[1] = -0.5
         state.axes[2] = 0.5
     # Then stand still, and let the camera settle.
@@ -240,6 +247,13 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
         width,
         height,
     )
+    var kept = Path(PROGRESS_FILE)
+    if kept.exists():
+        try:
+            game.restore(unpack_progress(kept.read_bytes()))
+            print("Took up the progress in", PROGRESS_FILE, file=stderr)
+        except error:
+            print("Could not take up the progress:", error, file=stderr)
     var window = X11Window(width, height, "ThreeMojo village")
     var database = default_mapping_database()
     var hid = HidHub[HidrawFile]()
@@ -256,11 +270,8 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
             var tapped = False
             for event in window.poll(POLL):
                 if event.kind == KEY_DOWN:
-                    if (
-                        event.key == ESCAPE
-                        or event.key == QUIT
-                        or event.key == CTRL_C
-                    ):
+                    # The `q` key calls the companion's assist attack.
+                    if event.key == ESCAPE or event.key == CTRL_C:
                         running = False
                     if event.key == KEY_SPACE:
                         tapped = True
@@ -310,6 +321,8 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
                 )
     finally:
         window.close()
+    kept.write_bytes(pack_progress(game.progress()))
+    print("Kept the progress in", PROGRESS_FILE, file=stderr)
 
 
 def main() raises:

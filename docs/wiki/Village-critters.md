@@ -17,7 +17,7 @@ The wings take one of four colors in turn: orange, cream, blue and yellow. `wing
 
 ## Set the haunts
 
-A `Haunt` is a round patch of the meadow, and how many fireflies and butterflies keep to it. Each critter flies its own loop round a point of its haunt.
+A `Haunt` is a round patch of the meadow, and how many fireflies and butterflies keep to it. Each critter flies its own loop around a point of its haunt.
 
 ```mojo
 from extensions.village.critters import Haunt
@@ -45,4 +45,4 @@ A firefly is one mesh of 8 triangles. A butterfly is three meshes: its body and 
 
 - A critter does not keep off the houses or the trees. Keep the haunts clear of them.
 - The player cannot catch a critter.
-- A firefly gives no light to the things round it.
+- A firefly gives no light to the things around it.

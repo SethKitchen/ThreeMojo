@@ -20,7 +20,7 @@ from extensions.village.skills import (
     DEFEAT_EXPERIENCE,
     PRACTICE_EXPERIENCE,
     SWORDPLAY,
-    SWORD_MIGHT,
+    FIGHTING_MIGHT,
     FISHING,
     FISH_HASTE,
     FORAGE_BONUS_LEVEL,
@@ -37,7 +37,22 @@ from extensions.village.skills import (
     ore_strikes,
     skill_name,
     skill_of,
-    sword_might,
+    fighting_might,
+    style_skill,
+    AXEWORK,
+    BRAWLING,
+    MACEWORK,
+    MARKSMANSHIP,
+    SPELLCRAFT,
+)
+from extensions.village.styles import (
+    ARCHERY,
+    AXE,
+    HAND_TO_HAND,
+    MACE,
+    MAGIC,
+    SWORD,
+    FightingStyle,
 )
 from std.testing import (
     TestSuite,
@@ -52,12 +67,13 @@ from std.testing import (
 def test_each_kind_trains_its_skill() raises:
     assert_true(FISHING.is_valid())
     assert_true(SWORDPLAY.is_valid())
-    assert_false(SkillKind(4).is_valid())
+    assert_true(SkillKind(4).is_valid())
+    assert_false(SkillKind(9).is_valid())
     assert_equal(skill_name(SWORDPLAY), "SWORDPLAY")
     assert_equal(skill_name(FORAGING), "FORAGING")
     assert_equal(skill_name(MINING), "MINING")
     assert_equal(skill_name(FISHING), "FISHING")
-    with assert_raises(contains="one of the four"):
+    with assert_raises(contains="one of the nine"):
         _ = skill_name(SkillKind(-1))
     assert_true(skill_of(HERBS).value() == FORAGING)
     assert_true(skill_of(MUSHROOMS).value() == FORAGING)
@@ -118,8 +134,8 @@ def test_experience_raises_a_skill() raises:
     assert_equal(skills.lines()[2], "FISHING 10  5000")
     with assert_raises(contains="negative"):
         _ = skills.gain(HERBS, -1)
-    with assert_raises(contains="one of the four"):
-        _ = skills.level(SkillKind(5))
+    with assert_raises(contains="one of the nine"):
+        _ = skills.level(SkillKind(9))
 
 
 def test_swordplay_grows_by_fighting_and_strengthens_blows() raises:
@@ -131,10 +147,28 @@ def test_swordplay_grows_by_fighting_and_strengthens_blows() raises:
     assert_equal(skills.lines()[0], "SWORDPLAY 2  50/150")
     with assert_raises(contains="negative"):
         _ = skills.train(SWORDPLAY, -1)
-    assert_almost_equal(sword_might(1), 1, atol=1e-6)
-    assert_almost_equal(sword_might(10), 1 + 9 * SWORD_MIGHT, atol=1e-6)
+    assert_almost_equal(fighting_might(1), 1, atol=1e-6)
+    assert_almost_equal(fighting_might(10), 1 + 9 * FIGHTING_MIGHT, atol=1e-6)
     assert_true(DEFEAT_EXPERIENCE > BLOW_EXPERIENCE)
     assert_true(BLOW_EXPERIENCE > PRACTICE_EXPERIENCE)
+
+
+def test_each_style_trains_its_own_skill() raises:
+    assert_true(style_skill(HAND_TO_HAND) == BRAWLING)
+    assert_true(style_skill(SWORD) == SWORDPLAY)
+    assert_true(style_skill(AXE) == AXEWORK)
+    assert_true(style_skill(MACE) == MACEWORK)
+    assert_true(style_skill(MAGIC) == SPELLCRAFT)
+    assert_true(style_skill(ARCHERY) == MARKSMANSHIP)
+    with assert_raises(contains="six"):
+        _ = style_skill(FightingStyle(6))
+    assert_equal(skill_name(BRAWLING), "BRAWLING")
+    assert_equal(skill_name(MARKSMANSHIP), "MARKSMANSHIP")
+    # A fighting skill trains and lists as swordplay does.
+    var skills = Skills()
+    _ = skills.train(SPELLCRAFT, 150)
+    assert_equal(skills.level(SPELLCRAFT), 3)
+    assert_equal(skills.lines()[0], "SPELLCRAFT 3  150/300")
 
 
 def main() raises:

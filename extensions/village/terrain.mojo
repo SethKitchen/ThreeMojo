@@ -14,7 +14,7 @@ entered, such as a scanned one, stays a solid `Lot`.
 - `Terrain.height_at` is the height of the highest floor under a point
   that feet can reach, or of the ground where there is no such floor.
   Feet reach a floor at most `CLIMB` above them. A higher floor, such as
-  a house's upper storey, passes over them.
+  a house's upper story, passes over them.
 - `wall_push` moves a circle out of a wall span, as `lot_push` moves it
   out of a lot.
 - `Terrain.view_reach` says how far a camera can stand from its focus
@@ -32,7 +32,7 @@ comptime INSIDE = Float32(1.0e-6)
 """A point nearer a lot than this, in meters, is on it."""
 comptime CLIMB = Float32(0.45)
 """How far above its feet a character can step onto a floor, in meters:
-more than a step or a stair's riser, and less than a storey."""
+more than a step or a stair's riser, and less than a story."""
 
 
 @fieldwise_init

@@ -23,7 +23,7 @@ the feet keep pace with the ground. The player is a `Body` too.
 **Animals.** An animal is meshed once for each of `phases` poses of its
 walk, and once standing: a flipbook. Each frame its mesh shows the pose of
 how far it has walked, so a stride covers one stride of ground. Each
-`Herd` grazes round its own pasture. A species that does not walk on four
+`Herd` grazes around its own pasture. A species that does not walk on four
 legs keeps its standing mesh. A shy herd runs from the player, at
 `FLEE_PACE` times its walk, while the player is nearer than its `flee`.
 """
@@ -419,7 +419,7 @@ def wander_route(
     lots: List[Lot],
     rest: Duration,
 ) raises -> Route:
-    """Return a route between points scattered round a middle.
+    """Return a route between points scattered around a middle.
 
     A point on a lot, near one, or under the pond's water is tried again
     elsewhere, up to `TRIES` times, and left out after that. The middle
@@ -510,7 +510,7 @@ struct Villager(Copyable, Movable):
 
 
 struct Herd(Copyable, Movable):
-    """Animals of one kind that graze round one pasture."""
+    """Animals of one kind that graze around one pasture."""
 
     var species: SpeciesId
     var count: Int
@@ -540,7 +540,7 @@ struct Herd(Copyable, Movable):
             count: How many.
             x: The pasture's middle along x, in meters.
             z: The pasture's middle along z, in meters.
-            reach: How far round the middle they graze, in meters.
+            reach: How far around the middle they graze, in meters.
             seed: Which individual, and which points they graze between.
             flee: How near the player may come before they run away. Zero
                 is tame.
@@ -695,7 +695,7 @@ struct Flipbook(Copyable, Movable):
             return self.stand
         if len(self.frames) == 0:
             return self.stand
-        var strides = character.travelled / self.stride
+        var strides = character.traveled / self.stride
         var phase = strides - Float32(Int(strides))
         var index = Int(phase * Float32(len(self.frames)))
         return self.frames[min(index, len(self.frames) - 1)]

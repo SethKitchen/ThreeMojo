@@ -3,8 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The player's skills, which grow with use: three of gathering, and
-swordplay.
+"""The player's skills, which grow with use: three of gathering, and one
+for each fighting style.
 
 Each thing gathered gives experience to one skill, a `SkillKind`:
 
@@ -14,11 +14,24 @@ Each thing gathered gives experience to one skill, a `SkillKind`:
 | `MINING` | Ore | 30 | One strike fewer for each `MINING_STEP` levels, down to one |
 | `FISHING` | Fish | 25 | A fish bites sooner: the wait is `FISH_HASTE` shorter for each level |
 
-Coins and trinkets give no experience. `SWORDPLAY` grows by fighting:
-`BLOW_EXPERIENCE` for each of the player's blows that lands on a bandit,
-`PRACTICE_EXPERIENCE` for each that lands on a straw dummy, and
-`DEFEAT_EXPERIENCE` for each bandit felled. Each level over 1 makes the
-player's blows `SWORD_MIGHT` stronger: see `sword_might`.
+Coins and trinkets give no experience. Each fighting style has its own
+skill, which grows as the player fights in that style: see `style_skill`.
+
+| Style | Skill |
+|---|---|
+| Hand to hand | `BRAWLING` |
+| The sword | `SWORDPLAY` |
+| The axe | `AXEWORK` |
+| The mace | `MACEWORK` |
+| Magic | `SPELLCRAFT` |
+| Archery | `MARKSMANSHIP` |
+
+A fighting skill gets `BLOW_EXPERIENCE` for each of the player's blows
+that lands on a foe, `PRACTICE_EXPERIENCE` for each that lands on a straw
+dummy, and `DEFEAT_EXPERIENCE` for each foe felled. Each level over 1
+makes the player's blows in its style `FIGHTING_MIGHT` stronger: see
+`fighting_might`. A level also teaches the style's combos: see
+`extensions.village.combos`.
 
 A skill begins at level 1 and
 stops at `MAX_LEVEL`. Level `L` needs `level_experience(L)`: 25 times
@@ -27,6 +40,14 @@ level 10.
 """
 
 from core.ordinal import ordinal_valid
+from extensions.village.styles import (
+    ARCHERY,
+    AXE,
+    HAND_TO_HAND,
+    MACE,
+    MAGIC,
+    FightingStyle,
+)
 from extensions.village.gathering import (
     BERRIES,
     FISH,
@@ -37,7 +58,7 @@ from extensions.village.gathering import (
     STRIKES,
 )
 
-comptime SKILLS = 4
+comptime SKILLS = 9
 """How many skills there are."""
 comptime MAX_LEVEL = 10
 """The highest level of a skill."""
@@ -47,15 +68,15 @@ comptime MINING_STEP = 3
 """How many mining levels take one strike off a boulder."""
 comptime FISH_HASTE = Float32(0.06)
 """How much shorter a fish's wait is for each fishing level over 1."""
-comptime SWORD_MIGHT = Float32(0.05)
-"""How much stronger the player's blows are for each swordplay level
-over 1."""
+comptime FIGHTING_MIGHT = Float32(0.05)
+"""How much stronger the player's blows in a style are for each level of
+its skill over 1."""
 comptime BLOW_EXPERIENCE = 2
-"""The swordplay experience of a blow that lands on a bandit."""
+"""The fighting experience of a blow that lands on a foe."""
 comptime PRACTICE_EXPERIENCE = 1
-"""The swordplay experience of a blow that lands on a straw dummy."""
+"""The fighting experience of a blow that lands on a straw dummy."""
 comptime DEFEAT_EXPERIENCE = 40
-"""The swordplay experience of a bandit felled."""
+"""The fighting experience of a foe felled."""
 
 
 @fieldwise_init
@@ -68,7 +89,7 @@ struct SkillKind(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is one of the skills.
 
         Returns:
-            True for `FORAGING`, `MINING`, `FISHING` and `SWORDPLAY`.
+            True from `FORAGING` to `MARKSMANSHIP`.
         """
         return ordinal_valid(self.value, SKILLS - 1)
 
@@ -81,6 +102,16 @@ comptime FISHING = SkillKind(2)
 """Hooking fish in the pond."""
 comptime SWORDPLAY = SkillKind(3)
 """Fighting with the sword."""
+comptime BRAWLING = SkillKind(4)
+"""Fighting hand to hand."""
+comptime AXEWORK = SkillKind(5)
+"""Fighting with the axe."""
+comptime MACEWORK = SkillKind(6)
+"""Fighting with the mace."""
+comptime SPELLCRAFT = SkillKind(7)
+"""Fighting with magic."""
+comptime MARKSMANSHIP = SkillKind(8)
+"""Fighting with the bow."""
 
 
 def skill_name(skill: SkillKind) raises -> String:
@@ -90,20 +121,54 @@ def skill_name(skill: SkillKind) raises -> String:
         skill: The skill.
 
     Returns:
-        "FORAGING", "MINING", "FISHING" or "SWORDPLAY".
+        "FORAGING", "MINING", "FISHING", "SWORDPLAY", "BRAWLING",
+        "AXEWORK", "MACEWORK", "SPELLCRAFT" or "MARKSMANSHIP".
 
     Raises:
         Error: If the skill is not one.
     """
-    if skill == FORAGING:
-        return "FORAGING"
-    if skill == MINING:
-        return "MINING"
-    if skill == FISHING:
-        return "FISHING"
-    if skill == SWORDPLAY:
-        return "SWORDPLAY"
-    raise Error("A skill must be one of the four")
+    if not skill.is_valid():
+        raise Error("A skill must be one of the nine")
+    var names: List[String] = [
+        "FORAGING",
+        "MINING",
+        "FISHING",
+        "SWORDPLAY",
+        "BRAWLING",
+        "AXEWORK",
+        "MACEWORK",
+        "SPELLCRAFT",
+        "MARKSMANSHIP",
+    ]
+    return names[skill.value]
+
+
+def style_skill(style: FightingStyle) raises -> SkillKind:
+    """Return the skill that fighting in a style trains.
+
+    Args:
+        style: The style.
+
+    Returns:
+        `BRAWLING`, `SWORDPLAY`, `AXEWORK`, `MACEWORK`, `SPELLCRAFT` or
+        `MARKSMANSHIP`.
+
+    Raises:
+        Error: If the style is not one.
+    """
+    if not style.is_valid():
+        raise Error("A fighting style must be one of the six")
+    if style == HAND_TO_HAND:
+        return BRAWLING
+    if style == AXE:
+        return AXEWORK
+    if style == MACE:
+        return MACEWORK
+    if style == MAGIC:
+        return SPELLCRAFT
+    if style == ARCHERY:
+        return MARKSMANSHIP
+    return SWORDPLAY
 
 
 def skill_of(kind: GatherKind) -> Optional[SkillKind]:
@@ -132,7 +197,7 @@ def experience_for(kind: GatherKind) -> Int:
         kind: The kind of spot.
 
     Returns:
-        10 for a herb, 6 for a mushroom, 4 for a berry, 30 for ore, 25
+        10 for an herb, 6 for a mushroom, 4 for a berry, 30 for ore, 25
         for a fish, and 0 for a coin or a trinket.
     """
     if kind == HERBS:
@@ -201,16 +266,16 @@ def forage_bonus(level: Int) -> Int:
     return 1 if level >= FORAGE_BONUS_LEVEL else 0
 
 
-def sword_might(level: Int) -> Float32:
+def fighting_might(level: Int) -> Float32:
     """Return how many times its damage the player's blow does.
 
     Args:
-        level: The swordplay level.
+        level: The level of the style's skill.
 
     Returns:
-        One at level 1, and `SWORD_MIGHT` more for each level over it.
+        One at level 1, and `FIGHTING_MIGHT` more for each level over it.
     """
-    return 1 + SWORD_MIGHT * Float32(level - 1)
+    return 1 + FIGHTING_MIGHT * Float32(level - 1)
 
 
 def fish_haste(level: Int) -> Float32:
@@ -247,7 +312,7 @@ struct Skills(Copyable, Movable):
             Error: If the skill is not one.
         """
         if not skill.is_valid():
-            raise Error("A skill must be one of the four")
+            raise Error("A skill must be one of the nine")
         return level_of(self.experience[skill.value])
 
     def gain(

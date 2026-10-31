@@ -2,7 +2,7 @@
 
 `VillageGame` puts people and animals in the [Village](Village), and lets a player walk, run and jump through it, and into its houses. A third-person camera follows the player. A gamepad or the keyboard moves the player.
 
-![Seen from behind, a man in a red tunic walks past a pond and a stone cottage, then runs, jumps and looks round](out/village_walk.png)
+![Seen from behind, a man in a red tunic walks past a pond and a stone cottage, then runs, jumps and looks around](out/village_walk.png)
 
 `examples/village_walk.mojo` draws this picture. A gamepad of the web backend plays a fixed script. The modules live in `extensions/village/` and `controls/`. See [Gamepads](Gamepads) and [Game humanoid](Game-humanoid).
 
@@ -21,7 +21,7 @@ The window is 1920 by 1080 pixels by default. Give a width and a height for a di
 |---|---|---|
 | Move | Left stick, or the d-pad | `W`, `A`, `S`, `D` |
 | Look | Right stick | The arrows |
-| Run | Hold the right trigger, the east button or the left stick | Hold Shift, or `R` |
+| Run, and sprint after 0.6 seconds | Hold the right trigger, the east button or the left stick | Hold Shift, or `R` |
 | Jump | The south button | Space |
 | Use | The west button | `E` |
 | Light attack | The right shoulder | `F` |
@@ -35,15 +35,34 @@ The window is 1920 by 1080 pixels by default. Give a width and a height for a di
 | Lock on | The right stick | `T` |
 | Stance | Hold the left shoulder, and press the north, the west or the south button | `6`, `7` and `8` |
 | Eat herbs to heal | The back button | `H` |
+| Change the fighting style | Hold the left trigger, and press the south button | `Y` |
+| Taunt the Stone Warden | Hold the left trigger, and press the east button | `U` |
+| Show the combo book | Hold the left trigger, and press the back button | `K` |
 | Weather | | `1` clear, `2` overcast, `3` rain, `4` fog |
 | Time | | `5` moves the day on three hours |
-| Quit | The start button | Escape or `q` |
+| Quit | The start button | Escape |
 
-The buttons are named by position, as SDL names them. The south button is A on an Xbox controller and the cross on a PlayStation controller. The fight's controls are on [Village combat](Village-combat#the-controls).
+The buttons are named by position, as SDL names them. The south button is A on an Xbox controller and the cross on a PlayStation controller. The fight's controls are on [Village combat](Village-combat#the-controls). The styles and the combos are on [Village fighting styles](Village-styles) and [Village combos](Village-combos), and the raid on [Village raid](Village-raid).
 
 The game builds for about 15 seconds before the window opens. On a four-core Linux host, the `low` quality draws about 34 frames a second at 1920 by 1080 on the CPU. The game moves by the time each frame takes. So a slow frame moves the player as far as many quick frames do.
 
 The game prints the frames a second to the standard error.
+
+## Saved progress
+
+The player keeps their progress from one game to the next. With `--play`, the game keeps it in `out/village_progress.bin`. It reads the file as it begins, and writes it as the player quits. A file that the game cannot read is left as it is until the player quits, and the game begins as new.
+
+The module is `extensions/village/progress.mojo`. `VillageGame.progress` gives a `Progress`, and `VillageGame.restore` takes one up. `pack_progress` packs it into bytes, and `unpack_progress` reads them back.
+
+| Part | What it keeps |
+|---|---|
+| `experience` | Each skill's experience. The levels teach the combos again. |
+| `satchel` | How many of each thing the satchel holds. |
+| `mastery` | Each combo's mastery, so its rank and its perks. |
+| `specialty` | The style the player specializes in. |
+| `style` | The style in hand. The game takes it up if the player carries it. |
+
+The bytes begin with the letters `TMVP` and the version, 1. Each number takes 4 bytes. A record from an earlier game, of fewer skills, things or combos, reads with zero for the rest. A record of a later version, or of more than this game holds, is refused. In a game of many players, the server keeps each player's record.
 
 ## Run the game loop in code
 
@@ -87,7 +106,7 @@ var input = combined(gamepad_input(pad), keyboard_input(keys, shift))
 
 `tick` does these steps in this order:
 
-1. The look stick turns the camera round the player.
+1. The look stick turns the camera around the player.
 2. The fight runs: see [Village combat](Village-combat#one-frame-of-the-fight). The player's `Character` steps by the move stick, on the village's `Terrain`. Forward is the way the camera looks. An attack, a dodge or a blow carries the character instead.
 3. While the player moves, the look stick rests and no lock holds, the camera turns behind the player.
 4. The player's `Body` stands where the character stands. It plays the clip of its stance, or of its sword.
@@ -145,9 +164,31 @@ These things stop a character:
 
 Where a step is refused, the character slides along the edge if it can.
 
-The feet follow `Terrain.height_at`: the highest floor under them that they can reach, or the ground. Feet reach a floor at most `CLIMB`, 0.45 meters, above them. A higher floor, such as an upper storey, passes over them. A house's floor, the steps to its door and each tread of its stair are floors. So the character climbs the steps, walks on the floor, and goes up the stair one tread at a time. A floor stands over water, so a character does not wade on it.
+The feet follow `Terrain.height_at`: the highest floor under them that they can reach, or the ground. Feet reach a floor at most `CLIMB`, 0.45 meters, above them. A higher floor, such as an upper story, passes over them. A house's floor, the steps to its door and each tread of its stair are floors. So the character climbs the steps, walks on the floor, and goes up the stair one tread at a time. A floor stands over water, so a character does not wade on it.
 
 `Stance` is `STANDING`, `WALKING`, `RUNNING` or `AIRBORNE`. A character in the air is airborne. On the ground, a character below 0.15 meters a second is standing, and one above 1.15 times the walking speed is running.
+
+## The player's movement
+
+The player moves by `player_movement`, which adds these to a person's movement. The residents and the foes move as before.
+
+| Property | The player | What it does |
+|---|---|---|
+| `sprint_speed` | 6.6 meters a second | A run with the stick leaned all the way for `sprint_after`, 0.6 seconds, becomes a sprint. A sprint spends 11 stamina a second. With no stamina left, the player runs until they have 25 again. |
+| `sprint_turn` | 320 degrees a second | A sprint turns more slowly, in wide arcs. |
+| `deceleration` | 22 meters a second squared | The player slows and turns back faster than they speed up. |
+| `coyote` | 0.12 seconds | A player who walks off an edge can still jump for this long. A body that a blow throws up cannot. |
+| `jump_buffer` | 0.15 seconds | A press of the jump this long before the feet land jumps as they land. |
+| `jump_cut` | 0.45 | A jump whose button is let go while it rises keeps this share of its upward speed. So a tap jumps lower than a hold. |
+| `back_share` | 0.7 | A player locked on a target faces it, and strafes around it. They back away at this share of their speed. |
+| `climb_drag` | 0.4 | Uphill, the speed drops by this share for each meter of rise a meter, to 30 percent at least. |
+| `hard_landing` | 9 meters a second | A landing faster than this is hard. The player walks for `landing_time`, 0.3 seconds, and the camera shakes. |
+
+**The roll.** Out of a fight, a tap of the dodge button rolls the player the way the stick leans, or steps them back with no lean. The roll starts as the button comes up, within 0.3 seconds of its press. A longer hold of the east button runs.
+
+The roll spends a dodge's stamina, and does not draw the weapon. A roll in a sprint keeps the sprint. Hold the jump as a roll ends, and the player jumps with the roll's speed: a long jump.
+
+A character with a `sprint_speed` no faster than its run never sprints. `CharacterParameters()` gives a person who does not sprint, and slows as fast as it speeds up. Its jump has no grace, no buffer and no cut. It backs away and climbs at its full speed, and never lands hard.
 
 ## The camera
 
@@ -176,7 +217,7 @@ Under the open sky, a house's ceiling under the eye does not hold it. A sight li
 |---|---|
 | A woman of 65 inches, in a hooded green tunic | By the brick house, which she visits. |
 | A man of 70 inches, in a blue tunic | Along the trail. He visits the stone cottage. |
-| A child of 50 inches, in a yellow tunic, who runs | Round the pond. |
+| A child of 50 inches, in a yellow tunic, who runs | Around the pond. |
 | A man of 67 inches, in a hooded gray tunic | By the framed cottage, which he visits. |
 | A woman of 64 inches, in a red tunic | By the framed house, which she visits. |
 | Four sheep and a goat | Right of the trail. |
@@ -186,7 +227,7 @@ Under the open sky, a house's ceiling under the eye does not hold it. A sight li
 | Two rabbits | By the trail. |
 | Two deer | Past the pond. |
 
-Each resident walks a `Route`. It walks to a point, rests there for 3 seconds, and walks on to the next point. `wander_route` scatters the points round a middle. It does not put a point on or near a lot, or under the water. A resident that stays slower than 0.1 meters a second for 2.5 seconds gives up on its point, and rests as if it had arrived.
+Each resident walks a `Route`. It walks to a point, rests there for 3 seconds, and walks on to the next point. `wander_route` scatters the points around a middle. It does not put a point on or near a lot, or under the water. A resident that stays slower than 0.1 meters a second for 2.5 seconds gives up on its point, and rests as if it had arrived.
 
 A villager with a home visits it. `Villager.home` is a `HouseId`, the house's place among the village's houses, or `NO_HOUSE`. `visit` adds five points to the end of the route. They stand 3.2 meters before the home's front door, 1 meter before it, and 1.8 meters inside it, and then back out the same way. The door opens as the villager comes near.
 
@@ -230,6 +271,6 @@ The player wears a madder-red tunic trimmed in weld yellow, over walnut hose. `P
 - The game renderer lights each vertex, not each pixel. See [Game renderer](Game-renderer#why-it-agrees-with-renderer).
 - A garment bends with the skin. It does not swing as cloth does.
 - The characters do not swim. Deep water stops them.
-- A resident walks straight to its next point. It does not find a way round a house: it slides along the wall, or gives up.
+- A resident walks straight to its next point. It does not find a way around a house: it slides along the wall, or gives up.
 - An animal slides across the ground while it turns on the spot.
 - The camera comes in before a wall, but not before a tree or a roof.

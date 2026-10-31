@@ -160,7 +160,7 @@ def respawns(kind: GatherKind) -> Bool:
 
 
 def solid_radius(kind: GatherKind) -> Float32:
-    """Return how far round its middle a kind of spot stops a character.
+    """Return how far around its middle a kind of spot stops a character.
 
     Args:
         kind: The kind.
@@ -388,7 +388,7 @@ def _leaf(
 
 
 def _herbs(mut parts: _Parts, seed: Int) -> Float32:
-    """Add a tuft of herbs round the origin; return its height."""
+    """Add a tuft of herbs around the origin; return its height."""
     for k in range(12):
         var a = 2 * pi * (Float32(k) + hash01(k, seed, 1)) / 12
         var toward = Vector3(cos(a), 0, sin(a))
@@ -417,7 +417,7 @@ def _herbs(mut parts: _Parts, seed: Int) -> Float32:
 
 
 def _mushrooms(mut parts: _Parts, seed: Int) -> Float32:
-    """Add a cluster of mushrooms round the origin; return its height."""
+    """Add a cluster of mushrooms around the origin; return its height."""
     for k in range(5):
         var a = 2 * pi * Float32(k) / 5 + hash01(k, seed, 4)
         var away = 0.06 + 0.1 * Float32(k % 3)
@@ -455,7 +455,7 @@ def _mushrooms(mut parts: _Parts, seed: Int) -> Float32:
 
 
 def _bush(mut body: _Parts, mut fruit: _Parts, seed: Int) -> Float32:
-    """Add a berry bush round the origin, its berries apart; return its
+    """Add a berry bush around the origin, its berries apart; return its
     height."""
     # Three tiers of leafy sprays, each tier narrower and higher.
     for tier in range(3):
@@ -900,7 +900,7 @@ struct Gathering(Movable):
                 top = _mushrooms(part, index)
             elif spot.kind == BERRIES:
                 # The bush stays: it is drawn with the bodies, in the
-                # spot's turn, round its middle.
+                # spot's turn, around its middle.
                 var bush = _Parts()
                 top = _bush(bush, part, index)
                 self.triangles += _add_parts(

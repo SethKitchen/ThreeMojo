@@ -54,7 +54,7 @@ def test_a_door_opens_for_someone_near_and_shuts_after() raises:
     var q = scene.node(node).quaternion
     var turned = 2 * atan2(q.y, q.w)
     assert_almost_equal(turned, Float32(0.25) - WIDE, atol=1e-4)
-    # Someone far away, or on another storey, does not hold it open.
+    # Someone far away, or on another story, does not hold it open.
     var away: List[Vector3] = [
         Vector3(0.5, 0.5, OPEN_REACH + 1),
         Vector3(0.5, 0.5 + HEADROOM + 0.5, 0),

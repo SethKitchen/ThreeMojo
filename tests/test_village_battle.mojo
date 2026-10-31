@@ -51,6 +51,7 @@ from extensions.village.combat import (
 )
 from extensions.village.foes import Post, POSTED
 from extensions.village.skills import PRACTICE_EXPERIENCE
+from extensions.village.styles import SWORD
 from math.vector3 import Vector3
 from std.math import cos, sin
 from std.testing import (
@@ -253,7 +254,7 @@ def test_a_blow_pushes_and_throws() raises:
 def test_the_player_cuts_a_dummy() raises:
     # The bandit stands too far to notice, or to reach.
     var arena = Arena(arena_parameters(1, 1, 15))
-    assert_equal(arena.battle.trained, 0)
+    assert_equal(arena.battle.trained[SWORD.value], 0)
     assert_equal(len(arena.battle.dummies), 1)
     assert_equal(arena.battle.targets(), 2)
     assert_true(arena.battle.standing(1))
@@ -269,7 +270,7 @@ def test_the_player_cuts_a_dummy() raises:
     arena.run(0.3)
     assert_equal(arena.battle.fighter.combo, 1)
     assert_true(holds_text(popup_texts(arena.battle), "30"))
-    assert_equal(arena.battle.trained, PRACTICE_EXPERIENCE)
+    assert_equal(arena.battle.trained[SWORD.value], PRACTICE_EXPERIENCE)
     assert_almost_equal(arena.battle.foes[0].fighter.health, 300, atol=1e-6)
     assert_false(arena.battle.limited)
     # The dummy rocks, and keeps its health.
@@ -426,10 +427,14 @@ def test_a_fresh_guard_parries_and_a_late_dodge_is_perfect() raises:
 
 def test_a_dodge_goes_the_way_of_the_stick_or_back() raises:
     var arena = Arena(arena_parameters(0, 0))
-    # A sheathed sword does not dodge.
+    # A sheathed sword does not dodge as the button goes down, and a long
+    # hold does not roll as it comes up.
     var dodge = no_input()
     dodge.dodge = True
-    arena.press(dodge)
+    arena.tick(dodge)
+    assert_true(arena.battle.fighter.free())
+    arena.run(0.5, dodge)
+    arena.tick(no_input())
     assert_true(arena.battle.fighter.free())
     arena.battle.drawn = True
     dodge.right = 1

@@ -175,7 +175,7 @@ def test_a_fighter_on_a_lot_or_in_the_water_is_left_out() raises:
     )
     assert_equal(len(battle.foes), 0)
     assert_equal(len(battle.dummies), 0)
-    # And the other way round: the bandit in the water, the dummy on a lot.
+    # And the other way around: the bandit in the water, the dummy on a lot.
     var wet = Ground(
         hill_height=Length(0.0, METER),
         pond=Pond(

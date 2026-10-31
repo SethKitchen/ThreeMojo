@@ -243,6 +243,30 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_boss_attack_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 23,
+        "message": "invalid call to 'attack_name': value passed to 'attack' cannot be converted from 'IntLiteral[0]' to 'BossAttack'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_boss_phase_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'phase_pace': value passed to 'phase' cannot be converted from 'IntLiteral[1]' to 'BossPhase'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_boundary_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -530,6 +554,42 @@
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'combine' cannot be converted from 'IntLiteral[1]' to 'Combine'"
+    ]
+  },
+  "tests/compile_fail/a_combo_effect_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 23,
+        "message": "invalid call to 'effect_name': value passed to 'effect' cannot be converted from 'IntLiteral[3]' to 'ComboEffect'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_combo_key_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 20,
+        "message": "invalid call to 'key_name': value passed to 'key' cannot be converted from 'IntLiteral[0]' to 'ComboKey'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_combo_tier_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'tier_name': value passed to 'tier' cannot be converted from 'IntLiteral[0]' to 'ComboTier'"
+      }
+    ],
+    "notes": [
+      "function declared here"
     ]
   },
   "tests/compile_fail/a_command_kind_is_not_a_bare_int.mojo": {
@@ -1309,6 +1369,30 @@
         "line": 25,
         "column": 24,
         "message": "invalid call to 'failure_motion': value passed to 'mode' cannot be converted from 'IntLiteral[1]' to 'FailureMode'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_fight_button_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 29,
+        "message": "invalid call to 'style_move': value passed to 'button' cannot be converted from 'IntLiteral[0]' to 'FightButton'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_fighting_style_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'style_name': value passed to 'style' cannot be converted from 'IntLiteral[1]' to 'FightingStyle'"
       }
     ],
     "notes": [
@@ -2431,6 +2515,20 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_missile_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 16,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'MissileKind'"
+    ]
+  },
   "tests/compile_fail/a_motion_vector_space_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -2722,6 +2820,18 @@
         "column": 29,
         "line": 16,
         "message": "invalid call to 'part': value passed to 'id' cannot be converted from 'IntLiteral[3]' to 'PartId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_party_role_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'role_name': value passed to 'role' cannot be converted from 'IntLiteral[0]' to 'PartyRole'"
       }
     ],
     "notes": [
@@ -3133,6 +3243,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_relevance_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 17,
+        "message": "invalid call to 'heard': value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'Relevance'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/a_render_detail_is_not_a_bare_int.mojo": {
     "errors": [
@@ -4814,6 +4936,20 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_zone_shape_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 15,
+        "column": 17,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'shape' cannot be converted from 'IntLiteral[1]' to 'ZoneShape'"
+    ]
   },
   "tests/compile_fail/add_illuminance_to_luminance.mojo": {
     "errors": [
