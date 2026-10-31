@@ -8,8 +8,8 @@ of each skill, what the satchel holds, the mastery of each combo, the
 specialty and the style in hand.
 
 A `Progress` packs into bytes: see `pack_progress`. A game writes them to
-a file as it ends, and reads them back as it begins. In a game of many
-players, the server keeps them for each player. The combos that the
+a file as it ends, and reads them back as it begins, or keeps them
+anywhere it likes. The combos that the
 player knows are not kept: the levels teach them again.
 
 | Part | Bytes |

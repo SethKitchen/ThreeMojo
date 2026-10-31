@@ -3,9 +3,10 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The fight's messages: packed commands and snapshots, which fighters a
-player hears of, and the commands a player keeps until the server has
-them."""
+"""The sample networking layer: packed commands and snapshots, which
+fighters a player hears of, the commands a player keeps until the server
+has them, smoothing and prediction. It is test code, built on the
+library's hooks alone."""
 
 from extensions.vegetation.ground import Ground
 from extensions.village.character import (
@@ -20,11 +21,10 @@ from extensions.village.combat import (
     Fighter,
     FighterParameters,
     HEAVY,
-    HIGH_STANCE,
     LOW_STANCE,
     WHIRLWIND,
 )
-from extensions.village.netcode import (
+from tests._village_netcode import (
     BUFFERED,
     BUTTON_COUNT,
     COMMAND_BYTES,
@@ -39,12 +39,10 @@ from extensions.village.netcode import (
     RELEVANCES,
     SNAPSHOT_BYTES,
     UNHEARD,
-    FighterSnapshot,
     InputHistory,
     Predictor,
     Relevance,
     SnapshotBuffer,
-    apply_snapshot,
     axis_byte,
     blend_snapshots,
     buttons_of,
@@ -54,10 +52,10 @@ from extensions.village.netcode import (
     pack_command,
     pack_snapshot,
     relevance,
-    snapshot_of,
     unpack_command,
     unpack_snapshot,
 )
+from extensions.village.fighter_state import FighterState, state_of
 from extensions.village.styles import ARCHERY, MAGIC, FightingStyle
 from extensions.village.terrain import Terrain
 from math.vector3 import Vector3
@@ -102,9 +100,9 @@ def _all_held() -> MoveInput:
     )
 
 
-def _snapshot() -> FighterSnapshot:
+def _snapshot() -> FighterState:
     """Return a snapshot of a fighter in a whirlwind."""
-    return FighterSnapshot(
+    return FighterState(
         513,
         Vector3(-12.345, 1.5, 200.01),
         Angle(-1.0, RADIAN),
@@ -120,7 +118,7 @@ def _snapshot() -> FighterSnapshot:
     )
 
 
-def _moved(snapshot: FighterSnapshot, x: Float32) -> FighterSnapshot:
+def _moved(snapshot: FighterState, x: Float32) -> FighterState:
     """Return a snapshot moved along x, with half the health."""
     var out = snapshot
     out.position.x += x
@@ -351,48 +349,6 @@ def test_a_snapshot_refuses_what_it_cannot_carry() raises:
         _ = unpack_snapshot(styled)
 
 
-def test_a_client_takes_the_servers_snapshot() raises:
-    var terrain = Terrain(Ground(hill_height=Length(0.0, METER)))
-    var character = Character(
-        CharacterParameters(), 0, 0, Angle(0.0, RADIAN), terrain
-    )
-    var fighter = Fighter(FighterParameters())
-    fighter.health = 321
-    fighter.stamina = 40
-    fighter.mana = 50
-    fighter.combo = 4
-    var taken = snapshot_of(9, character, fighter)
-    assert_equal(taken.id, 9)
-    assert_almost_equal(taken.stamina, 0.4, atol=1e-6)
-    assert_almost_equal(taken.mana, 0.5, atol=1e-6)
-    var none = FighterParameters()
-    none.mana = 0
-    var plain = Fighter(none)
-    assert_equal(snapshot_of(1, character, plain).mana, 0)
-    var copy = Fighter(FighterParameters())
-    var place = Character(
-        CharacterParameters(), 3, 3, Angle(1.0, RADIAN), terrain
-    )
-    var shot = _snapshot()
-    shot.style = MAGIC
-    shot.move = HEAVY
-    shot.stance = HIGH_STANCE
-    apply_snapshot(shot, place, copy)
-    assert_almost_equal(place.position.x, -12.345, atol=1e-4)
-    assert_almost_equal(place.heading.to(RADIAN), -1, atol=1e-6)
-    assert_equal(copy.health, 432)
-    assert_almost_equal(copy.stamina, 50, atol=1e-4)
-    assert_almost_equal(copy.mana, 25, atol=1e-4)
-    assert_true(copy.move == HEAVY)
-    assert_true(copy.style == MAGIC)
-    assert_true(copy.stance == HIGH_STANCE)
-    assert_equal(copy.combo, 17)
-    # The same style again keeps the traits.
-    apply_snapshot(shot, place, copy)
-    assert_true(copy.style == MAGIC)
-    assert_true(copy.traits.ward)
-
-
 def test_a_player_keeps_each_command_until_the_server_has_it() raises:
     var history = InputHistory()
     var still = MoveInput(0, 0, 0, 0, False, False)
@@ -431,14 +387,14 @@ def test_a_client_predicts_its_player_and_the_server_sets_it_right() raises:
         predictor.step(6, ahead, yaw, terrain, none)
     var body = Fighter(FighterParameters())
     # The server agrees with the prediction at tick 3: nothing moves.
-    var agreed = snapshot_of(1, predictor.states[2], body)
+    var agreed = state_of(1, predictor.states[2], body)
     assert_almost_equal(
         predictor.reconcile(3, agreed, terrain, none), 0, atol=1e-4
     )
     assert_equal(predictor.ticks[0], 3)
     # The server put the player a meter aside at tick 4: each later input
     # plays again from there.
-    var aside = snapshot_of(1, predictor.states[1], body)
+    var aside = state_of(1, predictor.states[1], body)
     aside.position.x += 1
     assert_almost_equal(
         predictor.reconcile(4, aside, terrain, none), 1, atol=1e-3
@@ -447,7 +403,7 @@ def test_a_client_predicts_its_player_and_the_server_sets_it_right() raises:
     assert_equal(predictor.reconcile(1, aside, terrain, none), 0)
     # At a tick the client stepped no input, the state before it counts.
     predictor.step(9, ahead, yaw, terrain, none)
-    var gap = snapshot_of(1, predictor.states[2], body)
+    var gap = state_of(1, predictor.states[2], body)
     _ = predictor.reconcile(8, gap, terrain, none)
     assert_equal(predictor.ticks[0], 6)
     assert_equal(len(predictor.ticks), 2)
@@ -464,12 +420,12 @@ def test_a_client_predicts_its_player_and_the_server_sets_it_right() raises:
     assert_equal(predictor.ticks[0], 103)
     # A snapshot of the first tick kept forgets none; one of the last
     # leaves nothing to play again.
-    var first = snapshot_of(1, predictor.states[0], body)
+    var first = state_of(1, predictor.states[0], body)
     assert_almost_equal(
         predictor.reconcile(103, first, terrain, none), 0, atol=1e-4
     )
     assert_equal(len(predictor.ticks), PREDICTED)
-    var last = snapshot_of(1, predictor.states[PREDICTED - 1], body)
+    var last = state_of(1, predictor.states[PREDICTED - 1], body)
     _ = predictor.reconcile(102 + PREDICTED, last, terrain, none)
     assert_equal(len(predictor.ticks), 1)
     # With nothing kept, a snapshot places the player.

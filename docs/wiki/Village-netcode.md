@@ -1,14 +1,31 @@
 # Village netcode
 
-The fight's messages for a game of many players: a player's commands, the snapshots of the fighters, and which fighters each player hears of. The server's rules decide every blow. Each player sends only what they press.
+The village library holds no networking. It gives hooks, and a game's own networking layer decides how to carry what they give. `tests/_village_netcode.mojo` is a sample layer built on the hooks alone, and `tests/test_village_netcode.mojo` tests it.
 
-The module is `extensions/village/netcode.mojo`. It packs and unpacks bytes. It sends nothing itself: a game sends the bytes by its own sockets.
+## The hooks
 
-## The tick
+The module is `extensions/village/fighter_state.mojo`.
+
+| Hook | What it gives |
+|---|---|
+| `state_of` | A fighter's `FighterState`: its place, heading, health, stamina, mana, special gauge, move, clock, stance, style and combo, as plain values |
+| `apply_state` | Sets a character and its fighter from a `FighterState` |
+| `MoveInput` | A player's input for a frame, as plain values. `Battle.tick` and `VillageGame.tick` take one each frame |
+| `Character.step` | The same move for the same input, frame and ground |
+| `Boss.think` | The warden's choice from a `BossSight` alone, with dice from its seed |
+| `VillageGame.progress` | What a player keeps from one game to the next, which `pack_progress` packs |
+
+The library has no tick rate, no wire format, no schedule and no sockets. A networking layer, a replay or a test can use the same hooks.
+
+## The sample layer
+
+The rest of this page is about the sample layer in `tests/_village_netcode.mojo`. It is test code: a game can use it as a start, or write its own.
+
+### The tick
 
 The server runs the fight at `TICK_RATE`, 30 ticks a second. Each tick, it runs `Battle.tick` for each region with each player's command, and sends each player the snapshots they hear of. The fight's rules have no clock but the ticks, and the foes' and the warden's dice come from their seeds. So the same commands at the same ticks give the same fight on the same machine.
 
-## Commands
+### Commands
 
 `pack_command` packs a player's command for a tick into 12 bytes:
 
@@ -22,9 +39,9 @@ A stick's lean is kept in 255 steps: `axis_byte` gives 0 for -1, 127 at rest, an
 
 A message can be lost. `InputHistory` keeps each command a player sent until the server says it has it. `InputHistory.send` keeps a tick's command and gives every command kept, oldest first, for one message. `InputHistory.ack` forgets each command up to a tick. It keeps the last 64 at most.
 
-## Snapshots
+### Snapshots
 
-`snapshot_of` gives a `FighterSnapshot` of a character and its fighter. `pack_snapshot` packs it into 20 bytes:
+`state_of` gives a `FighterState` of a character and its fighter. `pack_snapshot` packs it into 20 bytes:
 
 | Part | Bytes | Kept as |
 |---|---|---|
@@ -39,9 +56,9 @@ A message can be lost. `InputHistory` keeps each command a player sent until the
 | Its stance and its style | 1 | Two bits and three bits |
 | Its combo | 1 | Up to 255 blows |
 
-`unpack_snapshot` gives the snapshot back, each value within half a step. It refuses a move, a stance or a style that is not one. `apply_snapshot` sets a client's copy of a character and its fighter from a snapshot.
+`unpack_snapshot` gives the snapshot back, each value within half a step. It refuses a move, a stance or a style that is not one. `apply_state` sets a client's copy of a character and its fighter from it.
 
-## Interest
+### Interest
 
 A player does not hear of every fighter every tick. `relevance` says how often by how far the fighter is:
 
@@ -54,17 +71,17 @@ A player does not hear of every fighter every tick. `relevance` says how often b
 
 `heard` says whether a player hears of a fighter at a tick. A fighter heard less often is heard at a tick of its own, by its id. So the far fighters spread over the ticks, and no tick carries them all.
 
-## Smoothing
+### Smoothing
 
 A client draws the other fighters 3 ticks behind the newest tick it heard of, a tenth of a second. So it has two snapshots around the tick it draws, even when one snapshot is lost.
 
 1. Keep each fighter's snapshots in a `SnapshotBuffer`. `add` keeps a snapshot by its tick, and drops one that comes late. The buffer keeps the newest 32.
 2. Each frame, ask `at` for the fighter at the newest tick, less `INTERPOLATION_TICKS`, plus the time since that tick.
-3. Put the result on the fighter's body with `apply_snapshot`.
+3. Put the result on the fighter's body with `apply_state`.
 
 `blend_snapshots` blends the place, the health, the stamina, the mana and the special gauge. The heading turns the short way. The move, the stance, the style and the combo come from the nearer snapshot. Before the first snapshot and after the last, the fighter stands as that snapshot says.
 
-## Prediction
+### Prediction
 
 A client does not wait for the server to move its own player. A `Predictor` moves the player at once, and the server sets it right.
 
@@ -73,7 +90,7 @@ A client does not wait for the server to move its own player. A `Predictor` move
 
 `reconcile` gives how far the player's place moved. It is zero when the server agrees with the prediction. A snapshot older than each tick kept changes nothing. A snapshot after each tick kept places the player where it says, and forgets the inputs.
 
-## What it costs
+### What it costs
 
 A player's commands cost 360 bytes a second. A snapshot costs 20 bytes. So 40 fighters near a player, heard each tick, cost 24 kilobytes a second, before the headers of the messages.
 
@@ -81,4 +98,4 @@ A player's commands cost 360 bytes a second. A snapshot costs 20 bytes. So 40 fi
 
 - A client predicts how its player moves, not the player's fight. It shows the moves and the blows that the server sends.
 - A snapshot carries no foe's brain, no missile and no popup. The client shows the missiles from the moves that send them.
-- The module has no sockets, no encryption and no lag measure.
+- The sample layer has no sockets, no encryption and no lag measure. A game brings its own.

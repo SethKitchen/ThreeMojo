@@ -10,7 +10,7 @@ This page gives the rules that every style shares, with the sword's moves. The o
 - [Village combos](Village-combos): strings of presses, the beat, and the combos that each level teaches.
 - [Village raid](Village-raid): the Stone Warden, which a party must fight together.
 - [Village walk](Village-walk#the-players-movement): the sprint, the brakes, strafing and the jump's grace.
-- [Village netcode](Village-netcode): the fight's messages for a game of many players.
+- [Village netcode](Village-netcode): the hooks that a networking layer builds on, and a sample layer in the tests.
 
 ![A man in red fights hooded bandits beside a woman in blue: he cuts, spins and sends a wave, and she casts bolts of light](out/village_combat.png)
 

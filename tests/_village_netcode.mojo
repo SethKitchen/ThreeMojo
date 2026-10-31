@@ -3,8 +3,13 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The fight's messages for a game of many players: a player's commands,
-the snapshots of the fighters, and which fighters each player hears of.
+"""A sample networking layer for the village, built on the library's
+hooks alone: a player's commands, the snapshots of the fighters, which
+fighters each player hears of, smoothing, and prediction.
+
+This is test code. The village library holds no networking: see
+`extensions.village.fighter_state` for the hooks this layer uses. A game
+can use this layer, or write its own on the same hooks.
 
 The server runs the fight at `TICK_RATE` ticks a second, and its rules
 decide every blow. Each player sends a command each tick: the tick, and
@@ -47,9 +52,9 @@ from extensions.village.character import Character, MoveInput, Obstacle
 from extensions.village.combat import (
     CombatMove,
     CombatStance,
-    Fighter,
     MOVES,
 )
+from extensions.village.fighter_state import FighterState
 from extensions.village.styles import FightingStyle
 from math.utils import clamp
 from math.vector3 import Vector3
@@ -348,63 +353,13 @@ def unpack_command(
     return (tick, input_of(sticks, buttons))
 
 
-@fieldwise_init
-struct FighterSnapshot(ImplicitlyCopyable):
-    """A fighter as the server sends it: where it is, and what it does."""
-
-    var id: Int
-    var position: Vector3
-    var heading: Angle
-    var health: Float32
-    # The shares of its most stamina and mana it has.
-    var stamina: Float32
-    var mana: Float32
-    var special: Float32
-    var move: CombatMove
-    # How far into its move it is, in seconds.
-    var clock: Float32
-    var stance: CombatStance
-    var style: FightingStyle
-    var combo: Int
-
-
-def snapshot_of(
-    id: Int, character: Character, fighter: Fighter
-) -> FighterSnapshot:
-    """Return the snapshot of a fighter.
-
-    Args:
-        id: The fighter's id.
-        character: Where it is.
-        fighter: What it does.
-
-    Returns:
-        Its snapshot.
-    """
-    ref p = fighter.parameters
-    return FighterSnapshot(
-        id,
-        character.position,
-        character.heading,
-        fighter.health,
-        fighter.stamina / p.stamina,
-        fighter.mana / p.mana if p.mana > 0 else Float32(0),
-        fighter.special,
-        fighter.move,
-        fighter.clock,
-        fighter.stance,
-        fighter.style,
-        fighter.combo,
-    )
-
-
 def _place(value: Float32) -> Int:
     """Return a coordinate in centimeters, kept to two bytes."""
     var steps = Int(clamp(value * CENTIMETERS, -32767, 32767))
     return steps & 0xFFFF
 
 
-def pack_snapshot(snapshot: FighterSnapshot) raises -> List[UInt8]:
+def pack_snapshot(snapshot: FighterState) raises -> List[UInt8]:
     """Pack a fighter's snapshot: see the module's table.
 
     Args:
@@ -443,7 +398,7 @@ def pack_snapshot(snapshot: FighterSnapshot) raises -> List[UInt8]:
     return out^
 
 
-def unpack_snapshot(bytes: List[UInt8], at: Int = 0) raises -> FighterSnapshot:
+def unpack_snapshot(bytes: List[UInt8], at: Int = 0) raises -> FighterState:
     """Unpack a fighter's snapshot.
 
     Args:
@@ -478,7 +433,7 @@ def unpack_snapshot(bytes: List[UInt8], at: Int = 0) raises -> FighterSnapshot:
         raise Error("A snapshot's move, stance and style must each be one")
     if turn > Float32(pi):
         turn -= Float32(2 * pi)
-    return FighterSnapshot(
+    return FighterState(
         id,
         Vector3(x, y, z),
         Angle(turn, RADIAN),
@@ -492,37 +447,6 @@ def unpack_snapshot(bytes: List[UInt8], at: Int = 0) raises -> FighterSnapshot:
         style,
         combo,
     )
-
-
-def apply_snapshot(
-    snapshot: FighterSnapshot, mut character: Character, mut fighter: Fighter
-) raises:
-    """Set a client's copy of a fighter from the server's snapshot.
-
-    Args:
-        snapshot: The snapshot.
-        character: The client's character of the fighter.
-        fighter: The client's fighter.
-
-    Raises:
-        Error: If the snapshot's style is not one.
-    """
-    character.position = snapshot.position
-    character.heading = snapshot.heading
-    ref p = fighter.parameters
-    fighter.health = snapshot.health
-    fighter.stamina = snapshot.stamina * p.stamina
-    fighter.mana = snapshot.mana * p.mana
-    fighter.special = snapshot.special
-    fighter.move = snapshot.move
-    fighter.clock = snapshot.clock
-    fighter.stance = snapshot.stance
-    if fighter.style != snapshot.style:
-        var move = fighter.move
-        fighter.move = CombatMove(0)
-        _ = fighter.set_style(snapshot.style)
-        fighter.move = move
-    fighter.combo = snapshot.combo
 
 
 struct InputHistory(Copyable, Movable):
@@ -589,8 +513,8 @@ struct InputHistory(Copyable, Movable):
 
 
 def blend_snapshots(
-    a: FighterSnapshot, b: FighterSnapshot, t: Float32
-) raises -> FighterSnapshot:
+    a: FighterState, b: FighterState, t: Float32
+) raises -> FighterState:
     """Return a fighter between two of its snapshots, as a client draws it
     between the ticks the server sent.
 
@@ -640,14 +564,14 @@ struct SnapshotBuffer(Copyable, Movable):
     """
 
     var ticks: List[Int]
-    var snapshots: List[FighterSnapshot]
+    var snapshots: List[FighterState]
 
     def __init__(out self):
         """Hold no snapshots."""
         self.ticks = List[Int]()
-        self.snapshots = List[FighterSnapshot]()
+        self.snapshots = List[FighterState]()
 
-    def add(mut self, tick: Int, snapshot: FighterSnapshot) raises -> Bool:
+    def add(mut self, tick: Int, snapshot: FighterState) raises -> Bool:
         """Keep a fighter's snapshot of a tick.
 
         Args:
@@ -673,7 +597,7 @@ struct SnapshotBuffer(Copyable, Movable):
             _ = self.snapshots.pop(0)
         return True
 
-    def at(self, tick: Float32) raises -> Optional[FighterSnapshot]:
+    def at(self, tick: Float32) raises -> Optional[FighterState]:
         """Return the fighter at a tick, which can fall between two.
 
         Args:
@@ -778,7 +702,7 @@ struct Predictor(Copyable, Movable):
     def reconcile(
         mut self,
         tick: Int,
-        snapshot: FighterSnapshot,
+        snapshot: FighterState,
         terrain: Terrain,
         obstacles: List[Obstacle],
     ) raises -> Float32:

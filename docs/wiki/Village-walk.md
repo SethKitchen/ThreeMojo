@@ -62,7 +62,7 @@ The module is `extensions/village/progress.mojo`. `VillageGame.progress` gives a
 | `specialty` | The style the player specializes in. |
 | `style` | The style in hand. The game takes it up if the player carries it. |
 
-The bytes begin with the letters `TMVP` and the version, 1. Each number takes 4 bytes. A record from an earlier game, of fewer skills, things or combos, reads with zero for the rest. A record of a later version, or of more than this game holds, is refused. In a game of many players, the server keeps each player's record.
+The bytes begin with the letters `TMVP` and the version, 1. Each number takes 4 bytes. A record from an earlier game, of fewer skills, things or combos, reads with zero for the rest. A record of a later version, or of more than this game holds, is refused. Where the bytes are kept is the game's: a file, or anywhere it likes.
 
 ## Run the game loop in code
 

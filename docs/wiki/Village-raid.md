@@ -122,7 +122,7 @@ The fallen warden gives 60 coins, 3 herbs, and 400 experience to the style the p
 
 ## In a game of many players
 
-In a game of many players, a player stands in each raider's place, and the mind stays out of it. `Boss` holds no scene, and decides from a `BossSight` alone, so a server can run it. Its dice come from its seed, so the same fight plays the same way on each machine. See [Village netcode](Village-netcode).
+In a game of many players, a player stands in each raider's place, and the mind stays out of it. The library holds no networking. `Boss` holds no scene, and decides from a `BossSight` alone, so a game can run it wherever it likes. Its dice come from its seed, so the same fight plays the same way on each machine. See [Village netcode](Village-netcode) for the hooks.
 
 ## Limits
 
