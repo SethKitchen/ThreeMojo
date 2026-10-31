@@ -671,7 +671,7 @@ def test_a_game_humanoid_grows_a_beard() raises:
     )
     assert_true(whole.beard)
     with assert_raises(contains="named style"):
-        _ = game_build_settings(beard=Beard(9))
+        _ = game_build_settings(beard=Beard(40))
     with assert_raises(contains="does not carry a beard"):
         _ = game_build_settings(facial_animation=True, beard=GOATEE)
 

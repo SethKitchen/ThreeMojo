@@ -201,6 +201,8 @@ $(call gallery,crowd,crowd)
 # Seven callings as a man and a woman each: hats and helmets, furs, robes and
 # plate of many metals, with hair cards moving as they walk.
 $(call gallery,archetypes,archetypes)
+# Eight heads, each in a hat or a helmet shaped round it, over hair cards.
+$(call gallery,headwear,headwear)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.
