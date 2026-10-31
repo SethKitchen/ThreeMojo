@@ -176,7 +176,7 @@ Each hat has an inner face a fabric's thickness in, so it shows from below. A cr
 
 `examples/headwear.mojo` draws each hat and helmet on a head of its own, and writes `out/headwear.png`.
 
-![Eight busts in a great helm, a half helm, a horned helm, a wizard's hat, a straw hat, a feathered cap, a crown and a circlet](out/headwear.png)
+![Eight busts, each in one of the eight hats and helmets](out/headwear.png)
 
 A great helm hides the hair. Every other hat keeps it: `press_hair` draws each point of the strands and cards over the band in under the hat. A hat that closes over the head cuts the hair's shell away over its band. The shell can stand out of the hat over the ears. A crown and a circlet are open over the hair, so they keep the shell whole.
 
