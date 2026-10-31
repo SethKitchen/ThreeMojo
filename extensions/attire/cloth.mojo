@@ -40,7 +40,7 @@ This is not a three.js port. See Extensions.
     cloak.step(scene, assets, step)
 """
 
-from std.math import sqrt
+from std.math import pi, sin, sqrt
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -49,13 +49,20 @@ from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.attire.dye import paint, DYE
-from extensions.attire.fabric import fabric_material
-from extensions.attire.kinds import FabricKind, WOOL, require_fabric_kind
+from extensions.attire.fabric import dye_sheen, fabric_material
+from extensions.attire.kinds import (
+    TRIM_DYE,
+    WOOL,
+    FabricKind,
+    require_fabric_kind,
+)
 from extensions.attire.springs import SpringCollider, body_colliders, push_out
+from extensions.attire.surface import SurfaceMaps
 from extensions.humanoid.rig.game import GameHumanoid
 from extensions.humanoid.rig.joints import (
     CHEST,
     LEFT_UPPER_ARM,
+    NECK,
     RIGHT_UPPER_ARM,
 )
 from materials.material import DOUBLE_SIDE
@@ -69,6 +76,13 @@ comptime MAX_COLORS = 62
 """The most colors the coloring can use; a grid's constraints need few."""
 comptime TASK_CONSTRAINTS = 256
 """The fewest constraints a task takes, below which one thread is faster."""
+comptime CLEAR_PASSES = 3
+"""The passes that push a new cloak's cloth out of its colliders."""
+comptime CLOAK_FOLD_COLUMNS = 6
+"""The fewest columns a cloak's fold takes."""
+comptime CLOAK_FOLD = Float32(0.035)
+"""How far a cloak's folds stand out of it at the hem, in meters on the
+template."""
 
 
 struct ClothSettings(Copyable, ImplicitlyCopyable, Movable):
@@ -575,7 +589,7 @@ struct CloakCut(Copyable, Movable):
     var length: Length
     """From the shoulders to the hem."""
     var width: Length
-    """Across, at the shoulders."""
+    """Across, at the shoulders, as far as the shoulders' joints."""
     var columns: Int
     """Particles across."""
     var rows: Int
@@ -584,6 +598,12 @@ struct CloakCut(Copyable, Movable):
     """What it is made of."""
     var dye: Color
     """Its color, sRGB."""
+    var trim: Optional[Color]
+    """The color of its hem and its two edges, sRGB, or none."""
+    var folds: Int
+    """The folds across it, zero for a flat cloak."""
+    var flare: Float32
+    """How much wider its hem is than its top, as a share of its width."""
     var settings: ClothSettings
     """How it moves."""
 
@@ -591,10 +611,13 @@ struct CloakCut(Copyable, Movable):
         out self,
         length: Length = Length(1.1, METER),
         width: Length = Length(0.5, METER),
-        columns: Int = 13,
-        rows: Int = 20,
+        columns: Int = 25,
+        rows: Int = 28,
         fabric: FabricKind = WOOL,
         dye: Color = Color(110, 24, 30),
+        trim: Optional[Color] = None,
+        folds: Int = 3,
+        flare: Float32 = 1.0,
     ):
         """Describe a cloak. A wool cloak to below the knee by default.
 
@@ -605,6 +628,13 @@ struct CloakCut(Copyable, Movable):
             rows: Particles down, two or more.
             fabric: What it is made of.
             dye: Its color.
+            trim: The color of its hem and its edges, or none.
+            folds: The folds across it, zero or more, with six columns
+                or more for each fold. Fewer columns would fold the cloth
+                at every other one, and the hem would hang jagged.
+            flare: How much wider its hem is than its top, zero or more.
+                One, the default, makes the hem twice as wide: there is
+                cloth to spare round the legs, so it falls in folds.
         """
         self.length = length
         self.width = width
@@ -612,6 +642,9 @@ struct CloakCut(Copyable, Movable):
         self.rows = rows
         self.fabric = fabric
         self.dye = dye
+        self.trim = trim
+        self.folds = folds
+        self.flare = flare
         self.settings = ClothSettings()
 
 
@@ -731,19 +764,28 @@ def add_cloak(
     mut assets: Assets,
     person: GameHumanoid,
     cut: CloakCut = CloakCut(),
+    over: List[SpringCollider] = List[SpringCollider](),
 ) raises -> Cloak:
     """Hang a cloak from a person's shoulders.
 
     The cloak's top row wraps the back of the neck from one shoulder to
     the other and is pinned to the chest bone. The cloth starts as a half
-    cone round the back; call `step` a few times at rest to let it settle
-    onto the body.
+    cone round the back, pushed out of the colliders; call `step` a few
+    times at rest to let it settle onto the body. Its folds stand out of
+    the cone, shallow at the neck and `CLOAK_FOLD` deep at the hem. The
+    cloth keeps them, as a cloak gathered at the neck keeps its folds:
+    each constraint keeps its length in the folded cloth. Its texture
+    coordinates are in meters, so its fabric's weave lies on it as on a
+    garment.
 
     Args:
         scene: The scene the person is in, updated.
         assets: The store for the cloak's mesh and look.
         person: The person.
         cut: The cloak's shape and look.
+        over: The capsules it falls against. None gives the body's
+            capsules; `dressed_colliders` gives capsules over the
+            person's garments.
 
     Returns:
         The cloak.
@@ -752,14 +794,21 @@ def add_cloak(
         Error: If the cut is refused or the scene is stale.
     """
     require_fabric_kind(cut.fabric)
+    if cut.folds < 0:
+        raise Error("A cloak's folds must be zero or more")
+    if cut.folds * CLOAK_FOLD_COLUMNS > cut.columns - 1:
+        raise Error("A cloak needs six columns for each of its folds")
+    if not (cut.flare >= 0 and cut.flare <= 10):
+        raise Error("A cloak's flare must be zero through ten")
     var s = person.rig.stature / 1.8288
     var right = person.rig.joints[RIGHT_UPPER_ARM.value]
     var left = person.rig.joints[LEFT_UPPER_ARM.value]
     var chest = person.rig.joints[CHEST.value]
     var middle = (right + left) * 0.5
-    var width = Float32(cut.width.to(METER)) * s
     var long = Float32(cut.length.to(METER)) * s
     var across = right - left
+    # The top's ends lie on the shoulders at the widest, not past them.
+    var width = min(Float32(cut.width.to(METER)) * s, across.length())
     across = across * (1 / across.length())
     var top = Vector3(middle.x, middle.y, chest.z) - across * (width / 2)
     var root = scene.world_matrix(person.root)
@@ -777,9 +826,14 @@ def add_cloak(
     var back = Vector3(0, 0, -1)
     var wrap = 0.13 * s
     var centre = Vector3(middle.x, middle.y + 0.04 * s, chest.z)
+    # The top row's middle lies at the base of the neck, higher than its
+    # ends on the shoulders, so the top edge falls from the neck along
+    # the slope of the shoulders.
+    var rise = max(Float32(0), person.rig.joints[NECK.value].y - centre.y)
     for r in range(cut.rows):  # pragma: no branch
         var fall = Float32(r) / Float32(cut.rows - 1)
-        var spread = 1 + 0.35 * fall
+        var spread = 1 + cut.flare * fall
+        var deep = CLOAK_FOLD * s * (0.2 + 0.8 * fall)
         for c in range(cut.columns):  # pragma: no branch
             var t = Float32(c) / Float32(cut.columns - 1) * 2 - 1
             var round = sqrt(max(Float32(0), 1 - t * t))
@@ -787,9 +841,34 @@ def add_cloak(
                 centre
                 + across * (t * spread * width / 2)
                 + back * (spread * wrap * (0.3 + 0.7 * round))
-                + Vector3(0, -long * fall, 0)
+                + Vector3(0, rise * (1 - t * t) - long * fall, 0)
             )
+            # Each fold stands out of the cone, away from its axis.
+            var away = Vector3(p.x - centre.x, 0, p.z - centre.z)
+            away.normalize()
+            var phase = Float32(pi) * Float32(cut.folds) * (t + 1)
+            p = p + away * (deep * sin(phase))
             grid[0][r * cut.columns + c] = root.transform_point(p)
+    var colliders = over.copy()
+    if len(colliders) == 0:
+        colliders = body_colliders(person)
+    # The cloth starts out of the colliders, its pins too: a pin is never
+    # pushed, so a pin inside a mantle would hold the cloak inside it.
+    var starts = List[Vector3]()
+    var ends = List[Vector3]()
+    for collider in colliders:  # pragma: no branch
+        var world = scene.world_matrix(collider.node)
+        starts.append(world.transform_point(collider.start))
+        ends.append(world.transform_point(collider.end))
+    for _ in range(CLEAR_PASSES):  # pragma: no branch
+        for k in range(len(grid[0])):  # pragma: no branch
+            for c in range(len(colliders)):  # pragma: no branch
+                grid[0][k] = push_out(
+                    grid[0][k],
+                    starts[c],
+                    ends[c],
+                    colliders[c].radius + cut.settings.thickness,
+                )
     var points = grid[0].copy()
     var pinned = List[Bool](length=len(points), fill=False)
     var pins = List[Int]()
@@ -814,21 +893,32 @@ def add_cloak(
             flat.append(p.x)
             flat.append(p.y)
             flat.append(p.z)
-            uv.append(Float32(c) / Float32(cut.columns - 1))
-            uv.append(Float32(r) / Float32(cut.rows - 1))
+            uv.append(width * Float32(c) / Float32(cut.columns - 1))
+            uv.append(long * Float32(r) / Float32(cut.rows - 1))
     mesh.set_attribute(String(POSITION), BufferAttribute(flat^, 3))
     mesh.set_attribute("uv", BufferAttribute(uv^, 2))
+    # The hem and the two edges take the trim's dye.
     var weights = List[Float32]()
-    for _ in range(len(points)):  # pragma: no branch
-        weights.append(1)
-        weights.append(0)
-        weights.append(0)
-        weights.append(0)
+    for r in range(cut.rows):  # pragma: no branch
+        for c in range(cut.columns):  # pragma: no branch
+            var edge = (
+                c == 0 or c == cut.columns - 1 or r == cut.rows - 1
+            ) and Bool(cut.trim)
+            weights.append(Float32(0) if edge else Float32(1))
+            weights.append(0)
+            weights.append(Float32(1) if edge else Float32(0))
+            weights.append(0)
     mesh.set_attribute(String(DYE), BufferAttribute(weights^, 4))
     mesh.set_index(grid[3].copy())
     mesh.compute_vertex_normals()
-    paint(mesh, List[Color](length=4, fill=cut.dye))
+    var dyes = List[Color](length=4, fill=cut.dye)
+    if cut.trim:
+        dyes[TRIM_DYE.value] = cut.trim.value()
+    paint(mesh, dyes)
     var look = fabric_material(cut.fabric, Color(255, 255, 255))
+    dye_sheen(look, cut.dye)
+    var maps = SurfaceMaps()
+    maps.apply(look, assets, cut.fabric)
     look.side = DOUBLE_SIDE
     var node = scene.add(Object3D())
     var geometry = assets.geometries.add(mesh^)
@@ -840,6 +930,6 @@ def add_cloak(
         anchor,
         locals^,
         pins^,
-        body_colliders(person),
+        colliders^,
         grid[3].copy(),
     )

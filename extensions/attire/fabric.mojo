@@ -324,3 +324,30 @@ def fabric_material(
         )
     look.vertex_colors = True
     return look^
+
+
+comptime SHEEN_LIFT = Float32(0.4)
+"""How far a dyed cloth's sheen lies from its dye toward white."""
+
+
+def _lift(channel: UInt8) -> UInt8:
+    """Return a channel `SHEEN_LIFT` of the way to white."""
+    var v = Float32(channel)
+    return UInt8(Int(v + (255 - v) * SHEEN_LIFT + 0.5))
+
+
+def dye_sheen(mut look: Material, dye: Color):
+    """Give a cloth's sheen the color of its dye.
+
+    Vertex colors tint the base of a look and not its sheen, so a fixed
+    pale sheen washes a dark cloth out to gray where the light grazes it.
+    The fibers of a dyed cloth shine in their own color, a little paler.
+    A look with no sheen, such as mail's or plate's, is left as it is.
+
+    Args:
+        look: A look from `fabric_material`.
+        dye: The cloth's main dye, sRGB.
+    """
+    if look.sheen <= 0:
+        return
+    look.sheen_color = Color(_lift(dye.r), _lift(dye.g), _lift(dye.b))

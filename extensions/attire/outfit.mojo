@@ -45,7 +45,12 @@ from core.buffer_geometry import POSITION, BufferGeometry
 from core.scene import Scene
 from extensions.attire.cover import cover_values
 from extensions.attire.dye import dye_pattern, paint
-from extensions.attire.fabric import fabric, fabric_material, fold_depth
+from extensions.attire.fabric import (
+    dye_sheen,
+    fabric,
+    fabric_material,
+    fold_depth,
+)
 from extensions.attire.garment import Garment
 from extensions.attire.cowl import hang_cowl, head_cowl
 from extensions.attire.band import belt_band
@@ -56,6 +61,7 @@ from extensions.attire.kinds import (
     COWLED,
     DOMED,
     HATTED,
+    PRIMARY_DYE,
     SHOD,
     SKIRTED,
     layer_label,
@@ -551,6 +557,7 @@ def dress(
         var material = fabric_material(
             garment.fabric, Color(255, 255, 255), garment.metal
         )
+        dye_sheen(material, garment.dyes[PRIMARY_DYE.value])
         maps.apply(material, assets, garment.fabric)
         var look = assets.materials.add(material)
         meshes.append(len(scene.skinned_meshes))

@@ -21,7 +21,9 @@ seed an outfit of its own, in three choices:
 
 `calling_outfit` gives the outfit of one calling for a seed, and
 `dressed_as` for a person of either sex. `calling_hair` and
-`calling_beard` pick the hairstyle and the beard that suit the calling. The first eight callings dress
+`calling_beard` pick the hairstyle and the beard that suit the calling,
+and `calling_cloak` a cloak or none; see `extensions.attire.drape` to
+hang it over the outfit. The first eight callings dress
 as their calling's sex; the last seven have clothes for each. The same
 seed gives the same outfit, on every machine.
 
@@ -68,6 +70,7 @@ from extensions.attire.apparel import (
     wizard_hat,
     wizard_robe,
 )
+from extensions.attire.cloth import CloakCut
 from extensions.attire.armory import (
     arm_harness,
     bracers,
@@ -101,6 +104,7 @@ from extensions.attire.garment import (
 )
 from extensions.attire.kinds import (
     ACCENT_DYE,
+    FUR,
     PARTY,
     PLATE,
     PRIMARY_DYE,
@@ -154,6 +158,7 @@ from extensions.humanoid.skeleton.head.hair.styles import (
     HairStyle,
 )
 from render.framebuffer import Color
+from units.si import METER, Length
 
 comptime PLAIN_DYES = 9
 """How many dyes `plain_dye` gives."""
@@ -952,6 +957,140 @@ def calling_beard(calling: Calling, sex: Sex, seed: Int) raises -> Beard:
     else:
         beards = [MUSTACHE, STUBBLE, MUTTON_CHOPS, SHORT_BEARD, CLEAN_SHAVEN]
     return _pick(beards, seed, 37)
+
+
+comptime ERMINE = Color(236, 232, 222)
+"""The white of an ermine edge."""
+comptime GILT = Color(214, 170, 64)
+"""The color of a gold edge."""
+comptime SILVERED = Color(200, 204, 214)
+"""The color of a silver edge."""
+
+
+def _cloak_share(calling: Calling) -> Int:
+    """Return how many of each hundred of a calling wear a cloak."""
+    if calling == ROYAL:
+        return 75
+    if calling == WARLOCK or calling == RANGER:
+        return 55
+    if calling == KNIGHT:
+        return 50
+    if calling == WIZARD:
+        return 45
+    if calling == NOBLEWOMAN or calling == WARRIOR:
+        return 40
+    if calling == ARCHER or calling == BARBARIAN:
+        return 35
+    if calling == MERCHANT or calling == MONK:
+        return 25
+    return 15
+
+
+def cloak_of(calling: Calling, seed: Int) raises -> CloakCut:
+    """Return the cloak a calling wears, when it wears one, by a seed.
+
+    | Callings | Cloak |
+    |---|---|
+    | royal | velvet in a rich dye to the ankle, edged in ermine or gold |
+    | noblewoman | velvet in a rich dye, edged in gold |
+    | wizard | wool in an arcane dye to the ankle, edged in gold or silver |
+    | warlock | wool in a shadow dye to the ankle, edged in a red |
+    | knight, warrior, merchant | wool in a rich dye; a knight's is edged in a second |
+    | ranger, archer | wool in a forest dye |
+    | monk | wool in the plain dye of his robe, to the ankle |
+    | barbarian | a short cloak of fur |
+    | the rest | plain wool, to the knee |
+
+    Each cloak's length and flare vary a little by the seed.
+
+    Args:
+        calling: A named calling.
+        seed: Any integer. The same seed picks the dyes of the calling's
+            outfit, so a monk's cloak matches his robe.
+
+    Returns:
+        The cloak's cut.
+
+    Raises:
+        Error: If the calling is not named.
+    """
+    require_calling(calling)
+    var length = Float32(1.1)
+    var cut = CloakCut()
+    cut.dye = plain_dye(_mixed(seed, 63))
+    if calling == ROYAL:
+        length = 1.35
+        cut.fabric = VELVET
+        cut.dye = rich_dye(_mixed(seed, 64))
+        cut.trim = ERMINE if _chance(seed, 65, 70) else GILT
+        cut.flare = 1.3
+    elif calling == NOBLEWOMAN:
+        length = 1.25
+        cut.fabric = VELVET
+        cut.dye = rich_dye(_mixed(seed, 64))
+        cut.trim = GILT
+    elif calling == WIZARD:
+        length = 1.3
+        cut.dye = arcane_dye(_mixed(seed, 66))
+        cut.trim = GILT if _chance(seed, 21, 60) else SILVERED
+    elif calling == WARLOCK:
+        length = 1.3
+        cut.dye = shadow_dye(_mixed(seed, 67))
+        cut.trim = Color(110, 18, 24)
+        cut.flare = 1.2
+    elif calling == KNIGHT or calling == WARRIOR or calling == MERCHANT:
+        var rich = _mixed(seed, 68)
+        cut.dye = rich_dye(rich)
+        if calling == KNIGHT:
+            cut.trim = rich_dye(rich + 3)
+    elif calling == RANGER or calling == ARCHER:
+        cut.dye = forest_dye(_mixed(seed, 69))
+        length = 1.0
+    elif calling == MONK:
+        length = 1.3
+        cut.dye = plain_dye(3 + _mixed(seed, 1) % 3 * 2)
+    elif calling == BARBARIAN:
+        length = 0.8
+        cut.fabric = FUR
+        cut.dye = fur_dye(_mixed(seed, 70))
+        cut.flare = 0.7
+    else:
+        length = 0.9
+    # Each cloak a little longer or shorter, and fuller or plainer.
+    length *= 0.95 + 0.1 * Float32(_mixed(seed, 71) % 11) / 10
+    cut.flare *= 0.85 + 0.3 * Float32(_mixed(seed, 72) % 11) / 10
+    cut.length = Length(length, METER)
+    return cut^
+
+
+def calling_cloak(
+    calling: Calling, sex: Sex, seed: Int
+) raises -> Optional[CloakCut]:
+    """Return the cloak a person of a calling wears, by a seed, or none.
+
+    A royal wears one three times in four, a warlock and a ranger a
+    little more than half the time, and a knight half the time. A wizard
+    wears one nine times in twenty, a noblewoman and a warrior two times
+    in five, an archer and a barbarian seven times in twenty, a merchant
+    and a monk one time in four, and the rest three times in twenty.
+    `cloak_of` says which cloak.
+
+    Args:
+        calling: A named calling.
+        sex: `MALE` or `FEMALE`.
+        seed: Any integer.
+
+    Returns:
+        The cloak's cut, or none.
+
+    Raises:
+        Error: If the calling or the sex is not named.
+    """
+    require_calling(calling)
+    require_valid(sex.is_valid(), "A sex must be MALE or FEMALE")
+    if not _chance(seed, 73, _cloak_share(calling)):
+        return None
+    return cloak_of(calling, seed)
 
 
 def mixed_calling(seed: Int) -> Calling:

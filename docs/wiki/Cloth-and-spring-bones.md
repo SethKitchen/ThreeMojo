@@ -15,7 +15,7 @@ sword.step(scene, step)
 scene.update()
 ```
 
-This is not a three.js port. The code is in `extensions/attire/springs.mojo` and `extensions/attire/cloth.mojo`.
+This is not a three.js port. The code is in `extensions/attire/springs.mojo`, `extensions/attire/cloth.mojo` and `extensions/attire/drape.mojo`.
 
 ## Spring chains
 
@@ -82,10 +82,39 @@ A cloak of a few hundred particles steps in well under a millisecond on the CPU.
 
 ## Cloaks
 
-`add_cloak(scene, assets, person, cut)` hangs a cloak from the shoulders. Its top row wraps the back of the neck from one shoulder to the other and is pinned to the chest bone. The cloth starts as a half cone round the back. Step it a few times at rest to let it settle.
+`add_cloak(scene, assets, person, cut, over)` hangs a cloak from the shoulders. Its top row wraps the back of the neck from one shoulder to the other and is pinned to the chest bone. The middle of the top row lies at the base of the neck, so the top edge falls along the slope of the shoulders. The cloth starts as a half cone round the back, out of the colliders. Step it a few times at rest to let it settle.
 
-`CloakCut` sets the length, the width, the particles across and down, the fabric and the dye. The default is a wool cloak to below the knee, 13 particles across and 20 down. `Cloak.step` reads where the chest bone and the colliders' bones are, steps the cloth, and writes the cloak's mesh.
+`CloakCut` sets the length, the width at the top, the particles across and down, the fabric, the dye, a trim, the folds and the flare. The default is a wool cloak to below the knee, 25 particles across and 28 down, in three folds. Its hem is twice as wide as its top, so it has cloth to spare round the legs and falls in folds.
+
+- The top is no wider than the span between the shoulders' joints.
+- A trim dyes the hem and the two edges.
+- Each fold stands out of the cone, 3.5 cm deep at the hem on the template. Each constraint keeps its length in the folded cloth, so the cloak keeps its folds.
+- Each fold needs six columns or more. With fewer, alternate columns hang apart and the hem is jagged. `add_cloak` refuses such a cut.
+- The texture coordinates are in meters, so the fabric's weave lies on the cloak as on a garment.
+- The sheen takes the cloak's dye. A pale sheen washes a dark cloth out to gray where the light grazes it.
+
+`Cloak.step` reads where the chest bone and the colliders' bones are, steps the cloth, and writes the cloak's mesh.
+
+### Over garments
+
+The body's capsules lie inside a flared robe, a pauldron and a fur mantle, so a cloak falls through them. `dressed_colliders(person, outfit, dressed)` fits capsules to the garments' shells instead. Pass them to `add_cloak` as `over`. The code is in `extensions/attire/drape.mojo`.
+
+1. Each capsule of the body is cut into three parts along its bone.
+2. Each vertex of a garment grows a part of the bone that weighs it most: the part whose skin it lies nearest. The neck's vertices grow the chest's parts.
+3. A part grows by 12 cm on the template at the most, and to twice its radius at the most. So a wide sleeve does not swing a great capsule through the cloak.
+4. A part of the trunk grows to hold the garments' depth alone. The trunk is wider than it is deep, and a round part as wide as the hips stands far off the back.
+5. A skirt's vertices below the skirt's top are sliced into bands 4 cm high. A capsule across the hips holds each band, as wide and as deep as the band. A band is deeper by 4 % of its fall below the top, as the legs swing the skirt.
+6. A hat grows nothing. A vertex of a hand or a foot grows nothing, as no capsule rides those bones.
+
+Start a walk with `fade_in`. A pose that jumps from rest to a stride moves the skirt's capsules through the settled cloth, and throws the cloth off.
+
+```mojo
+var dressed = dress(scene, assets, person, outfit)
+var over = dressed_colliders(person, outfit, dressed)
+scene.update()
+var cloak = add_cloak(scene, assets, person, cloak_of(ROYAL, seed), over)
+```
 
 ## Tests
 
-`tests/test_attire_springs.mojo` and `tests/test_attire_cloth.mojo` cover this page. `tests/test_attire_cloth_gpu.mojo` steps one sheet on the CPU and on a GPU and compares every particle. It runs only on a machine with a GPU. Its bound of two millimeters has not yet been measured on one.
+`tests/test_attire_springs.mojo`, `tests/test_attire_cloth.mojo` and `tests/test_attire_drape.mojo` cover this page. `tests/test_attire_cloth_gpu.mojo` steps one sheet on the CPU and on a GPU and compares every particle. It runs only on a machine with a GPU. Its bound of two millimeters has not yet been measured on one.

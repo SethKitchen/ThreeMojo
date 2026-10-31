@@ -6,7 +6,12 @@
 """Tests for the fabric table, its looks and the areal density units."""
 
 from extensions.anatomy.evidence import DESIGN, FROM_TEXT
-from extensions.attire.fabric import fabric, fabric_material, fold_depth
+from extensions.attire.fabric import (
+    dye_sheen,
+    fabric,
+    fabric_material,
+    fold_depth,
+)
 from extensions.attire.kinds import (
     FABRIC_KIND_COUNT,
     FELT,
@@ -125,6 +130,18 @@ def test_soft_cloth_folds_and_plate_does_not() raises:
     assert_equal(fold_depth(FELT).value, fold_depth(FUR).value)
     with assert_raises(contains="named kind"):
         _ = fold_depth(FabricKind(99))
+
+
+def test_a_cloth_s_sheen_takes_its_dye() raises:
+    var wool = fabric_material(WOOL, Color(255, 255, 255))
+    dye_sheen(wool, Color(20, 30, 40))
+    # A dark dye shines a little paler, and never gray-white.
+    assert_true(wool.sheen_color.r > 20 and wool.sheen_color.r < 130)
+    assert_true(wool.sheen_color.b > wool.sheen_color.r)
+    var plate = fabric_material(PLATE, Color(255, 255, 255))
+    var before = plate.sheen_color
+    dye_sheen(plate, Color(20, 30, 40))
+    assert_true(plate.sheen_color == before)
 
 
 def main() raises:

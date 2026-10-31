@@ -3,22 +3,24 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Seven callings, each as a man and a woman, with their hair in motion.
+"""Seven callings, each as a man and a woman, with their hair and cloaks in
+motion.
 
     mojo run -I . examples/archetypes.mojo [path.png] [frames] [cards]
 
 The page is Outfits and armor. A farmer, a barbarian, a royal, a wizard,
 a warlock, a ranger and a warrior stand side by side, the men in front
 and the women behind. Each person's seed picks a genome, a stature, the
-dyes, the metals and the headwear of their calling, and a hairstyle
-and a beard that suit it. Each person's hair is cards of
-fibers that `GameHairMotion` moves with the head and shades for the
-lights. Half walk in place and half stand at ease while the camera
-passes along the front row. It writes `out/archetypes.png` and prints
-how long the building, the dressing and the frames took.
+dyes, the metals and the headwear of their calling, and a hairstyle,
+a beard and a cloak that suit it. Each person's hair is cards of fibers
+that `GameHairMotion` moves with the head and shades for the lights.
+Each cloak falls over capsules fit to its wearer's outfit. Half walk in
+place and half stand at ease while the camera passes along the front
+row and round to the back. It writes `out/archetypes.png` and prints
+how long the building, the dressing, the cloaks and the frames took.
 
 The optional second argument is how many frames to draw, one or more.
-The default is 36. The optional third argument is the cards of hair on
+The default is 48. The optional third argument is the cards of hair on
 each head; zero draws each hair's shell alone. The default is 500.
 """
 
@@ -35,6 +37,8 @@ from core.buffer_geometry import POSITION
 from core.object3d import Object3D
 from core.scene import Scene
 from environments.room_environment import room_environment
+from extensions.attire.cloth import Cloak, CloakCut, add_cloak
+from extensions.attire.drape import dressed_colliders
 from extensions.attire.mix import (
     BARBARIAN,
     FARMER,
@@ -45,11 +49,13 @@ from extensions.attire.mix import (
     WIZARD,
     Calling,
     calling_beard,
+    calling_cloak,
     calling_hair,
     calling_label,
     dressed_as,
 )
 from extensions.attire.outfit import dress
+from extensions.attire.springs import SpringCollider
 from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.genome import random_genome
 from extensions.humanoid.rig.clips import idle_clip, walk_clip
@@ -85,7 +91,9 @@ comptime DEFAULT_OUTPUT = "out/archetypes.png"
 comptime WIDTH = 640
 comptime HEIGHT = 360
 comptime FPS = 24
-comptime DEFAULT_FRAMES = 36
+comptime DEFAULT_FRAMES = 48
+# Steps that settle each cloak at rest before the people move.
+comptime SETTLE_STEPS = 40
 comptime DEFAULT_CARDS = 500
 comptime TRIANGLES = 16000
 # The seed of the first person; each next one adds nine.
@@ -131,6 +139,9 @@ def main() raises:
     var specs = List[HumanoidSpec]()
     var building = Float64(0)
     var dressing = Float64(0)
+    var wearers = List[Int]()
+    var cuts = List[CloakCut]()
+    var overs = List[List[SpringCollider]]()
     var callings = _callings()
     var count = len(callings)
     for index in range(2 * count):
@@ -178,7 +189,13 @@ def main() raises:
             lowest = min(lowest, placed.vector3(v).y)
         scene.node(at).set_position(x, -lowest, z)
         start = perf_counter_ns()
-        _ = dress(scene, assets, person, dressed_as(calling, sex, seed))
+        var outfit = dressed_as(calling, sex, seed)
+        var dressed = dress(scene, assets, person, outfit)
+        var cut = calling_cloak(calling, sex, seed)
+        if cut:
+            wearers.append(index)
+            cuts.append(cut.take())
+            overs.append(dressed_colliders(person, outfit, dressed))
         dressing += _seconds_since(start)
         print(index, calling_label(calling), "woman" if woman else "man")
         # Half walk in place and half stand at ease, each at a pace and
@@ -191,6 +208,9 @@ def main() raises:
         action.phase = 0.37 * Float32(index)
         var k = mixer.add(action^)
         mixer.action(k).play()
+        # Each eases from rest into its clip, so the cloaks settled at rest
+        # are not thrown.
+        mixer.action(k).fade_in(Duration(0.5, SECOND))
         people.append(person^)
         specs.append(spec)
     print(
@@ -201,6 +221,25 @@ def main() raises:
     studio_floor(scene, assets, Length(16.0, METER))
     studio_sun(scene, SUN.x, SUN.y, SUN.z, Length(7.0, METER))
     scene.add_light(ambient_light(Color(200, 210, 255), 0.1))
+    var cloaks = List[Cloak]()
+    var draping = perf_counter_ns()
+    var step = Duration(Float32(1) / Float32(FPS), SECOND)
+    for k in range(len(wearers)):
+        scene.update()
+        cloaks.append(
+            add_cloak(scene, assets, people[wearers[k]], cuts[k], overs[k])
+        )
+    for _ in range(SETTLE_STEPS):
+        scene.update()
+        for k in range(len(cloaks)):
+            cloaks[k].step(scene, assets, step, workers)
+    print(
+        "Hung and settled",
+        len(cloaks),
+        "cloaks in",
+        _seconds_since(draping),
+        "s",
+    )
     scene.update()
     var motions = List[GameHairMotion]()
     for index in range(len(people)):
@@ -213,15 +252,18 @@ def main() raises:
     var breeze = Vector3(1.0, 0.0, 0.4)
     breeze.normalize()
 
-    var step = Duration(Float32(1) / Float32(FPS), SECOND)
     var frames = List[Framebuffer]()
     var start = perf_counter_ns()
     for frame in range(frames_wanted):
         if frame > 0:
             mixer.update(scene, step)
         scene.update()
+        for k in range(len(cloaks)):
+            cloaks[k].step(scene, assets, step, workers)
+        # Along the front, then round the right side to the back.
         var share = Float32(frame) / Float32(max(1, frames_wanted - 1))
-        var turn = Float32(-0.4) + Float32(0.8) * share
+        var ease = share * share * (3 - 2 * share)
+        var turn = Float32(-0.4) + Float32(3.3) * ease
         var eye = Vector3(4.5 * sin(turn) + 0.2, 1.5, 4.5 * cos(turn) - 0.3)
         for index in range(len(people)):
             motions[index].update(

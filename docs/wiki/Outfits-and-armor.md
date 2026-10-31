@@ -78,6 +78,25 @@ The new callings take palettes of their own. `fur_dye` gives wolf gray, bear bro
 
 `calling_hair(calling, sex, seed)` and `calling_beard(calling, sex, seed)` pick a hairstyle and a beard that suit the calling. A woman of a barbarian calling can wear twin braids, and a royal man slicks his hair back. A wizard grows a long beard or a full one, and a barbarian a forked, a full or a long one. A woman is clean-shaven.
 
+`calling_cloak(calling, sex, seed)` picks a cloak, or none. `cloak_of(calling, seed)` gives the cloak of a calling that wears one. Hang it over the outfit as [Cloth and spring bones](Cloth-and-spring-bones#over-garments) shows.
+
+| Calling | Wears one | Cloak |
+|---|---|---|
+| royal | 3 in 4 | velvet in a rich dye to the ankle, edged in ermine or gold |
+| warlock | 11 in 20 | wool in a shadow dye to the ankle, edged in red |
+| ranger | 11 in 20 | wool in a forest dye |
+| knight | 1 in 2 | wool in a rich dye, edged in a second |
+| wizard | 9 in 20 | wool in an arcane dye to the ankle, edged in gold or silver |
+| noblewoman | 2 in 5 | velvet in a rich dye, edged in gold |
+| warrior | 2 in 5 | wool in a rich dye |
+| archer | 7 in 20 | wool in a forest dye |
+| barbarian | 7 in 20 | a short cloak of fur |
+| merchant | 1 in 4 | wool in a rich dye |
+| monk | 1 in 4 | wool in the dye of his robe, to the ankle |
+| peasant, goodwife, man-at-arms, farmer | 3 in 20 | plain wool, to the knee |
+
+The seed makes each cloak a little longer or shorter, and fuller or plainer.
+
 Each garment of a calling takes its dye by a pick of its own. So the dyes of a robe, its mantle and its sash vary apart. A test dresses 120 seeds of each of the seven callings as a man and as a woman. Of the 1,680 people, more than 1,500 differ in their garments, dyes, metals, hair or beard. The genome and the stature make each person differ further.
 
 Some garments are parti-colored: four merchants' tunics in ten and three women's gowns in ten take a second dye on the left side. Three men-at-arms' surcoats in ten are quartered.
@@ -88,9 +107,11 @@ Some garments are parti-colored: four merchants' tunics in ten and three women's
 
 ### Archetypes
 
-`examples/archetypes.mojo` dresses a farmer, a barbarian, a royal, a wizard, a warlock, a ranger and a warrior, each as a man and a woman. The men stand in front and the women behind. Each person's seed picks a genome, a stature, the dyes, the metals, the headwear and a hairstyle. Each man's calling picks his beard. Their hair is 500 cards each, moved and shaded by `GameHairMotion`. It writes `out/archetypes.png`.
+`examples/archetypes.mojo` dresses a farmer, a barbarian, a royal, a wizard, a warlock, a ranger and a warrior, each as a man and a woman. The men stand in front and the women behind. Each person's seed picks a genome, a stature, the dyes, the metals, the headwear and a hairstyle. Each man's calling picks his beard, and each calling a cloak by chance.
 
-![Fourteen people of seven callings walk and stand while the camera passes](out/archetypes.png)
+The cloaks fall over the outfits' colliders. The hair is 500 cards on each head, moved and shaded by `GameHairMotion`. The camera passes along the front and round to the back. It writes `out/archetypes.png`.
+
+![Fourteen people of seven callings walk and stand while the camera passes round to their cloaks](out/archetypes.png)
 
 ## Plate
 

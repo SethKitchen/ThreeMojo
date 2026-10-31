@@ -7,7 +7,7 @@
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import POSITION, BufferGeometry
+from core.buffer_geometry import COLOR, POSITION, UV, BufferGeometry
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.attire.cloth import (
@@ -24,9 +24,13 @@ from extensions.attire.cloth import (
     relax_pair,
     settle,
 )
+from extensions.attire.apparel import wizard_robe
+from extensions.attire.drape import dressed_colliders
 from extensions.attire.kinds import FabricKind
-from extensions.attire.springs import SpringCollider
+from extensions.attire.outfit import Outfit, dress
+from extensions.attire.springs import SpringCollider, nearest_on_segment
 from math.vector3 import Vector3
+from render.framebuffer import Color
 from std.math import nan
 from std.testing import (
     TestSuite,
@@ -300,6 +304,65 @@ def test_a_cloak_hangs_from_the_shoulders_and_moves() raises:
     cut.fabric = FabricKind(42)
     with assert_raises(contains="named kind"):
         _ = add_cloak(scene, assets, person, cut)
+
+
+def test_a_cloak_falls_over_a_robe_and_is_trimmed() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    var outfit = Outfit()
+    outfit.add(wizard_robe())
+    var over = dressed_colliders(
+        person, outfit, dress(scene, assets, person, outfit)
+    )
+    scene.update()
+    var cut = CloakCut(trim=Color(214, 170, 64))
+    var cloak = add_cloak(scene, assets, person, cut, over)
+    assert_equal(len(cloak.colliders), len(over))
+    scene.update()
+    # Every particle, each pin too, starts out of the colliders.
+    for p in cloak.solver.points:
+        for c in over:
+            var world = scene.world_matrix(c.node)
+            var a = world.transform_point(c.start)
+            var b = world.transform_point(c.end)
+            var d = (p - nearest_on_segment(p, a, b)).length()
+            assert_true(d >= c.radius + cut.settings.thickness - 1e-3)
+    # The hem and the edges take the trim; the middle takes the dye.
+    ref mesh = assets.geometries.get(cloak.geometry)
+    ref colors = mesh.attribute_view(String(COLOR))
+    ref uv = mesh.attribute_view(String(UV))
+    var edge = cloak.solver.count() - 1
+    var middle = cut.columns // 2
+    assert_true(colors.component(edge, 0) > colors.component(middle, 0))
+    assert_true(colors.component(edge, 2) < colors.component(middle, 2) + 0.2)
+    # The texture coordinates are in meters: the last column lies a
+    # top's width from the first.
+    assert_true(uv.component(cut.columns - 1, 0) > 0.2)
+    assert_true(uv.component(cut.columns - 1, 0) < 0.6)
+    for _ in range(4):
+        scene.update()
+        cloak.step(scene, assets, _frame(), 2)
+    # A cloak without a trim is one dye throughout.
+    var plain = add_cloak(scene, assets, person, CloakCut(folds=0))
+    ref flat = assets.geometries.get(plain.geometry)
+    ref hues = flat.attribute_view(String(COLOR))
+    assert_almost_equal(hues.component(0, 0), hues.component(middle, 0))
+
+
+def test_a_cut_s_folds_and_flare_are_checked() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    scene.update()
+    with assert_raises(contains="folds must be zero or more"):
+        _ = add_cloak(scene, assets, person, CloakCut(folds=-1))
+    with assert_raises(contains="six columns"):
+        _ = add_cloak(scene, assets, person, CloakCut(columns=13, folds=3))
+    with assert_raises(contains="flare"):
+        _ = add_cloak(scene, assets, person, CloakCut(flare=-0.5))
+    with assert_raises(contains="flare"):
+        _ = add_cloak(scene, assets, person, CloakCut(flare=11))
 
 
 def test_the_shared_arithmetic_moves_one_particle_at_a_time() raises:

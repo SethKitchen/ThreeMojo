@@ -27,8 +27,10 @@ from extensions.attire.mix import (
     WIZARD,
     arcane_dye,
     calling_beard,
+    calling_cloak,
     calling_hair,
     calling_sex,
+    cloak_of,
     dressed_as,
     forest_dye,
     fur_dye,
@@ -56,7 +58,7 @@ from extensions.attire.mix import (
     require_calling,
     rich_dye,
 )
-from extensions.attire.kinds import FUR, HATTED
+from extensions.attire.kinds import FUR, HATTED, VELVET
 from extensions.attire.metal import METAL_COUNT
 from extensions.attire.outfit import Outfit
 from extensions.humanoid.sex import FEMALE, MALE, Sex
@@ -408,6 +410,52 @@ def test_the_archetypes_make_thousands_of_looks() raises:
     # Few of the 1,680 people are twins in their clothes, hair and beard.
     assert_equal(made, 1680)
     assert_true(len(seen) > 1500)
+
+
+def test_each_calling_wears_a_cloak_of_its_own_by_chance() raises:
+    var wearers = List[Int](length=CALLING_COUNT, fill=0)
+    for c in range(CALLING_COUNT):
+        for seed in range(200):
+            if calling_cloak(Calling(c), MALE, seed):
+                wearers[c] += 1
+    # Three royals in four, and three peasants in twenty.
+    assert_true(wearers[ROYAL.value] > 130 and wearers[ROYAL.value] < 170)
+    assert_true(wearers[PEASANT.value] > 15 and wearers[PEASANT.value] < 45)
+    assert_true(wearers[RANGER.value] > wearers[MONK.value])
+    with assert_raises(contains="calling"):
+        _ = calling_cloak(Calling(99), MALE, 1)
+    with assert_raises(contains="sex"):
+        _ = calling_cloak(ROYAL, Sex(9), 1)
+    with assert_raises(contains="calling"):
+        _ = cloak_of(Calling(99), 1)
+
+
+def test_a_cloak_suits_its_calling() raises:
+    var edges = Set[Int]()
+    for seed in range(60):
+        var royal = cloak_of(ROYAL, seed)
+        assert_true(royal.fabric == VELVET)
+        assert_true(Bool(royal.trim))
+        edges.add(Int(royal.trim.value().r))
+        assert_true(cloak_of(NOBLEWOMAN, seed).fabric == VELVET)
+        var wizard = cloak_of(WIZARD, seed)
+        edges.add(Int(wizard.trim.value().b))
+        assert_true(Bool(cloak_of(WARLOCK, seed).trim))
+        assert_true(Bool(cloak_of(KNIGHT, seed).trim))
+        assert_false(Bool(cloak_of(WARRIOR, seed).trim))
+        assert_false(Bool(cloak_of(MERCHANT, seed).trim))
+        assert_false(Bool(cloak_of(RANGER, seed).trim))
+        assert_false(Bool(cloak_of(ARCHER, seed).trim))
+        var fur = cloak_of(BARBARIAN, seed)
+        assert_true(fur.fabric == FUR)
+        # A barbarian's is short, a monk's long, and a peasant's between.
+        var monk = cloak_of(MONK, seed)
+        var peasant = cloak_of(PEASANT, seed)
+        assert_true(fur.length.value < peasant.length.value)
+        assert_true(peasant.length.value < monk.length.value)
+        assert_true(monk.flare > 0.8 and monk.flare < 1.2)
+    # Ermine and gold, gold and silver.
+    assert_true(len(edges) >= 3)
 
 
 def main() raises:
