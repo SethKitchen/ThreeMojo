@@ -762,6 +762,7 @@ Procedural buildings for engineering analysis and for games share one canonical 
 Earth-retaining structures and the pictures that explain them. A checked box records implemented scope. It does not establish engineering validity for a project.
 
 - [x] [Retaining walls](https://github.com/SethKitchen/ThreeMojo/wiki/Retaining-walls): earth and water pressure, trial wedges, LRFD wall stability, concrete strips, Bishop slip circles and failure motions [#753](https://github.com/SethKitchen/ThreeMojo/issues/753)
+- [x] [Design checks](https://github.com/SethKitchen/ThreeMojo/wiki/Design-checks): US member and foundation checks. AISC steel members and connections, NDS joists and bolts. ACI walls, footings, plain concrete and chapter 17 anchors. ASCE 7 wind. Patterned continuous beams, LaTeX/TikZ calculation writers and staged utilization views
 - [x] [Engineering views](https://github.com/SethKitchen/ThreeMojo/wiki/Engineering-views): a mesh builder for walls, pipes and ground, a text and label overlay, and civil-works textures [#754](https://github.com/SethKitchen/ThreeMojo/issues/754)
 
 ### Out of scope

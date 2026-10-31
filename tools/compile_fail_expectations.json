@@ -4833,6 +4833,18 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_wind_exposure_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 54,
+        "message": "invalid call to 'exposure_coefficient': value passed to 'exposure' cannot be converted from 'IntLiteral[1]' to 'WindExposure'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_window_id_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -5108,6 +5120,18 @@
         "column": 18,
         "line": 12,
         "message": "invalid call to 'require_mode': value passed to 'mode' cannot be converted from 'IntLiteral[1]' to 'AnatomyMode'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_anchor_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 15,
+        "column": 37,
+        "message": "invalid call to 'breakout_tension_strength': value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'AnchorKind'"
       }
     ],
     "notes": [
