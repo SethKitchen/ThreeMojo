@@ -61,6 +61,7 @@ from extensions.attire.apparel import (
     fur_boots,
     fur_kilt,
     fur_mantle,
+    hood_cape,
     royal_mantle,
     sash,
     smock,
@@ -1102,10 +1103,30 @@ def _ranger(woman: Bool, seed: Int) raises -> Outfit:
         outfit.add(cap^)
     else:
         outfit.add(_dyed(hood(), hooded, forest_dye(green)))
-    if _chance(seed, 57, 20):
+    # A forest outlaw's capuchon: a short cape round the hood or under
+    # the cap, in the hood's green. Or, now and then, a fur mantle.
+    if _chance(seed, 144, 55):
+        outfit.add(_dyed(hood_cape(), hooded, forest_dye(green)))
+    elif _chance(seed, 57, 20):
         outfit.add(_dyed(fur_mantle(), fur_dye(_mixed(seed, 58)), fur_dye(1)))
     outfit.add(tall_boots())
     return outfit^
+
+
+def carries_bow(calling: Calling) raises -> Bool:
+    """Return whether a calling carries a longbow and a quiver of arrows.
+
+    Args:
+        calling: A named calling.
+
+    Returns:
+        True for archers and rangers.
+
+    Raises:
+        Error: If the calling is not named.
+    """
+    require_calling(calling)
+    return calling == ARCHER or calling == RANGER
 
 
 def _warrior(woman: Bool, seed: Int) raises -> Outfit:

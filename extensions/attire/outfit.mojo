@@ -82,6 +82,7 @@ from extensions.attire.kinds import (
 from extensions.attire.last import FootLast, foot_lasts, shoe
 from extensions.attire.mesh_ops import add_rim, cut, merge, normalize_normals
 from extensions.attire.ruffle import ruffle_mesh
+from extensions.attire.hang import hang_lifts, hangs_loose
 from extensions.attire.fur import (
     outer_face,
     fur_shell_count,
@@ -302,6 +303,7 @@ def dress_pieces(
     var top = skirt_top(person.rig)
     var detail = garment_detail(skin)
     var clear = top - 2 * SKIRT_RING * skirt_scale(person.rig) / detail
+    var hang = List[Float32]()
     var values = List[List[Float32]]()
     var hides = List[List[Float32]]()
     var faces = List[List[Float32]]()
@@ -330,6 +332,12 @@ def dress_pieces(
         var lifts = List[Float32](length=count, fill=0)
         if garment.sleeve != FITTED_SLEEVE:
             lifts = sleeve_lifts(skin, person.rig, garment.sleeve)
+        # A loose garment hangs from the chest over the hollows below it.
+        if hangs_loose(garment):
+            if len(hang) == 0:
+                hang = hang_lifts(skin, person.rig)
+            for v in range(count):  # pragma: no branch
+                lifts[v] += hang[v]
         var standoffs = List[Float32](capacity=count)
         for v in range(count):
             standoffs.append(

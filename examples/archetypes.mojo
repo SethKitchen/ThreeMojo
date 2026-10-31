@@ -13,7 +13,9 @@ a warlock, a ranger and a warrior stand side by side, the men in front
 and the women behind. Each person's seed picks a genome, a stature, the
 dyes, the metals and the headwear of their calling, and a hairstyle,
 a beard and a cloak that suit it. A warrior with no cloak carries a
-shield on the back that bears the arms of the warrior's seed. Each person's hair is cards of fibers
+shield on the back that bears the arms of the warrior's seed. A ranger
+holds a longbow and, with no cloak, wears a quiver of arrows on the
+back; most wear a hood or a feathered cap with a short cape. Each person's hair is cards of fibers
 that `GameHairMotion` moves with the head and shades for the lights.
 Each cloak falls over capsules fit to its wearer's outfit. Half walk in
 place and half stand at ease while the camera passes along the front
@@ -51,6 +53,7 @@ from extensions.attire.mix import (
     Calling,
     calling_arms,
     calling_beard,
+    carries_bow,
     calling_cloak,
     calling_hair,
     calling_label,
@@ -58,6 +61,7 @@ from extensions.attire.mix import (
 )
 from extensions.attire.outfit import dress
 from extensions.attire.props import heraldic_shield
+from extensions.attire.archery import equip_archer
 from extensions.attire.sockets import BACK, attach
 from extensions.attire.springs import SpringCollider
 from extensions.humanoid.athleticism import TONED, UNTONED
@@ -212,6 +216,7 @@ def main() raises:
         var outfit = dressed_as(calling, sex, seed)
         var dressed = dress(scene, assets, person, outfit)
         var cut = calling_cloak(calling, sex, seed)
+        var cloaked = Bool(cut)
         var arms = calling_arms(calling, seed)
         if cut:
             wearers.append(index)
@@ -238,6 +243,12 @@ def main() raises:
                     shield_look,
                     back,
                 )
+            )
+        if carries_bow(calling):
+            # A longbow in the left hand, and a quiver on the back unless
+            # a cloak hangs there.
+            _ = equip_archer(
+                scene, assets, person, shield_look, quivered=not cloaked
             )
         dressing += _seconds_since(start)
         print(index, calling_label(calling), "woman" if woman else "man")

@@ -41,6 +41,7 @@ from extensions.attire.mix import (
     calling_cloak,
     calling_hair,
     calling_sex,
+    carries_bow,
     cloak_of,
     heraldry,
     dressed_as,
@@ -635,6 +636,21 @@ def test_callings_wear_designs_by_chance() raises:
     assert_true(designed[PEASANT.value] < designed[ROYAL.value])
     assert_true(designed[WARRIOR.value] < 20)
     assert_true(plaid > 15 and plaid < 60)
+
+
+def test_rangers_wear_a_capuchon_and_carry_bows() raises:
+    var caped = 0
+    for seed in range(100):
+        var ranger = dressed_as(RANGER, MALE, seed)
+        ranger.check()
+        if _has(ranger, "hood cape"):
+            caped += 1
+            assert_false(_has(ranger, "fur mantle"))
+    assert_true(caped > 35 and caped < 75)
+    assert_true(carries_bow(RANGER) and carries_bow(ARCHER))
+    assert_false(carries_bow(WARRIOR) or carries_bow(PEASANT))
+    with assert_raises(contains="calling"):
+        _ = carries_bow(Calling(77))
 
 
 def test_callings_wear_frills_by_chance() raises:

@@ -63,6 +63,18 @@ A layer under a garment lifts it in full inside and at that layer's hem. The lif
 
 A garment is cut where a layer over it covers it past 0.75. That layer's hem lies at 0.5, so the garment ends under it. The cut runs along the iso-line, as a hem does, and not along the edges of triangles. So no whole triangle of an inner layer reaches out past the hem of the layer over it.
 
+A loose garment hangs from the chest. A shell follows the skin into each hollow, such as under the bust, over the small of the back and below the chest. A loose robe does not: its cloth falls from the widest point above and spans the hollow.
+
+`hangs_loose` says which garments hang. Each is a closed garment of cloth, skirted, that covers the chest, with a round or a slit neck. A robe, a tunic, a gown and a surcoat hang. A tailored coat, a ball gown, a bodice and armor are fitted.
+
+`hang_lifts` adds a standoff to each vertex of a hanging garment, as a full sleeve does:
+
+1. It cuts the trunk into 36 sectors round a vertical axis through the hips. The span runs from the waist joint up to halfway from the chest joint to the neck.
+2. In each sector, from the top down, the cloth hangs as far out as the widest point above it. It draws in 20 cm for each meter it falls.
+3. A vertex inside that curtain is lifted out to it. The lift fades to none over the lowest 35% of the span. So the garment comes back to the body at the waist, where a belt cinches it.
+
+Each lift is scaled by the weight of the trunk's bones on the vertex, so an arm beside the body is not lifted. Each layer stands off the layer under it, so a belt or a cloak over a robe stays clear of it.
+
 The hands' skins are meshes of their own, and each layer stands off only the layers under it on the same skin. So at the wrist a glove on the hand's skin can still show past a vambrace on the arm's.
 
 A shell is one face of its fabric, so a hem has no thickness of its own. `add_rim` gives each open edge a rim: a strip of two triangles from the edge in along the normals, facing out of the edge. `dress` rims each fabric 1.5 mm thick or more, at its own thickness and at most 6 mm deep. So the hems of leather, padding, mail and plate, and the edge of each lame, show their thickness and catch the light. Copies of a vertex at one position are one vertex, so a seam where the skin was parted takes no rim.
@@ -470,6 +482,7 @@ A design in colors paints its primary part white, so the texture gives the color
 | `trousers` | legs | mid | wool, cut loose, to the ankle | fitted |
 | `fur_kilt` | waist | outer | fur, to above the knee | skirted, flare 0.25 |
 | `fur_mantle` | shoulders | over | fur | fitted |
+| `hood_cape` | shoulders | over | wool, a short cape to mid-chest, worn with a hood | fitted |
 | `royal_mantle` | shoulders | over | velvet, edged in white fur | fitted |
 | `wizard_robe` | torso | mid | wool, cut loose, to the floor | skirted, flare 0.35 |
 | `cassock` | torso | mid | wool, a high collar, to the ankles | skirted, flare 0.2 |
@@ -526,4 +539,4 @@ Roblox's cages and MakeHuman's `mhclo` files bind a garment to a body mesh from 
 
 ## Tests
 
-`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_metal.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_skirt.mojo`, `test_attire_last.mojo`, `test_attire_cowl.mojo`, `test_attire_dome.mojo`, `test_attire_headwear.mojo`, `test_attire_surface.mojo`, `test_attire_fur.mojo`, `test_attire_ruffle.mojo`, `test_attire_dye.mojo`, `test_attire_design.mojo`, `test_attire_garment.mojo`, `test_attire_armory.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.
+`tests/test_attire_kinds.mojo`, `test_attire_fabric.mojo`, `test_attire_metal.mojo`, `test_attire_mesh_ops.mojo`, `test_attire_cover.mojo`, `test_attire_shell.mojo`, `test_attire_skirt.mojo`, `test_attire_last.mojo`, `test_attire_cowl.mojo`, `test_attire_dome.mojo`, `test_attire_headwear.mojo`, `test_attire_surface.mojo`, `test_attire_hang.mojo`, `test_attire_fur.mojo`, `test_attire_ruffle.mojo`, `test_attire_dye.mojo`, `test_attire_design.mojo`, `test_attire_garment.mojo`, `test_attire_armory.mojo` and `test_attire_binding.mojo` cover this page. Each kind type has a file in `tests/compile_fail/`.

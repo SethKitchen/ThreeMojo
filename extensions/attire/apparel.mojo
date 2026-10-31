@@ -12,6 +12,7 @@
 | `trousers` | legs | mid | wool, cut loose, to the ankle | fitted |
 | `fur_kilt` | waist | outer | fur, to above the knee | skirted, flare 0.25 |
 | `fur_mantle` | shoulders | over | fur, round the shoulders | fitted |
+| `hood_cape` | shoulders | over | wool, a short cape to mid-chest, worn with a hood | fitted |
 | `royal_mantle` | shoulders | over | velvet, edged in white fur | fitted |
 | `wizard_robe` | torso | mid | wool, cut loose, to the floor | skirted, flare 0.35 |
 | `cassock` | torso | mid | wool, a high collar, to the ankles | skirted, flare 0.2 |
@@ -482,6 +483,35 @@ def circlet() raises -> Garment:
     return made^
 
 
+def hood_cape() raises -> Garment:
+    """Return a short wool cape over the shoulders, worn with a hood.
+
+    A hood and a hood cape together are a capuchon, the forest outlaw's
+    hood: the cape covers the chest to its middle and each upper arm to
+    its middle, round the base of the hood.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which an apparel garment's is not.
+    """
+    var cover = Cover()
+    cover.reach_to(CHEST, 1, 0.4)
+    cover.reach_to(NECK, 0.5)
+    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.45, 0)
+    return Garment(
+        "hood cape",
+        SHOULDERS_SLOT,
+        OVER_LAYER,
+        WOOL,
+        cover^,
+        Color(56, 88, 44),
+        drape=12,
+        ease=Length(1.4, CENTIMETER),
+    )
+
+
 def apparel() raises -> List[Garment]:
     """Return every garment of this module.
 
@@ -497,6 +527,7 @@ def apparel() raises -> List[Garment]:
         trousers(),
         fur_kilt(),
         fur_mantle(),
+        hood_cape(),
         royal_mantle(),
         wizard_robe(),
         cassock(),
