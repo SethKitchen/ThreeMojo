@@ -250,8 +250,10 @@ struct Body(Movable):
         if len(outfit.garments) > 0:
             var dressed = dress(scene, assets, self.person, outfit)
             self.garments = dressed.meshes.copy()
-            for mesh in self.garments:  # pragma: no branch
-                if mesh >= 0:
+            # A garment in a design, with frills or of fur is drawn in
+            # parts, and each part casts a shadow.
+            for parts in dressed.parts:  # pragma: no branch
+                for mesh in parts:
                     scene.skinned_meshes[mesh].cast_shadow = True
         ref rig = self.person.rig
         ref bones = self.person.bones

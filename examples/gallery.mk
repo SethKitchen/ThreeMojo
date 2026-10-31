@@ -204,6 +204,21 @@ $(call gallery,family,family)
 $(call gallery,armory,armory)
 # Eight people of eight callings, each of a genome and an outfit picked by a seed.
 $(call gallery,crowd,crowd)
+# Seven callings as a man and a woman each: hats and helmets, furs, robes and
+# plate of many metals, with hair cards moving as they walk.
+$(call gallery,archetypes,archetypes)
+# Eight heads, each in a hat or a helmet shaped round it, over hair cards.
+$(call gallery,headwear,headwear)
+# Ten surcoats, one in each dye pattern: party, quartered and charged.
+$(call gallery,heraldry,heraldry)
+# Eight people in the tailor's shirts, bodices, skirts, coats and gowns.
+$(call gallery,tailoring,tailoring)
+# Nine people, each in one design woven or embroidered over the dyes.
+$(call gallery,designs,designs)
+# Five people whose cloth shows its character: frills, fur, folds and leather.
+$(call gallery,fabrics,fabrics)
+# Two forest outlaws in hoods and hood capes, with longbows and quivers.
+$(call gallery,outlaws,outlaws)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.

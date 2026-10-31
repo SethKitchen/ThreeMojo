@@ -6,7 +6,7 @@
 """Tests for a garment's dyes, its patterns and its wear."""
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, BufferGeometry
+from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from extensions.attire.dye import (
     DYE,
     TRIM_LEVEL,
@@ -19,6 +19,7 @@ from extensions.attire.dye import (
     worn_color,
 )
 from extensions.attire.kinds import (
+    ACCENT_DYE,
     BLOOD,
     DIRT,
     PARTY,
@@ -29,9 +30,19 @@ from extensions.attire.kinds import (
     STRIPES,
     TRIM_DYE,
     WET,
+    BANDED_SLEEVES,
+    BEND,
+    CHECKY,
+    FRONT_PANEL,
+    SLEEVES,
+    CHEVRON,
+    CROSS,
+    PALY,
+    SALTIRE,
     DyePattern,
     WearKind,
 )
+from extensions.attire.mesh_ops import ACCENT
 from extensions.attire.shell import COVER
 from extensions.humanoid.rig.joints import HIPS, RIGHT_UPPER_ARM
 from math.vector3 import Vector3
@@ -44,7 +55,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from tests._attire_fixtures import empty_mesh, line_rig, strip
+from tests._attire_fixtures import empty_mesh, line_rig, strip, tube
 from units.si import Length, METER
 
 
@@ -77,7 +88,89 @@ def test_patterns_sign_each_vertex() raises:
     var stripes = pattern_values(mesh, rig, STRIPES)
     assert_equal(len(stripes), 10)
     with assert_raises(contains="named pattern"):
-        _ = pattern_values(mesh, rig, DyePattern(8))
+        _ = pattern_values(mesh, rig, DyePattern(40))
+
+
+def test_charges_lie_on_the_chest() raises:
+    # The line rig's chest stands at the origin, its waist too, and its
+    # right arm at plus x: across is x, up from the chest is y.
+    var rig = line_rig()
+    var at: List[Vector3] = [
+        Vector3(0, 0, 0),
+        Vector3(0.3, -0.3, 0),
+        Vector3(0.3, 0.3, 0),
+        Vector3(0.3, 0, 0),
+        Vector3(0.5, -0.44, 0),
+        Vector3(0, -0.3, 0),
+        Vector3(0.045, 0.045, 0),
+        Vector3(-0.045, 0.045, 0),
+        Vector3(0.045, -0.045, 0),
+    ]
+    var flat = List[Float32]()
+    for p in at:
+        flat.append(p.x)
+        flat.append(p.y)
+        flat.append(p.z)
+    var mesh = BufferGeometry()
+    mesh.set_attribute(String(POSITION), BufferAttribute(flat^, 3))
+    # A cross: on its arms, the secondary dye; between them, the field.
+    var cross = pattern_values(mesh, rig, CROSS)
+    assert_true(cross[0] < 0 and cross[3] < 0 and cross[1] > 0)
+    # A saltire: on its diagonals, not across the middle.
+    var saltire = pattern_values(mesh, rig, SALTIRE)
+    assert_true(saltire[1] < 0 and saltire[2] < 0 and saltire[3] > 0)
+    # A bend: from the right shoulder down to the left hip.
+    var bend = pattern_values(mesh, rig, BEND)
+    assert_true(bend[2] < 0 and bend[0] < 0 and bend[1] > 0)
+    # A chevron: its point over the chest, its arms falling away.
+    var chevron = pattern_values(mesh, rig, CHEVRON)
+    assert_true(chevron[0] < 0 and chevron[4] < 0 and chevron[5] > 0)
+    # Paly and checky: bands up and down, and squares.
+    var paly = pattern_values(mesh, rig, PALY)
+    assert_true(paly[6] > 0 and paly[7] < 0)
+    var checky = pattern_values(mesh, rig, CHECKY)
+    assert_true(checky[6] > 0 and checky[7] < 0 and checky[8] < 0)
+
+
+def test_a_front_panel_and_sleeves_take_the_second_dye() raises:
+    var rig = line_rig()
+    var at: List[Vector3] = [
+        Vector3(0, 0.1, 0.1),
+        Vector3(0.4, 0.1, 0.1),
+        Vector3(0.15, -0.5, 0.1),
+        Vector3(0, 0.1, -0.1),
+    ]
+    var flat = List[Float32]()
+    for p in at:
+        flat.append(p.x)
+        flat.append(p.y)
+        flat.append(p.z)
+    var mesh = BufferGeometry()
+    mesh.set_attribute(String(POSITION), BufferAttribute(flat^, 3))
+    # A panel down the middle of the front, wider down a skirt, and none
+    # behind.
+    var panel = pattern_values(mesh, rig, FRONT_PANEL)
+    assert_true(panel[0] < 0 and panel[1] > 0)
+    assert_true(panel[2] < 0 and panel[3] > 0)
+    # A mesh with no skin weights has no sleeves.
+    for value in pattern_values(mesh, rig, SLEEVES):
+        assert_true(value > 0)
+    # The arm's skin takes the second dye; the trunk's does not.
+    var arm = tube(0, 0, 0.05, 0, -0.4, RIGHT_UPPER_ARM, 8, 6)
+    for value in pattern_values(arm, rig, SLEEVES):
+        assert_true(value < 0)
+    var trunk = tube(0, 0, 0.15, 0, -0.4, HIPS, 8, 6)
+    for value in pattern_values(trunk, rig, SLEEVES):
+        assert_true(value > 0)
+    # Banded sleeves: both dyes down the arm, the trunk plain.
+    var low = Float32(1)
+    var high = Float32(-1)
+    for value in pattern_values(arm, rig, BANDED_SLEEVES):
+        low = min(low, value)
+        high = max(high, value)
+    assert_true(low < 0 and high > 0)
+    for value in pattern_values(trunk, rig, BANDED_SLEEVES):
+        assert_true(value >= 0)
 
 
 def test_a_pattern_cuts_crisp_boundaries_and_trims_hems() raises:
@@ -106,6 +199,23 @@ def test_a_pattern_cuts_crisp_boundaries_and_trims_hems() raises:
         assert_true(dye_pattern(_sheet(), rig, pattern).triangle_count() > 0)
     with assert_raises(contains="named pattern"):
         _ = dye_pattern(mesh, rig, DyePattern(-2))
+    # A vertex marked as an accent takes the accent dye.
+    var marked = _sheet()
+    var marks = List[Float32](length=marked.vertex_count(), fill=0)
+    marks[0] = 1
+    marks[1] = 1
+    marked.set_attribute(String(ACCENT), BufferAttribute(marks^, 1))
+    var accented = dye_pattern(marked, rig, SOLID)
+    ref accent_weights = accented.attribute_view(String(DYE))
+    ref accent_marks = accented.attribute_view(String(ACCENT))
+    var accents = 0
+    for v in range(accent_weights.count()):
+        if accent_marks.component(v, 0) >= 0.5:
+            assert_equal(accent_weights.component(v, ACCENT_DYE.value), 1)
+            accents += 1
+        else:
+            assert_equal(accent_weights.component(v, ACCENT_DYE.value), 0)
+    assert_true(accents >= 2)
 
 
 def test_stains_and_dirt_add_wear() raises:

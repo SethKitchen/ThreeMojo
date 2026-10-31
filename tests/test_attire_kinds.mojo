@@ -6,6 +6,49 @@
 """Tests for the named kinds of `extensions.attire`."""
 
 from extensions.attire.kinds import (
+    CROWN,
+    CIRCLET,
+    GREAT_HELM,
+    HALF_HELM,
+    HATTED,
+    HEADWEAR_COUNT,
+    NO_HEADWEAR,
+    STRAW,
+    Headwear,
+    headwear_label,
+    headwear_named,
+    NECKLINE_COUNT,
+    OPENING_COUNT,
+    SLEEVE_COUNT,
+    DESIGN_COUNT,
+    BROCADE,
+    DAMASK,
+    DIAPER,
+    FLORAL,
+    HERRINGBONE,
+    HIDE,
+    PLAIN,
+    TARTAN,
+    Design,
+    design_label,
+    design_named,
+    require_design,
+    SQUARE_NECK,
+    OPEN_BELOW,
+    BISHOP_SLEEVE,
+    Neckline,
+    Opening,
+    Sleeve,
+    neckline_label,
+    neckline_named,
+    opening_label,
+    opening_named,
+    require_neckline,
+    require_opening,
+    require_sleeve,
+    sleeve_label,
+    sleeve_named,
+    require_headwear,
     ACCENT_DYE,
     BUMP_COUNT,
     MAIL_RINGS,
@@ -139,17 +182,19 @@ def test_dye_channels_and_patterns_are_named() raises:
     require_dye_channel(ACCENT_DYE)
     with assert_raises(contains="named channel"):
         require_dye_channel(DyeChannel(4))
-    for pattern in [SOLID, PARTY, STRIPES, QUARTERLY]:
+    for k in range(DYE_PATTERN_COUNT):
+        var pattern = DyePattern(k)
         assert_true(pattern.is_valid())
         assert_equal(pattern_named(pattern_label(pattern)), pattern)
+    assert_equal(pattern_label(DyePattern(9)), "checky")
     assert_false(DyePattern(DYE_PATTERN_COUNT).is_valid())
     assert_false(DyePattern(-1).is_valid())
-    assert_equal(pattern_label(DyePattern(9)), "pattern")
+    assert_equal(pattern_label(DyePattern(40)), "pattern")
     require_dye_pattern(PARTY)
     with assert_raises(contains="named pattern"):
-        require_dye_pattern(DyePattern(9))
+        require_dye_pattern(DyePattern(40))
     with assert_raises(contains="No dye pattern"):
-        _ = pattern_named("checky")
+        _ = pattern_named("lozengy")
 
 
 def test_wear_kinds_are_named() raises:
@@ -168,15 +213,41 @@ def test_forms_are_named() raises:
         assert_true(form.is_valid())
         assert_equal(form_named(form_label(form)), form)
     assert_equal(form_label(SKIRTED), "skirted")
-    assert_equal(form_label(Form(7)), "form")
+    assert_equal(form_label(Form(9)), "form")
+    assert_equal(form_label(HATTED), "hatted")
     assert_false(Form(-1).is_valid())
     assert_false(Form(FORM_COUNT).is_valid())
     require_form(FITTED)
     require_form(SHOD)
     with assert_raises(contains="named one"):
-        require_form(Form(7))
+        require_form(Form(9))
     with assert_raises(contains="No form"):
         _ = form_named("baggy")
+
+
+def test_headwear_is_named() raises:
+    for k in range(HEADWEAR_COUNT):
+        var headwear = Headwear(k)
+        assert_true(headwear.is_valid())
+        assert_equal(headwear_named(headwear_label(headwear)), headwear)
+    assert_equal(headwear_label(GREAT_HELM), "great helm")
+    assert_equal(headwear_label(Headwear(40)), "headwear")
+    assert_false(Headwear(-1).is_valid())
+    assert_false(Headwear(HEADWEAR_COUNT).is_valid())
+    # A great helm closes the head; the rest leave the hair below them.
+    assert_false(GREAT_HELM.keeps_hair())
+    assert_true(HALF_HELM.keeps_hair())
+    assert_true(CIRCLET.keeps_hair())
+    # A crown and a circlet are open over the hair; a hat is not.
+    assert_true(CIRCLET.is_open())
+    assert_true(CROWN.is_open())
+    assert_false(HALF_HELM.is_open())
+    require_headwear(NO_HEADWEAR)
+    with assert_raises(contains="named one"):
+        require_headwear(Headwear(40))
+    with assert_raises(contains="No headwear"):
+        _ = headwear_named("turban")
+    assert_equal(fabric_label(STRAW), "straw")
 
 
 def test_articulations_are_named() raises:
@@ -207,6 +278,64 @@ def test_bump_maps_are_named() raises:
     require_bump(NO_BUMP)
     with assert_raises(contains="bump map"):
         require_bump(Bump(BUMP_COUNT))
+
+
+def test_necklines_openings_and_sleeves_are_named() raises:
+    for k in range(NECKLINE_COUNT):
+        assert_equal(neckline_named(neckline_label(Neckline(k))), Neckline(k))
+    for k in range(OPENING_COUNT):
+        assert_equal(opening_named(opening_label(Opening(k))), Opening(k))
+    for k in range(SLEEVE_COUNT):
+        assert_equal(sleeve_named(sleeve_label(Sleeve(k))), Sleeve(k))
+    assert_equal(neckline_label(SQUARE_NECK), "square")
+    assert_equal(opening_label(OPEN_BELOW), "open below")
+    assert_equal(sleeve_label(BISHOP_SLEEVE), "bishop")
+    assert_equal(neckline_label(Neckline(40)), "neckline")
+    assert_equal(opening_label(Opening(40)), "opening")
+    assert_equal(sleeve_label(Sleeve(-1)), "sleeve")
+    assert_false(Neckline(NECKLINE_COUNT).is_valid())
+    assert_false(Opening(-1).is_valid())
+    assert_false(Sleeve(SLEEVE_COUNT).is_valid())
+    require_neckline(SQUARE_NECK)
+    require_opening(OPEN_BELOW)
+    require_sleeve(BISHOP_SLEEVE)
+    with assert_raises(contains="neckline must"):
+        require_neckline(Neckline(40))
+    with assert_raises(contains="opening must"):
+        require_opening(Opening(40))
+    with assert_raises(contains="sleeve must"):
+        require_sleeve(Sleeve(40))
+    with assert_raises(contains="No neckline"):
+        _ = neckline_named("boat")
+    with assert_raises(contains="No opening"):
+        _ = opening_named("slashed")
+    with assert_raises(contains="No sleeve"):
+        _ = sleeve_named("leg-of-mutton")
+
+
+def test_designs_are_named_and_sorted_by_how_they_are_drawn() raises:
+    for k in range(DESIGN_COUNT):
+        assert_equal(design_named(design_label(Design(k))), Design(k))
+    assert_equal(design_label(BROCADE), "brocade")
+    assert_equal(design_label(Design(-1)), "design")
+    assert_false(Design(DESIGN_COUNT).is_valid())
+    require_design(HIDE)
+    with assert_raises(contains="design must"):
+        require_design(Design(40))
+    with assert_raises(contains="No design"):
+        _ = design_named("paisley")
+    # Each named design but plain is tonal or in colors, not both.
+    for k in range(1, DESIGN_COUNT):
+        assert_true(Design(k).is_tonal() != Design(k).is_colored())
+    assert_false(PLAIN.is_tonal() or PLAIN.is_colored())
+    assert_false(Design(40).is_colored())
+    assert_true(DAMASK.is_tonal() and HERRINGBONE.is_tonal())
+    assert_true(TARTAN.is_colored())
+    # The designs of fine cloth braid their trim.
+    for design in [DAMASK, BROCADE, DIAPER, FLORAL]:
+        assert_true(design.braids_trim())
+    for design in [PLAIN, TARTAN, HERRINGBONE, HIDE]:
+        assert_false(design.braids_trim())
 
 
 def main() raises:

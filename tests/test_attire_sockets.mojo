@@ -11,8 +11,17 @@ from core.object3d import Object3D
 from core.scene import Scene
 from extensions.attire.props import (
     heater_shield,
+    heraldic_shield,
     shield_half_width,
     sword_in_scabbard,
+)
+from extensions.attire.dye import DYE
+from extensions.attire.kinds import (
+    CROSS,
+    SECONDARY_DYE,
+    SOLID,
+    TRIM_DYE,
+    DyePattern,
 )
 from extensions.attire.sockets import (
     BACK,
@@ -158,6 +167,43 @@ def test_a_sword_hangs_in_its_scabbard() raises:
     assert_true(highest > 0.15)
     with assert_raises(contains="positive length"):
         _ = sword_in_scabbard(Length(-1, METER))
+
+
+def test_a_heraldic_shield_bears_its_arms_inside_a_rim() raises:
+    var field = Color(30, 60, 150)
+    var charge = Color(240, 240, 240)
+    var gold = Color(214, 170, 64)
+    var plain = heraldic_shield(Length(0.7, METER), SOLID, field, charge, gold)
+    var crossed = heraldic_shield(
+        Length(0.7, METER), CROSS, field, charge, gold
+    )
+    # Cut along the cross and the rim, it has more triangles than its
+    # plain face.
+    assert_true(crossed.triangle_count() > plain.triangle_count())
+    ref placed = crossed.attribute_view(String(POSITION))
+    ref dyes = crossed.attribute_view(String(DYE))
+    var rims = 0
+    var charged = 0
+    for v in range(placed.count()):
+        var p = placed.vector3(v)
+        if dyes.component(v, TRIM_DYE.value) > 0.5:
+            rims += 1
+        elif dyes.component(v, SECONDARY_DYE.value) > 0.5:
+            charged += 1
+            # The cross's arms: near the middle across, or near the fess.
+            assert_true(abs(p.x) < 0.06 or abs(p.y + 0.28) < 0.06)
+    assert_true(rims > 0 and charged > 0)
+    # Its point is still the shield's.
+    var lowest = Float32(1)
+    for v in range(placed.count()):
+        lowest = min(lowest, placed.vector3(v).y)
+    assert_almost_equal(lowest, -0.7, atol=1e-4)
+    with assert_raises(contains="positive height"):
+        _ = heraldic_shield(Length(0, METER), CROSS, field, charge, gold)
+    with assert_raises(contains="named pattern"):
+        _ = heraldic_shield(
+            Length(0.7, METER), DyePattern(40), field, charge, gold
+        )
 
 
 def main() raises:

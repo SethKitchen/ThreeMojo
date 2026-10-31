@@ -28,6 +28,14 @@ from extensions.attire.garment import (
     wardrobe,
 )
 from extensions.attire.kinds import (
+    Design,
+    Ruffles,
+    Neckline,
+    Opening,
+    Sleeve,
+    CROWN,
+    HATTED,
+    Headwear,
     BANDED,
     ARMOR_LAYER,
     COWLED,
@@ -47,6 +55,7 @@ from extensions.attire.kinds import (
     Layer,
     Slot,
 )
+from extensions.attire.metal import Metal
 from extensions.attire.plates import (
     anchor_weights,
     articulate,
@@ -162,7 +171,7 @@ def test_a_garment_refuses_what_cannot_be_made() raises:
     with assert_raises(contains="named one"):
         bad.check()
     bad = good.copy()
-    bad.pattern = DyePattern(9)
+    bad.pattern = DyePattern(40)
     with assert_raises(contains="named pattern"):
         bad.check()
     bad = good.copy()
@@ -195,9 +204,48 @@ def test_a_garment_refuses_what_cannot_be_made() raises:
     with assert_raises(contains="An ease"):
         bad.check()
     bad = good.copy()
-    bad.form = Form(5)
+    bad.form = Form(9)
     with assert_raises(contains="form must"):
         bad.check()
+    bad = good.copy()
+    bad.metal = Metal(30)
+    with assert_raises(contains="metal must"):
+        bad.check()
+    bad = good.copy()
+    bad.headwear = Headwear(30)
+    with assert_raises(contains="headwear kind must"):
+        bad.check()
+    bad = good.copy()
+    bad.neckline = Neckline(30)
+    with assert_raises(contains="neckline must"):
+        bad.check()
+    bad = good.copy()
+    bad.opening = Opening(30)
+    with assert_raises(contains="opening must"):
+        bad.check()
+    bad = good.copy()
+    bad.sleeve = Sleeve(30)
+    with assert_raises(contains="sleeve must"):
+        bad.check()
+    bad = good.copy()
+    bad.design = Design(30)
+    with assert_raises(contains="design must"):
+        bad.check()
+    bad = good.copy()
+    bad.ruffles = Ruffles(30)
+    with assert_raises(contains="Ruffles must"):
+        bad.check()
+    # A hat names its headwear, and nothing else does.
+    bad = good.copy()
+    bad.form = HATTED
+    with assert_raises(contains="names its headwear"):
+        bad.check()
+    bad = good.copy()
+    bad.headwear = CROWN
+    with assert_raises(contains="names its headwear"):
+        bad.check()
+    bad.form = HATTED
+    bad.check()
     bad = good.copy()
     bad.flare = -0.1
     with assert_raises(contains="A flare"):

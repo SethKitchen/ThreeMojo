@@ -115,6 +115,33 @@ struct FootLast(Copyable, Movable):
                 found = True
         return nearest
 
+    def cast_from(self, origin: Vector3, direction: Vector3) -> Float32:
+        """Return how far from a point inside the hull a ray leaves it.
+
+        Args:
+            origin: A point inside the hull.
+            direction: A unit direction.
+
+        Returns:
+            The distance along the ray to the nearest face it meets on
+            its way out, or zero for a hull with no faces or a point
+            outside it.
+        """
+        var nearest = Float32(0)
+        var found = False
+        var from_center = origin - self.center
+        for k in range(len(self.normals)):
+            var facing = self.normals[k].dot(direction)
+            if facing <= 0:
+                continue
+            var along = (
+                self.offsets[k] - self.normals[k].dot(from_center)
+            ) / facing
+            if not found or along < nearest:
+                nearest = along
+                found = True
+        return max(Float32(0), nearest)
+
 
 def last_top(rig: HumanoidRig) -> Float32:
     """Return the height a last reaches.

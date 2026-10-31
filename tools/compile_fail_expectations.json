@@ -1977,6 +1977,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_headwear_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'require_headwear': value passed to 'headwear' cannot be converted from 'IntLiteral[1]' to 'Headwear'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_helper_size_is_not_a_bare_float.mojo": {
     "errors": [
       {
@@ -2501,6 +2513,18 @@
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'message_id' cannot be converted from 'IntLiteral[2]' to 'MessageId'"
+    ]
+  },
+  "tests/compile_fail/a_metal_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 19,
+        "message": "invalid call to 'require_metal': value passed to 'metal' cannot be converted from 'IntLiteral[1]' to 'Metal'"
+      }
+    ],
+    "notes": [
+      "function declared here"
     ]
   },
   "tests/compile_fail/a_mirror_side_is_not_a_bare_int.mojo": {
@@ -9411,6 +9435,66 @@
         "column": 22,
         "line": 12,
         "message": "invalid call to 'plus': value passed to 'other' cannot be converted from 'IntLiteral[2]' to 'TorsoContents'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_neckline_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'require_neckline': value passed to 'neckline' cannot be converted from 'IntLiteral[1]' to 'Neckline'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_opening_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'require_opening': value passed to 'opening' cannot be converted from 'IntLiteral[1]' to 'Opening'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_sleeve_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 20,
+        "message": "invalid call to 'require_sleeve': value passed to 'sleeve' cannot be converted from 'IntLiteral[1]' to 'Sleeve'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_design_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 20,
+        "message": "invalid call to 'require_design': value passed to 'design' cannot be converted from 'IntLiteral[1]' to 'Design'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/ruffles_are_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'require_ruffles': value passed to 'ruffles' cannot be converted from 'IntLiteral[1]' to 'Ruffles'"
       }
     ],
     "notes": [

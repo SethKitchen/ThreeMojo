@@ -35,6 +35,29 @@ The rig has nineteen joints. Each joint is a bone, a scene node named as a glTF 
 
 `add_game_humanoid` builds three skinned meshes on one skeleton: the body's skin and each hand's. The eyes and the scalp's hair hang from the head's bone, so they turn with it. With `guides`, it grows strands of hair as well. With none, the hair's shell takes the shape of `hair_style`. A bob falls to the jaw, a ponytail hangs from its tie, and a bun stands on the crown. See [Head](Head#a-shell-drawn-alone).
 
+With `cards`, it grows that many guide strands in the shape of `hair_style` and draws each as a card of fibers over a thin shell. A beard grows a quarter as many cards over its own shell. A crowd can wear cards: a head of 700 cards costs about 22,000 triangles to draw. With `guides`, it grows strands of hair as well. Strands cost far more to draw: each segment is a quad and two round caps. See [Hair cards](Head#hair-cards).
+
+`GameHairMotion` moves the strands and the cards as the person moves. Call `update` once a frame, after the scene is updated. The hair lags as the head starts, swings as it stops, and falls toward the ground as the head bows. A groom that a hood or a helmet hides is not moved.
+
+A groom whose head is farther than `reach` from the camera is not moved either. The default is 15 m. It rides its head as it last lay, and its sway is too small to see there. When it comes near again it swings on from where it lay.
+
+`move_hair(motions, scene, assets, people, lights, eye, ambient, wind, workers)` moves a crowd's hair. It works in three steps:
+
+1. Each motion carries its grooms through their heads' moves, as `prepare` does.
+2. The grooms that show and lie within reach step and are lit at once, a run of grooms on each thread, as `advance` does.
+3. Their meshes go to the store, as `publish` does.
+
+The hair moves as each person's own `update` moves it.
+
+```mojo
+var person = add_game_humanoid(scene, assets, root, spec, 20000, cards=700)
+var motion = GameHairMotion(scene, person, spec)
+# Each frame:
+mixer.update(scene, step)
+scene.update()
+motion.update(scene, assets, person, lights, eye, ambient, wind)
+```
+
 With `beard`, the face grows facial hair: a mustache, a goatee, a short or full beard, a chin strap or mutton chops. See [Facial hair](Head#facial-hair). The beard hangs from the head's bone with the hair, in the hair's material, and `person.beard` names its node. It takes 3 % of the triangle budget, and 32 triangles at least, from the body's share.
 
 The game recipe's revision is `v2`, since the skin, the hair and the neck seam changed. A bearded build also records the beard. A hood or a helmet hides the beard with the hair. A face with facial animation does not carry a beard yet.
@@ -83,7 +106,9 @@ Build the humanoid once and bake it with `write_sealed_bake(path, scene, assets,
 | Load the `.glb` | 12 ms |
 | Animate and draw one frame, 640 by 360 | 31 ms: 32 frames a second |
 
-These were measured on four cores. Most of the build is the hair's shell, at `hair_detail` 32.
+These were measured on four cores.
+
+With a budget, the hair's shell and the hands are meshed at about ten times their shares of it. `budget_detail` chooses the detail, and never above `hair_detail` or `hand_detail`. Finer, the decimation throws the rest away, and the meshing and the decimation cost more for nothing. At 16,000 triangles the shell's share is 1,920. So it is meshed at detail 15, about 21,000 triangles, not at 32, about 96,000. A beard keeps its detail: meshed coarser, its locks stop the decimation short of a small budget.
 
 The body's skin, each hand's and the hair's shell are decimated at once, one on each thread, with `budget_all`. Each decimation is the same as before, so the meshes are too. On a shared four-core machine a build at 24,000 triangles fell from 3.3 s to 2.5 s.
 
