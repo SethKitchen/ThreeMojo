@@ -129,13 +129,22 @@ comptime HAIR_TEXELS = 64
 comptime HAIR_SHARE = Float32(0.12)
 # The share a beard takes, from the body's.
 comptime BEARD_SHARE = Float32(0.03)
-# Cells along a beard's box.
+# Cells along a beard's box, with no triangle budget.
 comptime BEARD_DETAIL = 28
+# Cells along a beard's box with a budget. The budget decimates it to a
+# few hundred triangles, so a finer mesh is thrown away. The decimation
+# must not pinch a thin part, so on some beards meshed coarse it stops
+# short of the budget. Such a beard is meshed again at the finer detail.
+# Stubble lies in patches, and each patch keeps its rim: it decimates
+# best when meshed coarse, and it is never meshed again.
+comptime COARSE_BEARD_DETAIL = 12
+comptime FINE_BEARD_DETAIL = 20
+# How many times its budget a decimated beard can keep before it is
+# meshed again at `FINE_BEARD_DETAIL`.
+comptime BEARD_STALL = 2
 # With a triangle budget, the hair's shell and the hands are meshed at
 # about this many times their shares of it. Finer, decimation throws the
-# rest away, and the meshing and the decimation cost more for nothing. A
-# beard keeps its detail: meshed coarser, its locks stop decimation short
-# of a small budget.
+# rest away, and the meshing and the decimation cost more for nothing.
 comptime SPARE_TRIANGLES = Float32(10)
 # Triangles per square of the detail: the hair's shell, its outer face
 # alone, and a hand's skin.
@@ -427,6 +436,37 @@ def budget_detail(budget: Int, density: Float32, most: Int) -> Int:
     return min(most, max(LEAST_BUDGET_DETAIL, detail))
 
 
+def beard_detail(triangles: Int) -> Int:
+    """Return the cells along a beard's box for a person's budget.
+
+    Args:
+        triangles: The person's triangle budget, or zero for none.
+
+    Returns:
+        `BEARD_DETAIL` with no budget, else `COARSE_BEARD_DETAIL`.
+    """
+    if triangles <= 0:
+        return BEARD_DETAIL
+    return COARSE_BEARD_DETAIL
+
+
+def beard_stalls(beard: Beard, budget: Int, drawn: Int) -> Bool:
+    """Return whether a coarse beard's decimation stopped short of its
+    budget, so the beard must be meshed again at `FINE_BEARD_DETAIL`.
+
+    Args:
+        beard: The facial hair.
+        budget: The beard's share of the triangle budget, or zero for
+            none.
+        drawn: How many triangles the decimation kept.
+
+    Returns:
+        True if there is a budget, the beard is not stubble, and the
+        decimation kept more than `BEARD_STALL` times the budget.
+    """
+    return budget > 0 and beard != STUBBLE and drawn > BEARD_STALL * budget
+
+
 def add_game_humanoid(
     mut scene: Scene,
     mut assets: Assets,
@@ -562,7 +602,7 @@ def add_game_humanoid(
     var meshed = shell.clone()
     var whiskers = Optional[BufferGeometry](None)
     if beard != CLEAN_SHAVEN:
-        whiskers = beard_mesh(dims, beard, BEARD_DETAIL, workers)
+        whiskers = beard_mesh(dims, beard, beard_detail(triangles), workers)
     var eyes = List[BufferGeometry]()
     # Both named sides receive an eye.
     for side in [RIGHT, LEFT]:  # pragma: no branch
@@ -751,14 +791,12 @@ def add_game_humanoid(
     var full_beard = Optional[BufferGeometry](None)
     var beard_node = Optional[NodeId](None)
     if whiskers:
-        full_beard = whiskers.value().clone()
-        beard_node = place_mesh_node(
-            scene,
-            assets,
-            holder_id,
-            _budgeted(whiskers.take(), beard_budget),
-            hair,
-        )
+        var drawn = _budgeted(whiskers.value().clone(), beard_budget)
+        if beard_stalls(beard, beard_budget, drawn.triangle_count()):
+            whiskers = beard_mesh(dims, beard, FINE_BEARD_DETAIL, workers)
+            drawn = _budgeted(whiskers.value().clone(), beard_budget)
+        full_beard = whiskers.take()
+        beard_node = place_mesh_node(scene, assets, holder_id, drawn^, hair)
     var face = Optional[GameFace](None)
     if facial_animation:
         var paints = List[MaterialId]()
