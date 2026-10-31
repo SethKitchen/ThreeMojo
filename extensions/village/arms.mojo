@@ -42,6 +42,14 @@ from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.rig.joints import CHEST, HIPS, LEFT_HAND, RIGHT_HAND
+from extensions.humanoid.rig.giant_clips import (
+    giant_call_clip,
+    giant_charge_clip,
+    giant_cleave_clip,
+    giant_roar_clip,
+    giant_slam_clip,
+    giant_stomp_clip,
+)
 from extensions.humanoid.rig.style_clips import (
     aimed_shot_clip,
     bow_ready_clip,
@@ -176,6 +184,7 @@ struct Arms(Movable):
         looks: SwordLooks,
         steel: Vector3,
         styles: List[FightingStyle] = [SWORD],
+        giant: Bool = False,
     ) raises:
         """Add the fighting clips to a body, and hang its weapons.
 
@@ -186,6 +195,8 @@ struct Arms(Movable):
             looks: The weapons' materials.
             steel: The sword's blade's color.
             styles: The styles whose weapons and clips the body carries.
+            giant: Whether the body is a raid boss's: it plays a giant's
+                clips for the moves that stand in for its attacks.
 
         Raises:
             Error: If a style is not one, or a clip or a weapon cannot be
@@ -250,6 +261,28 @@ struct Arms(Movable):
                 continue
             self.armed[style.value] = True
             self._arm(scene, assets, body, looks, steel, style, scale)
+        if giant:
+            self._giant(body)
+
+    def _giant(mut self, mut body: Body) raises:
+        """Play a giant's clips, in each style, for the moves that stand in
+        for a boss's attacks: see `extensions.village.raid.puppet_move`."""
+        ref bones = body.person.bones
+        ref rig = body.person.rig
+        var cleave = _once(body, giant_cleave_clip(bones, rig))
+        var slam = _once(body, giant_slam_clip(bones, rig))
+        var stomp = _once(body, giant_stomp_clip(bones, rig))
+        var charge = _once(body, giant_charge_clip(bones, rig))
+        var call = _once(body, giant_call_clip(bones, rig))
+        var roar = _once(body, giant_roar_clip(bones, rig))
+        for k in range(STYLES):  # pragma: no branch
+            var style = FightingStyle(k)
+            self._set(style, HEAVY, cleave)
+            self._set(style, PLUNGE, slam)
+            self._set(style, GROUND_WAVE, stomp)
+            self._set(style, PIERCE, charge)
+            self._set(style, CAST, call)
+            self._set(style, MEND, roar)
 
     def _set(mut self, style: FightingStyle, move: CombatMove, action: Int):
         """Play an action for a style's move."""

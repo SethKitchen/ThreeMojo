@@ -33,10 +33,17 @@ fighter within `NEAR` is heard every tick, within `MIDDLE` every third
 tick, and within `FAR` every tenth; further away it is not heard. A
 fighter heard less often is heard at a tick of its own, by its id, so the
 far fighters spread over the ticks. See `relevance` and `heard`.
+
+**Smoothing.** A client draws the other fighters `INTERPOLATION_TICKS`
+behind the newest tick it heard of. A `SnapshotBuffer` keeps each
+fighter's snapshots, and `blend_snapshots` draws it between two. So a
+fighter heard every tenth tick still moves smoothly, and one lost
+snapshot does not make it jump.
 """
 
+from controls.third_person_controls import wrap_angle
 from core.ordinal import ordinal_valid
-from extensions.village.character import Character, MoveInput
+from extensions.village.character import Character, MoveInput, Obstacle
 from extensions.village.combat import (
     CombatMove,
     CombatStance,
@@ -47,7 +54,8 @@ from extensions.village.styles import FightingStyle
 from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import pi
-from units.si import RADIAN, Angle
+from extensions.village.terrain import Terrain
+from units.si import RADIAN, SECOND, Angle, Duration
 
 comptime TICK_RATE = 30
 """How many ticks a second the server runs the fight at."""
@@ -67,6 +75,15 @@ comptime CENTIMETERS = Float32(100)
 """The steps a meter of a snapshot's place is kept in."""
 comptime HISTORY = 64
 """How many commands an input history keeps at most."""
+comptime INTERPOLATION_TICKS = Float32(3)
+"""How many ticks behind the newest it heard of a client draws the other
+fighters: a tenth of a second at `TICK_RATE`."""
+comptime BUFFERED = 32
+"""How many snapshots of a fighter a snapshot buffer keeps at most."""
+comptime PREDICTED = 64
+"""How many ticks of input a predictor keeps to play again at most."""
+comptime _TICK = Duration(Float32(1) / Float32(TICK_RATE), SECOND)
+"""How long a tick lasts."""
 comptime RELEVANCES = 4
 """How many kinds of relevance there are."""
 
@@ -569,3 +586,245 @@ struct InputHistory(Copyable, Movable):
             The count.
         """
         return len(self.ticks)
+
+
+def blend_snapshots(
+    a: FighterSnapshot, b: FighterSnapshot, t: Float32
+) raises -> FighterSnapshot:
+    """Return a fighter between two of its snapshots, as a client draws it
+    between the ticks the server sent.
+
+    Args:
+        a: The earlier snapshot.
+        b: The later snapshot.
+        t: How far from `a` to `b`, from 0 to 1.
+
+    Returns:
+        Its place, its health, its stamina, its mana and its special gauge
+        blended, and its heading turned the short way. Its move, its
+        stance, its style and its combo are the nearer snapshot's. Its
+        clock is blended while both have the same move.
+
+    Raises:
+        Error: If the two are not of one fighter, or `t` is not from 0
+            to 1.
+    """
+    if a.id != b.id:
+        raise Error("Two blended snapshots must be of one fighter")
+    if not (t >= 0 and t <= 1):
+        raise Error("A blend must be from 0 to 1")
+    var out = b if t >= 0.5 else a
+    out.position = a.position + (b.position - a.position) * t
+    var turn = wrap_angle(
+        Angle(b.heading.to(RADIAN) - a.heading.to(RADIAN), RADIAN)
+    )
+    out.heading = wrap_angle(
+        Angle(a.heading.to(RADIAN) + turn.to(RADIAN) * t, RADIAN)
+    )
+    out.health = a.health + (b.health - a.health) * t
+    out.stamina = a.stamina + (b.stamina - a.stamina) * t
+    out.mana = a.mana + (b.mana - a.mana) * t
+    out.special = a.special + (b.special - a.special) * t
+    if a.move == b.move:
+        out.clock = a.clock + (b.clock - a.clock) * t
+    return out
+
+
+struct SnapshotBuffer(Copyable, Movable):
+    """A fighter's latest snapshots, by tick, so a client can draw it
+    smoothly between them.
+
+    A client draws the other fighters `INTERPOLATION_TICKS` behind the
+    newest tick it heard of, so that one lost or late snapshot still
+    leaves two around the tick it draws.
+    """
+
+    var ticks: List[Int]
+    var snapshots: List[FighterSnapshot]
+
+    def __init__(out self):
+        """Hold no snapshots."""
+        self.ticks = List[Int]()
+        self.snapshots = List[FighterSnapshot]()
+
+    def add(mut self, tick: Int, snapshot: FighterSnapshot) raises -> Bool:
+        """Keep a fighter's snapshot of a tick.
+
+        Args:
+            tick: The tick the server sent it for.
+            snapshot: The snapshot.
+
+        Returns:
+            Whether it was kept. A snapshot that comes late, of a tick at
+            or before the newest kept, is dropped. At most `BUFFERED` are
+            kept: the oldest goes first.
+
+        Raises:
+            Error: If it is of another fighter than those kept.
+        """
+        if len(self.snapshots) > 0 and snapshot.id != self.snapshots[0].id:
+            raise Error("A snapshot buffer holds one fighter")
+        if len(self.ticks) > 0 and tick <= self.ticks[len(self.ticks) - 1]:
+            return False
+        self.ticks.append(tick)
+        self.snapshots.append(snapshot)
+        if len(self.ticks) > BUFFERED:
+            _ = self.ticks.pop(0)
+            _ = self.snapshots.pop(0)
+        return True
+
+    def at(self, tick: Float32) raises -> Optional[FighterSnapshot]:
+        """Return the fighter at a tick, which can fall between two.
+
+        Args:
+            tick: The tick to draw, as `newest - INTERPOLATION_TICKS` and
+                the time since.
+
+        Returns:
+            None with no snapshot kept. The first snapshot for a tick
+            before it, and the last for a tick after it: the fighter holds
+            still until the server says more. Else the blend of the two
+            snapshots around the tick.
+
+        Raises:
+            Error: Never: the snapshots kept are of one fighter.
+        """
+        var count = len(self.ticks)
+        if count == 0:
+            return None
+        if tick <= Float32(self.ticks[0]):
+            return self.snapshots[0]
+        for k in range(1, count):
+            if tick <= Float32(self.ticks[k]):
+                var start = Float32(self.ticks[k - 1])
+                var t = (tick - start) / (Float32(self.ticks[k]) - start)
+                return blend_snapshots(
+                    self.snapshots[k - 1], self.snapshots[k], t
+                )
+        return self.snapshots[count - 1]
+
+
+struct Predictor(Copyable, Movable):
+    """A client's own character, moved at once by each tick's input, and
+    set right by the server's snapshots.
+
+    The client does not wait for the server to move its player. It steps
+    the character at once, and keeps each tick's input and the state it
+    led to. When a snapshot of the player comes, `reconcile` takes the
+    server's word for that tick, and plays each later input again.
+    """
+
+    var character: Character
+    # Each tick stepped, its input and its camera's yaw, and the character
+    # after it, oldest first.
+    var ticks: List[Int]
+    var inputs: List[MoveInput]
+    var yaws: List[Angle]
+    var states: List[Character]
+
+    def __init__(out self, var character: Character):
+        """Predict a character from where it stands.
+
+        Args:
+            character: The client's own character.
+        """
+        self.character = character^
+        self.ticks = List[Int]()
+        self.inputs = List[MoveInput]()
+        self.yaws = List[Angle]()
+        self.states = List[Character]()
+
+    def step(
+        mut self,
+        tick: Int,
+        input: MoveInput,
+        yaw: Angle,
+        terrain: Terrain,
+        obstacles: List[Obstacle],
+    ) raises:
+        """Move the character by a tick's input at once, and keep the input
+        to play again.
+
+        Args:
+            tick: The tick, after the last one stepped.
+            input: The tick's input.
+            yaw: The camera's yaw.
+            terrain: The ground.
+            obstacles: The round things in the way.
+
+        Raises:
+            Error: If the tick is not after the last one stepped, or the
+                character cannot move.
+        """
+        var count = len(self.ticks)
+        if count > 0 and tick <= self.ticks[count - 1]:
+            raise Error("A predicted tick must follow the last one")
+        self.character.step(input, yaw, _TICK, terrain, obstacles)
+        self.ticks.append(tick)
+        self.inputs.append(input)
+        self.yaws.append(yaw)
+        self.states.append(self.character.copy())
+        if len(self.ticks) > PREDICTED:
+            self._forget(1)
+
+    def _forget(mut self, count: Int):
+        """Drop the oldest `count` ticks kept."""
+        for _ in range(count):
+            _ = self.ticks.pop(0)
+            _ = self.inputs.pop(0)
+            _ = self.yaws.pop(0)
+            _ = self.states.pop(0)
+
+    def reconcile(
+        mut self,
+        tick: Int,
+        snapshot: FighterSnapshot,
+        terrain: Terrain,
+        obstacles: List[Obstacle],
+    ) raises -> Float32:
+        """Take the server's word for where the character stood at a tick,
+        and play each later input again from there.
+
+        Args:
+            tick: The tick of the snapshot.
+            snapshot: The server's snapshot of the character.
+            terrain: The ground.
+            obstacles: The round things in the way.
+
+        Returns:
+            How far the character's place moved, in meters: zero when the
+            server agrees with the prediction. A snapshot older than each
+            tick kept changes nothing. One after each tick kept places the
+            character where it says, and forgets the inputs.
+
+        Raises:
+            Error: If the character cannot move.
+        """
+        var before = self.character.position
+        var count = len(self.ticks)
+        if count == 0 or tick > self.ticks[count - 1]:
+            self.character.position = snapshot.position
+            self.character.heading = snapshot.heading
+            self._forget(count)
+            return (self.character.position - before).length()
+        if tick < self.ticks[0]:
+            return 0
+        # The state after the snapshot's tick: that tick's, or, when the
+        # client stepped no input at it, the last before it.
+        var at = 0
+        while self.ticks[at] < tick:
+            at += 1
+        if self.ticks[at] > tick:
+            at -= 1
+        self._forget(at)
+        var base = self.states[0].copy()
+        base.position = snapshot.position
+        base.heading = snapshot.heading
+        self.states[0] = base.copy()
+        self.character = base^
+        for k in range(1, len(self.ticks)):
+            self.character.step(
+                self.inputs[k], self.yaws[k], _TICK, terrain, obstacles
+            )
+            self.states[k] = self.character.copy()
+        return (self.character.position - before).length()

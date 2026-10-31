@@ -20,6 +20,8 @@ from tests._village_arena import (
 from extensions.village.battle import (
     CHEST,
     FAR_POSE,
+    STORM_HEIGHT,
+    STORM_RANGE,
     LANDING_SHAKE,
     SPRINT_REST,
     Person,
@@ -49,6 +51,7 @@ from extensions.village.combat import (
     RISING_EDGE,
     SPELL_BLAST,
     SPELL_BOLT,
+    ULTIMATE,
     VOLLEY,
 )
 from extensions.village.combos import (
@@ -60,7 +63,14 @@ from extensions.village.combos import (
     PRACTICED_RANK,
     rank_mastery,
 )
-from extensions.village.missiles import ARROW, ORB, SPARK, SPARK_LIFE, Missile
+from extensions.village.missiles import (
+    ARROW,
+    ORB,
+    RAIN_ARROWS,
+    SPARK,
+    SPARK_LIFE,
+    Missile,
+)
 from extensions.village.skills import PRACTICE_EXPERIENCE
 from extensions.village.styles import (
     ARCHERY,
@@ -477,6 +487,47 @@ def test_a_shot_flies_on_past_a_target_that_fell() raises:
     arena.battle._send_shots(arena.scene, arena.player, arena.terrain, 0.01)
     assert_equal(len(arena.battle.shots), 0)
     assert_equal(arena.battle.foes[0].fighter.health, health)
+
+
+def _storm(style: FightingStyle) raises -> Arena:
+    """Return a fight of a fallen bandit, two dummies near and one far,
+    in which the player in a style has made an ultimate, and it has risen.
+    """
+    var styles: List[FightingStyle] = [style]
+    var arena = Arena(arena_parameters(1, 3, styles=styles))
+    arena.battle.foes[0].down = 0
+    arena.battle.dummies[2].dummy.post.x = STORM_RANGE + 5
+    arena.tick(no_input())
+    arena.battle.fighter.over = 5
+    var both = no_input()
+    both.ultimate = True
+    both.rising = True
+    both.whirlwind = True
+    arena.press(both)
+    assert_true(arena.battle.fighter.move == ULTIMATE)
+    for _ in range(20):
+        if len(arena.battle.shots) > 0:
+            break
+        arena.tick(no_input())
+    return arena^
+
+
+def test_a_ranged_ultimate_falls_on_each_target_near() raises:
+    var magic = _storm(MAGIC)
+    assert_true(holds_text(magic.battle.notes, "STARFALL!"))
+    # A star of light over each of the two dummies near.
+    assert_equal(len(magic.battle.shots), 2)
+    assert_true(magic.battle.shots[0].kind == ORB)
+    assert_true(magic.battle.shots[0].at.y > STORM_HEIGHT * 0.8)
+    var archery = _storm(ARCHERY)
+    assert_true(holds_text(archery.battle.notes, "ARROW STORM!"))
+    assert_equal(len(archery.battle.shots), 2 * RAIN_ARROWS)
+    # With nothing to fall on, the storm sends nothing.
+    archery.battle.shots.clear()
+    archery.battle.foes.clear()
+    archery.battle.dummies.clear()
+    archery.battle._storm(archery.player)
+    assert_equal(len(archery.battle.shots), 0)
 
 
 def test_a_mend_heals_the_player_and_the_companion_near() raises:

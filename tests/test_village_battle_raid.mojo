@@ -40,8 +40,10 @@ from extensions.village.boss import (
     link_damage,
 )
 from extensions.village.character import no_input
-from extensions.village.combat import DODGE, FALL, FREE, LIGHT_ONE
+from controls.third_person_controls import yaw_of
+from extensions.village.combat import BITE, DODGE, FALL, FREE, LIGHT_ONE
 from extensions.village.party import TAUNT_EVERY
+from extensions.village.foes import CIRCLING
 from extensions.village.raid import (
     REVIVE_SHARE,
     RISE_SECONDS,
@@ -489,6 +491,60 @@ def test_a_raiders_swing_passes_dummies_and_the_fallen() raises:
     assert_true(tank.swing())
     arena.battle._member_strikes(arena.scene, 0, arena.player)
     assert_true(arena.battle.foes[0].down >= 0)
+
+
+def test_a_wolf_goes_for_the_nearest_raider_and_bites_them() raises:
+    var arena = Arena(arena_parameters(0, 0, 30, 1, raid=True, raiders=1))
+    arena.tick(no_input())
+    var post = arena.battle.members[0].character.position
+    # The wolf stands by the raider, far from the player: it goes for them.
+    arena.battle.foes[0].character.position = post + Vector3(1, 0, 0)
+    arena.tick(no_input())
+    assert_equal(arena.battle.quarries[0], 0)
+    # It attacks the raider without taking the player's attack token.
+    arena.battle.foes[0].home = post + Vector3(2, 0, 0)
+    arena.battle.foes[0].brain.state = CIRCLING
+    arena.battle.foes[0].brain.timer = 0
+    arena.tick(no_input())
+    assert_equal(arena.battle.token, -1)
+    # Beside the player, it goes for the player.
+    arena.battle.foes[0].character.position = Vector3(1, 0, -1)
+    arena.tick(no_input())
+    assert_equal(arena.battle.quarries[0], -1)
+    # A fallen raider is not one to go for; with the player fallen, the
+    # standing raider is.
+    arena.battle.foes[0].character.position = post + Vector3(1, 0, 0)
+    arena.battle.members[0].down = 0
+    arena.tick(no_input())
+    assert_equal(arena.battle.quarries[0], -1)
+    arena.battle.members[0].down = -1
+    arena.battle.fighter.health = 0
+    arena.battle.fighter.move = FALL
+    arena.battle.foes[0].character.position = Vector3(1, 0, -1)
+    arena.tick(no_input())
+    assert_equal(arena.battle.quarries[0], 0)
+    # Its bite strikes the raider it goes for, once a bite, and only within
+    # its reach.
+    ref wolf = arena.battle.foes[0].fighter
+    wolf.move = FREE
+    _ = wolf.request(BITE)
+    for _ in range(100):
+        if wolf.swing():
+            break
+        wolf.update(Duration(0.01, SECOND))
+    assert_true(wolf.swing())
+    var there = arena.battle.members[0].character.position
+    arena.battle.foes[0].character.position = there + Vector3(9, 0, 0)
+    arena.battle.foes[0].character.heading = yaw_of(Vector3(-1, 0, 0))
+    var health = arena.battle.members[0].fighter.health
+    arena.battle._foe_strikes(arena.scene, 0, arena.player)
+    assert_equal(arena.battle.members[0].fighter.health, health)
+    arena.battle.foes[0].character.position = there + Vector3(0.9, 0, 0)
+    arena.battle._foe_strikes(arena.scene, 0, arena.player)
+    var bitten = arena.battle.members[0].fighter.health
+    assert_true(bitten < health)
+    arena.battle._foe_strikes(arena.scene, 0, arena.player)
+    assert_equal(arena.battle.members[0].fighter.health, bitten)
 
 
 def test_raiders_strike_shoot_and_mend_in_the_fight() raises:

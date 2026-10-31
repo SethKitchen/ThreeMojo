@@ -12,6 +12,7 @@ from extensions.village.character import (
     Character,
     CharacterParameters,
     MoveInput,
+    Obstacle,
 )
 from extensions.village.combat import (
     CombatMove,
@@ -24,6 +25,7 @@ from extensions.village.combat import (
     WHIRLWIND,
 )
 from extensions.village.netcode import (
+    BUFFERED,
     BUTTON_COUNT,
     COMMAND_BYTES,
     EVERY_TENTH,
@@ -33,14 +35,18 @@ from extensions.village.netcode import (
     HISTORY,
     MIDDLE,
     NEAR,
+    PREDICTED,
     RELEVANCES,
     SNAPSHOT_BYTES,
     UNHEARD,
     FighterSnapshot,
     InputHistory,
+    Predictor,
     Relevance,
+    SnapshotBuffer,
     apply_snapshot,
     axis_byte,
+    blend_snapshots,
     buttons_of,
     byte_axis,
     heard,
@@ -112,6 +118,76 @@ def _snapshot() -> FighterSnapshot:
         ARCHERY,
         17,
     )
+
+
+def _moved(snapshot: FighterSnapshot, x: Float32) -> FighterSnapshot:
+    """Return a snapshot moved along x, with half the health."""
+    var out = snapshot
+    out.position.x += x
+    out.health = snapshot.health / 2
+    return out
+
+
+def test_a_fighter_is_blended_between_two_snapshots() raises:
+    var a = _snapshot()
+    var b = _moved(a, 2)
+    b.heading = Angle(3.0, RADIAN)
+    a.heading = Angle(-3.0, RADIAN)
+    b.clock = 0.656
+    var half = blend_snapshots(a, b, 0.5)
+    assert_almost_equal(half.position.x, a.position.x + 1, atol=1e-4)
+    assert_almost_equal(half.health, a.health * 0.75, atol=1e-3)
+    assert_almost_equal(half.clock, 0.556, atol=1e-4)
+    # The heading turns the short way, across the back.
+    assert_almost_equal(abs(half.heading.to(RADIAN)), 3.1416, atol=1e-3)
+    # The move and the style are the nearer snapshot's; the clock of
+    # another move is not blended.
+    b.move = HEAVY
+    b.style = MAGIC
+    var early = blend_snapshots(a, b, 0.25)
+    assert_true(early.move == WHIRLWIND)
+    assert_true(early.style == ARCHERY)
+    assert_almost_equal(early.clock, a.clock, atol=1e-6)
+    var late = blend_snapshots(a, b, 0.75)
+    assert_true(late.move == HEAVY)
+    assert_true(late.style == MAGIC)
+    var other = b
+    other.id = 1
+    with assert_raises(contains="one fighter"):
+        _ = blend_snapshots(a, other, 0.5)
+    for t in [Float32(-0.1), Float32(1.1)]:
+        with assert_raises(contains="0 to 1"):
+            _ = blend_snapshots(a, b, t)
+
+
+def test_a_buffer_draws_a_fighter_behind_the_newest_tick() raises:
+    var buffer = SnapshotBuffer()
+    assert_false(buffer.at(5))
+    var first = _snapshot()
+    assert_true(buffer.add(10, first))
+    # With one snapshot, the fighter stands where it says.
+    assert_almost_equal(buffer.at(12).value().position.x, first.position.x)
+    assert_true(buffer.add(13, _moved(first, 3)))
+    # Before the first, the first; after the last, the last.
+    assert_almost_equal(buffer.at(4).value().position.x, first.position.x)
+    var after = buffer.at(20).value().position.x
+    assert_almost_equal(after, first.position.x + 3, atol=1e-4)
+    # Between two, a blend: a fighter heard every third tick moves on.
+    var mid = buffer.at(11).value().position.x
+    assert_almost_equal(mid, first.position.x + 1, atol=1e-4)
+    # A late snapshot is dropped.
+    assert_false(buffer.add(12, _moved(first, 9)))
+    assert_false(buffer.add(13, _moved(first, 9)))
+    assert_equal(len(buffer.ticks), 2)
+    # It keeps the newest snapshots, and one fighter's alone.
+    for k in range(BUFFERED):
+        _ = buffer.add(20 + k, first)
+    assert_equal(len(buffer.ticks), BUFFERED)
+    assert_equal(buffer.ticks[0], 20)
+    var stranger = first
+    stranger.id = 2
+    with assert_raises(contains="one fighter"):
+        _ = buffer.add(100, stranger)
 
 
 def test_a_fighter_is_heard_by_how_far_it_is() raises:
@@ -339,6 +415,68 @@ def test_a_player_keeps_each_command_until_the_server_has_it() raises:
     for tick in range(13, 13 + HISTORY + 5):
         _ = history.send(tick, still)
     assert_equal(history.waiting(), HISTORY)
+
+
+def test_a_client_predicts_its_player_and_the_server_sets_it_right() raises:
+    var terrain = Terrain(Ground(hill_height=Length(0.0, METER)))
+    var none = List[Obstacle]()
+    var yaw = Angle(0.0, RADIAN)
+    var walker = Character(CharacterParameters(), 0, 0, yaw, terrain)
+    var predictor = Predictor(walker^)
+    var ahead = MoveInput(1, 0, 0, 0, True, False)
+    for tick in range(1, 7):
+        predictor.step(tick, ahead, yaw, terrain, none)
+    assert_true(predictor.character.position.length() > 0.1)
+    with assert_raises(contains="follow"):
+        predictor.step(6, ahead, yaw, terrain, none)
+    var body = Fighter(FighterParameters())
+    # The server agrees with the prediction at tick 3: nothing moves.
+    var agreed = snapshot_of(1, predictor.states[2], body)
+    assert_almost_equal(
+        predictor.reconcile(3, agreed, terrain, none), 0, atol=1e-4
+    )
+    assert_equal(predictor.ticks[0], 3)
+    # The server put the player a meter aside at tick 4: each later input
+    # plays again from there.
+    var aside = snapshot_of(1, predictor.states[1], body)
+    aside.position.x += 1
+    assert_almost_equal(
+        predictor.reconcile(4, aside, terrain, none), 1, atol=1e-3
+    )
+    # A snapshot older than each tick kept changes nothing.
+    assert_equal(predictor.reconcile(1, aside, terrain, none), 0)
+    # At a tick the client stepped no input, the state before it counts.
+    predictor.step(9, ahead, yaw, terrain, none)
+    var gap = snapshot_of(1, predictor.states[2], body)
+    _ = predictor.reconcile(8, gap, terrain, none)
+    assert_equal(predictor.ticks[0], 6)
+    assert_equal(len(predictor.ticks), 2)
+    # A snapshot after each tick kept places the player, and forgets.
+    var far = aside
+    far.position = Vector3(50, 0, 50)
+    assert_true(predictor.reconcile(20, far, terrain, none) > 10)
+    assert_equal(len(predictor.ticks), 0)
+    assert_equal(predictor.character.position.x, 50)
+    # It keeps the newest ticks alone.
+    for tick in range(100, 100 + PREDICTED + 3):
+        predictor.step(tick, ahead, yaw, terrain, none)
+    assert_equal(len(predictor.ticks), PREDICTED)
+    assert_equal(predictor.ticks[0], 103)
+    # A snapshot of the first tick kept forgets none; one of the last
+    # leaves nothing to play again.
+    var first = snapshot_of(1, predictor.states[0], body)
+    assert_almost_equal(
+        predictor.reconcile(103, first, terrain, none), 0, atol=1e-4
+    )
+    assert_equal(len(predictor.ticks), PREDICTED)
+    var last = snapshot_of(1, predictor.states[PREDICTED - 1], body)
+    _ = predictor.reconcile(102 + PREDICTED, last, terrain, none)
+    assert_equal(len(predictor.ticks), 1)
+    # With nothing kept, a snapshot places the player.
+    var fresh = Predictor(Character(CharacterParameters(), 0, 0, yaw, terrain))
+    assert_almost_equal(
+        fresh.reconcile(5, far, terrain, none), Float32(50 * 1.41421), atol=1e-2
+    )
 
 
 def main() raises:

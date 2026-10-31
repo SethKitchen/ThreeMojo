@@ -27,7 +27,9 @@ from extensions.village.combat import (
     FREE,
     HIGH_STANCE,
     LIGHT_ONE,
+    MEND,
     MOVES,
+    PLUNGE,
     SPELL_BOLT,
     Fighter,
     FighterParameters,
@@ -213,6 +215,15 @@ def test_a_body_carries_each_styles_weapon_and_clips() raises:
     )
     for k in range(STYLES):
         assert_false(bare.armed[k])
+    # A giant plays a giant's clips for the moves of a boss's attacks.
+    var maces: List[FightingStyle] = [MACE]
+    var giant = Arms(
+        scene, assets, body, SwordLooks(assets), BRIGHT_STEEL, maces, True
+    )
+    var slam = giant.table[MACE.value * MOVES + PLUNGE.value]
+    assert_equal(body.mixer.action(slam).clip.name, "giant_slam")
+    var roar = giant.table[SWORD.value * MOVES + MEND.value]
+    assert_equal(body.mixer.action(roar).clip.name, "giant_roar")
     var bad: List[FightingStyle] = [FightingStyle(6)]
     with assert_raises(contains="six"):
         _ = Arms(scene, assets, body, SwordLooks(assets), BRIGHT_STEEL, bad)

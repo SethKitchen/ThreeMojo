@@ -48,11 +48,14 @@ step and pose:
    foe, else at the nearest foe that fights
    within `ALLY_SEEK` of the player. Her bolts fly at `BOLT_SPEED`, and
    follow their foe. The assist button calls for her assist attack when its
-   gauge is full. One foe
-   at a time holds the attack token. A bandit plays its sword's clips; a
+   gauge is full. Each foe goes for the nearest of the player and the
+   raiders who stand with them: see `quarries`. One foe at a time holds
+   the attack token, which is for the player alone. A bandit plays its sword's clips; a
    wolf shows the pose of its walk, and lies on its side when it falls.
    A perfect dodge slows the foes to `SLOW_SHARE` of the time for
-   `SLOW_SECONDS`, and an ultimate for `ULTIMATE_SLOW`.
+   `SLOW_SECONDS`, and an ultimate for `ULTIMATE_SLOW`. In magic or
+   archery, an ultimate also drops a star of light or a rain of arrows on
+   each target within `STORM_RANGE`.
 4. **The blows.** In steps of at most `COMBAT_STEP`, each fighter's clock
    runs, and each swing gives its blow to the fighters that it reaches.
    The player's spells and arrows fly as `Missile`s from the hand, at the
@@ -329,6 +332,12 @@ comptime SLOW_SHARE = Float32(0.3)
 """The share of the time the foes move at while they are slowed."""
 comptime ULTIMATE_SLOW = Float32(2.1)
 """How long an ultimate slows the foes, in seconds: all through it."""
+comptime STORM_RANGE = Float32(18)
+"""How near the player a target must stand for a ranged style's ultimate
+to fall on it, in meters."""
+comptime STORM_HEIGHT = Float32(9)
+"""How high over each target a magic ultimate's star of light starts, in
+meters."""
 comptime LOCK_RANGE = Float32(16)
 """How near a target must be to lock on to, in meters."""
 comptime LOCK_BREAK = Float32(22)
@@ -911,6 +920,9 @@ struct Battle(Movable):
     # another can take it, in seconds.
     var token: Int
     var token_rest: Float32
+    # The member each foe goes for: -1 for the player, and `k` for the
+    # raider `k`.
+    var quarries: List[Int]
     # The last frame's input, for new presses.
     var last: MoveInput
     # The way the player's dodge goes, and how fast a blow pushes them.
@@ -1182,6 +1194,7 @@ struct Battle(Movable):
         self.lock = -1
         self.token = -1
         self.token_rest = 0
+        self.quarries = List[Int](length=len(self.foes), fill=-1)
         self.last = MoveInput(0, 0, 0, 0, False, False)
         self.dodge_way = Vector3(0, 0, 1)
         self.shove = Vector3(0, 0, 0)
@@ -1245,7 +1258,9 @@ struct Battle(Movable):
             WARDEN_SIZE, WARDEN_SIZE, WARDEN_SIZE
         )
         person.lift *= WARDEN_SIZE
-        var arms = Arms(scene, assets, person, swords, DULL_IRON, [MACE])
+        var arms = Arms(
+            scene, assets, person, swords, DULL_IRON, [MACE], giant=True
+        )
         var size = person.person.rig.stature / Float32(1.8288)
         var trail = Trail(scene, person.carrier, size, FOE_TRAIL)
         var giant = CharacterParameters()
@@ -1887,20 +1902,39 @@ struct Battle(Movable):
                 and fighter.clock >= fighter.active_end()
                 and fighter.queued == FREE
             )
+            # It goes for the nearest of the player and the raiders who
+            # stand with them. The attack token is for the player alone.
+            var quarry = -1
+            var goal = feet
+            var near = Float32(1.0e9)
+            if not self.fighter.defeated():
+                near = _flat(foe.character.position, feet)
+            for k in range(len(self.members)):
+                ref member = self.members[k]
+                if not member.joined or member.down >= 0:
+                    continue
+                var there = member.character.position
+                var gap = _flat(foe.character.position, there)
+                if gap < near:
+                    near = gap
+                    quarry = k
+                    goal = there
+            self.quarries[index] = quarry
+            var player_quarry = quarry < 0
             var sight = Sight(
                 foe.character.position,
                 foe.home,
-                feet,
-                self.fighter.defeated(),
-                self.threat,
+                goal,
+                player_quarry and self.fighter.defeated(),
+                player_quarry and self.threat,
                 fighter.free(),
                 ready,
-                self.token == index,
+                self.token == index or not player_quarry,
                 self.token < 0 and self.token_rest <= 0,
                 fighter.raging(),
             )
             var intent = foe.brain.think(sight, delta)
-            var toward = yaw_of(feet - foe.character.position)
+            var toward = yaw_of(goal - foe.character.position)
             foe.fighter.hold_guard(intent.guard)
             if intent.dodge.length() > 0:
                 _ = foe.fighter.request(DODGE)
@@ -1948,7 +1982,7 @@ struct Battle(Movable):
             around[first + index] = Obstacle(
                 at.x, at.z, foe.character.parameters.radius.to(METER)
             )
-            if intent.claim:
+            if intent.claim and player_quarry:
                 self.token = index
             if intent.release and self.token == index:
                 self.token = -1
@@ -2228,6 +2262,28 @@ struct Battle(Movable):
                 )
             )
 
+    def _storm(mut self, player: Character) raises:
+        """Send a ranged style's ultimate as it rises: on each standing
+        target within `STORM_RANGE`, a star of light falls for magic, and a
+        rain of arrows for archery."""
+        var blow = self.fighter.blow()
+        var magic = self.fighter.style == MAGIC
+        for index in range(self.targets()):
+            if not self.standing(index):
+                continue
+            var there = self.target_at(index)
+            if _flat(there, player.position) > STORM_RANGE:
+                continue
+            if magic:
+                var high = there + Vector3(0, STORM_HEIGHT, 0)
+                var fall = Vector3(0, -2 * ORB_SPEED, 0)
+                self.shots.append(Missile(ORB, high, fall, index, -1, blow))
+            else:
+                var fall = Vector3(0, -RAIN_SPEED, 0)
+                for spot in rain_spots(there, RAIN_ARROWS):  # pragma: no branch
+                    self.shots.append(Missile(ARROW, spot, fall, -1, -1, blow))
+        self.notes.append("STARFALL!" if magic else "ARROW STORM!")
+
     def _mend(mut self, player: Character) raises:
         """Heal the player, the companion and each raider near them, as a
         mend's light rises. Each warden learns of the heal."""
@@ -2287,6 +2343,10 @@ struct Battle(Movable):
                 self._shoot(player)
             elif self.fighter.move == MEND:
                 self._mend(player)
+            elif self.fighter.move == ULTIMATE and not is_melee(
+                self.fighter.style
+            ):
+                self._storm(player)
         var kept = List[Missile]()
         for k in range(len(self.shots)):
             var shot = self.shots[k].copy()
@@ -2492,9 +2552,14 @@ struct Battle(Movable):
     def _foe_strikes(
         mut self, mut scene: Scene, index: Int, mut player: Character
     ) raises:
-        """Give a bandit's swing to the player, if it reaches them."""
+        """Give a foe's swing to the member it goes for, if it reaches
+        them."""
         var swing = self.foes[index].fighter.swing()
         if not swing:
+            return
+        var quarry = self.quarries[index]
+        if quarry >= 0:
+            self._strike_raider(scene, index, quarry)
             return
         ref feet = player.position
         var at = self.foes[index].character.position
@@ -2511,6 +2576,31 @@ struct Battle(Movable):
         if not blow:
             return
         self._hurt(scene, index, blow.value(), at, player)
+
+    def _strike_raider(mut self, mut scene: Scene, index: Int, k: Int) raises:
+        """Give a foe's swing to the raider `k`, if it reaches them."""
+        ref foe = self.foes[index]
+        var swing = foe.fighter.swing().value()
+        ref member = self.members[k]
+        var at = foe.character.position
+        var there = member.character.position
+        var radius = member.character.parameters.radius
+        if not reaches(
+            at, foe.character.heading, swing.reach, swing.arc, there, radius
+        ):
+            return
+        var blow = foe.fighter.connect(k + 1)
+        if not blow:
+            return
+        var front = faces(
+            there,
+            member.character.heading,
+            member.fighter.parameters.guard_arc,
+            at,
+        )
+        var struck = member.fighter.receive(blow.value(), front)
+        member.shove = push_of(struck, blow.value(), _way(at, there))
+        self._show(scene, struck, there, False)
 
     def _hurt(
         mut self,

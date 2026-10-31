@@ -63,6 +63,15 @@ The new moves, in the middle stance:
 | `LEAP_SHOT` | 0.12 s | 0.22 s | 0.36 s | An arrow, from a leap 4.2 m back | 40 | 10 | 1 special point |
 | `ARROW_RAIN` | 0.40 s | 0.10 s | 0.40 s | Six arrows from the sky onto the target | 22 each | 6 | 3 special points |
 
+**The ultimate's storm.** In magic and archery, the ultimate also strikes from afar. As it rises, a storm falls on each standing target within 18 meters:
+
+| Style | Its storm | Note |
+|---|---|---|
+| Magic | A star of light, an orb that falls from 9 meters over the target, and bursts | `STARFALL!` |
+| Archery | A rain of six arrows on the target | `ARROW STORM!` |
+
+Each missile carries the ultimate's blow. The melee styles spin, as the sword does: see [Village combat](Village-combat#the-ultimate).
+
 A blast and an aimed shot break a piercing attack, as a heavy attack does. A mend heals the player, the companion and each raider within 8 meters by 18 percent of their health. In a raid, the heal adds to the player's threat.
 
 ## Mana
@@ -126,6 +135,6 @@ The clips are in `extensions/humanoid/rig/style_clips.mojo`. Each lasts as long 
 
 ## Limits
 
-- The ultimate is the sword's spin in each style.
+- The ultimate is the sword's spin in each style. Magic and archery add their storms to it.
 - Fists and shots leave no blade's trail. A spinning kick does.
 - The bow's string does not move as the arm draws it.

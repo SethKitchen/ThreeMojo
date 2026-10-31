@@ -54,12 +54,31 @@ A player does not hear of every fighter every tick. `relevance` says how often b
 
 `heard` says whether a player hears of a fighter at a tick. A fighter heard less often is heard at a tick of its own, by its id. So the far fighters spread over the ticks, and no tick carries them all.
 
+## Smoothing
+
+A client draws the other fighters 3 ticks behind the newest tick it heard of, a tenth of a second. So it has two snapshots around the tick it draws, even when one snapshot is lost.
+
+1. Keep each fighter's snapshots in a `SnapshotBuffer`. `add` keeps a snapshot by its tick, and drops one that comes late. The buffer keeps the newest 32.
+2. Each frame, ask `at` for the fighter at the newest tick, less `INTERPOLATION_TICKS`, plus the time since that tick.
+3. Put the result on the fighter's body with `apply_snapshot`.
+
+`blend_snapshots` blends the place, the health, the stamina, the mana and the special gauge. The heading turns the short way. The move, the stance, the style and the combo come from the nearer snapshot. Before the first snapshot and after the last, the fighter stands as that snapshot says.
+
+## Prediction
+
+A client does not wait for the server to move its own player. A `Predictor` moves the player at once, and the server sets it right.
+
+1. Each tick, call `step` with the tick, the input and the camera's yaw. The player moves at once. The predictor keeps the input, and the state it led to, for the newest 64 ticks.
+2. When a snapshot of the player comes, call `reconcile` with its tick. The predictor takes the server's place and heading for that tick, and plays each later input again from there.
+
+`reconcile` gives how far the player's place moved. It is zero when the server agrees with the prediction. A snapshot older than each tick kept changes nothing. A snapshot after each tick kept places the player where it says, and forgets the inputs.
+
 ## What it costs
 
 A player's commands cost 360 bytes a second. A snapshot costs 20 bytes. So 40 fighters near a player, heard each tick, cost 24 kilobytes a second, before the headers of the messages.
 
 ## Limits
 
-- A client does not predict its own moves. It shows what the server sends.
+- A client predicts how its player moves, not the player's fight. It shows the moves and the blows that the server sends.
 - A snapshot carries no foe's brain, no missile and no popup. The client shows the missiles from the moves that send them.
 - The module has no sockets, no encryption and no lag measure.

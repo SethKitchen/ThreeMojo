@@ -63,7 +63,9 @@ from extensions.village.combat import (
     CAST,
     FALL,
     FREE,
+    GROUND_WAVE,
     HEAVY,
+    MEND,
     PIERCE,
     PLUNGE,
     STAGGER,
@@ -265,8 +267,9 @@ def puppet_move(boss: Boss) raises -> Tuple[CombatMove, Float32, Float32]:
     Returns:
         `FALL` once it falls; `STAGGER` while it staggers, paced to last
         the stagger; for an attack, its clip: `HEAVY` for a cleave, `PLUNGE`
-        for a slam or a stomp, `PIERCE` for a charge, and `CAST` for a
-        rockfall or a summon, paced so the clip strikes as the attack does;
+        for a slam, `GROUND_WAVE` for a stomp, `PIERCE` for a charge,
+        `CAST` for a rockfall and `MEND` for a summon, paced so the clip
+        strikes as the attack does;
         else `FREE`. The clock is in the clip's own seconds times the pace.
 
     Raises:
@@ -283,10 +286,14 @@ def puppet_move(boss: Boss) raises -> Tuple[CombatMove, Float32, Float32]:
     var move = CAST
     if boss.attack == CLEAVE:
         move = HEAVY
-    elif boss.attack == SLAM or boss.attack == STOMP:
+    elif boss.attack == SLAM:
         move = PLUNGE
+    elif boss.attack == STOMP:
+        move = GROUND_WAVE
     elif boss.attack == CHARGE:
         move = PIERCE
+    elif boss.attack == SUMMON:
+        move = MEND
     var data = move_data(move)
     var strike = data.startup.to(SECOND) + data.active.to(SECOND) * 0.5
     var pace = max(Float32(0.2), boss.windup() / strike)

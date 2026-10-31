@@ -78,6 +78,19 @@ After 5 minutes the warden enrages. Its attacks do 3 times their damage and wind
 
 The warden's health is `boss_health` for the size of its party. It is 4,500 for one member, and half of that more for each other member. So a party of five meets a warden of 13,500 health.
 
+## The warden's clips
+
+The warden is a person drawn 1.45 times as large, with a mace. It plays a giant's clip for each attack, from `extensions/humanoid/rig/giant_clips.mojo`. `Arms` with `giant` set plays them. `puppet_move` paces each clip, so it strikes as the attack's zone does.
+
+| Attack | Clip | What it shows |
+|---|---|---|
+| `CLEAVE` | `giant_cleave_clip` | The mace drawn far back, and swept flat across the front |
+| `SLAM` | `giant_slam_clip` | The mace raised in both hands over the head, and slammed down |
+| `STOMP` | `giant_stomp_clip` | A knee raised high, and the foot driven down, the arms out |
+| `CHARGE` | `giant_charge_clip` | A crouch, the shoulder lowered, and a lunge behind it |
+| `ROCKFALL` | `giant_call_clip` | The free hand thrust at the sky, the head thrown back |
+| `SUMMON` | `giant_roar_clip` | The arms spread wide, the chest out, the head back |
+
 ## The raiders
 
 Each raider has a `PartyMind` and a role. `PartyRole` is a type with `is_valid`.
@@ -90,6 +103,8 @@ Each raider has a `PartyMind` and a role. `PartyRole` is a type with `is_valid`.
 | A huntress in walnut brown | `ARCHER` | Archery | 450 | 11 m off the warden's flank | Quick shots, and an aimed shot every third |
 
 Every raider steps out of a zone as it winds up, and dodges out of it at 80 percent of its wind-up. When a rockfall marks a member, every raider gathers on them.
+
+**Foes go for the raiders too.** Each bandit and wolf goes for the nearest of the player and the raiders who stand with them. Its blows strike that member. So the wolves that the warden summons go for the healer and the archer, and the tank must stand between. The attack token, which lets one foe at a time attack, is for the player alone.
 
 A fallen raider lies in the fight. A member who stands within 1.6 meters of them for 2.5 seconds, holding the use button, revives them with 40 percent of their health. Out of the fight, a fallen raider stands up after 10 seconds.
 
@@ -111,6 +126,5 @@ In a game of many players, a player stands in each raider's place, and the mind 
 
 ## Limits
 
-- The bandits and the wolves do not attack the raiders. Only the warden does.
+- A knife thrower throws at the player alone.
 - The fight is not saved. A new game starts with the warden at full health.
-- The warden is a person drawn larger, with the sword's clips. It has no clips of its own.

@@ -22,7 +22,9 @@ from extensions.village.combat import (
     CAST,
     FALL,
     FREE,
+    GROUND_WAVE,
     HEAVY,
+    MEND,
     PIERCE,
     PLUNGE,
     STAGGER,
@@ -97,10 +99,10 @@ def test_the_warden_plays_a_clip_for_each_attack() raises:
     var moves: List[Int] = [
         HEAVY.value,
         PLUNGE.value,
-        PLUNGE.value,
+        GROUND_WAVE.value,
         PIERCE.value,
         CAST.value,
-        CAST.value,
+        MEND.value,
     ]
     var attacks: List[BossAttack] = [
         CLEAVE,
