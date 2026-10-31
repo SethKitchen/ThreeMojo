@@ -56,10 +56,14 @@ from extensions.humanoid.skeleton.head.hair.styles import (
     LAYERED,
     LONG,
     MOHAWK,
+    CROPPED,
     PIGTAILS,
     PIXIE,
     PONYTAIL,
+    SLICKED,
     SPACE_BUNS,
+    TOPKNOT,
+    TWIN_BRAIDS,
     HairStyle,
     require_hair_style,
     HairStyleFile,
@@ -138,6 +142,10 @@ comptime HALF_TAIL_SHORTEST = Float32(9.0)
 comptime HALF_TAIL_LONGEST = Float32(15.0)
 comptime PIXIE_SHORTEST = Float32(3.0)
 comptime PIXIE_LONGEST = Float32(6.5)
+comptime CROPPED_SHORTEST = Float32(1.2)
+comptime CROPPED_LONGEST = Float32(2.6)
+comptime TWIN_BRAID_SHORTEST = Float32(24.0)
+comptime TWIN_BRAID_LONGEST = Float32(30.0)
 # More ties, in template centimeters: a high ponytail's on the crown; a
 # pigtail's behind each ear; a space bun's on each side of the crown; a
 # braid's at the nape; and a half-up's at the back of the head, which
@@ -161,6 +169,17 @@ comptime BRAID_WIDTH = Float32(1.6)
 comptime BRAID_TWIST = Float32(4.0)
 # A bob is cut level at this height, in template centimeters.
 comptime BOB_CUT_Y = Float32(63.0)
+# Slicked-back hair is cut level at the nape.
+comptime SLICK_CUT_Y = Float32(68.5)
+# A topknot's tie, on the top of the crown, and its small ball.
+comptime TOPKNOT_TIE_Y = Float32(86.5)
+comptime TOPKNOT_TIE_Z = Float32(-3.0)
+comptime TOPKNOT_RADIUS = Float32(2.2)
+# Cropped hair is combed back and down, and slicked hair back.
+comptime CROPPED_SPREAD = Float32(0.3)
+comptime CROPPED_BACK = Float32(0.9)
+comptime SLICK_SPREAD = Float32(0.15)
+comptime SLICK_BACK = Float32(1.4)
 # Which way a pixie is combed: out to the side and forward, against
 # down.
 comptime PIXIE_SPREAD = Float32(0.35)
@@ -1005,7 +1024,9 @@ def _designed(
     tie and falls as a tail, coils round a bun, or is woven into a
     braid. Loose hair is combed over the scalp away from a part down the
     middle, and then hangs: to its length, or to a level cut for a bob.
-    A pixie's is combed forward and down, a few centimeters.
+    Slicked hair is combed back and hangs to a level cut at the nape. A
+    pixie's is combed forward and down, a few centimeters; cropped hair
+    is combed back and down, two at most.
     """
     var field = GroomField(dimensions, style)
     var h = dimensions.head.copy()
@@ -1036,6 +1057,8 @@ def _designed(
             at = Vector3(0, BRAID_TIE_Y, BRAID_TIE_Z)
         elif style == HALF_UP:
             at = Vector3(0, HALF_TIE_Y, HALF_TIE_Z)
+        elif style == TOPKNOT:
+            at = Vector3(0, TOPKNOT_TIE_Y, TOPKNOT_TIE_Z)
         ties.append(h.at(at.x, at.y, at.z))
     var aways = List[Vector3]()
     for k in range(len(ties)):  # pragma: no branch
@@ -1080,10 +1103,15 @@ def _designed(
             var want = Vector3(side * PART_SPREAD, -1, -Float32(0.15))
             if style == PIXIE:
                 want = Vector3(side * PIXIE_SPREAD, -1, PIXIE_FORWARD)
+            elif style == CROPPED:
+                want = Vector3(side * CROPPED_SPREAD, -1, -CROPPED_BACK)
+            elif style == SLICKED:
+                want = Vector3(side * SLICK_SPREAD, -0.6, -SLICK_BACK)
+            var cropped = style == PIXIE or style == CROPPED
             for _ in range(MAX_STEPS):  # pragma: no branch
-                if style == PIXIE and travelled >= length:
+                if cropped and travelled >= length:
                     break
-                if style != PIXIE and p.y < h.at(0, LONG_HANGS_Y, 0).y:
+                if not cropped and p.y < h.at(0, LONG_HANGS_Y, 0).y:
                     break
                 var n = _normal(field, p, probe)
                 var t = want - n * n.dot(want)
@@ -1097,22 +1125,25 @@ def _designed(
                 travelled += (q - p).length()
                 p = q
                 strand.append(p)
-        if style == BOB:
+        if style == BOB or style == SLICKED:
+            var cut = BOB_CUT_Y if style == BOB else SLICK_CUT_Y
             _hang(
                 strand,
                 h.cm(LONG_LONGEST),
                 spec.step,
                 key,
-                h.at(0, BOB_CUT_Y, 0).y,
+                h.at(0, cut, 0).y,
             )
         elif style == LONG or (style == HALF_UP and not tied):
             _hang(strand, length - travelled, spec.step, key)
-        elif style == BUN or style == SPACE_BUNS:
+        elif style == BUN or style == SPACE_BUNS or style == TOPKNOT:
             var radius = h.cm(BUN_RADIUS)
             if style == SPACE_BUNS:
                 radius = h.cm(SPACE_BUN_RADIUS)
+            elif style == TOPKNOT:
+                radius = h.cm(TOPKNOT_RADIUS)
             _coil(strand, ties[which], aways[which], radius, spec.step, key)
-        elif style == BRAID:
+        elif style == BRAID or style == TWIN_BRAIDS:
             _braid(
                 strand,
                 ties[which],
@@ -1123,7 +1154,7 @@ def _designed(
                 h.cm(BRAID_TWIST),
                 key,
             )
-        elif style != PIXIE:
+        elif style != PIXIE and style != CROPPED:
             _tail(
                 strand,
                 ties[which],
@@ -1160,6 +1191,12 @@ def _length(style: HairStyle, h: HeadDimensions, key: Int) -> Float32:
     elif style == PIXIE:
         shortest = PIXIE_SHORTEST
         longest = PIXIE_LONGEST
+    elif style == CROPPED:
+        shortest = CROPPED_SHORTEST
+        longest = CROPPED_LONGEST
+    elif style == TWIN_BRAIDS:
+        shortest = TWIN_BRAID_SHORTEST
+        longest = TWIN_BRAID_LONGEST
     return h.cm(shortest) + h.cm(longest - shortest) * _unit(key, 2)
 
 

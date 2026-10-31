@@ -10,8 +10,8 @@
 The page is Outfits and armor. A farmer, a barbarian, a royal, a wizard,
 a warlock, a ranger and a warrior stand side by side, the men in front
 and the women behind. Each person's seed picks a genome, a stature, the
-dyes, the metals and the headwear of their calling, and a hairstyle.
-Each man's calling picks his beard. Each person's hair is cards of
+dyes, the metals and the headwear of their calling, and a hairstyle
+and a beard that suit it. Each person's hair is cards of
 fibers that `GameHairMotion` moves with the head and shades for the
 lights. Half walk in place and half stand at ease while the camera
 passes along the front row. It writes `out/archetypes.png` and prints
@@ -44,6 +44,8 @@ from extensions.attire.mix import (
     WARRIOR,
     WIZARD,
     Calling,
+    calling_beard,
+    calling_hair,
     calling_label,
     dressed_as,
 )
@@ -54,27 +56,8 @@ from extensions.humanoid.rig.clips import idle_clip, walk_clip
 from extensions.humanoid.rig.game import GameHumanoid, add_game_humanoid
 from extensions.humanoid.rig.game_hair import GameHairMotion
 from extensions.humanoid.sex import FEMALE, MALE, Sex
-from extensions.humanoid.skeleton.head.hair.beard import (
-    CHIN_STRAP,
-    CLEAN_SHAVEN,
-    FORKED_BEARD,
-    GOATEE,
-    LONG_BEARD,
-    MUSTACHE,
-    SHORT_BEARD,
-    Beard,
-)
 from extensions.humanoid.skeleton.head.hair.shading import HairLight
 from extensions.humanoid.skeleton.head.hair.simulation import HairWind
-from extensions.humanoid.skeleton.head.hair.styles import (
-    BRAID,
-    BUN,
-    GROWN,
-    HALF_UP,
-    LONG,
-    PONYTAIL,
-    HairStyle,
-)
 from extensions.humanoid.spec import HumanoidSpec
 from lights.light import ambient_light
 from lights.shadow import PCF_SOFT_SHADOW_MAP
@@ -119,31 +102,6 @@ def _seconds_since(start: Int) -> Float64:
 def _callings() -> List[Calling]:
     """Return the seven callings, left to right."""
     return [FARMER, BARBARIAN, ROYAL, WIZARD, WARLOCK, RANGER, WARRIOR]
-
-
-def _beard(calling: Calling) -> Beard:
-    """Return the beard a man of a calling grows."""
-    if calling == WIZARD:
-        return LONG_BEARD
-    if calling == BARBARIAN:
-        return FORKED_BEARD
-    if calling == ROYAL:
-        return SHORT_BEARD
-    if calling == RANGER or calling == WARLOCK:
-        return GOATEE
-    if calling == FARMER:
-        return MUSTACHE
-    return CHIN_STRAP
-
-
-def _style(calling: Calling, woman: Bool, seed: Int) -> HairStyle:
-    """Return the hairstyle of a person of a calling."""
-    if not woman:
-        if calling == BARBARIAN or calling == WIZARD:
-            return LONG
-        return GROWN
-    var styles: List[HairStyle] = [LONG, BRAID, PONYTAIL, HALF_UP, BUN]
-    return styles[seed % len(styles)]
 
 
 def main() raises:
@@ -191,7 +149,7 @@ def main() raises:
         var spec = HumanoidSpec(
             Length(Float32(inches), INCH), sex, build, random_genome(seed)
         )
-        var beard = CLEAN_SHAVEN if woman else _beard(calling)
+
         var x = (
             Float32(column) - Float32(count - 1) / 2
         ) * 0.66 + 0.33 * Float32(row)
@@ -204,9 +162,9 @@ def main() raises:
             at,
             spec,
             TRIANGLES,
-            hair_style=_style(calling, woman, seed),
+            hair_style=calling_hair(calling, sex, seed),
             workers=workers,
-            beard=beard,
+            beard=calling_beard(calling, sex, seed),
             cards=cards,
         )
         building += _seconds_since(start)

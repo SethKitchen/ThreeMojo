@@ -26,6 +26,7 @@ from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.head.hair.styles import (
     GROWN,
+    CROPPED,
     PIXIE,
     MOHAWK,
     HairStyle,
@@ -387,8 +388,8 @@ struct HairShape(Copyable, DistanceField, Movable):
         # shell are what falls.
         if style.is_designed():
             self.length = Float32(-0.5)
-        # A pixie is cropped closest of all.
-        if style == PIXIE:
+        # A pixie and a crop are cropped closest of all.
+        if style == PIXIE or style == CROPPED:
             self.length = Float32(-1)
         if length:
             var override = length.value()

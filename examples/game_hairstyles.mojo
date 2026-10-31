@@ -61,8 +61,8 @@ comptime DEFAULT_CARDS = 700
 comptime SETTLE_STEPS = 8
 comptime WIDTH = 1600
 comptime HEIGHT = 760
-comptime COLUMNS = 7
-comptime SPACING_X = Float32(0.34)
+comptime COLUMNS = 9
+comptime SPACING_X = Float32(0.3)
 comptime SPACING_Y = Float32(0.7)
 # How far below the skull's joint each bust is cut, in meters.
 comptime CUT_BELOW = Float32(0.36)

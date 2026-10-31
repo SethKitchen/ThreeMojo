@@ -20,7 +20,8 @@ seed an outfit of its own, in three choices:
    company's surcoat.
 
 `calling_outfit` gives the outfit of one calling for a seed, and
-`dressed_as` for a person of either sex. The first eight callings dress
+`dressed_as` for a person of either sex. `calling_hair` and
+`calling_beard` pick the hairstyle and the beard that suit the calling. The first eight callings dress
 as their calling's sex; the last seven have clothes for each. The same
 seed gives the same outfit, on every machine.
 
@@ -123,6 +124,34 @@ from extensions.attire.metal import (
 from extensions.attire.outfit import Outfit
 from extensions.attire.preset import outfit_named
 from extensions.humanoid.sex import FEMALE, MALE, Sex
+from extensions.humanoid.skeleton.head.hair.beard import (
+    CHIN_STRAP,
+    CLEAN_SHAVEN,
+    FORKED_BEARD,
+    FULL_BEARD,
+    GOATEE,
+    LONG_BEARD,
+    MUSTACHE,
+    MUTTON_CHOPS,
+    SHORT_BEARD,
+    STUBBLE,
+    Beard,
+)
+from extensions.humanoid.skeleton.head.hair.styles import (
+    BOB,
+    BRAID,
+    BUN,
+    CROPPED,
+    GROWN,
+    HALF_UP,
+    LONG,
+    PIGTAILS,
+    PONYTAIL,
+    SLICKED,
+    TOPKNOT,
+    TWIN_BRAIDS,
+    HairStyle,
+)
 from render.framebuffer import Color
 
 comptime PLAIN_DYES = 9
@@ -772,6 +801,121 @@ def _archetype(calling: Calling, woman: Bool, seed: Int) raises -> Outfit:
     if calling == RANGER:
         return _ranger(woman, seed)
     return _warrior(woman, seed)
+
+
+def _pick[T: Copyable](choices: List[T], seed: Int, salt: Int) -> T:
+    """Return one of some choices, as a seed and a salt pick it."""
+    return choices[_mixed(seed, salt) % len(choices)].copy()
+
+
+def calling_hair(calling: Calling, sex: Sex, seed: Int) raises -> HairStyle:
+    """Return the hairstyle a person of a calling wears, by a seed.
+
+    | Callings | Women | Men |
+    |---|---|---|
+    | peasant, goodwife, farmer | bun, braid, ponytail, pigtails | grown, cropped |
+    | noblewoman, royal | bun, braid, half up, long, topknot | slicked, grown, long |
+    | barbarian | twin braids, braid, long | long, topknot, grown |
+    | wizard, warlock, monk | long, half up, braid | long, slicked, cropped |
+    | ranger, archer | braid, ponytail, twin braids | grown, ponytail, long |
+    | man-at-arms, knight, warrior | braid, ponytail, bun, cropped | cropped, grown, slicked |
+    | merchant | long, bun, bob, half up | grown, slicked, cropped |
+
+    Args:
+        calling: A named calling.
+        sex: `MALE` or `FEMALE`.
+        seed: Any integer.
+
+    Returns:
+        A designed or grown hairstyle.
+
+    Raises:
+        Error: If the calling or the sex is not named.
+    """
+    require_calling(calling)
+    require_valid(sex.is_valid(), "A sex must be MALE or FEMALE")
+    var woman = sex == FEMALE
+    var styles: List[HairStyle]
+    if calling == PEASANT or calling == GOODWIFE or calling == FARMER:
+        styles = [BUN, BRAID, PONYTAIL, PIGTAILS] if woman else [
+            GROWN,
+            CROPPED,
+        ]
+    elif calling == NOBLEWOMAN or calling == ROYAL:
+        styles = [BUN, BRAID, HALF_UP, LONG, TOPKNOT] if woman else [
+            SLICKED,
+            GROWN,
+            LONG,
+        ]
+    elif calling == BARBARIAN:
+        styles = [TWIN_BRAIDS, BRAID, LONG] if woman else [
+            LONG,
+            TOPKNOT,
+            GROWN,
+        ]
+    elif calling == WIZARD or calling == WARLOCK or calling == MONK:
+        styles = [LONG, HALF_UP, BRAID] if woman else [LONG, SLICKED, CROPPED]
+    elif calling == RANGER or calling == ARCHER:
+        styles = [BRAID, PONYTAIL, TWIN_BRAIDS] if woman else [
+            GROWN,
+            PONYTAIL,
+            LONG,
+        ]
+    elif calling == MERCHANT:
+        styles = [LONG, BUN, BOB, HALF_UP] if woman else [
+            GROWN,
+            SLICKED,
+            CROPPED,
+        ]
+    else:
+        styles = [BRAID, PONYTAIL, BUN, CROPPED] if woman else [
+            CROPPED,
+            GROWN,
+            SLICKED,
+        ]
+    return _pick(styles, seed, 36)
+
+
+def calling_beard(calling: Calling, sex: Sex, seed: Int) raises -> Beard:
+    """Return the beard a person of a calling grows, by a seed.
+
+    A woman is clean-shaven. A wizard grows a long or a full beard, a
+    barbarian a forked, a full or a long one, and a royal a short or a
+    full beard or a goatee. A warlock and a ranger favor a goatee, a
+    soldier a clean chin, stubble or a chin strap, and the rest of the
+    callings a mustache, stubble, mutton chops or a short beard.
+
+    Args:
+        calling: A named calling.
+        sex: `MALE` or `FEMALE`.
+        seed: Any integer.
+
+    Returns:
+        A named beard.
+
+    Raises:
+        Error: If the calling or the sex is not named.
+    """
+    require_calling(calling)
+    require_valid(sex.is_valid(), "A sex must be MALE or FEMALE")
+    if sex == FEMALE:
+        return CLEAN_SHAVEN
+    var beards: List[Beard]
+    if calling == WIZARD:
+        beards = [LONG_BEARD, LONG_BEARD, FULL_BEARD]
+    elif calling == BARBARIAN:
+        beards = [FORKED_BEARD, FULL_BEARD, LONG_BEARD]
+    elif calling == ROYAL:
+        beards = [SHORT_BEARD, FULL_BEARD, GOATEE]
+    elif calling == WARLOCK or calling == RANGER:
+        beards = [GOATEE, STUBBLE, CLEAN_SHAVEN, SHORT_BEARD]
+    elif calling == MAN_AT_ARMS or calling == KNIGHT or calling == WARRIOR:
+        beards = [CLEAN_SHAVEN, STUBBLE, CHIN_STRAP, SHORT_BEARD]
+    elif calling == MONK:
+        beards = [CLEAN_SHAVEN, FULL_BEARD]
+    else:
+        beards = [MUSTACHE, STUBBLE, MUTTON_CHOPS, SHORT_BEARD, CLEAN_SHAVEN]
+    return _pick(beards, seed, 37)
 
 
 def mixed_calling(seed: Int) -> Calling:

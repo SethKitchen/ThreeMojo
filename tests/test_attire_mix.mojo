@@ -26,6 +26,8 @@ from extensions.attire.mix import (
     WARRIOR,
     WIZARD,
     arcane_dye,
+    calling_beard,
+    calling_hair,
     calling_sex,
     dressed_as,
     forest_dye,
@@ -58,6 +60,12 @@ from extensions.attire.kinds import FUR, HATTED
 from extensions.attire.metal import METAL_COUNT
 from extensions.attire.outfit import Outfit
 from extensions.humanoid.sex import FEMALE, MALE, Sex
+from extensions.humanoid.skeleton.head.hair.beard import (
+    CLEAN_SHAVEN,
+    FULL_BEARD,
+    LONG_BEARD,
+)
+from extensions.humanoid.skeleton.head.hair.styles import TWIN_BRAIDS
 from extensions.attire.preset import outfit_json
 from std.testing import (
     TestSuite,
@@ -334,6 +342,44 @@ def test_each_person_of_a_crowd_has_a_sex() raises:
         else:
             men += 1
     assert_true(women > 20 and men > 30)
+
+
+def test_each_calling_picks_its_hair_and_its_beard() raises:
+    var sexes: List[Sex] = [MALE, FEMALE]
+    var styles = List[Int]()
+    for k in range(CALLING_COUNT):
+        for sex in sexes:
+            for seed in range(6):
+                var style = calling_hair(Calling(k), sex, seed)
+                assert_true(style.is_valid())
+                if not style.value in styles:
+                    styles.append(style.value)
+                var beard = calling_beard(Calling(k), sex, seed)
+                assert_true(beard.is_valid())
+                if sex == FEMALE:
+                    assert_equal(beard, CLEAN_SHAVEN)
+    assert_true(len(styles) >= 10)
+    # A wizard grows a long beard or a full one; the same seed picks the
+    # same.
+    for seed in range(12):
+        var beard = calling_beard(WIZARD, MALE, seed)
+        assert_true(beard == LONG_BEARD or beard == FULL_BEARD)
+    assert_equal(
+        calling_hair(BARBARIAN, FEMALE, 4), calling_hair(BARBARIAN, FEMALE, 4)
+    )
+    var braided = False
+    for seed in range(12):
+        if calling_hair(BARBARIAN, FEMALE, seed) == TWIN_BRAIDS:
+            braided = True
+    assert_true(braided)
+    with assert_raises(contains="MALE or FEMALE"):
+        _ = calling_hair(FARMER, Sex(3), 0)
+    with assert_raises(contains="MALE or FEMALE"):
+        _ = calling_beard(FARMER, Sex(3), 0)
+    with assert_raises(contains="named one"):
+        _ = calling_hair(Calling(40), MALE, 0)
+    with assert_raises(contains="named one"):
+        _ = calling_beard(Calling(40), MALE, 0)
 
 
 def main() raises:

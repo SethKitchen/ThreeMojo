@@ -277,15 +277,20 @@ A `HairStyle` says how the hair is cut and laid. Pass the same style to `add_gro
 | `HALF_UP` | The hair above the temples is tied in a short tail at the back. The rest falls long. |
 | `BOB` | Parted down the middle and cut level at the jaw. |
 | `PIXIE` | Cropped short, 3 to 6.5 cm, and combed forward and down. |
+| `TOPKNOT` | Combed up to a tie on the top of the crown, and coiled round a small ball on it. |
+| `TWIN_BRAIDS` | Parted down the middle, tied behind each ear, and woven into a braid on each side. Each braid is 24 to 30 cm. |
+| `CROPPED` | Cropped closer than a pixie, 1.2 to 2.6 cm, and combed back and down. |
+| `SLICKED` | Combed straight back over the crown, and cut level at the nape. |
 
 An artist groomed `LAYERED` and `MOHAWK`. `tools/hair_style.mojo` converts their TressFX files into `assets/hair/`.
 
-The groom designs the other ten on its own guides. Each guide grows from a root on the scalp's hair:
+The groom designs the other fourteen on its own guides. Each guide grows from a root on the scalp's hair:
 
 - Loose hair walks over the hair away from the part and down, to the ears. Then it hangs to its length and sways a little. A bob's hangs only to its cut.
-- A pixie's walks forward and down, as far as it is long.
+- A pixie's walks forward and down, as far as it is long. A crop's walks back and down, as far as it is long.
+- Slicked hair walks back over the crown and down, then hangs to its cut at the nape.
 - Tied hair follows the arc from its root to its tie, round the cranium's middle. A style with a tie on each side takes the nearer one. Hair from the brow goes up over the crown, and hair from the temple goes back over the ear. The arc arches up a little in its middle, so the hair clears the ear.
-- Past the tie, a tail springs back and falls. A bun climbs over its ball and coils round it. A braid falls in three lanes, each a third of a turn behind the next, which cross over one another.
+- Past the tie, a tail springs back and falls. A bun or a topknot climbs over its ball and coils round it. A braid falls in three lanes, each a third of a turn behind the next, which cross over one another. Twin braids are woven so from each tie behind the ears.
 
 Each strand is then lifted out of the head's skin and the body's grid. A lifted point carries the rest of its strand with it, so long hair drapes over the shoulders and does not break. Tied hair is pulled taut over the scalp: it curls only past the tie, and its shell does not stand fuller for the curl. Every designed style keeps a thin shell, so the strands are what shows. A tied style's roots reach down to the nape, which shows when the hair is pulled up.
 
@@ -303,7 +308,10 @@ A game humanoid with no strands draws only the hair's shell. A designed style's 
 | `BRAID` | A narrower tail from the nape, down the back. |
 | `PIGTAILS` | A tail from each tie, behind each ear, down beside the neck. |
 | `BUN`, `SPACE_BUNS` | A ball on each tie, half as far out as the groom coils it, so it sits on the head. |
-| `PIXIE` | Cropped close, as it is under strands. |
+| `PIXIE`, `CROPPED` | Cropped close, as it is under strands. |
+| `TOPKNOT` | A ball on its tie, on the top of the crown. |
+| `TWIN_BRAIDS` | A narrow tail from each tie behind the ears, down beside the neck. |
+| `SLICKED` | A short fall to the nape. |
 
 A tail and a bun take their ties from the groom, and join the shell in a smooth fillet. The tails pass behind the neck, but they do not know the body, so the lowest part of a braid can sink into the back. `GROWN`, `LAYERED` and `MOHAWK` are drawn as they are. Run `examples/game_hairstyles.mojo` with zero cards to draw each style's shell alone: `mojo run -I . examples/game_hairstyles.mojo out/shells.png 140 0`. A long tail stretches the shell's box. So the mesh takes more cells, up to 64, and each cell stays the size it is on the head alone.
 

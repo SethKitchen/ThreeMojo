@@ -76,6 +76,8 @@ The new callings take palettes of their own. `fur_dye` gives wolf gray, bear bro
 
 `warrior_metal(seed)` forges a warrior's harness. Of each twenty seeds, about six are steel, three iron and three blackened. Two are blued, two bronze, and one each copper, brass, silver and gold. A quarter of the harnesses are gilt at their edges, and a quarter of the rest brassed.
 
+`calling_hair(calling, sex, seed)` and `calling_beard(calling, sex, seed)` pick a hairstyle and a beard that suit the calling. A woman of a barbarian calling can wear twin braids, and a royal man slicks his hair back. A wizard grows a long beard or a full one, and a barbarian a forked, a full or a long one. A woman is clean-shaven.
+
 Each calling of the seven has about a dozen choices of cut, dye, metal and headwear for each sex. With the genome, the stature, the hair and the beard of each person, a crowd of thousands has few twins.
 
 Some garments are parti-colored: four merchants' tunics in ten and three women's gowns in ten take a second dye on the left side. Three men-at-arms' surcoats in ten are quartered.
