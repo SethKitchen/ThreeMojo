@@ -160,6 +160,7 @@ Of the 40, 30 stand within 15 m of the camera. Their hair moves, and 11 of the 1
 
 - The CPU renderer holds about 680 bytes for each triangle it draws. So the 40 people at 16,000 triangles take 1.9 GB to draw.
 - The garments, the cloaks and the hats do not scale with the skin's budget. At 4,000 triangles they draw more than half of each person's triangles.
+- For thousands of colors, dress a few bodies and paint each many ways. `redye(scene, assets, dressed, outfit)` paints a dressed outfit in new dyes, in about 4 ms against 51 ms to dress the test's coarse person. See [New dyes](#new-dyes).
 - For thousands of people, build each look once and bake it. A bake loads in 12 ms; see [Game humanoid](Game-humanoid#baking-and-speed). A loaded bake draws its hair and its cloak as they lay when baked.
 
 These changes made a crowd cheaper:
@@ -169,6 +170,23 @@ These changes made a crowd cheaper:
 - Hair and cloaks farther than 15 m from the camera ride their bones and are not simulated.
 - `move_cloaks` steps the near cloaks at once, and a capsule is tested only near its box. The cloaks fell from 62 ms to 20 ms a frame.
 - `move_hair` steps and lights the near grooms at once. The hair fell from 55 ms to 39 ms a frame.
+
+### New dyes
+
+`redye` paints a dressed person in new dyes, without dressing them again. Each vertex keeps its share of each dye in its `dye` attribute, so the colors are the cheap part of a garment.
+
+```mojo
+var dressed = dress(scene, assets, person, outfit)
+outfit.garments[2].dyes[PRIMARY_DYE.value] = crimson
+redye(scene, assets, dressed, outfit)
+```
+
+1. It paints each part of each garment from its `dye` and `wear` attributes, in the dyes `design_dyes` gives.
+2. A part in a design in colors takes a new texture in the new dyes. A tonal design and a braid are shades, so they serve every dye.
+3. A fur shell is drawn darker the lower it stands, as `fur_shade` says.
+4. Each part's sheen takes the new primary dye.
+
+The outfit must hold the garments the person was dressed in, in the same order, with the same designs. Only their dyes can differ. A test paints one person and dresses another in the same dyes, and their colors, textures and sheens agree.
 
 ## Plate
 
