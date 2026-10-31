@@ -64,10 +64,10 @@ The first eight callings dress as their own sex: a goodwife and a noblewoman as 
 | `KNIGHT` | the knight's outfit and a belt |
 | `FARMER` | shirt; a smock or a tunic over trousers, or a gown and by chance a bodice; a straw hat and a belt by chance; boots |
 | `BARBARIAN` | fur kilt, fur boots, bracers and belt, bare-chested; a woman wears a jerkin; a fur mantle, and a horned or half helm of iron or bronze, by chance |
-| `ROYAL` | a velvet robe or gown in a rich dye, edged in white fur, a royal mantle and a sash; a crown of gold or silver, or for some queens a circlet; boots |
-| `WIZARD` | a wizard's robe, sash and hat in an arcane dye, trimmed in gold or silver; some women wear a silver circlet; boots |
-| `WARLOCK` | a black cassock trimmed in red and a sash; a hood, or for some women a blackened circlet; a dark mantle by chance; tall boots |
-| `RANGER` | hose, a tunic in forest green, bracers and a belt; a jerkin by chance; a feathered cap with a red or white feather, or a hood; tall boots |
+| `ROYAL` | a velvet robe or gown in a rich dye, edged in white fur and parti-colored by chance; a royal mantle edged in ermine or gold; a sash; a crown of gold or silver set with a rich stone, or for some queens a circlet; boots |
+| `WIZARD` | a wizard's robe in an arcane dye, banded in a second by chance, trimmed in gold or silver; a sash; a hat in the robe's dye or another; some women wear a silver circlet; a gray fur mantle by chance; boots |
+| `WARLOCK` | a dark cassock and sash in shadow dyes; a hood, or for some women a blackened circlet; blackened great pauldrons gilt at their edges, or a dark mantle, by chance; tall boots |
+| `RANGER` | hose and a tunic in forest greens, bracers and a belt; a jerkin by chance; a feathered cap with a red or white feather, or a hood; a fur mantle by chance; tall boots |
 | `WARRIOR` | a gambeson under a platebody, plate legs, arm harness, pauldrons or great pauldrons, a plate skirt or a fauld, gauntlets and sabatons, all of one metal; a great helm or a half helm, which some women leave off; a surcoat by chance |
 
 The poor wear the dyes of `plain_dye`: madder, woad, weld, walnut, nettle, gray and cream wool, russet and lichen purple. The rich wear the dyes of `rich_dye`: kermes crimson, deep woad, verdigris, saffron, black and murex violet. A merchant's trim is rich. A knight's surcoat takes two rich dyes per pale. Three plates in ten are blackened against rust.
@@ -78,7 +78,7 @@ The new callings take palettes of their own. `fur_dye` gives wolf gray, bear bro
 
 `calling_hair(calling, sex, seed)` and `calling_beard(calling, sex, seed)` pick a hairstyle and a beard that suit the calling. A woman of a barbarian calling can wear twin braids, and a royal man slicks his hair back. A wizard grows a long beard or a full one, and a barbarian a forked, a full or a long one. A woman is clean-shaven.
 
-Each calling of the seven has about a dozen choices of cut, dye, metal and headwear for each sex. With the genome, the stature, the hair and the beard of each person, a crowd of thousands has few twins.
+Each garment of a calling takes its dye by a pick of its own. So the dyes of a robe, its mantle and its sash vary apart. A test dresses 120 seeds of each of the seven callings as a man and as a woman. Of the 1,680 people, more than 1,500 differ in their garments, dyes, metals, hair or beard. The genome and the stature make each person differ further.
 
 Some garments are parti-colored: four merchants' tunics in ten and three women's gowns in ten take a second dye on the left side. Three men-at-arms' surcoats in ten are quartered.
 

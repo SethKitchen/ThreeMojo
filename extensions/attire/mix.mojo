@@ -106,6 +106,7 @@ from extensions.attire.kinds import (
     PRIMARY_DYE,
     QUARTERLY,
     SECONDARY_DYE,
+    STRIPES,
     TRIM_DYE,
     VELVET,
 )
@@ -611,9 +612,10 @@ def _farmer(woman: Bool, seed: Int) raises -> Outfit:
     var outfit = Outfit()
     outfit.add(_dyed(shirt(), plain_dye(6), plain_dye(6)))
     if woman:
-        outfit.add(_dyed(gown(), plain_dye(plain), plain_dye(plain + 6)))
+        outfit.add(_dyed(gown(), plain_dye(plain), plain_dye(_mixed(seed, 59))))
         if _chance(seed, 12, 50):
-            outfit.add(_dyed(bodice(), plain_dye(3), plain_dye(3)))
+            var laced = plain_dye(_mixed(seed, 60))
+            outfit.add(_dyed(bodice(), laced, laced))
     else:
         outfit.add(_dyed(trousers(), plain_dye(plain + 3), plain_dye(3)))
         if _chance(seed, 12, 50):
@@ -633,13 +635,15 @@ def _barbarian(woman: Bool, seed: Int) raises -> Outfit:
     var pelt = _mixed(seed, 1)
     var outfit = Outfit()
     if woman:
-        outfit.add(_dyed(jerkin(), plain_dye(3), plain_dye(3)))
+        var hide = plain_dye(3) if _chance(seed, 61, 50) else fur_dye(1)
+        outfit.add(_dyed(jerkin(), hide, hide))
     outfit.add(_dyed(fur_kilt(), fur_dye(pelt), fur_dye(pelt + 1)))
     outfit.add(_dyed(fur_boots(), fur_dye(pelt), fur_dye(pelt)))
     outfit.add(bracers())
     outfit.add(belt())
     if _chance(seed, 15, 60):
-        outfit.add(_dyed(fur_mantle(), fur_dye(pelt + 3), fur_dye(pelt + 3)))
+        var mantle = fur_dye(_mixed(seed, 62))
+        outfit.add(_dyed(fur_mantle(), mantle, mantle))
     var metal = IRON if _chance(seed, 16, 50) else BRONZE
     if _chance(seed, 17, 50):
         outfit.add(forged(horned_helm(), metal))
@@ -660,22 +664,32 @@ def _royal(woman: Bool, seed: Int) raises -> Outfit:
     )
     robe.name = "royal robe" if not woman else "royal gown"
     robe.fabric = VELVET
+    # Some robes are parti-colored, a second rich dye on the left side.
+    if _chance(seed, 38, 25):
+        robe.pattern = PARTY
+        robe.dyes[SECONDARY_DYE.value] = rich_dye(_mixed(seed, 39))
     outfit.add(robe^)
     if not woman:
         outfit.add(_dyed(hose(), rich_dye(rich + 3), rich_dye(rich + 3)))
     var mantle = royal_mantle()
-    mantle.dyes[PRIMARY_DYE.value] = rich_dye(rich + 2)
-    mantle.dyes[SECONDARY_DYE.value] = rich_dye(rich + 2)
+    var cloak = rich_dye(_mixed(seed, 40))
+    mantle.dyes[PRIMARY_DYE.value] = cloak
+    mantle.dyes[SECONDARY_DYE.value] = cloak
+    # Ermine, or a gold edge.
+    if _chance(seed, 41, 30):
+        mantle.dyes[TRIM_DYE.value] = Color(214, 170, 64)
     outfit.add(mantle^)
-    outfit.add(_dyed(sash(), rich_dye(rich + 3), rich_dye(rich + 3)))
+    var girdle = rich_dye(_mixed(seed, 42))
+    outfit.add(_dyed(sash(), girdle, girdle))
     var gold = SILVER if _chance(seed, 19, 25) else GOLD
+    var stone = rich_dye(_mixed(seed, 43))
     if woman and _chance(seed, 20, 40):
         var band = forged(circlet(), gold)
-        band.dyes[ACCENT_DYE.value] = rich_dye(rich + 1)
+        band.dyes[ACCENT_DYE.value] = stone
         outfit.add(band^)
     else:
         var made = forged(crown(), gold)
-        made.dyes[ACCENT_DYE.value] = rich_dye(rich + 1)
+        made.dyes[ACCENT_DYE.value] = stone
         outfit.add(made^)
     outfit.add(boots())
     return outfit^
@@ -689,31 +703,48 @@ def _wizard(woman: Bool, seed: Int) raises -> Outfit:
     )
     var outfit = Outfit()
     outfit.add(shirt())
-    outfit.add(_dyed(wizard_robe(), dye, trim))
-    outfit.add(_dyed(sash(), trim, trim))
+    var robe = _dyed(wizard_robe(), dye, trim)
+    # Some robes are banded in a second arcane dye.
+    if _chance(seed, 44, 20):
+        robe.pattern = STRIPES
+        robe.dyes[SECONDARY_DYE.value] = arcane_dye(_mixed(seed, 45))
+    outfit.add(robe^)
+    var girdle = trim if _chance(seed, 46, 50) else arcane_dye(_mixed(seed, 47))
+    outfit.add(_dyed(sash(), girdle, girdle))
     if woman and _chance(seed, 22, 25):
         outfit.add(forged(circlet(), SILVER))
     else:
-        outfit.add(_dyed(wizard_hat(), dye, trim))
+        # A hat in the robe's dye, or in another.
+        var crown_dye = dye
+        if _chance(seed, 48, 35):
+            crown_dye = arcane_dye(_mixed(seed, 49))
+        outfit.add(_dyed(wizard_hat(), crown_dye, trim))
+    if _chance(seed, 50, 20):
+        outfit.add(_dyed(fur_mantle(), fur_dye(0), fur_dye(3)))
     outfit.add(boots())
     return outfit^
 
 
 def _warlock(woman: Bool, seed: Int) raises -> Outfit:
-    """Return a warlock's black cassock, and a hood or a mantle."""
+    """Return a warlock's black cassock, and a hood, a mantle or dark
+    pauldrons."""
     var dark = _mixed(seed, 4)
     var outfit = Outfit()
     outfit.add(_dyed(shirt(), shadow_dye(0), shadow_dye(0)))
-    outfit.add(_dyed(cassock(), shadow_dye(dark), shadow_dye(dark + 2)))
-    outfit.add(_dyed(sash(), shadow_dye(dark + 2), shadow_dye(dark + 2)))
+    var edge = shadow_dye(_mixed(seed, 51))
+    outfit.add(_dyed(cassock(), shadow_dye(dark), edge))
+    var girdle = shadow_dye(_mixed(seed, 52))
+    outfit.add(_dyed(sash(), girdle, girdle))
     if _chance(seed, 23, 60):
-        outfit.add(_dyed(hood(), shadow_dye(dark), shadow_dye(dark + 2)))
+        outfit.add(_dyed(hood(), shadow_dye(dark), edge))
     elif woman and _chance(seed, 24, 50):
         outfit.add(forged(circlet(), BLACKENED))
-    if _chance(seed, 25, 50):
+    if _chance(seed, 53, 25):
+        outfit.add(forged(great_pauldrons(), BLACKENED, GOLD))
+    elif _chance(seed, 25, 50):
         var mantle = royal_mantle()
         mantle.name = "dark mantle"
-        outfit.add(_dyed(mantle^, shadow_dye(dark + 1), shadow_dye(dark + 2)))
+        outfit.add(_dyed(mantle^, shadow_dye(dark + 1), edge))
     outfit.add(_dyed(tall_boots(), shadow_dye(0), shadow_dye(0)))
     return outfit^
 
@@ -723,24 +754,29 @@ def _ranger(woman: Bool, seed: Int) raises -> Outfit:
     var green = _mixed(seed, 5)
     var outfit = Outfit()
     outfit.add(shirt())
-    outfit.add(_dyed(hose(), forest_dye(green + 4), forest_dye(green + 4)))
+    var legs = forest_dye(_mixed(seed, 54))
+    outfit.add(_dyed(hose(), legs, legs))
     var coat = _dyed(tunic(), forest_dye(green), forest_dye(green + 1))
     if woman:
         coat.flare = 0.32
     outfit.add(coat^)
     if _chance(seed, 26, 60):
-        outfit.add(_dyed(jerkin(), plain_dye(3), plain_dye(7)))
+        var hide = plain_dye(3) if _chance(seed, 55, 60) else plain_dye(7)
+        outfit.add(_dyed(jerkin(), hide, plain_dye(7)))
     outfit.add(bracers())
     outfit.add(belt())
+    var hooded = forest_dye(_mixed(seed, 56))
     if _chance(seed, 27, 50):
         var cap = feathered_cap()
-        cap.dyes[PRIMARY_DYE.value] = forest_dye(green + 1)
-        cap.dyes[SECONDARY_DYE.value] = forest_dye(green + 1)
+        cap.dyes[PRIMARY_DYE.value] = hooded
+        cap.dyes[SECONDARY_DYE.value] = hooded
         if _chance(seed, 28, 50):
             cap.dyes[ACCENT_DYE.value] = Color(232, 228, 214)
         outfit.add(cap^)
     else:
-        outfit.add(_dyed(hood(), forest_dye(green + 1), forest_dye(green)))
+        outfit.add(_dyed(hood(), hooded, forest_dye(green)))
+    if _chance(seed, 57, 20):
+        outfit.add(_dyed(fur_mantle(), fur_dye(_mixed(seed, 58)), fur_dye(1)))
     outfit.add(tall_boots())
     return outfit^
 

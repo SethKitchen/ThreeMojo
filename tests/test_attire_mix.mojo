@@ -67,6 +67,7 @@ from extensions.humanoid.skeleton.head.hair.beard import (
 )
 from extensions.humanoid.skeleton.head.hair.styles import TWIN_BRAIDS
 from extensions.attire.preset import outfit_json
+from std.collections import Set
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -380,6 +381,33 @@ def test_each_calling_picks_its_hair_and_its_beard() raises:
         _ = calling_hair(Calling(40), MALE, 0)
     with assert_raises(contains="named one"):
         _ = calling_beard(Calling(40), MALE, 0)
+
+
+def _look(calling: Calling, sex: Sex, seed: Int) raises -> String:
+    """Return a key for a person's whole look: garments, dyes, metals,
+    headwear, hair and beard."""
+    var key = String(calling_hair(calling, sex, seed).value) + "/"
+    key += String(calling_beard(calling, sex, seed).value)
+    for garment in dressed_as(calling, sex, seed).garments:
+        key += "|" + garment.name + ":" + String(garment.metal.value)
+        for dye in garment.dyes:
+            key += "," + String(Int(dye.r)) + "." + String(Int(dye.g))
+            key += "." + String(Int(dye.b))
+    return key^
+
+
+def test_the_archetypes_make_thousands_of_looks() raises:
+    var seen = Set[String]()
+    var sexes: List[Sex] = [MALE, FEMALE]
+    var made = 0
+    for seed in range(120):
+        for k in range(FARMER.value, CALLING_COUNT):
+            for sex in sexes:
+                seen.add(_look(Calling(k), sex, seed))
+                made += 1
+    # Few of the 1,680 people are twins in their clothes, hair and beard.
+    assert_equal(made, 1680)
+    assert_true(len(seen) > 1500)
 
 
 def main() raises:
