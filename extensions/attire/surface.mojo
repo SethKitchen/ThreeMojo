@@ -27,6 +27,7 @@ The bump maps are height images, one tile each:
 | `fur_heights` | 3 cm | the locks of a pelt, each a tuft that falls down the garment |
 | `plait_heights` | 1.2 cm | flat straws plaited over and under, two each way |
 | `grain_heights` | 1.2 cm | the pebbled grain of leather: rounded cells parted by creases |
+| `scale_heights` | 5 cm, two rows of two scales | rounded scales, each rising to its lower edge over the row below, each row set half a scale over the last |
 
 `surface_look` gives a fabric's bump map, its scale and how many tiles a
 meter, or no map for plate and felt. `SurfaceMaps` makes each map once
@@ -57,6 +58,8 @@ from extensions.attire.kinds import (
     PADDING,
     PLAIT,
     QUILTING,
+    SCALE,
+    SCALES,
     SILK,
     STRAW,
     TWILL,
@@ -97,6 +100,8 @@ comptime FUR_LOCKS_A_TILE = 14
 """How many locks of fur one tile holds."""
 comptime GRAIN_TILE = Float32(0.012)
 """The side of one tile of leather's grain, in meters."""
+comptime SCALE_TILE = Float32(0.05)
+"""The side of one tile of scales: two scales across, in meters."""
 comptime GRAIN_CELLS = 36
 """How many pebbles of grain one tile holds."""
 comptime TEXELS = 64
@@ -147,7 +152,8 @@ def surface_look(kind: FabricKind) raises -> SurfaceLook:
 
     Returns:
         Mail's rings, padding's quilting, cloth's weave, fur's locks,
-        straw's plait, leather's grain, or none for plate and felt.
+        straw's plait, leather's grain, scale's scales, or none for plate
+        and felt.
 
     Raises:
         Error: If the kind is not named.
@@ -165,6 +171,8 @@ def surface_look(kind: FabricKind) raises -> SurfaceLook:
         return SurfaceLook(PLAIT, 0.5, 1 / PLAIT_TILE)
     if kind == LEATHER:
         return SurfaceLook(GRAIN, 0.35, 1 / GRAIN_TILE)
+    if kind == SCALE:
+        return SurfaceLook(SCALES, 1.2, 1 / SCALE_TILE)
     return SurfaceLook(NO_BUMP, 0, 1)
 
 
@@ -347,6 +355,38 @@ def plait_heights() -> List[Float32]:
     return heights^
 
 
+def scale_heights() -> List[Float32]:
+    """Return the heights of one tile of scale: two rows of two scales.
+
+    Each scale is half the tile wide and half of it tall, and its lower
+    edge is rounded. A scale rises from its top, where the row above
+    covers it, to its lower edge, where it lies over the row below; under
+    that edge the next row starts low. Each row is set half a scale
+    over the last, as laced scales are. The tile wraps both ways.
+
+    Returns:
+        `TEXELS` by `TEXELS` heights, row by row, zero through one.
+    """
+    var heights = List[Float32](capacity=TEXELS * TEXELS)
+    for y in range(TEXELS):  # pragma: no branch
+        for x in range(TEXELS):  # pragma: no branch
+            var v = (Float32(y) + 0.5) / Float32(TEXELS) * 2
+            var row = Int(floor(v))
+            var down = v - Float32(row)
+            var u = (Float32(x) + 0.5) / Float32(TEXELS) * 2
+            u += 0.5 * Float32(row % 2)
+            # Across the scale, from minus one at one side to one.
+            var across = (u - floor(u)) * 2 - 1
+            # The lower edge is lowest in the middle, a half circle.
+            var edge = 0.7 + 0.3 * sqrt(max(Float32(0), 1 - across * across))
+            var h = Float32(0.15)
+            if down < edge:
+                var dome = sqrt(max(Float32(0), 1 - 0.6 * across * across))
+                h = (0.25 + 0.75 * down / edge) * dome
+            heights.append(clamp(h, 0, 1))
+    return heights^
+
+
 def grain_heights() -> List[Float32]:
     """Return the heights of one tile of leather's grain.
 
@@ -414,6 +454,8 @@ def bump_texture(look: SurfaceLook) raises -> Texture:
         heights = plait_heights()
     elif look.kind == GRAIN:
         heights = grain_heights()
+    elif look.kind == SCALES:
+        heights = scale_heights()
     else:
         raise Error("This fabric has no bump map")
     var texture = _height_texture(heights)

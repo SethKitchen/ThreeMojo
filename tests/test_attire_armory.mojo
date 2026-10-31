@@ -61,7 +61,7 @@ def test_every_new_garment_checks_and_has_its_own_name() raises:
         names.append(garment.name)
     var added = armory()
     added.extend(apparel())
-    assert_equal(len(added), 27)
+    assert_equal(len(added), 28)
     for garment in added:
         garment.check()
         assert_false(garment.name in names)

@@ -63,12 +63,12 @@ The first eight callings dress as their own sex: a goodwife and a noblewoman as 
 | `MAN_AT_ARMS` | the man-at-arms's outfit and a belt; a surcoat by chance |
 | `KNIGHT` | the knight's outfit and a belt |
 | `FARMER` | shirt; a smock or a tunic over trousers, or a gown and by chance a bodice; a straw hat and a belt by chance; boots |
-| `BARBARIAN` | fur kilt, fur boots, bracers and belt, bare-chested; a woman wears a jerkin; a fur mantle, and a horned or half helm of iron or bronze, by chance |
+| `BARBARIAN` | fur kilt, fur boots, bracers and belt, bare-chested; a woman wears a jerkin; a shirt of iron or bronze scales, more often for women; a fur mantle, and a horned or half helm of iron or bronze, by chance |
 | `ROYAL` | a velvet robe or gown in a rich dye, edged in white fur and parti-colored by chance; a royal mantle edged in ermine or gold; a sash; a crown of gold or silver set with a rich stone, or for some queens a circlet; boots |
 | `WIZARD` | a wizard's robe in an arcane dye, banded in a second by chance, trimmed in gold or silver; a sash; a hat in the robe's dye or another; some women wear a silver circlet; a gray fur mantle by chance; boots |
 | `WARLOCK` | a dark cassock and sash in shadow dyes; a hood, or for some women a blackened circlet; blackened great pauldrons gilt at their edges, or a dark mantle, by chance; tall boots |
 | `RANGER` | hose and a tunic in forest greens, bracers and a belt; a jerkin by chance; a feathered cap with a red or white feather, or a hood; a fur mantle by chance; tall boots |
-| `WARRIOR` | a gambeson under a platebody, plate legs, arm harness, pauldrons or great pauldrons, a plate skirt or a fauld, gauntlets and sabatons, all of one metal; a great helm or a half helm, which some women leave off; a surcoat by chance |
+| `WARRIOR` | a gambeson under a platebody or, three times in ten, a shirt of scales, plate legs, arm harness, pauldrons or great pauldrons, a plate skirt or a fauld under a platebody, gauntlets and sabatons, all of one metal; a great helm or a half helm, which some women leave off; a surcoat by chance |
 
 The poor wear the dyes of `plain_dye`: madder, woad, weld, walnut, nettle, gray and cream wool, russet and lichen purple. The rich wear the dyes of `rich_dye`: kermes crimson, deep woad, verdigris, saffron, black and murex violet. A merchant's trim is rich. A knight's surcoat takes two rich dyes per pale. Three plates in ten are blackened against rust.
 

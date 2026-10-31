@@ -22,12 +22,13 @@ from extensions.attire.kinds import (
     MAIL,
     PADDING,
     PLATE,
+    SCALE,
     SILK,
     VELVET,
     WOOL,
     FabricKind,
 )
-from extensions.attire.metal import BLACKENED, GOLD, IRON, Metal
+from extensions.attire.metal import BLACKENED, BRONZE, GOLD, IRON, Metal
 from extensions.attire.quantities import (
     ArealDensity,
     GRAM_PER_SQUARE_METER,
@@ -142,6 +143,20 @@ def test_a_cloth_s_sheen_takes_its_dye() raises:
     var before = plate.sheen_color
     dye_sheen(plate, Color(20, 30, 40))
     assert_true(plate.sheen_color == before)
+
+
+def test_scale_is_a_metal_on_a_backing() raises:
+    var scale = fabric(SCALE)
+    assert_almost_equal(Float32(scale.areal_density.value), 10.5)
+    assert_almost_equal(Float32(scale.thickness.to(MILLIMETER)), 4)
+    assert_true(SCALE.is_metal())
+    assert_equal(fold_depth(SCALE).value, fold_depth(MAIL).value)
+    var bronze = fabric_material(SCALE, Color(255, 255, 255), BRONZE)
+    var plate = fabric_material(PLATE, Color(255, 255, 255), BRONZE)
+    assert_true(bronze.kind == PHYSICAL)
+    assert_true(bronze.metalness > 0.5)
+    # A little rougher than plate of the same metal.
+    assert_true(bronze.roughness > plate.roughness)
 
 
 def main() raises:

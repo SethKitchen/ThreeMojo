@@ -18,6 +18,7 @@
 | `FUR` | 1.4 kg/m² | 12 mm | 6 | A sheepskin with its fleece on, 1 to 1.5 kg/m² |
 | `FELT` | 600 g/m² | 3 mm | 4 | 3 mm of wool felt at about 200 kg/m³ |
 | `STRAW` | 350 g/m² | 2 mm | 6 | Plaited wheat straw |
+| `SCALE` | 10.5 kg/m² | 4 mm | 4 | Scales of 1 mm steel, each overlapping a third of the next, on a leather backing |
 
 The drape is how many smoothing passes the shell takes. One pass keeps
 the skin's shape under a thin cloth. Many passes span the hollows, as a
@@ -45,6 +46,7 @@ from extensions.attire.kinds import (
     MAIL,
     PADDING,
     PLATE,
+    SCALE,
     SILK,
     STRAW,
     VELVET,
@@ -164,6 +166,15 @@ def fabric(kind: FabricKind) raises -> Fabric:
         return Fabric(kind, _gsm(600), _mm(3), _mm(2), 4, practice^)
     if kind == STRAW:
         return Fabric(kind, _gsm(350), _mm(2), _mm(2), 6, practice^)
+    if kind == SCALE:
+        return Fabric(
+            kind,
+            ArealDensity(10.5, KILOGRAM_PER_SQUARE_METER),
+            _mm(4),
+            _mm(1),
+            4,
+            Cited(DESIGN, "TextilePractice"),
+        )
     return Fabric(
         kind,
         ArealDensity(15.7, KILOGRAM_PER_SQUARE_METER),
@@ -203,7 +214,7 @@ def fold_depth(kind: FabricKind) raises -> Length:
         return _mm(18)
     if kind == WOOL or kind == VELVET:
         return _mm(25)
-    if kind == LEATHER or kind == MAIL:
+    if kind == LEATHER or kind == MAIL or kind == SCALE:
         return _mm(6)
     if kind == PADDING or kind == STRAW:
         return _mm(4)
@@ -218,7 +229,8 @@ def fabric_material(
     """Return a physically based look for a fabric.
 
     Cloth takes a sheen, the lobe of cloth and velvet. Leather takes a
-    faint clear coat. Mail is a rough metal; its rings scatter the light,
+    faint clear coat. Scale is its metal, a little rougher, its rows
+    catching the light apart. Mail is a rough metal; its rings scatter the light,
     so it is a quarter rougher than its metal's polished surface. Plate is
     its metal, polished, under a thin clear coat. Fur is matte, with a
     broad sheen of its own color; felt is matte with a faint sheen;
@@ -231,8 +243,8 @@ def fabric_material(
         kind: A named fabric kind.
         tint: The base color, multiplied by the vertex colors. White
             leaves the dyes as they are.
-        metal: What mail or plate is made of. Steel by default. Other
-            fabrics ignore it.
+        metal: What mail, plate or scale is made of. Steel by default.
+            Other fabrics ignore it.
 
     Returns:
         A `PHYSICAL` material with vertex colors on.
@@ -251,6 +263,16 @@ def fabric_material(
             roughness=min(Float32(1), rough + 0.25),
             metalness=shine * 0.95,
             env_map=SCENE_ENVIRONMENT,
+        )
+    elif kind == SCALE:
+        # Each scale is polished, but their rows catch the light apart.
+        look = physical_material(
+            tint,
+            roughness=min(Float32(1), rough + 0.12),
+            metalness=shine,
+            env_map=SCENE_ENVIRONMENT,
+            clearcoat=0.1,
+            clearcoat_roughness=0.3,
         )
     elif kind == PLATE:
         look = physical_material(

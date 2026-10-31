@@ -47,8 +47,15 @@ from extensions.humanoid.rig.joints import (
     SPINE,
 )
 from render.framebuffer import Color
+from extensions.attire.skirt import skirt_top
+from math.vector3 import Vector3
 from extensions.attire.apparel import crown, straw_hat
-from extensions.attire.armory import great_helm, great_pauldrons
+from extensions.attire.armory import (
+    great_helm,
+    great_pauldrons,
+    plate_legs,
+    scale_shirt,
+)
 from extensions.attire.mesh_ops import ACCENT
 from extensions.attire.outfit import (
     Outfit,
@@ -486,6 +493,41 @@ def test_a_coarse_skin_s_garments_take_less_detail() raises:
     )
     between.set_index(List[Int](length=3 * 4900, fill=0))
     assert_almost_equal(garment_detail(between), 0.7, atol=1e-4)
+
+
+def _skirt_reach(
+    person: GameHumanoid, shell: BufferGeometry, below: Float32
+) raises -> Float32:
+    """Return how far a skirt's shell reaches from the hips' axis, a band
+    of 10 cm about `below` under the skirt's top."""
+    var top = skirt_top(person.rig)
+    var hips = person.rig.joints[HIPS.value]
+    ref placed = shell.attribute_view(String(POSITION))
+    var reach = Float32(0)
+    for v in range(placed.count()):
+        var p = placed.vector3(v)
+        if abs(top - below - p.y) < 0.05:
+            reach = max(reach, Vector3(p.x - hips.x, 0, p.z - hips.z).length())
+    return reach
+
+
+def test_a_skirt_hangs_clear_of_plate_on_the_legs() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var alone = coarse_person(scene, assets)
+    var plated = coarse_person(scene, assets)
+    var bare = Outfit()
+    bare.add(scale_shirt())
+    var armored = Outfit()
+    armored.add(plate_legs())
+    armored.add(scale_shirt())
+    var one = dress(scene, assets, alone, bare)
+    var two = dress(scene, assets, plated, armored)
+    # Over the thighs' plate, the shirt's skirt stands farther out.
+    var without = _skirt_reach(alone, one.shells[0], 0.2)
+    var over = _skirt_reach(plated, two.shells[1], 0.2)
+    assert_true(without > 0)
+    assert_true(over > without)
 
 
 def main() raises:

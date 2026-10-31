@@ -209,7 +209,7 @@ struct FabricKind(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is a named fabric kind.
 
         Returns:
-            True for `LINEN` through `STRAW`.
+            True for `LINEN` through `SCALE`.
         """
         return ordinal_valid(self.value, FABRIC_KIND_COUNT - 1)
 
@@ -217,9 +217,9 @@ struct FabricKind(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this fabric is metal.
 
         Returns:
-            True for `MAIL` and `PLATE`.
+            True for `MAIL`, `PLATE` and `SCALE`.
         """
-        return self == MAIL or self == PLATE
+        return self == MAIL or self == PLATE or self == SCALE
 
 
 comptime LINEN = FabricKind(0)
@@ -244,7 +244,10 @@ comptime FELT = FabricKind(9)
 """Wool matted into a stiff cloth: hats and caps."""
 comptime STRAW = FabricKind(10)
 """Plaited straw: a farmer's hat."""
-comptime FABRIC_KIND_COUNT = 11
+comptime SCALE = FabricKind(11)
+"""Small plates of metal laced in rows to a backing, each row over the
+row below, as a fish's scales lie."""
+comptime FABRIC_KIND_COUNT = 12
 """How many fabric kinds there are."""
 
 
@@ -262,6 +265,7 @@ def _fabric_names() -> List[String]:
         "fur",
         "felt",
         "straw",
+        "scale",
     ]
 
 
@@ -282,7 +286,7 @@ def fabric_named(name: String) raises -> FabricKind:
 
     Args:
         name: `linen`, `wool`, `silk`, `velvet`, `leather`, `padding`,
-            `mail`, `plate`, `fur`, `felt` or `straw`.
+            `mail`, `plate`, `fur`, `felt`, `straw` or `scale`.
 
     Returns:
         The named fabric kind.
@@ -684,7 +688,7 @@ struct Bump(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is a named bump map.
 
         Returns:
-            True for `NO_BUMP` through `GRAIN`.
+            True for `NO_BUMP` through `SCALES`.
         """
         return ordinal_valid(self.value, BUMP_COUNT - 1)
 
@@ -703,7 +707,9 @@ comptime PLAIT = Bump(5)
 """Flat straws plaited over and under each other."""
 comptime GRAIN = Bump(6)
 """The pebbled grain of tanned leather."""
-comptime BUMP_COUNT = 7
+comptime SCALES = Bump(7)
+"""Rows of rounded scales, each row over the row below."""
+comptime BUMP_COUNT = 8
 """How many bump maps there are, the smooth one with them."""
 
 

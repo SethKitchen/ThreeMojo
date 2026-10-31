@@ -166,7 +166,7 @@ def test_a_garment_refuses_what_cannot_be_made() raises:
     with assert_raises(contains="named one"):
         bad.check()
     bad = good.copy()
-    bad.pattern = DyePattern(9)
+    bad.pattern = DyePattern(40)
     with assert_raises(contains="named pattern"):
         bad.check()
     bad = good.copy()

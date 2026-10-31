@@ -3,8 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""More armor: a platebody, plate legs, a plate skirt, mail, great
-pauldrons, leather bracers, and three helmets.
+"""More armor: a platebody, plate legs, a plate skirt, mail, a shirt of
+scales, great pauldrons, leather bracers, and three helmets.
 
 | Garment | Slot | Layer | Fabric | Articulation | Form |
 |---|---|---|---|---|---|
@@ -14,6 +14,7 @@ pauldrons, leather bracers, and three helmets.
 | `arm_harness` | arms | armor | plate | rigid on each upper arm and forearm | fitted |
 | `great_pauldrons` | shoulders | armor | plate | four lames from the chest | domed |
 | `chain_shirt` | torso | outer | mail, short sleeves | flexible | skirted, flare 0.1 |
+| `scale_shirt` | torso | armor | scale, short sleeves | flexible | skirted, flare 0.12 |
 | `mail_chausses` | legs | outer | mail | flexible | fitted |
 | `bracers` | arms | outer | leather | flexible | fitted |
 | `great_helm` | head | armor | plate | rigid on the head | hatted, a great helm |
@@ -59,6 +60,7 @@ from extensions.attire.kinds import (
     OUTER_LAYER,
     PLATE,
     RIGID,
+    SCALE,
     SHOULDERS_SLOT,
     SKIRTED,
     TORSO_SLOT,
@@ -260,6 +262,38 @@ def chain_shirt() raises -> Garment:
     )
 
 
+def scale_shirt() raises -> Garment:
+    """Return a shirt of scales with short sleeves, to the middle of the
+    thigh.
+
+    It is armor: it takes the platebody's slot and layer, over a
+    gambeson.
+
+    Returns:
+        The garment.
+
+    Raises:
+        Error: If its cover is refused, which an armory garment's is not.
+    """
+    var cover = Cover()
+    cover.reach_to(HIPS)
+    cover.reach_to(SPINE)
+    cover.reach_to(CHEST)
+    cover.reach_to(NECK, 0.15)
+    _both(cover, RIGHT_UPPER_ARM, LEFT_UPPER_ARM, 0.45, 0)
+    _both(cover, RIGHT_THIGH, LEFT_THIGH, 0.4, 0)
+    return Garment(
+        "scale shirt",
+        TORSO_SLOT,
+        ARMOR_LAYER,
+        SCALE,
+        cover^,
+        STEEL_DYE,
+        form=SKIRTED,
+        flare=0.12,
+    )
+
+
 def mail_chausses() raises -> Garment:
     """Return mail over the legs and the feet.
 
@@ -383,6 +417,7 @@ def armory() raises -> List[Garment]:
         arm_harness(),
         great_pauldrons(),
         chain_shirt(),
+        scale_shirt(),
         mail_chausses(),
         bracers(),
         great_helm(),

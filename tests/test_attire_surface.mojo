@@ -31,6 +31,8 @@ from extensions.attire.kinds import (
     FUR_LOCKS,
     GRAIN,
     PLAIT,
+    SCALE,
+    SCALES,
     STRAW,
     FabricKind,
 )
@@ -41,6 +43,8 @@ from extensions.attire.surface import (
     fur_heights,
     grain_heights,
     plait_heights,
+    scale_heights,
+    SCALE_TILE,
     MAIL_TILE,
     QUILT_TILE,
     TEXELS,
@@ -209,8 +213,29 @@ def test_each_fabric_has_its_surface() raises:
     assert_almost_equal(surface_look(FUR).tiles, 1 / FUR_TILE, atol=1e-3)
     assert_true(surface_look(STRAW).kind == PLAIT)
     assert_almost_equal(surface_look(STRAW).tiles, 1 / PLAIT_TILE, atol=1e-3)
+    assert_true(surface_look(SCALE).kind == SCALES)
+    assert_almost_equal(surface_look(SCALE).tiles, 1 / SCALE_TILE, atol=1e-3)
     with assert_raises(contains="fabric"):
         _ = surface_look(FabricKind(99))
+
+
+def test_scales_rise_to_their_lower_edges() raises:
+    var heights = scale_heights()
+    assert_equal(len(heights), TEXELS * TEXELS)
+    var lowest = Float32(1)
+    var highest = Float32(0)
+    for h in heights:
+        assert_true(h >= 0 and h <= 1)
+        lowest = min(lowest, h)
+        highest = max(highest, h)
+    # Under each scale's edge the next row starts low.
+    assert_true(lowest < 0.2 and highest > 0.9)
+    # Down the middle of a scale, it rises toward its lower edge.
+    var column = TEXELS // 4
+    assert_true(
+        heights[(TEXELS // 4) * TEXELS + column]
+        > heights[(TEXELS // 16) * TEXELS + column]
+    )
 
 
 def test_the_height_maps_tile_and_stay_in_range() raises:

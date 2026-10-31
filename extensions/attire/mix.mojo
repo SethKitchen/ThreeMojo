@@ -38,12 +38,12 @@ seed gives the same outfit, on every machine.
 | `MAN_AT_ARMS` | `outfit_named("man-at-arms")`, a belt, and a surcoat by chance, quartered or bearing a cross or a saltire by chance |
 | `KNIGHT` | `outfit_named("knight")` and a belt, its surcoat in two rich dyes, bearing arms by `heraldry` |
 | `FARMER` | a shirt; a smock or a tunic over trousers, or a gown and a bodice; a straw hat by chance; boots |
-| `BARBARIAN` | a fur kilt, fur boots, bracers and a belt; a fur mantle, a horned or half helm by chance; a woman wears a jerkin |
+| `BARBARIAN` | a fur kilt, fur boots, bracers and a belt; a fur mantle, a horned or half helm, or a shirt of scales by chance; a woman wears a jerkin or scales |
 | `ROYAL` | a velvet robe or gown in a rich dye, a royal mantle edged in white fur, a sash, boots; a crown, or a circlet for some queens |
 | `WIZARD` | a wizard's robe and hat in an arcane dye, trimmed in gold or silver, a sash, boots |
 | `WARLOCK` | a black cassock trimmed in red; a hood or a dark mantle by chance; tall boots |
 | `RANGER` | hose, a tunic in forest green, a jerkin by chance, bracers, tall boots, a belt, and a hood or a feathered cap |
-| `WARRIOR` | a full harness of plate forged of one metal, gilt or brassed by chance: a platebody, plate legs, arm harness, pauldrons, gauntlets, sabatons, a plate skirt or a fauld, and a helm |
+| `WARRIOR` | a full harness of plate forged of one metal, gilt or brassed by chance: a platebody, or a shirt of scales by chance, plate legs, arm harness, pauldrons, gauntlets, sabatons, a plate skirt or a fauld under a platebody, and a helm |
 
 This is not a three.js port. See Extensions.
 
@@ -81,6 +81,7 @@ from extensions.attire.armory import (
     plate_legs,
     plate_skirt,
     platebody,
+    scale_shirt,
 )
 from extensions.attire.garment import (
     Garment,
@@ -691,7 +692,11 @@ def _barbarian(woman: Bool, seed: Int) raises -> Outfit:
     """Return a barbarian's furs, bare-chested for a man."""
     var pelt = _mixed(seed, 1)
     var outfit = Outfit()
-    if woman:
+    var metal = IRON if _chance(seed, 16, 50) else BRONZE
+    # Some wear a shirt of scales, more of the women than of the men.
+    if _chance(seed, 82, 25 if woman else 15):
+        outfit.add(forged(scale_shirt(), metal))
+    elif woman:
         var hide = plain_dye(3) if _chance(seed, 61, 50) else fur_dye(1)
         outfit.add(_dyed(jerkin(), hide, hide))
     outfit.add(_dyed(fur_kilt(), fur_dye(pelt), fur_dye(pelt + 1)))
@@ -701,7 +706,6 @@ def _barbarian(woman: Bool, seed: Int) raises -> Outfit:
     if _chance(seed, 15, 60):
         var mantle = fur_dye(_mixed(seed, 62))
         outfit.add(_dyed(fur_mantle(), mantle, mantle))
-    var metal = IRON if _chance(seed, 16, 50) else BRONZE
     if _chance(seed, 17, 50):
         outfit.add(forged(horned_helm(), metal))
     elif _chance(seed, 18, 40):
@@ -850,17 +854,25 @@ def _warrior(woman: Bool, seed: Int) raises -> Outfit:
     outfit.add(shirt())
     outfit.add(_dyed(hose(), plain_dye(_mixed(seed, 1)), plain_dye(3)))
     outfit.add(gambeson())
-    outfit.add(forged(platebody(), metal, trim))
+    # The legs first: a skirt over them hangs clear of their plate.
     outfit.add(forged(plate_legs(), metal, trim))
+    # A shirt of scales, to the thigh, or a platebody and a skirt of plate.
+    var scaled = _chance(seed, 81, 30)
+    if scaled:
+        outfit.add(forged(scale_shirt(), metal, trim))
+    else:
+        outfit.add(forged(platebody(), metal, trim))
     outfit.add(forged(arm_harness(), metal, trim))
     if _chance(seed, 31, 50):
         outfit.add(forged(great_pauldrons(), metal, trim))
     else:
         outfit.add(forged(pauldrons(), metal, trim))
-    if _chance(seed, 32, 50):
-        outfit.add(forged(plate_skirt(), metal, trim))
-    else:
-        outfit.add(forged(fauld(), metal, trim))
+    # A shirt of scales reaches the thigh: it needs no skirt of plate.
+    if not scaled:
+        if _chance(seed, 32, 50):
+            outfit.add(forged(plate_skirt(), metal, trim))
+        else:
+            outfit.add(forged(fauld(), metal, trim))
     outfit.add(forged(gauntlets(), metal, trim))
     outfit.add(forged(sabatons(), metal, trim))
     var helm = _mixed(seed, 33) % 10

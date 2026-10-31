@@ -92,7 +92,7 @@ from extensions.attire.skirt import (
     skirt_top,
 )
 from extensions.attire.surface import SurfaceMaps, garment_uvs
-from extensions.humanoid.rig.joints import HEAD
+from extensions.humanoid.rig.joints import HEAD, LEFT_THIGH, RIGHT_THIGH
 from extensions.humanoid.rig.game import GameHumanoid
 from extensions.humanoid.skeleton.head.hair.shading import HairLight
 from math.vector3 import Vector3
@@ -317,9 +317,11 @@ def dress_pieces(
         shells.append(BufferGeometry())
     var nothing = List[Float32](length=count, fill=0)
     var everything = List[Float32](length=count, fill=1)
-    # Each skirt hangs over the skirts under it, from the skin out. A boot
-    # closes each foot in a last.
+    # Each skirt hangs over the skirts under it, from the skin out, and
+    # over the metal on the legs under it, which stands off the thighs.
+    # A boot closes each foot in a last.
     var skirts = List[SkirtEnvelope]()
+    var legwear = List[SkirtEnvelope]()
     var lasts = List[List[FootLast]]()
     var cowls = List[List[FootLast]]()
     for i in range(len(order)):
@@ -328,17 +330,35 @@ def dress_pieces(
         var envelope = SkirtEnvelope(Vector3(0, top, 0), 0)
         if garment.form == SKIRTED:
             var cloth = fabric(garment.fabric)
+            var under = skirts.copy()
+            under.extend(legwear.copy())
             envelope = skirt_envelope(
                 whole,
                 person.rig,
                 garment.flare,
-                skirts,
+                under,
                 Float32(cloth.clearance.value + garment.ease.value),
                 Float32(cloth.thickness.value),
                 Float32(fold_depth(garment.fabric).value),
                 detail,
             )
             whole = hang_skirt(whole, envelope, person.rig, False)
+        elif garment.fabric.is_metal() and (
+            garment.cover.covers(RIGHT_THIGH)
+            or garment.cover.covers(LEFT_THIGH)
+        ):
+            legwear.append(
+                skirt_envelope(
+                    whole,
+                    person.rig,
+                    0,
+                    List[SkirtEnvelope](),
+                    0,
+                    Float32(fabric(garment.fabric).thickness.value),
+                    0,
+                    detail,
+                )
+            )
         var feet = List[FootLast]()
         if garment.form == SHOD:
             feet = foot_lasts(whole, person.rig)

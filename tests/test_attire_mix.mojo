@@ -11,6 +11,7 @@ from extensions.attire.kinds import (
     PLATE,
     QUARTERLY,
     PRIMARY_DYE,
+    SCALE,
     SECONDARY_DYE,
     SOLID,
     STRIPES,
@@ -252,11 +253,15 @@ def test_each_archetype_dresses_either_sex() raises:
         assert_true(_has(farmer, "trousers"))
         assert_true(_has(farmer, "smock") or _has(farmer, "tunic"))
         assert_true(_has(dressed_as(FARMER, FEMALE, seed), "gown"))
-        # A barbarian is bare-chested; a woman wears a jerkin.
+        # A barbarian is bare-chested or in scales; a woman wears a jerkin
+        # or scales.
         var barbarian = dressed_as(BARBARIAN, MALE, seed)
         assert_false(_has(barbarian, "shirt"))
         assert_true(_has(barbarian, "fur kilt"))
-        assert_true(_has(dressed_as(BARBARIAN, FEMALE, seed), "jerkin"))
+        var shieldmaiden = dressed_as(BARBARIAN, FEMALE, seed)
+        assert_true(
+            _has(shieldmaiden, "jerkin") or _has(shieldmaiden, "scale shirt")
+        )
         var king = dressed_as(ROYAL, MALE, seed)
         assert_true(_has(king, "royal robe") and _has(king, "crown"))
         var queen = dressed_as(ROYAL, FEMALE, seed)
@@ -270,10 +275,11 @@ def test_each_archetype_dresses_either_sex() raises:
         assert_true(_has(ranger, "feathered cap") or _has(ranger, "hood"))
         # A warrior's plate is all of one metal.
         var warrior = dressed_as(WARRIOR, FEMALE, seed)
-        assert_true(_has(warrior, "platebody") and _has(warrior, "plate legs"))
+        assert_true(_has(warrior, "platebody") or _has(warrior, "scale shirt"))
+        assert_true(_has(warrior, "plate legs"))
         var metal = warrior_metal(seed)
         for garment in warrior.garments:
-            if garment.fabric == PLATE:
+            if garment.fabric == PLATE or garment.fabric == SCALE:
                 assert_equal(garment.metal, metal)
     with assert_raises(contains="MALE or FEMALE"):
         _ = dressed_as(FARMER, Sex(5), 0)
@@ -517,6 +523,22 @@ def test_soldiers_bear_the_arms_of_their_surcoats() raises:
     assert_true(len(rims) >= 3)
     with assert_raises(contains="calling"):
         _ = calling_arms(Calling(99), 1)
+
+
+def test_some_warriors_and_barbarians_wear_scales() raises:
+    var warriors = 0
+    var barbarians = 0
+    for seed in range(200):
+        var harness = dressed_as(WARRIOR, MALE, seed)
+        if _has(harness, "scale shirt"):
+            warriors += 1
+            # A shirt of scales reaches the thigh: no skirt of plate.
+            assert_false(_has(harness, "plate skirt") or _has(harness, "fauld"))
+            assert_false(_has(harness, "platebody"))
+        if _has(dressed_as(BARBARIAN, FEMALE, seed), "scale shirt"):
+            barbarians += 1
+    assert_true(warriors > 40 and warriors < 80)
+    assert_true(barbarians > 30 and barbarians < 70)
 
 
 def main() raises:

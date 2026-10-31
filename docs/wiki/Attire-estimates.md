@@ -50,6 +50,7 @@ A load on the legs costs more than one on the trunk, as Askew, Formenti and Mine
 | `STRAW` | 3 J | design | textile practice |
 | `FELT` | 10 J | design | textile practice |
 | `FUR` | 15 J | design | textile practice |
+| `SCALE` | 60 J | design | between leather and mail: overlapping steel scales on leather |
 
 Alan Williams's tests give 60 to 130 J for a hand blow and about 120 J for an arrow through mail over a padded jack. They give about 55 J at 1 mm and 175 J at 2 mm for mild steel plate. The square law is fitted to 2 mm, so it gives about 44 J at 1 mm. Secondary sources disagree on some of these figures. Check them against the original before you rely on them.
 
@@ -59,8 +60,8 @@ Alan Williams's tests give 60 to 130 J for a hand blow and about 120 J for an ar
 
 `noise(outfit)` and `visibility(outfit)` are zero-through-one hooks for a game's stealth, as Kingdom Come: Deliverance has them.
 
-- Noise: plate rings at 0.5, mail rattles at 0.3, leather creaks at 0.06, padding at 0.03, and cloth at 0.01. The sum is held to one.
-- Visibility: the outermost garment of each slot shows. Its primary dye's brightness counts, and polished plate adds 0.3.
+- Noise: plate rings at 0.5, mail rattles at 0.3, scale clatters at 0.25, leather creaks at 0.06, padding at 0.03, and cloth at 0.01. The sum is held to one.
+- Visibility: the outermost garment of each slot shows. Its primary dye's brightness counts, and polished plate or scale adds 0.3.
 
 ## The report
 

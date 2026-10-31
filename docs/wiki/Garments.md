@@ -105,7 +105,7 @@ A band hides nothing under it: the tunic under a belt is drawn whole.
 
 1. `skirt_top` is 3 cm below the hip joints on the template, above the crotch. There the shell is one tube round the pelvis. The shell of the trunk and the legs is cut there.
 2. `skirt_envelope` slices the garment's own shell at rings 3 cm apart, from the top to the lowest point of the shell on the legs. That point is the hem. Each slice is closed as a convex hull, so it spans the gap between the thighs.
-3. Each ring is at least as wide as the ring above it, plus the flare times the drop. So the cloth falls straight or flares, and does not tuck in between the legs. A skirt under it lifts it by that skirt's thickness and this garment's clearance.
+3. Each ring is at least as wide as the ring above it, plus the flare times the drop. So the cloth falls straight or flares, and does not tuck in between the legs. A skirt under it lifts it by that skirt's thickness and this garment's clearance. So does metal on the legs under it, such as plate legs, which stands off the thighs.
 4. `skirt_mesh` lofts the rings on 40 sides. The top ring reaches 1.5 cm up inside the shell, so no gap opens at the cut.
 
 Ten folds run down each skirt. They stand only out of the rings, so no fold dips into a skirt under it. They deepen as the cloth falls, from none at the top to their whole depth at the hem. Every skirt's folds lie at the same sides, so a skirt over another folds over its folds. `fold_depth` gives the depth at the hem.
@@ -114,7 +114,7 @@ Ten folds run down each skirt. They stand only out of the rings, so no fold dips
 |---|---|
 | `LINEN`, `SILK` | 18 mm |
 | `WOOL`, `VELVET` | 25 mm |
-| `LEATHER`, `MAIL` | 6 mm |
+| `LEATHER`, `MAIL`, `SCALE` | 6 mm |
 | `PADDING`, `STRAW` | 4 mm |
 | `FUR`, `FELT` | 10 mm |
 | `PLATE` | none |
@@ -205,6 +205,7 @@ A great helm hides the hair. Every other hat keeps it: `press_hair` draws each p
 | `FUR` | 1.4 kg/m² | 12 mm | 6 | matte, with a broad sheen |
 | `FELT` | 600 g/m² | 3 mm | 4 | matte, with a faint sheen |
 | `STRAW` | 350 g/m² | 2 mm | 6 | dull, with a faint clear coat |
+| `SCALE` | 10.5 kg/m² | 4 mm | 4 | its metal, a little rougher than plate |
 
 `ArealDensity` is a `Quantity[-2, 1, 0, 0]`, in `extensions/attire/quantities.mojo`. Its units are `KILOGRAM_PER_SQUARE_METER`, `GRAM_PER_SQUARE_METER` and `OUNCE_PER_SQUARE_YARD`. A metal shows what it reflects, so give the scene an environment.
 
@@ -242,6 +243,7 @@ var helm = forged(bascinet(), BLUED, GOLD)
 | `FUR` | locks that fall down the garment | 3 cm | 1.6 |
 | `STRAW` | flat straws plaited over and under | 1.2 cm | 0.5 |
 | `LEATHER` | pebbled grain, rounded cells parted by creases | 1.2 cm | 0.35 |
+| `SCALE` | rounded scales, each rising to its lower edge over the row below | 5 cm, two scales across | 1.2 |
 | `PLATE`, `FELT` | none | | |
 
 `garment_uvs(piece, rig)` makes the coordinates in three steps.
@@ -330,6 +332,7 @@ paint(piece, garment.dyes)
 | `arm_harness` | arms | armor | plate | rigid on each upper arm and forearm | fitted |
 | `great_pauldrons` | shoulders | armor | plate | four lames from the chest | domed |
 | `chain_shirt` | torso | outer | mail, short sleeves | flexible | skirted, flare 0.1 |
+| `scale_shirt` | torso | armor | scale, short sleeves | flexible | skirted, flare 0.12 |
 | `mail_chausses` | legs | outer | mail | flexible | fitted |
 | `bracers` | arms | outer | leather | flexible | fitted |
 | `great_helm` | head | armor | plate, brass trim | rigid on the head | hatted |
