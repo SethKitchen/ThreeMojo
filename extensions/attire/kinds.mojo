@@ -360,7 +360,7 @@ struct DyePattern(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is a named pattern.
 
         Returns:
-            True for `SOLID` through `QUARTERLY`.
+            True for `SOLID` through `CHECKY`.
         """
         return ordinal_valid(self.value, DYE_PATTERN_COUNT - 1)
 
@@ -373,13 +373,38 @@ comptime STRIPES = DyePattern(2)
 """Bands of the primary and secondary dye round the body."""
 comptime QUARTERLY = DyePattern(3)
 """Four quarters: primary and secondary, crossed at the waist."""
-comptime DYE_PATTERN_COUNT = 4
+comptime CHEVRON = DyePattern(4)
+"""A band in the secondary dye like an inverted V, its point on the
+chest."""
+comptime CROSS = DyePattern(5)
+"""An upright cross in the secondary dye, crossed on the chest."""
+comptime SALTIRE = DyePattern(6)
+"""A diagonal cross in the secondary dye, crossed on the chest."""
+comptime BEND = DyePattern(7)
+"""A diagonal band in the secondary dye, from the wearer's right
+shoulder down to the left hip."""
+comptime PALY = DyePattern(8)
+"""Upright bands of the primary and secondary dye."""
+comptime CHECKY = DyePattern(9)
+"""A checkerboard of the primary and secondary dye."""
+comptime DYE_PATTERN_COUNT = 10
 """How many dye patterns there are."""
 
 
 def _pattern_names() -> List[String]:
     """Return the pattern names, in order."""
-    return ["solid", "party", "stripes", "quarterly"]
+    return [
+        "solid",
+        "party",
+        "stripes",
+        "quarterly",
+        "chevron",
+        "cross",
+        "saltire",
+        "bend",
+        "paly",
+        "checky",
+    ]
 
 
 def pattern_label(pattern: DyePattern) -> String:
@@ -400,7 +425,8 @@ def pattern_named(name: String) raises -> DyePattern:
     """Return the dye pattern that `name` names.
 
     Args:
-        name: `solid`, `party`, `stripes` or `quarterly`.
+        name: `solid`, `party`, `stripes`, `quarterly`, `chevron`,
+            `cross`, `saltire`, `bend`, `paly` or `checky`.
 
     Returns:
         The named pattern.

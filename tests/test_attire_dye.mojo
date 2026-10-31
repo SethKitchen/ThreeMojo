@@ -6,7 +6,7 @@
 """Tests for a garment's dyes, its patterns and its wear."""
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, BufferGeometry
+from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from extensions.attire.dye import (
     DYE,
     TRIM_LEVEL,
@@ -30,6 +30,12 @@ from extensions.attire.kinds import (
     STRIPES,
     TRIM_DYE,
     WET,
+    BEND,
+    CHECKY,
+    CHEVRON,
+    CROSS,
+    PALY,
+    SALTIRE,
     DyePattern,
     WearKind,
 )
@@ -79,7 +85,48 @@ def test_patterns_sign_each_vertex() raises:
     var stripes = pattern_values(mesh, rig, STRIPES)
     assert_equal(len(stripes), 10)
     with assert_raises(contains="named pattern"):
-        _ = pattern_values(mesh, rig, DyePattern(8))
+        _ = pattern_values(mesh, rig, DyePattern(40))
+
+
+def test_charges_lie_on_the_chest() raises:
+    # The line rig's chest stands at the origin, its waist too, and its
+    # right arm at plus x: across is x, up from the chest is y.
+    var rig = line_rig()
+    var at: List[Vector3] = [
+        Vector3(0, 0, 0),
+        Vector3(0.3, -0.3, 0),
+        Vector3(0.3, 0.3, 0),
+        Vector3(0.3, 0, 0),
+        Vector3(0.5, -0.44, 0),
+        Vector3(0, -0.3, 0),
+        Vector3(0.045, 0.045, 0),
+        Vector3(-0.045, 0.045, 0),
+        Vector3(0.045, -0.045, 0),
+    ]
+    var flat = List[Float32]()
+    for p in at:
+        flat.append(p.x)
+        flat.append(p.y)
+        flat.append(p.z)
+    var mesh = BufferGeometry()
+    mesh.set_attribute(String(POSITION), BufferAttribute(flat^, 3))
+    # A cross: on its arms, the secondary dye; between them, the field.
+    var cross = pattern_values(mesh, rig, CROSS)
+    assert_true(cross[0] < 0 and cross[3] < 0 and cross[1] > 0)
+    # A saltire: on its diagonals, not across the middle.
+    var saltire = pattern_values(mesh, rig, SALTIRE)
+    assert_true(saltire[1] < 0 and saltire[2] < 0 and saltire[3] > 0)
+    # A bend: from the right shoulder down to the left hip.
+    var bend = pattern_values(mesh, rig, BEND)
+    assert_true(bend[2] < 0 and bend[0] < 0 and bend[1] > 0)
+    # A chevron: its point over the chest, its arms falling away.
+    var chevron = pattern_values(mesh, rig, CHEVRON)
+    assert_true(chevron[0] < 0 and chevron[4] < 0 and chevron[5] > 0)
+    # Paly and checky: bands up and down, and squares.
+    var paly = pattern_values(mesh, rig, PALY)
+    assert_true(paly[6] > 0 and paly[7] < 0)
+    var checky = pattern_values(mesh, rig, CHECKY)
+    assert_true(checky[6] > 0 and checky[7] < 0 and checky[8] < 0)
 
 
 def test_a_pattern_cuts_crisp_boundaries_and_trims_hems() raises:

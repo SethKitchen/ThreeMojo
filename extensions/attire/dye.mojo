@@ -14,6 +14,15 @@ pattern says where each lies:
 | `PARTY` | the wearer's right side | the left side |
 | `STRIPES` | even bands round the body | odd bands |
 | `QUARTERLY` | upper right and lower left | upper left and lower right |
+| `CHEVRON` | the field | a band like an inverted V, its point on the chest |
+| `CROSS` | the field | an upright cross, crossed on the chest |
+| `SALTIRE` | the field | a diagonal cross, crossed on the chest |
+| `BEND` | the field | a band from the right shoulder to the left hip |
+| `PALY` | even upright bands | odd upright bands |
+| `CHECKY` | even squares | odd squares |
+
+The charges lie on the front and the back alike, as a tabard's do. Each
+band is `CHARGE` wide on the template, about a hand's breadth.
 
 Every pattern puts the trim dye along each hem. A vertex whose `accent`
 attribute is one or more half takes the accent dye: a hat's stones, horns
@@ -45,9 +54,15 @@ from extensions.attire.kinds import (
     ACCENT_DYE,
     DIRT,
     DYE_CHANNEL_COUNT,
+    BEND,
+    CHECKY,
+    CHEVRON,
+    CROSS,
+    PALY,
     PARTY,
     PRIMARY_DYE,
     QUARTERLY,
+    SALTIRE,
     SECONDARY_DYE,
     STRIPES,
     TRIM_DYE,
@@ -61,6 +76,7 @@ from extensions.attire.kinds import (
 from extensions.attire.mesh_ops import ACCENT, cut, merge
 from extensions.attire.shell import COVER
 from extensions.humanoid.rig.joints import (
+    CHEST,
     HIPS,
     RIGHT_UPPER_ARM,
     SPINE,
@@ -82,6 +98,14 @@ comptime STRIPE = Float32(0.09)
 """The height of one stripe, in meters on the template."""
 comptime PATTERN_STATURE = Float32(1.8288)
 """The template stature patterns are sized for, in meters."""
+comptime DIAGONAL = Float32(0.70710678)
+"""One over the square root of two: a distance across a diagonal line."""
+comptime CHARGE = Float32(0.11)
+"""How wide a cross's, a saltire's, a chevron's or a bend's band is, in
+meters on the template."""
+comptime CHEVRON_RISE = Float32(0.06)
+"""How far above the chest's joint a chevron's point lies, in meters on
+the template."""
 
 
 def _linear(color: Color) -> Vector3:
@@ -152,17 +176,38 @@ def pattern_values(
     if rig.joints[RIGHT_UPPER_ARM.value].x < middle:
         right = -1
     var waist = rig.joints[SPINE.value].y
-    var stripe = STRIPE * rig.stature / PATTERN_STATURE
+    var chest = rig.joints[CHEST.value].y
+    var s = rig.stature / PATTERN_STATURE
+    var stripe = STRIPE * s
+    var half = CHARGE * s / 2
     var values = List[Float32](capacity=placed.count())
     for v in range(placed.count()):
         var p = placed.vector3(v)
+        # Across toward the wearer's right, and up from the chest.
+        var u = right * (p.x - middle)
+        var w = p.y - chest
         var value = Float32(1)
         if pattern == PARTY:
-            value = right * (p.x - middle)
+            value = u
         elif pattern == STRIPES:
             value = sin(Float32(pi) * (p.y - waist) / stripe)
         elif pattern == QUARTERLY:
-            value = right * (p.x - middle) * (p.y - waist)
+            value = u * (p.y - waist)
+        elif pattern == CHEVRON:
+            var line = CHEVRON_RISE * s - abs(u)
+            value = abs(w - line) * DIAGONAL - half
+        elif pattern == CROSS:
+            value = min(abs(u), abs(w)) - half
+        elif pattern == SALTIRE:
+            value = min(abs(u - w), abs(u + w)) * DIAGONAL - half
+        elif pattern == BEND:
+            value = abs(u - w) * DIAGONAL - half
+        elif pattern == PALY:
+            value = sin(Float32(pi) * u / stripe)
+        elif pattern == CHECKY:
+            value = sin(Float32(pi) * u / stripe) * sin(
+                Float32(pi) * (p.y - waist) / stripe
+            )
         values.append(value)
     return values^
 

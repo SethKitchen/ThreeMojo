@@ -151,17 +151,19 @@ def test_dye_channels_and_patterns_are_named() raises:
     require_dye_channel(ACCENT_DYE)
     with assert_raises(contains="named channel"):
         require_dye_channel(DyeChannel(4))
-    for pattern in [SOLID, PARTY, STRIPES, QUARTERLY]:
+    for k in range(DYE_PATTERN_COUNT):
+        var pattern = DyePattern(k)
         assert_true(pattern.is_valid())
         assert_equal(pattern_named(pattern_label(pattern)), pattern)
+    assert_equal(pattern_label(DyePattern(9)), "checky")
     assert_false(DyePattern(DYE_PATTERN_COUNT).is_valid())
     assert_false(DyePattern(-1).is_valid())
-    assert_equal(pattern_label(DyePattern(9)), "pattern")
+    assert_equal(pattern_label(DyePattern(40)), "pattern")
     require_dye_pattern(PARTY)
     with assert_raises(contains="named pattern"):
-        require_dye_pattern(DyePattern(9))
+        require_dye_pattern(DyePattern(40))
     with assert_raises(contains="No dye pattern"):
-        _ = pattern_named("checky")
+        _ = pattern_named("lozengy")
 
 
 def test_wear_kinds_are_named() raises:

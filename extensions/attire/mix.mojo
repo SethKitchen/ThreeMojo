@@ -35,8 +35,8 @@ seed gives the same outfit, on every machine.
 | `MONK` | shirt, robe, hood, belt, boots |
 | `MERCHANT` | shirt, hose, tunic, belt, boots; a hood by chance |
 | `NOBLEWOMAN` | shirt, gown, belt, boots |
-| `MAN_AT_ARMS` | `outfit_named("man-at-arms")`, a belt, and a surcoat by chance |
-| `KNIGHT` | `outfit_named("knight")` and a belt, its surcoat in two rich dyes |
+| `MAN_AT_ARMS` | `outfit_named("man-at-arms")`, a belt, and a surcoat by chance, quartered or bearing a cross or a saltire by chance |
+| `KNIGHT` | `outfit_named("knight")` and a belt, its surcoat in two rich dyes, bearing arms by `heraldry` |
 | `FARMER` | a shirt; a smock or a tunic over trousers, or a gown and a bodice; a straw hat by chance; boots |
 | `BARBARIAN` | a fur kilt, fur boots, bracers and a belt; a fur mantle, a horned or half helm by chance; a woman wears a jerkin |
 | `ROYAL` | a velvet robe or gown in a rich dye, a royal mantle edged in white fur, a sash, boots; a crown, or a circlet for some queens |
@@ -104,7 +104,15 @@ from extensions.attire.garment import (
 )
 from extensions.attire.kinds import (
     ACCENT_DYE,
+    BEND,
+    CHECKY,
+    CHEVRON,
+    CROSS,
     FUR,
+    PALY,
+    SALTIRE,
+    SOLID,
+    DyePattern,
     PARTY,
     PLATE,
     PRIMARY_DYE,
@@ -481,6 +489,45 @@ def _chance(seed: Int, salt: Int, percent: Int) -> Bool:
     return _mixed(seed, salt) % 100 < percent
 
 
+def heraldry(seed: Int, salt: Int) -> DyePattern:
+    """Return the pattern a seed picks for a surcoat's arms.
+
+    Of each twenty seeds, about four are plain, three parted per pale,
+    three quartered and three bear a chevron; two each bear a cross or a
+    saltire, and one each a bend, paly or checky.
+
+    Args:
+        seed: Any integer.
+        salt: Keeps this pick apart from the seed's other picks.
+
+    Returns:
+        A named pattern.
+    """
+    var patterns: List[DyePattern] = [
+        SOLID,
+        SOLID,
+        SOLID,
+        SOLID,
+        PARTY,
+        PARTY,
+        PARTY,
+        QUARTERLY,
+        QUARTERLY,
+        QUARTERLY,
+        CROSS,
+        CROSS,
+        SALTIRE,
+        SALTIRE,
+        CHEVRON,
+        CHEVRON,
+        BEND,
+        PALY,
+        CHECKY,
+        CHEVRON,
+    ]
+    return patterns[_mixed(seed, salt) % len(patterns)]
+
+
 def _dyed(var garment: Garment, primary: Color, trim: Color) -> Garment:
     """Return a garment dyed one color, its trim another."""
     for k in range(len(garment.dyes)):  # pragma: no branch
@@ -549,6 +596,7 @@ def dressed_as(calling: Calling, sex: Sex, seed: Int) raises -> Outfit:
                 made.dyes[PRIMARY_DYE.value] = rich_dye(rich)
                 made.dyes[SECONDARY_DYE.value] = rich_dye(rich + 3)
                 made.dyes[TRIM_DYE.value] = rich_dye(rich + 3)
+                made.pattern = heraldry(seed, 77)
             elif made.name == "hose":
                 made = _dyed(made^, plain_dye(plain), plain_dye(plain))
             outfit.add(made^)
@@ -556,9 +604,12 @@ def dressed_as(calling: Calling, sex: Sex, seed: Int) raises -> Outfit:
             var coat = surcoat()
             coat.dyes[PRIMARY_DYE.value] = plain_dye(plain + 1)
             coat.dyes[SECONDARY_DYE.value] = plain_dye(plain + 2)
-            # Some companies wear their colors quartered.
+            # Some companies wear their colors quartered, or a cross or
+            # a saltire.
             if _chance(seed, 7, 30):
                 coat.pattern = QUARTERLY
+            elif _chance(seed, 78, 30):
+                coat.pattern = CROSS if _chance(seed, 79, 50) else SALTIRE
             coat.dyes[TRIM_DYE.value] = plain_dye(plain + 2)
             outfit.add(coat^)
         outfit.add(belt())
@@ -822,6 +873,7 @@ def _warrior(woman: Bool, seed: Int) raises -> Outfit:
         coat.dyes[PRIMARY_DYE.value] = rich_dye(rich)
         coat.dyes[SECONDARY_DYE.value] = rich_dye(rich + 3)
         coat.dyes[TRIM_DYE.value] = rich_dye(rich + 3)
+        coat.pattern = heraldry(seed, 80)
         outfit.add(coat^)
     outfit.add(belt())
     return outfit^

@@ -264,6 +264,18 @@ A garment has four dye channels: primary, secondary, trim and accent. A pattern 
 | `PARTY` | the wearer's right side | the left side |
 | `STRIPES` | even bands round the body | odd bands |
 | `QUARTERLY` | upper right and lower left | upper left and lower right |
+| `CHEVRON` | the field | a band like an inverted V, its point on the chest |
+| `CROSS` | the field | an upright cross, crossed on the chest |
+| `SALTIRE` | the field | a diagonal cross, crossed on the chest |
+| `BEND` | the field | a band from the right shoulder to the left hip |
+| `PALY` | even upright bands | odd upright bands |
+| `CHECKY` | even squares | odd squares |
+
+A charge lies on the front and the back alike, as a tabard's does. Each band of a cross, a saltire, a chevron or a bend is 11 cm wide on the template. A pattern is a field over the body whose sign says the dye, so each charge has a crisp edge.
+
+`examples/heraldry.mojo` dresses ten men in surcoats, one in each pattern, and writes `out/heraldry.png`.
+
+![Ten men in surcoats, one in each of the ten dye patterns](out/heraldry.png)
 
 Every pattern puts the trim dye along each hem. `dye_pattern` cuts the garment along each boundary, so a boundary is a crisp line. A vertex whose `accent` attribute is one half or more takes the accent dye: a hat's stones, horns and feather. Each vertex keeps its channel weights in a `dye` attribute.
 

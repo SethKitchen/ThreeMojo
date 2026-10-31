@@ -99,7 +99,9 @@ The seed makes each cloak a little longer or shorter, and fuller or plainer.
 
 Each garment of a calling takes its dye by a pick of its own. So the dyes of a robe, its mantle and its sash vary apart. A test dresses 120 seeds of each of the seven callings as a man and as a woman. Of the 1,680 people, more than 1,500 differ in their garments, dyes, metals, hair or beard. The genome and the stature make each person differ further.
 
-Some garments are parti-colored: four merchants' tunics in ten and three women's gowns in ten take a second dye on the left side. Three men-at-arms' surcoats in ten are quartered.
+Some garments are parti-colored: four merchants' tunics in ten and three women's gowns in ten take a second dye on the left side. Three men-at-arms' surcoats in ten are quartered, and two in ten bear a cross or a saltire.
+
+A knight's surcoat and a warrior's bear arms that `heraldry(seed, salt)` picks. Of each twenty seeds, about four are plain, three parted per pale, three quartered and three bear a chevron. Two each bear a cross or a saltire, and one each a bend, paly or checky.
 
 `examples/crowd.mojo` draws the eight callings side by side, each with a genome and a stature of their own. Each person's hair and beard suit their calling, and the hair is 400 cards. It writes `out/crowd.png`.
 

@@ -6,11 +6,14 @@
 """Tests for a crowd's clothes: outfits picked by a seed."""
 
 from extensions.attire.kinds import (
+    DYE_PATTERN_COUNT,
     PARTY,
     PLATE,
     QUARTERLY,
     PRIMARY_DYE,
     SECONDARY_DYE,
+    SOLID,
+    STRIPES,
     TRIM_DYE,
 )
 from extensions.attire.mix import (
@@ -31,6 +34,7 @@ from extensions.attire.mix import (
     calling_hair,
     calling_sex,
     cloak_of,
+    heraldry,
     dressed_as,
     forest_dye,
     fur_dye,
@@ -461,6 +465,29 @@ def test_a_cloak_suits_its_calling() raises:
         assert_true(monk.flare > 0.8 and monk.flare < 1.2)
     # Ermine and gold, gold and silver.
     assert_true(len(edges) >= 3)
+
+
+def test_heraldry_bears_every_charge() raises:
+    var seen = Set[Int]()
+    var plain = 0
+    for seed in range(400):
+        var pattern = heraldry(seed, 77)
+        assert_true(pattern.is_valid())
+        seen.add(pattern.value)
+        if pattern == SOLID:
+            plain += 1
+    # Every pattern but stripes, and about one in five plain.
+    assert_equal(len(seen), DYE_PATTERN_COUNT - 1)
+    assert_false(STRIPES.value in seen)
+    assert_true(plain > 50 and plain < 110)
+    # A knight's surcoat bears arms by its seed.
+    var charges = Set[Int]()
+    for seed in range(40):
+        var outfit = dressed_as(KNIGHT, MALE, seed)
+        for garment in outfit.garments:
+            if garment.name == "surcoat":
+                charges.add(garment.pattern.value)
+    assert_true(len(charges) >= 5)
 
 
 def main() raises:

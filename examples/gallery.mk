@@ -203,6 +203,8 @@ $(call gallery,crowd,crowd)
 $(call gallery,archetypes,archetypes)
 # Eight heads, each in a hat or a helmet shaped round it, over hair cards.
 $(call gallery,headwear,headwear)
+# Ten surcoats, one in each dye pattern: party, quartered and charged.
+$(call gallery,heraldry,heraldry)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.
