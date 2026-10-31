@@ -26,9 +26,10 @@ The bump maps are height images, one tile each:
 | `weave_heights` | 4 mm | a two-over-two twill of warp and weft |
 | `fur_heights` | 3 cm | the locks of a pelt, each a tuft that falls down the garment |
 | `plait_heights` | 1.2 cm | flat straws plaited over and under, two each way |
+| `grain_heights` | 1.2 cm | the pebbled grain of leather: rounded cells parted by creases |
 
 `surface_look` gives a fabric's bump map, its scale and how many tiles a
-meter, or no map for leather, plate and felt. `SurfaceMaps` makes each map once
+meter, or no map for plate and felt. `SurfaceMaps` makes each map once
 and gives it to every material that needs it.
 
 This is not a three.js port. See Extensions.
@@ -47,6 +48,8 @@ from extensions.attire.kinds import (
     BUMP_COUNT,
     FUR,
     FUR_LOCKS,
+    GRAIN,
+    LEATHER,
     LINEN,
     MAIL,
     MAIL_RINGS,
@@ -92,6 +95,10 @@ comptime PLAIT_TILE = Float32(0.012)
 """The side of one repeat of plaited straw, in meters."""
 comptime FUR_LOCKS_A_TILE = 14
 """How many locks of fur one tile holds."""
+comptime GRAIN_TILE = Float32(0.012)
+"""The side of one tile of leather's grain, in meters."""
+comptime GRAIN_CELLS = 36
+"""How many pebbles of grain one tile holds."""
 comptime TEXELS = 64
 """The side of each bump map, in texels."""
 comptime CHAIN_BEND = Float32(0.7)
@@ -127,7 +134,7 @@ struct SurfaceLook(ImplicitlyCopyable):
         """Return whether the fabric has a bump map.
 
         Returns:
-            False for leather, plate and felt, which are smooth.
+            False for plate and felt, which are smooth.
         """
         return self.kind != NO_BUMP
 
@@ -140,7 +147,7 @@ def surface_look(kind: FabricKind) raises -> SurfaceLook:
 
     Returns:
         Mail's rings, padding's quilting, cloth's weave, fur's locks,
-        straw's plait, or none for leather, plate and felt.
+        straw's plait, leather's grain, or none for plate and felt.
 
     Raises:
         Error: If the kind is not named.
@@ -156,6 +163,8 @@ def surface_look(kind: FabricKind) raises -> SurfaceLook:
         return SurfaceLook(FUR_LOCKS, 1.6, 1 / FUR_TILE)
     if kind == STRAW:
         return SurfaceLook(PLAIT, 0.5, 1 / PLAIT_TILE)
+    if kind == LEATHER:
+        return SurfaceLook(GRAIN, 0.35, 1 / GRAIN_TILE)
     return SurfaceLook(NO_BUMP, 0, 1)
 
 
@@ -338,6 +347,47 @@ def plait_heights() -> List[Float32]:
     return heights^
 
 
+def grain_heights() -> List[Float32]:
+    """Return the heights of one tile of leather's grain.
+
+    `GRAIN_CELLS` pebbles lie at random across the tile. Each texel takes
+    the height of the pebble nearest it: highest at the pebble's middle,
+    falling toward the crease where it meets the pebble next to it. The
+    tile wraps both ways.
+
+    Returns:
+        `TEXELS` by `TEXELS` heights, row by row, zero through one.
+    """
+    var size = Float32(TEXELS)
+    var xs = List[Float32]()
+    var ys = List[Float32]()
+    for cell in range(GRAIN_CELLS):  # pragma: no branch
+        xs.append(_scramble(cell, 21) * size)
+        ys.append(_scramble(cell, 22) * size)
+    var heights = List[Float32](capacity=TEXELS * TEXELS)
+    for y in range(TEXELS):  # pragma: no branch
+        for x in range(TEXELS):  # pragma: no branch
+            var nearest = Float32(1e9)
+            var second = Float32(1e9)
+            for cell in range(GRAIN_CELLS):  # pragma: no branch
+                var dx = Float32(x) + 0.5 - xs[cell]
+                var dy = Float32(y) + 0.5 - ys[cell]
+                dx -= size * floor(dx / size + 0.5)
+                dy -= size * floor(dy / size + 0.5)
+                var d = sqrt(dx * dx + dy * dy)
+                if d < nearest:
+                    second = nearest
+                    nearest = d
+                elif d < second:
+                    second = d
+            # Zero on the crease, where the two nearest are as near.
+            var ridge = (second - nearest) / max(
+                second + nearest, Float32(1e-6)
+            )
+            heights.append(clamp(sqrt(ridge) * 1.6, 0, 1))
+    return heights^
+
+
 def bump_texture(look: SurfaceLook) raises -> Texture:
     """Return a fabric's bump map, tiled at its true size.
 
@@ -362,6 +412,8 @@ def bump_texture(look: SurfaceLook) raises -> Texture:
         heights = fur_heights()
     elif look.kind == PLAIT:
         heights = plait_heights()
+    elif look.kind == GRAIN:
+        heights = grain_heights()
     else:
         raise Error("This fabric has no bump map")
     var texture = _height_texture(heights)

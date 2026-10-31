@@ -144,7 +144,8 @@ def test_a_person_is_dressed_from_the_skin_out() raises:
     assert_true(hauberk_look.bump_map == coif_look.bump_map)
     assert_true(gambeson_look.bump_map != NO_TEXTURE)
     assert_true(gambeson_look.bump_map != hauberk_look.bump_map)
-    assert_true(boots_look.bump_map == NO_TEXTURE)
+    assert_true(boots_look.bump_map != NO_TEXTURE)
+    assert_true(boots_look.bump_map != hauberk_look.bump_map)
     # The shirt shows at most a sliver past the gambeson and the mail.
     var shirt_shown = 0
     if dressed.meshes[0] >= 0:

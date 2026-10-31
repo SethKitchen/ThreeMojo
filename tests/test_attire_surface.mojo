@@ -29,14 +29,17 @@ from extensions.attire.kinds import (
     FELT,
     FUR,
     FUR_LOCKS,
+    GRAIN,
     PLAIT,
     STRAW,
     FabricKind,
 )
 from extensions.attire.surface import (
     FUR_TILE,
+    GRAIN_TILE,
     PLAIT_TILE,
     fur_heights,
+    grain_heights,
     plait_heights,
     MAIL_TILE,
     QUILT_TILE,
@@ -198,7 +201,8 @@ def test_each_fabric_has_its_surface() raises:
         var look = surface_look(kind)
         assert_true(look.kind == TWILL)
         assert_almost_equal(look.tiles, 1 / WEAVE_TILE, atol=1e-2)
-    assert_false(surface_look(LEATHER).has_map())
+    assert_true(surface_look(LEATHER).kind == GRAIN)
+    assert_almost_equal(surface_look(LEATHER).tiles, 1 / GRAIN_TILE, atol=1e-3)
     assert_false(surface_look(PLATE).has_map())
     assert_false(surface_look(FELT).has_map())
     assert_true(surface_look(FUR).kind == FUR_LOCKS)
@@ -216,8 +220,9 @@ def test_the_height_maps_tile_and_stay_in_range() raises:
         weave_heights(),
         fur_heights(),
         plait_heights(),
+        grain_heights(),
     ]
-    for m in range(5):
+    for m in range(6):
         assert_equal(len(maps[m]), TEXELS * TEXELS)
         for h in maps[m]:
             assert_true(h >= 0 and h <= 1)
@@ -249,6 +254,13 @@ def test_the_height_maps_tile_and_stay_in_range() raises:
         highest_fur = max(highest_fur, h)
     assert_equal(lowest_fur, 0)
     assert_true(highest_fur > 0.6)
+    # Leather's pebbles stand between creases.
+    var lowest_grain = Float32(1)
+    var highest_grain = Float32(0)
+    for h in maps[5]:
+        lowest_grain = min(lowest_grain, h)
+        highest_grain = max(highest_grain, h)
+    assert_true(lowest_grain < 0.1 and highest_grain > 0.8)
     # A straw is over in the first quarter of the plait and under in the
     # quarter beside it.
     var half = TEXELS // 2
@@ -270,6 +282,7 @@ def test_a_bump_map_tiles_at_its_true_size() raises:
     _ = bump_texture(surface_look(WOOL))
     _ = bump_texture(surface_look(FUR))
     _ = bump_texture(surface_look(STRAW))
+    _ = bump_texture(surface_look(LEATHER))
     with assert_raises(contains="no bump map"):
         _ = bump_texture(SurfaceLook(NO_BUMP, 0, 1))
     with assert_raises(contains="named"):
@@ -283,16 +296,19 @@ def test_each_map_is_made_once() raises:
     var coif = fabric_material(MAIL, Color(255, 255, 255))
     var gambeson = fabric_material(PADDING, Color(255, 255, 255))
     var boots = fabric_material(LEATHER, Color(255, 255, 255))
+    var cuirass = fabric_material(PLATE, Color(255, 255, 255))
     maps.apply(hauberk, assets, MAIL)
     maps.apply(coif, assets, MAIL)
     maps.apply(gambeson, assets, PADDING)
     maps.apply(boots, assets, LEATHER)
-    assert_equal(assets.textures.count(), 2)
+    maps.apply(cuirass, assets, PLATE)
+    assert_equal(assets.textures.count(), 3)
     assert_true(hauberk.bump_map != NO_TEXTURE)
     assert_true(hauberk.bump_map == coif.bump_map)
     assert_true(gambeson.bump_map != hauberk.bump_map)
     assert_almost_equal(hauberk.bump_scale, surface_look(MAIL).scale)
-    assert_true(boots.bump_map == NO_TEXTURE)
+    assert_true(boots.bump_map != NO_TEXTURE)
+    assert_true(cuirass.bump_map == NO_TEXTURE)
 
 
 def test_a_bone_frame_runs_down_and_across_the_bone() raises:

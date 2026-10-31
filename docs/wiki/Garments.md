@@ -229,7 +229,8 @@ var helm = forged(bascinet(), BLUED, GOLD)
 | `LINEN`, `WOOL`, `SILK`, `VELVET` | two-over-two twill | 4 mm | 0.15 |
 | `FUR` | locks that fall down the garment | 3 cm | 1.6 |
 | `STRAW` | flat straws plaited over and under | 1.2 cm | 0.5 |
-| `LEATHER`, `PLATE`, `FELT` | none | | |
+| `LEATHER` | pebbled grain, rounded cells parted by creases | 1.2 cm | 0.35 |
+| `PLATE`, `FELT` | none | | |
 
 `garment_uvs(piece, rig)` makes the coordinates in three steps.
 

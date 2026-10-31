@@ -658,13 +658,13 @@ struct Bump(Equatable, ImplicitlyCopyable, Writable):
         """Return whether this is a named bump map.
 
         Returns:
-            True for `NO_BUMP` through `PLAIT`.
+            True for `NO_BUMP` through `GRAIN`.
         """
         return ordinal_valid(self.value, BUMP_COUNT - 1)
 
 
 comptime NO_BUMP = Bump(0)
-"""A smooth surface: leather, plate and felt."""
+"""A smooth surface: plate and felt."""
 comptime MAIL_RINGS = Bump(1)
 """The riveted rings of mail."""
 comptime QUILTING = Bump(2)
@@ -675,7 +675,9 @@ comptime FUR_LOCKS = Bump(4)
 """The locks of a pelt's hair."""
 comptime PLAIT = Bump(5)
 """Flat straws plaited over and under each other."""
-comptime BUMP_COUNT = 6
+comptime GRAIN = Bump(6)
+"""The pebbled grain of tanned leather."""
+comptime BUMP_COUNT = 7
 """How many bump maps there are, the smooth one with them."""
 
 
