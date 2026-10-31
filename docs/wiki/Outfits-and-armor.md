@@ -103,7 +103,7 @@ Frills come by chance too. A courtly royal mostly wears a shirt with frilled cuf
 
 Each garment of a calling takes its dye by a pick of its own. So the dyes of a robe, its mantle and its sash vary apart. A test dresses 120 seeds of each of the seven callings as a man and as a woman. Of the 1,680 people, more than 1,500 differ in their garments, dyes, metals, hair or beard.
 
-Over all fifteen callings, 200 seeds and both sexes, 5,337 of 6,000 people differ. They differ in their garments, dyes, metals, designs, frills, patterns, hair, beard or cloak. The genome and the stature make each person differ further.
+Over all fifteen callings, 3,400 seeds and both sexes, 79,661 of 102,000 people differ. They differ in their garments, dyes, metals, designs, frills, patterns, hair, beard or cloak. A monk wears one of five habits, a cord or a belt. A man-at-arms wears mail of one of four metals, and a half helmet by chance. An archer wears a jerkin of one of five hides, and a hood or a feathered cap by chance. The genome and the stature make each person differ further.
 
 Some garments are parti-colored: four merchants' tunics in ten and three women's gowns in ten take a second dye on the left side. Three men-at-arms' surcoats in ten are quartered, and two in ten bear a cross or a saltire.
 
@@ -160,7 +160,8 @@ Of the 40, 30 stand within 15 m of the camera. Their hair moves, and 11 of the 1
 
 - The CPU renderer holds about 680 bytes for each triangle it draws. So the 40 people at 16,000 triangles take 1.9 GB to draw.
 - The garments, the cloaks and the hats do not scale with the skin's budget. At 4,000 triangles they draw more than half of each person's triangles.
-- For thousands of colors, dress a few bodies and paint each many ways. `redye(scene, assets, dressed, outfit)` paints a dressed outfit in new dyes, in about 4 ms against 51 ms to dress the test's coarse person. See [New dyes](#new-dyes).
+- A look is cheap to choose. The 102,000 looks above, each an outfit, a hairstyle and a beard, take 0.25 s to make: 2.4 µs a look.
+- For thousands of colors, dress a few bodies and paint each many ways. At 16,000 triangles, dressing a royal woman takes 0.32 s, and `redye(scene, assets, dressed, outfit)` paints her in new dyes in 3.8 ms. See [New dyes](#new-dyes).
 - For thousands of people, build each look once and bake it. A bake loads in 12 ms; see [Game humanoid](Game-humanoid#baking-and-speed). A loaded bake draws its hair and its cloak as they lay when baked.
 
 These changes made a crowd cheaper:
@@ -201,16 +202,16 @@ A flexible garment keeps the skin's weights and bends as the skin bends. Plate d
 
 A lamed garment is cut into bands along the anchor's own weight on the skin. The top lame rides the anchor wholly. Each lame below it shares more of its weight with the bones under it, in equal steps. Each lame reaches 0.3 of a band past its lower bound and stands 2.5 mm out over the lame below. So each lame shows its lower edge as a lip, and the fauld opens as the thigh lifts.
 
-`examples/plate_and_mail.mojo` dresses four people in plate and mail of four metals, and writes `out/plate_and_mail.png`.
+`examples/plate_and_mail.mojo` dresses eight people in four kits of plate and mail, and writes `out/plate_and_mail.png`. Each kit is on a man in front and a woman behind him, in other metals.
 
-| Person | Metal | Pieces |
-|---|---|---|
-| a man | bright steel | `great_helm`, the full helmet; `platebody`, `arm_harness`, `great_pauldrons`, `plate_skirt`, `plate_legs`, `gauntlets` and `sabatons` |
-| a woman | blued steel, trimmed with gold | `half_helm`, `platebody`, `arm_harness`, `pauldrons`, `plate_skirt`, `plate_legs`, `gauntlets` and `sabatons` |
-| a man | iron | `hauberk` and `coif` of mail, `mail_chausses`, and `pauldrons` of plate |
-| a woman | bronze | `half_helm`, `chain_shirt`, `great_pauldrons`, `plate_skirt`, `plate_legs` and `sabatons` |
+| Kit | Man | Woman | Pieces |
+|---|---|---|---|
+| full harness, full helmet | bright steel | silver, trimmed with gold | `great_helm`, `platebody`, `arm_harness`, `great_pauldrons`, `plate_skirt`, `plate_legs`, `gauntlets` and `sabatons` |
+| full harness, half helmet | blued steel, trimmed with gold | blackened steel, trimmed with brass | `half_helm`, `platebody`, `arm_harness`, `pauldrons`, `plate_skirt`, `plate_legs`, `gauntlets` and `sabatons` |
+| chainmail | iron | steel | `hauberk` and `coif` of mail, `mail_chausses`, and `pauldrons` of plate |
+| chain shirt over plate | bronze | copper, trimmed with brass | `half_helm`, `chain_shirt`, `great_pauldrons`, `plate_skirt`, `plate_legs` and `sabatons` |
 
-![Four people in steel, blued, iron and bronze plate and mail](out/plate_and_mail.png)
+![Eight people in four kits of plate and mail, men in front and women behind, of eight metals](out/plate_and_mail.png)
 
 ## Sockets and props
 

@@ -653,6 +653,45 @@ def test_rangers_wear_a_capuchon_and_carry_bows() raises:
         _ = carries_bow(Calling(77))
 
 
+def test_monks_archers_and_men_at_arms_vary() raises:
+    var habits = List[Int]()
+    var corded = 0
+    var metals = List[Int]()
+    var helmed = 0
+    var capped = 0
+    var hides = List[Int]()
+    for seed in range(80):
+        for garment in calling_outfit(MONK, seed).garments:
+            if garment.name == "robe" and not (
+                Int(garment.dyes[0].r) in habits
+            ):
+                habits.append(Int(garment.dyes[0].r))
+            if garment.name == "sash":
+                corded += 1
+        for garment in calling_outfit(MAN_AT_ARMS, seed).garments:
+            if garment.name == "hauberk" and not (
+                garment.metal.value in metals
+            ):
+                metals.append(garment.metal.value)
+            if garment.name == "half helm":
+                helmed += 1
+        for garment in calling_outfit(ARCHER, seed).garments:
+            if garment.name == "feathered cap":
+                capped += 1
+            if garment.name == "jerkin" and not (
+                Int(garment.dyes[0].r) in hides
+            ):
+                hides.append(Int(garment.dyes[0].r))
+    # Five habits, a cord or a belt; four metals of mail, a half helmet
+    # by chance; jerkins of several hides, and a cap now and then.
+    assert_equal(len(habits), 5)
+    assert_true(corded > 20 and corded < 60)
+    assert_equal(len(metals), 4)
+    assert_true(helmed > 20 and helmed < 60)
+    assert_true(len(hides) >= 4)
+    assert_true(capped > 5 and capped < 40)
+
+
 def test_callings_wear_frills_by_chance() raises:
     var royal_shirts = 0
     var flounces = 0

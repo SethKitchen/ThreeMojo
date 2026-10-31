@@ -146,6 +146,7 @@ from extensions.attire.kinds import (
     SLEEVES,
     SOLID,
     DyePattern,
+    MAIL,
     PARTY,
     PLATE,
     PRIMARY_DYE,
@@ -640,10 +641,18 @@ def dressed_as(calling: Calling, sex: Sex, seed: Int) raises -> Outfit:
         var steel = Color(198, 200, 206)
         if _chance(seed, 3, 30):
             steel = Color(70, 72, 80)
+        # A company's mail is of the iron or steel it could buy.
+        var mail: List[Metal] = [IRON, STEEL, STEEL, BLACKENED, BRONZE]
+        var ring = _pick(mail, seed, 145)
         for garment in base.garments:  # pragma: no branch
             var made = garment.copy()
             if made.fabric == PLATE:
                 made = _dyed(made^, steel, steel)
+            elif made.fabric == MAIL and calling == MAN_AT_ARMS:
+                made = forged(made^, ring)
+            elif made.name == "gambeson":
+                var quilt = plain_dye(plain + 5)
+                made = _dyed(made^, quilt, quilt)
             elif made.name == "surcoat":
                 made.dyes[PRIMARY_DYE.value] = rich_dye(rich)
                 made.dyes[SECONDARY_DYE.value] = rich_dye(rich + 3)
@@ -665,15 +674,36 @@ def dressed_as(calling: Calling, sex: Sex, seed: Int) raises -> Outfit:
                 coat.pattern = CROSS if _chance(seed, 79, 50) else SALTIRE
             coat.dyes[TRIM_DYE.value] = plain_dye(plain + 2)
             outfit.add(coat^)
+        # Some wear a half helmet over the coif.
+        if calling == MAN_AT_ARMS and _chance(seed, 146, 45):
+            outfit.add(forged(half_helm(), ring))
         outfit.add(belt())
         return outfit^
     if calling == MONK:
         outfit.add(shirt())
-        var habit = _dyed(robe(), plain_dye(3 + plain % 3 * 2), plain_dye(3))
+        # The habits of the orders: black, brown, gray, undyed wool and
+        # a dark blue. Some wear a hood of another order's color.
+        var habits: List[Color] = [
+            Color(40, 36, 34),
+            Color(96, 70, 46),
+            Color(120, 116, 108),
+            Color(214, 206, 186),
+            Color(46, 52, 70),
+        ]
+        var cloth = _pick(habits, seed, 147)
+        var cowl = cloth
+        if _chance(seed, 148, 30):
+            cowl = _pick(habits, seed, 149)
+        var habit = _dyed(robe(), cloth, cowl)
         habit.design = _woven(seed, 106, 30, [HERRINGBONE])
         outfit.add(habit^)
-        outfit.add(_dyed(hood(), plain_dye(3 + plain % 3 * 2), plain_dye(3)))
-        outfit.add(belt())
+        outfit.add(_dyed(hood(), cowl, cloth))
+        # A leather belt, or a cord of rope.
+        if _chance(seed, 150, 50):
+            outfit.add(belt())
+        else:
+            var rope = Color(190, 170, 130)
+            outfit.add(_dyed(sash(), rope, rope))
         outfit.add(boots())
         return outfit^
     if calling == GOODWIFE:
@@ -695,8 +725,16 @@ def dressed_as(calling: Calling, sex: Sex, seed: Int) raises -> Outfit:
     else:
         _trews(outfit, calling, seed)
         if calling == ARCHER:
-            outfit.add(gambeson())
-            outfit.add(_dyed(jerkin(), plain_dye(3), plain_dye(7)))
+            var quilt = plain_dye(_mixed(seed, 151))
+            outfit.add(_dyed(gambeson(), quilt, quilt))
+            var hides: List[Color] = [
+                plain_dye(3),
+                plain_dye(7),
+                Color(132, 86, 48),
+                Color(62, 42, 30),
+                Color(36, 32, 30),
+            ]
+            outfit.add(_dyed(jerkin(), _pick(hides, seed, 152), plain_dye(7)))
         elif calling == MERCHANT:
             _townsman(outfit, seed)
         elif not _has_top(outfit):
@@ -705,6 +743,11 @@ def dressed_as(calling: Calling, sex: Sex, seed: Int) raises -> Outfit:
             outfit.add(coat^)
         if _chance(seed, 5, 40):
             outfit.add(_dyed(hood(), plain_dye(plain + 2), plain_dye(plain)))
+        elif calling == ARCHER and _chance(seed, 153, 40):
+            var cap = feathered_cap()
+            cap.dyes[PRIMARY_DYE.value] = plain_dye(plain + 2)
+            cap.dyes[SECONDARY_DYE.value] = plain_dye(plain + 2)
+            outfit.add(cap^)
     if calling != PEASANT or _chance(seed, 6, 60):
         outfit.add(belt())
     outfit.add(boots())
