@@ -31,7 +31,7 @@ light across the way it runs, standing on the ground.
 **Rings.** `draw_ring` adds a ring of light on the ground, as a plunge
 slams it.
 
-**Stars.** `glow_star` adds a star of light round a point of the frame,
+**Stars.** `glow_star` adds a star of light around a point of the frame,
 as the red glow of a foe that winds up a piercing attack.
 
 **Sparks.** `Sparks` keeps `SPARKS` bursts of gold rays. A blow puts the
@@ -126,7 +126,7 @@ def arc_points(
     inner: Float32,
     outer: Float32,
 ) -> List[Vector3]:
-    """Return the corners of a flat ribbon round a center, between two
+    """Return the corners of a flat ribbon around a center, between two
     radii.
 
     A point of the arc at the angle `a` lies along `first` times `cos a`
@@ -169,7 +169,7 @@ def trail_points(move: CombatMove, scale: Float32) -> List[Vector3]:
 
     Returns:
         The ribbon's corners, as `arc_points` gives them, from 1.0 to 1.45
-        meters round the sword's shoulder for a person of six feet; a
+        meters around the sword's shoulder for a person of six feet; a
         straight ribbon from 0.4 to 2.6 meters ahead for a piercing attack's
         thrust; none for a move that is not a cut.
     """
@@ -315,7 +315,7 @@ def glow_triangle(
         frame: The frame.
         a: A corner: its x and y are pixels, its z how much of the light
             it adds, from 0 to 1.
-        b: The next corner, either way round.
+        b: The next corner, either way around.
         c: The last corner.
         color: The light at a share of one, as sRGB bytes.
     """
@@ -349,7 +349,7 @@ def glow_star(
     radius: Float32,
     color: Vector3,
 ):
-    """Add a star of light to a frame: `STAR_RAYS` rays round a point,
+    """Add a star of light to a frame: `STAR_RAYS` rays around a point,
     brightest at the point.
 
     Args:

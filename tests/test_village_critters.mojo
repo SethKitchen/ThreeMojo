@@ -31,7 +31,7 @@ from units.si import METER, SECOND, Duration, Length
 
 
 def _haunt(radius: Float32, fireflies: Int, butterflies: Int) -> Haunt:
-    """Return a haunt round the origin."""
+    """Return a haunt around the origin."""
     return Haunt(
         Length(0.0, METER),
         Length(0.0, METER),

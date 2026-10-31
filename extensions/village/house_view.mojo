@@ -28,11 +28,11 @@ it. It draws more of what an eye sees from close by:
    `DOUBLE_DOOR` wide or wider has two leaves, one at each jamb.
 3. **Floors and ceilings.** Each room has a floor of planks and a
    plastered ceiling, or a ceiling of planks in a barn. The ground
-   storey's ceiling has oak joists.
+   story's ceiling has oak joists.
 4. **The stair.** Where `house_stair` finds a stair, it has oak treads
    and risers, a stringer on its open side, and a handrail on
    balusters. Its well is cut out of the hall's ceiling and the floor
-   above, with oak trimmers round it. A balustrade guards the well
+   above, with oak trimmers around it. A balustrade guards the well
    upstairs.
 5. **The roof.** A gable roof covers the flat roof of the model: two
    slopes of tiles or slates with a thickness, weathered by
@@ -499,7 +499,7 @@ def _wall_faces(
     seed: Int,
     boards: Bool,
 ):
-    """Add a wall's two faces, cut into cells round its openings: an
+    """Add a wall's two faces, cut into cells around its openings: an
     outside face to `sheets`, and an inside face to `inside`.
 
     `out_sign` is +1 when the outside is along the normal, and -1 when it
@@ -726,7 +726,7 @@ def _window(
     var bar = Float32(0.06)
     var deep = Float32(0.07)
     var back = plane - out_sign * deep / 2
-    # The frame round the opening.
+    # The frame around the opening.
     _bar(
         sheets.wood,
         face.at(o.u0, o.v0 + bar / 2, back),
@@ -848,7 +848,7 @@ def _window(
         _bar(sheets.wood, lintel_from, lintel_to, n, 0.2, 0.115, OAK)
     if parameters.facade == BOARDED:
         return
-    # Most windows of the ground storey have a box of flowers.
+    # Most windows of the ground story have a box of flowers.
     var pick = hash01(Int(o.u0 * 10), Int(face.base * 10), parameters.seed)
     if face.base < 0.5 and pick < 0.65:
         _flower_box(sheets, face, o, n, outer, out_sign, paint, pick)
@@ -1158,12 +1158,12 @@ def _string_courses(
     half_z: Float32,
     parameters: HouseParameters,
 ):
-    """Add a band of dressed stone round the house's outside faces at each
-    upper storey's floor, `half_x` and `half_z` being the faces' half
+    """Add a band of dressed stone around the house's outside faces at each
+    upper story's floor, `half_x` and `half_z` being the faces' half
     sizes. It stands proud of the quoins, so it runs over them."""
-    var height = parameters.storey_height.to(METER)
+    var height = parameters.story_height.to(METER)
     var proud = Float32(0.035)
-    for storey in range(1, parameters.storeys):
+    for storey in range(1, parameters.stories):
         var y = height * Float32(storey)
         for sz in [Float32(1), Float32(-1)]:
             # Along x, on the faces at either end of z.
@@ -1201,7 +1201,7 @@ def _gutters(
     is below the floor, with a swan neck from the gutter to the wall."""
     var half_w = parameters.width.to(METER) / 2
     var half_d = parameters.depth.to(METER) / 2
-    var base = parameters.storey_height.to(METER) * Float32(parameters.storeys)
+    var base = parameters.story_height.to(METER) * Float32(parameters.stories)
     var slope = tan(parameters.pitch.to(RADIAN))
     var eave = base - slope * EAVES
     var hx = half_w + half_t + VERGE
@@ -1368,7 +1368,7 @@ def _timbers(
                 deep,
                 OAK,
             )
-        # A storey is 2.4 meters tall at least, so the head rail fits.
+        # A story is 2.4 meters tall at least, so the head rail fits.
         if not _inside(openings, middle, over - 0.01):
             _bar(
                 sheets.wood,
@@ -1379,7 +1379,7 @@ def _timbers(
                 deep,
                 OAK,
             )
-    # A brace in the panel at each end: the posts round each opening
+    # A brace in the panel at each end: the posts around each opening
     # keep the end panels clear of it.
     var first = all[0]
     var second = all[1]
@@ -1524,7 +1524,7 @@ def _rooms(
     barn: Bool,
 ) raises:
     """Add each room's floor of planks and its plastered ceiling, and the
-    ground storey's joists. A barn's ceilings are planks. A stair's well
+    ground story's joists. A barn's ceilings are planks. A stair's well
     is cut out of the ceiling of the room it rises from and the floor of
     the room above."""
     var slab = Float32(0.2)
@@ -1551,7 +1551,7 @@ def _rooms(
         if Bool(stair) and space.storey.value == 1:
             floors = _around(room, hole)
         # The stair rises from the hall, the first room of the ground
-        # storey.
+        # story.
         var ceilings: List[_Rect] = [room]
         var under = Bool(stair) and s == 0
         if under:
@@ -1692,7 +1692,7 @@ def _dress_rooms(
 
 
 def _trimmers(mut sheets: _Sheets, hole: _Rect, low: Float32, high: Float32):
-    """Add oak trimmers round the open sides of a stair's well, from the
+    """Add oak trimmers around the open sides of a stair's well, from the
     ceiling below it at `low` to the floor above it at `high`."""
     var middle = (low + high) / 2
     var half = (high - low) / 2
@@ -1718,7 +1718,7 @@ def _trimmers(mut sheets: _Sheets, hole: _Rect, low: Float32, high: Float32):
 
 def _stair_view(mut sheets: _Sheets, stair: Stair):
     """Add a stair: its treads and risers, a stringer on its open side, a
-    handrail on balusters, and a balustrade round its well upstairs."""
+    handrail on balusters, and a balustrade around its well upstairs."""
     var hole = _well(stair)
     var rise = Float32(stair.rise)
     var going = Float32(STAIR_GOING)
@@ -1861,8 +1861,8 @@ def _breast_view(
     breast: Breast,
     mut glows: List[Glow],
 ):
-    """Add a chimney breast up through every storey, and on the ground
-    storey its fireplace: a stone surround, an oak mantel, a sooty back, a
+    """Add a chimney breast up through every story, and on the ground
+    story its fireplace: a stone surround, an oak mantel, a sooty back, a
     stone hearth, logs and glowing embers."""
     var back = Float32(breast.x0)
     var face = Float32(breast.x1)
@@ -2031,7 +2031,7 @@ def _roof(
     """Add the gable roof, its gables, and the chimney over a breast."""
     var half_w = parameters.width.to(METER) / 2
     var half_d = parameters.depth.to(METER) / 2
-    var base = parameters.storey_height.to(METER) * Float32(parameters.storeys)
+    var base = parameters.story_height.to(METER) * Float32(parameters.stories)
     var slope = tan(parameters.pitch.to(RADIAN))
     var hx = half_w + half_t + VERGE
     var hz = half_d + half_t + EAVES
@@ -2269,7 +2269,7 @@ def _block(
 ):
     """Add a box of a piece of furniture, `side` along its width and
     `front` along its depth, both of length one."""
-    # Side, up and back turn the right way round.
+    # Side, up and back turn the right way around.
     sheet.box(
         center,
         side * half_width,
@@ -2748,7 +2748,7 @@ def _loft(mut sheets: _Sheets, parameters: HouseParameters, half_t: Float32):
     gable too low for a door of 60 centimeters has none."""
     var half_w = parameters.width.to(METER) / 2
     var half_d = parameters.depth.to(METER) / 2
-    var base = parameters.storey_height.to(METER) * Float32(parameters.storeys)
+    var base = parameters.story_height.to(METER) * Float32(parameters.stories)
     var slope = tan(parameters.pitch.to(RADIAN))
     var ridge = base + slope * (half_d + half_t)
     var gx = half_w + half_t
@@ -2760,7 +2760,7 @@ def _loft(mut sheets: _Sheets, parameters: HouseParameters, half_t: Float32):
         return
     var paint = painted(parameters.trim)
     var hw = LOFT_DOOR.x / 2
-    # Two leaves of boards, a frame round them, and the beam over them.
+    # Two leaves of boards, a frame around them, and the beam over them.
     for sz in [Float32(1), Float32(-1)]:  # pragma: no branch
         sheets.wood.box(
             Vector3(gx + 0.03, sill + tall / 2, sz * hw / 2),
@@ -2899,7 +2899,7 @@ struct StandingHouse(Movable):
     var meshes: Int
     var triangles: Int
     var interior: HouseInterior
-    # The hinge of each door leaf of the ground storey, in the order of
+    # The hinge of each door leaf of the ground story, in the order of
     # `interior.doorways`.
     var hinges: List[Hinge]
 
@@ -2927,7 +2927,7 @@ struct StandingHouse(Movable):
             meshes: How many meshes it added.
             triangles: How many triangles they hold.
             interior: Where a character can walk in it.
-            hinges: The hinge of each door leaf of the ground storey.
+            hinges: The hinge of each door leaf of the ground story.
         """
         self.root = root
         self.inside = inside
@@ -3084,7 +3084,7 @@ def stand_house(
     var inside = _Sheets(parameters.facade)
     var half_x = parameters.width.to(METER) / 2
     var half_z = parameters.depth.to(METER) / 2
-    var top = parameters.storey_height.to(METER) * Float32(parameters.storeys)
+    var top = parameters.story_height.to(METER) * Float32(parameters.stories)
     _walls(sheets, inside, building, parameters, top)
     var stair = house_stair(building)
     var barn = parameters.use == BARN
@@ -3110,7 +3110,7 @@ def stand_house(
     _furniture(inside, building, barn, glows)
     if barn and parameters.pitch.to(RADIAN) > 0:
         _loft(sheets, parameters, half_t)
-    # Light bounces round a dwelling's rooms, and the fire, the candles
+    # Light bounces around a dwelling's rooms, and the fire, the candles
     # and the lanterns warm what faces them. A barn's rooms stay dim.
     var fill = Vector3(1, 1, 1) if barn else FILL
     _warm_all(sheets, glows, half_x, half_z, fill)
@@ -3146,7 +3146,7 @@ def stand_house(
     triangles += _add_all(
         scene, assets, inside, looks, parameters, inner, False
     )
-    # A leaf on a hinge for each door of the ground storey, two for a
+    # A leaf on a hinge for each door of the ground story, two for a
     # wide one, in the order of the interior's doorways.
     var hinges = List[Hinge]()
     var paint = painted(parameters.trim)

@@ -1,8 +1,16 @@
 # Village combat
 
-A player of the [Village walk](Village-walk) carries a sword, and can fight. A companion fights beside them. Four bandits and their captain keep a camp on the meadow. A pack of three wolves keeps a den east of the pond. Two straw dummies stand near the start for practice.
+A player of the [Village walk](Village-walk) carries a sword and five more fighting styles, and can fight. A companion fights beside them. Four bandits and their captain keep a camp on the meadow. A pack of three wolves keeps a den east of the pond. Two straw dummies stand near the start for practice.
 
 The rules are of the action games' kind. The player spends stamina on each move, picks a stance, and makes specials from a special gauge. Perfect dodges, parries, long combos and a limit gauge reward good play. The foes guard, sidestep, rage and wind up red piercing attacks.
+
+This page gives the rules that every style shares, with the sword's moves. The other pages give the rest:
+
+- [Village fighting styles](Village-styles): hand to hand, the axe, the mace, magic and archery, and their weapons and clips.
+- [Village combos](Village-combos): strings of presses, the beat, and the combos that each level teaches.
+- [Village raid](Village-raid): the Stone Warden, which a party must fight together.
+- [Village walk](Village-walk#the-players-movement): the sprint, the brakes, strafing and the jump's grace.
+- [Village netcode](Village-netcode): the fight's messages for a game of many players.
 
 ![A man in red fights hooded bandits beside a woman in blue: he cuts, spins and sends a wave, and she casts bolts of light](out/village_combat.png)
 
@@ -58,19 +66,19 @@ A **stamina recovery** gets back the stamina that a swing spent. Press the guard
 
 ### Specials
 
-A special is a strong move that spends points of the special gauge, not stamina. The gauge holds 5 points. It fills by half a point a second, and by 0.2 points for each blow that lands. The rising edge costs 2 points, and throws the foe into the air. The whirlwind costs 3 points. It spins the player round, and strikes all round four times.
+A special is a strong move that spends points of the special gauge, not stamina. The gauge holds 5 points. It fills by half a point a second, and by 0.2 points for each blow that lands. The rising edge costs 2 points, and throws the foe into the air. The whirlwind costs 3 points. It spins the player around, and strikes all around four times.
 
 The ground wave costs 1 point. Its cut along the ground sends a wave of force that runs 12 meters at 14 meters a second. The wave strikes each target it passes over once, for 45 damage. It shows as an arch of light across the way it runs.
 
 ### The plunge
 
-A heavy attack in the air is a **plunge**. The player dives at 14 meters a second, and cuts down to the ground. The cut strikes everything within 2.6 meters, all round, for 70 damage. A ring of light spreads over the ground as it strikes. The plunge has armor until it strikes, and it counters a piercing attack as a heavy attack does. Throw a foe up with the rising edge, jump after it, cut, and plunge to end the combo.
+A heavy attack in the air is a **plunge**. The player dives at 14 meters a second, and cuts down to the ground. The cut strikes everything within 2.6 meters, all around, for 70 damage. A ring of light spreads over the ground as it strikes. The plunge has armor until it strikes, and it counters a piercing attack as a heavy attack does. Throw a foe up with the rising edge, jump after it, cut, and plunge to end the combo.
 
 ### The lock and the heal
 
 The lock button locks the camera on the standing target nearest the middle of the view, within 16 meters. A radian off the middle counts as 6 meters further. While locked, the player faces the target, and the camera turns toward it. A flick of the look stick moves the lock to the target nearest in angle on that side. The lock lets go when its target falls, or goes further than 22 meters.
 
-The heal button eats one of the herbs that the player gathered: see [Village gathering](Village-gathering). A herb heals 30 percent of the player's health. A player at full health eats nothing.
+The heal button eats one of the herbs that the player gathered: see [Village gathering](Village-gathering). An herb heals 30 percent of the player's health. A player at full health eats nothing.
 
 ### The surge
 
@@ -80,7 +88,7 @@ When the gauge is full, the player surges for 10 seconds. The special gauge fill
 
 ### The ultimate
 
-While a surge lasts, the player can spend what is left of it on a **ultimate**. Press the rising edge's and the whirlwind's buttons together. The player raises the sword to the sky, and `ULTIMATE` shows large in the middle of the frame. Then the player spins round twice. The spins strike everything within 4.5 meters six times, for 70 damage a hit. Last, the player cuts down.
+While a surge lasts, the player can spend what is left of it on a **ultimate**. Press the rising edge's and the whirlwind's buttons together. The player raises the sword to the sky, and `ULTIMATE` shows large in the middle of the frame. Then the player spins around twice. The spins strike everything within 4.5 meters six times, for 70 damage a hit. Last, the player cuts down.
 
 No blow can hit the player through the ultimate. The foes move at 30 percent of the time while it lasts. The surge ends when it starts. Without a surge, the same buttons make the rising edge.
 
@@ -104,13 +112,13 @@ A bandit's piercing attack glows red as a warning. The bandit coils for 0.7 seco
 
 The piercing attack has armor until it strikes, so a light attack does not stop it. A heavy attack or a special that lands in the red wind-up is a **pierce break**. The bandit loses all its stamina, and staggers. The fight stops for 0.2 seconds, as for a finisher. A ground wave breaks a piercing attack too, from far off.
 
-### Combos
+### Chains
 
-The three light attacks chain. A press during a move waits for the chain point: the end of the active part, and 30 percent of the recovery after it. Each blow that lands adds one to the combo. Each blow does 2 percent more damage for each blow of the combo before it, up to 25 blows. The combo ends 2.5 seconds after its last blow, or when the fighter is hit.
+The three light attacks chain. A press during a move waits for the chain point: the end of the active part, and 30 percent of the recovery after it. Each blow that lands adds one to the combo. Each blow does 2 percent more damage for each blow of the combo before it, up to 25 blows. The combo ends 2.5 seconds after its last blow, or when the fighter is hit. A string of presses can also end in a combo's finisher: see [Village combos](Village-combos).
 
 ### The moves
 
-`CombatMove` is a type with `is_valid`, and so are `CombatStance` and `StrikeOutcome`. A bare integer does not compile. The times are for the middle stance.
+`CombatMove` is a type with `is_valid`, and so are `CombatStance` and `StrikeOutcome`. A bare integer does not compile. The times are for the middle stance and the sword. The spells and the shots are on [Village fighting styles](Village-styles#the-buttons-and-the-moves).
 
 | Move | Start-up | Active | Recovery | Reach | Arc | Damage | Stamina damage | Stamina | Special points |
 |---|---|---|---|---|---|---|---|---|---|
@@ -150,19 +158,19 @@ A `Brain` decides what a bandit does, frame by frame. `FoeState` is a type with 
 | `POSTED` | Stands at its post | The player comes within 14 meters: `ALERTED` |
 | `ALERTED` | Faces the player for 0.7 seconds | The time is over: `CLOSING` |
 | `CLOSING` | Runs or walks at the player | It is within 3.6 meters: `CIRCLING` |
-| `CIRCLING` | Steps round the player, facing them | Its wait is over and it holds the attack token: `ATTACKING` |
+| `CIRCLING` | Steps around the player, facing them | Its wait is over and it holds the attack token: `ATTACKING` |
 | `ATTACKING` | Comes within 1.9 meters and makes its plan of attacks | The plan is done: `RETREATING` |
 | `RETREATING` | Backs away for 0.8 seconds | The time is over: `CIRCLING` |
 | `GUARDING` | Guards for 0.9 seconds | The time is over: `CIRCLING` |
 | `RETURNING` | Walks back to its post | It is there: `POSTED` |
 
-Only the bandit that holds the attack token attacks. The others wait their turn round the player. A plan is two or three light attacks, a heavy attack, or a light and a heavy attack. One plan in ten is a piercing attack. A blow that lands on an attacking bandit breaks off its plan.
+Only the bandit that holds the attack token attacks. The others wait their turn around the player. A plan is two or three light attacks, a heavy attack, or a light and a heavy attack. One plan in ten is a piercing attack. A blow that lands on an attacking bandit breaks off its plan.
 
 A waiting bandit answers about one attack of the player's in three. Two answers in five are a sidestep, and the rest are a guard. A bandit's perfect dodge does not slow the fight.
 
 A bandit returns to its post when the player falls. It also returns when the player leads it more than 28 meters from its post. The dice that choose come from each bandit's seed, so a fight plays the same way each time.
 
-A fallen bandit gives 8 coins, which go into the satchel. One time in two, it also drops a herb. It lies for 10 seconds, and comes back to its post after a minute.
+A fallen bandit gives 8 coins, which go into the satchel. One time in two, it also drops an herb. It lies for 10 seconds, and comes back to its post after a minute.
 
 Fighting trains the player's swordplay. Each level over 1 makes the player's blows 5 percent stronger: see [Village skills](Village-skills).
 
@@ -199,9 +207,17 @@ The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these o
 - **The combo**, such as `12 HITS`, on the right. It fades as the combo ends.
 - **Each bandit's health and stamina**, over its head, while it fights or is hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy attack would finish it. A bandit that winds up a heavy attack shows a red `!`. A bandit that winds up a piercing attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under its bars.
 - **A dummy's stamina**, over its head, while its stamina is not full.
-- **The lock's mark**: four gold dots round the locked target's chest.
+- **The lock's mark**: four gold dots around the locked target's chest.
 - **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `PIERCE BREAK`. They rise and fade.
 - **The edges of the frame**, tinted. They turn blue while the player's perfect dodge slows the foes. They turn gold through an ultimate, and red below a quarter of the player's health. A stamina recovery rings the player's feet with blue light.
+
+For the styles, the combos and the raid, `draw_battle` also writes:
+
+- **The style's name**, over the gauges, and the mana for magic.
+- **The routes** of the combos that the string is on the way to, over the combo counter. `ON BEAT` shows after a press on the beat.
+- **The combo book**, while it shows.
+- **The warden's bars**, at the top; **the party**, on the left; and **the zones** of the warden's attacks, in red light on the ground. See [Village raid](Village-raid#what-shows).
+- **The spells and the arrows**, as stars of light.
 
 The note over the prompt names each special as it starts, and each new stance. It says `SURGE!` when a surge begins, and `ASSIST ATTACK!` when the companion makes one. The companion's bolts are blue stars, and her assist attack's is gold. A thrown knife is a small orange star. A blow that lands bursts in sparks.
 
@@ -257,11 +273,20 @@ The rig faces plus z, and calls the side on plus x its right. A camera behind th
 
 | Module | Holds |
 |---|---|
-| `combat.mojo` | `CombatMove`, `CombatStance`, `StrikeOutcome`, `MoveData`, `FighterParameters`, `Fighter`, `reaches` and `faces`. |
-| `battle.mojo` | `BattleParameters`, `Foe`, `Ally`, `Bolt`, `Person`, `Pelt`, `Battle`, `pressed`, `push_of`, `throw_up` and `strong_blow`. |
+| `combat.mojo` | `CombatMove`, `CombatStance`, `StrikeOutcome`, `FightButton`, `MoveData`, `FighterParameters`, `Fighter`, `style_move`, `reaches` and `faces`. |
+| `styles.mojo` | `FightingStyle`, `StyleTraits` and `style_traits`. |
+| `combos.mojo` | `ComboKey`, `ComboTier`, `Combo`, `ComboTracker`, `ComboBook`, `on_beat` and `default_combos`. |
+| `missiles.mojo` | `MissileKind`, `Missile`, `fly`, `touches`, `fan`, `rain_spots` and `lob`. |
+| `weapons.mojo` | `add_weapon`, and the axe's, the mace's, the staff's and the bow's triangles. |
+| `boss.mojo` | `Boss`, `BossAttack`, `BossPhase`, `Zone`, `ZoneShape`, `inside` and `share_rockfall`. |
+| `party.mojo` | `PartyRole`, `PartyMind`, `MemberSight`, `MemberIntent` and `escape`. |
+| `raid.mojo` | `RaidParameters`, `Raider`, `Warden`, `Member`, `member_fighter`, `puppet_move` and `add_stones`. |
+| `raid_hud.mojo` | `draw_raid` and `draw_zone`. |
+| `netcode.mojo` | `pack_command`, `pack_snapshot`, `InputHistory`, `Relevance` and `relevance`. |
+| `battle.mojo` | `BattleParameters`, `Foe`, `Ally`, `Bolt`, `Person`, `Pelt`, `Battle`, `pressed`, `push_of`, `throw_up`, `strong_blow` and `pose_person`. |
 | `foes.mojo` | `FoeState`, `Brain`, `Sight`, `Intent`, `Bandit`, `Den`, `Post` and `Dummy`. |
 | `companion.mojo` | `Companion`, `AllySight`, `AllyIntent`, `ally_fighter`, `assist_blow` and `default_allies`. |
-| `arms.mojo` | `Arms`: a body's swords and sword clips. |
+| `arms.mojo` | `Arms`: a body's weapons and the clips of each style it carries. |
 | `blade.mojo` | `SwordLooks`, `add_sword` and `add_scabbard`. |
 | `slashes.mojo` | `Trail`, `Sparks`, `draw_wave`, `glow_triangle`, `glow_ribbon`, `glow_star` and `slash_material`. |
 | `battle_hud.mojo` | `draw_battle`. |
@@ -271,7 +296,8 @@ The rig faces plus z, and calls the side on plus x its right. A camera behind th
 
 - The fight is not saved. A new game starts with full health, and every bandit at its post.
 - A blow lands where its arc meets a fighter's circle. The blade's own path does not decide it.
-- The foes do not attack the companion, and she is never hurt.
+- The foes do not attack the companion, and she is never hurt. Only the Stone Warden attacks the raiders.
 - Only the player has specials. A bandit makes light attacks, heavy attacks and piercing attacks only.
+- The bandits fight with the sword alone.
 - A trail is a flat ribbon, not the blade's exact path. It is added over the frame, so a wall does not hide it.
 - A fighter in the air hangs there while its attack strikes. The plunge is the one attack made for the air.

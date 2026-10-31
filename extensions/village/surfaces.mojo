@@ -69,7 +69,7 @@ def tiled_noise(x: Float32, y: Float32, period: Int, seed: Int) -> Float32:
         seed: Which noise.
 
     Returns:
-        A number from 0 to 1, mixed from the four cells' corners round
+        A number from 0 to 1, mixed from the four cells' corners around
         the point.
     """
     var fx = floor(x)
@@ -349,7 +349,7 @@ def wood_texture(size: Int, seed: Int) raises -> Texture:
         for x in range(size):  # pragma: no branch
             var u = Float32(x) / Float32(size)
             var shade = _grain(u, v, seed)
-            # A knot: a dark ring round a few points.
+            # A knot: a dark ring around a few points.
             var kx = u * 3 - floor(u * 3)
             var ky = v * 3 - floor(v * 3)
             var cell = Int(u * 3) + Int(v * 3) * 3

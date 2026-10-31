@@ -29,6 +29,7 @@ from extensions.village.gathering import CHEST, HERBS, Spot
 from extensions.village.house import HouseParameters, house_lot
 from extensions.village.play import (
     FOCUS_HEIGHT,
+    SPECIALTY_MIGHT,
     PlayParameters,
     TRUNK,
     VillageGame,
@@ -48,6 +49,8 @@ from extensions.village.village import (
     PATH_WIDTH,
     VillageParameters,
 )
+from extensions.village.raid import RaidParameters
+from extensions.village.styles import MACE, SWORD
 from extensions.water.pebbles import pebble_bed
 from extensions.water.resolution import SpectrumResolution
 from render.png import DecodedImage
@@ -141,6 +144,7 @@ def _game_parameters() raises -> PlayParameters:
     p.battle.dens = List[Den]()
     p.battle.posts = List[Post]()
     p.battle.allies = List[Bandit]()
+    p.battle.raids = List[RaidParameters]()
     return p^
 
 
@@ -269,7 +273,7 @@ def test_a_player_walks_into_a_house_through_its_door() raises:
         _ = game.tick(scene, assets, ahead, step)
         nearest = min(nearest, game.reach)
         widest = max(widest, game.village.doors.angles[0])
-    # Look round: the eye swings off the doorway, behind the front wall.
+    # Look around: the eye swings off the doorway, behind the front wall.
     var look = MoveInput(0, 0, 1, 0, False, False)
     for _ in range(8):
         _ = game.tick(scene, assets, look, step)
@@ -329,7 +333,7 @@ def test_a_player_gathers_and_the_display_says_so() raises:
     # The note ages with the frames.
     _ = game.tick(scene, assets, no_input(), step)
     assert_almost_equal(game.note_age, 0.1, atol=1e-5)
-    # The herbs come back, and a herb that lifts foraging a level says so.
+    # The herbs come back, and an herb that lifts foraging a level says so.
     game.skills.experience[FORAGING.value] = 45
     game.gathering.spots[0].wait = 0
     _ = game.tick(scene, assets, use, step)
@@ -503,7 +507,7 @@ def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:
     _ = game.tick(scene, assets, no_input(), step)
     assert_equal(game.gathering.satchel.count(CHEST), 8)
     assert_equal(game.battle.loot, 0)
-    # A herb eaten to heal comes out of it.
+    # An herb eaten to heal comes out of it.
     game.gathering.satchel.counts[HERBS.value] = 1
     game.battle.fighter.health = 100
     var heal = no_input()
@@ -512,17 +516,26 @@ def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:
     assert_equal(game.gathering.satchel.count(HERBS), 0)
     assert_equal(game.battle.eaten, 0)
     assert_true(game.battle.fighter.health > 200)
-    # A herb a bandit dropped goes into the satchel.
+    # An herb a bandit dropped goes into the satchel.
     game.battle.found = 1
     _ = game.tick(scene, assets, no_input(), step)
     assert_equal(game.gathering.satchel.count(HERBS), 1)
     # Fighting trains swordplay; a new level is the note, and makes the
     # blows stronger.
-    game.battle.trained = 50
+    game.battle.trained[SWORD.value] = 50
     _ = game.tick(scene, assets, no_input(), step)
     assert_equal(game.note, "SWORDPLAY LEVEL 2!")
     _ = game.tick(scene, assets, no_input(), step)
-    assert_almost_equal(game.battle.fighter.parameters.might, 1.05, atol=1e-5)
+    # The sword is the player's specialty: its blows are stronger still.
+    assert_almost_equal(
+        game.battle.fighter.parameters.might,
+        1.05 * (1 + SPECIALTY_MIGHT),
+        atol=1e-5,
+    )
+    # In another style, the might is that style's level alone.
+    _ = game.battle.fighter.set_style(MACE)
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_almost_equal(game.battle.fighter.parameters.might, 1, atol=1e-5)
     # A strong blow shakes the camera.
     game.battle.shake = 0.05
     _ = game.tick(scene, assets, no_input(), step)

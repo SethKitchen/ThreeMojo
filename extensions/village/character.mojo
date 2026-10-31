@@ -13,13 +13,25 @@ moves the character as far as many quick ones do. Each substep does five
 things:
 
 1. **Speed.** The wanted speed is the stick's lean times the walking speed,
-   or times the running speed while `run` is held. The velocity on the
-   ground turns toward it by at most `acceleration` a second. In the air
-   only `air_control` of that is allowed.
+   or times the running speed while `run` is held. A character that runs
+   with the stick leaned all the way for `sprint_after` sprints, at
+   `sprint_speed`, until it lets go, or `tired` is set. A sprint no faster
+   than the run is no sprint. Uphill, the speed
+   drops by `climb_drag` for each meter of rise a meter. Through a hard
+   landing's `landing_time`, it walks. The velocity on the ground turns
+   toward the wanted speed by at most `acceleration` a second, or
+   `deceleration` while it slows. In the air only `air_control` of that is
+   allowed.
 2. **Heading.** The character turns toward the way it moves, by at most
-   `turn_speed` a second.
+   `turn_speed` a second, or `sprint_turn` while it sprints. A character
+   told to face a way, as one locked on a foe, turns to that way and
+   strafes: it backs away at `back_share` of its speed.
 3. **Jump.** A press of `jump` on the ground starts a jump at `jump_speed`.
-   Holding the button does not jump again: it must be let go first.
+   Holding the button does not jump again: it must be let go first. A
+   press up to `jump_buffer` before the feet land jumps as they land. A
+   character that walks off an edge can still jump for `coyote`. A jump
+   whose button is let go while it rises keeps `jump_cut` of its upward
+   speed, so a tap jumps lower than a hold.
 4. **Collision.** The character is a circle of `radius` on the ground. It
    is pushed out of each solid `Lot` of the `Terrain`, out of each of its
    `WallSpan`s that stands between its feet and `HEADROOM` above them,
@@ -31,9 +43,10 @@ things:
 5. **The ground.** On the ground, the feet follow `Terrain.height_at`:
    the highest floor or step that they can reach, and the ground
    elsewhere. A floor more than `CLIMB` above the feet, such as an upper
-   storey, passes over them, so a character goes up a stair one tread at
+   story, passes over them, so a character goes up a stair one tread at
    a time. Where the ground drops away by more than `step_down`, the
-   character falls. In the air, gravity pulls it down until it lands.
+   character falls. In the air, gravity pulls it down until it lands. A
+   landing faster than `hard_landing` is hard: `landed` holds its speed.
 
 The stance says which clip a body plays: see `Stance`.
 """
@@ -142,6 +155,11 @@ struct MoveInput(ImplicitlyCopyable):
     var assist: Bool
     # Whether the button that eats herbs to heal is held.
     var heal: Bool
+    # Whether the buttons that change the fighting style, taunt a boss and
+    # show the combo book are held.
+    var swap: Bool
+    var taunt: Bool
+    var book: Bool
 
     def __init__(
         out self,
@@ -167,6 +185,9 @@ struct MoveInput(ImplicitlyCopyable):
         low: Bool = False,
         assist: Bool = False,
         heal: Bool = False,
+        swap: Bool = False,
+        taunt: Bool = False,
+        book: Bool = False,
     ):
         """Hold one frame of input.
 
@@ -193,6 +214,10 @@ struct MoveInput(ImplicitlyCopyable):
             low: Whether the low stance's buttons are held.
             assist: Whether the assist attack's buttons are held.
             heal: Whether the button that eats herbs to heal is held.
+            swap: Whether the button that changes the fighting style is
+                held.
+            taunt: Whether the button that taunts a boss is held.
+            book: Whether the button that shows the combo book is held.
         """
         self.forward = forward
         self.right = right
@@ -215,6 +240,9 @@ struct MoveInput(ImplicitlyCopyable):
         self.low = low
         self.assist = assist
         self.heal = heal
+        self.swap = swap
+        self.taunt = taunt
+        self.book = book
 
 
 def no_input() -> MoveInput:
@@ -260,10 +288,35 @@ struct CharacterParameters(ImplicitlyCopyable):
     var step_down: Length
     # How far from the middle the character can go.
     var bounds: Length
+    # How fast it sprints, how long it runs before it sprints, and how
+    # fast it turns while it sprints.
+    var sprint_speed: Velocity
+    var sprint_after: Duration
+    var sprint_turn: AngularVelocity
+    # How fast the speed on the ground drops when it slows.
+    var deceleration: Acceleration
+    # How long after it walks off an edge it can still jump, and how long
+    # before it lands a press of the jump still counts.
+    var coyote: Duration
+    var jump_buffer: Duration
+    # The share of its upward speed a jump keeps when its button is let go
+    # while it rises.
+    var jump_cut: Float32
+    # The share of its speed at which it backs away while it faces a way.
+    var back_share: Float32
+    # The share of its speed lost for each meter of rise a meter uphill.
+    var climb_drag: Float32
+    # How fast a landing must be to be hard, and how long the character
+    # walks after it.
+    var hard_landing: Velocity
+    var landing_time: Duration
 
     def __init__(out self):
         """Create a person: a walk of 1.4 meters a second, a run of 4.5,
-        and a jump of about 0.9 meters."""
+        and a jump of about 0.9 meters. It does not sprint, slows as fast as
+        it speeds up, jumps only on the ground and as high however long it
+        holds the button, backs away and climbs at its full speed, and
+        never lands hard. See `player_movement` for the player's."""
         self.walk_speed = Velocity(1.4, METER_PER_SECOND)
         self.run_speed = Velocity(4.5, METER_PER_SECOND)
         self.acceleration = Acceleration(14.0, METER_PER_SECOND_SQUARED)
@@ -275,6 +328,17 @@ struct CharacterParameters(ImplicitlyCopyable):
         self.wade_depth = Length(0.5, METER)
         self.step_down = Length(0.4, METER)
         self.bounds = Length(250.0, METER)
+        self.sprint_speed = Velocity(0.0, METER_PER_SECOND)
+        self.sprint_after = Duration(0.6, SECOND)
+        self.sprint_turn = self.turn_speed
+        self.deceleration = self.acceleration
+        self.coyote = Duration(0.0, SECOND)
+        self.jump_buffer = Duration(0.0, SECOND)
+        self.jump_cut = 1
+        self.back_share = 1
+        self.climb_drag = 0
+        self.hard_landing = Velocity(1.0e3, METER_PER_SECOND)
+        self.landing_time = Duration(0.0, SECOND)
 
     def check(self) raises:
         """Refuse a character that cannot move.
@@ -285,7 +349,12 @@ struct CharacterParameters(ImplicitlyCopyable):
                 walk or not below 10 kilometers a second; the air control
                 is not from 0 to 1; or the jump speed, the wade depth or
                 the step down is negative or not below 10 kilometers, or
-                10 kilometers a second.
+                10 kilometers a second; the sprint is negative or not
+                below 10 kilometers a second; the sprint's turn or
+                the deceleration is not positive; a time is negative or not
+                below 10 seconds; the jump cut or the back share is not
+                from 0 to 1; the climb drag is not from 0 to 4; or the
+                hard landing is not positive.
         """
         require_positive_finite(
             Float64(self.walk_speed.to(METER_PER_SECOND)),
@@ -336,6 +405,69 @@ struct CharacterParameters(ImplicitlyCopyable):
             Float64(self.bounds.to(METER)),
             "A character's bounds must be positive",
         )
+        var sprint = self.sprint_speed.to(METER_PER_SECOND)
+        if not (sprint >= 0 and sprint < 1.0e4):
+            raise Error(
+                "A character's sprint must be from 0 to 10 kilometers a second"
+            )
+        require_positive_finite(
+            Float64(self.sprint_turn.to(RADIAN_PER_SECOND)),
+            "A character's sprinting turn must be positive",
+        )
+        require_positive_finite(
+            Float64(self.deceleration.to(METER_PER_SECOND_SQUARED)),
+            "A character's deceleration must be positive",
+        )
+        for time in [  # pragma: no branch
+            self.sprint_after,
+            self.coyote,
+            self.jump_buffer,
+            self.landing_time,
+        ]:
+            if not (time.to(SECOND) >= 0 and time.to(SECOND) < 10):
+                raise Error(
+                    "A character's sprint, coyote, buffer and landing times"
+                    " must be from 0 to 10 seconds"
+                )
+        for share in [self.jump_cut, self.back_share]:  # pragma: no branch
+            if not (share >= 0 and share <= 1):
+                raise Error(
+                    "A character's jump cut and back share must be from 0 to 1"
+                )
+        if not (self.climb_drag >= 0 and self.climb_drag <= 4):
+            raise Error("A character's climb drag must be from 0 to 4")
+        require_positive_finite(
+            Float64(self.hard_landing.to(METER_PER_SECOND)),
+            "A character's hard landing must be positive",
+        )
+
+
+def player_movement() -> CharacterParameters:
+    """Return how the player moves: a person who sprints, brakes, jumps
+    from a ledge's edge, and lands hard.
+
+    Returns:
+        A person who sprints at 6.6 meters a second after 0.6 seconds of a
+        run, turns at 320 degrees a second while sprinting, slows at 22
+        meters a second each second, can jump 0.12 seconds after walking off
+        an edge or 0.15 seconds before landing, keeps 45 percent of a jump's
+        upward speed when the button is let go, backs away at 70 percent of
+        its speed, climbs 40 percent slower up a slope of one in one, and
+        lands hard from 9 meters a second, after which it walks for 0.3
+        seconds.
+    """
+    var p = CharacterParameters()
+    p.sprint_speed = Velocity(6.6, METER_PER_SECOND)
+    p.sprint_turn = AngularVelocity(320.0, DEGREE_PER_SECOND)
+    p.deceleration = Acceleration(22.0, METER_PER_SECOND_SQUARED)
+    p.coyote = Duration(0.12, SECOND)
+    p.jump_buffer = Duration(0.15, SECOND)
+    p.jump_cut = 0.45
+    p.back_share = 0.7
+    p.climb_drag = 0.4
+    p.hard_landing = Velocity(9.0, METER_PER_SECOND)
+    p.landing_time = Duration(0.3, SECOND)
+    return p
 
 
 def lot_push(lot: Lot, x: Float32, z: Float32, radius: Float32) -> Vector3:
@@ -435,7 +567,25 @@ struct Character(Copyable, Movable):
     var jump_held: Bool
     # How far its feet have gone on the ground, in meters: the phase of a
     # walking body's stride.
-    var travelled: Float32
+    var traveled: Float32
+    # Whether it sprints, and how long it has run with the stick leaned all
+    # the way, in seconds; whether it may not sprint, as when it has no
+    # stamina left.
+    var sprinting: Bool
+    var run_time: Float32
+    var tired: Bool
+    # How long it has been off the ground, in seconds, and whether it left
+    # by a jump; how long ago the jump was pressed, in seconds, or -1; and
+    # whether the jump's rise was cut.
+    var air_time: Float32
+    var jumped: Bool
+    var buffered: Float32
+    var cut: Bool
+    # How long it still walks after a hard landing, in seconds; and how
+    # fast its last hard landing was, in meters a second, until a reader
+    # takes it, or zero.
+    var landing: Float32
+    var landed: Float32
 
     def __init__(
         out self,
@@ -473,7 +623,16 @@ struct Character(Copyable, Movable):
         self.grounded = True
         self.stance = STANDING
         self.jump_held = False
-        self.travelled = 0
+        self.traveled = 0
+        self.sprinting = False
+        self.run_time = 0
+        self.tired = False
+        self.air_time = 0
+        self.jumped = False
+        self.buffered = -1
+        self.cut = False
+        self.landing = 0
+        self.landed = 0
 
     def speed(self) -> Velocity:
         """Return how fast the character moves over the ground.
@@ -492,6 +651,7 @@ struct Character(Copyable, Movable):
         terrain: Terrain,
         obstacles: List[Obstacle],
         skip: Int = -1,
+        face: Optional[Angle] = None,
     ) raises:
         """Move the character by one frame.
 
@@ -504,24 +664,31 @@ struct Character(Copyable, Movable):
             obstacles: The round things in the way.
             skip: The index of an obstacle to pass over, such as the
                 character's own, or -1 for none.
+            face: The way to face while it moves, as a character locked on
+                a foe strafes; None to face the way it moves.
 
         Raises:
             Error: If the time is negative or above a billion seconds, the
-                yaw is not finite, or `parameters.check` refuses a value.
+                yaw or the face is not finite, or `parameters.check` refuses
+                a value.
         """
         self.parameters.check()
         var seconds = delta.to(SECOND)
         if not (seconds >= 0 and seconds < 1.0e9):
             raise Error("A frame's time must not be negative or endless")
         require_finite(Float64(yaw.to(RADIAN)), "A yaw must be finite")
+        if face:
+            require_finite(
+                Float64(face.value().to(RADIAN)), "A facing must be finite"
+            )
         var left = min(seconds, LONGEST_FRAME)
         var count = max(1, Int(ceil(left / SUBSTEP)))
         var h = left / Float32(count)
-        var pressed = input.jump and not self.jump_held
+        if input.jump and not self.jump_held:
+            self.buffered = 0
         self.jump_held = input.jump
         for _ in range(count):  # pragma: no branch
-            self._substep(input, yaw, h, pressed, terrain, obstacles, skip)
-            pressed = False
+            self._substep(input, yaw, h, face, terrain, obstacles, skip)
         self._settle()
 
     def _substep(
@@ -529,32 +696,60 @@ struct Character(Copyable, Movable):
         input: MoveInput,
         yaw: Angle,
         h: Float32,
-        jump: Bool,
+        face: Optional[Angle],
         terrain: Terrain,
         obstacles: List[Obstacle],
         skip: Int,
     ):
         """Move the character by one substep of `h` seconds, passing over
-        the obstacle at `skip`."""
+        the obstacle at `skip`, facing `face` if it is set."""
         ref p = self.parameters
         var wish = ground_direction(
             yaw, clamp(input.forward, -1, 1), clamp(input.right, -1, 1)
         )
         var lean = min(Float32(1), wish.length())
+        var full = lean > 0.9 and input.run and self.grounded
+        if full and not self.tired and not face:
+            self.run_time += h
+        else:
+            self.run_time = 0
+        var sprint = p.sprint_speed.to(METER_PER_SECOND)
+        var faster = sprint > p.run_speed.to(METER_PER_SECOND)
+        self.sprinting = faster and self.run_time >= p.sprint_after.to(SECOND)
         var top = p.run_speed if input.run else p.walk_speed
+        if self.sprinting:
+            top = p.sprint_speed
+        if self.landing > 0:
+            top = p.walk_speed
+            self.landing = max(Float32(0), self.landing - h)
         var want = Vector3(0, 0, 0)
         if lean > LEAN:
-            want = wish * (lean * top.to(METER_PER_SECOND) / wish.length())
-            var most = p.turn_speed.to(RADIAN_PER_SECOND) * h
-            self.heading = turn_toward(
-                self.heading, yaw_of(wish), Angle(most, RADIAN)
-            )
-        var rate = p.acceleration.to(METER_PER_SECOND_SQUARED) * h
-        if not self.grounded:
-            rate *= p.air_control
+            var ahead = wish / wish.length()
+            var pace = lean * top.to(METER_PER_SECOND)
+            if face:
+                # Backing away from the way it faces is slower.
+                var front = ground_direction(face.value(), 1, 0)
+                var back = max(Float32(0), -front.dot(ahead))
+                pace *= 1 - (1 - p.back_share) * back
+            if p.climb_drag > 0 and self.grounded:
+                pace *= self._uphill(ahead, terrain)
+            want = ahead * pace
+        var turn = p.sprint_turn if self.sprinting else p.turn_speed
+        var most = Angle(turn.to(RADIAN_PER_SECOND) * h, RADIAN)
+        if face:
+            self.heading = turn_toward(self.heading, face.value(), most)
+        elif lean > LEAN:
+            self.heading = turn_toward(self.heading, yaw_of(wish), most)
         var change = Vector3(
             want.x - self.velocity.x, 0, want.z - self.velocity.z
         )
+        # Slowing, or turning back, brakes at the deceleration.
+        var now = Vector3(self.velocity.x, 0, self.velocity.z)
+        var slowing = want.length() < now.length() or change.dot(now) < 0
+        var pull = p.deceleration if slowing else p.acceleration
+        var rate = pull.to(METER_PER_SECOND_SQUARED) * h
+        if not self.grounded:
+            rate *= p.air_control
         var size = change.length()
         if size > rate:
             change = change * (rate / size)
@@ -563,10 +758,45 @@ struct Character(Copyable, Movable):
             self.velocity.y,
             self.velocity.z + change.z,
         )
-        if jump and self.grounded:
+        self._jump(input.jump, h)
+        self._travel(h, terrain, obstacles, skip)
+
+    def _uphill(self, ahead: Vector3, terrain: Terrain) -> Float32:
+        """Return the share of its speed the character keeps going `ahead`
+        up the ground: one on the flat and downhill."""
+        ref at = self.position
+        var x = at.x + ahead.x * 0.5
+        var z = at.z + ahead.z * 0.5
+        var rise = terrain.height_at(x, z, at.y) - at.y
+        var grade = max(Float32(0), rise / 0.5)
+        return max(Float32(0.3), 1 - self.parameters.climb_drag * grade)
+
+    def _jump(mut self, held: Bool, h: Float32):
+        """Start a jump that a press, a buffered press or a coyote's press
+        asks for; and cut a rising jump whose button is let go."""
+        ref p = self.parameters
+        # A ledge's grace is for a character that walked off it, not one
+        # that a blow threw up.
+        var falling = self.velocity.y <= 0
+        var late = self.air_time < p.coyote.to(SECOND)
+        var edge = not self.jumped and late and falling
+        var wanted = self.buffered >= 0 and self.buffered <= p.jump_buffer.to(
+            SECOND
+        )
+        if wanted and (self.grounded or edge):
             self.velocity.y = p.jump_speed.to(METER_PER_SECOND)
             self.grounded = False
-        self._travel(h, terrain, obstacles, skip)
+            self.jumped = True
+            self.cut = False
+            self.buffered = -1
+        elif self.buffered >= 0:
+            self.buffered += h
+            if self.buffered > p.jump_buffer.to(SECOND):
+                self.buffered = -1
+        var rising = self.jumped and self.velocity.y > 0
+        if rising and not held and not self.cut:
+            self.velocity.y *= p.jump_cut
+            self.cut = True
 
     def drive(
         mut self,
@@ -676,16 +906,24 @@ struct Character(Copyable, Movable):
                 y = floor
                 self.velocity.y = 0
         if not self.grounded:
+            self.air_time += h
             self.velocity.y -= p.gravity.to(METER_PER_SECOND_SQUARED) * h
             y = start.y + self.velocity.y * h
             if y <= floor and self.velocity.y <= 0:
+                var impact = -self.velocity.y
+                if impact > p.hard_landing.to(METER_PER_SECOND):
+                    self.landed = impact
+                    self.landing = p.landing_time.to(SECOND)
                 y = floor
                 self.velocity.y = 0
                 self.grounded = True
         if self.grounded:
+            self.air_time = 0
+            self.jumped = False
+        if self.grounded:
             var dx = goal.x - start.x
             var dz = goal.z - start.z
-            self.travelled += sqrt(dx * dx + dz * dz)
+            self.traveled += sqrt(dx * dx + dz * dz)
         self.position = Vector3(goal.x, y, goal.z)
 
     def _clear(

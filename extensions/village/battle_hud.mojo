@@ -31,7 +31,7 @@
    attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under
    its bars.
 5. **A dummy's stamina**, over its head, while its stamina is not full.
-6. **The lock's mark**: four gold dots round the locked target's chest.
+6. **The lock's mark**: four gold dots around the locked target's chest.
 7. **The numbers and the words** of the blows, which rise and fade.
 8. **The edges of the frame**, tinted: blue while the player's perfect
    dodge slows the foes; gold through an ultimate; and red below a
@@ -69,6 +69,7 @@ from extensions.village.combat import (
 )
 from extensions.village.companion import ASSIST_FULL
 from extensions.village.foes import POSTED
+from extensions.village.raid_hud import draw_raid
 from extensions.village.slashes import (
     PIERCE_TRAIL,
     FOE_TRAIL,
@@ -465,7 +466,9 @@ def _ultimate(
     var at = on_screen(
         camera,
         look,
-        scene.world_matrix(battle.arms.held).transform_point(Vector3(0, 0, 0)),
+        scene.world_matrix(
+            battle.arms.held[battle.fighter.style.value]
+        ).transform_point(Vector3(0, 0, 0)),
         frame.width,
         frame.height,
     )
@@ -617,6 +620,7 @@ def draw_battle(
                 var cx = x + corner[0]
                 var cy = y + corner[1]
                 fill_box(frame, cx - d, cy - d, cx + d, cy + d, GOLD_TEXT, 1)
+    draw_raid(frame, battle, camera, look, scale)
     for popup in battle.popups:
         var at = on_screen(camera, look, popup.at, w, h)
         if not at:

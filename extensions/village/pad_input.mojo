@@ -27,11 +27,16 @@ a PlayStation controller play alike:
 | High, middle and low stance | Hold the left shoulder, and the north, the west or the south button | `6`, `7` and `8` |
 | Eat herbs to heal | The back button | `H` |
 | The companion's assist attack | Hold the left trigger, and the left shoulder | `Q` |
+| Change the fighting style | Hold the left trigger, and the south button | `Y` |
+| Taunt a boss | Hold the left trigger, and the east button | `U` |
+| Show the combo book | Hold the left trigger, and the back button | `K` |
 
 While the left shoulder guards, the north, the west and the south buttons
 choose a stance, and do not attack, use or jump. While the left trigger
-is held, the west button makes the ground wave, and does not use: see
-`fight_input`.
+is held, the west button makes the ground wave, and does not use; the
+south button changes the style, and does not jump; the east button
+taunts, and does not dodge; and the back button shows the combo book, and
+does not heal: see `fight_input`.
 
 A stick reads nothing within `DEAD_ZONE` of its middle, and the rest of
 its throw is stretched to the whole range, so a worn stick does not
@@ -79,7 +84,7 @@ from math.utils import clamp
 from std.math import sqrt
 
 comptime DEAD_ZONE = Float32(0.2)
-"""The share of a stick's throw round its middle that reads nothing."""
+"""The share of a stick's throw around its middle that reads nothing."""
 comptime TRIGGER_PRESS = Float32(0.5)
 """The share of a trigger's throw past which it counts as held."""
 comptime AXIS_HIGH = Float32(32767)
@@ -110,6 +115,12 @@ comptime KEY_M = Key(109)
 """The `M` key: the ultimate, in a surge."""
 comptime KEY_Q = Key(113)
 """The `Q` key: the companion's assist attack."""
+comptime KEY_Y = Key(121)
+"""The `Y` key: the next fighting style."""
+comptime KEY_U = Key(117)
+"""The `U` key: taunt a boss."""
+comptime KEY_K = Key(107)
+"""The `K` key: show the combo book."""
 
 
 def stick(
@@ -120,7 +131,7 @@ def stick(
     Args:
         x: The stick's x axis, from -32768 to 32767, as SDL reads it.
         y: The stick's y axis. Down is positive, as SDL reads it.
-        dead_zone: The share of the throw round the middle that reads
+        dead_zone: The share of the throw around the middle that reads
             nothing, from 0 to less than 1.
 
     Returns:
@@ -173,10 +184,13 @@ def fight_input(
         the north button and the west button into the specials, and the
         right shoulder and the north button together into the ultimate
         special. The left trigger and the left shoulder together call for
-        the companion's assist attack.
+        the companion's assist attack. The left trigger and the south
+        button change the style, the left trigger and the east button
+        taunt, and the left trigger and the back button show the combo
+        book.
     """
     var stance = left_shoulder and not left_trigger
-    input.jump = south and not left_shoulder
+    input.jump = south and not (left_shoulder or left_trigger)
     input.use = west and not (left_shoulder or left_trigger)
     input.light = right_shoulder and not left_trigger
     input.rising = right_shoulder and left_trigger
@@ -185,13 +199,16 @@ def fight_input(
     input.ground_wave = west and left_trigger
     input.ultimate = right_shoulder and north and left_trigger
     input.assist = left_shoulder and left_trigger
-    input.dodge = east
+    input.dodge = east and not left_trigger
     input.guard = left_shoulder
     input.lock = right_stick
     input.high = north and stance
     input.middle = west and stance
     input.low = south and stance
-    input.heal = back
+    input.heal = back and not left_trigger
+    input.swap = south and left_trigger and not left_shoulder
+    input.taunt = east and left_trigger
+    input.book = back and left_trigger
     return input
 
 
@@ -301,6 +318,9 @@ def keyboard_input(keys: HeldKeys, shift: Bool) -> MoveInput:
         low=keys.is_held(Key(KEY_SIX.value + 2)),
         assist=keys.is_held(KEY_Q),
         heal=keys.is_held(KEY_H),
+        swap=keys.is_held(KEY_Y),
+        taunt=keys.is_held(KEY_U),
+        book=keys.is_held(KEY_K),
     )
 
 
@@ -337,4 +357,7 @@ def combined(first: MoveInput, second: MoveInput) -> MoveInput:
         low=first.low or second.low,
         assist=first.assist or second.assist,
         heal=first.heal or second.heal,
+        swap=first.swap or second.swap,
+        taunt=first.taunt or second.taunt,
+        book=first.book or second.book,
     )

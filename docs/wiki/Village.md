@@ -95,11 +95,11 @@ On a four-core Linux host, the example cuts the Seem church out of its scan in 1
 | Part | Where it stands |
 |---|---|
 | A pond 12 meters across and 1.2 meters deep | Right of the trail, 11 meters ahead of the camera. |
-| A stone cottage of one storey, 7 by 5.5 meters, under slates | Left of the trail, about 25 meters away, turned 80 degrees. |
-| A framed cottage of one storey, 6.5 by 5 meters | Left of the trail, about 60 meters away, turned 70 degrees. |
-| A framed house of two storeys, 8 by 6 meters | Right of the trail, about 55 meters away, turned -80 degrees. |
-| A brick house of two storeys, 9 by 7 meters | On the left, about 75 meters away, turned 20 degrees. |
-| A boarded barn of one storey 4.2 meters tall, 13 by 8 meters | Ahead, about 90 meters away, turned -12 degrees. |
+| A stone cottage of one story, 7 by 5.5 meters, under slates | Left of the trail, about 25 meters away, turned 80 degrees. |
+| A framed cottage of one story, 6.5 by 5 meters | Left of the trail, about 60 meters away, turned 70 degrees. |
+| A framed house of two stories, 8 by 6 meters | Right of the trail, about 55 meters away, turned -80 degrees. |
+| A brick house of two stories, 9 by 7 meters | On the left, about 75 meters away, turned 20 degrees. |
+| A boarded barn of one story 4.2 meters tall, 13 by 8 meters | Ahead, about 90 meters away, turned -12 degrees. |
 | The scanned building, if there is one | On the right, about 110 meters away, turned 28 degrees. |
 
 The houses' textures are 128 texels on a side.
@@ -137,7 +137,7 @@ The default village has a well and a bench by the trail, and barrels, crates and
 
 ## Lots
 
-Each building stands on a `Lot`: its footprint, turned about +y. `Village` puts the lots into `MeadowParameters.lots` before it builds the meadow. So no grass grows on a lot or on the bare apron round it, and no tree or bush stands there. The ground under a lot is mottled dirt. See [Ponds and lots](Vegetation#ponds-and-lots).
+Each building stands on a `Lot`: its footprint, turned about +y. `Village` puts the lots into `MeadowParameters.lots` before it builds the meadow. So no grass grows on a lot or on the bare apron around it, and no tree or bush stands there. The ground under a lot is mottled dirt. See [Ponds and lots](Vegetation#ponds-and-lots).
 
 A worn footpath 0.8 meters wide leads from each house's front door to the trail. `door_path` gives it as two lots with narrow aprons. The first runs 3.5 meters straight out from the door. The second runs on to the nearest point of the trail. A door with no trail within 60 meters, or on ground with no trail, has only the first.
 
@@ -171,6 +171,6 @@ The pond's water is a `WaterScene`. Its sun is the meadow's sun, so the water's 
 ## Limits
 
 - The water does not reflect the houses, the trees or the sky cube. It reflects the Clearwater sky.
-- A house is a box of storeys under one gable roof. It has no porch and no wing. Its upper storeys have no stairs.
+- A house is a box of stories under one gable roof. It has no porch and no wing. Its upper stories have no stairs.
 - A scanned building's splats are lit by the scan's own light, not by the meadow's sun. They cast no shadow.
 - A lot keeps plants off the ground, but it does not level the ground. The plinth and the sunk foot fill the slope.

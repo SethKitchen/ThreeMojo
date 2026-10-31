@@ -93,10 +93,10 @@ from units.si import (
 )
 
 
-def _house(storeys: Int) -> HouseParameters:
-    """Return a small brick house, 5 by 4 meters, of `storeys`."""
+def _house(stories: Int) -> HouseParameters:
+    """Return a small brick house, 5 by 4 meters, of `stories`."""
     return HouseParameters(
-        "test house", Length(5.0, METER), Length(4.0, METER), storeys, brick()
+        "test house", Length(5.0, METER), Length(4.0, METER), stories, brick()
     )
 
 
@@ -517,7 +517,7 @@ def test_a_hearth_keeps_its_woodpile_by_its_gable() raises:
     house.facade = BOARDED
     assert_false(hearthed(house))
     var barn = _house(1)
-    barn.storey_height = Length(4.0, METER)
+    barn.story_height = Length(4.0, METER)
     barn.use = BARN
     assert_false(hearthed(barn))
     # Unturned, at (10, 20): the woodpile stands out from the west gable's

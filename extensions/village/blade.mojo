@@ -21,7 +21,7 @@ from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.village.sheet import Sheet
-from materials.material import MaterialId, standard_material
+from materials.material import BASIC, Material, MaterialId, standard_material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
@@ -49,13 +49,15 @@ comptime LEATHER = Vector3(0.26, 0.14, 0.08)
 
 
 struct SwordLooks(ImplicitlyCopyable):
-    """The materials of a sword: polished metal, and leather."""
+    """The materials of a sword and the other weapons: polished metal,
+    leather and wood, and an unlit glow for a crystal or a string."""
 
     var metal: MaterialId
     var leather: MaterialId
+    var glow: MaterialId
 
     def __init__(out self, mut assets: Assets) raises:
-        """Make the two materials. Each shows its vertex colors.
+        """Make the three materials. Each shows its vertex colors.
 
         Args:
             assets: The stores the materials go into.
@@ -71,6 +73,9 @@ struct SwordLooks(ImplicitlyCopyable):
         var leather = standard_material(Color(255, 255, 255), roughness=0.85)
         leather.vertex_colors = True
         self.leather = assets.materials.add(leather)
+        self.glow = assets.materials.add(
+            Material(Color(255, 255, 255), kind=BASIC, vertex_colors=True)
+        )
 
 
 struct SwordSheets(Movable):

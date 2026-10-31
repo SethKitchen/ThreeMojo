@@ -33,6 +33,7 @@ mojo run -I . examples/village_walk.mojo --play 1920 1080 low
 | `shadows` | `CACHED_SHADOWS` | `CACHED_SHADOWS` | `CACHED_SHADOWS` | `FULL_SHADOWS` |
 | `shadow_size` | 1,024 | 2,048 | 2,048 | 4,096 |
 | `smooth_edges` | True | True | True | True |
+| `fight_reach` | 12 m | 20 m | 32 m | 10,000 m |
 
 You can change each setting alone. `GameQuality.check` refuses a value out of range:
 
@@ -54,6 +55,7 @@ quality.check()
 - **`animal_coarseness`** multiplies the cell of each animal's mesh, from 1 to 8. A coarser animal has fewer triangles.
 - **`shadows`** and **`shadow_size`** set how the sun's shadows are drawn. See [Shadows](#shadows).
 - **`smooth_edges`** smooths the stair steps along the frame's edges before the frame is stretched. See [Smooth edges](#smooth-edges).
+- **`fight_reach`** sets how far from the player a fighter is posed each frame, from 5 to 10,000 meters. A fighter further away is posed every third frame, for all the time it waited, and leaves no trail. Between, it only stands where its character stands. So a crowded fight costs less on a slow machine.
 
 ## Smooth edges
 

@@ -29,6 +29,7 @@ from extensions.village.combat import (
     STAGGER,
     FLINCH,
     HEAVY,
+    LIGHT_ONE,
     Blow,
 )
 from extensions.village.foes import (
@@ -41,6 +42,7 @@ from extensions.village.foes import (
     POSTED,
 )
 from extensions.village.skills import BLOW_EXPERIENCE, DEFEAT_EXPERIENCE
+from extensions.village.styles import SWORD
 from math.vector3 import Vector3
 from std.testing import (
     TestSuite,
@@ -70,11 +72,18 @@ def test_the_player_defeats_a_bandit_who_comes_back() raises:
     assert_equal(arena.battle.lock, -1)
     assert_equal(arena.battle.token, -1)
     assert_false(arena.battle.standing(0))
+    # A fallen bandit draws no spell and no arrow.
+    var aim = arena.battle.shot_target(
+        arena.player.position, arena.player.heading
+    )
+    assert_true(aim != 0)
     assert_almost_equal(arena.battle.obstacles()[0].radius, 0, atol=1e-6)
     assert_equal(arena.battle.loot, LOOT)
     assert_true(holds_text(arena.battle.notes, "+8 COINS +1 HERB"))
     assert_equal(arena.battle.found, 1)
-    assert_equal(arena.battle.trained, BLOW_EXPERIENCE + DEFEAT_EXPERIENCE)
+    assert_equal(
+        arena.battle.trained[SWORD.value], BLOW_EXPERIENCE + DEFEAT_EXPERIENCE
+    )
     arena.run(1.2)
     assert_false(arena.scene.node(arena.battle.node_of(0)).visible)
     arena.run(1.2)
@@ -89,8 +98,12 @@ def test_a_guard_blocks_a_cut_and_a_stagger_takes_a_critical() raises:
     arena.battle.foes[0].brain.state = GUARDING
     arena.battle.foes[0].brain.timer = 5
     arena.battle.foes[0].fighter.hold_guard(True)
+    # A finisher that a guard blocks does not land.
+    arena.battle.finisher = 0
+    arena.battle.finishing = LIGHT_ONE
     light_cut(arena)
     assert_true(holds_text(popup_texts(arena.battle), "BLOCKED"))
+    assert_false(arena.battle.finisher_landed)
     assert_almost_equal(arena.battle.foes[0].fighter.health, 300, atol=1e-6)
     var broken = Arena(arena_parameters(1, 0))
     stand_facing(broken)

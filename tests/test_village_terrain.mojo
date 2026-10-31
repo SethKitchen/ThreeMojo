@@ -65,7 +65,7 @@ def test_a_wall_pushes_a_circle_straight_out() raises:
     assert_almost_equal(near.z, 0.4, atol=1e-5)
     var below = wall_push(wall, 2, -0.2, 0.3)
     assert_almost_equal(below.z, -0.4, atol=1e-5)
-    # Round the end, it pushes away from the end.
+    # Around the end, it pushes away from the end.
     var end = wall_push(wall, 4.2, 0.1, 0.3)
     var gap = (end - Vector3(4, 0, 0)).length()
     assert_almost_equal(gap, 0.4, atol=1e-5)

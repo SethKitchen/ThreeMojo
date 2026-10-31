@@ -8,7 +8,7 @@ and its animals, seen by a third-person camera.
 
 `VillageGame.tick` runs one frame of the game loop:
 
-1. The look stick turns the camera round the player: see
+1. The look stick turns the camera around the player: see
    `ThirdPersonControls`.
 2. The fight runs: see `extensions.village.battle`. The player's
    `Character` steps by the move stick, relative to the camera's yaw, on
@@ -19,11 +19,13 @@ and its animals, seen by a third-person camera.
    blows land. The player's `Body` stands where the character stands and
    plays its stance's clip, or its sword's. The coins and the herbs a
    fallen bandit gives go into the satchel, and the herbs the player eats
-   to heal come out of it. Fighting trains the player's swordplay, and
-   its level makes the player's blows stronger: see
-   `extensions.village.skills`.
+   to heal come out of it. Fighting trains the skill of the player's
+   fighting style. Its level makes the player's blows in that style
+   stronger, `SPECIALTY_MIGHT` more in the style they specialize in, and
+   teaches the style's combos: see `extensions.village.skills` and
+   `extensions.village.combos`.
 3. While the player moves and the look stick rests, the camera comes
-   round behind the player.
+   around behind the player.
 4. The camera turns toward the target the player locks on to.
 5. Each resident steps along its route and is posed: see `Residents`.
 6. Each door swings open while someone stands near it, and shut after.
@@ -77,6 +79,7 @@ from extensions.village.character import (
     CharacterParameters,
     MoveInput,
     Obstacle,
+    player_movement,
 )
 from extensions.village.battle import Battle, BattleParameters
 from extensions.village.battle_hud import draw_battle
@@ -91,14 +94,15 @@ from extensions.village.skills import (
     FISHING,
     FORAGING,
     MINING,
-    SWORDPLAY,
     Skills,
+    fighting_might,
     fish_haste,
     forage_bonus,
     ore_strikes,
     skill_name,
-    sword_might,
+    style_skill,
 )
+from extensions.village.styles import STYLES, FightingStyle
 from extensions.village.critters import Critters, Haunt, default_haunts
 from extensions.village.day import DayCycle, dim_water
 from extensions.village.talk import (
@@ -169,6 +173,9 @@ comptime ARM_MARGIN = Float32(0.3)
 """How far before a wall the camera's eye stops, in meters."""
 comptime SHAKEN = Float32(1.0e-3)
 """A camera's shake of less than this, in meters, is not seen."""
+comptime SPECIALTY_MIGHT = Float32(0.1)
+"""How much stronger the player's blows are in the style they specialize
+in."""
 comptime ARM_EASE = Float32(3)
 """How fast the eye goes back out once a wall is passed: each second it
 closes all but `exp(-ARM_EASE)` of its gap."""
@@ -180,7 +187,7 @@ def default_residents() raises -> ResidentsParameters:
     Returns:
         A woman in a hooded green tunic by the brick house, who visits
         it; a man in a blue tunic on the trail, who visits the stone
-        cottage; a child in a yellow tunic who runs round the pond; an
+        cottage; a child in a yellow tunic who runs around the pond; an
         old man in a gray tunic, who visits the framed cottage; and a
         woman in a red tunic by the framed house, who visits it. Four
         sheep and a goat right of the trail, two cows and a horse left
@@ -335,6 +342,7 @@ struct PlayParameters(Copyable, Movable):
         self.day = DayCycle()
         self.battle = BattleParameters()
         self.battle.coarseness = Float64(quality.animal_coarseness)
+        self.battle.fight_reach = quality.fight_reach
 
 
 def tree_obstacles(
@@ -494,7 +502,7 @@ struct VillageGame(Movable):
             parameters.residents.detail,
         )
         self.player = Character(
-            CharacterParameters(),
+            player_movement(),
             parameters.start_x,
             parameters.start_z,
             parameters.heading,
@@ -610,9 +618,16 @@ struct VillageGame(Movable):
         blocking.extend(self.residents.obstacles())
         var calm = abs(input.look_right) < CALM and abs(input.look_up) < CALM
         self.battle.herbs = self.gathering.satchel.count(HERBS)
-        self.battle.fighter.parameters.might = sword_might(
-            self.skills.level(SWORDPLAY)
-        )
+        # Each style's skill sets its level, which teaches its combos; the
+        # style the player fights in sets how strong the blows are.
+        for k in range(STYLES):  # pragma: no branch
+            var level = self.skills.level(style_skill(FightingStyle(k)))
+            self.battle.levels[k] = level
+        ref fighter = self.battle.fighter
+        var might = fighting_might(self.battle.levels[fighter.style.value])
+        if fighter.style == self.battle.book.specialty:
+            might *= 1 + SPECIALTY_MIGHT
+        fighter.parameters.might = might
         self.battle.tick(
             scene,
             input,
@@ -640,13 +655,15 @@ struct VillageGame(Movable):
             self.note = self.battle.notes[len(self.battle.notes) - 1]
             self.note_age = 0
             self.battle.notes.clear()
-        # Fighting trains swordplay, whose level makes the blows stronger.
-        if self.skills.train(SWORDPLAY, self.battle.trained):
-            self.note = String(
-                "SWORDPLAY LEVEL ", self.skills.level(SWORDPLAY), "!"
-            )
-            self.note_age = 0
-        self.battle.trained = 0
+        # Fighting trains each style's skill.
+        for k in range(STYLES):  # pragma: no branch
+            var skill = style_skill(FightingStyle(k))
+            if self.skills.train(skill, self.battle.trained[k]):
+                self.note = String(
+                    skill_name(skill), " LEVEL ", self.skills.level(skill), "!"
+                )
+                self.note_age = 0
+            self.battle.trained[k] = 0
         var around = self.trees.copy()
         around.extend(self.battle.obstacles())
         ref feet = self.player.position
