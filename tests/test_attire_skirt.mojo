@@ -360,5 +360,23 @@ def test_a_garment_hangs_its_skirt_below_the_top() raises:
     )
 
 
+def test_a_skirt_of_less_detail_has_fewer_rings() raises:
+    var rig = standing_rig()
+    var mesh = _hips_and_legs()
+    var full = skirt_envelope(mesh, rig, 0.2, List[SkirtEnvelope](), 0, 0)
+    var half = skirt_envelope(
+        mesh, rig, 0.2, List[SkirtEnvelope](), 0, 0, detail=0.5
+    )
+    # Rings twice as far apart, to the same hem.
+    assert_true(half.rings() < full.rings())
+    assert_true(half.rings() * 2 >= full.rings() - 2)
+    assert_almost_equal(half.hem(), full.hem())
+    for detail in [Float32(0), Float32(1.5)]:
+        with assert_raises(contains="detail"):
+            _ = skirt_envelope(
+                mesh, rig, 0.2, List[SkirtEnvelope](), 0, 0, detail=detail
+            )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

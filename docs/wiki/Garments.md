@@ -81,6 +81,14 @@ A shell made from the skin follows each thigh and each toe. A skirt and a boot d
 | `HATTED` | is drawn as the hat or the helmet its headwear names, round the head | a great helm, a crown, a wizard's hat |
 | `DOMED` | closes each shoulder in one smooth dome that stands well off it | great pauldrons |
 
+A garment cut from the skin has as many triangles as the skin under it. A skirt's rings and a hat's rings and sectors do not. On a coarse skin they would keep their full count and draw more triangles than the body. So `dress` gives them a share of their full detail, as `garment_detail` reads it off the skin:
+
+- A skin of 10,000 triangles or more takes the full detail: the body's share of a 16,000-triangle budget.
+- A coarser skin takes less, as the square root of its triangles over 10,000, and one half at the least.
+- A skirt's rings then lie farther apart, 6 cm at one half. A hat keeps fewer sectors and rings: 24 sectors and 12 rings at one half.
+
+At a 4,000-triangle budget, a robe draws 7,900 triangles, not 11,200, and a straw hat 2,900, not 5,400.
+
 ### Bands
 
 A belt is narrower than the ramp a hem is cut across. So its cover stays near one half, and a cut along it came out ragged on a game's coarse skin. `extensions/attire/band.mojo` draws a `BANDED` garment as a lined band of leather 4 cm deep on the template.

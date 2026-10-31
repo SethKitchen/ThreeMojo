@@ -426,6 +426,7 @@ def skirt_envelope(
     clearance: Float32,
     thickness: Float32,
     folds: Float32 = 0,
+    detail: Float32 = 1,
 ) raises -> SkirtEnvelope:
     """Return the rings a garment's skirt hangs on.
 
@@ -439,6 +440,10 @@ def skirt_envelope(
         thickness: Its fabric's thickness, in meters.
         folds: How deep its folds stand out at the hem, in meters. None
             by default.
+        detail: The share of its rings it keeps, above zero and one at
+            the most: its rings lie `SKIRT_RING` over `detail` apart at
+            the most. One by default. A coarse skin's garments take less,
+            as `garment_detail` says.
 
     Returns:
         The envelope. It has no rings when the garment reaches less than
@@ -446,8 +451,11 @@ def skirt_envelope(
         ring falls from the ring above as it was before its folds.
 
     Raises:
-        Error: If the mesh has no positions or skin weights.
+        Error: If the mesh has no positions or skin weights, or `detail`
+            is out of range.
     """
+    if not (detail > 0 and detail <= 1):
+        raise Error("A skirt's detail must be above zero, one at the most")
     var hips = rig.joints[HIPS.value]
     var top = skirt_top(rig)
     var envelope = SkirtEnvelope(Vector3(hips.x, top, hips.z), thickness)
@@ -456,7 +464,7 @@ def skirt_envelope(
     if top - hem < SKIRT_SHORTEST:
         return envelope^
     var scale = skirt_scale(rig)
-    var spacing = SKIRT_RING * scale
+    var spacing = SKIRT_RING * scale / detail
     var rings = Int((top - hem) / spacing) + 2
     var above = List[Float32]()
     var fallen = List[Float32]()

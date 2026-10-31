@@ -102,6 +102,11 @@ struct HeadFrame(Copyable, Movable):
     """The stature over the template's."""
     var bottom: Float32
     """The height of the base of the neck."""
+    var sectors: Int
+    """The steps round a hat drawn on this head: `SECTORS`, or fewer for
+    less detail, a multiple of eight."""
+    var rings: Int
+    """The rings of the sphere a helmet on this head is cast from."""
 
     def __init__(out self, var hull: FootLast, rig: HumanoidRig):
         """Read a head's hull.
@@ -115,6 +120,8 @@ struct HeadFrame(Copyable, Movable):
         self.hull = hull^
         self.scale = skirt_scale(rig)
         self.bottom = cowl_bottom(rig)
+        self.sectors = SECTORS
+        self.rings = RINGS
 
     def band(self) -> Float32:
         """Return the height of a hat's band.
@@ -261,9 +268,9 @@ struct _Hat(Movable):
         return self.writer.build()
 
 
-def _theta(k: Int) -> Float32:
+def _theta(k: Int, sectors: Int) -> Float32:
     """Return the way round of step `k`."""
-    return 2 * Float32(pi) * Float32(k) / Float32(SECTORS)
+    return 2 * Float32(pi) * Float32(k) / Float32(sectors)
 
 
 def _ring(frame: HeadFrame, y: Float32, beyond: Float32) -> List[Vector3]:
@@ -274,18 +281,18 @@ def _ring(frame: HeadFrame, y: Float32, beyond: Float32) -> List[Vector3]:
         y: The height the hull is read at, and the ring's height.
         beyond: How far past the hull the ring stands.
     """
-    var ring = List[Vector3](capacity=SECTORS)
-    for k in range(SECTORS):  # pragma: no branch
-        var theta = _theta(k)
+    var ring = List[Vector3](capacity=frame.sectors)
+    for k in range(frame.sectors):  # pragma: no branch
+        var theta = _theta(k, frame.sectors)
         ring.append(frame.at(y, theta, frame.width(y, theta) + beyond))
     return ring^
 
 
-def _rows_cover(rows: Int, value: Float32) -> List[List[Float32]]:
+def _rows_cover(rows: Int, value: Float32, sectors: Int) -> List[List[Float32]]:
     """Return the same cover value for every point of some rows."""
     var covers = List[List[Float32]]()
     for _ in range(rows):  # pragma: no branch
-        covers.append(List[Float32](length=SECTORS, fill=value))
+        covers.append(List[Float32](length=sectors, fill=value))
     return covers^
 
 
@@ -326,17 +333,19 @@ def _brim(
         var t = Float32(step) / Float32(steps)
         var row = List[Vector3]()
         var low = List[Vector3]()
-        for k in range(SECTORS):  # pragma: no branch
+        for k in range(frame.sectors):  # pragma: no branch
             var p = band[k]
-            var rise = lifts[k] * t * t + wave * t * sin(3 * _theta(k) + 1)
+            var rise = lifts[k] * t * t + wave * t * sin(
+                3 * _theta(k, frame.sectors) + 1
+            )
             var q = p + _away(frame, p) * (widths[k] * t) + Vector3(0, rise, 0)
             row.append(q)
             low.append(q - Vector3(0, thickness, 0))
         top.append(row^)
         under.append(low^)
-    var covers = _rows_cover(steps + 1, 1)
+    var covers = _rows_cover(steps + 1, 1, frame.sectors)
     # The edge of the brim takes the trim.
-    covers[steps] = List[Float32](length=SECTORS, fill=TRIM)
+    covers[steps] = List[Float32](length=frame.sectors, fill=TRIM)
     # Rows that run out from the axis face down as written, so the top
     # is written the other way round.
     hat.sheet(top, covers, False, True)
@@ -383,15 +392,18 @@ def _crown(
         var keep = 1 - t**taper
         var row = List[Vector3]()
         var lining = List[Vector3]()
-        for k in range(SECTORS):  # pragma: no branch
-            var fold = 1 + crumple * t * sin(5 * _theta(k) + 7 * t)
+        for k in range(frame.sectors):  # pragma: no branch
+            var fold = 1 + crumple * t * sin(
+                5 * _theta(k, frame.sectors) + 7 * t
+            )
             var from_axis = Vector3(
                 band[k].x - middle.x, 0, band[k].z - middle.z
             ) * (keep * fold)
             # The crown stands clear of the head and the hair under it.
             if axis.y < frame.top:
                 var clear = (
-                    frame.width(axis.y, _theta(k)) + HAIR_ROOM * frame.scale
+                    frame.width(axis.y, _theta(k, frame.sectors))
+                    + HAIR_ROOM * frame.scale
                 )
                 var reach = from_axis.length()
                 if reach < clear:
@@ -403,7 +415,7 @@ def _crown(
         rows.append(row^)
         inner.append(lining^)
         covers.append(
-            List[Float32](length=SECTORS, fill=TRIM if t < trim_to else 1)
+            List[Float32](length=frame.sectors, fill=TRIM if t < trim_to else 1)
         )
     hat.sheet(rows, covers, False, False)
     hat.cap(rows[steps - 1], middle + Vector3(0, rise, 0) + lean, 1)
@@ -486,16 +498,16 @@ def _tube(
         hat.writer.triangle(first[last] + s, first[last] + (s + 1) % sides, tip)
 
 
-def _corner(ring: Int, sector: Int) -> Int:
+def _corner(ring: Int, sector: Int, rings: Int, sectors: Int) -> Int:
     """Return the vertex of a cast sphere at a ring and a sector.
 
     A pole is one vertex. The sectors wrap round.
     """
     if ring == 0:
         return 0
-    if ring == RINGS:
-        return 1 + (RINGS - 1) * SECTORS
-    return 1 + (ring - 1) * SECTORS + sector % SECTORS
+    if ring == rings:
+        return 1 + (rings - 1) * sectors
+    return 1 + (ring - 1) * sectors + sector % sectors
 
 
 def _helmet(
@@ -533,13 +545,13 @@ def _helmet(
     var keep = List[Float32]()
     var lining = List[Vector3]()
     var linings = List[Float32]()
-    for ring in range(RINGS + 1):  # pragma: no branch
-        var sectors = SECTORS
-        if ring == 0 or ring == RINGS:
+    for ring in range(frame.rings + 1):  # pragma: no branch
+        var sectors = frame.sectors
+        if ring == 0 or ring == frame.rings:
             sectors = 1
         for sector in range(sectors):  # pragma: no branch
-            var down = Float32(pi) * Float32(ring) / Float32(RINGS)
-            var theta = _theta(sector)
+            var down = Float32(pi) * Float32(ring) / Float32(frame.rings)
+            var theta = _theta(sector, frame.sectors)
             var d = Vector3(
                 sin(down) * sin(theta), cos(down), sin(down) * cos(theta)
             )
@@ -587,16 +599,16 @@ def _helmet(
     for k in range(count):  # pragma: no branch
         keep.append(keep[k])
         _ = hat.vertex(lining[k], linings[k], False)
-    for ring in range(RINGS):  # pragma: no branch
-        for sector in range(SECTORS):  # pragma: no branch
-            var a = _corner(ring, sector)
-            var b = _corner(ring, sector + 1)
-            var c2 = _corner(ring + 1, sector)
-            var d2 = _corner(ring + 1, sector + 1)
+    for ring in range(frame.rings):  # pragma: no branch
+        for sector in range(frame.sectors):  # pragma: no branch
+            var a = _corner(ring, sector, frame.rings, frame.sectors)
+            var b = _corner(ring, sector + 1, frame.rings, frame.sectors)
+            var c2 = _corner(ring + 1, sector, frame.rings, frame.sectors)
+            var d2 = _corner(ring + 1, sector + 1, frame.rings, frame.sectors)
             if ring > 0:
                 hat.writer.triangle(a, b, c2)
                 hat.writer.triangle(count + a, count + c2, count + b)
-            if ring < RINGS - 1:
+            if ring < frame.rings - 1:
                 hat.writer.triangle(c2, b, d2)
                 hat.writer.triangle(count + c2, count + d2, count + b)
     return keep^
@@ -641,7 +653,7 @@ def _feather(mut hat: _Hat, frame: HeadFrame, band: List[Vector3]):
         band: The cap's band.
     """
     var s = frame.scale
-    var k = SECTORS * 3 // 8
+    var k = frame.sectors * 3 // 8
     var root = band[k] + _away(frame, band[k]) * (0.004 * s)
     var steps = 12
     var left = List[Int]()
@@ -691,8 +703,8 @@ def _band_rows(
     for r in range(rows):  # pragma: no branch
         var t = Float32(r) / Float32(rows - 1)
         var row = List[Vector3]()
-        for k in range(SECTORS):  # pragma: no branch
-            var theta = _theta(k)
+        for k in range(frame.sectors):  # pragma: no branch
+            var theta = _theta(k, frame.sectors)
             var y = lows[k] + (highs[k] - lows[k]) * t
             var reach = (frame.width(band, theta) + beyond) * (1 + flare * t)
             row.append(frame.at(y, theta, reach))
@@ -726,8 +738,8 @@ def _circlet(mut hat: _Hat, frame: HeadFrame, crown: Bool, thickness: Float32):
     var band = frame.band()
     var lows = List[Float32]()
     var highs = List[Float32]()
-    for k in range(SECTORS):  # pragma: no branch
-        var theta = _theta(k)
+    for k in range(frame.sectors):  # pragma: no branch
+        var theta = _theta(k, frame.sectors)
         if crown:
             # Eight points, one over the brow.
             var phase = Float32(8) * theta / (2 * Float32(pi))
@@ -743,13 +755,13 @@ def _circlet(mut hat: _Hat, frame: HeadFrame, crown: Bool, thickness: Float32):
     var rows = 6 if crown else 3
     var flare = Float32(0.12) if crown else Float32(0)
     var outer = _band_rows(frame, lows, highs, rows, flare, HAIR_ROOM * s)
-    var covers = _rows_cover(rows, 1)
-    covers[0] = List[Float32](length=SECTORS, fill=TRIM)
+    var covers = _rows_cover(rows, 1, frame.sectors)
+    covers[0] = List[Float32](length=frame.sectors, fill=TRIM)
     hat.sheet(outer, covers, False, False)
     hat.sheet(_inset(frame, outer, thickness), covers, False, True)
     if crown:
         for k in range(8):  # pragma: no branch
-            var at = outer[2][k * SECTORS // 8]
+            var at = outer[2][k * frame.sectors // 8]
             var size = (Float32(0.0065) if k == 0 else Float32(0.0045)) * s
             _gem(
                 hat, at + _away(frame, at) * (0.002 * s), _away(frame, at), size
@@ -790,6 +802,7 @@ def hat_mesh(
     rig: HumanoidRig,
     headwear: Headwear,
     thickness: Float32,
+    detail: Float32 = 1,
 ) raises -> BufferGeometry:
     """Return the hat or helmet a garment is drawn as.
 
@@ -799,22 +812,31 @@ def hat_mesh(
         rig: The rig it was made on.
         headwear: A named headwear kind, not `NO_HEADWEAR`.
         thickness: The fabric's thickness: how far each lining lies in.
+        detail: The share of its sectors and rings it keeps, above zero
+            and one at the most. One by default. Its sectors stay a
+            multiple of eight, 24 at the least, and its rings 12 at the
+            least.
 
     Returns:
         The hat, with an `accent` attribute: one on its stones, horns and
         feather. The shell as it is when it reaches too little of the head.
 
     Raises:
-        Error: If the headwear is not named or is `NO_HEADWEAR`, or the
-            mesh has no positions or skin weights.
+        Error: If the headwear is not named or is `NO_HEADWEAR`, the
+            detail is out of range, or the mesh has no positions or skin
+            weights.
     """
     require_headwear(headwear)
     if headwear == NO_HEADWEAR:
         raise Error("A hat needs a headwear kind")
+    if not (detail > 0 and detail <= 1):
+        raise Error("A hat's detail must be above zero, one at the most")
     var hulls = head_cowl(whole, rig)
     if len(hulls) == 0:
         return whole.clone()
     var frame = HeadFrame(hulls.pop(0), rig)
+    frame.sectors = 8 * max(3, Int(Float32(SECTORS // 8) * detail + 0.5))
+    frame.rings = max(12, Int(Float32(RINGS) * detail + 0.5))
     var s = frame.scale
     var hat = _Hat(whole)
     if (
@@ -837,8 +859,8 @@ def hat_mesh(
     var above = frame.top - frame.band()
     var widths = List[Float32]()
     var lifts = List[Float32]()
-    for k in range(SECTORS):  # pragma: no branch
-        var theta = _theta(k)
+    for k in range(frame.sectors):  # pragma: no branch
+        var theta = _theta(k, frame.sectors)
         if headwear == WIZARD_HAT:
             widths.append(0.085 * s)
             lifts.append(-0.018 * s)

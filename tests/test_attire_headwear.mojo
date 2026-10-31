@@ -213,5 +213,17 @@ def test_a_hat_presses_the_hair_under_it() raises:
     assert_equal(press_hair(empty, frame), 0)
 
 
+def test_a_hat_of_less_detail_has_fewer_triangles() raises:
+    var rig = _rig()
+    for kind in [GREAT_HELM, CROWN]:
+        var full = hat_mesh(_head(), rig, kind, 0.002)
+        var half = hat_mesh(_head(), rig, kind, 0.002, detail=0.5)
+        assert_true(half.triangle_count() < full.triangle_count() * 2 // 3)
+        assert_true(_trims(half) > 0)
+    for detail in [Float32(0), Float32(1.5)]:
+        with assert_raises(contains="detail"):
+            _ = hat_mesh(_head(), rig, CROWN, 0.002, detail=detail)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

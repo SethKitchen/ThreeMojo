@@ -39,6 +39,8 @@ This is not a three.js port. See Extensions.
     var dressed = dress(scene, assets, person, outfit)
 """
 
+from std.math import sqrt
+
 from core.assets import Assets
 from core.object3d import NodeId
 from core.buffer_geometry import POSITION, BufferGeometry
@@ -194,6 +196,38 @@ struct Dressed(Movable):
         self.shells = shells^
 
 
+comptime FULL_DETAIL = Float32(10000)
+"""The triangles of a skin whose formed garments take their full detail:
+a little less than the body's share of a 16,000-triangle budget, less a
+beard's."""
+comptime LEAST_DETAIL = Float32(0.5)
+"""The least share of their full detail formed garments take."""
+
+
+def garment_detail(skin: BufferGeometry) raises -> Float32:
+    """Return the share of their full detail a skin's formed garments
+    take.
+
+    A garment cut from the skin has as many triangles as the skin under
+    it. A skirt's rings, a hat's rings and sectors and a boot's last do
+    not: they would keep their full count on a coarse skin, and draw more
+    than the body. So they take a share that falls with the square root
+    of the skin's triangles, as the spacing of its vertices grows.
+
+    Args:
+        skin: A person's skin, as drawn.
+
+    Returns:
+        One for `FULL_DETAIL` triangles or more; less for fewer, and
+        `LEAST_DETAIL` at the least.
+
+    Raises:
+        Error: If the skin has no positions.
+    """
+    var share = sqrt(Float32(skin.triangle_count()) / FULL_DETAIL)
+    return min(Float32(1), max(LEAST_DETAIL, share))
+
+
 def dress_pieces(
     skin: BufferGeometry,
     person: GameHumanoid,
@@ -229,7 +263,8 @@ def dress_pieces(
     # shows through the shell over it.
     var legs = leg_side(skin)
     var top = skirt_top(person.rig)
-    var clear = top - 2 * SKIRT_RING * skirt_scale(person.rig)
+    var detail = garment_detail(skin)
+    var clear = top - 2 * SKIRT_RING * skirt_scale(person.rig) / detail
     var values = List[List[Float32]]()
     var hides = List[List[Float32]]()
     var faces = List[List[Float32]]()
@@ -301,6 +336,7 @@ def dress_pieces(
                 Float32(cloth.clearance.value + garment.ease.value),
                 Float32(cloth.thickness.value),
                 Float32(fold_depth(garment.fabric).value),
+                detail,
             )
             whole = hang_skirt(whole, envelope, person.rig, False)
         var feet = List[FootLast]()
@@ -334,6 +370,7 @@ def dress_pieces(
                 person.rig,
                 garment.headwear,
                 Float32(fabric(garment.fabric).thickness.value),
+                detail,
             )
         var head = List[FootLast]()
         if garment.form == COWLED:

@@ -6,6 +6,7 @@
 """Tests for outfits, and for dressing a game humanoid in one."""
 
 from core.assets import Assets
+from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from core.object3d import NodeId
 from core.scene import Scene
@@ -49,11 +50,17 @@ from render.framebuffer import Color
 from extensions.attire.apparel import crown, straw_hat
 from extensions.attire.armory import great_helm, great_pauldrons
 from extensions.attire.mesh_ops import ACCENT
-from extensions.attire.outfit import Outfit, dress, dress_pieces
+from extensions.attire.outfit import (
+    Outfit,
+    dress,
+    dress_pieces,
+    garment_detail,
+)
 from objects.skinned_mesh import SKIN_INDEX
 from render.texture_store import NO_TEXTURE
 from std.testing import (
     TestSuite,
+    assert_almost_equal,
     assert_equal,
     assert_false,
     assert_raises,
@@ -460,6 +467,25 @@ def test_a_great_helm_hides_the_hair() raises:
     hatted.add(straw_hat())
     _ = dress(scene, assets, shorn, hatted)
     assert_true(scene.node(shorn.cards[0].node.value()).visible)
+
+
+def test_a_coarse_skin_s_garments_take_less_detail() raises:
+    var counts: List[Int] = [2500, 100, 10000, 40000]
+    var shares: List[Float32] = [0.5, 0.5, 1, 1]
+    for k in range(len(counts)):
+        var skin = BufferGeometry()
+        skin.set_attribute(
+            String(POSITION),
+            BufferAttribute(List[Float32](length=9, fill=0), 3),
+        )
+        skin.set_index(List[Int](length=3 * counts[k], fill=0))
+        assert_almost_equal(garment_detail(skin), shares[k])
+    var between = BufferGeometry()
+    between.set_attribute(
+        String(POSITION), BufferAttribute(List[Float32](length=9, fill=0), 3)
+    )
+    between.set_index(List[Int](length=3 * 4900, fill=0))
+    assert_almost_equal(garment_detail(between), 0.7, atol=1e-4)
 
 
 def main() raises:
