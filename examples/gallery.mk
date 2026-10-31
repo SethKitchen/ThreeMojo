@@ -213,6 +213,8 @@ $(call gallery,designs,designs)
 $(call gallery,fabrics,fabrics)
 # Two forest outlaws in hoods and hood capes, with longbows and quivers.
 $(call gallery,outlaws,outlaws)
+# Four people in plate and mail of four metals: full and half helmets, plate skirts.
+$(call gallery,plate_and_mail,plate_and_mail)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.

@@ -101,7 +101,9 @@ Many garments of a calling also take a [design](Garments#designs) by chance. Mos
 
 Frills come by chance too. A courtly royal mostly wears a shirt with frilled cuffs and collar, and so do some merchants and warlocks. Some ladies' gowns have frilled sleeve ends, and one skirted woman in four has a flounce at her hem.
 
-Each garment of a calling takes its dye by a pick of its own. So the dyes of a robe, its mantle and its sash vary apart. A test dresses 120 seeds of each of the seven callings as a man and as a woman. Of the 1,680 people, more than 1,500 differ in their garments, dyes, metals, hair or beard. The genome and the stature make each person differ further.
+Each garment of a calling takes its dye by a pick of its own. So the dyes of a robe, its mantle and its sash vary apart. A test dresses 120 seeds of each of the seven callings as a man and as a woman. Of the 1,680 people, more than 1,500 differ in their garments, dyes, metals, hair or beard.
+
+Over all fifteen callings, 200 seeds and both sexes, 5,337 of 6,000 people differ. They differ in their garments, dyes, metals, designs, frills, patterns, hair, beard or cloak. The genome and the stature make each person differ further.
 
 Some garments are parti-colored: four merchants' tunics in ten and three women's gowns in ten take a second dye on the left side. Three men-at-arms' surcoats in ten are quartered, and two in ten bear a cross or a saltire.
 
@@ -119,6 +121,27 @@ The cloaks fall over the outfits' colliders. The hair is 500 cards on each head,
 
 ![Fourteen people of seven callings walk and stand while the camera passes round to their cloaks](out/archetypes.png)
 
+### Looks by name
+
+Each look below comes from one call, for a man or a woman, and a seed varies it. The last column names the pictures that show it.
+
+| Look | Made by | Pictures |
+|---|---|---|
+| peasant | `dressed_as(PEASANT, sex, seed)` | `crowd.png` |
+| farmer | `dressed_as(FARMER, sex, seed)` | `archetypes.png` |
+| barbarian | `dressed_as(BARBARIAN, sex, seed)`: furs, or a plaid kilt | `archetypes.png`, `fabrics.png` |
+| royalty | `dressed_as(ROYAL, sex, seed)`: a crown or a circlet, robes or a ball gown | `archetypes.png`, `tailoring.png` |
+| wizard | `dressed_as(WIZARD, sex, seed)` | `archetypes.png` |
+| warlock | `dressed_as(WARLOCK, sex, seed)` | `archetypes.png` |
+| forest outlaw | `dressed_as(RANGER, sex, seed)` and `equip_archer` | `outlaws.png` |
+| platebody, plate legs, plate skirt | `platebody`, `plate_legs`, `plate_skirt`, each `forged` of a metal | `plate_and_mail.png` |
+| plate shoulders | `pauldrons`, `great_pauldrons` | `plate_and_mail.png` |
+| full helmet, half helmet | `great_helm`, `half_helm` | `plate_and_mail.png`, `headwear.png` |
+| chainmail | `hauberk`, `chain_shirt`, `coif`, `mail_chausses` | `plate_and_mail.png`, `armory.png` |
+| a full harness | `dressed_as(WARRIOR, sex, seed)` | `archetypes.png` |
+
+Nine metals forge the armor; see [Garments](Garments#metals). Fabrics, dyes, designs, frills and fur vary the cloth; see [Garments](Garments#designs).
+
 ## Crowd cost
 
 `bench/crowd_bench.mojo` builds a varied crowd and measures it. A seed gives each person a calling, a sex, a genome, a stature, an outfit, a hairstyle, a beard and, by chance, a cloak. The crowd stands in rows ten wide and four meters apart, and walks in place. The camera looks along the rows from in front.
@@ -130,6 +153,8 @@ These are 40 people on four threads, drawn at 1280 by 720 on the CPU:
 | 16,000, 400 | 41,000 | 2.1 s | 0.19 s | 39 ms | 20 ms | 1.8 s |
 | 8,000, 200 | 28,000 | 2.0 s | 0.13 s | 20 ms | 15 ms | 1.4 s |
 | 4,000, 100 | 21,500 | 1.9 s | 0.08 s | 9 ms | 16 ms | 1.0 s |
+
+Designs, frills, fur and hanging cloth came after this table. With them, a person of the same crowd draws 45,000 triangles, not 41,000, and holds 9.7 MB, not 9. A fur garment costs the most: its three shells at full detail draw its outer face three more times.
 
 Of the 40, 30 stand within 15 m of the camera. Their hair moves, and 11 of the 14 cloaks step. The rest ride their bones. Animating the 40 skeletons takes 3 ms a frame. A person holds about 9 MB after the build at 16,000 triangles.
 
@@ -157,6 +182,17 @@ A flexible garment keeps the skin's weights and bends as the skin bends. Plate d
 | `LAMED` | bands that step from the anchor to the skin's weights | a fauld from the hips, pauldrons from the chest |
 
 A lamed garment is cut into bands along the anchor's own weight on the skin. The top lame rides the anchor wholly. Each lame below it shares more of its weight with the bones under it, in equal steps. Each lame reaches 0.3 of a band past its lower bound and stands 2.5 mm out over the lame below. So each lame shows its lower edge as a lip, and the fauld opens as the thigh lifts.
+
+`examples/plate_and_mail.mojo` dresses four people in plate and mail of four metals, and writes `out/plate_and_mail.png`.
+
+| Person | Metal | Pieces |
+|---|---|---|
+| a man | bright steel | `great_helm`, the full helmet; `platebody`, `arm_harness`, `great_pauldrons`, `plate_skirt`, `plate_legs`, `gauntlets` and `sabatons` |
+| a woman | blued steel, trimmed with gold | `half_helm`, `platebody`, `arm_harness`, `pauldrons`, `plate_skirt`, `plate_legs`, `gauntlets` and `sabatons` |
+| a man | iron | `hauberk` and `coif` of mail, `mail_chausses`, and `pauldrons` of plate |
+| a woman | bronze | `half_helm`, `chain_shirt`, `great_pauldrons`, `plate_skirt`, `plate_legs` and `sabatons` |
+
+![Four people in steel, blued, iron and bronze plate and mail](out/plate_and_mail.png)
 
 ## Sockets and props
 
