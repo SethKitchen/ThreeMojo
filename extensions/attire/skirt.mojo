@@ -32,7 +32,13 @@ part of a garment's shell below the hips with such a tube:
    Down the tube the weights pass over to the thighs: the right thigh
    turns the right side, the left thigh the left side, and the two share
    the middle of the front and the back. So the skirt opens as a leg
-   lifts.
+   lifts. Where the tube lies within `SKIRT_HUG` of the shell under it,
+   it takes the weights of the shell's nearest vertex instead, and it
+   passes back to its own blend by `SKIRT_FREE`. The gap is the closer
+   of the distance to that vertex and the gap along the side's ray from
+   the axis to where the ray crosses the shell. So a skirt close over a thigh or a hip moves
+   with the cloth under it, and a swinging thigh does not pass out
+   through it.
 
 The skirt keeps the shell's `cover` attribute, falling to one half at the
 hem, so a hem trim lies along it as along any hem.
@@ -89,6 +95,12 @@ comptime SKIRT_LEG_SHARE = Float32(0.9)
 comptime SKIRT_HEM_RAMP = Float32(0.04)
 """Over how many meters above the hem the cover value climbs from one
 half to one."""
+comptime SKIRT_HUG = Float32(0.02)
+"""How close over the cloth under it, in meters on the template, a skirt
+takes that cloth's weights in full."""
+comptime SKIRT_FREE = Float32(0.06)
+"""How far from the cloth under it, in meters on the template, a skirt
+keeps its own blend of weights in full."""
 comptime SKIRT_SHORTEST = Float32(0.01)
 """A garment that reaches less than this below the top, in meters, hangs
 no skirt."""
@@ -110,6 +122,11 @@ struct SkirtEnvelope(Copyable, Movable):
     """The radius of each side of the tucked ring, in meters."""
     var thickness: Float32
     """How thick the skirt's fabric is, in meters."""
+    var cloth: List[Float32]
+    """Where the garment's own shell crosses each side of each ring, in
+    the order of `radii`, in meters: the farthest crossing of the ray from
+    the axis, or zero where the ray crosses only a gap, such as between
+    the legs."""
 
     def __init__(out self, center: Vector3, thickness: Float32):
         """Hold no rings: a garment that hangs no skirt.
@@ -124,6 +141,7 @@ struct SkirtEnvelope(Copyable, Movable):
         self.tuck = center.y
         self.tucked = List[Float32]()
         self.thickness = thickness
+        self.cloth = List[Float32]()
 
     def rings(self) -> Int:
         """Return how many rings the skirt has.
@@ -508,9 +526,17 @@ def skirt_envelope(
         envelope.heights.append(y)
         # A level at the hem itself touches only its lowest point.
         var sliced = max(y, hem + Float32(0.002))
-        var radii = hull_radii(
-            level_hull(slice_segments(whole, legs, sliced)), envelope.center
-        )
+        var segments = slice_segments(whole, legs, sliced)
+        var radii = hull_radii(level_hull(segments), envelope.center)
+        var crossed = segment_radii(segments, envelope.center)
+        # A ray that passes through a corner of the shell can miss both of
+        # its edges: a side that both its neighbors cross crosses too.
+        for side in range(SKIRT_SIDES):  # pragma: no branch
+            var before = crossed[(side + SKIRT_SIDES - 1) % SKIRT_SIDES]
+            var after = crossed[(side + 1) % SKIRT_SIDES]
+            if crossed[side] <= 0 and before > 0 and after > 0:
+                crossed[side] = (before + after) / 2
+        envelope.cloth.extend(crossed^)
         for side in range(SKIRT_SIDES):  # pragma: no branch
             var r = radii[side]
             if k > 0:
@@ -574,12 +600,14 @@ def skirt_mesh(
         The skirt, with the garment's attributes and normals.
 
     Raises:
-        Error: If the envelope has fewer than two rings, or the mesh has
-            no positions or skin weights.
+        Error: If the envelope has fewer than two rings or not one cloth
+            radius a radius, or the mesh has no positions or skin weights.
     """
     var rings = envelope.rings()
     if rings < 2:
         raise Error("A skirt needs two rings or more")
+    if len(envelope.cloth) != len(envelope.radii):
+        raise Error("A skirt needs where its shell crosses each side")
     var legs = leg_side(piece)
     ref placed = piece.attribute_view(String(POSITION))
     ref bones = piece.attribute_view(String(SKIN_INDEX))
@@ -587,6 +615,10 @@ def skirt_mesh(
     var points = List[Vector3](capacity=placed.count())
     for v in range(placed.count()):
         points.append(placed.vector3(v))
+    # The cloth under the skirt: the shell's own vertices below its top.
+    var under = List[Bool](capacity=placed.count())
+    for v in range(placed.count()):
+        under.append(legs[v] and points[v].y <= envelope.tuck)
     var top = envelope.heights[0]
     var hem = envelope.hem()
     var scale = skirt_scale(rig)
@@ -615,7 +647,10 @@ def skirt_mesh(
                 r = envelope.radii[k * SKIRT_SIDES + side]
             var p = envelope.center + direction * r
             p.y = y
-            # The weights of the shell at the top of this side.
+            # The weights of the shell at the top of this side, passing to
+            # the thighs as the cloth falls: right on the right, left on
+            # the left, and the two sharing the middle.
+            var share = clamp(0.5 + right * (p.x - hips.x) / (2 * split), 0, 1)
             var all = List[Float32](length=JOINT_COUNT, fill=0)
             var source = _nearest(
                 points,
@@ -629,10 +664,35 @@ def skirt_mesh(
                     ) * weights.component(source, c)
             else:
                 all[HIPS.value] += 1 - fall
-            var share = clamp(0.5 + right * (p.x - hips.x) / (2 * split), 0, 1)
             all[HIPS.value] += fall * (1 - SKIRT_LEG_SHARE)
             all[RIGHT_THIGH.value] += fall * SKIRT_LEG_SHARE * share
             all[LEFT_THIGH.value] += fall * SKIRT_LEG_SHARE * (1 - share)
+            # Where the skirt lies close over the cloth under it, it takes
+            # that cloth's weights, so it moves with it and a swinging
+            # thigh does not pass out through it. Where it hangs free,
+            # between the legs and out at a flared hem, it keeps the blend.
+            # How close the skirt lies over the cloth: along its side's
+            # ray from the axis, where the ray crosses the cloth, and to
+            # the cloth's nearest vertex, whichever is closer.
+            var below = _nearest(points, under, p)
+            if below >= 0:
+                var gap = (points[below] - p).length()
+                var at = max(k, 0) * SKIRT_SIDES + side
+                if envelope.cloth[at] > 0:
+                    gap = min(gap, envelope.radii[at] - envelope.cloth[at])
+                var hug = clamp(
+                    (SKIRT_FREE * scale - gap)
+                    / ((SKIRT_FREE - SKIRT_HUG) * scale),
+                    0,
+                    1,
+                )
+                hug = hug * hug * (3 - 2 * hug)
+                for b in range(JOINT_COUNT):  # pragma: no branch
+                    all[b] *= 1 - hug
+                for c in range(4):  # pragma: no branch
+                    all[
+                        Int(bones.component(below, c))
+                    ] += hug * weights.component(below, c)
             var chosen = top_four(all)
             outer.append(builder.add(p, cover, chosen[0], chosen[1]))
             var q = p - direction * envelope.thickness

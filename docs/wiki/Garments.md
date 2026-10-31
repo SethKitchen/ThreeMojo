@@ -139,6 +139,12 @@ A drawn skirt is lined: it has an inner face one fabric thickness inside, and a 
 
 Each vertex at the top takes the weights of the nearest vertex of the shell. Down the skirt the weights pass to the thighs: at the hem the thighs hold 0.9 of each vertex. The right thigh turns the right side and the left thigh the left side. The two share a band 10 cm wide at the middle of the front and the back. So the skirt opens as a leg lifts.
 
+A skirt close over the body moves with the cloth under it. Where the gap is 2 cm or less, the skirt's vertex takes the weights of the shell's nearest vertex. From 2 cm to 6 cm, it passes smoothly back to its own blend. So a short tunic over trousers turns with each thigh. A thigh that swings 35 degrees forward or back does not pass out through it. Between the legs and at a flared hem, the skirt hangs free and keeps its blend.
+
+The gap is the closer of two measures. One is to the shell's nearest vertex. The other runs along the side's ray from the axis, to where the ray crosses the shell.
+
+A skirt is not simulated. A thigh that swings far past a stride, as in a high kick, can still pass out through a short skirt near its top.
+
 The cover value falls from one to one half over the 4 cm above the hem. So a trim lies along a skirt's hem, as along any hem.
 
 Below the top, a skirt hangs clear of the legs. So it hides neither the skin nor the garments under it there, and the hose and the legs draw under it. A band 6 cm deep below the top stays hidden, so no triangle that crosses the top shows through the shell over it. A skirt over another that falls as far hides it. The inner skirt is then not drawn.

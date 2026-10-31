@@ -258,6 +258,34 @@ def test_a_skirt_s_folds_bunch_and_vary() raises:
     assert_true(wide > narrow)
 
 
+def test_a_skirt_close_over_its_cloth_takes_its_weights() raises:
+    var rig = standing_rig()
+    # A long tube round the hips and down past the knees, all held by the
+    # hips.
+    var piece = _covered(tube(0, 0, 0.16, 0.1, -0.5, HIPS, 12, 16))
+    var hugging = skirt_envelope(piece, rig, 0, List[SkirtEnvelope](), 0, 0)
+    var straight = skirt_mesh(hugging, piece, rig, False)
+    ref bones = straight.attribute_view(String(SKIN_INDEX))
+    ref weights = straight.attribute_view(String(SKIN_WEIGHT))
+    var hem = (hugging.rings() - 1) * SKIRT_SIDES
+    # A straight skirt lies on the tube: its hem moves with the hips.
+    for side in range(SKIRT_SIDES):
+        assert_equal(Int(bones.component(hem + side, 0)), HIPS.value)
+        assert_true(weights.component(hem + side, 0) > 0.99)
+    # An envelope must say where its shell crosses each side.
+    var bare = hugging.copy()
+    bare.cloth.clear()
+    with assert_raises(contains="crosses each side"):
+        _ = skirt_mesh(bare, piece, rig, False)
+    # A wide one hangs free of it at the hem, and passes to the thighs.
+    var flared = skirt_envelope(piece, rig, 0.6, List[SkirtEnvelope](), 0, 0)
+    var wide = skirt_mesh(flared, piece, rig, False)
+    ref free = wide.attribute_view(String(SKIN_INDEX))
+    var bottom = (flared.rings() - 1) * SKIRT_SIDES
+    var thigh = Int(free.component(bottom + 3 * SKIRT_SIDES // 4, 0))
+    assert_true(thigh == RIGHT_THIGH.value or thigh == LEFT_THIGH.value)
+
+
 def test_a_short_skirt_does_not_lift_a_long_one() raises:
     var rig = standing_rig()
     var long = _hips_and_legs()
@@ -334,9 +362,8 @@ def test_a_skirt_is_lofted_lined_and_weighted() raises:
     assert_equal(Int(bones.component(SKIRT_SIDES, 0)), HIPS.value)
     var right_side = rings * SKIRT_SIDES + 3 * SKIRT_SIDES // 4
     assert_equal(Int(bones.component(right_side, 0)), RIGHT_THIGH.value)
-    assert_almost_equal(
-        weights.component(right_side, 0), SKIRT_LEG_SHARE, atol=1e-5
-    )
+    # At least its share; more where the hem lies close over the thigh.
+    assert_true(weights.component(right_side, 0) >= SKIRT_LEG_SHARE - 1e-5)
     # A mirrored rig puts the right thigh on the other side.
     var mirrored = standing_rig(0.1)
     var flipped = skirt_mesh(envelope, piece, mirrored, False)

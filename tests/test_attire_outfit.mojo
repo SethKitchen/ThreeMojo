@@ -73,6 +73,9 @@ from extensions.attire.outfit import (
 )
 from objects.skinned_mesh import SKIN_INDEX
 from extensions.attire.tailor import chemise, doublet, skirt
+from extensions.attire.apparel import trousers
+from core.deform import skin_carriers, skin_pose
+from units.si import DEGREE, Angle
 from extensions.attire.apparel import fur_mantle
 from extensions.attire.garment import jerkin
 from render.texture_store import NO_TEXTURE
@@ -605,6 +608,101 @@ def test_frills_fur_and_hide_each_draw_their_part() raises:
 def _mesh_of(scene: Scene, assets: Assets, mesh: Int) raises -> BufferGeometry:
     """Return the geometry a garment draws, in its bind pose."""
     return assets.geometries.get(scene.skinned_meshes[mesh].geometry).clone()
+
+
+def _posed(scene: Scene, assets: Assets, mesh: Int) raises -> BufferGeometry:
+    """Return a skinned mesh's geometry, carried by its bones as they stand:
+    its positions and its normals."""
+    var geometry = assets.geometries.get(
+        scene.skinned_meshes[mesh].geometry
+    ).clone()
+    var count = geometry.vertex_count()
+    var carriers = skin_carriers(geometry, skin_pose(scene, mesh), count)
+    var placed = geometry.clone_attribute(String(POSITION))
+    var normals = geometry.clone_attribute(String(NORMAL))
+    for v in range(count):
+        var p = placed.vector3(v)
+        p.apply_matrix4(carriers[v])
+        placed.set_component(v, 0, p.x)
+        placed.set_component(v, 1, p.y)
+        placed.set_component(v, 2, p.z)
+        var n = normals.vector3(v)
+        n.transform_direction(carriers[v])
+        normals.set_component(v, 0, n.x)
+        normals.set_component(v, 1, n.y)
+        normals.set_component(v, 2, n.z)
+    geometry.set_attribute(String(POSITION), placed^)
+    geometry.set_attribute(String(NORMAL), normals^)
+    return geometry^
+
+
+def _poking(
+    legs: BufferGeometry,
+    skirt: BufferGeometry,
+    under: List[Bool],
+    axis: Vector3,
+) raises -> Int:
+    """Return how many of the legs' vertices that `under` names stand
+    more than 3 mm out past the outer face of the skirt nearest them. The
+    outer face looks away from a vertical axis; the lining looks in."""
+    ref placed = legs.attribute_view(String(POSITION))
+    ref over = skirt.attribute_view(String(POSITION))
+    ref facing = skirt.attribute_view(String(NORMAL))
+    var outer = List[Bool]()
+    for s in range(over.count()):
+        var away = over.vector3(s) - axis
+        away.y = 0
+        outer.append(facing.vector3(s).dot(away) > 0)
+    var count = 0
+    for v in range(placed.count()):
+        if not under[v]:
+            continue
+        var p = placed.vector3(v)
+        var nearest = 0
+        var closest = Float32(1e30)
+        for s in range(over.count()):
+            if not outer[s]:
+                continue
+            var d = (over.vector3(s) - p).length_sq()
+            if d < closest:
+                closest = d
+                nearest = s
+        if (p - over.vector3(nearest)).dot(facing.vector3(nearest)) > 0.003:
+            count += 1
+    return count
+
+
+def test_trousers_stay_under_a_tunic_as_a_thigh_swings() raises:
+    for angle in [Float32(-35), Float32(35)]:
+        var scene = Scene()
+        var assets = Assets()
+        var person = coarse_person(scene, assets)
+        var outfit = Outfit()
+        outfit.add(trousers())
+        outfit.add(tunic())
+        var dressed = dress(scene, assets, person, outfit)
+        var top = skirt_top(person.rig)
+        # The legs' vertices under the tunic's skirt, at rest.
+        var hem = Float32(1e9)
+        var coat = _mesh_of(scene, assets, dressed.meshes[1])
+        ref hung = coat.attribute_view(String(POSITION))
+        for v in range(hung.count()):
+            hem = min(hem, hung.vector3(v).y)
+        var legs = _mesh_of(scene, assets, dressed.meshes[0])
+        ref rest = legs.attribute_view(String(POSITION))
+        var under = List[Bool]()
+        for v in range(rest.count()):
+            var y = rest.vector3(v).y
+            under.append(y < top - 0.02 and y > hem + 0.02)
+        # One thigh swings forward or back, as in a stride.
+        scene.node(person.bones[RIGHT_THIGH.value]).rotate_x(
+            Angle(angle, DEGREE)
+        )
+        scene.update()
+        var posed = _posed(scene, assets, dressed.meshes[0])
+        var skirt = _posed(scene, assets, dressed.meshes[1])
+        var axis = person.rig.joints[HIPS.value]
+        assert_equal(_poking(posed, skirt, under, axis), 0)
 
 
 def test_a_garment_that_covers_nothing_draws_nothing() raises:
