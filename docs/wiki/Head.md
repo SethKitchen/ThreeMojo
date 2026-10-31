@@ -239,7 +239,7 @@ Pass a `HairBody` as the collider. The skins' own fields are too slow to read fo
 - The head's skin, into a fine grid. Above the chin only the head counts, so the hair on the scalp lies smooth.
 - The body's skin, from the middle of the back up, into a coarser grid. Below the neck the body counts, so long hair falls on the shoulders and the back.
 
-`HairCollider` bakes any other field. `HairWind` blows one way, in gusts. Each strand's strength flutters, out of phase with its neighbors'. The simulation is ported from Frostbitten Hair WebGPU, with its defaults. Its grids of density and velocity are left out.
+`HairCollider` bakes any other field. It samples the grid's planes on every thread, as each sample stands alone. `HairWind` blows one way, in gusts. Each strand's strength flutters, out of phase with its neighbors'. The simulation is ported from Frostbitten Hair WebGPU, with its defaults. Its grids of density and velocity are left out.
 
 The strands lie in the frame of the node they hang from. A game humanoid's head moves that frame. `carry(move)` moves each point but the root back by the frame's move, so the point keeps its place and its speed in the world. Give it the frame's new world matrix, inverted, times its old one. The next step then swings the hair as the head speeds up, slows or turns. A move that takes a root more than half a meter is a jump, and the hair is not carried through it.
 

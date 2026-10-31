@@ -39,6 +39,16 @@ With `cards`, it grows that many guide strands in the shape of `hair_style` and 
 
 `GameHairMotion` moves the strands and the cards as the person moves. Call `update` once a frame, after the scene is updated. The hair lags as the head starts, swings as it stops, and falls toward the ground as the head bows. A groom that a hood or a helmet hides is not moved.
 
+A groom whose head is farther than `reach` from the camera is not moved either. The default is 15 m. It rides its head as it last lay, and its sway is too small to see there. When it comes near again it swings on from where it lay.
+
+`move_hair(motions, scene, assets, people, lights, eye, ambient, wind, workers)` moves a crowd's hair. It works in three steps:
+
+1. Each motion carries its grooms through their heads' moves, as `prepare` does.
+2. The grooms that show and lie within reach step and are lit at once, a run of grooms on each thread, as `advance` does.
+3. Their meshes go to the store, as `publish` does.
+
+The hair moves as each person's own `update` moves it.
+
 ```mojo
 var person = add_game_humanoid(scene, assets, root, spec, 20000, cards=700)
 var motion = GameHairMotion(scene, person, spec)
@@ -96,7 +106,9 @@ Build the humanoid once and bake it with `write_sealed_bake(path, scene, assets,
 | Load the `.glb` | 12 ms |
 | Animate and draw one frame, 640 by 360 | 31 ms: 32 frames a second |
 
-These were measured on four cores. Most of the build is the hair's shell, at `hair_detail` 32.
+These were measured on four cores.
+
+With a budget, the hair's shell and the hands are meshed at about ten times their shares of it. `budget_detail` chooses the detail, and never above `hair_detail` or `hand_detail`. Finer, the decimation throws the rest away, and the meshing and the decimation cost more for nothing. At 16,000 triangles the shell's share is 1,920. So it is meshed at detail 15, about 21,000 triangles, not at 32, about 96,000. A beard keeps its detail: meshed coarser, its locks stop the decimation short of a small budget.
 
 The body's skin, each hand's and the hair's shell are decimated at once, one on each thread, with `budget_all`. Each decimation is the same as before, so the meshes are too. On a shared four-core machine a build at 24,000 triangles fell from 3.3 s to 2.5 s.
 

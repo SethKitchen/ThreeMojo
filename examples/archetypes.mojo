@@ -37,7 +37,7 @@ from core.buffer_geometry import POSITION
 from core.object3d import Object3D
 from core.scene import Scene
 from environments.room_environment import room_environment
-from extensions.attire.cloth import Cloak, CloakCut, add_cloak
+from extensions.attire.cloth import Cloak, CloakCut, add_cloak, move_cloaks
 from extensions.attire.drape import dressed_colliders
 from extensions.attire.mix import (
     BARBARIAN,
@@ -60,7 +60,7 @@ from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.genome import random_genome
 from extensions.humanoid.rig.clips import idle_clip, walk_clip
 from extensions.humanoid.rig.game import GameHumanoid, add_game_humanoid
-from extensions.humanoid.rig.game_hair import GameHairMotion
+from extensions.humanoid.rig.game_hair import GameHairMotion, move_hair
 from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.skeleton.head.hair.shading import HairLight
 from extensions.humanoid.skeleton.head.hair.simulation import HairWind
@@ -258,23 +258,23 @@ def main() raises:
         if frame > 0:
             mixer.update(scene, step)
         scene.update()
-        for k in range(len(cloaks)):
-            cloaks[k].step(scene, assets, step, workers)
         # Along the front, then round the right side to the back.
         var share = Float32(frame) / Float32(max(1, frames_wanted - 1))
         var ease = share * share * (3 - 2 * share)
         var turn = Float32(-0.4) + Float32(3.3) * ease
         var eye = Vector3(4.5 * sin(turn) + 0.2, 1.5, 4.5 * cos(turn) - 0.3)
-        for index in range(len(people)):
-            motions[index].update(
-                scene,
-                assets,
-                people[index],
-                lights,
-                eye,
-                ambient,
-                HairWind(breeze, 0.25),
-            )
+        move_cloaks(cloaks, scene, assets, step, eye, workers)
+        move_hair(
+            motions,
+            scene,
+            assets,
+            people,
+            lights,
+            eye,
+            ambient,
+            HairWind(breeze, 0.25),
+            workers,
+        )
         var camera = gallery_camera(
             WIDTH,
             HEIGHT,

@@ -119,6 +119,7 @@ from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SkinnedMesh
 from core.ordinal import require_valid, require_non_negative
 from render.tasks import TaskGroup
+from std.math import ceil, sqrt
 
 # The share of a triangle budget the body's skin takes, and the hair's
 # shell; each hand takes half of the rest.
@@ -130,6 +131,18 @@ comptime HAIR_SHARE = Float32(0.12)
 comptime BEARD_SHARE = Float32(0.03)
 # Cells along a beard's box.
 comptime BEARD_DETAIL = 28
+# With a triangle budget, the hair's shell and the hands are meshed at
+# about this many times their shares of it. Finer, decimation throws the
+# rest away, and the meshing and the decimation cost more for nothing. A
+# beard keeps its detail: meshed coarser, its locks stop decimation short
+# of a small budget.
+comptime SPARE_TRIANGLES = Float32(10)
+# Triangles per square of the detail: the hair's shell, its outer face
+# alone, and a hand's skin.
+comptime SHELL_DENSITY = Float32(95)
+comptime HAND_DENSITY = Float32(38)
+# The coarsest detail a budget meshes a part at.
+comptime LEAST_BUDGET_DETAIL = 12
 # A beard's cards: a quarter of the scalp's, and 40 at least.
 comptime BEARD_CARDS_SHARE = 4
 comptime BEARD_CARDS_LEAST = 40
@@ -393,6 +406,27 @@ def budget_all(
 comptime _FACIAL_PART_MINIMUM = 4 * 32
 
 
+def budget_detail(budget: Int, density: Float32, most: Int) -> Int:
+    """Return the detail at which a part's mesh has about
+    `SPARE_TRIANGLES` times its budget.
+
+    A mesh's triangles grow as the square of its detail.
+
+    Args:
+        budget: The part's share of a triangle budget, or zero for none.
+        density: The part's triangles per square of the detail.
+        most: The detail asked for.
+
+    Returns:
+        `most` with no budget. Else the detail, from `LEAST_BUDGET_DETAIL`
+        up to `most`, and never above it.
+    """
+    if budget <= 0:
+        return most
+    var detail = Int(ceil(sqrt(SPARE_TRIANGLES * Float32(budget) / density)))
+    return min(most, max(LEAST_BUDGET_DETAIL, detail))
+
+
 def add_game_humanoid(
     mut scene: Scene,
     mut assets: Assets,
@@ -512,11 +546,12 @@ def add_game_humanoid(
         body = body_skin_mesh(spec, detail, workers, gap)
     # The shell's inner face lies under the scalp: a game never sees it.
     # With no strands over it, the shell takes its style's shape.
+    var share = Float32(triangles) if triangles > 0 else Float32(0)
     var shell = head_hair_from_dimensions(
         dims,
         SCALP_HAIR,
         RIGHT,
-        hair_detail,
+        budget_detail(Int(share * HAIR_SHARE), SHELL_DENSITY, hair_detail),
         workers,
         hair_style,
         outer_only=True,
@@ -533,8 +568,10 @@ def add_game_humanoid(
     for side in [RIGHT, LEFT]:  # pragma: no branch
         eyes.append(eyeball_mesh(dims, side, 12))
     var arms = arm_muscle_dimensions(spec)
-    var right = hand_skin_from_dimensions(arms, RIGHT, hand_detail)
-    var left = hand_skin_from_dimensions(arms, LEFT, hand_detail)
+    var each_hand = Int(share * (1 - BODY_SHARE - HAIR_SHARE) / 2)
+    var fingers = budget_detail(each_hand, HAND_DENSITY, hand_detail)
+    var right = hand_skin_from_dimensions(arms, RIGHT, fingers)
+    var left = hand_skin_from_dimensions(arms, LEFT, fingers)
     untinted(right)
     untinted(left)
     # The rig reads the crown, the fingertips and the toes off the skin.

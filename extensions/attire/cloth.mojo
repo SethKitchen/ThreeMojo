@@ -30,7 +30,10 @@ pass gives the same result, bit for bit, on one thread or on many. A
 GPU kernel can run the same schedule.
 
 `Cloak` hangs a cloak from a person's shoulders, pinned to the chest
-bone, and steps it with the animation.
+bone, and steps it with the animation. `Cloak.ride` moves a far cloak
+with its bone as one piece, for no solve. `move_cloaks` moves a crowd's
+cloaks: it steps the near ones at once, a run of whole cloaks on each
+thread, and lets the far ones ride.
 
 This is not a three.js port. See Extensions.
 
@@ -40,7 +43,7 @@ This is not a three.js port. See Extensions.
     cloak.step(scene, assets, step)
 """
 
-from std.math import pi, sin, sqrt
+from std.math import isfinite, pi, sin, sqrt
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -66,6 +69,7 @@ from extensions.humanoid.rig.joints import (
     RIGHT_UPPER_ARM,
 )
 from materials.material import DOUBLE_SIDE
+from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
@@ -76,6 +80,14 @@ comptime MAX_COLORS = 62
 """The most colors the coloring can use; a grid's constraints need few."""
 comptime TASK_CONSTRAINTS = 256
 """The fewest constraints a task takes, below which one thread is faster."""
+comptime CLOAK_REACH = Float32(15.0)
+"""How far from the camera `move_cloaks` steps a cloak, in meters, by
+default."""
+comptime TASK_PARTICLES = 256
+"""The fewest particles a task settles, below which one thread is faster."""
+comptime BOX_SLACK = Float32(1.0e-4)
+"""How much a collider's box is grown past the capsule, in meters, so that
+rounding never passes over a capsule that holds a particle."""
 comptime CLEAR_PASSES = 3
 """The passes that push a new cloak's cloth out of its colliders."""
 comptime CLOAK_FOLD_COLUMNS = 6
@@ -296,6 +308,10 @@ struct ClothSolver(Movable):
     """The other end of each collider."""
     var radii: List[Float32]
     """Each collider's radius."""
+    var lows: List[Vector3]
+    """The least corner of each collider's box, grown by the thickness."""
+    var highs: List[Vector3]
+    """The greatest corner of each collider's box, grown likewise."""
 
     def __init__(
         out self,
@@ -365,6 +381,8 @@ struct ClothSolver(Movable):
         self.starts = List[Vector3]()
         self.ends = List[Vector3]()
         self.radii = List[Float32]()
+        self.lows = List[Vector3]()
+        self.highs = List[Vector3]()
 
     def count(self) -> Int:
         """Return how many particles the cloth has.
@@ -382,6 +400,9 @@ struct ClothSolver(Movable):
     ) raises:
         """Set the capsules the cloth falls against, in world space.
 
+        Each capsule's box is grown by the settings' thickness as it is
+        now: set the colliders again after the thickness changes.
+
         Args:
             starts: One end of each.
             ends: The other end of each.
@@ -392,9 +413,38 @@ struct ClothSolver(Movable):
         """
         if len(starts) != len(ends) or len(ends) != len(radii):
             raise Error("A collider needs two ends and a radius")
+        # Each capsule's box, grown by the cloth's thickness and a hair
+        # more: a particle outside it cannot touch the capsule.
+        self.lows = List[Vector3](capacity=len(radii))
+        self.highs = List[Vector3](capacity=len(radii))
+        for c in range(len(radii)):
+            var r = radii[c] + self.settings.thickness + BOX_SLACK
+            var a = starts[c]
+            var b = ends[c]
+            self.lows.append(
+                Vector3(min(a.x, b.x) - r, min(a.y, b.y) - r, min(a.z, b.z) - r)
+            )
+            self.highs.append(
+                Vector3(max(a.x, b.x) + r, max(a.y, b.y) + r, max(a.z, b.z) + r)
+            )
         self.starts = starts^
         self.ends = ends^
         self.radii = radii^
+
+    def carry(mut self, move: Matrix4):
+        """Move the whole cloth as one rigid piece.
+
+        Each particle, its place a substep ago and each pin's target move
+        alike, so the cloth keeps its shape and its velocity turns with
+        it.
+
+        Args:
+            move: An affine move.
+        """
+        for k in range(self.count()):
+            self.points[k] = move.transform_point(self.points[k])
+            self.previous[k] = move.transform_point(self.previous[k])
+            self.targets[k] = move.transform_point(self.targets[k])
 
     def pin(mut self, particle: Int, target: Vector3) raises:
         """Move a pinned particle's target.
@@ -453,6 +503,10 @@ struct ClothSolver(Movable):
             raise Error("A cloth's step must be above zero")
         if workers < 1:
             raise Error("A cloth needs one or more workers")
+        self._advance(dt, workers)
+
+    def _advance(mut self, dt: Float32, workers: Int):
+        """Move the cloth one frame of `dt` seconds, checked."""
         var substeps = self.settings.substeps
         var h = dt / Float32(substeps)
         # A compliance alpha works as alpha / h^2 in a substep of h.
@@ -488,20 +542,63 @@ struct ClothSolver(Movable):
                         )
                     )
                 group.wait()
-            for k in range(self.count()):
-                var pin = self.tethers[k]
-                if pin < 0:
-                    continue
-                self.points[k] = settle(
-                    self.points[k], self.points[pin], self.reaches[k]
-                )
-                for c in range(len(self.radii)):
-                    self.points[k] = push_out(
-                        self.points[k],
-                        self.starts[c],
-                        self.ends[c],
-                        self.radii[c] + self.settings.thickness,
+            var count = self.count()
+            var tasks = min(workers, count // TASK_PARTICLES)
+            if tasks <= 1:
+                self._settle_run(0, count)
+                continue
+            var group = TaskGroup()
+            for task in range(tasks):  # pragma: no branch
+                group.create_task(
+                    _settle_task(
+                        Pointer(to=self).unsafe_origin_cast[MutAnyOrigin](),
+                        task * count // tasks,
+                        (task + 1) * count // tasks,
                     )
+                )
+            group.wait()
+
+    def _settle_run(mut self, first: Int, past: Int):
+        """Hold each free particle of a run to its tether, and push it out
+        of each capsule.
+
+        A particle writes only itself and reads only its pin, which never
+        moves here, so runs of particles settle at once. A capsule whose
+        box does not hold the particle is passed over: it could not move
+        the particle.
+        """
+        for k in range(first, past):
+            var pin = self.tethers[k]
+            if pin < 0:
+                continue
+            var p = settle(self.points[k], self.points[pin], self.reaches[k])
+            for c in range(len(self.radii)):
+                var lo = self.lows[c]
+                var hi = self.highs[c]
+                var gap = max(
+                    max(
+                        max(lo.x - p.x, p.x - hi.x), max(lo.y - p.y, p.y - hi.y)
+                    ),
+                    max(lo.z - p.z, p.z - hi.z),
+                )
+                if gap > 0:
+                    continue
+                p = push_out(
+                    p,
+                    self.starts[c],
+                    self.ends[c],
+                    self.radii[c] + self.settings.thickness,
+                )
+            self.points[k] = p
+
+
+__async def _settle_task(
+    cloth: Pointer[ClothSolver, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Settle one run of a cloth's particles."""
+    cloth[]._settle_run(first, past)
 
 
 __async def _relax_task(
@@ -667,6 +764,8 @@ struct Cloak(Movable):
     """The capsules it falls against."""
     var index: List[Int]
     """Three particles per triangle."""
+    var anchored: Matrix4
+    """The anchor bone's place in the world when the cloak last moved."""
 
     def __init__(
         out self,
@@ -678,6 +777,7 @@ struct Cloak(Movable):
         var pins: List[Int],
         var colliders: List[SpringCollider],
         var index: List[Int],
+        var anchored: Matrix4,
     ):
         """Hold a cloak's parts.
 
@@ -690,6 +790,7 @@ struct Cloak(Movable):
             pins: The pinned particles.
             colliders: What it falls against.
             index: Its triangles.
+            anchored: The anchor bone's place in the world now.
         """
         self.solver = solver^
         self.geometry = geometry
@@ -699,6 +800,7 @@ struct Cloak(Movable):
         self.pins = pins^
         self.colliders = colliders^
         self.index = index^
+        self.anchored = anchored^
 
     def step(
         mut self,
@@ -721,9 +823,26 @@ struct Cloak(Movable):
         Raises:
             Error: If the scene is stale or the step is refused.
         """
+        self.follow(scene)
+        self.solver.step(time, workers)
+        assets.geometries.replace(self.geometry, self.mesh(assets))
+
+    def follow(mut self, scene: Scene) raises:
+        """Move the pins' targets and the colliders to where the bones are.
+
+        `step` calls it. `move_cloaks` calls it for each cloak, then
+        steps the cloths at once.
+
+        Args:
+            scene: The scene, updated.
+
+        Raises:
+            Error: If the scene is stale.
+        """
         var bone = scene.world_matrix(self.anchor)
         for k in range(len(self.pins)):
             self.solver.pin(self.pins[k], bone.transform_point(self.locals[k]))
+        self.anchored = bone^
         var starts = List[Vector3]()
         var ends = List[Vector3]()
         var radii = List[Float32]()
@@ -733,7 +852,31 @@ struct Cloak(Movable):
             ends.append(world.transform_point(collider.end))
             radii.append(collider.radius)
         self.solver.set_colliders(starts^, ends^, radii^)
-        self.solver.step(time, workers)
+
+    def ride(mut self, scene: Scene, mut assets: Assets) raises:
+        """Move the cloak with its anchor bone as one rigid piece.
+
+        A cloak far from the camera need not be stepped: riding costs a
+        move of each particle, not a solve. It keeps its folds as they
+        lay and swings on from them at the next `step`.
+
+        Args:
+            scene: The scene, updated.
+            assets: The store of the cloak's mesh.
+
+        Raises:
+            Error: If the scene is stale.
+        """
+        var bone = scene.world_matrix(self.anchor)
+        var back = self.anchored.copy()
+        back.invert()
+        var move = bone * back
+        # A bone's move is affine; its inverse's rounding is not.
+        for column in range(3):  # pragma: no branch
+            move.put(3, column, 0)
+        move.put(3, 3, 1)
+        self.solver.carry(move)
+        self.anchored = bone^
         assets.geometries.replace(self.geometry, self.mesh(assets))
 
     def mesh(self, assets: Assets) raises -> BufferGeometry:
@@ -879,7 +1022,8 @@ def add_cloak(
         points.copy(), pinned, grid[1].copy(), grid[2].copy(), cut.settings
     )
     var anchor = person.bones[CHEST.value]
-    var into = scene.world_matrix(anchor)
+    var anchored = scene.world_matrix(anchor)
+    var into = anchored.copy()
     into.invert()
     var locals = List[Vector3]()
     for p in pins:  # pragma: no branch
@@ -932,4 +1076,84 @@ def add_cloak(
         pins^,
         colliders^,
         grid[3].copy(),
+        anchored^,
     )
+
+
+__async def _advance_task(
+    cloaks: MutPointer[Cloak, MutAnyOrigin],
+    near: MutPointer[Int, MutAnyOrigin],
+    first: Int,
+    past: Int,
+    dt: Float32,
+):
+    """Step the cloths of a run of the near cloaks, one thread each."""
+    for k in range(first, past):
+        cloaks[unsafe_offset=near[unsafe_offset=k]].solver._advance(dt, 1)
+
+
+def move_cloaks(
+    mut cloaks: List[Cloak],
+    scene: Scene,
+    mut assets: Assets,
+    time: Duration,
+    camera: Vector3,
+    workers: Int = 1,
+    reach: Length = Length(CLOAK_REACH, METER),
+) raises:
+    """Move a crowd's cloaks one frame: the near ones at once, on threads.
+
+    A cloak whose anchor bone lies farther than `reach` from the camera
+    rides its bone, as `Cloak.ride` says. Each near cloak follows its
+    bones, and then the near cloaks' cloths step at once, a run of whole
+    cloaks on each thread. A small cloth gains little from threads of its
+    own; a crowd of them gains one thread's worth each.
+
+    Args:
+        cloaks: The cloaks.
+        scene: The scene, updated.
+        assets: The store of the cloaks' meshes.
+        time: The frame's length.
+        camera: Where the camera is, in the world.
+        workers: Threads that step the near cloaks, one or more.
+        reach: How far from the camera a cloak is stepped.
+
+    Raises:
+        Error: If the scene is stale, a step is refused, there are no
+            workers, or `reach` is not positive and finite.
+    """
+    var meters = Float32(reach.to(METER))
+    if not (isfinite(meters) and meters > 0):
+        raise Error("A cloak's reach must be positive and finite")
+    if workers < 1:
+        raise Error("A cloth needs one or more workers")
+    var dt = Float32(time.to(SECOND))
+    if not (dt > 0 and dt < 1e6):
+        raise Error("A cloth's step must be above zero")
+    var near = List[Int]()
+    for k in range(len(cloaks)):
+        var at = scene.world_matrix(cloaks[k].anchor).transform_point(
+            Vector3(0, 0, 0)
+        )
+        if (at - camera).length() > meters:
+            cloaks[k].ride(scene, assets)
+            continue
+        cloaks[k].solver.settings.check()
+        cloaks[k].follow(scene)
+        near.append(k)
+    var tasks = min(workers, len(near))
+    if tasks > 0:
+        var group = TaskGroup()
+        for task in range(tasks):  # pragma: no branch
+            group.create_task(
+                _advance_task(
+                    cloaks.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    near.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    task * len(near) // tasks,
+                    (task + 1) * len(near) // tasks,
+                    dt,
+                )
+            )
+        group.wait()
+    for k in near:
+        assets.geometries.replace(cloaks[k].geometry, cloaks[k].mesh(assets))

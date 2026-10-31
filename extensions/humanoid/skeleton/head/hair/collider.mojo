@@ -19,11 +19,40 @@ This is not a three.js port. See Extensions.
 from extensions.humanoid.skeleton.field import DistanceField
 from math.utils import mix_trilinear
 from math.vector3 import Vector3
+from render.tasks import TaskGroup
+from std.sys import num_logical_cores
 
 # The collider's grid: cells along each side of its box.
 comptime COLLIDER_CELLS = 48
 # How far past the collider's box a sample reads as empty, in meters.
 comptime FAR_AWAY = Float32(1.0)
+
+
+__async def _bake_task[
+    F: DistanceField
+](
+    field: Pointer[F, ImmutAnyOrigin],
+    low: Vector3,
+    cell: Vector3,
+    cells: Int,
+    values: MutPointer[Float32, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Sample the planes from `first` up to `past` of a baked grid."""
+    for k in range(first, past):
+        for j in range(cells):  # pragma: no branch
+            for i in range(cells):  # pragma: no branch
+                values[
+                    unsafe_offset=(k * cells + j) * cells + i
+                ] = field[].distance(
+                    low
+                    + Vector3(
+                        Float32(i) * cell.x,
+                        Float32(j) * cell.y,
+                        Float32(k) * cell.z,
+                    )
+                )
 
 
 struct HairCollider(Copyable, DistanceField, Movable):
@@ -38,7 +67,8 @@ struct HairCollider(Copyable, DistanceField, Movable):
     def __init__[
         F: DistanceField
     ](out self, field: F, low: Vector3, high: Vector3):
-        """Bake `field` over the box from `low` to `high`.
+        """Bake `field` over the box from `low` to `high`, on every
+        thread.
 
         Args:
             field: The solid, a head's skin.
@@ -47,26 +77,30 @@ struct HairCollider(Copyable, DistanceField, Movable):
         """
         self.cells = COLLIDER_CELLS
         self.low = low
-        var n = Float32(self.cells - 1)
+        var span = Float32(self.cells - 1)
         self.cell = Vector3(
-            (high.x - low.x) / n, (high.y - low.y) / n, (high.z - low.z) / n
+            (high.x - low.x) / span,
+            (high.y - low.y) / span,
+            (high.z - low.z) / span,
         )
-        self.values = List[Float32](
-            capacity=self.cells * self.cells * self.cells
-        )
-        for k in range(self.cells):  # pragma: no branch
-            for j in range(self.cells):  # pragma: no branch
-                for i in range(self.cells):  # pragma: no branch
-                    self.values.append(
-                        field.distance(
-                            low
-                            + Vector3(
-                                Float32(i) * self.cell.x,
-                                Float32(j) * self.cell.y,
-                                Float32(k) * self.cell.z,
-                            )
-                        )
-                    )
+        var n = self.cells
+        self.values = List[Float32](length=n * n * n, fill=0)
+        # Each thread samples its own planes: one writer to each slot.
+        var tasks = min(num_logical_cores(), n)
+        var bakers = TaskGroup()
+        for task in range(tasks):  # pragma: no branch
+            bakers.create_task(
+                _bake_task(
+                    Pointer(to=field).unsafe_origin_cast[ImmutAnyOrigin](),
+                    low,
+                    self.cell,
+                    n,
+                    self.values.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    task * n // tasks,
+                    (task + 1) * n // tasks,
+                )
+            )
+        bakers.wait()
 
     def distance(self, point: Vector3) -> Float32:
         """Return the baked distance at `point`, trilinear between the

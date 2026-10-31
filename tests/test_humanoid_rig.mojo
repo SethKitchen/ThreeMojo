@@ -36,8 +36,11 @@ from extensions.humanoid.skeleton.head.hair.beard import (
     Beard,
 )
 from extensions.humanoid.rig.game import (
+    LEAST_BUDGET_DETAIL,
+    SHELL_DENSITY,
     add_game_humanoid,
     budget_all,
+    budget_detail,
     game_build_settings,
     carry_attributes,
 )
@@ -765,6 +768,20 @@ def test_game_builder_refuses_engineering_before_scene_edits() raises:
     with assert_raises(contains="Engineering use is unsupported"):
         _ = add_game_humanoid(scene, assets, root, _spec(), use=ENGINEERING_USE)
     assert_equal(scene.count(), before)
+
+
+def test_a_part_is_meshed_about_ten_times_finer_than_its_budget() raises:
+    # No budget: the detail asked for.
+    assert_equal(budget_detail(0, SHELL_DENSITY, 32), 32)
+    # 1,920 triangles: about 19,200 meshed, at detail 15.
+    var detail = budget_detail(1920, SHELL_DENSITY, 32)
+    assert_equal(detail, 15)
+    var meshed = SHELL_DENSITY * Float32(detail * detail)
+    assert_true(meshed > 19200 and meshed < 25000)
+    # Never coarser than the least, nor finer than asked.
+    assert_equal(budget_detail(1, SHELL_DENSITY, 32), LEAST_BUDGET_DETAIL)
+    assert_equal(budget_detail(1000000, SHELL_DENSITY, 32), 32)
+    assert_equal(budget_detail(1920, SHELL_DENSITY, 10), 10)
 
 
 def main() raises:

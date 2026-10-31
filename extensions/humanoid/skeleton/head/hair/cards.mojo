@@ -438,6 +438,32 @@ struct HairCards(Movable):
             Error: If a light, the density or a shading field is refused,
                 or the store does not hold the cards' mesh.
         """
+        assets.geometries.replace(
+            self.geometry, self.light(lights, camera, ambient)
+        )
+
+    def light(
+        mut self,
+        lights: List[HairLight],
+        camera: Vector3,
+        ambient: Vector3,
+    ) raises -> BufferGeometry:
+        """Light the cards for a camera and lights, and return their mesh.
+
+        It touches no store, so many grooms can be lit at once; `shade`
+        lights them and writes the mesh.
+
+        Args:
+            lights: The distant lights, in the cards' frame.
+            camera: Where the camera is, in the cards' frame.
+            ambient: The light from all round, linear.
+
+        Returns:
+            The cards' mesh, lit.
+
+        Raises:
+            Error: If a light, the density or a shading field is refused.
+        """
         self.density.rebuild(self.groom)
         hair_shadow_depths(
             self.density, self.groom.points, lights, self._depths
@@ -451,7 +477,7 @@ struct HairCards(Movable):
             self._colors,
             self._depths,
         )
-        assets.geometries.replace(self.geometry, self.mesh())
+        return self.mesh()
 
 
 def card_material(fibers: TextureId) raises -> Material:

@@ -13,7 +13,11 @@ from extensions.humanoid.rig.game import (
     add_game_humanoid,
     game_build_settings,
 )
-from extensions.humanoid.rig.game_hair import GameHairMotion, _toward
+from extensions.humanoid.rig.game_hair import (
+    GameHairMotion,
+    _toward,
+    move_hair,
+)
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.skeleton.head.hair.beard import (
     CLEAN_SHAVEN,
@@ -27,6 +31,7 @@ from extensions.humanoid.spec import HumanoidSpec
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from std.sys import num_logical_cores
+from std.math import inf
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -34,7 +39,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import DEGREE, FOOT, Angle, Length
+from units.si import DEGREE, FOOT, METER, Angle, Length
 
 
 def _spec() -> HumanoidSpec:
@@ -129,6 +134,21 @@ def test_the_hair_swings_as_the_head_moves() raises:
         scene, assets, person, _lights(), eye, Vector3(0.1, 0.1, 0.1), still
     )
     assert_true(person.cards[0].groom.points == hidden)
+    # Hair far from the camera rides its head as it lay.
+    scene.node(person.cards[0].node.value()).visible = True
+    var far = person.cards[0].groom.points.copy()
+    scene.node(person.root).set_position(0, 0, 0.3)
+    scene.update()
+    motion.update(
+        scene,
+        assets,
+        person,
+        _lights(),
+        Vector3(0, 1.6, 40),
+        Vector3(0.1, 0.1, 0.1),
+        still,
+    )
+    assert_true(person.cards[0].groom.points == far)
 
 
 def test_a_person_with_cards_alone_or_no_hair_moves() raises:
@@ -173,6 +193,12 @@ def test_hair_motion_refuses_what_it_cannot_move() raises:
     scene.update()
     with assert_raises(contains="one step an update"):
         _ = GameHairMotion(scene, person, _spec(), steps=0)
+    with assert_raises(contains="reach"):
+        _ = GameHairMotion(scene, person, _spec(), reach=Length(0.0, METER))
+    with assert_raises(contains="reach"):
+        _ = GameHairMotion(
+            scene, person, _spec(), reach=Length(inf[DType.float32](), METER)
+        )
     var motion = GameHairMotion(scene, person, _spec(), steps=2)
     assert_equal(motion.steps, 2)
     var other = _person(scene, assets, 0)
@@ -207,6 +233,73 @@ def test_a_beard_grows_cards_but_stubble_does_not() raises:
     assert_equal(len(stubbled.cards), 1)
     var bare = _person(scene, assets, 0, 0, FULL_BEARD)
     assert_equal(len(bare.cards), 0)
+
+
+def test_a_crowd_s_hair_moves_at_once_as_each_person_s_would() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var people = List[GameHumanoid]()
+    people.append(_person(scene, assets))
+    people.append(_person(scene, assets))
+    # The second person stands far down the street.
+    scene.node(people[1].root).set_position(0, 0, -40)
+    scene.update()
+    var motions = List[GameHairMotion]()
+    for k in range(2):
+        motions.append(GameHairMotion(scene, people[k], _spec()))
+    var alone = _person(scene, assets)
+    scene.update()
+    var single = GameHairMotion(scene, alone, _spec())
+    var near = people[0].cards[0].groom.points.copy()
+    var far = people[1].cards[0].groom.points.copy()
+    for k in range(2):
+        scene.node(people[k].root).rotate_y(Angle(9.0, DEGREE))
+    scene.node(alone.root).rotate_y(Angle(9.0, DEGREE))
+    scene.update()
+    var eye = Vector3(0, 1.6, 2)
+    var still = HairWind(Vector3(1, 0, 0), 0)
+    var ambient = Vector3(0.1, 0.1, 0.1)
+    move_hair(motions, scene, assets, people, _lights(), eye, ambient, still, 3)
+    single.update(scene, assets, alone, _lights(), eye, ambient, still)
+    # The near person's hair swings as one person's alone does; the far
+    # person's rides the head as it lay.
+    assert_false(people[0].cards[0].groom.points == near)
+    assert_true(people[0].cards[0].groom.points == alone.cards[0].groom.points)
+    assert_true(
+        people[0].strands[0].groom.points == alone.strands[0].groom.points
+    )
+    assert_true(people[1].cards[0].groom.points == far)
+    # Nobody to move costs nothing.
+    var nobody = List[GameHairMotion]()
+    var none = List[GameHumanoid]()
+    move_hair(nobody, scene, assets, none, _lights(), eye, ambient, still)
+
+
+def test_a_crowd_s_hair_refuses_what_it_cannot_move() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var people = List[GameHumanoid]()
+    people.append(_person(scene, assets))
+    scene.update()
+    var motions = List[GameHairMotion]()
+    var eye = Vector3(0, 1.6, 2)
+    var still = HairWind(Vector3(1, 0, 0), 0)
+    var ambient = Vector3(0.1, 0.1, 0.1)
+    with assert_raises(contains="one motion for each person"):
+        move_hair(
+            motions, scene, assets, people, _lights(), eye, ambient, still
+        )
+    motions.append(GameHairMotion(scene, people[0], _spec()))
+    with assert_raises(contains="workers"):
+        move_hair(
+            motions, scene, assets, people, _lights(), eye, ambient, still, 0
+        )
+    # A groom that fails on a thread fails the frame.
+    motions[0].simulations[0].physics.iterations = 16777217
+    with assert_raises(contains="settle count"):
+        move_hair(
+            motions, scene, assets, people, _lights(), eye, ambient, still, 2
+        )
 
 
 def main() raises:

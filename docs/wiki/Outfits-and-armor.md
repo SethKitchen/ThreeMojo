@@ -113,6 +113,32 @@ The cloaks fall over the outfits' colliders. The hair is 500 cards on each head,
 
 ![Fourteen people of seven callings walk and stand while the camera passes round to their cloaks](out/archetypes.png)
 
+## Crowd cost
+
+`bench/crowd_bench.mojo` builds a varied crowd and measures it. A seed gives each person a calling, a sex, a genome, a stature, an outfit, a hairstyle, a beard and, by chance, a cloak. The crowd stands in rows ten wide and four meters apart, and walks in place. The camera looks along the rows from in front.
+
+These are 40 people on four threads, drawn at 1280 by 720 on the CPU:
+
+| Skin budget, cards | Triangles a person | Build | Dress | Hair a frame | Cloaks a frame | Draw a frame |
+|---|---|---|---|---|---|---|
+| 16,000, 400 | 41,000 | 2.1 s | 0.19 s | 39 ms | 20 ms | 1.8 s |
+| 8,000, 200 | 28,000 | 2.0 s | 0.13 s | 20 ms | 15 ms | 1.4 s |
+| 4,000, 100 | 21,500 | 1.9 s | 0.08 s | 9 ms | 16 ms | 1.0 s |
+
+Of the 40, 30 stand within 15 m of the camera. Their hair moves, and 11 of the 14 cloaks step. The rest ride their bones. Animating the 40 skeletons takes 3 ms a frame. A person holds about 9 MB after the build at 16,000 triangles.
+
+- The CPU renderer holds about 680 bytes for each triangle it draws. So the 40 people at 16,000 triangles take 1.9 GB to draw.
+- The garments, the cloaks and the hats do not scale with the skin's budget. At 4,000 triangles they draw more than half of each person's triangles.
+- For thousands of people, build each look once and bake it. A bake loads in 12 ms; see [Game humanoid](Game-humanoid#baking-and-speed). A loaded bake draws its hair and its cloak as they lay when baked.
+
+These changes made a crowd cheaper:
+
+- The hair's shell and the hands are meshed at about ten times their budgets, not finer. The archetypes example built its 14 people in 44.6 s before, and in 32.2 s after.
+- `HairCollider` bakes its grid on every thread.
+- Hair and cloaks farther than 15 m from the camera ride their bones and are not simulated.
+- `move_cloaks` steps the near cloaks at once, and a capsule is tested only near its box. The cloaks fell from 62 ms to 20 ms a frame.
+- `move_hair` steps and lights the near grooms at once. The hair fell from 55 ms to 39 ms a frame.
+
 ## Plate
 
 A flexible garment keeps the skin's weights and bends as the skin bends. Plate does not bend.

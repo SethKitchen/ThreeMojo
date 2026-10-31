@@ -93,7 +93,11 @@ A cloak of a few hundred particles steps in well under a millisecond on the CPU.
 - The texture coordinates are in meters, so the fabric's weave lies on the cloak as on a garment.
 - The sheen takes the cloak's dye. A pale sheen washes a dark cloth out to gray where the light grazes it.
 
-`Cloak.step` reads where the chest bone and the colliders' bones are, steps the cloth, and writes the cloak's mesh.
+`Cloak.step` reads where the chest bone and the colliders' bones are, steps the cloth, and writes the cloak's mesh. `Cloak.ride` moves the cloak with its chest bone as one piece, for no solve. It keeps its folds as they lay, and swings on from them at the next step.
+
+`move_cloaks(cloaks, scene, assets, step, eye, workers)` moves a crowd's cloaks. A cloak whose chest bone lies farther than `reach` from the camera rides. The default is 15 m. Each near cloak follows its bones, and then the near cloaks' cloths step at once, a run of whole cloaks on each thread. A small cloth gains little from threads of its own, and a crowd of them gains one thread's worth each. A near cloak falls as one stepped alone does.
+
+Each step tests a particle against a capsule only if the particle lies in the capsule's box, grown by the cloth's thickness. A capsule outside that box cannot move the particle, so the result is the same as testing every capsule. The particles of a large cloth settle on threads, a run on each. A particle writes only itself and reads only its pin.
 
 ### Over garments
 

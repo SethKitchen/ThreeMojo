@@ -18,6 +18,7 @@ from extensions.attire.cloth import (
     CloakCut,
     add_cloak,
     cloth_grid,
+    move_cloaks,
     color_constraints,
     glide,
     predict,
@@ -29,9 +30,10 @@ from extensions.attire.drape import dressed_colliders
 from extensions.attire.kinds import FabricKind
 from extensions.attire.outfit import Outfit, dress
 from extensions.attire.springs import SpringCollider, nearest_on_segment
+from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from render.framebuffer import Color
-from std.math import nan
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -41,7 +43,7 @@ from std.testing import (
     assert_true,
 )
 from tests._attire_people import coarse_person
-from units.si import Duration, SECOND
+from units.si import DEGREE, METER, SECOND, Angle, Duration, Length
 
 
 def _frame() -> Duration:
@@ -350,6 +352,88 @@ def test_a_cloak_falls_over_a_robe_and_is_trimmed() raises:
     assert_almost_equal(hues.component(0, 0), hues.component(middle, 0))
 
 
+def test_a_far_cloak_rides_its_bone_as_one_piece() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var person = coarse_person(scene, assets)
+    scene.update()
+    var cloak = add_cloak(scene, assets, person, CloakCut(folds=0))
+    scene.update()
+    for _ in range(3):
+        cloak.step(scene, assets, _frame(), 2)
+    var before = cloak.solver.points.copy()
+    # The person steps a meter to the side and turns a quarter.
+    scene.node(person.root).set_position(1, 0, 0)
+    scene.node(person.root).rotate_y(Angle(90.0, DEGREE))
+    scene.update()
+    cloak.ride(scene, assets)
+    # Each particle keeps its distance from every other: one rigid piece.
+    var last = cloak.solver.count() - 1
+    assert_almost_equal(
+        (cloak.solver.points[0] - cloak.solver.points[last]).length(),
+        (before[0] - before[last]).length(),
+        atol=1e-4,
+    )
+    assert_true((cloak.solver.points[0] - before[0]).length() > 0.5)
+    ref placed = assets.geometries.get(cloak.geometry).attribute_view(
+        String(POSITION)
+    )
+    assert_almost_equal(placed.vector3(last).x, cloak.solver.points[last].x)
+    # A step goes on from where it rode to.
+    cloak.step(scene, assets, _frame(), 2)
+    assert_true((cloak.solver.points[0] - before[0]).length() > 0.5)
+
+
+def test_a_crowd_s_cloaks_step_near_and_ride_far() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var near = coarse_person(scene, assets)
+    var far = coarse_person(scene, assets)
+    var alone = coarse_person(scene, assets)
+    scene.node(far.root).set_position(0, 0, -40)
+    scene.update()
+    var cloaks = List[Cloak]()
+    cloaks.append(add_cloak(scene, assets, near, CloakCut(folds=0)))
+    scene.update()
+    cloaks.append(add_cloak(scene, assets, far, CloakCut(folds=0)))
+    scene.update()
+    var single = add_cloak(scene, assets, alone, CloakCut(folds=0))
+    scene.update()
+    var eye = Vector3(0, 1.6, 3)
+    for _ in range(3):
+        move_cloaks(cloaks, scene, assets, _frame(), eye, 2)
+        single.step(scene, assets, _frame(), 1)
+    # The near cloak falls as one stepped alone does.
+    var last = single.solver.count() - 1
+    assert_true(cloaks[0].solver.points == single.solver.points)
+    ref placed = assets.geometries.get(cloaks[0].geometry).attribute_view(
+        String(POSITION)
+    )
+    assert_equal(placed.vector3(last).y, cloaks[0].solver.points[last].y)
+    # The far cloak rides its bone: as it hung, unmoved.
+    var hung = cloaks[1].solver.points.copy()
+    move_cloaks(cloaks, scene, assets, _frame(), eye, 2)
+    assert_true(cloaks[1].solver.points == hung)
+    var nothing = List[Cloak]()
+    move_cloaks(nothing, scene, assets, _frame(), eye)
+    with assert_raises(contains="reach"):
+        move_cloaks(cloaks, scene, assets, _frame(), eye, 1, Length(0.0, METER))
+    with assert_raises(contains="reach"):
+        move_cloaks(
+            cloaks,
+            scene,
+            assets,
+            _frame(),
+            eye,
+            1,
+            Length(inf[DType.float32](), METER),
+        )
+    with assert_raises(contains="workers"):
+        move_cloaks(cloaks, scene, assets, _frame(), eye, 0)
+    with assert_raises(contains="above zero"):
+        move_cloaks(cloaks, scene, assets, Duration(0.0, SECOND), eye)
+
+
 def test_a_cut_s_folds_and_flare_are_checked() raises:
     var scene = Scene()
     var assets = Assets()
@@ -421,6 +505,7 @@ def test_an_empty_cloth_steps_and_draws_nothing() raises:
         List[Int](),
         List[SpringCollider](),
         List[Int](),
+        Matrix4(),
     )
     cloak.step(scene, assets, Duration(1.0 / 60.0, SECOND), 2)
     assert_equal(assets.geometries.get(geometry).vertex_count(), 0)

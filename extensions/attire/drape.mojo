@@ -49,7 +49,7 @@ from extensions.attire.springs import (
 from extensions.humanoid.rig.game import GameHumanoid
 from extensions.humanoid.rig.joints import CHEST, HIPS, JOINT_COUNT, NECK
 from math.vector3 import Vector3
-from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
+from objects.skinned_mesh import SKIN_INDEX
 
 comptime DRAPE_PARTS = 3
 """The capsules each of the body's capsules is cut into, along its bone."""
@@ -171,7 +171,7 @@ def dressed_colliders(
 
     Raises:
         Error: If the outfit and what was dressed do not match, or a
-            shell has no positions or skin weights.
+            shell has no positions or skin indices.
     """
     if len(dressed.shells) != len(outfit.garments):
         raise Error("A dressed outfit needs one shell per garment")
@@ -194,7 +194,7 @@ def dressed_colliders(
         base.append(part.radius)
         joints.append(joint)
     var skirted = List[Vector3]()
-    for g in range(len(outfit.garments)):
+    for g in range(len(outfit.garments)):  # pragma: no branch
         ref garment = outfit.garments[g]
         # A hat is left out, and so is a garment that covers nothing.
         if garment.form == HATTED or not dressed.shells[g].has_attribute(
@@ -203,17 +203,13 @@ def dressed_colliders(
             continue
         ref placed = dressed.shells[g].attribute_view(String(POSITION))
         ref bones = dressed.shells[g].attribute_view(String(SKIN_INDEX))
-        ref weights = dressed.shells[g].attribute_view(String(SKIN_WEIGHT))
         for v in range(placed.count()):  # pragma: no branch
             var p = placed.vector3(v)
             if garment.form == SKIRTED and p.y < top:
                 skirted.append(p)
                 continue
-            var heaviest = 0
-            for k in range(1, 4):  # pragma: no branch
-                if weights.component(v, k) > weights.component(v, heaviest):
-                    heaviest = k
-            var joint = Int(bones.component(v, heaviest))
+            # A garment keeps its four bones heaviest first.
+            var joint = Int(bones.component(v, 0))
             if joint == NECK.value:
                 joint = CHEST.value
             var best = -1
