@@ -180,6 +180,9 @@ from extensions.village.combos import (
     LAND_MASTERY,
     LIGHT_KEY,
     MAKE_MASTERY,
+    MASTERED_SPECIAL,
+    MAX_RANK,
+    PRACTICED_RANK,
     ComboBook,
     ComboKey,
     ComboTracker,
@@ -453,6 +456,9 @@ comptime RAID_EXPERIENCE = 400
 """The fighting experience of the warden felled."""
 comptime TAUNT_RANGE = Float32(25)
 """How near the warden the player must be to taunt it, in meters."""
+comptime ROLL_TAP = Float32(0.3)
+"""How long a press of the dodge can last, out of a fight, to roll, in
+seconds. A longer hold of the east button runs."""
 comptime REVIVE_REACH = Float32(1.6)
 """How near a fallen raider a member must stand to revive it, in
 meters."""
@@ -970,6 +976,8 @@ struct Battle(Movable):
     var wardens: List[Warden]
     var members: List[Member]
     var taunt_wait: Float32
+    # How long the dodge has been held, in seconds.
+    var dodge_hold: Float32
     # Where the player's feet were at the end of the last frame, for the
     # display.
     var feet: Vector3
@@ -1162,6 +1170,7 @@ struct Battle(Movable):
         self.wardens = List[Warden]()
         self.members = List[Member]()
         self.taunt_wait = 0
+        self.dodge_hold = 0
         self.feet = start
         self.frame = 0
         self.sparks = Sparks(scene, assets, glow)
@@ -1668,13 +1677,25 @@ struct Battle(Movable):
     def _master(mut self, index: Int, amount: Int) raises:
         """Give a combo mastery, and say so when its rank rises."""
         if self.book.practice(index, amount):
-            self.notes.append(
-                String(
-                    self.book.combos[index].name,
-                    " RANK ",
-                    self.book.rank(index),
-                    "!",
-                )
+            var name = self.book.combos[index].name
+            var rank = self.book.rank(index)
+            if rank == MAX_RANK:
+                self.notes.append(name + " MASTERED!")
+            else:
+                self.notes.append(String(name, " RANK ", rank, "!"))
+
+    def _perks(mut self, index: Int) raises:
+        """Give a landed finisher's perks, by its combo's rank: its stamina
+        back from `PRACTICED_RANK`, and `MASTERED_SPECIAL` special points
+        at `MAX_RANK`."""
+        var rank = self.book.rank(index)
+        ref f = self.fighter
+        if rank >= PRACTICED_RANK:
+            var back = f.stamina_price(self.finishing)
+            f.stamina = min(f.parameters.stamina, f.stamina + back)
+        if rank == MAX_RANK:
+            f.special = min(
+                f.parameters.special_points, f.special + MASTERED_SPECIAL
             )
 
     def _link(mut self, player: Character) raises -> Bool:
@@ -2005,6 +2026,7 @@ struct Battle(Movable):
         var finished = self.finisher >= 0 and not self.finisher_landed
         if finished and landed_blow(struck.outcome):
             self.finisher_landed = True
+            self._perks(self.finisher)
             self._master(self.finisher, LAND_MASTERY)
         self.fighter.landed(struck)
 
@@ -2650,7 +2672,9 @@ struct Battle(Movable):
                 member.down = -1
         self.token_rest -= seconds
         ref p = self.parameters
-        var engaged = not self.fighter.free() or self.fighter.guarding
+        # A move or a guard draws the weapon; a roll does not.
+        var moving = not self.fighter.free() and self.fighter.move != DODGE
+        var engaged = moving or self.fighter.guarding
         for index in range(len(self.foes)):
             var node = self.node_of(index)
             ref foe = self.foes[index]
@@ -3176,8 +3200,14 @@ struct Battle(Movable):
         var flick = Float32(0)
         if abs(input.look_right) > FLICK and abs(self.last.look_right) <= FLICK:
             flick = Float32(1) if input.look_right > 0 else Float32(-1)
+        var let_go = self.last.dodge and not input.dodge
         self.last = input
         self._command(input, presses, flick, view.yaw, player)
+        # Out of a fight, a tap of the dodge rolls, to cross the ground.
+        var tap = let_go and self.dodge_hold <= ROLL_TAP
+        if tap and not self.drawn and player.grounded:
+            _ = self.fighter.request(DODGE)
+        self.dodge_hold = self.dodge_hold + real if input.dodge else 0
         if input.use and not self.fighter.defeated():
             self._revive_near(player.position, real)
         var around = blocking.copy()

@@ -455,7 +455,9 @@ def _book(mut frame: Framebuffer, battle: Battle, scale: Int) raises:
             keys += "' " if combo.beats[j] else " "
         draw_text(frame, x + 150 * scale, y, keys, scale, color, 1)
         var right = String("LEVEL ", combo.level)
-        if known:
+        if known and book.rank(k) == MAX_RANK:
+            right = "MASTERED"
+        elif known:
             right = String("RANK ", book.rank(k), "/", MAX_RANK)
         elif combo.tier == MASTER and style != book.specialty:
             right = "SPECIALTY"

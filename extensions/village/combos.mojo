@@ -30,6 +30,11 @@ combo from level 9. Only the player's specialty teaches `MASTER` combos.
 `LAND_MASTERY` more. A combo's rank rises from 1 to `MAX_RANK` as its
 mastery grows: rank `r` needs `rank_mastery(r)`. Each rank over 1 adds
 `RANK_POWER` of the combo's power. See `ComboBook`.
+
+**Perks.** A combo's rank also upgrades its finisher. From `PRACTICED_RANK`,
+a finisher that lands gives back the stamina it spent. At `MAX_RANK` the
+combo is mastered: a finisher that lands also gives `MASTERED_SPECIAL`
+special points.
 """
 
 from core.ordinal import ordinal_valid
@@ -86,6 +91,12 @@ comptime MAX_RANK = 5
 """The highest rank of a combo."""
 comptime RANK_POWER = Float32(0.1)
 """How much of a combo's power each rank over 1 adds."""
+comptime PRACTICED_RANK = 3
+"""The rank from which a combo's finisher that lands gives back the
+stamina it spent."""
+comptime MASTERED_SPECIAL = Float32(1)
+"""The special points that a mastered combo's finisher gives as it
+lands."""
 comptime MAKE_MASTERY = 2
 """The mastery of a combo's finisher made."""
 comptime LAND_MASTERY = 3

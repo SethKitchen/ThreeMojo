@@ -31,6 +31,11 @@ cores.
 | Time | | `5` moves the day on three hours |
 | Quit | The start button | Escape |
 
+With `--play`, the game keeps the player's progress in
+`out/village_progress.bin`: the skills, the satchel, the combos' mastery,
+the specialty and the style in hand. It reads the file as it begins, and
+writes it as the player quits. See `extensions.village.progress`.
+
 With `--play`, the weather turns by itself, a minute and a half each:
 see `extensions.village.weather`. A number key sets it. The day passes
 in twenty minutes, from two in the afternoon: see
@@ -70,6 +75,7 @@ from extensions.village.pad_input import (
     keyboard_input,
 )
 from extensions.village.play import PlayParameters, VillageGame
+from extensions.village.progress import pack_progress, unpack_progress
 from extensions.village.day import DayCycle
 from extensions.village.weather import WeatherKind
 from extensions.village.quality import (
@@ -92,6 +98,8 @@ from window.x11 import X11Window
 
 comptime DEFAULT_OUTPUT = "out/village_walk.png"
 comptime PEBBLES = "assets/pebbles.jpg"
+comptime PROGRESS_FILE = "out/village_progress.bin"
+"""Where `--play` keeps the player's progress from one game to the next."""
 comptime WIDTH = 480
 comptime HEIGHT = 270
 comptime PLAY_WIDTH = 1920
@@ -239,6 +247,13 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
         width,
         height,
     )
+    var kept = Path(PROGRESS_FILE)
+    if kept.exists():
+        try:
+            game.restore(unpack_progress(kept.read_bytes()))
+            print("Took up the progress in", PROGRESS_FILE, file=stderr)
+        except error:
+            print("Could not take up the progress:", error, file=stderr)
     var window = X11Window(width, height, "ThreeMojo village")
     var database = default_mapping_database()
     var hid = HidHub[HidrawFile]()
@@ -306,6 +321,8 @@ def _play(width: Int, height: Int, preset: QualityPreset) raises:
                 )
     finally:
         window.close()
+    kept.write_bytes(pack_progress(game.progress()))
+    print("Kept the progress in", PROGRESS_FILE, file=stderr)
 
 
 def main() raises:

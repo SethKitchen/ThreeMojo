@@ -56,6 +56,9 @@ from extensions.village.combos import (
     LAND_MASTERY,
     LIGHT_KEY,
     MAKE_MASTERY,
+    MASTERED_SPECIAL,
+    PRACTICED_RANK,
+    rank_mastery,
 )
 from extensions.village.missiles import ARROW, ORB, SPARK, SPARK_LIFE, Missile
 from extensions.village.skills import PRACTICE_EXPERIENCE
@@ -182,6 +185,11 @@ def test_a_string_of_presses_makes_a_combos_finisher() raises:
     arena.run(1.5)
     assert_equal(arena.battle.book.mastery[found], 38 + LAND_MASTERY)
     assert_true(holds_text(arena.battle.notes, "RISING STRIKE RANK 2!"))
+    # At the last rank, the combo is mastered.
+    arena.battle.finisher_landed = False
+    arena.battle.book.mastery[found] = rank_mastery(5) - 1
+    arena.battle._master(found, LAND_MASTERY)
+    assert_true(holds_text(arena.battle.notes, "RISING STRIKE MASTERED!"))
     assert_true(arena.battle.trained[SWORD.value] >= PRACTICE_EXPERIENCE)
     # Another move begun ends the finisher.
     _ = arena.battle.fighter.request(LIGHT_ONE)
@@ -209,6 +217,38 @@ def test_a_finisher_in_the_air_plunges_and_a_spent_one_waits() raises:
         spent.tick(no_input(), 0.01)
     assert_equal(spent.battle.finisher, -1)
     assert_equal(len(spent.battle.tracker.keys), 3)
+
+
+def test_a_practiced_finisher_gives_back_stamina_and_a_mastered_one_more() raises:
+    var arena = Arena(arena_parameters(0, 0))
+    _ = arena.battle.book.teach(SWORD, 1)
+    var found = arena.battle.book.known(SWORD)[0]
+    arena.battle.finishing = arena.battle.book.combos[found].finisher
+    var price = arena.battle.fighter.stamina_price(arena.battle.finishing)
+    # At rank 1, a landed finisher gives nothing back.
+    arena.battle.fighter.stamina = 10
+    arena.battle.fighter.special = 0
+    arena.battle._perks(found)
+    assert_equal(arena.battle.fighter.stamina, 10)
+    # Practiced, it gives back its stamina.
+    arena.battle.book.mastery[found] = rank_mastery(PRACTICED_RANK)
+    arena.battle._perks(found)
+    assert_almost_equal(arena.battle.fighter.stamina, 10 + price, atol=1e-4)
+    assert_equal(arena.battle.fighter.special, 0)
+    # Mastered, it gives a special point too, up to the most.
+    arena.battle.book.mastery[found] = rank_mastery(5)
+    arena.battle._perks(found)
+    assert_almost_equal(
+        arena.battle.fighter.special, MASTERED_SPECIAL, atol=1e-6
+    )
+    var most = arena.battle.fighter.parameters.special_points
+    arena.battle.fighter.special = most
+    arena.battle.fighter.stamina = arena.battle.fighter.parameters.stamina
+    arena.battle._perks(found)
+    assert_equal(arena.battle.fighter.special, most)
+    assert_equal(
+        arena.battle.fighter.stamina, arena.battle.fighter.parameters.stamina
+    )
 
 
 def test_a_finisher_asked_for_as_a_move_begins_still_waits() raises:
@@ -480,6 +520,32 @@ def test_a_sprint_spends_stamina_and_a_tired_player_runs() raises:
     arena.battle.fighter.stamina = SPRINT_REST
     arena.tick(run)
     assert_false(arena.player.tired)
+
+
+def test_out_of_a_fight_the_dodge_rolls() raises:
+    var arena = Arena(arena_parameters(0, 0))
+    arena.player = Character(
+        player_movement(), 0, 0, Angle(0.0, RADIAN), arena.terrain
+    )
+    assert_false(arena.battle.drawn)
+    # A tap of the dodge rolls as it comes up.
+    var roll = MoveInput(1, 0, 0, 0, True, False)
+    roll.dodge = True
+    arena.tick(roll)
+    assert_true(arena.battle.fighter.free())
+    arena.tick(MoveInput(1, 0, 0, 0, True, False))
+    assert_true(arena.battle.fighter.move == DODGE)
+    assert_false(arena.battle.drawn)
+    # The roll carries the player the way the stick leans.
+    arena.run(0.4, MoveInput(1, 0, 0, 0, True, False))
+    var at = arena.player.position
+    assert_true(at.x * at.x + at.z * at.z > 1)
+    # In the air, it does not roll.
+    arena.run(1)
+    arena.player.position.y += 2
+    arena.tick(no_input())
+    arena.press(roll)
+    assert_true(arena.battle.fighter.move != DODGE)
 
 
 def test_a_locked_player_strafes_around_the_target() raises:

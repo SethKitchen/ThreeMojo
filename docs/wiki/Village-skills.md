@@ -54,5 +54,5 @@ Before each frame, it sets the strength of the player's blows to `fighting_might
 
 ## Limits
 
-- The skills last as long as the game. They are not saved.
+- The game keeps each skill's experience from one game to the next: see [Village walk](Village-walk#saved-progress).
 - A level does not change what a chest or a trinket gives.

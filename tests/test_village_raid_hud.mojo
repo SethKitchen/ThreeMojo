@@ -208,7 +208,9 @@ def test_the_style_routes_beat_and_book_show() raises:
     var later = _frame()
     draw_raid(later, battle, camera, look, 1)
     assert_true(_changed(later) < _changed(routes))
-    # The book: learned, not yet learned, and only the specialty's.
+    # The book: learned, mastered, not yet learned, and only the
+    # specialty's.
+    battle.book.mastery[battle.book.known(SWORD)[0]] = 400
     battle.reading = True
     var book = _frame()
     draw_raid(book, battle, camera, look, 1)

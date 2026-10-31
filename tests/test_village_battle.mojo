@@ -427,10 +427,14 @@ def test_a_fresh_guard_parries_and_a_late_dodge_is_perfect() raises:
 
 def test_a_dodge_goes_the_way_of_the_stick_or_back() raises:
     var arena = Arena(arena_parameters(0, 0))
-    # A sheathed sword does not dodge.
+    # A sheathed sword does not dodge as the button goes down, and a long
+    # hold does not roll as it comes up.
     var dodge = no_input()
     dodge.dodge = True
-    arena.press(dodge)
+    arena.tick(dodge)
+    assert_true(arena.battle.fighter.free())
+    arena.run(0.5, dodge)
+    arena.tick(no_input())
     assert_true(arena.battle.fighter.free())
     arena.battle.drawn = True
     dodge.right = 1

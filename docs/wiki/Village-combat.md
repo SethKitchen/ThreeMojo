@@ -40,6 +40,8 @@ This page gives the rules that every style shares, with the sword's moves. The o
 
 A move starts on a new press. Hold a button and the move starts once. While the left shoulder guards, the north, the west and the south buttons choose a stance. They do not attack, use or jump then. While the left trigger is held, the west button makes the ground wave, and does not use. The east button also runs, so a dodge needs the sword drawn.
 
+Out of a fight, a tap of the east button rolls: see [Village walk](Village-walk#the-players-movement).
+
 ## The rules
 
 The module is `extensions/village/combat.mojo`. A `Fighter` holds a body's health, its stamina and its special gauge, its stance, and the move it makes. It does not know where it stands. The battle finds the fighters that a swing reaches, and gives each one a blow.

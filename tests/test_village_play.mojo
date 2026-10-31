@@ -36,7 +36,13 @@ from extensions.village.play import (
     default_residents,
     tree_obstacles,
 )
-from extensions.village.skills import FORAGING
+from extensions.village.combat import LIGHT_ONE
+from extensions.village.progress import (
+    Progress,
+    pack_progress,
+    unpack_progress,
+)
+from extensions.village.skills import FORAGING, style_skill
 from extensions.village.quality import LOW, ULTRA, game_quality
 from extensions.village.residents import (
     Herd,
@@ -50,7 +56,7 @@ from extensions.village.village import (
     VillageParameters,
 )
 from extensions.village.raid import RaidParameters
-from extensions.village.styles import MACE, SWORD
+from extensions.village.styles import ARCHERY, MACE, MAGIC, SWORD
 from extensions.water.pebbles import pebble_bed
 from extensions.water.resolution import SpectrumResolution
 from render.png import DecodedImage
@@ -61,6 +67,7 @@ from std.testing import (
     assert_almost_equal,
     assert_equal,
     assert_false,
+    assert_raises,
     assert_true,
 )
 from math.vector3 import Vector3
@@ -542,6 +549,40 @@ def test_the_player_cuts_a_dummy_and_takes_a_bandits_coins() raises:
     assert_true(game.battle.shake < 0.05)
     game.render(scene, assets)
     assert_equal(game.window.width, 64)
+    # The player keeps their progress from one game to the next: the
+    # experience, the satchel, a mastered combo, the specialty and the
+    # style in hand. The levels teach the combos again.
+    var kept = game.progress()
+    assert_equal(kept.satchel[HERBS.value], 1)
+    var before = Progress()
+    before.experience[style_skill(MAGIC).value] = 2250
+    before.satchel[HERBS.value] = 3
+    before.mastery[0] = 400
+    before.specialty = MAGIC
+    before.style = MAGIC
+    game.battle.parameters.styles = [SWORD, MAGIC]
+    game.restore(unpack_progress(pack_progress(before)))
+    assert_true(game.battle.fighter.style == MAGIC)
+    assert_equal(game.battle.style_at, 1)
+    assert_true(game.battle.book.specialty == MAGIC)
+    assert_equal(game.gathering.satchel.count(HERBS), 3)
+    _ = game.tick(scene, assets, no_input(), step)
+    assert_true(len(game.battle.book.known(MAGIC)) > 0)
+    var back = game.progress()
+    assert_equal(back.mastery[0], 400)
+    assert_true(back.style == MAGIC)
+    # A style the player does not carry is not taken up; nor one while
+    # the player makes a move.
+    before.style = ARCHERY
+    game.restore(before)
+    assert_true(game.battle.fighter.style == MAGIC)
+    before.style = SWORD
+    game.battle.fighter.move = LIGHT_ONE
+    game.restore(before)
+    assert_true(game.battle.fighter.style == MAGIC)
+    _ = before.mastery.pop()
+    with assert_raises(contains="mastery"):
+        game.restore(before)
 
 
 def main() raises:

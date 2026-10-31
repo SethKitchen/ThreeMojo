@@ -98,13 +98,24 @@ A mend's power heals more. SANCTUARY heals 1.4 times as much as a plain mend.
 | Mastery | 0 | 40 | 120 | 240 | 400 |
 | Power | 1 times | 1.1 times | 1.2 times | 1.3 times | 1.4 times |
 
-The note says when a combo ranks up, such as `RISING STRIKE RANK 2!`. It says `NEW COMBO:` and the name when a level teaches one.
+The note says when a combo ranks up, such as `RISING STRIKE RANK 2!`, and `RISING STRIKE MASTERED!` at rank 5. It says `NEW COMBO:` and the name when a level teaches one.
+
+## Perks
+
+A combo's rank also upgrades its finisher. A perk acts when the finisher lands.
+
+| Rank | Perk |
+|---|---|
+| 3 and 4 | The finisher gives back the stamina it spent. |
+| 5, mastered | The finisher gives back its stamina, and gives one special point. |
+
+So a player who masters a combo can chain finishers and specials for longer. The book shows `MASTERED` for a combo at rank 5.
 
 ## What shows
 
 Over the combo counter, the display lists up to three combos that the string is on the way to. A combo's keys done are gold, the next is white, and the rest are gray. A key that must be on the beat has an orange dot under it.
 
-The book button shows the combo book: each combo of the player's style, its tier, its keys and its rank. A combo not yet learned shows the level that teaches it, or `SPECIALTY` for a master combo of another style.
+The book button shows the combo book: each combo of the player's style, its tier, its keys and its rank, or `MASTERED`. A combo not yet learned shows the level that teaches it, or `SPECIALTY` for a master combo of another style.
 
 | Control | Gamepad | Keyboard |
 |---|---|---|
@@ -112,5 +123,5 @@ The book button shows the combo book: each combo of the player's style, its tier
 
 ## Limits
 
-- The mastery and the combos learned last as long as the game. They are not saved.
+- The game keeps each combo's mastery from one game to the next: see [Village walk](Village-walk#saved-progress). The combos learned are not kept, because the levels teach them again.
 - A finisher is one of the existing moves. A combo has no clip of its own.

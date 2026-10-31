@@ -48,6 +48,22 @@ The game builds for about 15 seconds before the window opens. On a four-core Lin
 
 The game prints the frames a second to the standard error.
 
+## Saved progress
+
+The player keeps their progress from one game to the next. With `--play`, the game keeps it in `out/village_progress.bin`. It reads the file as it begins, and writes it as the player quits. A file that the game cannot read is left as it is until the player quits, and the game begins as new.
+
+The module is `extensions/village/progress.mojo`. `VillageGame.progress` gives a `Progress`, and `VillageGame.restore` takes one up. `pack_progress` packs it into bytes, and `unpack_progress` reads them back.
+
+| Part | What it keeps |
+|---|---|
+| `experience` | Each skill's experience. The levels teach the combos again. |
+| `satchel` | How many of each thing the satchel holds. |
+| `mastery` | Each combo's mastery, so its rank and its perks. |
+| `specialty` | The style the player specializes in. |
+| `style` | The style in hand. The game takes it up if the player carries it. |
+
+The bytes begin with the letters `TMVP` and the version, 1. Each number takes 4 bytes. A record from an earlier game, of fewer skills, things or combos, reads with zero for the rest. A record of a later version, or of more than this game holds, is refused. In a game of many players, the server keeps each player's record.
+
 ## Run the game loop in code
 
 ```mojo
@@ -167,6 +183,10 @@ The player moves by `player_movement`, which adds these to a person's movement. 
 | `back_share` | 0.7 | A player locked on a target faces it, and strafes around it. They back away at this share of their speed. |
 | `climb_drag` | 0.4 | Uphill, the speed drops by this share for each meter of rise a meter, to 30 percent at least. |
 | `hard_landing` | 9 meters a second | A landing faster than this is hard. The player walks for `landing_time`, 0.3 seconds, and the camera shakes. |
+
+**The roll.** Out of a fight, a tap of the dodge button rolls the player the way the stick leans, or steps them back with no lean. The roll starts as the button comes up, within 0.3 seconds of its press. A longer hold of the east button runs.
+
+The roll spends a dodge's stamina, and does not draw the weapon. A roll in a sprint keeps the sprint. Hold the jump as a roll ends, and the player jumps with the roll's speed: a long jump.
 
 A character with a `sprint_speed` no faster than its run never sprints. `CharacterParameters()` gives a person who does not sprint, and slows as fast as it speeds up. Its jump has no grace, no buffer and no cut. It backs away and climbs at its full speed, and never lands hard.
 

@@ -102,6 +102,7 @@ from extensions.village.skills import (
     skill_name,
     style_skill,
 )
+from extensions.village.progress import Progress
 from extensions.village.styles import STYLES, FightingStyle
 from extensions.village.critters import Critters, Haunt, default_haunts
 from extensions.village.day import DayCycle, dim_water
@@ -590,6 +591,48 @@ struct VillageGame(Movable):
         movers.extend(self.battle.movers())
         scene.update()
         self.fast.set_moving(scene, movers)
+
+    def progress(self) raises -> Progress:
+        """Return what the player keeps from this game to the next.
+
+        Returns:
+            Each skill's experience, what the satchel holds, each combo's
+            mastery, the specialty and the style in hand.
+
+        Raises:
+            Error: Never: the combos build.
+        """
+        var out = Progress()
+        out.experience = self.skills.experience.copy()
+        out.satchel = self.gathering.satchel.counts.copy()
+        out.mastery = self.battle.book.mastery.copy()
+        out.specialty = self.battle.book.specialty
+        out.style = self.battle.fighter.style
+        return out^
+
+    def restore(mut self, progress: Progress) raises:
+        """Take up what the player kept from a game before: the levels
+        that the experience gives teach their combos again. The style in
+        hand is taken up if the player carries it.
+
+        Args:
+            progress: The kept progress.
+
+        Raises:
+            Error: If `Progress.check` refuses it.
+        """
+        progress.check()
+        self.skills.experience = progress.experience.copy()
+        self.gathering.satchel.counts = progress.satchel.copy()
+        self.battle.book.mastery = progress.mastery.copy()
+        self.battle.book.specialty = progress.specialty
+        self.battle.parameters.specialty = progress.specialty
+        ref carried = self.battle.parameters.styles
+        for k in range(len(carried)):  # pragma: no branch
+            if carried[k] == progress.style:
+                if self.battle.fighter.set_style(progress.style):
+                    self.battle.style_at = k
+                return
 
     def tick(
         mut self,
