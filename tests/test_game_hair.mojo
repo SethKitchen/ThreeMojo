@@ -15,6 +15,12 @@ from extensions.humanoid.rig.game import (
 )
 from extensions.humanoid.rig.game_hair import GameHairMotion, _toward
 from extensions.humanoid.sex import MALE
+from extensions.humanoid.skeleton.head.hair.beard import (
+    CLEAN_SHAVEN,
+    FULL_BEARD,
+    STUBBLE,
+    Beard,
+)
 from extensions.humanoid.skeleton.head.hair.shading import HairLight
 from extensions.humanoid.skeleton.head.hair.simulation import HairWind
 from extensions.humanoid.spec import HumanoidSpec
@@ -37,7 +43,11 @@ def _spec() -> HumanoidSpec:
 
 
 def _person(
-    mut scene: Scene, mut assets: Assets, cards: Int = 12, guides: Int = 6
+    mut scene: Scene,
+    mut assets: Assets,
+    cards: Int = 12,
+    guides: Int = 6,
+    beard: Beard = CLEAN_SHAVEN,
 ) raises -> GameHumanoid:
     """Return a coarse person with a few strands and a few cards."""
     var root = scene.add(Object3D())
@@ -54,6 +64,7 @@ def _person(
         followers=1 if guides > 0 else 0,
         workers=num_logical_cores(),
         cards=cards,
+        beard=beard,
     )
 
 
@@ -184,6 +195,18 @@ def test_hair_motion_refuses_what_it_cannot_move() raises:
     person.strands[0].node = None
     with assert_raises(contains="groom must hang from a node"):
         _ = GameHairMotion(scene, person, _spec())
+
+
+def test_a_beard_grows_cards_but_stubble_does_not() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var bearded = _person(scene, assets, 12, 0, FULL_BEARD)
+    assert_equal(len(bearded.cards), 2)
+    assert_true(len(bearded.cards[1].groom) >= 40)
+    var stubbled = _person(scene, assets, 12, 0, STUBBLE)
+    assert_equal(len(stubbled.cards), 1)
+    var bare = _person(scene, assets, 0, 0, FULL_BEARD)
+    assert_equal(len(bare.cards), 0)
 
 
 def main() raises:

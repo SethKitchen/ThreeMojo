@@ -6,12 +6,33 @@
 """Tests for hair cards: a groom drawn as ribbons of fibers."""
 
 from core.assets import Assets
+from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, UV, BufferGeometry
 from core.object3d import Object3D
 from core.scene import Scene
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.spec import HumanoidSpec
+from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
+from extensions.humanoid.skeleton.head.hair.beard import (
+    CHIN_STRAP,
+    CLEAN_SHAVEN,
+    FORKED_BEARD,
+    FULL_BEARD,
+    GOATEE,
+    LONG_BEARD,
+    MUSTACHE,
+    MUTTON_CHOPS,
+    SHORT_BEARD,
+    STUBBLE,
+    Beard,
+    BeardShape,
+    beard_mesh,
+)
 from extensions.humanoid.skeleton.head.hair.cards import (
+    _surface_normal,
+    add_beard_cards,
+    beard_groom,
+    beard_reach,
     CARD_POINTS,
     CARD_TILE,
     FIBER_TEXELS,
@@ -211,6 +232,69 @@ def test_a_person_grows_cards() raises:
     assert_true(len(cards.groom) > 20)
     assert_equal(cards.groom.guides[0], -1)
     assert_true(abs(cards.root_width - card_width(person, 30)) < 1e-6)
+
+
+def test_a_beard_reaches_as_far_as_its_style() raises:
+    assert_true(abs(beard_reach(MUSTACHE) - 0.016) < 1e-6)
+    assert_equal(beard_reach(SHORT_BEARD), beard_reach(CHIN_STRAP))
+    assert_true(abs(beard_reach(GOATEE) - 0.024) < 1e-6)
+    assert_equal(beard_reach(GOATEE), beard_reach(MUTTON_CHOPS))
+    assert_true(abs(beard_reach(FULL_BEARD) - 0.05) < 1e-6)
+    assert_true(beard_reach(LONG_BEARD) > beard_reach(FORKED_BEARD))
+    with assert_raises(contains="grows no cards"):
+        _ = beard_reach(CLEAN_SHAVEN)
+    with assert_raises(contains="grows no cards"):
+        _ = beard_reach(STUBBLE)
+    with assert_raises(contains="named style"):
+        _ = beard_reach(Beard(40))
+
+
+def test_a_beard_s_strands_lie_on_it_down_its_lock() raises:
+    var person = HumanoidSpec(Length(6.0, FOOT), MALE)
+    var dims = head_muscle_dimensions(person)
+    var shape = BeardShape(dims, LONG_BEARD)
+    var shell = beard_mesh(dims, LONG_BEARD, 12)
+    var groom = beard_groom(shape, shell, 40)
+    assert_equal(len(groom), 40)
+    var longest = Float32(0)
+    for strand in range(len(groom)):
+        var first = groom.starts[strand]
+        var last = groom.starts[strand + 1] - 1
+        assert_true(last > first)
+        # Each point lies on the beard's surface, just off it.
+        for k in range(first, last + 1):
+            assert_true(abs(shape.distance(groom.points[k])) < 0.004)
+        longest = max(longest, groom.points[first].y - groom.points[last].y)
+    # Some strands run far down the lock.
+    assert_true(longest > 0.08)
+    with assert_raises(contains="one strand or more"):
+        _ = beard_groom(shape, shell, 0)
+    var empty = BufferGeometry()
+    empty.set_attribute(String(POSITION), BufferAttribute(List[Float32](), 3))
+    with assert_raises(contains="needs a vertex"):
+        _ = beard_groom(shape, empty, 4)
+    # Where the field is the same everywhere, its normal looks forward.
+    var bare = BeardShape(dims, CLEAN_SHAVEN)
+    assert_true(_surface_normal(bare, shape.mouth) == Vector3(0, 0, 1))
+
+
+def test_a_beard_grows_cards() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var person = HumanoidSpec(Length(6.0, FOOT), MALE)
+    var dims = head_muscle_dimensions(person)
+    var cards = add_beard_cards(
+        scene,
+        assets,
+        root,
+        person,
+        beard_mesh(dims, FORKED_BEARD, 12),
+        FORKED_BEARD,
+        30,
+    )
+    assert_equal(len(cards.groom), 30)
+    assert_true(cards.root_width < card_width(person, 600))
 
 
 def main() raises:

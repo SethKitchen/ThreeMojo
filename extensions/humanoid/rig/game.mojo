@@ -77,6 +77,7 @@ from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.head.hair.dimensions import SCALP_HAIR
 from extensions.humanoid.skeleton.head.hair.beard import (
     CLEAN_SHAVEN,
+    STUBBLE,
     Beard,
     beard_label,
     beard_mesh,
@@ -84,6 +85,7 @@ from extensions.humanoid.skeleton.head.hair.beard import (
 )
 from extensions.humanoid.skeleton.head.hair.cards import (
     HairCards,
+    add_beard_cards,
     add_hair_cards,
 )
 from extensions.humanoid.skeleton.head.hair.geometry import (
@@ -128,6 +130,9 @@ comptime HAIR_SHARE = Float32(0.12)
 comptime BEARD_SHARE = Float32(0.03)
 # Cells along a beard's box.
 comptime BEARD_DETAIL = 28
+# A beard's cards: a quarter of the scalp's, and 40 at least.
+comptime BEARD_CARDS_SHARE = 4
+comptime BEARD_CARDS_LEAST = 40
 # Half the slot that parts the legs, so they can swing apart, in meters
 # on the template.
 comptime LEG_GAP = Float32(0.014)
@@ -705,8 +710,11 @@ def add_game_humanoid(
             hair_phong(spec.genome, assets.textures.add(strands^))
         )
     var hair_node = place_mesh_node(scene, assets, holder_id, shell^, hair)
+    # The shells are drawn before the cards over them.
+    var full_beard = Optional[BufferGeometry](None)
     var beard_node = Optional[NodeId](None)
     if whiskers:
+        full_beard = whiskers.value().clone()
         beard_node = place_mesh_node(
             scene,
             assets,
@@ -749,6 +757,19 @@ def add_game_humanoid(
                 scene, assets, holder_id, spec, cards, style=hair_style
             )
         )
+        # A beard grows cards over its shell, but stubble is too short.
+        if full_beard and beard != STUBBLE:
+            card_grooms.append(
+                add_beard_cards(
+                    scene,
+                    assets,
+                    holder_id,
+                    spec,
+                    full_beard.value(),
+                    beard,
+                    max(BEARD_CARDS_LEAST, cards // BEARD_CARDS_SHARE),
+                )
+            )
     return GameHumanoid(
         rig^,
         root,

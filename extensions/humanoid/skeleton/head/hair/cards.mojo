@@ -28,6 +28,13 @@ groom:
    light. The density counts each card as `CARD_FIBERS` fibers. So the
    cards light as the strands do, and cost a mesh's triangles to draw.
 
+`add_beard_cards` grows cards over a beard. Each strand starts at a
+vertex of the beard's shell and walks down over the beard's surface,
+laid on it at each step, until it is as long as `beard_reach` says or
+the surface turns under. So the cards follow a long beard's lock and a
+forked beard's two locks, and the shell under them is the beard's mass
+in shade.
+
 A groom of cards moves under `HairSimulation` as strands do, with fewer
 points to move. `HairCards.shade` writes the moved points into the
 ribbons and lights them.
@@ -42,11 +49,23 @@ from std.math import sqrt
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, POSITION, UV, BufferGeometry
+from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.skeleton.complexion import hair_tone
+from extensions.humanoid.skeleton.head.hair.beard import (
+    CLEAN_SHAVEN,
+    FORKED_BEARD,
+    FULL_BEARD,
+    GOATEE,
+    LONG_BEARD,
+    MUTTON_CHOPS,
+    STUBBLE,
+    Beard,
+    BeardShape,
+    require_beard,
+)
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.head.hair.density import HairDensity
 from extensions.humanoid.skeleton.head.hair.groom import (
@@ -98,6 +117,10 @@ comptime ROOT_SHADE = Float32(0.55)
 comptime ROOT_REACH = Float32(0.35)
 """How far along a card, as a share of its length, its root's shade
 lifts to its full brightness."""
+comptime BEARD_STEP = Float32(0.004)
+"""The step a beard's strand grows by, in meters."""
+comptime BEARD_CARD_WIDTH = Float32(0.009)
+"""How wide a beard's card is at its root, in meters."""
 
 
 def _hash(a: Int, b: Int) -> Float32:
@@ -558,4 +581,175 @@ def add_hair_cards(
     )
     return add_cards(
         scene, assets, parent, groom^, look, card_width(spec, cards), seed
+    )
+
+
+def beard_reach(beard: Beard) raises -> Float32:
+    """Return how long a beard's strands grow at most.
+
+    | Beard | Length |
+    |---|---|
+    | `MUSTACHE`, `SHORT_BEARD`, `CHIN_STRAP` | 1.6 cm |
+    | `GOATEE`, `MUTTON_CHOPS` | 2.4 cm |
+    | `FULL_BEARD` | 5 cm |
+    | `FORKED_BEARD` | 14 cm |
+    | `LONG_BEARD` | 20 cm |
+
+    A strand stops sooner where the beard's surface turns under.
+
+    Args:
+        beard: A beard that grows cards: not `CLEAN_SHAVEN` or `STUBBLE`.
+
+    Returns:
+        The length, in meters.
+
+    Raises:
+        Error: If the beard is not named, or grows no cards.
+    """
+    require_beard(beard)
+    if beard == CLEAN_SHAVEN or beard == STUBBLE:
+        raise Error("A clean-shaven or stubbled face grows no cards")
+    if beard == GOATEE or beard == MUTTON_CHOPS:
+        return 0.024
+    if beard == FULL_BEARD:
+        return 0.05
+    if beard == FORKED_BEARD:
+        return 0.14
+    if beard == LONG_BEARD:
+        return 0.2
+    return 0.016
+
+
+def _surface_normal(shape: BeardShape, p: Vector3) -> Vector3:
+    """Return the unit gradient of a beard's field at a point."""
+    var e = Float32(0.0008)
+    var g = Vector3(
+        shape.distance(p + Vector3(e, 0, 0))
+        - shape.distance(p - Vector3(e, 0, 0)),
+        shape.distance(p + Vector3(0, e, 0))
+        - shape.distance(p - Vector3(0, e, 0)),
+        shape.distance(p + Vector3(0, 0, e))
+        - shape.distance(p - Vector3(0, 0, e)),
+    )
+    if g.length() < 1e-9:
+        return Vector3(0, 0, 1)
+    g.normalize()
+    return g
+
+
+def beard_groom(
+    shape: BeardShape, shell: BufferGeometry, count: Int, seed: Int = 1
+) raises -> HairGroom:
+    """Grow guide strands over a beard, down its surface.
+
+    Each strand starts at a vertex of the shell, picked evenly by index
+    with a little jitter. It walks down over the beard's surface, laid
+    on it at each step, as far as `beard_reach` says, and stops where the
+    surface turns under, at a lock's tip or under the jaw. A long or a
+    forked beard's strands so follow its locks.
+
+    Args:
+        shape: The beard's solid.
+        shell: The beard's shell, with positions.
+        count: How many strands, one or more.
+        seed: Picks the jitter.
+
+    Returns:
+        A groom of guide strands, two points each at least.
+
+    Raises:
+        Error: If the beard grows no cards, `count` is below one, or the
+            shell has no vertex.
+    """
+    var length = beard_reach(shape.beard)
+    if count < 1:
+        raise Error("A beard needs one strand or more")
+    ref placed = shell.attribute_view(String(POSITION))
+    var total = placed.count()
+    if total == 0:
+        raise Error("A beard's shell needs a vertex")
+    var steps = max(2, Int(length / BEARD_STEP))
+    var lift = Float32(0.0012)
+    var down = Vector3(0, -1, 0)
+    var groom = HairGroom()
+    for k in range(count):  # pragma: no branch
+        var jitter = Int(_hash(seed, k) * Float32(total) / Float32(count))
+        var v = (k * total // count + jitter) % total
+        var p = placed.vector3(v)
+        var n = _surface_normal(shape, p)
+        p = p - n * (shape.distance(p) - lift)
+        var points = List[Vector3]()
+        var facing = List[Vector3]()
+        points.append(p)
+        facing.append(n)
+        for _ in range(steps):  # pragma: no branch
+            var t = down - n * n.dot(down)
+            # The surface faces down here: the strand has reached the
+            # beard's underside, and falls no further.
+            if t.length() < 0.35:
+                break
+            t.normalize()
+            var q = p + t * BEARD_STEP
+            n = _surface_normal(shape, q)
+            q = q - n * (shape.distance(q) - lift)
+            points.append(q)
+            facing.append(n)
+            p = q
+        if len(points) < 2:
+            points.append(p + down * BEARD_STEP)
+            facing.append(n)
+        var depths = List[Float32](length=len(points), fill=0)
+        groom.add(points, facing, depths, 0.85 + 0.3 * _hash(seed, k + 7))
+    return groom^
+
+
+def add_beard_cards(
+    mut scene: Scene,
+    mut assets: Assets,
+    parent: NodeId,
+    spec: HumanoidSpec,
+    shell: BufferGeometry,
+    beard: Beard,
+    cards: Int,
+    seed: Int = 1,
+) raises -> HairCards:
+    """Grow a beard's cards out of its shell, and draw them under `parent`.
+
+    Args:
+        scene: The scene that receives the cards.
+        assets: The store for their mesh, fibers and material.
+        parent: The node they hang from, as the shell does.
+        spec: The person, whose hair's color the beard takes.
+        shell: The beard's shell, in the parent's frame.
+        beard: A beard that grows cards.
+        cards: How many cards, one or more.
+        seed: Picks the roots' jitter and the fibers.
+
+    Returns:
+        The cards, for `HairCards.shade`.
+
+    Raises:
+        Error: If the beard grows no cards, the count is refused, or the
+            shell has no vertex.
+    """
+    var groom = beard_groom(
+        BeardShape(head_muscle_dimensions(spec), beard), shell, cards, seed
+    )
+    var tone = hair_tone(spec.genome)
+    var look = HairLook(
+        Vector3(
+            srgb_to_linear(Float32(tone.r) / 255),
+            srgb_to_linear(Float32(tone.g) / 255),
+            srgb_to_linear(Float32(tone.b) / 255),
+        )
+    )
+    var h = head_muscle_dimensions(spec).head.copy()
+    return add_cards(
+        scene,
+        assets,
+        parent,
+        groom^,
+        look,
+        BEARD_CARD_WIDTH * h.cm(1) / Float32(0.01),
+        seed + 17,
     )

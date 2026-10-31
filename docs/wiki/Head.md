@@ -352,6 +352,17 @@ The head's frame maps the zones onto each face. So a genome that widens the jaw 
 
 `beard_mesh` meshes the outer face of the shell. The inner face lies under the skin and never shows. Facial hair takes the scalp hair's material. Pass `beard` to `add_game_humanoid`; see [Game humanoid](Game-humanoid).
 
+#### Beard cards
+
+A beard can wear cards over its shell, as the scalp does. `add_beard_cards(scene, assets, parent, spec, shell, beard, cards)` grows them. Stubble and a clean-shaven face grow no cards.
+
+1. `beard_groom` roots each strand at a vertex of the beard's shell, 1.2 mm out of it.
+2. Each strand walks down the beard's surface in steps of 4 mm. At each step it turns along the surface, toward the ground.
+3. A strand stops where the surface faces down, under the jaw or at a lock's tip. It stops at its style's reach too. A mustache reaches 1.6 cm, a full beard 5 cm and a long beard 20 cm.
+4. Each card is 9 mm wide on the template, so the shell shows between the cards as the beard's mass.
+
+The cards lie on the beard and follow its locks, so a forked beard parts in its cards too. `add_game_humanoid` grows a quarter of its `cards` on a beard, and 40 at the least.
+
 ## Examples
 
 `examples/expressions.mojo` draws one face in each of the eight expressions and writes `out/expressions.png`. `examples/talking.mojo` writes `out/talking.png`, an animation: a woman says four phrases, and her face greets, smiles, frowns and is surprised.

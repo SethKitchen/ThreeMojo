@@ -35,7 +35,7 @@ The rig has nineteen joints. Each joint is a bone, a scene node named as a glTF 
 
 `add_game_humanoid` builds three skinned meshes on one skeleton: the body's skin and each hand's. The eyes and the scalp's hair hang from the head's bone, so they turn with it. With `guides`, it grows strands of hair as well. With none, the hair's shell takes the shape of `hair_style`. A bob falls to the jaw, a ponytail hangs from its tie, and a bun stands on the crown. See [Head](Head#a-shell-drawn-alone).
 
-With `cards`, it grows that many guide strands in the shape of `hair_style` and draws each as a card of fibers over a thin shell. A crowd can wear cards: a head of 700 cards costs about 22,000 triangles to draw. With `guides`, it grows strands of hair as well. Strands cost far more to draw: each segment is a quad and two round caps. See [Hair cards](Head#hair-cards).
+With `cards`, it grows that many guide strands in the shape of `hair_style` and draws each as a card of fibers over a thin shell. A beard grows a quarter as many cards over its own shell. A crowd can wear cards: a head of 700 cards costs about 22,000 triangles to draw. With `guides`, it grows strands of hair as well. Strands cost far more to draw: each segment is a quad and two round caps. See [Hair cards](Head#hair-cards).
 
 `GameHairMotion` moves the strands and the cards as the person moves. Call `update` once a frame, after the scene is updated. The hair lags as the head starts, swings as it stops, and falls toward the ground as the head bows. A groom that a hood or a helmet hides is not moved.
 
