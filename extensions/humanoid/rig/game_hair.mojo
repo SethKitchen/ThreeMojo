@@ -168,7 +168,12 @@ struct GameHairMotion(Movable):
             var pose = scene.world_matrix(node)
             var back = pose.copy()
             back.invert()
-            self.simulations[k].carry(back * self.poses[k])
+            # A bone's pose is affine; its inverse's rounding is not.
+            var move = back * self.poses[k]
+            for column in range(3):  # pragma: no branch
+                move.put(3, column, 0)
+            move.put(3, 3, 1)
+            self.simulations[k].carry(move)
             self.simulations[k].down = _toward(back, Vector3(0, -1, 0))
             self.poses[k] = pose^
             var local = wind

@@ -198,6 +198,9 @@ $(call gallery,family,family)
 $(call gallery,armory,armory)
 # Eight people of eight callings, each of a genome and an outfit picked by a seed.
 $(call gallery,crowd,crowd)
+# Seven callings as a man and a woman each: hats and helmets, furs, robes and
+# plate of many metals, with hair cards moving as they walk.
+$(call gallery,archetypes,archetypes)
 $(call gallery,talking,talking)
 $(call gallery,expressions,expressions)
 # The CPU fallback upscaler beside the full-size render. It is not DLSS, and no image of it is tracked.

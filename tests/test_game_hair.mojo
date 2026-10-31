@@ -28,7 +28,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import FOOT, Length
+from units.si import DEGREE, FOOT, Angle, Length
 
 
 def _spec() -> HumanoidSpec:
@@ -95,8 +95,9 @@ def test_the_hair_swings_as_the_head_moves() raises:
     assert_equal(len(motion.simulations), 2)
     var before = person.cards[0].groom.points.copy()
     var strands_before = person.strands[0].groom.points.copy()
-    # The person steps forward: the loose points lag behind.
+    # The person steps forward and turns: the loose points lag behind.
     scene.node(person.root).set_position(0, 0, 0.05)
+    scene.node(person.root).rotate_y(Angle(7.0, DEGREE))
     scene.update()
     var eye = Vector3(0, 1.6, 2)
     var still = HairWind(Vector3(1, 0, 0), 0)

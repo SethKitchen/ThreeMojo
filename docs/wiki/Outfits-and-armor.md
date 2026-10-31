@@ -84,6 +84,12 @@ Some garments are parti-colored: four merchants' tunics in ten and three women's
 
 ![Eight people of eight callings walk and stand in a studio](out/crowd.png)
 
+### Archetypes
+
+`examples/archetypes.mojo` dresses a farmer, a barbarian, a royal, a wizard, a warlock, a ranger and a warrior, each as a man and a woman. The men stand in front and the women behind. Each person's seed picks a genome, a stature, the dyes, the metals, the headwear and a hairstyle. Each man's calling picks his beard. Their hair is 500 cards each, moved and shaded by `GameHairMotion`. It writes `out/archetypes.png`.
+
+![Fourteen people of seven callings walk and stand while the camera passes](out/archetypes.png)
+
 ## Plate
 
 A flexible garment keeps the skin's weights and bends as the skin bends. Plate does not bend.
