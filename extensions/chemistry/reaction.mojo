@@ -31,7 +31,7 @@ proceeds.
                               Pressure64(1, ATMOSPHERE))   # 1167 K
 """
 
-from std.math import exp, isfinite, log
+from std.math import exp, isfinite, log, sqrt
 from extensions.chemistry.elements import ElementCount, formula_index
 from extensions.chemistry.quantities import (
     GAS_CONSTANT,
@@ -40,7 +40,7 @@ from extensions.chemistry.quantities import (
 )
 from extensions.chemistry.thermo import Substance
 from units.si import Pressure64
-from units.temperature import Temperature64
+from units.temperature import Temperature64, TemperatureDifference64
 
 # Element sums closer to zero than this balance.
 comptime _BALANCE = 1e-9
@@ -310,6 +310,63 @@ struct Reaction(Copyable, Movable, Writable):
             else:
                 hi = mid
         return Pressure64(exp(0.5 * (lo + hi)))
+
+    def delta_g_uncertainty(
+        self, temperature: Temperature64
+    ) raises -> MolarEnergy64:
+        """Return the standard uncertainty of the Gibbs energy change.
+
+        The substances' enthalpy uncertainties are independent, so they
+        add in quadrature, each times its coefficient.
+
+        Args:
+            temperature: The temperature.
+
+        Returns:
+            The square root of the sum of (coefficient times uncertainty)
+            squared.
+
+        Raises:
+            Error: If a substance's data does not reach the temperature.
+        """
+        var total = Float64(0)
+        # A reaction has two terms at least.
+        for term in self.terms:  # pragma: no branch
+            var u = (
+                term.coefficient
+                * term.substance.uncertainty_at(temperature).value
+            )
+            total += u * u
+        return MolarEnergy64(sqrt(total))
+
+    def equilibrium_temperature_uncertainty(
+        self, temperature: Temperature64, pressure: Pressure64
+    ) raises -> TemperatureDifference64:
+        """Return the uncertainty of an equilibrium temperature.
+
+        The change's uncertainty divided by its slope in temperature: the
+        change crosses zero that much earlier or later.
+
+        Args:
+            temperature: The equilibrium temperature.
+            pressure: The total pressure.
+
+        Returns:
+            The standard uncertainty in kelvin.
+
+        Raises:
+            Error: If the data does not reach a kelvin either side, or the
+                change does not vary with temperature.
+        """
+        var h = Float64(0.5)
+        var t = temperature.kelvin
+        var up = self.delta_g(Temperature64(t + h), pressure).value
+        var down = self.delta_g(Temperature64(t - h), pressure).value
+        var slope = (up - down) / (2 * h)
+        if slope == 0:
+            raise Error("The change does not vary with temperature")
+        var u = self.delta_g_uncertainty(temperature).value
+        return TemperatureDifference64(u / abs(slope))
 
     def mass_ratio(self, of: Substance, per: Substance) raises -> Float64:
         """Return the mass of one substance per mass of another.

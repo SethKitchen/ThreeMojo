@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Read NASA seven-coefficient data in the CHEMKIN thermo format.
+"""Read and write NASA seven-coefficient data in the CHEMKIN thermo format.
 
 Most published thermochemical databases use this format: GRI-Mech, the
 Burcat tables and the files of combustion and plasma codes. Each species
@@ -11,6 +11,7 @@ takes four lines of 80 columns, with the line number 1 to 4 in column 80:
 
     columns  1-18   the name; the first word is used
     columns 25-44   up to four elements: a 2-column symbol, a 3-column count
+    columns 74-78   a fifth element, in extended files
     column  45      the phase: G, L or S
     columns 46-55   the low temperature
     columns 56-65   the high temperature
@@ -23,8 +24,12 @@ takes four lines of 80 columns, with the line number 1 to 4 in column 80:
 Blank lines, lines that start with `!`, a `THERMO` line with the line of
 default temperatures after it, and an `END` line are allowed between
 records. An element with a count of zero is left out. A Fortran `D`
-exponent reads as `E`. The fifth element pair of some extended files, in
-columns 74 to 78, is not read.
+exponent reads as `E`.
+
+`write_chemkin_thermo` writes species back in the same columns, with each
+coefficient as Fortran's E15.8 writes it. A species fit must have one or
+two segments in the seven-coefficient form. A one-segment fit is written
+as two equal segments that meet at the middle of its range.
 
 The species have no molar volume. Set one where the pressure term of a
 condensed phase matters.
@@ -35,9 +40,11 @@ from extensions.chemistry.elements import (
     Formula,
     element_from_symbol,
 )
+from std.math import floor, log10
 from extensions.chemistry.kinds import GAS, LIQUID, Phase, SOLID
 from extensions.chemistry.quantities import MolarVolume64
-from extensions.chemistry.thermo import Species, nasa7
+from extensions.chemistry.thermo import PER_SEGMENT, Species, nasa7
+from loaders.js_number import js_to_fixed
 
 
 def _number(field: String, line: Int) raises -> Float64:
@@ -78,8 +85,7 @@ def _record(lines: List[String], first: Int) raises -> Species:
     if len(words) == 0:
         raise Error(String("Line ", number, ": a species needs a name"))
     var counts = List[ElementCount]()
-    for k in range(4):
-        var at = 24 + 5 * k
+    for at in [24, 29, 34, 39, 73]:
         var symbol = String(String(head[byte = at : at + 2]).strip())
         if symbol.byte_length() == 0:
             continue
@@ -153,3 +159,145 @@ def read_chemkin_thermo(text: String) raises -> List[Species]:
             out.append(_record(lines, i))
             i += 4
     return out^
+
+
+def _e15(value: Float64) raises -> String:
+    """Return a number in 15 columns, as Fortran's E15.8 writes it."""
+    if value == 0:
+        return " 0.00000000E+00"
+    var sign = String(" ")
+    if value < 0:
+        sign = "-"
+    var a = abs(value)
+    var power = Int(floor(log10(a)))
+    var text = js_to_fixed(a / Float64(10) ** power, 8)
+    # A mantissa just below 10 rounds up to "10.": move a power over. One
+    # just below 1 rounds up to "1.", so it needs no change.
+    if text.startswith("10."):
+        power += 1
+        text = js_to_fixed(a / Float64(10) ** power, 8)
+    if abs(power) >= 100:
+        raise Error("A coefficient's exponent must have two digits")
+    var exponent_sign = String("+")
+    if power < 0:
+        exponent_sign = "-"
+    var digits = String(abs(power))
+    if abs(power) < 10:
+        digits = "0" + digits
+    return sign + text + "E" + exponent_sign + digits
+
+
+def _right(text: String, width: Int) raises -> String:
+    """Return text right-justified in a field."""
+    if text.byte_length() > width:
+        raise Error(String("'", text, "' does not fit in ", width, " columns"))
+    return String(" ") * (width - text.byte_length()) + text
+
+
+def _left(text: String, width: Int) -> String:
+    """Return text left-justified in a field it fits."""
+    return text + String(" ") * (width - text.byte_length())
+
+
+def _pair(symbol: String, count: Int) raises -> String:
+    """Return an element and its count in five columns."""
+    return _left(symbol, 2) + _right(String(count), 3)
+
+
+def chemkin_record(species: Species) raises -> String:
+    """Return the four lines of one species in the CHEMKIN thermo format.
+
+    Args:
+        species: The species. Its fit has one or two segments in the
+            seven-coefficient form.
+
+    Returns:
+        Four lines of 80 columns, each ending in a newline.
+
+    Raises:
+        Error: If the fit has more than two segments or is not in the
+            seven-coefficient form, the name has a space or more than 18
+            characters, the formula has more than five elements or a count
+            above 999, a temperature does not fit its columns, or a
+            coefficient's exponent needs three digits.
+    """
+    ref f = species.thermo
+    var segments = len(f.bounds) - 1
+    if segments > 2:
+        raise Error("A CHEMKIN record holds at most two segments")
+    for s in range(segments):  # pragma: no branch
+        var k = PER_SEGMENT * s
+        if f.coefficients[k] != 0 or f.coefficients[k + 1] != 0:
+            raise Error("A CHEMKIN record holds the seven-coefficient form")
+    var name = species.name
+    if name.find(" ") >= 0 or name.byte_length() > 18:
+        raise Error("A CHEMKIN name has no space and at most 18 characters")
+    ref counts = species.formula.counts
+    if len(counts) > 5:
+        raise Error("A CHEMKIN record holds at most five elements")
+    var low = f.bounds[0]
+    var high = f.bounds[segments]
+    var common = 0.5 * (low + high)
+    var high_segment = 0
+    if segments == 2:
+        common = f.bounds[1]
+        high_segment = 1
+    var elements = String()
+    var fifth = String("     ")
+    for i in range(len(counts)):  # pragma: no branch
+        var pair = _pair(counts[i].element.symbol(), counts[i].count)
+        if i < 4:
+            elements += pair
+        else:
+            fifth = pair
+    var phase = String("S")
+    if species.phase == GAS:
+        phase = "G"
+    elif species.phase == LIQUID:
+        phase = "L"
+    var line1 = (
+        _left(name, 18)
+        + String(" ") * 6
+        + _left(elements, 20)
+        + phase
+        + _right(js_to_fixed(low, 3), 10)
+        + _right(js_to_fixed(high, 3), 10)
+        + _right(js_to_fixed(common, 2), 8)
+        + fifth
+        + " 1\n"
+    )
+    # The high segment first, then the low.
+    var numbers = List[Float64]()
+    for s in [high_segment, 0]:
+        var k = PER_SEGMENT * s
+        for i in range(2, 9):
+            numbers.append(f.coefficients[k + i])
+    var out = line1
+    for row in range(3):
+        var line = String()
+        for j in range(5):
+            var at = 5 * row + j
+            if at < 14:
+                line += _e15(numbers[at])
+        out += _left(line, 79) + String(row + 2) + "\n"
+    return out^
+
+
+def write_chemkin_thermo(species: List[Species]) raises -> String:
+    """Return a CHEMKIN thermo file of species.
+
+    Args:
+        species: The species, each in one or two seven-coefficient
+            segments.
+
+    Returns:
+        A `THERMO` line, a line of default temperatures, the records and
+        an `END` line.
+
+    Raises:
+        Error: If a species cannot be written. See `chemkin_record`.
+    """
+    var out = String("THERMO\n   300.000  1000.000  5000.000\n")
+    for s in species:
+        out += chemkin_record(s)
+    return out + "END\n"

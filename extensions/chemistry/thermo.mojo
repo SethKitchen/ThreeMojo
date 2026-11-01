@@ -356,6 +356,8 @@ struct Species(Copyable, Movable, Writable):
     # Zero for a gas, or where the volume does not matter. The pressure
     # term of a condensed phase uses it.
     var molar_volume: MolarVolume64
+    # The standard uncertainty of the enthalpy, zero when not known.
+    var uncertainty: MolarEnergy64
 
     def __init__(
         out self,
@@ -387,6 +389,7 @@ struct Species(Copyable, Movable, Writable):
         self.phase = phase
         self.thermo = thermo^
         self.molar_volume = molar_volume
+        self.uncertainty = MolarEnergy64(0)
 
     def covers(self, temperature: Temperature64) -> Bool:
         """Return True if the data reaches a temperature.
@@ -398,6 +401,24 @@ struct Species(Copyable, Movable, Writable):
             Whether the temperature lies in the data's range.
         """
         return self.thermo.covers(temperature)
+
+    def set_uncertainty(mut self, uncertainty: MolarEnergy64) raises:
+        """Set the standard uncertainty of the enthalpy.
+
+        A table such as CODATA's gives it with the enthalpy of formation.
+        It carries into a reaction's change and its equilibrium
+        temperature.
+
+        Args:
+            uncertainty: The uncertainty, zero or more.
+
+        Raises:
+            Error: If the uncertainty is negative or not finite.
+        """
+        var u = uncertainty.value
+        if not (isfinite(u) and u >= 0):
+            raise Error("An uncertainty must be finite and not negative")
+        self.uncertainty = uncertainty
 
     def molar_mass(self) raises -> MolarMass64:
         """Return the mass of a mole.
@@ -557,6 +578,22 @@ struct Substance(Copyable, Movable, Writable):
             Error: Never for a valid formula.
         """
         return self.phases[0].formula.molar_mass()
+
+    def uncertainty_at(
+        self, temperature: Temperature64
+    ) raises -> MolarEnergy64:
+        """Return the enthalpy uncertainty of the phase that holds.
+
+        Args:
+            temperature: The temperature.
+
+        Returns:
+            The phase's standard uncertainty.
+
+        Raises:
+            Error: If no phase's data reaches the temperature.
+        """
+        return self.phases[self._index(temperature)].uncertainty
 
     def transition(self, colder: Phase, hotter: Phase) raises -> Temperature64:
         """Return where one phase gives way to the next.
