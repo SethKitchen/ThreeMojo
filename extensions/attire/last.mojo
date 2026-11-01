@@ -321,11 +321,8 @@ def last_mesh(last: FootLast, piece: BufferGeometry) raises -> BufferGeometry:
     var sides = List[Int](capacity=placed.count())
     var votes = 0
     for v in range(placed.count()):
-        var most = 0
-        for c in range(1, 4):  # pragma: no branch
-            if weights.component(v, c) > weights.component(v, most):
-                most = c
-        var side = Joint(Int(bones.component(v, most))).side()
+        # A garment keeps its four bones heaviest first.
+        var side = Joint(Int(bones.component(v, 0))).side()
         sides.append(side)
         if placed.vector3(v).x * last.center.x > 0:
             votes += side

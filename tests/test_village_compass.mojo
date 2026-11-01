@@ -9,6 +9,7 @@ that matter."""
 from extensions.village.compass import (
     COMPASS_SHARE,
     CompassMark,
+    _wrap,
     bearing,
     clock_text,
     draw_compass,
@@ -48,6 +49,8 @@ def test_a_bearing_is_the_turn_from_the_camera_s_way() raises:
         bearing(origin, Vector3(7, 0, 1), look), -Float32(pi / 2), atol=1e-6
     )
     # A turn past a half turn is wrapped either way.
+    assert_almost_equal(_wrap(4), Float32(4 - 2 * pi), atol=1e-5)
+    assert_almost_equal(_wrap(-4), Float32(2 * pi - 4), atol=1e-5)
     var turned = Angle(170.0, DEGREE)
     var b = bearing(origin, Vector3(1, 0, -5), turned)
     assert_almost_equal(b, Float32(-170.0 * pi / 180), atol=1e-5)
