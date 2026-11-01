@@ -210,6 +210,7 @@ The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these o
 - **Each bandit's health and stamina**, over its head, while it fights or is hurt. A staggered bandit shows `BREAK`, or `FINISH` when a heavy attack would finish it. A bandit that winds up a heavy attack shows a red `!`. A bandit that winds up a piercing attack glows red at the chest, and the glow grows until it strikes. A raging bandit shows `RAGE` under its bars.
 - **A dummy's stamina**, over its head, while its stamina is not full.
 - **The lock's mark**: four gold dots around the locked target's chest.
+- **The target panel**, under the compass: the locked foe's name, such as `BANDIT` or `WOLF`, and its health bar. `draw_target` writes it, and `target_name` gives the name. While a warden fights, the panel and the compass stand under the warden's bars: `hud_drop` gives how far down.
 - **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `PIERCE BREAK`. They rise and fade.
 - **The edges of the frame**, tinted. They turn blue while the player's perfect dodge slows the foes. They turn gold through an ultimate, and red below a quarter of the player's health. A stamina recovery rings the player's feet with blue light.
 

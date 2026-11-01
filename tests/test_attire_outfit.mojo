@@ -166,28 +166,17 @@ def test_a_person_is_dressed_from_the_skin_out() raises:
     var coif_look = assets.materials.get(
         scene.skinned_meshes[dressed.meshes[4]].material
     )
-    var gambeson_look = assets.materials.get(
-        scene.skinned_meshes[dressed.meshes[2]].material
-    )
     var boots_look = assets.materials.get(
         scene.skinned_meshes[dressed.meshes[5]].material
     )
     assert_true(hauberk_look.bump_map != NO_TEXTURE)
     assert_true(hauberk_look.bump_map == coif_look.bump_map)
-    assert_true(gambeson_look.bump_map != NO_TEXTURE)
-    assert_true(gambeson_look.bump_map != hauberk_look.bump_map)
     assert_true(boots_look.bump_map != NO_TEXTURE)
     assert_true(boots_look.bump_map != hauberk_look.bump_map)
-    # The shirt shows at most a sliver past the gambeson and the mail.
-    var shirt_shown = 0
-    if dressed.meshes[0] >= 0:
-        shirt_shown = assets.geometries.get(
-            scene.skinned_meshes[dressed.meshes[0]].geometry
-        ).triangle_count()
-    var gambeson_shown = assets.geometries.get(
-        scene.skinned_meshes[dressed.meshes[2]].geometry
-    ).triangle_count()
-    assert_true(shirt_shown < gambeson_shown)
+    # The mail has no opening, so the shirt and the gambeson under it are
+    # cut away to its hems: they draw nothing.
+    assert_equal(dressed.meshes[0], -1)
+    assert_equal(dressed.meshes[2], -1)
     # The outfit hides most of the skin.
     var skin_after = assets.geometries.get(
         scene.skinned_meshes[person.skins[0]].geometry
@@ -197,6 +186,16 @@ def test_a_person_is_dressed_from_the_skin_out() raises:
     assert_false(scene.node(person.hair.value()).visible)
     assert_false(scene.node(person.strands[0].node.value()).visible)
     assert_false(scene.node(person.cards[0].node.value()).visible)
+    # A gambeson worn alone shows, with its quilting.
+    var padded = Outfit()
+    padded.add(gambeson())
+    var alone = dress(scene, assets, person, padded)
+    assert_true(alone.meshes[0] >= 0)
+    var gambeson_look = assets.materials.get(
+        scene.skinned_meshes[alone.meshes[0]].material
+    )
+    assert_true(gambeson_look.bump_map != NO_TEXTURE)
+    assert_true(gambeson_look.bump_map != hauberk_look.bump_map)
 
 
 def _pieces(
@@ -673,10 +672,16 @@ def test_a_design_draws_a_garment_in_parts() raises:
     outfit.add(legs^)
     outfit.add(boots())
     var dressed = dress(scene, assets, person, outfit)
-    # A plain shirt is one part, drawn without a map.
-    assert_equal(len(dressed.parts[0]), 1)
-    assert_equal(dressed.parts[0][0], dressed.meshes[0])
-    ref linen = scene.skinned_meshes[dressed.meshes[0]]
+    # The doublet has no opening, so the shirt under it draws nothing.
+    assert_equal(len(dressed.parts[0]), 0)
+    assert_equal(dressed.meshes[0], -1)
+    # A plain shirt worn alone is one part, drawn without a map.
+    var plain = Outfit()
+    plain.add(shirt())
+    var alone = dress(scene, assets, person, plain)
+    assert_equal(len(alone.parts[0]), 1)
+    assert_equal(alone.parts[0][0], alone.meshes[0])
+    ref linen = scene.skinned_meshes[alone.meshes[0]]
     assert_equal(assets.materials.get(linen.material).map, NO_TEXTURE)
     # A brocade doublet: the brocade, its plain panel, its braided trim.
     assert_equal(len(dressed.parts[1]), 3)

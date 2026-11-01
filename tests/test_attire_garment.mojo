@@ -321,15 +321,25 @@ def test_lames_step_from_the_anchor() raises:
         Int(all.attribute_view(String(SKIN_INDEX)).component(0, 0)),
         CHEST.value,
     )
-    # Holding the arms, the anchor takes an arm's weight: a cuirass does
-    # not turn with a raised arm. Not holding them, it does not; nor does
-    # a leg give its weight up.
-    var arm = _shared(RIGHT_UPPER_ARM, 1, SPINE, 0)
-    var cuirass = arm.clone()
-    share_with(cuirass, CHEST, 1, True)
+    # Holding the arms, the anchor takes an arm's weight where the arm
+    # turns less than half: a cuirass does not turn with a raised arm.
+    # Its edge over the arm still turns with it. Not holding them, the
+    # anchor takes no arm's weight; nor does a leg give its weight up.
+    var side = _shared(RIGHT_UPPER_ARM, 0.4, CHEST, 0.6)
+    share_with(side, CHEST, 1, True)
     assert_equal(
-        Int(cuirass.attribute_view(String(SKIN_INDEX)).component(0, 0)),
+        Int(side.attribute_view(String(SKIN_INDEX)).component(0, 0)),
         CHEST.value,
+    )
+    assert_almost_equal(
+        side.attribute_view(String(SKIN_WEIGHT)).component(0, 0), 1
+    )
+    var arm = _shared(RIGHT_UPPER_ARM, 1, SPINE, 0)
+    var edge = arm.clone()
+    share_with(edge, CHEST, 1, True)
+    assert_equal(
+        Int(edge.attribute_view(String(SKIN_INDEX)).component(0, 0)),
+        RIGHT_UPPER_ARM.value,
     )
     var pauldron = arm.clone()
     share_with(pauldron, CHEST, 1)

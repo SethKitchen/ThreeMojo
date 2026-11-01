@@ -127,14 +127,10 @@ from extensions.attire.design import (
 from extensions.humanoid.rig.joints import (
     HEAD,
     LEFT_THIGH,
-    LEFT_UPPER_ARM,
     RIGHT_SHIN,
     RIGHT_THIGH,
-    RIGHT_UPPER_ARM,
 )
 from extensions.humanoid.rig.game import GameHumanoid
-from extensions.humanoid.rig.joints import HumanoidRig
-from extensions.humanoid.rig.weights import bone_weights
 from extensions.humanoid.skeleton.head.hair.shading import HairLight
 from math.vector3 import Vector3
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
@@ -145,9 +141,6 @@ comptime SKIRT_SHOW = Float32(0.15)
 """How far over a long skirt's hem the legs inside it still show, in
 meters on the template: as a leg swings, this much of it can pass the
 hem."""
-comptime ARMPIT_GAIN = Float32(5)
-"""How many times the upper arms' weight on a vertex its armpit share is:
-see `arm_shares`."""
 comptime RIM_THINNEST = Float32(0.0015)
 """A fabric at least this thick, in meters, has a rim at its hems: velvet,
 leather, padding, mail and plate."""
@@ -324,8 +317,7 @@ def dress_pieces(
     var detail = garment_detail(skin)
     var clear = top - 2 * SKIRT_RING * skirt_scale(person.rig) / detail
     var hang = List[Float32]()
-    var armpits = arm_shares(skin, person.rig)
-    var closes = List[List[Float32]]()
+    var closes = List[Bool]()
     var values = List[List[Float32]]()
     var hides = List[List[Float32]]()
     var faces = List[List[Float32]]()
@@ -343,17 +335,16 @@ def dress_pieces(
         )
         # A neckline or an opening cuts the cover away, so what is under
         # it shows there.
-        var closed = List[Float32](length=count, fill=1)
-        if is_cut(garment.neckline, garment.opening):
+        var open = is_cut(garment.neckline, garment.opening)
+        if open:
             for v in range(count):  # pragma: no branch
-                closed[v] = opening_mask(
+                mine[v] *= opening_mask(
                     person.rig,
                     garment.neckline,
                     garment.opening,
                     frame.points[v],
                 )
-                mine[v] *= closed[v]
-        closes.append(closed^)
+        closes.append(not open)
         var lifts = List[Float32](length=count, fill=0)
         if garment.sleeve != FITTED_SLEEVE:
             lifts = sleeve_lifts(skin, person.rig, garment.sleeve)
@@ -519,13 +510,11 @@ def dress_pieces(
         # last over this one hides its lasts.
         var shown = True
         var feet = lasts[i].copy()
-        # Round the armpits, where a layer over this one is closed, this
-        # one is cut deeper: see `CLOSED_REACH`.
+        # Under a layer with no opening, this one is cut deeper: see
+        # `CLOSED_REACH`.
         for j in range(i + 1, len(order)):
+            var deep = UNDER_REACH / CLOSED_REACH if closes[j] else Float32(1)
             for v in range(count):
-                var deep = 1 + (UNDER_REACH / CLOSED_REACH - 1) * (
-                    closes[j][v] * armpits[v]
-                )
                 over[v] = max(over[v], hides[j][v] * deep)
             if skirts[j].rings() > 1 and skirts[j].hem() <= skirts[i].hem():
                 shown = False
@@ -696,34 +685,6 @@ def _head_skin(
                 ),
             )
     out.index = face.index.copy()
-    return out^
-
-
-def arm_shares(skin: BufferGeometry, rig: HumanoidRig) raises -> List[Float32]:
-    """Return how near the upper arms each vertex of a skin lies.
-
-    The skin's own weights do not say: the arms are parted from the trunk
-    before the skin is weighed, so the side of the chest under an arm is
-    the trunk's alone. Nearness through the air says, as `bone_weights`
-    weighs it.
-
-    Args:
-        skin: A mesh at rest, in the rig's frame.
-        rig: The rig.
-
-    Returns:
-        Per vertex, `ARMPIT_GAIN` times the sum of both upper arms' weights
-        through the air, held to one.
-
-    Raises:
-        Error: If the skin has no positions.
-    """
-    ref points = skin.attribute_view(String(POSITION))
-    var out = List[Float32](capacity=points.count())
-    for v in range(points.count()):  # pragma: no branch
-        var near = bone_weights(rig, points.vector3(v))
-        var share = near[RIGHT_UPPER_ARM.value] + near[LEFT_UPPER_ARM.value]
-        out.append(min(Float32(1), share * ARMPIT_GAIN))
     return out^
 
 

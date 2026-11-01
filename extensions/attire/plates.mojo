@@ -136,8 +136,11 @@ def share_with(
 
     Each vertex's weights become `1 - share` on the anchor, plus `share`
     times the weights it had. With `hold_arms`, the anchor takes the
-    weights of the arms' joints too: a cuirass does not turn with a
-    raised arm, so its side does not tear open under the arm. The legs'
+    weights of the arms' joints too, at each vertex the arms turn less
+    than half: a cuirass does not turn with a raised arm, so its side does
+    not tear open under the arm. Its edge over the upper arm, which the
+    arm turns most, still turns with it, so it does not stay behind as a
+    fin. The legs'
     joints keep theirs, so a fauld still opens as the thigh lifts.
 
     Args:
@@ -157,9 +160,16 @@ def share_with(
     for v in range(bones.count()):
         var mixed = List[Float32](length=JOINT_COUNT, fill=0)
         mixed[anchor.value] = 1 - share
+        # The plate's edge over an upper arm, which the arm turns most,
+        # still turns with it; only the trunk under the arm is held.
+        var arm = Float32(0)
         for k in range(4):  # pragma: no branch
             var bone = Int(bones.component(v, k))
-            if hold_arms and _arm(bone):
+            arm += weights.component(v, k) if _arm(bone) else Float32(0)
+        var hold = hold_arms and arm < 0.5
+        for k in range(4):  # pragma: no branch
+            var bone = Int(bones.component(v, k))
+            if hold and _arm(bone):
                 bone = anchor.value
             mixed[bone] += share * weights.component(v, k)
         var chosen = List[Int]()

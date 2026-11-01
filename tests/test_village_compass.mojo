@@ -104,6 +104,18 @@ def test_the_compass_points_to_its_marks() raises:
         String(),
     )
     assert_equal(_red(plain, 200, 30), 0)
+    # Dropped under a bar, the strip stands lower.
+    var low = _frame()
+    draw_compass(
+        low,
+        Vector3(0, 0, 0),
+        Angle(0.0, RADIAN),
+        marks,
+        String(),
+        40,
+    )
+    assert_equal(_red(low, 200, 10), 0)
+    assert_equal(_red(low, 200, 50), 255)
 
 
 def main() raises:

@@ -66,6 +66,7 @@ from extensions.humanoid.skeleton.head.face_model import TEETH, GUMS_AND_TONGUE
 from extensions.humanoid.skeleton.head.skin.mouth import mouth_mesh
 from extensions.humanoid.skeleton.isosurface import check_detail
 from extensions.humanoid.rig.weights import (
+    keep_arms_off,
     part_arms,
     part_legs,
     skin_weights,
@@ -948,16 +949,14 @@ def add_game_humanoid(
     allowed.append([LEFT_FOREARM, LEFT_HAND])
     for k in range(3):  # pragma: no branch
         var part = parts.pop(0)
+        var armpit = rig.at(RIGHT_UPPER_ARM).y - (ARMPIT * rig.stature / 1.8288)
         if k == 0:
             # Where a hanging arm's skin joins the side and the hip, it is
             # parted before the skin is weighed.
-            _ = part_arms(
-                part,
-                rig,
-                rig.at(RIGHT_UPPER_ARM).y - ARMPIT * rig.stature / 1.8288,
-            )
+            _ = part_arms(part, rig, armpit)
         skin_weights(part, rig, allowed[k])
         if k == 0:
+            keep_arms_off(part, rig, armpit)
             part_legs(part, rig.at(HIPS).y - CROTCH * rig.stature / 1.8288)
         skins.append(len(scene.skinned_meshes))
         scene.add_skinned_mesh(

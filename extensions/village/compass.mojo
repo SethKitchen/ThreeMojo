@@ -114,6 +114,7 @@ def draw_compass(
     yaw: Angle,
     marks: List[CompassMark],
     caption: String,
+    drop: Int = 0,
 ):
     """Draw the compass at the top middle of a frame.
 
@@ -123,11 +124,13 @@ def draw_compass(
         yaw: The way the camera looks.
         marks: The places to point to.
         caption: A line under the strip, or empty for none.
+        drop: How far down from its place the compass stands, in dots of
+            the heads-up display's font: room for a bar over it.
     """
     var scale = hud_scale(frame.height)
     var half = Int(Float32(frame.width) * COMPASS_SHARE / 2)
     var middle = frame.width // 2
-    var top = 6 * scale
+    var top = (6 + drop) * scale
     var height = 9 * scale
     fill_box(
         frame,

@@ -80,8 +80,10 @@ from extensions.humanoid.rig.weights import (
     _quantized_coordinate,
     _weld_key,
     _welded_edges,
+    _side_owner,
     bone_weights,
     close_holes,
+    keep_arms_off,
     part_arms,
     part_legs,
     rigid_weights,
@@ -369,6 +371,66 @@ def test_an_arm_parts_from_the_trunk_below_the_armpit() raises:
     var alone = _mesh(points, [1, 3, 2])
     assert_equal(part_arms(alone, rig, upper.y + 1), 0)
     assert_equal(len(alone.index), 3)
+
+
+def test_the_side_of_the_chest_stays_the_trunks() raises:
+    var rig = _rig()
+    var upper = _middle(rig, RIGHT_UPPER_ARM)
+    var side = Float32(1) if upper.x > 0 else Float32(-1)
+    # Beside the upper arm's bone, toward the midline: facing out, it is
+    # the side of the chest; facing in, the arm's inner side.
+    var inside = upper - Vector3(side * 0.02, 0, 0)
+    var outside = upper + Vector3(side * 0.02, 0, 0)
+    var points: List[Vector3] = [inside, inside, outside]
+    var mesh = _mesh(points, [0, 1, 2])
+    mesh.set_attribute(
+        String(NORMAL),
+        BufferAttribute([side, 0, 0, -side, 0, 0, side, 0, 0], 3),
+    )
+    assert_false(Joint(_side_owner(mesh, rig, 0)).side() != 0)
+    assert_equal(_side_owner(mesh, rig, 1), RIGHT_UPPER_ARM.value)
+    assert_equal(_side_owner(mesh, rig, 2), RIGHT_UPPER_ARM.value)
+    # Without normals, the arm keeps what it lies nearest.
+    var bare = _mesh(points, [0, 1, 2])
+    assert_equal(_side_owner(bare, rig, 0), RIGHT_UPPER_ARM.value)
+
+
+def test_the_arms_weights_come_off_the_trunk_below_the_armpit() raises:
+    var rig = _rig()
+    var trunk = _middle(rig, SPINE)
+    var forearm = _middle(rig, RIGHT_FOREARM)
+    assert_true(forearm.y < trunk.y)
+    var points: List[Vector3] = [
+        trunk,
+        trunk + Vector3(0, 0.01, 0),
+        forearm,
+        trunk + Vector3(0, 0, 0.01),
+    ]
+    var mesh = _mesh(points, [0, 1, 2, 0, 2, 3])
+    var a = Float32(RIGHT_FOREARM.value)
+    var c = Float32(SPINE.value)
+    mesh.set_attribute(
+        String(SKIN_INDEX),
+        BufferAttribute([c, a, 0, 0, c, a, 0, 0, a, c, 0, 0, a, 0, 0, 0], 4),
+    )
+    mesh.set_attribute(
+        String(SKIN_WEIGHT),
+        BufferAttribute(
+            [0.75, 0.25, 0, 0, 0.75, 0.25, 0, 0, 0.75, 0.25, 0, 0, 1, 0, 0, 0],
+            4,
+        ),
+    )
+    # The armpit lies between the trunk's first two points.
+    keep_arms_off(mesh, rig, trunk.y + 0.005)
+    ref weights = mesh.attribute_view(String(SKIN_WEIGHT))
+    # The trunk below it keeps only the trunk's weight; above it, all.
+    assert_almost_equal(weights.component(0, 0), 1, atol=1e-6)
+    assert_almost_equal(weights.component(0, 1), 0, atol=1e-6)
+    assert_almost_equal(weights.component(1, 0), 0.75, atol=1e-6)
+    # The arm keeps its own; a trunk point that held only an arm's weight
+    # keeps it, for it has no other.
+    assert_almost_equal(weights.component(2, 0), 0.75, atol=1e-6)
+    assert_almost_equal(weights.component(3, 0), 1, atol=1e-6)
 
 
 def test_holes_that_meet_at_a_vertex_are_closed_once() raises:

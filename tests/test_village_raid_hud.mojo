@@ -24,6 +24,13 @@ from extensions.village.boss import (
 from extensions.village.combat import Blow
 from extensions.village.combos import LIGHT_KEY
 from extensions.village.missiles import ARROW, ORB, SPARK, Missile
+from extensions.village.battle_hud import (
+    BOSS_ROOM,
+    boss_fights,
+    draw_target,
+    hud_drop,
+    target_name,
+)
 from extensions.village.raid_hud import draw_raid, draw_zone, zone_corners
 from extensions.village.styles import AXE, MAGIC, SWORD
 from math.vector3 import Vector3
@@ -32,6 +39,7 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_true,
 )
 from tests._village_arena import Arena, arena_parameters
@@ -154,6 +162,51 @@ def test_the_raid_writes_its_bars_party_mark_and_zones() raises:
     var gone = _frame()
     draw_raid(gone, arena.battle, camera, look, 1)
     assert_true(_changed(gone) < _changed(left))
+
+
+def test_a_boss_that_fights_takes_the_top_of_the_frame() raises:
+    var arena = Arena(arena_parameters(0, 0, 6, raid=True, raiders=0))
+    assert_false(boss_fights(arena.battle))
+    assert_equal(hud_drop(arena.battle), 0)
+    arena.battle.wardens[0].boss.engaged = True
+    assert_true(boss_fights(arena.battle))
+    assert_equal(hud_drop(arena.battle), BOSS_ROOM)
+    arena.battle.wardens[0].boss.health = 0
+    assert_false(boss_fights(arena.battle))
+
+
+def test_the_foe_locked_on_to_is_named_and_shown() raises:
+    var arena = Arena(arena_parameters(2, 1, 6, wolves=1))
+    ref battle = arena.battle
+    var wolf = -1
+    var bandit = -1
+    for k in range(len(battle.foes)):
+        if battle.foes[k].beast:
+            wolf = k
+        else:
+            bandit = k
+    # With no warden, none fights.
+    assert_false(boss_fights(battle))
+    assert_equal(target_name(battle, wolf), "WOLF")
+    assert_equal(target_name(battle, bandit), "BANDIT")
+    battle.foes[bandit].brain.throws = True
+    assert_equal(target_name(battle, bandit), "KNIFE THROWER")
+    battle.foes[bandit].brain.throws = False
+    battle.foes[bandit].fighter.parameters.health = 650
+    assert_equal(target_name(battle, bandit), "BANDIT CAPTAIN")
+    # Locked on to nothing, or to a dummy, the panel draws nothing.
+    var none = _frame()
+    battle.lock = -1
+    draw_target(none, battle, 30)
+    assert_equal(_changed(none), 0)
+    battle.lock = len(battle.foes)
+    draw_target(none, battle, 30)
+    assert_equal(_changed(none), 0)
+    # Locked on to a foe, its name and its bars show.
+    var shown = _frame()
+    battle.lock = bandit
+    draw_target(shown, battle, 30)
+    assert_true(_changed(shown) > 0)
 
 
 def test_a_rockfalls_mark_rings_the_marked() raises:

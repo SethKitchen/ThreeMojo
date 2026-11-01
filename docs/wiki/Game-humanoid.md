@@ -83,11 +83,11 @@ The thighs touch, so the skin over them is one surface. For a game the body's sk
 
 A hanging arm lies against the side and the hip, and the skin can join them there. Weighed over that joined skin, the inside of the arm followed the trunk, and the hip followed the arm. An arm that swung out then tore open and stretched a web of skin and cloth to the hip. So `part_arms` parts each arm before the skin is weighed:
 
-1. Each vertex goes to the bone it lies nearest through the air, in that bone's own thicknesses.
+1. Each vertex goes to the bone it lies nearest through the air, in that bone's own thicknesses. The upper arm is thin, so the side of the chest that an arm hangs against can lie nearer it. Some vertices that an arm's bone wins lie nearer the midline than the bone and face away from it. These lie on the side of the chest, so they go to the nearest bone not of an arm.
 2. A triangle that joins an arm's vertex to a vertex of the trunk or a leg is dropped. This applies to a forearm or a hand at any height. It applies to an upper arm when the other vertex lies below the armpit, 4 cm under the shoulder joint on the template. The skin over the shoulder stays joined.
 3. `close_holes` closes each hole this opens, in the arm and in the trunk. It adds a fan of triangles round a new vertex at the middle of the hole, which takes the mean of the hole's attributes.
 
-The skin is then weighed, so no weight passes over the slit.
+The skin is then weighed, so no weight passes over the slit. Over the skin, an arm's weight still spreads round the shoulder and down the side of the chest. So `keep_arms_off` then takes the arms' weights off each vertex below the armpit that step 1 gave to the trunk or a leg. The garments over the side of the chest then stay on it as an arm rises.
 
 ## The clips
 

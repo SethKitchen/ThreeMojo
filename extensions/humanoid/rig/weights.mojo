@@ -32,7 +32,7 @@ from math.finite import require_finite
 from std.math import sqrt
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import POSITION, BufferGeometry
+from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
 from extensions.humanoid.rig.joints import (
     HEAD,
     HIPS,
@@ -78,6 +78,9 @@ comptime THICKNESS: List[Float32] = [
 ]
 # The power a nearness is raised to: the higher, the sharper each bend.
 comptime SHARPNESS = 6
+# How far a vertex on the side of the chest faces away from the midline,
+# as its normal's x on that side, at least: see `part_arms`.
+comptime SIDE_FACING = Float32(0.7)
 # How far past the midline a limb's bones still reach, in meters.
 comptime MIDLINE = Float32(0.01)
 # How far below the hips their bone starts, in meters on the template.
@@ -517,6 +520,36 @@ def _mirror(joint: Int) -> Int:
     return mirrored[joint]
 
 
+def _side_owner(skin: BufferGeometry, rig: HumanoidRig, v: Int) raises -> Int:
+    """Return the joint a vertex of a skin is given to, to part the arms:
+    the bone it lies nearest through the air, in each bone's thicknesses.
+    A vertex an arm's bone wins that lies nearer the midline than the
+    bone and faces away from the midline lies on the side of the chest
+    the arm hangs against: it goes to the nearest bone not of an arm."""
+    var p = skin.attribute_view(String(POSITION)).vector3(v)
+    var near = bone_weights(rig, p)
+    var best = 0
+    for j in range(1, JOINT_COUNT):  # pragma: no branch
+        if near[j] > near[best]:
+            best = j
+    if not _same_arm(best, best) or not skin.has_attribute(String(NORMAL)):
+        return best
+    var a = rig.joints[best]
+    var b = rig.ends[best]
+    var ab = b - a
+    var t = clamp((p - a).dot(ab) / max(ab.dot(ab), Float32(1.0e-12)), 0, 1)
+    var axis = a + ab * t
+    var facing = skin.attribute_view(String(NORMAL)).vector3(v).x
+    var side = Float32(1) if p.x > 0 else Float32(-1)
+    if abs(p.x) >= abs(axis.x) or facing * side <= SIDE_FACING:
+        return best
+    var other = HIPS.value
+    for j in range(JOINT_COUNT):  # pragma: no branch
+        if not _same_arm(j, j) and near[j] > near[other]:
+            other = j
+    return other
+
+
 def _forearm(joint: Int) -> Bool:
     """Return True for a forearm or a hand, of either side."""
     return (
@@ -555,7 +588,10 @@ def part_arms(
     the skin would tear open along the arm and stretch into a web to the
     hip. So each vertex is first given to the bone it lies nearest
     through the air, in that bone's thicknesses, as `bone_weights` weighs
-    it. A triangle is dropped, so a slit opens, when one corner is given
+    it. A vertex an arm's bone wins that lies nearer the midline than the
+    bone, and faces away from the midline, lies on the side of the chest
+    the arm hangs against: it goes to the nearest bone not of an arm, so
+    the garments over it stay on the trunk. A triangle is dropped, so a slit opens, when one corner is given
     to a joint of one arm and another to a joint not of that arm, and
     either the arm's corner is given to its forearm or its hand, or the
     other corner lies below the armpit. The skin over the shoulder joins
@@ -578,12 +614,7 @@ def part_arms(
     ref points = skin.attribute_view(String(POSITION))
     var most = List[Int](capacity=points.count())
     for v in range(points.count()):  # pragma: no branch
-        var weights = bone_weights(rig, points.vector3(v))
-        var best = 0
-        for j in range(1, JOINT_COUNT):  # pragma: no branch
-            if weights[j] > weights[best]:
-                best = j
-        most.append(best)
+        most.append(_side_owner(skin, rig, v))
     ref placed = skin.attribute_view(String(POSITION))
     var kept = List[Int](capacity=len(skin.index))
     var dropped = 0
@@ -611,6 +642,56 @@ def part_arms(
     if dropped > 0:
         close_holes(skin, cut)
     return dropped
+
+
+def keep_arms_off(
+    mut skin: BufferGeometry, rig: HumanoidRig, armpit: Float32
+) raises:
+    """Take the arms' weights off the trunk and the legs below the armpit,
+    after the skin is weighed.
+
+    Over the skin, an arm's weight still spreads round the shoulder and
+    down the side of the chest, so the side would follow a raised arm a
+    little, and every garment over it would stretch into a wedge from the
+    arm to the waist. A vertex below the armpit that `part_arms` gives to
+    a joint not of an arm keeps only the weights of the joints that are not
+    an arm's, in their shares, and they add up to one again. A vertex that
+    held no other weight keeps its own.
+
+    Args:
+        skin: A skin with `skinIndex` and `skinWeight`, in the pelvis
+            frame.
+        rig: The rig it is bound to.
+        armpit: The height of the armpits, in the skin's frame, in
+            meters.
+
+    Raises:
+        Error: If the skin has no positions or skin attributes.
+    """
+    ref points = skin.attribute_view(String(POSITION))
+    var bones = skin.clone_attribute(String(SKIN_INDEX))
+    var weights = skin.clone_attribute(String(SKIN_WEIGHT))
+    for v in range(points.count()):  # pragma: no branch
+        var p = points.vector3(v)
+        if p.y >= armpit:
+            continue
+        var best = _side_owner(skin, rig, v)
+        if _same_arm(best, best):
+            continue
+        var kept = Float32(0)
+        for k in range(4):  # pragma: no branch
+            var joint = Int(bones.component(v, k))
+            if not _same_arm(joint, joint):
+                kept += weights.component(v, k)
+        if kept <= 0:
+            continue
+        for k in range(4):  # pragma: no branch
+            var joint = Int(bones.component(v, k))
+            var w = weights.component(v, k)
+            var share = Float32(0) if _same_arm(joint, joint) else w / kept
+            weights.set_component(v, k, share)
+    skin.set_attribute(String(SKIN_INDEX), bones^)
+    skin.set_attribute(String(SKIN_WEIGHT), weights^)
 
 
 def close_holes(mut skin: BufferGeometry, touched: List[Bool]) raises:

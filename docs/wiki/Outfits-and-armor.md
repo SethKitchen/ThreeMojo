@@ -202,7 +202,7 @@ A flexible garment keeps the skin's weights and bends as the skin bends. Plate d
 
 A lamed garment is cut into bands along the anchor's own weight on the skin. The top lame rides the anchor wholly. Each lame below it shares more of its weight with the bones under it, in equal steps. Each lame reaches 0.3 of a band past its lower bound and stands 2.5 mm out over the lame below. So each lame shows its lower edge as a lip, and the fauld opens as the thigh lifts.
 
-A lamed garment of the torso slot, as a platebody, keeps off the arms. Its lames give the arms' weights to the anchor. So the cuirass does not turn with a raised arm, and its side does not tear open under the arm. A garment of the shoulders slot, as a pair of pauldrons, still rises with the arm. The legs keep their weights in either, so a fauld still opens.
+A lamed garment of the torso slot, as a platebody, keeps off the arms. Where the arms turn a vertex less than half, its lames give the arms' weights to the anchor. Its edge over the upper arm still turns with the arm, so it does not stay behind as a fin. So the cuirass does not turn with a raised arm, and its side does not tear open under the arm. A garment of the shoulders slot, as a pair of pauldrons, still rises with the arm. The legs keep their weights in either, so a fauld still opens.
 
 `examples/plate_and_mail.mojo` dresses eight people in four kits of plate and mail, and writes `out/plate_and_mail.png`. Each kit is on a man in front and a woman behind him, in other metals.
 

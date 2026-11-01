@@ -68,7 +68,7 @@ from extensions.village.combat import (
     move_data,
 )
 from extensions.village.companion import ASSIST_FULL
-from extensions.village.foes import POSTED
+from extensions.village.foes import POSTED, bandit_fighter
 from extensions.village.effects_hud import draw_effects
 from extensions.village.raid_hud import draw_raid
 from extensions.village.slashes import (
@@ -133,6 +133,9 @@ comptime RING_SECONDS = Float32(0.3)
 comptime GLOW_REACH = Float32(0.35)
 """How far a piercing attack's red glow reaches from the chest as it
 begins, in meters: half a man's shoulders."""
+comptime BOSS_ROOM = 40
+"""How many dots of the heads-up display's font a fighting warden's bars
+take at the top of the frame."""
 
 
 def stance_label(stance: CombatStance) -> String:
@@ -636,3 +639,91 @@ def draw_battle(
             popup.color,
             note_alpha(popup.age, POPUP_SECONDS),
         )
+
+
+def target_name(battle: Battle, index: Int) -> String:
+    """Return the name of a foe the player can lock on to.
+
+    Args:
+        battle: The fight.
+        index: The foe's place in `battle.foes`.
+
+    Returns:
+        `WOLF` for a beast, `KNIFE THROWER` for a bandit that throws,
+        `BANDIT CAPTAIN` for one stronger than a bandit, else `BANDIT`.
+    """
+    ref foe = battle.foes[index]
+    if foe.beast:
+        return "WOLF"
+    if foe.brain.throws:
+        return "KNIFE THROWER"
+    if foe.fighter.parameters.health > bandit_fighter().health:
+        return "BANDIT CAPTAIN"
+    return "BANDIT"
+
+
+def draw_target(mut frame: Framebuffer, battle: Battle, top: Int):
+    """Draw the foe the player is locked on to, under the compass: its
+    name, and its health and stamina as wide bars.
+
+    Nothing is drawn while the player is locked on to no foe, as on a
+    dummy or the warden, whose own bar is drawn apart.
+
+    Args:
+        frame: The frame, the window's size.
+        battle: The fight.
+        top: How far down the frame the panel starts, in pixels.
+    """
+    if battle.lock < 0 or battle.lock >= len(battle.foes):
+        return
+    ref foe = battle.foes[battle.lock]
+    var scale = hud_scale(frame.height)
+    var name = target_name(battle, battle.lock)
+    var width = frame.width // 4
+    var x = (frame.width - width) // 2
+    _centered(frame, frame.width // 2, top, name, scale, WHITE_TEXT, 1)
+    ref p = foe.fighter.parameters
+    var y = top + 9 * scale
+    draw_bar(
+        frame, x, y, width, 3 * scale, foe.fighter.health / p.health, WOUNDED
+    )
+    draw_bar(
+        frame,
+        x,
+        y + 4 * scale,
+        width,
+        scale,
+        foe.fighter.stamina / p.stamina,
+        STAMINA_COLOR,
+    )
+
+
+def hud_drop(battle: Battle) -> Int:
+    """Return how far down the compass and the target panel stand, so a
+    fighting warden's bars show over them.
+
+    Args:
+        battle: The fight.
+
+    Returns:
+        `BOSS_ROOM` dots of the heads-up display's font while a warden
+        fights, else zero.
+    """
+    return BOSS_ROOM if boss_fights(battle) else 0
+
+
+def boss_fights(battle: Battle) -> Bool:
+    """Return whether a raid's boss fights, and shows its bar at the top of
+    the frame.
+
+    Args:
+        battle: The fight.
+
+    Returns:
+        Whether a warden is engaged and not yet defeated.
+    """
+    for index in range(len(battle.wardens)):
+        ref boss = battle.wardens[index].boss
+        if boss.engaged and not boss.defeated():
+            return True
+    return False

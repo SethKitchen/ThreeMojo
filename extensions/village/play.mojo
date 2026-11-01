@@ -102,12 +102,13 @@ from extensions.village.gathering import (
     GatherParameters,
     Gathering,
 )
-from extensions.village.battle_hud import DANGER
+from extensions.village.battle_hud import DANGER, draw_target, hud_drop
 from extensions.village.compass import CompassMark, clock_text, draw_compass
 from extensions.village.hud import (
     GOLD_TEXT,
     Rgb,
     draw_hud,
+    hud_scale,
     note_text,
     use_prompt,
 )
@@ -217,6 +218,9 @@ comptime SHAKEN = Float32(1.0e-3)
 comptime SPECIALTY_MIGHT = Float32(0.1)
 """How much stronger the player's blows are in the style they specialize
 in."""
+comptime TARGET_TOP = 30
+"""How far down the frame the panel of the foe locked on to starts, in
+dots of the heads-up display's font: under the compass."""
 comptime FOE_SIGHT = Float32(60)
 """How near a foe must be for the compass to point to it, in meters."""
 comptime SILVER_MARK = Rgb(200, 205, 215)
@@ -1013,6 +1017,9 @@ struct VillageGame(Movable):
             draw_battle(
                 self.window, self.battle, scene, self.camera, self.view.look()
             )
+            # A fighting warden's bars take the top of the frame, so the
+            # compass and the target panel stand under them.
+            var drop = hud_drop(self.battle)
             draw_compass(
                 self.window,
                 self.player.position,
@@ -1023,6 +1030,12 @@ struct VillageGame(Movable):
                     "  ",
                     weather_label(self.weather.kind),
                 ),
+                drop,
+            )
+            draw_target(
+                self.window,
+                self.battle,
+                (TARGET_TOP + drop) * hud_scale(self.window.height),
             )
 
     def speech(self) -> String:
