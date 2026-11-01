@@ -614,6 +614,11 @@ def test_an_interleaved_and_a_replaced_geometry_are_read() raises:
     var buffer = InterleavedBuffer(data^, 4)
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(buffer, 3, 0))
+    # Texture coordinates interleaved with a third float are read too.
+    var uvs: List[Float32] = [0, 0, 9, 1, 0, 9, 0, 1, 9]
+    geometry.set_attribute(
+        String(UV), BufferAttribute(InterleavedBuffer(uvs^, 3), 2, 0)
+    )
     var scene = _facing_scene(
         assets, geometry^, [Material(Color(255, 255, 255), kind=BASIC)]
     )
@@ -624,6 +629,17 @@ def test_an_interleaved_and_a_replaced_geometry_are_read() raises:
     assets.geometries.replace(scene.meshes[0].geometry, _triangle_geometry())
     var replaced = fast.render(scene, assets, _facing(), NOW)
     assert_true(replaced.depth[28 * WIDTH + 50] < 1)
+    # Replaced again by the same triangles, raised: the shape keeps its
+    # parts, and draws where the new positions are.
+    var raised = _triangle_geometry()
+    var points = raised.attribute_view(String(POSITION)).packed()
+    for i in range(6):
+        points[3 * i + 1] += 1.5
+    raised.set_attribute(String(POSITION), BufferAttribute(points^, 3))
+    assets.geometries.replace(scene.meshes[0].geometry, raised^)
+    var moved = fast.render(scene, assets, _facing(), NOW)
+    assert_equal(moved.depth[33 * WIDTH + 30], inf[DType.float32]())
+    assert_true(moved.depth[14 * WIDTH + 30] < 1)
 
 
 def _raised(relative: Bool, normals: Bool) raises -> BufferGeometry:

@@ -84,7 +84,7 @@ The bench walks a scripted player through the village. It prints the median, the
 
 ## How a frame is drawn
 
-1. **The geometry is read once.** Each geometry is copied into flat arrays the first time it is drawn. `GeometryStore.replace` gives a geometry a new generation, and the renderer reads it again then.
+1. **The geometry is read once.** Each geometry is copied into flat arrays the first time it is drawn. `GeometryStore.replace` gives a geometry a new generation, and the renderer reads it again then. A geometry replaced by one of the same triangles keeps its parts, and only its values are read again.
 2. **The light is found at the vertices.** Each vertex keeps its ambient and sky light apart from its sun light. The fog veils both at the vertex.
 3. **What the camera cannot see is left out.** A mesh whose bounding sphere lies outside the view is not drawn. A skinned mesh's sphere is its bound at rest, grown 1.5 times (`POSE_REACH`), so any pose of a person stays inside it. So a person behind the camera costs no skinning and no setup. In the village this saves about a fifth of each frame's draw.
 4. **The triangles are binned into tiles.** Each triangle is clipped at the near plane and culled by its facing and its bounds. It is listed in each 64-pixel tile it touches.

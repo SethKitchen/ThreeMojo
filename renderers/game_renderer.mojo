@@ -359,13 +359,25 @@ struct _Shape(Movable):
     var morph_deltas: List[List[Float32]]
     var rest: List[List[Float32]]
     var worn: List[Float32]
+    # A fingerprint of the triangles: the vertex count, the index and the
+    # groups. A geometry replaced by one of the same triangles keeps its
+    # parts, and only its values are read again.
+    var topology: UInt64
 
-    def __init__(out self, geometry: BufferGeometry, generation: Int) raises:
+    def __init__(
+        out self,
+        geometry: BufferGeometry,
+        generation: Int,
+        previous: Optional[_Shape] = None,
+    ) raises:
         """Read a geometry.
 
         Args:
             geometry: The geometry.
             generation: Its generation in the store.
+            previous: The shape the geometry was read into before, if any.
+                If the triangles are the same, its parts are kept, and
+                only the values are read again, as wind moves grass.
 
         Raises:
             Error: If it has no positions, or an index or a group is out of
@@ -404,16 +416,26 @@ struct _Shape(Movable):
         self.v = List[Float32](length=self.count, fill=0)
         if geometry.has_attribute(String(UV)):
             ref uv = geometry.attribute_view(String(UV))
-            for i in range(self.count):
-                self.u[i] = uv.component(i, 0)
-                self.v[i] = uv.component(i, 1)
+            _read_component(uv, self.u, 0)
+            _read_component(uv, self.v, 1)
         self.parts = List[_Part]()
+        self.topology = _topology(geometry, self.count)
         var corners = (
             len(geometry.index) if len(geometry.index) > 0 else self.count
         )
-        if len(geometry.groups) == 0:
+        var kept = False
+        if previous:
+            ref before = previous.value()
+            if before.topology == self.topology:
+                for p in range(len(before.parts)):  # pragma: no branch
+                    var part = _Part(before.parts[p].slot)
+                    part.vertices = before.parts[p].vertices.copy()
+                    part.triangles = before.parts[p].triangles.copy()
+                    self.parts.append(part^)
+                kept = True
+        if not kept and len(geometry.groups) == 0:
             self.parts.append(_part(geometry, 0, corners, 0, self.count))
-        else:
+        elif not kept:
             for g in geometry.groups:  # pragma: no branch
                 var start = max(0, g.start)
                 var past = min(corners, g.start + g.count)
@@ -613,8 +635,7 @@ struct _Shape(Movable):
             raise Error("A geometry has no attribute '", name, "' to light by")
         ref values = geometry.attribute_view(name)
         var out = List[Float32](length=self.count, fill=0)
-        for i in range(self.count):
-            out[i] = values.component(i, 0)
+        _read_component(values, out, 0)
         for p in range(len(self.parts)):  # pragma: no branch
             var gathered = List[Float32]()
             _gather_into(gathered, out, self.parts[p].vertices)
@@ -690,6 +711,38 @@ def _gather_into(
     var at = order.unsafe_ptr()
     for k in range(count):
         out[unsafe_offset=k] = src[unsafe_offset=Int(at[unsafe_offset=k])]
+
+
+def _topology(geometry: BufferGeometry, count: Int) -> UInt64:
+    """Return a fingerprint of a geometry's triangles: its vertex count,
+    its index and its groups. It is not a cryptographic digest."""
+    var h = UInt64(14695981039346656037)
+    var prime = UInt64(1099511628211)
+    h = (h ^ UInt64(count)) * prime
+    h = (h ^ UInt64(len(geometry.index))) * prime
+    for i in geometry.index:
+        h = (h ^ UInt64(i)) * prime
+    for g in geometry.groups:
+        h = (h ^ UInt64(g.start)) * prime
+        h = (h ^ UInt64(g.count)) * prime
+        h = (h ^ UInt64(g.material_index.value)) * prime
+    return h
+
+
+def _read_component(
+    attribute: BufferAttribute, mut out: List[Float32], component: Int
+) raises:
+    """Read one component of each item of an attribute, as many items as
+    `out` holds."""
+    var count = min(attribute.count(), len(out))
+    var size = attribute.item_size
+    if not attribute.is_interleaved():
+        var data = attribute.data.unsafe_ptr()
+        for i in range(count):
+            out[i] = data[unsafe_offset=i * size + component]
+        return
+    for i in range(count):
+        out[i] = attribute.component(i, component)
 
 
 def _read3(
@@ -1376,16 +1429,19 @@ struct GameRenderer(Movable):
 
     def _shape(mut self, assets: Assets, id: GeometryId) raises -> Int:
         """Return the shape of a geometry, reading it if it is new or was
-        replaced."""
+        replaced. A replaced geometry of the same triangles keeps its
+        shape's parts."""
         while len(self._shapes) <= id.value:
             self._shapes.append(None)
         var generation = assets.geometries.generation(id)
-        if (
-            not self._shapes[id.value]
-            or self._shapes[id.value].value().generation != generation
-        ):
+        if not self._shapes[id.value]:
             self._shapes[id.value] = _Shape(
                 assets.geometries.get(id), generation
+            )
+        elif self._shapes[id.value].value().generation != generation:
+            var previous = self._shapes[id.value].take()
+            self._shapes[id.value] = _Shape(
+                assets.geometries.get(id), generation, previous^
             )
         return id.value
 
