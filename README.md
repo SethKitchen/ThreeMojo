@@ -783,6 +783,21 @@ Warp drive spacetimes, analyzed as WarpFactory analyzes them. A checked box reco
 - [ ] [Positive-energy soliton](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#more-metrics): the soliton of Fell and Heisenberg; its construction needs the paper's equations [#940](https://github.com/SethKitchen/ThreeMojo/issues/940)
 - [ ] [Warp solver on the GPU](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#limits): a MAX kernel with a parity test against the CPU solver [#941](https://github.com/SethKitchen/ThreeMojo/issues/941)
 
+### Process chemistry
+
+A library for the requirements that turn a material into a product. A checked box records implemented scope. It is not an operating procedure.
+
+- [x] [Process chemistry](https://github.com/SethKitchen/ThreeMojo/wiki/Process-chemistry): NASA thermochemical data and a CHEMKIN reader, formulas, reactions and their equilibrium temperature and pressure. Steps with thermodynamic, phase, kinetic, physical and engineering requirements, a `Constraint` trait, operating windows, coating stress and heat duties. Worked processes: Kroll titanium, a diamond-coated tool and lime [#929](https://github.com/SethKitchen/ThreeMojo/issues/929)
+- [x] [Thermochemical data](https://github.com/SethKitchen/ThreeMojo/wiki/Thermochemical-data): NASA-7, NASA-9 and Shomate fits, CHEMKIN files read and written, NASA CEA records, fits to tables, and enthalpy uncertainty [#930](https://github.com/SethKitchen/ThreeMojo/issues/930)
+- [x] [Chemical equilibrium](https://github.com/SethKitchen/ThreeMojo/wiki/Chemical-equilibrium): multiphase Gibbs minimization by the NASA CEA method, with phases that enter and leave, and an equilibrium yield constraint [#942](https://github.com/SethKitchen/ThreeMojo/issues/942)
+- [x] [Process maps](https://github.com/SethKitchen/ThreeMojo/wiki/Process-maps): scans over temperature and pressure, Ellingham lines, Kellogg predominance maps and the Baur-Glaessner map [#943](https://github.com/SethKitchen/ThreeMojo/issues/943)
+- [x] [Rates and transport](https://github.com/SethKitchen/ThreeMojo/wiki/Rates-and-transport): Arrhenius rates as constraints, the shrinking-core model, evaporation, case depth and heating time [#945](https://github.com/SethKitchen/ThreeMojo/issues/945)
+- [x] [Electrolysis and film color](https://github.com/SethKitchen/ThreeMojo/wiki/Electrolysis-and-film-color): reversible, decomposition and thermoneutral voltages, Faraday's law, cell energy, and the colors of thin oxide films [#946](https://github.com/SethKitchen/ThreeMojo/issues/946)
+- [x] [Binary solutions](https://github.com/SethKitchen/ThreeMojo/wiki/Binary-solutions): Redlich-Kister phases, activities and phase boundaries from the convex hull [#947](https://github.com/SethKitchen/ThreeMojo/issues/947)
+- [x] [Flowsheets and routes](https://github.com/SethKitchen/ThreeMojo/wiki/Flowsheets-and-routes): mixers, reactors and splitters with recycle, solved to steady state, and a breadth-first search for reaction routes [#948](https://github.com/SethKitchen/ThreeMojo/issues/948)
+- [x] [Materials and coatings](https://github.com/SethKitchen/ThreeMojo/wiki/Materials-and-coatings): expansion curves, melting points and eutectics with sources, Stoney's stress, buckling and thermal shock [#949](https://github.com/SethKitchen/ThreeMojo/issues/949)
+- [x] [Crystals and figures](https://github.com/SethKitchen/ThreeMojo/wiki/Crystals-and-figures): a CIF reader with symmetry expansion, densities and bonds, chart axes, and six gallery figures [#950](https://github.com/SethKitchen/ThreeMojo/issues/950)
+
 ### Out of scope
 
 This port provides native CPU and MAX GPU rendering. It excludes the WebGL and WebGPU renderers, CSS renderers, WebXR, audio, and video and canvas textures.

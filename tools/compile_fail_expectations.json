@@ -407,6 +407,16 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_check_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Check'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_clipping_groups_node_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -1893,6 +1903,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_hazard_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Hazard'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_head_bone_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3028,6 +3048,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_phase_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Phase'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_pipe_run_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3333,6 +3363,16 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_requirement_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 33,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'RequirementKind'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_road_geometry_kind_is_not_a_bare_int.mojo": {
     "errors": [
@@ -3976,6 +4016,16 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_stream_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'StreamId'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_strike_outcome_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -4395,6 +4445,16 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_unit_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'UnitKind'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_usd_asset_kind_is_not_a_bare_int.mojo": {
     "errors": [
@@ -5542,6 +5602,16 @@
         "column": 25,
         "line": 12,
         "message": "cannot implicitly convert 'IntLiteral[0]' value to 'ElementId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_element_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[22]' value to 'Element'"
       }
     ],
     "notes": []
