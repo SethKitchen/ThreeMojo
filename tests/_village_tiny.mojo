@@ -23,6 +23,7 @@ from extensions.village.gathering import HERBS, Spot
 from extensions.village.house import HouseParameters
 from extensions.village.play import PlayParameters
 from extensions.village.quality import LOW, game_quality
+from extensions.village.raid import RaidParameters
 from extensions.village.residents import Herd, ResidentsParameters
 from extensions.village.village import HousePlacement, VillageParameters
 from extensions.water.resolution import SpectrumResolution
@@ -113,6 +114,7 @@ def tiny_game() raises -> PlayParameters:
     p.battle.dens = List[Den]()
     p.battle.posts = List[Post]()
     p.battle.allies = List[Bandit]()
+    p.battle.raids = List[RaidParameters]()
     return p^
 
 

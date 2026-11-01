@@ -1781,8 +1781,8 @@ struct WaterScene(Movable):
         Raises:
             Error: If the camera is not a centered perspective camera, it
                 is not above the water, is attached, or a matrix is invalid;
-                or if `shade_step` is not from 1 to 64, or `refresh_every`
-                is below one.
+                or if `shade_step` is not from 1 to 64, `refresh_every` is
+                below one, or `image` has no depth for each pixel.
         """
         return self._compose_view(
             image,
@@ -1826,8 +1826,8 @@ struct WaterScene(Movable):
             Error: If the camera's view is invalid, its node is absent, or
                 the attached scene is stale. Also if the projection is not
                 centered perspective, the camera is not above the water,
-                `shade_step` is not from 1 to 64, or `refresh_every` is
-                below one.
+                `shade_step` is not from 1 to 64, `refresh_every` is below
+                one, or `image` has no depth for each pixel.
         """
         return self._compose_view(
             image,
@@ -1847,6 +1847,9 @@ struct WaterScene(Movable):
     ) raises -> Int:
         # Both public paths resolve exactly one view before any image writes.
         var plan = _compose_plan(image, projection, view, water_level)
+        # The water reads and writes a depth for each pixel.
+        if len(image.depth) != image.width * image.height:
+            raise Error("Water composition needs a depth for each pixel")
         if self.shade_step < 1 or self.shade_step > 64:
             raise Error("The water's shade step must be from 1 to 64 pixels")
         if self.refresh_every < 1:
