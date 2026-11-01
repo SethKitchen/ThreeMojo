@@ -32,7 +32,8 @@
    its bars.
 5. **A dummy's stamina**, over its head, while its stamina is not full.
 6. **The lock's mark**: four gold dots around the locked target's chest.
-7. **The numbers and the words** of the blows, which rise and fade.
+7. **The numbers and the words** of the blows, which rise and fade. They
+   stand under `TOP_BAND`, so they do not cross the compass.
 8. **The edges of the frame**, tinted: blue while the player's perfect
    dodge slows the foes; gold through an ultimate; and red below a
    quarter of the player's health. A stamina recovery rings the player's feet
@@ -142,6 +143,10 @@ the frame's width across and of its height down."""
 comptime HURT_ARC = Float32(0.06)
 """How far apart the squares of a blow's mark stand along its arc, as a
 share of the way from the middle."""
+comptime TOP_BAND = 46
+"""How many dots of the heads-up display's font the compass, its caption
+and the target panel take at the top of the frame. The numbers and the
+words of the blows stand under them."""
 comptime BOSS_ROOM = 40
 """How many dots of the heads-up display's font a fighting warden's bars
 take at the top of the frame."""
@@ -636,6 +641,15 @@ def draw_battle(
                 fill_box(frame, cx - d, cy - d, cx + d, cy + d, GOLD_TEXT, 1)
     draw_raid(frame, battle, camera, look, scale)
     draw_effects(frame, battle, camera, look)
+    # Numbers over a head high in the frame stand under the compass and
+    # the target panel, so they do not cross them. They move down
+    # together, so they keep their order and do not cover each other.
+    var band = (TOP_BAND + hud_drop(battle)) * scale
+    var lowest = band
+    for popup in battle.popups:
+        var at = on_screen(camera, look, popup.at, w, h)
+        if at:
+            lowest = min(lowest, Int(at.value().y))
     for popup in battle.popups:
         var at = on_screen(camera, look, popup.at, w, h)
         if not at:
@@ -643,7 +657,7 @@ def draw_battle(
         _centered(
             frame,
             Int(at.value().x),
-            Int(at.value().y),
+            Int(at.value().y) + band - lowest,
             popup.text,
             scale,
             popup.color,

@@ -212,7 +212,7 @@ The module is `extensions/village/battle_hud.mojo`. `draw_battle` writes these o
 - **The lock's mark**: four gold dots around the locked target's chest.
 - **The way of each blow on the player**: a red arc near the edge of the frame, toward where the blow came from. It tells the player which way to turn. It fades in `HURT_SECONDS`, 1.2 seconds. A blow that a guard blocks takes no health, so it shows no arc. `hurt_way` gives the way on the frame.
 - **The target panel**, under the compass: the locked foe's name, such as `BANDIT` or `WOLF`, and its health bar. `draw_target` writes it, and `target_name` gives the name. While a warden fights, the panel and the compass stand under the warden's bars: `hud_drop` gives how far down.
-- **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `PIERCE BREAK`. They rise and fade.
+- **The damage** of each blow, and its word, such as `PERFECT DODGE`, `PARRY`, `CRITICAL` or `PIERCE BREAK`. They rise and fade. They stand under `TOP_BAND`, 46 dots of the font, so they do not cross the compass or the target panel. They move down together, so they keep their order.
 - **The edges of the frame**, tinted. They turn blue while the player's perfect dodge slows the foes. They turn gold through an ultimate, and red below a quarter of the player's health. A stamina recovery rings the player's feet with blue light.
 
 For the styles, the combos and the raid, `draw_battle` also writes:
