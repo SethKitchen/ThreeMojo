@@ -736,13 +736,13 @@ def _read_component(
     `out` holds."""
     var count = min(attribute.count(), len(out))
     var size = attribute.item_size
-    if not attribute.is_interleaved():
-        var data = attribute.data.unsafe_ptr()
-        for i in range(count):
-            out[i] = data[unsafe_offset=i * size + component]
-        return
+    # A plain attribute is read straight from its buffer.
+    var plain = not attribute.is_interleaved()
+    var data = attribute.data.unsafe_ptr()
     for i in range(count):
-        out[i] = attribute.component(i, component)
+        out[i] = data[
+            unsafe_offset=i * size + component
+        ] if plain else attribute.component(i, component)
 
 
 def _read3(
