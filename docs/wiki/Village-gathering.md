@@ -94,7 +94,7 @@ The font has 5 by 7 dots and needs no font file. It draws capitals, digits, and 
 - A mark past the strip's end stands at that end, half as bright, so the player knows which way to turn.
 - Under the strip, the hour as a twelve-hour clock and the weather, such as `2:00 PM  CLEAR`.
 
-While a warden fights, its bars take the top of the frame. The compass then stands `BOSS_ROOM`, 40 dots of the font, lower, under the bars.
+While a warden fights, its bars take the top of the frame. The compass then stands `BOSS_ROOM`, 40 dots of the font, lower, under the bars. It shows no hour and no weather then, so the numbers of the blows over the warden do not cross them.
 
 Set `PlayParameters.hud` to False for a frame with no display.
 

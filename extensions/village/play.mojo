@@ -1019,17 +1019,20 @@ struct VillageGame(Movable):
             )
             # A fighting warden's bars take the top of the frame, so the
             # compass and the target panel stand under them.
+            # The hour and the weather give way there too: the numbers of
+            # the blows over a giant warden's head would cross them.
             var drop = hud_drop(self.battle)
+            var caption = String(
+                clock_text(self.day.hour),
+                "  ",
+                weather_label(self.weather.kind),
+            )
             draw_compass(
                 self.window,
                 self.player.position,
                 self.view.yaw,
                 self.compass_marks(),
-                String(
-                    clock_text(self.day.hour),
-                    "  ",
-                    weather_label(self.weather.kind),
-                ),
+                caption if drop == 0 else String(),
                 drop,
             )
             draw_target(
