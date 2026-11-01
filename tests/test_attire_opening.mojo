@@ -50,7 +50,7 @@ from std.testing import (
     assert_false,
     assert_true,
 )
-from tests._attire_fixtures import standing_rig, tube
+from tests._attire_fixtures import empty_mesh, standing_rig, tube
 
 
 def _rig() raises -> HumanoidRig:
@@ -164,6 +164,8 @@ def test_sleeves_swell_along_the_arm() raises:
     var trunk = tube(0, 0, 0.15, 0.3, 0, HIPS, 2, 6)
     for lift in sleeve_lifts(trunk, rig, BISHOP_SLEEVE):
         assert_equal(lift, 0)
+    # An empty skin has no lift.
+    assert_equal(len(sleeve_lifts(empty_mesh(), rig, BISHOP_SLEEVE)), 0)
 
 
 def test_a_skirt_s_tube_is_cut_open_and_trimmed_down_its_edges() raises:
