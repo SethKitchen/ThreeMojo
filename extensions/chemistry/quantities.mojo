@@ -271,6 +271,8 @@ comptime TORR = PressureUnit64(133.32236842105263, "Torr")
 
 # Coating thickness is quoted in micrometers.
 comptime MICROMETER = Unit[1, 0, 0, 0, 0, DType.float64](1.0e-6, "um")
+# Crystal cells and bonds are quoted in angstroms.
+comptime ANGSTROM = Unit[1, 0, 0, 0, 0, DType.float64](1.0e-10, "angstrom")
 
 # The energy to open a unit area of crack along an interface: J/m^2. It has
 # the dimension of a force per length.

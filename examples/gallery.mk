@@ -234,3 +234,15 @@ $(call gallery,scanned-buildings,building_scan)
 # A demonstration site of splats on a hillside, cut into parts, with a copy of
 # its largest part beside it, drawn with levels of detail on every core.
 $(call gallery,scan-parts,scan_parts)
+# An Ellingham diagram computed from the NASA data in the chemistry catalog.
+$(call gallery,ellingham,ellingham)
+# Predominance maps: Ti-O-Cl at 1000 K, and the Fe-O-C Baur-Glaessner map.
+$(call gallery,predominance,predominance)
+# The requirements of each Kroll step and the windows where they all hold.
+$(call gallery,process-windows,process_windows)
+# Anodized titanium colors from thin-film interference, 0 to 120 V.
+$(call gallery,anodizing,anodizing)
+# The Kroll route as a loop, with the flows the flowsheet solver settles on.
+$(call gallery,kroll-loop,kroll_loop)
+# Diamond and graphite read from CIF text, turning side by side.
+$(call gallery,crystal,crystal)
