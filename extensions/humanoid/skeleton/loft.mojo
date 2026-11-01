@@ -496,8 +496,10 @@ def _near(
     """Return the stations whose reach meets the window `low` to `high`."""
     var near = List[Int]()
     for index in range(len(reaches)):
-        if reaches[index][1] >= low and reaches[index][0] <= high:
-            near.append(index)
+        # Two single tests: this runs for every station at every sample.
+        if reaches[index][1] >= low:
+            if reaches[index][0] <= high:
+                near.append(index)
     return near^
 
 
@@ -522,8 +524,9 @@ def _slice(
         if reach <= 0:
             reach = min(sample.ml, sample.ap)
         _add_round(out, sample.center, sample.ml, sample.ap, reach, at, axis)
-        if index + 1 < count and samples[index + 1].joins:
-            _add_segment(out, sample, samples[index + 1], at, axis)
+        if index + 1 < count:
+            if samples[index + 1].joins:
+                _add_segment(out, sample, samples[index + 1], at, axis)
     return out^
 
 
@@ -552,19 +555,20 @@ def _add_segment(
     # The segment's own crossing of the plane, where its slice is widest.
     if abs(dz) > Float32(1.0e-6):
         var cross = (at - za) / dz
-        if cross >= 0 and cross <= 1:
-            _add_round(
-                out,
-                mix_delta3(a.center, b.center, cross),
-                mix_delta(a.ml, b.ml, cross),
-                mix_delta(a.ap, b.ap, cross),
-                min(
+        if cross >= 0:
+            if cross <= 1:
+                _add_round(
+                    out,
+                    mix_delta3(a.center, b.center, cross),
                     mix_delta(a.ml, b.ml, cross),
                     mix_delta(a.ap, b.ap, cross),
-                ),
-                at,
-                axis,
-            )
+                    min(
+                        mix_delta(a.ml, b.ml, cross),
+                        mix_delta(a.ap, b.ap, cross),
+                    ),
+                    at,
+                    axis,
+                )
     var run = (b.center - a.center).length() * (t1 - t0)
     var finest = max(min(min(a.ml, a.ap), min(b.ml, b.ap)), Float32(1.0e-4))
     # Sixteen slices is the cap. A ratio of fifteen or more, or one that
@@ -594,7 +598,8 @@ def _add_round(
 ):
     """Add the slice of an ellipsoid at `center` if the plane cuts it."""
     var gap = at - _along(center, axis)
-    if gap >= reach or gap <= -reach:
+    # The plane misses the ellipsoid: one test, as it runs per sample.
+    if abs(gap) >= reach:
         return
     var ratio = gap / reach
     var scale = sqrt(1 - ratio * ratio)

@@ -333,11 +333,13 @@ CPU test groups use imported source size. Coverage groups use `tools/coverage_sh
 
 Ties use the suite path and group number. Every affected suite stays in exactly one group. CI uses eight groups and a budget of 9000 seconds a group. The budget is a hang detector, not a target. Hosted runners differ: one took a quarter longer than another on the same group.
 
-The current profile uses attempt 1 of [CI run 41231829187](https://github.com/SethKitchen/ThreeMojo/actions/runs/41231829187), from October 31, 2026. Its source commit is `f761375eeddd092dc1c804792d1d1d7bb82bfd3c`; its merge checkout is `9b9357b5ccf690bbf83c734af77198ec74153fa0`. It used Mojo `1.2.0` (`2016d0cd`), the `aot-hits` profile, eight groups and four capture workers per runner. The profile contains 1171 completed capture durations and two explicit scheduling estimates.
+The current profile uses attempt 1 of [CI run 41231829187](https://github.com/SethKitchen/ThreeMojo/actions/runs/41231829187), from October 31, 2026. Its source commit is `f761375eeddd092dc1c804792d1d1d7bb82bfd3c`; its merge checkout is `9b9357b5ccf690bbf83c734af77198ec74153fa0`. It used Mojo `1.2.0` (`2016d0cd`), the `aot-hits` profile, eight groups and four capture workers per runner. The profile contains 1171 completed capture durations and three explicit scheduling estimates.
 
 The older profile held no time for 468 of the suites. Their source-size estimates put several of the heaviest in two groups, and both reached the deadline. With the current profile, each of the eight groups holds about 24,200 seconds of captures.
 
 The group deadline stopped two captures before completion: `test_village_battle_raid` after 6784.0 seconds and `test_capi_water` after 2275.8 seconds. Their profile values are lower bounds used to start those suites first. They are not measured successful durations or completion forecasts. The JSON labels these estimates separately.
+
+`test_capi_village` is newer than that run, so the profile had no time for it. A source-size estimate started it 54 minutes into its group in [CI run 41340404746](https://github.com/SethKitchen/ThreeMojo/actions/runs/41340404746). The deadline stopped it after 5709.6 seconds. That lower bound is the third estimate, so the suite now starts first in its group.
 
 In that run, `test_anatomy_overlaps_tool` and `test_anatomy_report_binding_tool` completed, but one test failed in each, because their evidence was stale. Their durations stay in the profile. New complete captures must verify that the current work fits the unchanged budget.
 
