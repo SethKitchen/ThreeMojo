@@ -37,7 +37,7 @@ from extensions.chemistry.elements import (
 )
 from extensions.chemistry.kinds import GAS, LIQUID, Phase, SOLID
 from extensions.chemistry.quantities import MolarVolume64
-from extensions.chemistry.thermo import Nasa7, Species
+from extensions.chemistry.thermo import Species, nasa7
 
 
 def _number(field: String, line: Int) raises -> Float64:
@@ -105,7 +105,7 @@ def _record(lines: List[String], first: Int) raises -> Species:
                 fields.append(
                     _number(String(line[byte = at : at + 15]), first + k + 1)
                 )
-    # The low range comes first in `Nasa7`; the file gives the high first.
+    # The low range comes first in `nasa7`; the file gives the high first.
     var coefficients = List[Float64]()
     for i in range(7, 14):
         coefficients.append(fields[i])
@@ -115,7 +115,7 @@ def _record(lines: List[String], first: Int) raises -> Species:
         String(words[0]),
         Formula(counts^),
         phase,
-        Nasa7([low, common, high], coefficients^),
+        nasa7([low, common, high], coefficients^),
         MolarVolume64(0),
     )
 

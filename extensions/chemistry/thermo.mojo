@@ -3,14 +3,27 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Thermochemical data: NASA polynomials, species and substances.
+"""Thermochemical data: polynomial fits, species and substances.
 
-A `Nasa7` holds the seven-coefficient polynomials of McBride, Gordon and
-Reno (NASA TM-4513, 1993), one set for each temperature segment:
+A `ThermoFit` holds the nine-coefficient NASA form of McBride, Zehe and
+Gordon (NASA TP-2002-211556), one set for each temperature segment:
 
-    cp/R  = a1 + a2 T + a3 T^2 + a4 T^3 + a5 T^4
-    H/RT  = a1 + a2 T/2 + a3 T^2/3 + a4 T^3/4 + a5 T^4/5 + a6/T
-    S/R   = a1 ln T + a2 T + a3 T^2/2 + a4 T^3/3 + a5 T^4/4 + a7
+    cp/R = a1 T^-2 + a2 T^-1 + a3 + a4 T + a5 T^2 + a6 T^3 + a7 T^4
+    H/RT = -a1 T^-2 + a2 ln(T)/T + a3 + a4 T/2 + a5 T^2/3 + a6 T^3/4
+           + a7 T^4/5 + b1/T
+    S/R  = -a1 T^-2/2 - a2/T + a3 ln T + a4 T + a5 T^2/2 + a6 T^3/3
+           + a7 T^4/4 + b2
+
+Three constructors fill it from the published forms:
+
+- `nasa9` takes the nine coefficients as they are.
+- `nasa7` takes the seven-coefficient form of McBride, Gordon and Reno
+  (NASA TM-4513) and of CHEMKIN files. It is the nine-coefficient form
+  with a1 = a2 = 0.
+- `shomate` takes the Shomate form of the NIST Chemistry WebBook, with
+  t = T/1000: cp = A + B t + C t^2 + D t^3 + E/t^2, in J/(mol K). Its
+  enthalpy coefficient F is in kJ/mol, so the formation enthalpy is part
+  of it. The coefficient H is not needed and is not read.
 
 H is the enthalpy of formation at 298.15 K plus the heat taken up since.
 So G = H - T S of each species is on one scale, and the sum over a
@@ -40,42 +53,44 @@ from units.temperature import Temperature64
 comptime _MEET = 1e-6
 
 
-struct Nasa7(Copyable, Movable):
-    """Seven-coefficient NASA polynomials over one or more segments."""
+# Coefficients per segment of a `ThermoFit`: a1 to a7, b1 and b2.
+comptime PER_SEGMENT = 9
+
+
+struct ThermoFit(Copyable, Movable):
+    """Nine-coefficient NASA polynomials over one or more segments."""
 
     # The segment ends, in kelvin, ascending: one more than the segments.
     var bounds: List[Float64]
-    # Seven coefficients per segment, the lowest segment first.
+    # Nine coefficients per segment, the lowest segment first.
     var coefficients: List[Float64]
 
     def __init__(
         out self, var bounds: List[Float64], var coefficients: List[Float64]
     ) raises:
-        """Make a polynomial set from its segment ends and coefficients.
+        """Make a fit from its segment ends and nine coefficients each.
 
         Args:
             bounds: The segment ends in kelvin, ascending.
-            coefficients: Seven per segment, a1 to a7, lowest first.
+            coefficients: Nine per segment, a1 to a7, b1 and b2, lowest
+                segment first.
 
         Raises:
             Error: If there is no segment, the coefficient count is not
-                seven per segment, an end is not finite and positive, the
+                nine per segment, an end is not finite and positive, the
                 ends do not ascend, or a coefficient is not finite.
         """
-        if len(bounds) < 2:
-            raise Error("NASA data needs at least one segment")
-        if len(coefficients) != 7 * (len(bounds) - 1):
-            raise Error("NASA data needs seven coefficients per segment")
+        _require_segments(bounds, len(coefficients), PER_SEGMENT, "A fit")
         # There are two ends at least, so the loops always run.
         for b in bounds:  # pragma: no branch
             if not (isfinite(b) and b > 0):
-                raise Error("A NASA segment end must be finite and positive")
+                raise Error("A segment end must be finite and positive")
         for i in range(1, len(bounds)):  # pragma: no branch
             if bounds[i] <= bounds[i - 1]:
-                raise Error("NASA segment ends must ascend")
+                raise Error("Segment ends must ascend")
         for c in coefficients:  # pragma: no branch
             if not isfinite(c):
-                raise Error("A NASA coefficient must be finite")
+                raise Error("A coefficient must be finite")
         self.bounds = bounds^
         self.coefficients = coefficients^
 
@@ -114,8 +129,8 @@ struct Nasa7(Copyable, Movable):
         var t = temperature.kelvin
         for i in range(1, len(self.bounds) - 1):
             if t <= self.bounds[i]:
-                return 7 * (i - 1)
-        return 7 * (len(self.bounds) - 2)
+                return PER_SEGMENT * (i - 1)
+        return PER_SEGMENT * (len(self.bounds) - 2)
 
     def heat_capacity(
         self, temperature: Temperature64
@@ -134,8 +149,10 @@ struct Nasa7(Copyable, Movable):
         var k = self._base(temperature)
         var t = temperature.kelvin
         ref a = self.coefficients
-        var r = a[k] + t * (
-            a[k + 1] + t * (a[k + 2] + t * (a[k + 3] + t * a[k + 4]))
+        var r = (
+            (a[k] / t + a[k + 1]) / t
+            + a[k + 2]
+            + t * (a[k + 3] + t * (a[k + 4] + t * (a[k + 5] + t * a[k + 6])))
         )
         return MolarEntropy64(GAS_CONSTANT.value * r)
 
@@ -156,13 +173,15 @@ struct Nasa7(Copyable, Movable):
         var t = temperature.kelvin
         ref a = self.coefficients
         var r = (
-            a[k]
+            -a[k] / (t * t)
+            + a[k + 1] * log(t) / t
+            + a[k + 2]
             + t
             * (
-                a[k + 1] / 2
-                + t * (a[k + 2] / 3 + t * (a[k + 3] / 4 + t * a[k + 4] / 5))
+                a[k + 3] / 2
+                + t * (a[k + 4] / 3 + t * (a[k + 5] / 4 + t * a[k + 6] / 5))
             )
-            + a[k + 5] / t
+            + a[k + 7] / t
         )
         return MolarEnergy64(GAS_CONSTANT.value * t * r)
 
@@ -182,13 +201,15 @@ struct Nasa7(Copyable, Movable):
         var t = temperature.kelvin
         ref a = self.coefficients
         var r = (
-            a[k] * log(t)
+            -a[k] / (2 * t * t)
+            - a[k + 1] / t
+            + a[k + 2] * log(t)
             + t
             * (
-                a[k + 1]
-                + t * (a[k + 2] / 2 + t * (a[k + 3] / 3 + t * a[k + 4] / 4))
+                a[k + 3]
+                + t * (a[k + 4] / 2 + t * (a[k + 5] / 3 + t * a[k + 6] / 4))
             )
-            + a[k + 6]
+            + a[k + 8]
         )
         return MolarEntropy64(GAS_CONSTANT.value * r)
 
@@ -208,7 +229,9 @@ struct Nasa7(Copyable, Movable):
             temperature
         ).times_temperature(temperature)
 
-    def shifted(self, delta_h: MolarEnergy64, delta_s: MolarEntropy64) -> Nasa7:
+    def shifted(
+        self, delta_h: MolarEnergy64, delta_s: MolarEntropy64
+    ) -> ThermoFit:
         """Return the data moved by a constant enthalpy and entropy.
 
         This makes a phase from a neighbor when only the change at
@@ -225,9 +248,102 @@ struct Nasa7(Copyable, Movable):
         var out = self.copy()
         var segments = len(self.bounds) - 1
         for s in range(segments):  # pragma: no branch
-            out.coefficients[7 * s + 5] += delta_h.value / GAS_CONSTANT.value
-            out.coefficients[7 * s + 6] += delta_s.value / GAS_CONSTANT.value
+            var k = PER_SEGMENT * s
+            out.coefficients[k + 7] += delta_h.value / GAS_CONSTANT.value
+            out.coefficients[k + 8] += delta_s.value / GAS_CONSTANT.value
         return out^
+
+
+def _require_segments(
+    bounds: List[Float64], count: Int, per: Int, what: String
+) raises:
+    """Refuse data with no segment or the wrong coefficient count."""
+    if len(bounds) < 2:
+        raise Error(what + " needs at least one segment")
+    if count != per * (len(bounds) - 1):
+        raise Error(String(what, " needs ", per, " coefficients per segment"))
+
+
+def nasa9(
+    var bounds: List[Float64], var coefficients: List[Float64]
+) raises -> ThermoFit:
+    """Return a fit from nine-coefficient NASA data.
+
+    Args:
+        bounds: The segment ends in kelvin, ascending.
+        coefficients: The values a1 to a7, b1 and b2 per segment, lowest first, as
+            NASA TP-2002-211556 and NASA CEA give them.
+
+    Returns:
+        The fit.
+
+    Raises:
+        Error: If the data is not valid. See `ThermoFit`.
+    """
+    return ThermoFit(bounds^, coefficients^)
+
+
+def nasa7(
+    var bounds: List[Float64], var coefficients: List[Float64]
+) raises -> ThermoFit:
+    """Return a fit from seven-coefficient NASA data.
+
+    Args:
+        bounds: The segment ends in kelvin, ascending.
+        coefficients: The values a1 to a7 per segment, lowest first, as NASA TM-4513
+            gives them. A CHEMKIN file gives the high segment first.
+
+    Returns:
+        The fit, with a1 = a2 = 0 in the nine-coefficient form.
+
+    Raises:
+        Error: If the coefficient count is not seven per segment, or the
+            data is not valid. See `ThermoFit`.
+    """
+    _require_segments(bounds, len(coefficients), 7, "NASA-7 data")
+    var out = List[Float64]()
+    for s in range(len(bounds) - 1):  # pragma: no branch
+        var k = 7 * s
+        out.append(0)
+        out.append(0)
+        for i in range(7):
+            out.append(coefficients[k + i])
+    return ThermoFit(bounds^, out^)
+
+
+def shomate(
+    var bounds: List[Float64], var coefficients: List[Float64]
+) raises -> ThermoFit:
+    """Return a fit from Shomate data, as the NIST Chemistry WebBook gives it.
+
+    Args:
+        bounds: The segment ends in kelvin, ascending.
+        coefficients: A to H per segment, lowest first. Cp is in J/(mol K)
+            with t = T/1000, and F and H are in kJ/mol.
+
+    Returns:
+        The fit in the nine-coefficient form.
+
+    Raises:
+        Error: If the coefficient count is not eight per segment, or the
+            data is not valid. See `ThermoFit`.
+    """
+    _require_segments(bounds, len(coefficients), 8, "Shomate data")
+    var r = GAS_CONSTANT.value
+    var out = List[Float64]()
+    for s in range(len(bounds) - 1):  # pragma: no branch
+        var k = 8 * s
+        var a = coefficients[k]
+        out.append(coefficients[k + 4] * 1e6 / r)
+        out.append(0)
+        out.append(a / r)
+        out.append(coefficients[k + 1] / (1e3 * r))
+        out.append(coefficients[k + 2] / (1e6 * r))
+        out.append(coefficients[k + 3] / (1e9 * r))
+        out.append(0)
+        out.append(coefficients[k + 5] * 1e3 / r)
+        out.append((coefficients[k + 6] - a * log(1000.0)) / r)
+    return ThermoFit(bounds^, out^)
 
 
 struct Species(Copyable, Movable, Writable):
@@ -236,7 +352,7 @@ struct Species(Copyable, Movable, Writable):
     var name: String
     var formula: Formula
     var phase: Phase
-    var thermo: Nasa7
+    var thermo: ThermoFit
     # Zero for a gas, or where the volume does not matter. The pressure
     # term of a condensed phase uses it.
     var molar_volume: MolarVolume64
@@ -246,7 +362,7 @@ struct Species(Copyable, Movable, Writable):
         name: String,
         var formula: Formula,
         phase: Phase,
-        var thermo: Nasa7,
+        var thermo: ThermoFit,
         molar_volume: MolarVolume64,
     ) raises:
         """Make a species.
@@ -255,7 +371,7 @@ struct Species(Copyable, Movable, Writable):
             name: The name, such as "TiCl4(g)" or "diamond".
             formula: The atoms.
             phase: `SOLID`, `LIQUID` or `GAS`.
-            thermo: The NASA data of this phase.
+            thermo: The thermochemical data of this phase.
             molar_volume: The volume of a mole of a condensed phase.
 
         Raises:

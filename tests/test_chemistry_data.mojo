@@ -21,7 +21,18 @@ from std.testing import (
     assert_true,
 )
 from extensions.chemistry.catalog import (
+    alumina,
+    aluminum,
+    argon,
     atomic_hydrogen,
+    hematite,
+    iron,
+    magnesia,
+    magnetite,
+    nitrogen,
+    steam,
+    water,
+    wustite,
     calcite,
     carbon_dioxide,
     carbon_monoxide,
@@ -116,7 +127,14 @@ from extensions.chemistry.quantities import (
     TORR,
     amount_of,
 )
-from extensions.chemistry.thermo import Nasa7, Species, Substance
+from extensions.chemistry.thermo import (
+    Species,
+    Substance,
+    ThermoFit,
+    nasa7,
+    nasa9,
+    shomate,
+)
 from units.si import GRAM, JOULE, KILOGRAM, Length64, Mass64, Pressure64
 from units.temperature import Temperature64
 
@@ -360,9 +378,9 @@ def test_formula_index() raises:
 # --- NASA polynomials -------------------------------------------------------
 
 
-def _constant_cp() raises -> Nasa7:
+def _constant_cp() raises -> ThermoFit:
     """A gas with cp = 2.5 R, H = 0 and S = R ln(T / 1 K) at 1 K."""
-    return Nasa7([100.0, 1000.0], [2.5, 0, 0, 0, 0, 0, 0])
+    return nasa7([100.0, 1000.0], [2.5, 0, 0, 0, 0, 0, 0])
 
 
 def test_nasa_formulas() raises:
@@ -387,7 +405,7 @@ def test_nasa_formulas() raises:
 
 def test_nasa_segments() raises:
     # Two segments: the second has cp = 3.5 R.
-    var n = Nasa7(
+    var n = nasa7(
         [100.0, 500.0, 1000.0],
         [2.5, 0, 0, 0, 0, 0, 0, 3.5, 0, 0, 0, 0, 0, 0],
     )
@@ -411,17 +429,113 @@ def test_nasa_segments() raises:
 
 def test_nasa_refuses_bad_data() raises:
     with assert_raises(contains="at least one segment"):
-        _ = Nasa7([300.0], List[Float64]())
-    with assert_raises(contains="seven coefficients"):
-        _ = Nasa7([300.0, 400.0], [1.0, 2.0])
+        _ = nasa7([300.0], List[Float64]())
+    with assert_raises(contains="7 coefficients per segment"):
+        _ = nasa7([300.0, 400.0], [1.0, 2.0])
     with assert_raises(contains="finite and positive"):
-        _ = Nasa7([nan[DType.float64](), 400.0], [0.0, 0, 0, 0, 0, 0, 0])
+        _ = nasa7([nan[DType.float64](), 400.0], [0.0, 0, 0, 0, 0, 0, 0])
     with assert_raises(contains="finite and positive"):
-        _ = Nasa7([0.0, 400.0], [0.0, 0, 0, 0, 0, 0, 0])
+        _ = nasa7([0.0, 400.0], [0.0, 0, 0, 0, 0, 0, 0])
     with assert_raises(contains="ascend"):
-        _ = Nasa7([400.0, 300.0], [0.0, 0, 0, 0, 0, 0, 0])
+        _ = nasa7([400.0, 300.0], [0.0, 0, 0, 0, 0, 0, 0])
     with assert_raises(contains="coefficient must be finite"):
-        _ = Nasa7([300.0, 400.0], [inf[DType.float64](), 0, 0, 0, 0, 0, 0])
+        _ = nasa7([300.0, 400.0], [inf[DType.float64](), 0, 0, 0, 0, 0, 0])
+
+
+def test_nasa9_matches_nasa7() raises:
+    # O2 from NASA TP-2002-211556, two of its three segments. The
+    # catalog's O2 is the older TM-4513 fit of the same data. The two fits
+    # differ by about 0.1 % in enthalpy at 1500 K.
+    var o2 = nasa9(
+        [200.0, 1000.0, 6000.0],
+        [
+            -3.42556342e04,
+            484.700097,
+            1.119010961,
+            4.29388924e-03,
+            -6.83630052e-07,
+            -2.0233727e-09,
+            1.039040018e-12,
+            -3391.45487,
+            18.4969947,
+            -1.037939022e06,
+            2344.830282,
+            1.819732036,
+            1.267847582e-03,
+            -2.188067988e-07,
+            2.053719572e-11,
+            -8.19346705e-16,
+            -1.689010929e04,
+            17.38716506,
+        ],
+    )
+    var old = oxygen()
+    for t in [300.0, 600.0, 999.0, 1500.0, 3000.0]:
+        var temperature = _t(t)
+        assert_almost_equal(
+            o2.heat_capacity(temperature).value,
+            old.phases[0].thermo.heat_capacity(temperature).value,
+            atol=0.05,
+        )
+        assert_almost_equal(
+            o2.enthalpy(temperature).value,
+            old.enthalpy(temperature).value,
+            atol=100.0,
+        )
+        assert_almost_equal(
+            o2.entropy(temperature).value,
+            old.phases[0].thermo.entropy(temperature).value,
+            atol=0.05,
+        )
+
+
+def test_shomate_matches_nasa() raises:
+    # CO2 from the NIST Chemistry WebBook, Shomate form, 298 K to 1200 K.
+    var co2 = shomate(
+        [298.0, 1200.0],
+        [
+            24.99735,
+            55.18696,
+            -33.69137,
+            7.948387,
+            -0.136638,
+            -403.6075,
+            228.2431,
+            -393.5224,
+        ],
+    )
+    var nasa = carbon_dioxide()
+    for t in [298.15, 500.0, 800.0, 1000.0, 1200.0]:
+        var temperature = _t(t)
+        assert_almost_equal(
+            co2.enthalpy(temperature).value,
+            nasa.enthalpy(temperature).value,
+            atol=30.0,
+        )
+        assert_almost_equal(
+            co2.entropy(temperature).value,
+            nasa.phases[0].thermo.entropy(temperature).value,
+            atol=0.05,
+        )
+        assert_almost_equal(
+            co2.heat_capacity(temperature).value,
+            nasa.phases[0].thermo.heat_capacity(temperature).value,
+            atol=0.25,
+        )
+
+
+def test_fit_counts() raises:
+    with assert_raises(contains="9 coefficients per segment"):
+        _ = ThermoFit([300.0, 400.0], [1.0])
+    with assert_raises(contains="9 coefficients per segment"):
+        _ = nasa9([300.0, 400.0], [1.0])
+    with assert_raises(contains="8 coefficients per segment"):
+        _ = shomate([300.0, 400.0], [1.0])
+    with assert_raises(contains="at least one segment"):
+        _ = shomate([300.0], List[Float64]())
+    # A shifted fit keeps its segments.
+    var moved = _constant_cp().shifted(MolarEnergy64(1), MolarEntropy64(0))
+    assert_equal(len(moved.coefficients), 9)
 
 
 # --- species and substances -------------------------------------------------
@@ -436,7 +550,7 @@ def _species(phase: Phase, low: Float64, high: Float64) raises -> Species:
         "x",
         _carbon(),
         phase,
-        Nasa7([low, high], [2.5, 0, 0, 0, 0, 0, 0]),
+        nasa7([low, high], [2.5, 0, 0, 0, 0, 0, 0]),
         MolarVolume64(0),
     )
 
@@ -468,7 +582,7 @@ def test_substance_refuses_bad_phases() raises:
         "y",
         Formula([ElementCount(OXYGEN, 2)]),
         LIQUID,
-        Nasa7([500.0, 900.0], [2.5, 0, 0, 0, 0, 0, 0]),
+        nasa7([500.0, 900.0], [2.5, 0, 0, 0, 0, 0, 0]),
         MolarVolume64(0),
     )
     with assert_raises(contains="share one formula"):
@@ -573,6 +687,37 @@ def test_catalog_condensed_phases() raises:
     assert_true(magnesium_gas().is_gas())
     assert_true(magnesium_chloride_gas().is_gas())
     assert_equal(len(magnesium_chloride_gas().phases), 1)
+
+
+def test_catalog_metals_oxides_and_water() raises:
+    var t = _t(298.15)
+    # CODATA: liquid water -285.83 kJ/mol and 69.95 J/(mol K); vapor
+    # -241.826 kJ/mol.
+    assert_almost_equal(_kj(water().enthalpy(t)), -285.83, atol=0.1)
+    var s = water().phases[0].thermo.entropy(t).value
+    assert_almost_equal(s, 69.95, atol=0.1)
+    assert_almost_equal(_kj(steam().enthalpy(t)), -241.826, atol=0.1)
+    # Elements in their reference state have zero enthalpy.
+    assert_almost_equal(_kj(aluminum().enthalpy(t)), 0.0, atol=0.01)
+    assert_almost_equal(_kj(iron().enthalpy(t)), 0.0, atol=0.01)
+    assert_almost_equal(_kj(argon().enthalpy(t)), 0.0, atol=0.01)
+    assert_almost_equal(_kj(nitrogen().enthalpy(t)), 0.0, atol=0.01)
+    # These data start at 300 K. CODATA and NBS at 298.15 K: alumina
+    # -1675.7, magnesia -601.6, hematite -824.2, magnetite -1118.4 and
+    # wustite -272.0 kJ/mol. Two kelvin of heating adds under 0.3 kJ/mol.
+    var warm = _t(300)
+    assert_almost_equal(_kj(alumina().enthalpy(warm)), -1675.7, atol=1.0)
+    assert_almost_equal(_kj(magnesia().enthalpy(warm)), -601.6, atol=0.6)
+    assert_almost_equal(_kj(hematite().enthalpy(warm)), -824.2, atol=1.0)
+    # The published magnetite values differ by about 2 kJ/mol: NBS gives
+    # -1118.4 and JANAF about -1120.9.
+    assert_almost_equal(_kj(magnetite().enthalpy(warm)), -1118.4, atol=2.5)
+    assert_almost_equal(_kj(wustite().enthalpy(warm)), -272.0, atol=1.5)
+    # Iron's phases: alpha, gamma from 1184 K, delta, and liquid at 1809 K.
+    assert_almost_equal(iron().transition(SOLID, SOLID).kelvin, 1184.0, atol=0)
+    assert_almost_equal(iron().melting_point().kelvin, 1809.0, atol=0)
+    assert_almost_equal(aluminum().melting_point().kelvin, 933.61, atol=0)
+    assert_almost_equal(alumina().melting_point().kelvin, 2327.0, atol=0)
 
 
 def main() raises:

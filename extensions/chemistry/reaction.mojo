@@ -8,16 +8,17 @@
 A `Term` is a substance in a reaction, with its stoichiometric coefficient:
 negative for a reactant and positive for a product. `reactant` and
 `product` set the sign. A gas term also has a mole fraction of the total
-pressure.
+pressure. A condensed term's fraction is its activity: one for a pure
+phase, and less for a component of a solution.
 
 The Gibbs energy change at a temperature T and a pressure P is the sum of
 coefficient times chemical potential:
 
     gas:        mu = G(T) + R T ln(x P / p0)
-    condensed:  mu = G(T) + V (P - p0)
+    condensed:  mu = G(T) + V (P - p0) + R T ln(a)
 
 G is the standard molar Gibbs energy at p0, one bar. The gas is ideal. A
-condensed phase is pure and does not compress. A negative change means the
+condensed phase does not compress, and `a` is its activity. A negative change means the
 reaction proceeds. A positive change means it is held back and the reverse
 proceeds.
 
@@ -53,8 +54,8 @@ struct Term(Copyable, Movable):
     var substance: Substance
     # Negative for a reactant, positive for a product.
     var coefficient: Float64
-    # A gas's mole fraction of the total pressure. One for a condensed
-    # phase, which is pure.
+    # A gas's mole fraction of the total pressure, or a condensed phase's
+    # activity: one when it is pure.
     var fraction: Float64
 
     def __init__(
@@ -68,7 +69,7 @@ struct Term(Copyable, Movable):
         Args:
             substance: The substance.
             coefficient: Negative for a reactant, positive for a product.
-            fraction: A gas's mole fraction, or one.
+            fraction: A gas's mole fraction, or a condensed activity.
         """
         self.substance = substance^
         self.coefficient = coefficient
@@ -83,7 +84,8 @@ def reactant(
     Args:
         substance: The substance.
         coefficient: How many moles, positive.
-        fraction: A gas's mole fraction of the total pressure.
+        fraction: A gas's mole fraction of the total pressure, or a
+            condensed phase's activity.
 
     Returns:
         The term, with a negative coefficient.
@@ -99,7 +101,8 @@ def product(
     Args:
         substance: The substance.
         coefficient: How many moles, positive.
-        fraction: A gas's mole fraction of the total pressure.
+        fraction: A gas's mole fraction of the total pressure, or a
+            condensed phase's activity.
 
     Returns:
         The term, with a positive coefficient.
@@ -131,8 +134,7 @@ struct Reaction(Copyable, Movable, Writable):
 
         Raises:
             Error: If there is no reactant or no product, a coefficient is
-                zero or not finite, a fraction is not in (0, 1], a
-                condensed term has a fraction other than one, or the
+                zero or not finite, a fraction is not in (0, 1], or the
                 elements do not balance.
         """
         var reactants = 0
@@ -146,8 +148,6 @@ struct Reaction(Copyable, Movable, Writable):
                 raise Error("A coefficient must not be zero")
             if not (term.fraction > 0 and term.fraction <= 1):
                 raise Error("A mole fraction must be above 0 and at most 1")
-            if not term.substance.is_gas() and term.fraction != 1:
-                raise Error("A condensed phase is pure: its fraction is 1")
             if term.coefficient < 0:
                 reactants += 1
             else:
@@ -215,6 +215,7 @@ struct Reaction(Copyable, Movable, Writable):
             else:
                 var v = term.substance.molar_volume_at(temperature).value
                 mu += v * (pressure.value - STANDARD_PRESSURE.value)
+                mu += rt * log(term.fraction)
             total += term.coefficient * mu
         return MolarEnergy64(total)
 

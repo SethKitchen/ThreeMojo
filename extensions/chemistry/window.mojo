@@ -15,7 +15,8 @@ constraint defined outside this package works with them:
     window = intersect(window, met_intervals(my_constraint, low, high,
                                              pressure))
 
-A change narrower than the sampling, a 400th of the range, can be missed.
+A change narrower than the sampling, a 400th of the range by default, can
+be missed. Pass more samples for a narrow feature.
 """
 
 from extensions.chemistry.requirement import Constraint, kelvin_text
@@ -23,8 +24,10 @@ from std.math import isfinite
 from units.si import Pressure64
 from units.temperature import Temperature64
 
-# The samples of a constraint over a search range.
+# The default samples of a constraint over a search range.
 comptime SAMPLES = 400
+# The most samples a scan takes.
+comptime MAX_SAMPLES = 1_000_000
 # Bisection steps for a window edge: far below a microkelvin.
 comptime _BISECTIONS = 60
 
@@ -53,9 +56,11 @@ def interval_text(interval: Interval) raises -> String:
 
 
 def _require_search(
-    low: Temperature64, high: Temperature64, pressure: Pressure64
+    low: Temperature64, high: Temperature64, pressure: Pressure64, samples: Int
 ) raises:
-    """Refuse a search range or a pressure that is not physical."""
+    """Refuse a search range, a pressure or a sample count."""
+    if not (samples >= 2 and samples <= MAX_SAMPLES):
+        raise Error("A scan takes 2 to 1000000 samples")
     if not (isfinite(pressure.value) and pressure.value > 0):
         raise Error("A pressure must be finite and positive")
     if not (low.is_valid() and high.is_valid() and low.kelvin < high.kelvin):
@@ -90,6 +95,7 @@ def met_intervals[
     low: Temperature64,
     high: Temperature64,
     pressure: Pressure64,
+    samples: Int = SAMPLES,
 ) raises -> List[Interval]:
     """Return where in a range a constraint holds.
 
@@ -101,23 +107,25 @@ def met_intervals[
         low: The low end of the range.
         high: The high end of the range.
         pressure: The pressure.
+        samples: How many even steps the range is scanned in, 2 to a
+            million.
 
     Returns:
         The intervals, coldest first.
 
     Raises:
-        Error: If the range or the pressure is not physical, or the
-            constraint cannot be evaluated.
+        Error: If the range or the pressure is not physical, the sample
+            count is out of range, or the constraint cannot be evaluated.
     """
-    _require_search(low, high, pressure)
+    _require_search(low, high, pressure, samples)
     var out = List[Interval]()
     var a = low.kelvin
     var b = high.kelvin
     var previous = a
     var was_met = constraint.holds(low, pressure)
     var start = a
-    for i in range(1, SAMPLES + 1):  # pragma: no branch
-        var t = a + (b - a) * Float64(i) / Float64(SAMPLES)
+    for i in range(1, samples + 1):  # pragma: no branch
+        var t = a + (b - a) * Float64(i) / Float64(samples)
         var met = constraint.holds(Temperature64(t), pressure)
         if met != was_met:
             var edge = _edge(constraint, previous, t, was_met, pressure)
@@ -164,6 +172,7 @@ def window_of[
     low: Temperature64,
     high: Temperature64,
     pressure: Pressure64,
+    samples: Int = SAMPLES,
 ) raises -> List[Interval]:
     """Return where in a range every constraint of a list holds.
 
@@ -175,18 +184,21 @@ def window_of[
         low: The low end of the range.
         high: The high end of the range.
         pressure: The pressure.
+        samples: How many even steps the range is scanned in.
 
     Returns:
         The intervals, coldest first. An empty list means no temperature
         in the range meets every constraint.
 
     Raises:
-        Error: If the range or the pressure is not physical, or a
-            constraint cannot be evaluated.
+        Error: If the range or the pressure is not physical, the sample
+            count is out of range, or a constraint cannot be evaluated.
     """
-    _require_search(low, high, pressure)
+    _require_search(low, high, pressure, samples)
     var window = List[Interval]()
     window.append(Interval(low, high))
     for c in constraints:
-        window = intersect(window, met_intervals(c, low, high, pressure))
+        window = intersect(
+            window, met_intervals(c, low, high, pressure, samples)
+        )
     return window^

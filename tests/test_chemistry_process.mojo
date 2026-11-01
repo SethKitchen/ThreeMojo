@@ -185,8 +185,17 @@ def test_reaction_refuses_bad_terms() raises:
         _ = Reaction([reactant(oxygen(), 1, 0), product(oxygen())])
     with assert_raises(contains="mole fraction"):
         _ = Reaction([reactant(oxygen(), 1, 1.5), product(oxygen())])
-    with assert_raises(contains="pure"):
-        _ = Reaction([reactant(graphite(), 1, 0.5), product(diamond())])
+    # A condensed fraction is an activity: diamond at activity 0.5 lowers
+    # the change by R T ln 2.
+    var dilute = Reaction([reactant(graphite()), product(diamond(), 1, 0.5)])
+    var pure = Reaction([reactant(graphite()), product(diamond())])
+    var t = _t(1000)
+    assert_almost_equal(
+        pure.delta_g(t, Pressure64(1e5)).value
+        - dilute.delta_g(t, Pressure64(1e5)).value,
+        8.31446261815324 * 1000 * 0.6931471805599453,
+        atol=1e-6,
+    )
     with assert_raises(contains="balance"):
         _ = Reaction([reactant(graphite()), product(carbon_dioxide())])
     # A gas can have any fraction in (0, 1].
@@ -487,6 +496,19 @@ def test_custom_constraint() raises:
     )
     assert_almost_equal(narrowed[0].low.kelvin, 987.0, atol=1e-3)
     assert_almost_equal(narrowed[0].high.kelvin, 1050.0, atol=1e-6)
+
+
+def test_sample_counts() raises:
+    var atm = _atm()
+    # A 100 K feature in a range of a million kelvin falls between the
+    # default samples. More samples find it.
+    var near = _Near(501234)
+    assert_equal(len(met_intervals(near, _t(1), _t(1e6), atm)), 0)
+    assert_equal(len(met_intervals(near, _t(1), _t(1e6), atm, 100000)), 1)
+    with assert_raises(contains="2 to 1000000 samples"):
+        _ = met_intervals(near, _t(1), _t(1e6), atm, 1)
+    with assert_raises(contains="2 to 1000000 samples"):
+        _ = window_of(List[_Near](), _t(1), _t(1e6), atm, 2000000)
 
 
 def test_window_of_no_constraints() raises:
