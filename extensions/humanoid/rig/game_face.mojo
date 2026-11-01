@@ -229,6 +229,30 @@ struct GameFace(Copyable, Movable):
             Error: If the binding or weights are invalid. No mesh changes first.
         """
         self.validate(scene, assets)
+        self.animate(scene, face)
+
+    def animate(self, mut scene: Scene, face: FaceWeights) raises:
+        """Replace all three meshes' visual weights, frame after frame.
+
+        `apply` checks every vertex of every target before it changes a
+        mesh, which costs too much for each frame. A game must check the
+        face once with `validate`, and then call this. This checks only
+        the weights and the meshes' places.
+
+        Args:
+            scene: Scene to update.
+            face: Fresh speech weights, optionally composed with expressions.
+
+        Raises:
+            Error: If the weights are invalid, or a mesh is not in the
+                scene. No mesh changes first.
+        """
+        if len(self.meshes) != 3:
+            raise Error("A game face needs three preserved meshes")
+        for k in self.meshes:  # pragma: no branch
+            require_index_in_count(
+                k, len(scene.meshes), "Game facial mesh is missing"
+            )
         if len(face.shapes) != len(face.weights):
             raise Error("Facial weight dimensions do not match")
         var shapes = face_rig_shapes()

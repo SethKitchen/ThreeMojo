@@ -32,9 +32,16 @@ This is not a three.js port. See Extensions.
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
 from extensions.attire.garment import NO_ANCHOR, Garment
-from extensions.attire.kinds import LAMED, RIGID
+from extensions.attire.kinds import LAMED, RIGID, TORSO_SLOT
 from extensions.attire.mesh_ops import cut_attribute, merge
-from extensions.humanoid.rig.joints import JOINT_COUNT, Joint
+from extensions.humanoid.rig.joints import (
+    JOINT_COUNT,
+    LEFT_HAND,
+    LEFT_UPPER_ARM,
+    RIGHT_HAND,
+    RIGHT_UPPER_ARM,
+    Joint,
+)
 from extensions.humanoid.rig.weights import rigid_weights
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
 
@@ -119,17 +126,29 @@ def ride_covered(mut piece: BufferGeometry, garment: Garment) raises:
     piece.set_attribute(String(SKIN_WEIGHT), BufferAttribute(ones^, 4))
 
 
-def share_with(mut piece: BufferGeometry, anchor: Joint, share: Float32) raises:
+def share_with(
+    mut piece: BufferGeometry,
+    anchor: Joint,
+    share: Float32,
+    hold_arms: Bool = False,
+) raises:
     """Give each vertex the anchor's weight, but for a share of its own.
 
     Each vertex's weights become `1 - share` on the anchor, plus `share`
-    times the weights it had.
+    times the weights it had. With `hold_arms`, the anchor takes the
+    weights of the arms' joints too, at each vertex the arms turn less
+    than half: a cuirass does not turn with a raised arm, so its side does
+    not tear open under the arm. Its edge over the upper arm, which the
+    arm turns most, still turns with it, so it does not stay behind as a
+    fin. The legs'
+    joints keep theirs, so a fauld still opens as the thigh lifts.
 
     Args:
         piece: A skinned mesh.
         anchor: A named joint.
         share: How much of its own weights a vertex keeps, zero through
             one.
+        hold_arms: Whether the anchor takes the arms' weights.
 
     Raises:
         Error: If the mesh has no skin weights.
@@ -141,8 +160,17 @@ def share_with(mut piece: BufferGeometry, anchor: Joint, share: Float32) raises:
     for v in range(bones.count()):
         var mixed = List[Float32](length=JOINT_COUNT, fill=0)
         mixed[anchor.value] = 1 - share
+        # The plate's edge over an upper arm, which the arm turns most,
+        # still turns with it; only the trunk under the arm is held.
+        var arm = Float32(0)
         for k in range(4):  # pragma: no branch
             var bone = Int(bones.component(v, k))
+            arm += weights.component(v, k) if _arm(bone) else Float32(0)
+        var hold = hold_arms and arm < 0.5
+        for k in range(4):  # pragma: no branch
+            var bone = Int(bones.component(v, k))
+            if hold and _arm(bone):
+                bone = anchor.value
             mixed[bone] += share * weights.component(v, k)
         var chosen = List[Int]()
         var total = Float32(0)
@@ -162,6 +190,13 @@ def share_with(mut piece: BufferGeometry, anchor: Joint, share: Float32) raises:
     piece.set_attribute(String(SKIN_WEIGHT), BufferAttribute(kept^, 4))
 
 
+def _arm(joint: Int) -> Bool:
+    """Return True for an upper arm, a forearm or a hand, of either side."""
+    return (joint >= RIGHT_UPPER_ARM.value and joint <= RIGHT_HAND.value) or (
+        joint >= LEFT_UPPER_ARM.value and joint <= LEFT_HAND.value
+    )
+
+
 def _stand_out(mut piece: BufferGeometry, distance: Float32) raises:
     """Move every vertex out along its normal."""
     ref normals = piece.attribute_view(String(NORMAL))
@@ -175,7 +210,7 @@ def _stand_out(mut piece: BufferGeometry, distance: Float32) raises:
 
 
 def lames(
-    piece: BufferGeometry, anchor: Joint, count: Int
+    piece: BufferGeometry, anchor: Joint, count: Int, hold_arms: Bool = False
 ) raises -> BufferGeometry:
     """Cut a garment into lames and bind each one a step further from
     the anchor.
@@ -184,6 +219,7 @@ def lames(
         piece: A skinned garment.
         anchor: The bone the top lame rides.
         count: How many lames, two or more.
+        hold_arms: Whether the lames keep off the arms: see `share_with`.
 
     Returns:
         The lames, as one mesh of separate pieces.
@@ -214,7 +250,7 @@ def lames(
                 lame, String(BAND), Float32(k + 1) + LAME_OVERLAP, False
             )
         _stand_out(lame, LAME_STEP * Float32(count - 1 - k))
-        share_with(lame, anchor, Float32(k) / Float32(count - 1))
+        share_with(lame, anchor, Float32(k) / Float32(count - 1), hold_arms)
         lame.delete_attribute(String(BAND))
         if joined:
             joined = merge(joined.value(), lame)
@@ -247,5 +283,12 @@ def articulate(
             rigid_weights(piece, garment.anchor)
         return piece^
     if garment.articulation == LAMED:
-        return lames(piece, garment.anchor, garment.lames)
+        # A garment of the torso, as a platebody, keeps off the arms; one
+        # of the shoulders rises with them.
+        return lames(
+            piece,
+            garment.anchor,
+            garment.lames,
+            garment.slot == TORSO_SLOT,
+        )
     return piece^

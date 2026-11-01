@@ -97,10 +97,10 @@ Each raider has a `PartyMind` and a role. `PartyRole` is a type with `is_valid`.
 
 | Raider | Role | Style | Health | Where they stand | What they do |
 |---|---|---|---|---|---|
-| A shieldwoman in nettle green | `TANK` | The mace | 900 | 2.8 m before the warden | Taunts the warden when it fights another member; guards a cleave; strikes when it is open |
-| A priest in cream | `HEALER` | Magic | 420 | 5 m behind the player, away from the warden | Mends when a member falls below 60 percent of their health, at most once each 7 seconds; else casts bolts; revives a fallen raider |
-| An axeman in weld yellow | `STRIKER` | The axe | 520 | 2.6 m behind the warden | Light attacks in a chain, and a heavy attack |
-| A huntress in walnut brown | `ARCHER` | Archery | 450 | 11 m off the warden's flank | Quick shots, and an aimed shot every third |
+| A shieldwoman in plate | `TANK` | The mace | 900 | 2.8 m before the warden | Taunts the warden when it fights another member; guards a cleave; strikes when it is open |
+| A monk | `HEALER` | Magic | 420 | 5 m behind the player, away from the warden | Mends when a member falls below 60 percent of their health, at most once each 7 seconds; else casts bolts; revives a fallen raider |
+| An axeman in a knight's harness | `STRIKER` | The axe | 520 | 2.6 m behind the warden | Light attacks in a chain, and a heavy attack |
+| A huntress in a ranger's green | `ARCHER` | Archery | 450 | 11 m off the warden's flank | Quick shots, and an aimed shot every third |
 
 Every raider steps out of a zone as it winds up, and dodges out of it at 80 percent of its wind-up. When a rockfall marks a member, every raider gathers on them.
 

@@ -35,7 +35,9 @@ two differ: see the wiki page Game renderer.
 
 **What is drawn.** `scene.meshes` and `scene.skinned_meshes`, opaque, with
 `BASIC`, `LAMBERT`, `PHONG`, `STANDARD` and `PHYSICAL` materials, vertex
-colors, a color and an emissive color. A standard or physical material is
+colors, a color and an emissive color. A mesh's morph targets move its
+vertices as three.js's do, the targets it wears and only those: see
+`_Shape.wear`. A standard or physical material is
 lit as a Lambert one. A map is read at each vertex, or, with `pixel_maps`
 set, at each pixel: see `_PixelMaps`. A map read at each pixel scales all
 the light of its vertices, so a material that glows or shines, an emissive
@@ -63,6 +65,7 @@ from objects.skinned_mesh import (
 from core.fog import EXP2_FOG, NO_FOG, exp2_veil
 from core.geometry_store import GeometryId
 from core.layers import Layers
+from core.morph import MorphInfluences
 from core.object3d import NodeId
 from core.ordinal import ordinal_valid
 from core.scene import Scene
@@ -146,6 +149,10 @@ from std.memory import unsafe_memcpy
 from std.time import perf_counter_ns
 from units.si import PER_METER, SECOND, Duration
 
+comptime POSE_REACH = Float32(1.5)
+"""How many times its bound at rest a skinned mesh's bound is grown, so
+any pose of a person stays inside it: an arm raised over the head, or a
+body that lies on the ground after a fall."""
 comptime TILE = 64
 """The side of a tile, in pixels."""
 comptime STRIDE = 16
@@ -390,13 +397,33 @@ struct _Shape(Movable):
     # Baked light by attribute name, read on demand.
     var baked_names: List[String]
     var baked: List[List[Float32]]
+    # The morph targets, read the first time a mesh wears one: per target,
+    # the vertices it moves and, six floats each, how far it moves their
+    # positions and normals. The positions and normals at rest, and the
+    # weights the shape wears now.
+    var morph_vertices: List[List[Int32]]
+    var morph_deltas: List[List[Float32]]
+    var rest: List[List[Float32]]
+    var worn: List[Float32]
+    # A fingerprint of the triangles: the vertex count, the index and the
+    # groups. A geometry replaced by one of the same triangles keeps its
+    # parts, and only its values are read again.
+    var topology: UInt64
 
-    def __init__(out self, geometry: BufferGeometry, generation: Int) raises:
+    def __init__(
+        out self,
+        geometry: BufferGeometry,
+        generation: Int,
+        previous: Optional[_Shape] = None,
+    ) raises:
         """Read a geometry.
 
         Args:
             geometry: The geometry.
             generation: Its generation in the store.
+            previous: The shape the geometry was read into before, if any.
+                If the triangles are the same, its parts are kept, and
+                only the values are read again, as wind moves grass.
 
         Raises:
             Error: If it has no positions, or an index or a group is out of
@@ -435,16 +462,26 @@ struct _Shape(Movable):
         self.v = List[Float32](length=self.count, fill=0)
         if geometry.has_attribute(String(UV)):
             ref uv = geometry.attribute_view(String(UV))
-            for i in range(self.count):
-                self.u[i] = uv.component(i, 0)
-                self.v[i] = uv.component(i, 1)
+            _read_component(uv, self.u, 0)
+            _read_component(uv, self.v, 1)
         self.parts = List[_Part]()
+        self.topology = _topology(geometry, self.count)
         var corners = (
             len(geometry.index) if len(geometry.index) > 0 else self.count
         )
-        if len(geometry.groups) == 0:
+        var kept = False
+        if previous:
+            ref before = previous.value()
+            if before.topology == self.topology:
+                for p in range(len(before.parts)):  # pragma: no branch
+                    var part = _Part(before.parts[p].slot)
+                    part.vertices = before.parts[p].vertices.copy()
+                    part.triangles = before.parts[p].triangles.copy()
+                    self.parts.append(part^)
+                kept = True
+        if not kept and len(geometry.groups) == 0:
             self.parts.append(_part(geometry, 0, corners, 0, self.count))
-        else:
+        elif not kept:
             for g in geometry.groups:  # pragma: no branch
                 var start = max(0, g.start)
                 var past = min(corners, g.start + g.count)
@@ -480,6 +517,15 @@ struct _Shape(Movable):
         self.radius = sqrt(reach)
         self.baked_names = List[String]()
         self.baked = List[List[Float32]]()
+        self.morph_vertices = List[List[Int32]]()
+        self.morph_deltas = List[List[Float32]]()
+        self.rest = List[List[Float32]]()
+        self.worn = List[Float32]()
+        self._regather()
+
+    def _regather(mut self):
+        """Gather each part's positions, normals and colors from the
+        shape's."""
         for p in range(len(self.parts)):  # pragma: no branch
             ref part = self.parts[p]
             _gather_into(part.px, self.px, part.vertices)
@@ -491,6 +537,126 @@ struct _Shape(Movable):
             _gather_into(part.cr, self.cr, part.vertices)
             _gather_into(part.cg, self.cg, part.vertices)
             _gather_into(part.cb, self.cb, part.vertices)
+
+    def _read_morphs(mut self, geometry: BufferGeometry) raises:
+        """Read the geometry's morph targets, keeping only the vertices
+        each moves, and the positions and normals at rest."""
+        self.rest = [
+            self.px.copy(),
+            self.py.copy(),
+            self.pz.copy(),
+            self.nx.copy(),
+            self.ny.copy(),
+            self.nz.copy(),
+        ]
+        var normals = geometry.has_morph_normals()
+        for t in range(geometry.morph_count()):  # pragma: no branch
+            var moved = geometry.morph_positions[t].packed()
+            var turned = List[Float32]()
+            if normals:
+                turned = geometry.morph_normals[t].packed()
+            var vertices = List[Int32]()
+            var deltas = List[Float32]()
+            for i in range(self.count):  # pragma: no branch
+                var d = SIMD[DType.float32, 8](0)
+                d[0] = moved[3 * i]
+                d[1] = moved[3 * i + 1]
+                d[2] = moved[3 * i + 2]
+                if not geometry.morph_relative:
+                    d[0] -= self.px[i]
+                    d[1] -= self.py[i]
+                    d[2] -= self.pz[i]
+                if normals:
+                    d[3] = turned[3 * i]
+                    d[4] = turned[3 * i + 1]
+                    d[5] = turned[3 * i + 2]
+                    if not geometry.morph_relative:
+                        d[3] -= self.nx[i]
+                        d[4] -= self.ny[i]
+                        d[5] -= self.nz[i]
+                if abs(d).reduce_max() == 0:
+                    continue
+                vertices.append(Int32(i))
+                for c in range(6):  # pragma: no branch
+                    deltas.append(d[c])
+            self.morph_vertices.append(vertices^)
+            self.morph_deltas.append(deltas^)
+
+    def wear(
+        mut self, geometry: BufferGeometry, influences: MorphInfluences
+    ) raises:
+        """Move the shape's vertices by the morph targets a mesh wears, as
+        three.js's `morphtarget_vertex` and `morphnormal_vertex` do.
+
+        The shape is moved again only when the weights change. A geometry
+        that two meshes wear at once in different weights shows the
+        weights of the mesh drawn last.
+
+        Args:
+            geometry: The geometry the shape was read from.
+            influences: How much of each target the mesh wears.
+
+        Raises:
+            Error: If a morph target does not cover every vertex.
+        """
+        var targets = geometry.morph_count()
+        var same = len(self.worn) == targets
+        if same:
+            for t in range(targets):  # pragma: no branch
+                if self.worn[t] != influences[t]:
+                    same = False
+                    break
+        if same:
+            return
+        if len(self.rest) == 0:
+            self._read_morphs(geometry)
+        self.worn = List[Float32](length=targets, fill=0)
+        self.px = self.rest[0].copy()
+        self.py = self.rest[1].copy()
+        self.pz = self.rest[2].copy()
+        self.nx = self.rest[3].copy()
+        self.ny = self.rest[4].copy()
+        self.nz = self.rest[5].copy()
+        var turned = False
+        for t in range(targets):  # pragma: no branch
+            var w = influences[t]
+            self.worn[t] = w
+            if w == 0:
+                continue
+            ref vertices = self.morph_vertices[t]
+            ref deltas = self.morph_deltas[t]
+            for k in range(len(vertices)):  # pragma: no branch
+                var i = Int(vertices[k])
+                self.px[i] += w * deltas[6 * k]
+                self.py[i] += w * deltas[6 * k + 1]
+                self.pz[i] += w * deltas[6 * k + 2]
+                self.nx[i] += w * deltas[6 * k + 3]
+                self.ny[i] += w * deltas[6 * k + 4]
+                self.nz[i] += w * deltas[6 * k + 5]
+                turned = True
+        # The light stage reads unit normals.
+        if turned:
+            for i in range(self.count):  # pragma: no branch
+                var n = max(
+                    sqrt(
+                        self.nx[i] * self.nx[i]
+                        + self.ny[i] * self.ny[i]
+                        + self.nz[i] * self.nz[i]
+                    ),
+                    Float32(1.0e-12),
+                )
+                self.nx[i] /= n
+                self.ny[i] /= n
+                self.nz[i] /= n
+        # A moved vertex can stand past the bounding sphere at rest.
+        var reach = Float32(0)
+        for i in range(self.count):  # pragma: no branch
+            var dx = self.px[i] - self.center.x
+            var dy = self.py[i] - self.center.y
+            var dz = self.pz[i] - self.center.z
+            reach = max(reach, dx * dx + dy * dy + dz * dz)
+        self.radius = sqrt(reach)
+        self._regather()
 
     def baked_values(
         mut self, geometry: BufferGeometry, name: String
@@ -515,8 +681,7 @@ struct _Shape(Movable):
             raise Error("A geometry has no attribute '", name, "' to light by")
         ref values = geometry.attribute_view(name)
         var out = List[Float32](length=self.count, fill=0)
-        for i in range(self.count):
-            out[i] = values.component(i, 0)
+        _read_component(values, out, 0)
         for p in range(len(self.parts)):  # pragma: no branch
             var gathered = List[Float32]()
             _gather_into(gathered, out, self.parts[p].vertices)
@@ -592,6 +757,38 @@ def _gather_into(
     var at = order.unsafe_ptr()
     for k in range(count):
         out[unsafe_offset=k] = src[unsafe_offset=Int(at[unsafe_offset=k])]
+
+
+def _topology(geometry: BufferGeometry, count: Int) -> UInt64:
+    """Return a fingerprint of a geometry's triangles: its vertex count,
+    its index and its groups. It is not a cryptographic digest."""
+    var h = UInt64(14695981039346656037)
+    var prime = UInt64(1099511628211)
+    h = (h ^ UInt64(count)) * prime
+    h = (h ^ UInt64(len(geometry.index))) * prime
+    for i in geometry.index:
+        h = (h ^ UInt64(i)) * prime
+    for g in geometry.groups:
+        h = (h ^ UInt64(g.start)) * prime
+        h = (h ^ UInt64(g.count)) * prime
+        h = (h ^ UInt64(g.material_index.value)) * prime
+    return h
+
+
+def _read_component(
+    attribute: BufferAttribute, mut out: List[Float32], component: Int
+) raises:
+    """Read one component of each item of an attribute, as many items as
+    `out` holds."""
+    var count = min(attribute.count(), len(out))
+    var size = attribute.item_size
+    # A plain attribute is read straight from its buffer.
+    var plain = not attribute.is_interleaved()
+    var data = attribute.data.unsafe_ptr()
+    for i in range(count):
+        out[i] = data[
+            unsafe_offset=i * size + component
+        ] if plain else attribute.component(i, component)
 
 
 def _read3(
@@ -1486,16 +1683,19 @@ struct GameRenderer(Movable):
 
     def _shape(mut self, assets: Assets, id: GeometryId) raises -> Int:
         """Return the shape of a geometry, reading it if it is new or was
-        replaced."""
+        replaced. A replaced geometry of the same triangles keeps its
+        shape's parts."""
         while len(self._shapes) <= id.value:
             self._shapes.append(None)
         var generation = assets.geometries.generation(id)
-        if (
-            not self._shapes[id.value]
-            or self._shapes[id.value].value().generation != generation
-        ):
+        if not self._shapes[id.value]:
             self._shapes[id.value] = _Shape(
                 assets.geometries.get(id), generation
+            )
+        elif self._shapes[id.value].value().generation != generation:
+            var previous = self._shapes[id.value].take()
+            self._shapes[id.value] = _Shape(
+                assets.geometries.get(id), generation, previous^
             )
         return id.value
 
@@ -1579,6 +1779,15 @@ struct GameRenderer(Movable):
                 continue
             var world = scene.world_matrix(mesh.node)
             var shape = self._shape(assets, mesh.geometry)
+            # A mesh that wears its morph targets, or wore them, moves its
+            # shape's vertices: see `_Shape.wear`.
+            if mesh.morph_influences.is_worn() or (
+                len(self._shapes[shape].value().worn) > 0
+            ):
+                self._shapes[shape].value().wear(
+                    assets.geometries.get(mesh.geometry),
+                    mesh.morph_influences,
+                )
             if not _seen(self._shapes[shape].value(), world, frustum):
                 continue
             first = self._add_parts(
@@ -1604,6 +1813,12 @@ struct GameRenderer(Movable):
                 continue
             var world = scene.world_matrix(skinned.node)
             var shape = self._shape(assets, skinned.geometry)
+            # A pose moves the skin about its node: the bound at rest,
+            # grown by `POSE_REACH`, holds it.
+            if not _seen(
+                self._shapes[shape].value(), world, frustum, POSE_REACH
+            ):
+                continue
             first = self._add_parts(
                 draws,
                 assets,
@@ -2278,15 +2493,20 @@ def _rgb(c: FloatColor) -> SIMD[DType.float32, 4]:
     return SIMD[DType.float32, 4](c.r, c.g, c.b, 0)
 
 
-def _seen(shape: _Shape, world: Matrix4, frustum: Frustum) -> Bool:
-    """Return whether a shape's bounding sphere, placed, is in the view."""
+def _seen(
+    shape: _Shape, world: Matrix4, frustum: Frustum, grow: Float32 = 1
+) -> Bool:
+    """Return whether a shape's bounding sphere, placed and grown `grow`
+    times, is in the view."""
     var center = world.transform_point(shape.center)
     ref e = world.elements
     var sx = sqrt(e[0] * e[0] + e[1] * e[1] + e[2] * e[2])
     var sy = sqrt(e[4] * e[4] + e[5] * e[5] + e[6] * e[6])
     var sz = sqrt(e[8] * e[8] + e[9] * e[9] + e[10] * e[10])
     var scale = max(sx, max(sy, sz))
-    return frustum.intersects_sphere(Sphere(center, shape.radius * scale))
+    return frustum.intersects_sphere(
+        Sphere(center, shape.radius * scale * grow)
+    )
 
 
 struct _Batch(Copyable, Movable):

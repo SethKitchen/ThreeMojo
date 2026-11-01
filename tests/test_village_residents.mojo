@@ -39,6 +39,7 @@ from extensions.village.residents import (
     INDOORS,
     THRESHOLD,
     Body,
+    EYE_HEIGHT,
     Flipbook,
     GIVE_UP,
     Herd,
@@ -64,6 +65,7 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_raises,
     assert_true,
 )
@@ -367,6 +369,58 @@ def test_a_body_stands_where_its_character_stands_and_plays_its_stance() raises:
     ref jump = body.mixer.action(body.actions[3])
     assert_true(jump.phase > 0.5)
     assert_almost_equal(jump.time_scale, JUMP_PLAY, atol=1e-6)
+
+
+def test_a_speaking_body_shows_its_moving_face_near_the_camera() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var body = Body(
+        scene,
+        assets,
+        HumanoidSpec(Length(60.0, INCH), FEMALE),
+        Outfit(),
+        800,
+        8,
+        speaks=True,
+        seed=4,
+    )
+    assert_true(body.speaks)
+    var walker = Character(
+        CharacterParameters(), 2, 3, Angle(0.0, RADIAN), _flat()
+    )
+    var step = Duration(0.1, SECOND)
+    body.pose(scene, walker, step)
+    scene.update()
+    # The eyes are near the top of the person, over their feet.
+    var head = body.head(scene)
+    var tall = body.person.rig.stature
+    assert_almost_equal(head.x, 2, atol=1e-5)
+    assert_almost_equal(head.y, EYE_HEIGHT * tall, atol=1e-4)
+    ref face = body.person.face.value()
+    var mouth = face.meshes[0]
+    var still = body.person.far_face.value()
+    # Far away, the still face shows.
+    body.show_face(scene, Vector3(2, 1, 40), 3, step)
+    assert_false(body.near)
+    assert_true(scene.node(still).visible)
+    # Near, the preserved face shows, and says its words.
+    body.life.say("Hello")
+    body.show_face(scene, Vector3(2, 1.5, 4), 3, step)
+    assert_true(body.near)
+    assert_false(scene.node(still).visible)
+    assert_true(scene.meshes[mouth].morph_influences.is_worn())
+    # A body that does not speak is left as it is.
+    var quiet = Body(
+        scene,
+        assets,
+        HumanoidSpec(Length(60.0, INCH), FEMALE),
+        Outfit(),
+        500,
+        8,
+    )
+    quiet.show_face(scene, Vector3(0, 0, 0), 3, step)
+    assert_false(quiet.speaks)
+    assert_false(quiet.near)
 
 
 def test_a_garment_that_shows_nothing_casts_nothing() raises:

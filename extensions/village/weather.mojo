@@ -94,6 +94,27 @@ comptime RAIN = WeatherKind(2)
 comptime FOG = WeatherKind(3)
 
 
+def weather_label(kind: WeatherKind) -> String:
+    """Return the name of a kind of weather, for the heads-up display.
+
+    Args:
+        kind: The weather.
+
+    Returns:
+        `CLEAR`, `OVERCAST`, `RAIN` or `FOG`, or an empty string for a kind
+        that is not one.
+    """
+    if kind == CLEAR:
+        return "CLEAR"
+    if kind == OVERCAST:
+        return "OVERCAST"
+    if kind == RAIN:
+        return "RAIN"
+    if kind == FOG:
+        return "FOG"
+    return ""
+
+
 @fieldwise_init
 struct WeatherLook(ImplicitlyCopyable):
     """What a weather looks like."""

@@ -63,6 +63,8 @@ A layer under a garment lifts it in full inside and at that layer's hem. The lif
 
 A garment is cut where a layer over it covers it past 0.75. That layer's hem lies at 0.5, so the garment ends under it. The cut runs along the iso-line, as a hem does, and not along the edges of triangles. So no whole triangle of an inner layer reaches out past the hem of the layer over it.
 
+Under a layer with no opening, the garment is cut deeper, past 0.55. A raised arm bends the skin hard, and there the inner layer can cross the outer one near that layer's edge. The deeper cut keeps the inner layer out of that band. A garment that lies wholly under such a layer, such as a shirt under a doublet, is cut away and draws nothing. A coat parted below the waist is cut open. Under such a layer, the shallower cut keeps the garment that shows at the opening whole to its edge.
+
 A loose garment hangs from the chest. A shell follows the skin into each hollow, such as under the bust, over the small of the back and below the chest. A loose robe does not: its cloth falls from the widest point above and spans the hollow.
 
 `hangs_loose` says which garments hang. Each is a closed garment of cloth, skirted, that covers the chest, with a round or a slit neck. A robe, a tunic, a gown and a surcoat hang. A tailored coat, a ball gown, a bodice and armor are fitted.
@@ -137,6 +139,10 @@ About ten folds run down each skirt. They bunch together and spread apart round 
 
 A drawn skirt is lined: it has an inner face one fabric thickness inside, and a strip across its hem. So the hem shows its thickness, and the inside of the skirt draws when it is seen from below.
 
+A long skirt, whose hem falls below the knees, hides the legs inside it from 15 cm over its hem (`SKIRT_SHOW`). Both thighs share the middle of its front. So a thigh that lifts would push out through it as the person runs or jumps. With the legs hidden, nothing is left to push out. The skin and every garment under the skirt are hidden there.
+
+A short skirt, as a tunic's, hides no leg: a kick lifts the thigh out under its hem. A skirt parted open, as a frock coat's, shows the legs, so it hides none.
+
 Each vertex at the top takes the weights of the nearest vertex of the shell. Down the skirt the weights pass to the thighs: at the hem the thighs hold 0.9 of each vertex. The right thigh turns the right side and the left thigh the left side. The two share a band 10 cm wide at the middle of the front and the back. So the skirt opens as a leg lifts.
 
 A skirt close over the body moves with the cloth under it. Where the gap is 2 cm or less, the skirt's vertex takes the weights of the shell's nearest vertex. From 2 cm to 6 cm, it passes smoothly back to its own blend. So a short tunic over trousers turns with each thigh. A thigh that swings 35 degrees forward or back does not pass out through it. Between the legs and at a flared hem, the skirt hangs free and keeps its blend.
@@ -148,6 +154,8 @@ A skirt is not simulated. A thigh that swings far past a stride, as in a high ki
 The cover value falls from one to one half over the 4 cm above the hem. So a trim lies along a skirt's hem, as along any hem.
 
 Below the top, a skirt hangs clear of the legs. So it hides neither the skin nor the garments under it there, and the hose and the legs draw under it. A band 6 cm deep below the top stays hidden, so no triangle that crosses the top shows through the shell over it. A skirt over another that falls as far hides it. The inner skirt is then not drawn.
+
+A shorter skirt with no opening over another hides that skirt's top. The inner skirt is cut `SKIRT_UNDERLAP`, 3 cm, over the hem of the skirt over it. Only the part below is drawn. The two skirts take their weights apart, so they cross as the legs swing. Then the inner skirt's hidden top would show through.
 
 ### Lasts
 

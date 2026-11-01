@@ -20,10 +20,10 @@ beside them. They go back to the stones when the player is further than
 
 | Who | Role | Health | Stamina | Might |
 |---|---|---|---|---|
-| A shieldwoman in nettle green | `TANK` | 900 | 150 | 0.7 |
-| A priest in cream | `HEALER` | 420 | 90 | 0.6 |
-| An axeman in weld yellow | `STRIKER` | 520 | 110 | 0.85 |
-| A huntress in walnut brown | `ARCHER` | 450 | 100 | 0.8 |
+| A shieldwoman in plate | `TANK` | 900 | 150 | 0.7 |
+| A monk | `HEALER` | 420 | 90 | 0.6 |
+| An axeman in a knight's harness | `STRIKER` | 520 | 110 | 0.85 |
+| A huntress in a ranger's green | `ARCHER` | 450 | 100 | 0.8 |
 
 The warden is 2.5 meters tall, drawn `WARDEN_SIZE` times larger, in gray
 wool, with a mace. Its body plays the mace's clips at its attacks' pace:
@@ -33,6 +33,7 @@ see `puppet_move`.
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
+from extensions.attire.mix import KNIGHT, MONK, RANGER, WARRIOR, dressed_as
 from extensions.attire.outfit import Outfit
 from extensions.humanoid.athleticism import TONED
 from extensions.humanoid.genome import random_genome
@@ -51,6 +52,9 @@ from extensions.village.boss import (
 )
 from extensions.village.character import Character
 from extensions.village.clothes import (
+    Groom,
+    calling_groom,
+    plain_groom,
     CREAM_WOOL,
     GRAY_WOOL,
     NETTLE,
@@ -124,7 +128,6 @@ comptime RISE_SECONDS = Float32(10)
 up by itself, in seconds."""
 
 
-@fieldwise_init
 struct Raider(Copyable, Movable):
     """A raider: who they are, what they wear, and their role."""
 
@@ -134,6 +137,34 @@ struct Raider(Copyable, Movable):
     # Their place at the stones, from the arena's middle, in meters.
     var x: Float32
     var z: Float32
+    # How their hair is cut and laid, and their beard.
+    var groom: Groom
+
+    def __init__(
+        out self,
+        spec: HumanoidSpec,
+        outfit: Outfit,
+        role: PartyRole,
+        x: Float32,
+        z: Float32,
+        groom: Groom = plain_groom(),
+    ):
+        """Hold a person of the village.
+
+        Args:
+            spec: Who they are.
+            outfit: What they wear.
+            role: Their role in the party.
+            x: Their place at the stones along x, from the arena's middle, in meters.
+            z: Their place at the stones along z, from the arena's middle, in meters.
+            groom: How their hair is cut, and their beard.
+        """
+        self.spec = spec.copy()
+        self.outfit = outfit.copy()
+        self.role = role
+        self.x = x
+        self.z = z
+        self.groom = groom
 
 
 struct RaidParameters(Copyable, Movable):
@@ -170,37 +201,41 @@ struct RaidParameters(Copyable, Movable):
                 HumanoidSpec(
                     Length(68.0, INCH), FEMALE, TONED, random_genome(92)
                 ),
-                village_outfit(NETTLE, WELD, WALNUT, False),
+                dressed_as(WARRIOR, FEMALE, 92),
                 TANK,
                 -6,
                 -20,
+                calling_groom(WARRIOR, FEMALE, 92),
             ),
             Raider(
                 HumanoidSpec(
                     Length(69.0, INCH), MALE, TONED, random_genome(93)
                 ),
-                village_outfit(CREAM_WOOL, WOAD, CREAM_WOOL, True),
+                dressed_as(MONK, MALE, 93),
                 HEALER,
                 -3,
                 -21,
+                calling_groom(MONK, MALE, 93),
             ),
             Raider(
                 HumanoidSpec(
                     Length(72.0, INCH), MALE, TONED, random_genome(94)
                 ),
-                village_outfit(WELD, WALNUT, GRAY_WOOL, False),
+                dressed_as(KNIGHT, MALE, 94),
                 STRIKER,
                 0,
                 -21,
+                calling_groom(KNIGHT, MALE, 94),
             ),
             Raider(
                 HumanoidSpec(
                     Length(66.0, INCH), FEMALE, TONED, random_genome(95)
                 ),
-                village_outfit(WALNUT, NETTLE, WALNUT, True),
+                dressed_as(RANGER, FEMALE, 95),
                 ARCHER,
                 3,
                 -20,
+                calling_groom(RANGER, FEMALE, 95),
             ),
         ]
 
