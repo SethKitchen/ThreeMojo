@@ -10,6 +10,10 @@
 3. Reduce the TiCl4 with liquid magnesium in a steel retort.
 4. Boil the leftover magnesium and MgCl2 out of the sponge under vacuum.
 
+`kroll_loop` is the same route as a flowsheet with its recycle: an
+electrolysis cell splits the MgCl2 back into magnesium for the reducer
+and chlorine for the chlorinator.
+
 The reduction runs where MgCl2 is liquid, magnesium does not boil, and the
 steel retort stays below the Fe-Ti eutectic. These are models of the
 steps' requirements. They are not operating procedures.
@@ -40,7 +44,8 @@ from extensions.chemistry.kinds import (
     THERMODYNAMIC,
     TOXIC_GAS,
 )
-from extensions.chemistry.quantities import ATMOSPHERE
+from extensions.chemistry.flowsheet import Flowsheet
+from extensions.chemistry.quantities import ATMOSPHERE, Amount64, MOLE
 from extensions.chemistry.reaction import Reaction, product, reactant
 from extensions.chemistry.requirement import (
     above,
@@ -331,3 +336,103 @@ def kroll_route() raises -> List[Step]:
     steps.append(kroll_reduction())
     steps.append(vacuum_distillation())
     return steps^
+
+
+def kroll_loop() raises -> Flowsheet:
+    """Return the Kroll route as a flowsheet that recycles Mg and Cl2.
+
+    The feeds are one mole of rutile and of carbon, and 0.1 mole of
+    make-up chlorine. The chlorinator converts the limiting reactant
+    fully, and the TiCl4 goes to the reducer. The rest leaves as off-gas,
+    with the chlorine beyond what the rutile needs. The reducer makes
+    titanium sponge and MgCl2, and an electrolysis cell splits the MgCl2.
+    Its magnesium returns to the reducer and its chlorine to the
+    chlorinator. The magnesium loop starts with two moles.
+
+    Returns:
+        The flowsheet, ready to `solve`. Its streams are named "ore",
+        "make-up Cl2", "Cl2 recycle", "Mg recycle", "chlorinator feed",
+        "chlorinated", "TiCl4", "off-gas", "reducer feed", "reduced",
+        "sponge", "salt" and "cell out".
+
+    Raises:
+        Error: Never. The data is checked as it is built.
+    """
+    var sheet = Flowsheet(
+        [
+            rutile(),
+            graphite(),
+            chlorine(),
+            titanium_tetrachloride_gas(),
+            carbon_dioxide(),
+            magnesium(),
+            magnesium_chloride(),
+            titanium(),
+        ]
+    )
+    var ore = sheet.add_stream("ore")
+    var makeup = sheet.add_stream("make-up Cl2")
+    var cl2 = sheet.add_stream("Cl2 recycle")
+    var mg = sheet.add_stream("Mg recycle")
+    var feed = sheet.add_stream("chlorinator feed")
+    var chlorinated = sheet.add_stream("chlorinated")
+    var tet = sheet.add_stream("TiCl4")
+    var offgas = sheet.add_stream("off-gas")
+    var reducer = sheet.add_stream("reducer feed")
+    var reduced = sheet.add_stream("reduced")
+    var sponge = sheet.add_stream("sponge")
+    var salt = sheet.add_stream("salt")
+    var cell = sheet.add_stream("cell out")
+    sheet.set_feed(
+        ore, ["TiO2", "graphite"], [Amount64(1, MOLE), Amount64(1, MOLE)]
+    )
+    sheet.set_feed(makeup, ["Cl2(g)"], [Amount64(0.1, MOLE)])
+    sheet.set_guess(mg, ["Mg"], [Amount64(2, MOLE)])
+    sheet.mixer("chlorinator feed", [ore, makeup, cl2], feed)
+    sheet.reactor(
+        "chlorinator",
+        feed,
+        chlorinated,
+        Reaction(
+            [
+                reactant(rutile()),
+                reactant(chlorine(), 2),
+                reactant(graphite()),
+                product(titanium_tetrachloride_gas()),
+                product(carbon_dioxide()),
+            ]
+        ),
+        1,
+    )
+    sheet.splitter("condenser", chlorinated, tet, offgas, ["TiCl4(g)"], [1])
+    sheet.mixer("reducer feed", [tet, mg], reducer)
+    sheet.reactor(
+        "reducer",
+        reducer,
+        reduced,
+        Reaction(
+            [
+                reactant(titanium_tetrachloride_gas()),
+                reactant(magnesium(), 2),
+                product(titanium()),
+                product(magnesium_chloride(), 2),
+            ]
+        ),
+        1,
+    )
+    sheet.splitter("tapping", reduced, sponge, salt, ["Ti"], [1])
+    sheet.reactor(
+        "electrolysis cell",
+        salt,
+        cell,
+        Reaction(
+            [
+                reactant(magnesium_chloride()),
+                product(magnesium()),
+                product(chlorine()),
+            ]
+        ),
+        1,
+    )
+    sheet.splitter("cell taps", cell, mg, cl2, ["Mg"], [1])
+    return sheet^
