@@ -767,6 +767,12 @@ Earth-retaining structures and the pictures that explain them. A checked box rec
 - [x] [Design checks](https://github.com/SethKitchen/ThreeMojo/wiki/Design-checks): US member and foundation checks. AISC steel members and connections, NDS joists and bolts. ACI walls, footings, plain concrete and chapter 17 anchors. ASCE 7 wind. Patterned continuous beams, LaTeX/TikZ calculation writers and staged utilization views
 - [x] [Engineering views](https://github.com/SethKitchen/ThreeMojo/wiki/Engineering-views): a mesh builder for walls, pipes and ground, a text and label overlay, and civil-works textures [#754](https://github.com/SethKitchen/ThreeMojo/issues/754)
 
+### Process chemistry
+
+The requirements that turn a raw material into a product. A checked box records implemented scope. It is not an operating procedure.
+
+- [x] [Process chemistry](https://github.com/SethKitchen/ThreeMojo/wiki/Process-chemistry): NASA thermochemical data, reactions, and process steps with thermodynamic, phase, kinetic, physical and engineering requirements. Operating windows, hazards, coating stress, heat duties and a ledger. Kroll titanium, a diamond-coated tool, bismuth crystals and lime [#929](https://github.com/SethKitchen/ThreeMojo/issues/929)
+
 ### Out of scope
 
 This port provides native CPU and MAX GPU rendering. It excludes the WebGL and WebGPU renderers, CSS renderers, WebXR, audio, and video and canvas textures.

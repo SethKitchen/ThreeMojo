@@ -154,6 +154,7 @@
 - [Cloth and spring bones](Cloth-and-spring-bones)
 - [Attire estimates](Attire-estimates)
 - [Segment inertia](Segment-inertia)
+- [Process chemistry](Process-chemistry)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)
@@ -171,6 +172,7 @@
 - [Bands and threads](Why-the-CPU-renderer-uses-bands)
 - [PNG structure](Why-the-PNG-reader-checks-structure)
 - [Extensions beside the port](Why-extensions-sit-beside-the-port)
+- [Process temperatures](Why-a-process-runs-where-it-does)
 - [Scans as building models](Why-scans-become-building-models)
 - [CUDA teardown hang](The-CUDA-teardown-hang)
 - [Mojo compiler hang](The-Mojo-compiler-hang)

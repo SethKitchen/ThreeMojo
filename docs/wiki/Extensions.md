@@ -20,6 +20,8 @@ The scan subject reads splat scans of real places, in SOG and other formats, and
 
 The geotech subject analyzes earth-retaining walls: earth and water pressure, LRFD stability and slip circles. The visual subject draws engineering results with meshes, labels and textures. See [Retaining walls](Retaining-walls) and [Engineering views](Engineering-views).
 
+The chemistry subject models the steps of a process: the thermodynamic, phase, kinetic, physical and engineering requirements that turn a material into a product. Each step has an operating window, hazards and a setting. See [Process chemistry](Process-chemistry) and [Why a process runs where it does](Why-a-process-runs-where-it-does).
+
 The CARLA subject ports the CARLA driving simulator without its game engine and its network transport. It covers maps, physics, the world, sensors, traffic, agents, recording and rendering. See [CARLA](CARLA).
 
 The gamepad subject ports the gamepad subsystem of SDL. It reads Xbox, PlayStation, Nintendo and other controllers on Linux and through a host's own gamepad API, and names their controls by position. It runs their rumble, lights, motion sensors and touchpads. See [Gamepads](Gamepads).
@@ -166,6 +168,17 @@ extensions/
     constants.mojo  the per-frame constants from two cameras
     tags.mojo       the check of a frame's tagged buffers
     upscaler.mojo   the upscaler trait and a CPU fallback
+  chemistry/
+    kinds.mojo       phases, requirement kinds, checks, hazards, settings
+    quantities.mojo  molar values, amounts, pressures, fracture energy
+    elements.mojo    elements, atomic weights and formulas
+    thermo.mojo      NASA polynomials, species and substances
+    catalog.mojo     the substances of the recipes
+    reaction.mojo    reactions and their driving force
+    process.mojo     requirements, steps, windows and reports
+    coating.mojo     coating stress and the delamination limit
+    economics.mojo   heat duties and a ledger
+    recipes.mojo     titanium, a diamond-coated tool, bismuth and lime
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.
