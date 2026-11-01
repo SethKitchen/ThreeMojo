@@ -771,7 +771,17 @@ Earth-retaining structures and the pictures that explain them. A checked box rec
 
 Warp drive spacetimes, analyzed as WarpFactory analyzes them. A checked box records implemented scope. It does not establish that a warp drive is physical.
 
-- [x] [Warp drives](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives): a port of WarpFactory. Alcubierre, Lentz, Van Den Broeck and warp shell metrics, stress-energy by the Einstein equations, energy conditions, expansion, shear and vorticity
+- [x] [Warp drives](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives): a port of WarpFactory. Alcubierre, Lentz, Van Den Broeck and warp shell metrics, stress-energy by the Einstein equations, energy conditions, expansion, shear and vorticity [#931](https://github.com/SethKitchen/ThreeMojo/issues/931)
+- [x] [WarpFactory parity](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#verification): WarpFactory run in GNU Octave, and the port matched to 1e-12 of each point's largest component [#932](https://github.com/SethKitchen/ThreeMojo/issues/932)
+- [x] [Exact derivatives](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#exact-derivatives): closed-form metrics differentiated by automatic differentiation, with an exact solver and Christoffel symbols [#933](https://github.com/SethKitchen/ThreeMojo/issues/933)
+- [x] [More warp metrics](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#more-metrics): a zero-expansion drive, the Krasnikov tube, shells from any profiles and an accelerating shell [#934](https://github.com/SethKitchen/ThreeMojo/issues/934)
+- [x] [Energy totals](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#totals): the joules a metric needs over a time slice, and the total of a condition's violation [#935](https://github.com/SethKitchen/ThreeMojo/issues/935)
+- [x] [Warp solver on every core](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#analyze-a-metric): the solvers and the energy conditions on CPU tasks, with the same values bit for bit [#936](https://github.com/SethKitchen/ThreeMojo/issues/936)
+- [x] [Spherical and cylindrical grids](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#spherical-and-cylindrical-grids): curvilinear grids, wrapping stencils, and shells and bubbles on them [#937](https://github.com/SethKitchen/ThreeMojo/issues/937)
+- [x] [Geodesics](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#geodesics): rays and free fall through a metric, proper time, and the sky seen from inside a bubble [#938](https://github.com/SethKitchen/ThreeMojo/issues/938)
+- [x] [Warp views](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#views): a turning surface of negative energy, and a bubble crossing the frame [#939](https://github.com/SethKitchen/ThreeMojo/issues/939)
+- [ ] [Positive-energy soliton](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#more-metrics): the soliton of Fell and Heisenberg; its construction needs the paper's equations [#940](https://github.com/SethKitchen/ThreeMojo/issues/940)
+- [ ] [Warp solver on the GPU](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives#limits): a MAX kernel with a parity test against the CPU solver [#941](https://github.com/SethKitchen/ThreeMojo/issues/941)
 
 ### Out of scope
 

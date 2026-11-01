@@ -951,8 +951,12 @@ conditions, metric scalars, momentum flow lines and red-blue color map,
 from the MATLAB sources at commit `03b10cb`. The Mojo implementation is
 original work; the formulas and the order of their terms follow
 WarpFactory's. `tests/test_warp_metrics.mojo` copies WarpFactory's Lentz
-region tests as an oracle. WarpFactory is distributed under the MIT
-License, reproduced in full below.
+region tests as an oracle. `docs/warpfactory-parity/shims/` holds three
+WarpFactory files, `verifyTensor.m`, `getEulerianTransformationMatrix.m`
+and `getEvenPointsOnSphere.m`, each changed only so that GNU Octave can
+run it, and `docs/warpfactory-parity/reference.txt` holds values that
+WarpFactory computed. WarpFactory is distributed under the MIT License,
+reproduced in full below.
 
 Anyone may obtain WarpFactory directly from its authors under the MIT
 License. The noncommercial restriction in ThreeMojo's own license applies

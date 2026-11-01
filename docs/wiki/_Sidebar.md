@@ -3,6 +3,7 @@
 **Tutorials**
 - [First scene](Tutorial-Render-your-first-scene)
 - [Light, texture, animate](Tutorial-Light-texture-and-animate)
+- [Analyze a warp drive](Tutorial-Analyze-a-warp-drive)
 
 **How-to**
 - [Install](How-to-install)
@@ -77,6 +78,8 @@
 - [Tick force restoration](Tick-force-restoration)
 - [Water](Water)
 - [Warp drives](Warp-drives)
+  - [Tutorial: Analyze a warp drive](Tutorial-Analyze-a-warp-drive)
+  - [Why the energy conditions use the Eulerian frame](Why-the-energy-conditions-use-the-Eulerian-frame)
 - [Vegetation](Vegetation)
   - [Why grass is drawn in clusters](Why-grass-is-drawn-in-clusters)
 - [Village](Village)

@@ -10,6 +10,7 @@ Learn by doing.
 
 - [Render your first scene](Tutorial-Render-your-first-scene)
 - [Light, texture and animate a scene](Tutorial-Light-texture-and-animate)
+- [Analyze a warp drive](Tutorial-Analyze-a-warp-drive)
 
 ## How-to guides
 
@@ -89,6 +90,8 @@ Look something up.
 - [Norm consumers](Norm-consumers)
 - [Water](Water)
 - [Warp drives](Warp-drives)
+  - [Tutorial: Analyze a warp drive](Tutorial-Analyze-a-warp-drive)
+  - [Why the energy conditions use the Eulerian frame](Why-the-energy-conditions-use-the-Eulerian-frame)
 - [Animals](Animals)
   - [Animal anatomy](Animal-anatomy)
   - [Anatomy validity](Anatomy-validity)

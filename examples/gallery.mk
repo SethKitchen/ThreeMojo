@@ -137,6 +137,12 @@ $(call gallery,building-energy,heat)
 $(call gallery,numerics,spring_modes)
 # An Alcubierre warp bubble: energy density, null energy condition, expansion.
 $(call gallery,warp-drive,warp_drive)
+# The sky from inside an Alcubierre bubble at 1, 3 and 6 times c.
+$(call gallery,warp-view,warp_view)
+# The ring of negative energy around a warp bubble, turning.
+$(call gallery,warp-surface,warp_surface)
+# A warp bubble crossing the frame: energy and momentum density.
+$(call gallery,warp-bubble,warp_bubble)
 $(call gallery,femur,femur)
 $(call gallery,tibia,tibia)
 $(call gallery,fibula,fibula)

@@ -507,6 +507,10 @@ def test_profile_refusals() raises:
     flat.radius[1] = 0.0
     with assert_raises(contains="start at 0"):
         _ = shell_from_profile(grid, center, flat, none)
+    var undefined = _flat_profile(10, 0.1, 1.0)
+    undefined.radius[1] = nan[DType.float64]()
+    with assert_raises(contains="start at 0"):
+        _ = shell_from_profile(grid, center, undefined, none)
     var uneven = _flat_profile(10, 0.1, 1.0)
     uneven.radius[5] = 0.55
     with assert_raises(contains="equal steps"):

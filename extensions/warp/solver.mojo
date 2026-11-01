@@ -268,7 +268,7 @@ __async def _solve_chunk(
     var n = metric[].tensor.grid.points()
     var d1 = List[Float64](length=64, fill=0.0)
     var d2 = List[Float64](length=256, fill=0.0)
-    for point in range(first, past):
+    for point in range(first, past):  # pragma: no branch
         var g = metric[].at(point)
         var gu: Matrix4
         try:

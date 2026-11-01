@@ -320,7 +320,7 @@ __async def _evaluate_chunk(
     var per_point = len(directions[])
     var dominant = condition == DOMINANT_ENERGY
     var strong = condition == STRONG_ENERGY
-    for point in range(first, past):
+    for point in range(first, past):  # pragma: no branch
         var upper = eulerian[].tensor.matrix(point)
         # T_ab = η_ac T^cd η_db: η is diagonal, so each entry changes sign
         # once for each index that is 0.

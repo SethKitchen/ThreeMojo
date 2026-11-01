@@ -192,7 +192,7 @@ def red_blue(value: Float64, low: Float64, high: Float64) -> Color:
 
 
 def draw_plane(plane: PlaneSlice, scale: Int) raises -> Framebuffer:
-    """Return a picture of a plane on the red-blue map.
+    """Return a picture of a plane on the red-blue map of its own range.
 
     The first row of the plane is drawn at the bottom, so the second free
     axis points up.
@@ -207,15 +207,38 @@ def draw_plane(plane: PlaneSlice, scale: Int) raises -> Framebuffer:
     Raises:
         Error: If the scale is less than 1 or the frame is too large.
     """
+    var bounds = plane.bounds()
+    return draw_plane_range(plane, scale, bounds[0], bounds[1])
+
+
+def draw_plane_range(
+    plane: PlaneSlice, scale: Int, low: Float64, high: Float64
+) raises -> Framebuffer:
+    """Return a picture of a plane on the red-blue map of a given range.
+
+    Use one range for every frame of an animation, so that a color means
+    the same value in each.
+
+    Args:
+        plane: The plane.
+        scale: The side of the block of pixels for each point. 1 or more.
+        low: The value drawn fully red, or white if it is not negative.
+        high: The value drawn fully blue, or white if it is not positive.
+
+    Returns:
+        The frame, `scale` times the columns wide and the rows high.
+
+    Raises:
+        Error: If the scale is less than 1 or the frame is too large.
+    """
     if scale < 1:
         raise Error("A plot scale must be 1 or more")
-    var bounds = plane.bounds()
     var frame = Framebuffer(
         plane.columns * scale, plane.rows * scale, Color(255, 255, 255)
     )
     for row in range(plane.rows):  # pragma: no branch
         for column in range(plane.columns):  # pragma: no branch
-            var color = red_blue(plane.at(column, row), bounds[0], bounds[1])
+            var color = red_blue(plane.at(column, row), low, high)
             var top = (plane.rows - 1 - row) * scale
             for dy in range(scale):  # pragma: no branch
                 for dx in range(scale):  # pragma: no branch

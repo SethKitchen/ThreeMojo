@@ -233,7 +233,7 @@ __async def _exact_chunk[
     `first_out`. A singular point sets `failed[task]`.
     """
     var n = grid.points()
-    for point in range(first, past):
+    for point in range(first, past):  # pragma: no branch
         var parts = _derivatives(
             metric[].components(place_jets(grid, center, point))
         )

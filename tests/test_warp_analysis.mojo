@@ -41,6 +41,7 @@ from extensions.warp.metrics import alcubierre_comoving, minkowski
 from extensions.warp.plot import (
     PlaneSlice,
     draw_plane,
+    draw_plane_range,
     red_blue,
     slice_plane,
 )
@@ -325,6 +326,12 @@ def test_draw_plane() raises:
     assert_equal(frame.pixels[top_left + 2], 255)
     with assert_raises(contains="scale must be 1 or more"):
         _ = draw_plane(plane, 0)
+    with assert_raises(contains="scale must be 1 or more"):
+        _ = draw_plane_range(plane, -1, -1.0, 1.0)
+    # A wider range pales the same values.
+    var pale = draw_plane_range(plane, 1, -4.0, 4.0)
+    assert_equal(pale.pixels[(1 * 3 + 0) * 4], 255)
+    assert_true(pale.pixels[(1 * 3 + 0) * 4 + 1] > 128)
     assert_false(frame.pixels[(2 * 6 + 2) * 4 + 1] == 0)
 
 

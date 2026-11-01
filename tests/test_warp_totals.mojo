@@ -26,7 +26,7 @@ from std.testing import (
 
 from extensions.warp.analytic import exact_stress_energy, sample_metric
 from extensions.warp.conditions import ConditionMap
-from extensions.warp.grid import SpacetimeGrid
+from extensions.warp.grid import SpacetimeCenter, SpacetimeGrid
 from extensions.warp.kinds import (
     CONTRAVARIANT,
     COORDINATE_FRAME,
@@ -120,10 +120,15 @@ def _simpson_integral() -> Float64:
 
 
 def test_alcubierre_total_energy() raises:
+    # The density is even in x, y and z, so one octant of midpoints, times
+    # eight, covers the cube from -4.8 m to 4.8 m.
+    var h = 0.3
     var grid = SpacetimeGrid.uniform(
-        1, 31, 31, 31, Duration64(1.0), Length64(0.3)
+        1, 16, 16, 16, Duration64(1.0), Length64(h)
     )
-    var center = grid.center()
+    var center = SpacetimeCenter(
+        Duration64(0.0), Length64(0.5 * h), Length64(0.5 * h), Length64(0.5 * h)
+    )
     var bubble = AlcubierreMetric(
         fraction_of_light(0.5), Length64(2.0), InverseLength64(1.5), True
     )
@@ -134,7 +139,7 @@ def test_alcubierre_total_energy() raises:
         -(2.0 * PI / 3.0) * einstein_coupling() * 0.25 * _simpson_integral()
     )
     assert_true(exact < 0.0)
-    assert_almost_equal(totals.total.value, exact, atol=1e-3 * abs(exact))
+    assert_almost_equal(8.0 * totals.total.value, exact, atol=1e-3 * abs(exact))
     assert_true(totals.positive.value < 1e-6 * abs(exact))
     # The null condition's violation, as a map of the density itself.
     var values = List[Float64]()

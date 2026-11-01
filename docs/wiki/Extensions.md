@@ -24,7 +24,7 @@ The CARLA subject ports the CARLA driving simulator without its game engine and 
 
 The gamepad subject ports the gamepad subsystem of SDL. It reads Xbox, PlayStation, Nintendo and other controllers on Linux and through a host's own gamepad API, and names their controls by position. It runs their rumble, lights, motion sensors and touchpads. See [Gamepads](Gamepads).
 
-The warp subject ports WarpFactory. It finds the stress-energy tensor that a warp drive metric needs, and checks the energy conditions. See [Warp drives](Warp-drives).
+The warp subject ports WarpFactory. It finds the stress-energy tensor that a warp drive metric needs, and checks the energy conditions. It adds exact derivatives, more metrics, energy totals, curvilinear grids and geodesics. See [Warp drives](Warp-drives).
 
 The Streamline subject types NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction: modes, presets, options, per-frame constants and buffer checks. It has a CPU fallback upscaler. It does not run DLSS yet. See [Streamline](Streamline).
 
@@ -171,9 +171,13 @@ extensions/
   warp/
     kinds.mojo, quantities.mojo, grid.mojo     kinds, units and the grid
     tensor.mojo, three_plus_one.mojo           tensor fields and the 3+1 split
-    metrics.mojo, warp_shell.mojo              the metrics
+    metrics.mojo, warp_shell.mojo              the metrics of WarpFactory
+    natario.mojo, krasnikov.mojo               more metrics
+    curvilinear.mojo                           spherical and cylindrical metrics
     derivatives.mojo, solver.mojo              the Einstein equations
+    jet.mojo, analytic.mojo                    exact derivatives
     frame.mojo, conditions.mojo, scalars.mojo  the analysis
+    totals.mojo, geodesics.mojo                totals, geodesics, the passenger view
     flow.mojo, evaluation.mojo, plot.mojo      flow lines, one call, planes
 ```
 
