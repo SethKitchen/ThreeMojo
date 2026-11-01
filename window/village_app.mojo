@@ -448,11 +448,7 @@ struct VillageApp(Movable):
             Error: If the hour is not from 0 to less than 24, or the weather
                 is not a kind. The game is then as it was.
         """
-        if hour >= 24:
-            raise Error("An hour must be from 0 to less than 24, not ", hour)
-        var kind = WeatherKind(weather)
-        if weather >= 0 and not kind.is_valid():
-            raise Error("A weather must be a kind, not ", weather)
+        var kind = _start_weather(hour, weather)
         if hour >= 0:
             self.game.day.hour = hour
         if weather >= 0:
@@ -520,6 +516,29 @@ struct VillageApp(Movable):
             pass
 
 
+def _start_weather(hour: Float32, weather: Int) raises -> WeatherKind:
+    """Check an hour and a weather to begin a game at.
+
+    Args:
+        hour: The hour, from 0 to less than 24, or -1 to keep the game's own.
+        weather: The weather's `WeatherKind` value, or -1 to keep the game's
+            own.
+
+    Returns:
+        The weather's kind. It is not valid when `weather` is -1.
+
+    Raises:
+        Error: If the hour is not from 0 to less than 24, or the weather is
+            not a kind.
+    """
+    if hour >= 24:
+        raise Error("An hour must be from 0 to less than 24, not ", hour)
+    var kind = WeatherKind(weather)
+    if weather >= 0 and not kind.is_valid():
+        raise Error("A weather must be a kind, not ", weather)
+    return kind
+
+
 def new_app(
     width: Int,
     height: Int,
@@ -547,6 +566,8 @@ def new_app(
         Error: If a side is not positive, the game cannot be built, or the
             hour or the weather is not valid.
     """
+    # A start that is refused costs no build of the game.
+    _ = _start_weather(hour, weather)
     var app = VillageApp(width, height, parameters, bed^, gpu)
     app.start_at(hour, weather)
     var slot = alloc(Layout[VillageApp](count=1)).unsafe_leak()
