@@ -21,6 +21,9 @@ At the edge of the grid, WarpFactory copies the nearest derivative that
 the stencil can reach. A mixed derivative is zero there. An axis with
 fewer points than the stencil needs, 5 or 3, has a derivative of zero.
 So a grid with one time slice is static.
+
+On the azimuth φ of a spherical or cylindrical grid whose points cover a
+whole turn, the neighbors wrap around the circle, and there is no edge.
 """
 
 from extensions.warp.grid import SpacetimeGrid
@@ -40,7 +43,10 @@ struct Stencil(ImplicitlyCopyable, Movable):
     var strides: SIMD[DType.int64, 4]
     """The distance between neighbors along each axis, in storage."""
     var steps: SIMD[DType.float64, 4]
-    """The coordinate step along each axis, in meters."""
+    """The coordinate step along each axis, in meters or radians."""
+    var wraps: SIMD[DType.int64, 4]
+    """1 for an axis whose points cover a whole turn, so its neighbors
+    wrap around; 0 otherwise."""
     var reach: Int
     """How many points the stencil reads on each side."""
 
@@ -54,15 +60,62 @@ struct Stencil(ImplicitlyCopyable, Movable):
         Raises:
             Error: If the order is not valid.
         """
-        if not order.is_valid():
+        if not order.is_stencil():
             raise Error("A finite-difference order is not valid")
         self.counts = grid.counts
         self.strides = SIMD[DType.int64, 4](0)
         self.steps = SIMD[DType.float64, 4](0)
+        self.wraps = SIMD[DType.int64, 4](0)
         for axis in range(4):
             self.strides[axis] = Int64(grid.stride(Axis(axis)))
             self.steps[axis] = grid.coordinate_step(Axis(axis))
+            self.wraps[axis] = Int64(Int(grid.periodic(axis)))
         self.reach = order.reach()
+
+    def _center(self, point: Int, at: SIMD[DType.int64, 4], axis: Int) -> Int:
+        """Return the point the stencil along an axis is centered on.
+
+        On an axis that does not wrap, a point near an edge moves inward
+        until the stencil fits, which copies the nearest derivative.
+        """
+        if self.wraps[axis] != 0:
+            return point
+        var here = Int(at[axis])
+        var n = Int(self.counts[axis])
+        var moved = _clamp(here, self.reach, n - 1 - self.reach)
+        return point + (moved - here) * Int(self.strides[axis])
+
+    def _offset(self, at: SIMD[DType.int64, 4], axis: Int, k: Int) -> Int:
+        """Return the storage offset of the neighbor `k` steps along an
+        axis from a stencil center. On an axis that wraps, it wraps."""
+        var s = Int(self.strides[axis])
+        if self.wraps[axis] == 0:
+            return k * s
+        var n = Int(self.counts[axis])
+        var here = Int(at[axis])
+        var to = ((here + k) % n + n) % n
+        return (to - here) * s
+
+    def _difference(
+        self,
+        data: List[Float64],
+        p: Int,
+        at: SIMD[DType.int64, 4],
+        axis: Int,
+    ) -> Float64:
+        """Return the first-difference stencil centered at storage index
+        `p`, whose indexes are `at`."""
+        var h = self.steps[axis]
+        var o1 = self._offset(at, axis, 1)
+        var m1 = self._offset(at, axis, -1)
+        if self.reach == 2:
+            var o2 = self._offset(at, axis, 2)
+            var m2 = self._offset(at, axis, -2)
+            return (
+                -(data[p + o2] - data[p + m2])
+                + 8.0 * (data[p + o1] - data[p + m1])
+            ) / (12.0 * h)
+        return (data[p + o1] - data[p + m1]) / (2.0 * h)
 
     def first(
         self,
@@ -82,34 +135,17 @@ struct Stencil(ImplicitlyCopyable, Movable):
             axis: The axis, 0 to 3.
 
         Returns:
-            The derivative, per meter.
+            The derivative, per meter or per radian.
         """
         var n = Int(self.counts[axis])
-        var reach = self.reach
-        if n < 2 * reach + 1:
+        if n < 2 * self.reach + 1:
             return 0.0
-        var s = Int(self.strides[axis])
-        var here = Int(at[axis])
-        var p = base + point + (_clamp(here, reach, n - 1 - reach) - here) * s
-        var h = self.steps[axis]
-        if reach == 2:
-            return (
-                -(data[p + 2 * s] - data[p - 2 * s])
-                + 8.0 * (data[p + s] - data[p - s])
-            ) / (12.0 * h)
-        return (data[p + s] - data[p - s]) / (2.0 * h)
-
-    def _cross_first(
-        self, data: List[Float64], p: Int, s: Int, h: Float64
-    ) -> Float64:
-        """Return the first-difference stencil at storage index `p`, without
-        the clamp."""
-        if self.reach == 2:
-            return (
-                -(data[p + 2 * s] - data[p - 2 * s])
-                + 8.0 * (data[p + s] - data[p - s])
-            ) / (12.0 * h)
-        return (data[p + s] - data[p - s]) / (2.0 * h)
+        var center = self._center(point, at, axis)
+        var moved = at
+        moved[axis] = Int64(
+            Int(at[axis]) + (center - point) // Int(self.strides[axis])
+        )
+        return self._difference(data, base + center, moved, axis)
 
     def second(
         self,
@@ -131,51 +167,60 @@ struct Stencil(ImplicitlyCopyable, Movable):
             second_axis: The second axis, 0 to 3.
 
         Returns:
-            The derivative, per square meter.
+            The derivative, per square meter or radian.
         """
         var reach = self.reach
         var n1 = Int(self.counts[first_axis])
         var n2 = Int(self.counts[second_axis])
         if n1 < 2 * reach + 1 or n2 < 2 * reach + 1:
             return 0.0
-        var s1 = Int(self.strides[first_axis])
         var h1 = self.steps[first_axis]
-        var here1 = Int(at[first_axis])
         if first_axis == second_axis:
-            var p = (
-                base
-                + point
-                + (_clamp(here1, reach, n1 - 1 - reach) - here1) * s1
+            var center = self._center(point, at, first_axis)
+            var moved = at
+            moved[first_axis] = Int64(
+                Int(at[first_axis])
+                + (center - point) // Int(self.strides[first_axis])
             )
+            var p = base + center
+            var o1 = self._offset(moved, first_axis, 1)
+            var m1 = self._offset(moved, first_axis, -1)
             if reach == 2:
+                var o2 = self._offset(moved, first_axis, 2)
+                var m2 = self._offset(moved, first_axis, -2)
                 return (
-                    -(data[p + 2 * s1] + data[p - 2 * s1])
-                    + 16.0 * (data[p + s1] + data[p - s1])
+                    -(data[p + o2] + data[p + m2])
+                    + 16.0 * (data[p + o1] + data[p + m1])
                     - 30.0 * data[p]
                 ) / (12.0 * h1 * h1)
-            return (data[p + s1] - 2.0 * data[p] + data[p - s1]) / (h1 * h1)
-        var here2 = Int(at[second_axis])
-        if (
-            here1 < reach
-            or here1 > n1 - 1 - reach
-            or here2 < reach
-            or here2 > n2 - 1 - reach
-        ):
+            return (data[p + o1] - 2.0 * data[p] + data[p + m1]) / (h1 * h1)
+        if not (self._inside(at, first_axis) and self._inside(at, second_axis)):
             return 0.0
-        var s2 = Int(self.strides[second_axis])
         var h2 = self.steps[second_axis]
         var p = base + point
+        var o1 = self._offset(at, second_axis, 1)
+        var m1 = self._offset(at, second_axis, -1)
         if reach == 2:
+            var o2 = self._offset(at, second_axis, 2)
+            var m2 = self._offset(at, second_axis, -2)
             return (
-                -self._cross_first(data, p + 2 * s2, s1, h1)
-                + self._cross_first(data, p - 2 * s2, s1, h1)
-                + 8.0 * self._cross_first(data, p + s2, s1, h1)
-                - 8.0 * self._cross_first(data, p - s2, s1, h1)
+                -self._difference(data, p + o2, at, first_axis)
+                + self._difference(data, p + m2, at, first_axis)
+                + 8.0 * self._difference(data, p + o1, at, first_axis)
+                - 8.0 * self._difference(data, p + m1, at, first_axis)
             ) / (12.0 * h2)
         return (
-            self._cross_first(data, p + s2, s1, h1)
-            - self._cross_first(data, p - s2, s1, h1)
+            self._difference(data, p + o1, at, first_axis)
+            - self._difference(data, p + m1, at, first_axis)
         ) / (2.0 * h2)
+
+    def _inside(self, at: SIMD[DType.int64, 4], axis: Int) -> Bool:
+        """Return True if a mixed stencil fits along an axis at a point."""
+        var here = Int(at[axis])
+        var n = Int(self.counts[axis])
+        return self.wraps[axis] != 0 or (
+            here >= self.reach and here <= n - 1 - self.reach
+        )
 
 
 def _require_field(field: List[Float64], grid: SpacetimeGrid) raises:

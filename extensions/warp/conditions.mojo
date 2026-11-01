@@ -48,7 +48,8 @@ from extensions.warp.kinds import (
     WEAK_ENERGY,
 )
 from extensions.warp.quantities import EnergyDensity64
-from extensions.warp.solver import StressEnergy
+from extensions.warp.solver import StressEnergy, task_count
+from render.tasks import TaskGroup
 from extensions.warp.tensor import MINKOWSKI, Matrix4, Metric, Vector4
 
 comptime _GOLDEN_RATIO = 1.618033988749895
@@ -305,32 +306,22 @@ struct ConditionMap(Copyable, Movable):
         return ConditionMap(self.condition, values^)
 
 
-def _evaluate(
-    energy: StressEnergy,
-    metric: Metric,
+__async def _evaluate_chunk(
+    eulerian: Pointer[StressEnergy, MutAnyOrigin],
+    directions: Pointer[List[Vector4], MutAnyOrigin],
+    map: MutPointer[Float64, MutAnyOrigin],
+    values: MutPointer[Float64, MutAnyOrigin],
     condition: EnergyCondition,
-    count: Int,
-    shells: Int,
     keep_samples: Bool,
-) raises -> ConditionSamples:
-    """Evaluate a condition, and keep every sample if asked."""
-    if not condition.is_valid():
-        raise Error("An energy condition is not valid")
-    var directions = _directions(condition, count, shells)
-    var grid = metric.grid()
-    var n = grid.points()
-    var per_point = len(directions)
-    if keep_samples and per_point > MAX_VECTOR_ENTRIES // n:
-        raise Error("The samples are more than this port stores")
-    var eulerian = to_eulerian(energy, metric)
-    var map = List[Float64](capacity=n)
-    var values = List[Float64]()
-    if keep_samples:
-        values = List[Float64](capacity=n * per_point)
+    first: Int,
+    past: Int,
+):
+    """Evaluate a condition at the points from `first` to `past`."""
+    var per_point = len(directions[])
     var dominant = condition == DOMINANT_ENERGY
     var strong = condition == STRONG_ENERGY
-    for point in range(n):  # pragma: no branch
-        var upper = eulerian.tensor.matrix(point)
+    for point in range(first, past):
+        var upper = eulerian[].tensor.matrix(point)
         # T_ab = η_ac T^cd η_db: η is diagonal, so each entry changes sign
         # once for each index that is 0.
         var lower = upper * Matrix4(
@@ -347,14 +338,58 @@ def _evaluate(
         for d in range(per_point):  # pragma: no branch
             var value: Float64
             if dominant:
-                value = -_flux_value(mixed, directions[d])
+                value = -_flux_value(mixed, directions[][d])
             else:
-                value = _quadratic(lower, directions[d])
+                value = _quadratic(lower, directions[][d])
             if keep_samples:
-                values.append(value)
+                values[unsafe_offset=point * per_point + d] = value
             if d == 0 or value < best:
                 best = value
-        map.append(best)
+        map[unsafe_offset=point] = best
+
+
+def _evaluate(
+    energy: StressEnergy,
+    metric: Metric,
+    condition: EnergyCondition,
+    count: Int,
+    shells: Int,
+    keep_samples: Bool,
+    threads: Int,
+) raises -> ConditionSamples:
+    """Evaluate a condition, and keep every sample if asked."""
+    if not condition.is_valid():
+        raise Error("An energy condition is not valid")
+    var directions = _directions(condition, count, shells)
+    var grid = metric.grid()
+    var n = grid.points()
+    var per_point = len(directions)
+    if keep_samples and per_point > MAX_VECTOR_ENTRIES // n:
+        raise Error("The samples are more than this port stores")
+    var tasks = task_count(threads, n)
+    var eulerian = to_eulerian(energy, metric)
+    var map = List[Float64](length=n, fill=0.0)
+    var values = List[Float64]()
+    if keep_samples:
+        values = List[Float64](length=n * per_point, fill=0.0)
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _evaluate_chunk(
+                Pointer(to=eulerian).unsafe_origin_cast[MutAnyOrigin](),
+                Pointer(to=directions).unsafe_origin_cast[MutAnyOrigin](),
+                map.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                values.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                condition,
+                keep_samples,
+                task * n // tasks,
+                (task + 1) * n // tasks,
+            )
+        )
+    group.wait()
+    _ = len(map)
+    _ = len(values)
+    _ = len(eulerian.tensor.data)
     return ConditionSamples(condition, directions^, values^, map^)
 
 
@@ -364,6 +399,7 @@ def energy_condition(
     condition: EnergyCondition,
     count: Int = 100,
     shells: Int = 10,
+    threads: Int = 0,
 ) raises -> ConditionMap:
     """Return the most violating value of an energy condition at each point.
 
@@ -376,15 +412,19 @@ def energy_condition(
         count: The number of directions on the sphere.
         shells: The number of timelike shells, for the weak and strong
             conditions.
+        threads: The tasks to use. 0 means one for each logical core.
 
     Returns:
         The map. A negative value violates the condition.
 
     Raises:
-        Error: If the condition is not valid, a count is less than 1, the
-            grids differ, or the metric has no Eulerian frame at a point.
+        Error: If the condition is not valid, a count is less than 1,
+            `threads` is negative, the grids differ, or the metric has no
+            Eulerian frame at a point.
     """
-    var samples = _evaluate(energy, metric, condition, count, shells, False)
+    var samples = _evaluate(
+        energy, metric, condition, count, shells, False, threads
+    )
     return ConditionMap(condition, samples.map.copy())
 
 
@@ -394,6 +434,7 @@ def energy_condition_samples(
     condition: EnergyCondition,
     count: Int = 100,
     shells: Int = 10,
+    threads: Int = 0,
 ) raises -> ConditionSamples:
     """Return an energy condition for every sampled direction at each point.
 
@@ -406,6 +447,7 @@ def energy_condition_samples(
         count: The number of directions on the sphere.
         shells: The number of timelike shells, for the weak and strong
             conditions.
+        threads: The tasks to use. 0 means one for each logical core.
 
     Returns:
         The samples, the directions and the map.
@@ -414,4 +456,4 @@ def energy_condition_samples(
         Error: For the same input as `energy_condition`, or if the
             samples are more than 16777216 values.
     """
-    return _evaluate(energy, metric, condition, count, shells, True)
+    return _evaluate(energy, metric, condition, count, shells, True, threads)

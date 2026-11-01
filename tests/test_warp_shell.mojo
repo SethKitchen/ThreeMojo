@@ -30,16 +30,20 @@ from extensions.warp.frame import to_eulerian
 from extensions.warp.grid import SpacetimeCenter, SpacetimeGrid
 from extensions.warp.quantities import (
     GRAVITATIONAL_CONSTANT,
+    einstein_coupling,
     SPEED_OF_LIGHT,
     fraction_of_light,
 )
 from extensions.warp.solver import stress_energy
 from extensions.warp.warp_shell import (
+    ShellProfile,
+    accelerating_shell,
     compact_sigmoid,
     cumulative_trapezoid,
     legendre_radial,
     lapse_exponent,
     moving_average,
+    shell_from_profile,
     shell_profile,
     spherical_to_cartesian,
     tov_constant_density,
@@ -429,6 +433,222 @@ def test_shell_refusals() raises:
     with assert_raises(contains="past the radial samples"):
         _ = warp_shell_comoving(
             long, far, m, Length64(R1), Length64(R2), samples=1000
+        )
+
+
+def _flat_profile(count: Int, step: Float64, lapse: Float64) -> ShellProfile:
+    """Flat space with a constant lapse, and a shift of 1 out to 4 m."""
+    var radius = List[Float64]()
+    var g_tt = List[Float64]()
+    var g_rr = List[Float64]()
+    var shift = List[Float64]()
+    var zeros = List[Float64]()
+    for i in range(count):
+        radius.append(Float64(i) * step)
+        g_tt.append(-lapse * lapse)
+        g_rr.append(1.0)
+        shift.append(1.0 if Float64(i) * step < 4.0 else 0.0)
+        zeros.append(0.0)
+    return ShellProfile(
+        radius^, zeros.copy(), zeros.copy(), zeros^, g_tt^, g_rr^, shift^
+    )
+
+
+def test_shell_from_profile() raises:
+    var grid = SpacetimeGrid.uniform(1, 5, 5, 5, Duration64(1.0), Length64(0.5))
+    var center = grid.center()
+    var metric = shell_from_profile(
+        grid, center, _flat_profile(100, 0.1, 2.0), Velocity64(0.0)
+    )
+    assert_equal(metric.name, "Shell")
+    var g = metric.at(17)
+    assert_almost_equal(g[0], -4.0, atol=1e-14)
+    assert_almost_equal(g[5], 1.0, atol=1e-15)
+    assert_almost_equal(g[6], 0.0, atol=1e-15)
+    # A constant lapse is flat space: no curvature but rounding, which is
+    # below 1e-12 per square meter.
+    var energy = stress_energy(metric)
+    for k in range(len(energy.tensor.data)):
+        assert_true(abs(energy.tensor.data[k]) < 1e-12 * einstein_coupling())
+    var moving = shell_from_profile(
+        grid, center, _flat_profile(100, 0.1, 1.0), fraction_of_light(0.1)
+    )
+    assert_almost_equal(moving.at(62)[1], -0.1, atol=1e-15)
+    var slices = SpacetimeGrid.uniform(
+        3, 5, 5, 5, Duration64(1.0), Length64(0.5)
+    )
+    var static = shell_from_profile(
+        slices, slices.center(), _flat_profile(100, 0.1, 1.0), Velocity64(0.0)
+    )
+    assert_equal(static.at(17)[0], static.at(17 + 250)[0])
+
+
+def test_profile_refusals() raises:
+    var grid = SpacetimeGrid.uniform(1, 5, 5, 5, Duration64(1.0), Length64(0.5))
+    var center = grid.center()
+    var none = Velocity64(0.0)
+    with assert_raises(contains="at least 4 samples"):
+        _ = shell_from_profile(grid, center, _flat_profile(3, 0.1, 1.0), none)
+    for which in range(3):
+        var p = _flat_profile(10, 0.1, 1.0)
+        if which == 0:
+            p.g_tt.append(1.0)
+        elif which == 1:
+            p.g_rr.append(1.0)
+        else:
+            p.shift.append(1.0)
+        with assert_raises(contains="one length"):
+            _ = shell_from_profile(grid, center, p, none)
+    var moved = _flat_profile(10, 0.1, 1.0)
+    moved.radius[0] = 0.01
+    with assert_raises(contains="start at 0"):
+        _ = shell_from_profile(grid, center, moved, none)
+    var flat = _flat_profile(10, 0.1, 1.0)
+    flat.radius[1] = 0.0
+    with assert_raises(contains="start at 0"):
+        _ = shell_from_profile(grid, center, flat, none)
+    var uneven = _flat_profile(10, 0.1, 1.0)
+    uneven.radius[5] = 0.55
+    with assert_raises(contains="equal steps"):
+        _ = shell_from_profile(grid, center, uneven, none)
+    for which in range(3):
+        var p = _flat_profile(10, 0.1, 1.0)
+        if which == 0:
+            p.g_tt[4] = nan[DType.float64]()
+        elif which == 1:
+            p.g_rr[4] = inf[DType.float64]()
+        else:
+            p.shift[4] = nan[DType.float64]()
+        with assert_raises(contains="not finite"):
+            _ = shell_from_profile(grid, center, p, none)
+    # Five 0.1 m samples reach 0.4 m; the grid's corners are farther.
+    with assert_raises(contains="past the radial samples"):
+        _ = shell_from_profile(grid, center, _flat_profile(5, 0.1, 1.0), none)
+    with assert_raises(contains="speed must be finite"):
+        _ = shell_from_profile(
+            grid,
+            center,
+            _flat_profile(100, 0.1, 1.0),
+            Velocity64(inf[DType.float64]()),
+        )
+    with assert_raises(contains="center must be finite"):
+        _ = shell_from_profile(
+            grid,
+            SpacetimeCenter(
+                Duration64(nan[DType.float64]()),
+                Length64(0.0),
+                Length64(0.0),
+                Length64(0.0),
+            ),
+            _flat_profile(100, 0.1, 1.0),
+            none,
+        )
+
+
+def _ramp_grid() raises -> SpacetimeGrid:
+    return SpacetimeGrid.uniform(
+        5, 24, 5, 5, Duration64(1.0 / SPEED_OF_LIGHT.value), Length64(1.0)
+    )
+
+
+def _ramp_center() -> SpacetimeCenter:
+    """Slice 2 is at time 0; point (i, 2, 2) sits at x = i + 3."""
+    return SpacetimeCenter(
+        Duration64(3.0 / SPEED_OF_LIGHT.value),
+        Length64(-2.0),
+        Length64(3.0),
+        Length64(3.0),
+    )
+
+
+def test_accelerating_shell() raises:
+    var grid = _ramp_grid()
+    var center = _ramp_center()
+    var dt = 1.0 / SPEED_OF_LIGHT.value
+    var profile = shell_profile(
+        Length64(32.0),
+        Mass64(_shell_mass()),
+        Length64(R1),
+        Length64(R2),
+        Length64(0.0),
+        0.0,
+        1.0,
+        4000,
+    )
+    var metric = accelerating_shell(
+        grid,
+        center,
+        profile,
+        Velocity64(0.0),
+        fraction_of_light(0.02),
+        Duration64(-2.0 * dt),
+        Duration64(4.0 * dt),
+    )
+    assert_equal(metric.name, "Accelerating Shell")
+    # Slice 0 is at the start of the ramp; slice 4 is at its end.
+    var inside = grid.index(0, 2, 2, 2)
+    assert_almost_equal(metric.at(inside)[1], 0.0, atol=1e-15)
+    assert_almost_equal(metric.at(grid.index(4, 2, 2, 2))[1], -0.02, atol=1e-15)
+    assert_almost_equal(metric.at(grid.index(2, 2, 2, 2))[1], -0.01, atol=1e-15)
+    var energy = to_eulerian(stress_energy(metric), metric)
+    # Inside the shell a shift that changes only with time is a moving
+    # frame in flat space: no energy, even while it speeds up.
+    var middle = grid.index(2, 2, 2, 2)
+    var shell = grid.index(2, 12, 2, 2)
+    var rho = energy.tensor.get(0, 0, shell)
+    assert_true(rho > 0.0)
+    for k in range(16):
+        assert_true(abs(energy.tensor.matrix(middle)[k]) < 1e-9 * rho)
+    # After the ramp, with every slice at the end speed, it is the static
+    # shell at that speed.
+    var after = accelerating_shell(
+        grid,
+        center,
+        profile,
+        Velocity64(0.0),
+        fraction_of_light(0.02),
+        Duration64(-20.0 * dt),
+        Duration64(4.0 * dt),
+    )
+    var static = shell_from_profile(
+        grid, center, profile, fraction_of_light(0.02)
+    )
+    for k in range(16):
+        assert_equal(after.at(shell)[k], static.at(shell)[k])
+
+
+def test_accelerating_refusals() raises:
+    var grid = _ramp_grid()
+    var center = _ramp_center()
+    var profile = _flat_profile(400, 0.1, 1.0)
+    var v = Velocity64(0.0)
+    var t = Duration64(0.0)
+    var d = Duration64(1.0)
+    var bad_v = Velocity64(nan[DType.float64]())
+    var bad_t = Duration64(inf[DType.float64]())
+    with assert_raises(contains="must be finite"):
+        _ = accelerating_shell(grid, center, profile, bad_v, v, t, d)
+    with assert_raises(contains="must be finite"):
+        _ = accelerating_shell(grid, center, profile, v, bad_v, t, d)
+    with assert_raises(contains="must be finite"):
+        _ = accelerating_shell(grid, center, profile, v, v, bad_t, d)
+    with assert_raises(contains="positive, finite time"):
+        _ = accelerating_shell(grid, center, profile, v, v, t, Duration64(0.0))
+    with assert_raises(contains="positive, finite time"):
+        _ = accelerating_shell(grid, center, profile, v, v, t, bad_t)
+    with assert_raises(contains="at least 4 samples"):
+        _ = accelerating_shell(
+            grid, center, _flat_profile(2, 0.1, 1.0), v, v, t, d
+        )
+    with assert_raises(contains="center must be finite"):
+        _ = accelerating_shell(
+            grid,
+            SpacetimeCenter(bad_t, Length64(0.0), Length64(0.0), Length64(0.0)),
+            profile,
+            v,
+            v,
+            t,
+            d,
         )
 
 

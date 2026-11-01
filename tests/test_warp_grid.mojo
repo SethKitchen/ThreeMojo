@@ -39,6 +39,7 @@ from extensions.warp.kinds import (
     DOMINANT_ENERGY,
     DifferenceOrder,
     EULERIAN_FRAME,
+    EXACT_DERIVATIVES,
     EnergyCondition,
     FOURTH_ORDER,
     Frame,
@@ -111,7 +112,11 @@ def test_kinds() raises:
     assert_false(WEAK_ENERGY.uses_null_directions())
     assert_false(STRONG_ENERGY.uses_null_directions())
     assert_true(SECOND_ORDER.is_valid() and FOURTH_ORDER.is_valid())
-    assert_false(DifferenceOrder(2).is_valid())
+    assert_false(DifferenceOrder(3).is_valid())
+    assert_false(DifferenceOrder(-1).is_valid())
+    assert_true(EXACT_DERIVATIVES.is_valid())
+    assert_false(EXACT_DERIVATIVES.is_stencil())
+    assert_true(SECOND_ORDER.is_stencil() and FOURTH_ORDER.is_stencil())
     assert_equal(SECOND_ORDER.reach(), 1)
     assert_equal(FOURTH_ORDER.reach(), 2)
     assert_true(COORDINATE_FRAME.is_valid() and EULERIAN_FRAME.is_valid())

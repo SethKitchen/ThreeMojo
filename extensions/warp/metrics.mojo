@@ -10,6 +10,12 @@ at a constant speed. A function that ends in `_comoving` gives the metric
 in the frame that moves with the drive, on a grid with one time slice.
 The others move the drive across the time slices.
 
+Each closed-form metric is also a struct, such as `AlcubierreMetric`,
+that is an `AnalyticMetric`. The function samples the struct. Pass the
+struct to `exact_stress_energy` for derivatives without a grid. The Lentz
+soliton is a set of regions with jumps between them, so it has a grid
+form only.
+
 | Function | WarpFactory | Reference |
 |---|---|---|
 | `minkowski` | `metricGet_Minkowski` | Flat space |
@@ -32,22 +38,24 @@ The others move the drive across the time slices.
 
 from std.math import isfinite, sqrt, tanh
 
+from extensions.warp.analytic import (
+    AnalyticMetric,
+    flat_components,
+    radial,
+    sample_metric,
+)
 from extensions.warp.grid import (
     SpacetimeCenter,
     SpacetimeGrid,
     grid_place,
     grid_time,
+    require_cartesian,
     require_single_slice,
 )
-from extensions.warp.kinds import (
-    COORDINATE_FRAME,
-    COVARIANT,
-    X_AXIS,
-    Y_AXIS,
-    Z_AXIS,
-)
-from extensions.warp.quantities import SPEED_OF_LIGHT, light_fraction
-from extensions.warp.tensor import Metric, TensorField
+from extensions.warp.jet import Jet
+from extensions.warp.kinds import X_AXIS, Y_AXIS, Z_AXIS
+from extensions.warp.quantities import light_fraction
+from extensions.warp.tensor import Metric
 from extensions.warp.three_plus_one import ThreePlusOne
 from units.si import InverseLength64, Length64, Velocity64
 
@@ -133,6 +141,62 @@ def lentz_warp_factors(
     return _factors(1.0, 0.0)
 
 
+def _tanh_derivatives(u: Float64) -> SIMD[DType.float64, 8]:
+    """Return tanh(u) and its first four derivatives."""
+    var t = tanh(u)
+    var s = 1.0 - t * t
+    return SIMD[DType.float64, 8](
+        t,
+        s,
+        -2.0 * t * s,
+        (6.0 * t * t - 2.0) * s,
+        8.0 * t * (2.0 - 3.0 * t * t) * s,
+        0.0,
+        0.0,
+        0.0,
+    )
+
+
+def alcubierre_shape_derivatives(
+    r: Float64, radius: Float64, sigma: Float64
+) -> SIMD[DType.float64, 8]:
+    """Return Alcubierre's shape function and its first four derivatives.
+
+    With u₁ = σ (R + r), u₂ = σ (R - r) and T = tanh(σ R), the n-th
+    derivative is σⁿ (tanh⁽ⁿ⁾(u₁) + (-1)ⁿ tanh⁽ⁿ⁾(u₂)) / (2 T).
+
+    Args:
+        r: The distance from the center of the bubble, in meters.
+        radius: The radius R of the bubble, in meters.
+        sigma: The steepness σ of the wall, per meter.
+
+    Returns:
+        The shape and its first four derivatives in r, then three zeros.
+    """
+    var outer = _tanh_derivatives(sigma * (radius + r))
+    var inner = _tanh_derivatives(sigma * (radius - r))
+    var scale = 1.0 / (2.0 * tanh(radius * sigma))
+    var out = SIMD[DType.float64, 8](0)
+    var power = 1.0
+    var sign = 1.0
+    for n in range(5):
+        out[n] = power * (outer[n] + sign * inner[n]) * scale
+        power *= sigma
+        sign = -sign
+    return out
+
+
+def _shape_jet(square: Jet, radius: Float64, sigma: Float64) -> Jet:
+    """Return the jet of Alcubierre's f(r), from the jet of r²."""
+    var f = alcubierre_shape_derivatives(sqrt(square.value), radius, sigma)
+    return radial(square, f[0], f[1], f[2])
+
+
+def _distance_squared(x: Jet, y: Jet, z: Jet) -> Jet:
+    """Return x² + y² + z²."""
+    return x.squared() + y.squared() + z.squared()
+
+
 def _require_center(center: SpacetimeCenter) raises:
     """Raise unless the center is finite."""
     center.require_finite()
@@ -169,9 +233,347 @@ def _place(
     )
 
 
-def _distance(x: Float64, y: Float64, z: Float64) -> Float64:
-    """Return the length of a vector."""
-    return sqrt(x * x + y * y + z * z)
+struct MinkowskiMetric(AnalyticMetric):
+    """Flat space, as a closed form."""
+
+    def __init__(out self):
+        """Create flat space."""
+        pass
+
+    def components(self, place: List[Jet]) -> List[Jet]:
+        """Return diag(-1, 1, 1, 1).
+
+        Args:
+            place: The coordinate jets. Flat space does not read them.
+
+        Returns:
+            The sixteen constant components.
+        """
+        return flat_components()
+
+    def name(self) -> String:
+        """Return the name.
+
+        Returns:
+            "Minkowski".
+        """
+        return "Minkowski"
+
+
+struct AlcubierreMetric(AnalyticMetric):
+    """The Alcubierre metric, in the frame of the stars or of the bubble."""
+
+    var beta: Float64
+    """The speed of the bubble over c."""
+    var radius: Float64
+    """The radius R of the bubble, in meters."""
+    var sigma: Float64
+    """The steepness σ of the wall, per meter."""
+    var comoving: Bool
+    """Whether the frame moves with the bubble."""
+
+    def __init__(
+        out self,
+        speed: Velocity64,
+        radius: Length64,
+        thickness: InverseLength64,
+        comoving: Bool,
+    ) raises:
+        """Create the metric.
+
+        Args:
+            speed: The speed of the bubble. It can exceed c.
+            radius: The radius R of the bubble.
+            thickness: The steepness σ of the bubble wall.
+            comoving: Whether to use the frame that moves with the bubble.
+
+        Raises:
+            Error: If the speed is not finite, or the radius or the
+                steepness is not positive and finite.
+        """
+        _require_speed(speed)
+        _require_bubble(radius, thickness)
+        self.beta = light_fraction(speed)
+        self.radius = radius.value
+        self.sigma = thickness.value
+        self.comoving = comoving
+
+    def components(self, place: List[Jet]) -> List[Jet]:
+        """Return g_ab at a place.
+
+        The shift is β_x = -(v/c) f(r) about the moving center x = v t,
+        or (v/c) (1 - f(r)) about the origin in the comoving frame.
+
+        Args:
+            place: The jets of c t, x, y and z.
+
+        Returns:
+            The sixteen components.
+        """
+        var dx = place[1]
+        if not self.comoving:
+            dx = dx - place[0].scaled(self.beta)
+        var f = _shape_jet(
+            _distance_squared(dx, place[2], place[3]), self.radius, self.sigma
+        )
+        var shift = f.scaled(-self.beta)
+        if self.comoving:
+            shift = shift.shifted(self.beta)
+        var g = flat_components()
+        g[0] = shift.squared().shifted(-1.0)
+        g[1] = shift
+        g[4] = shift
+        return g^
+
+    def name(self) -> String:
+        """Return WarpFactory's name.
+
+        Returns:
+            "Alcubierre" or "Alcubierre Comoving".
+        """
+        if self.comoving:
+            return "Alcubierre Comoving"
+        return "Alcubierre"
+
+
+struct ModifiedTimeMetric(AnalyticMetric):
+    """An Alcubierre bubble whose lapse changes inside."""
+
+    var bubble: AlcubierreMetric
+    """The bubble that gives the shape and the shift."""
+    var lapse_factor: Float64
+    """A, the factor that the lapse is divided by inside."""
+
+    def __init__(
+        out self,
+        speed: Velocity64,
+        radius: Length64,
+        thickness: InverseLength64,
+        lapse_factor: Float64,
+        comoving: Bool,
+    ) raises:
+        """Create the metric.
+
+        Args:
+            speed: The speed of the bubble.
+            radius: The radius R of the bubble.
+            thickness: The steepness σ of the bubble wall.
+            lapse_factor: A, the factor that the lapse is divided by.
+            comoving: Whether to use the frame that moves with the bubble.
+
+        Raises:
+            Error: If the speed or A is not finite, A is zero, or the
+                radius or the steepness is not positive and finite.
+        """
+        self.bubble = AlcubierreMetric(speed, radius, thickness, comoving)
+        _require_lapse_factor(lapse_factor)
+        self.lapse_factor = lapse_factor
+
+    def components(self, place: List[Jet]) -> List[Jet]:
+        """Return g_ab at a place.
+
+        The lapse is α = (1 - f) + f / A. The time component is
+        g_00 = -α² + (v f / c)², in both frames, as WarpFactory has it.
+
+        Args:
+            place: The jets of c t, x, y and z.
+
+        Returns:
+            The sixteen components.
+        """
+        var b = self.bubble.copy()
+        var dx = place[1]
+        if not b.comoving:
+            dx = dx - place[0].scaled(b.beta)
+        var f = _shape_jet(
+            _distance_squared(dx, place[2], place[3]), b.radius, b.sigma
+        )
+        var lapse = f.scaled(1.0 / self.lapse_factor - 1.0).shifted(1.0)
+        var shift = f.scaled(-b.beta)
+        var g = flat_components()
+        g[0] = shift.squared() - lapse.squared()
+        if b.comoving:
+            shift = shift.shifted(b.beta)
+        g[1] = shift
+        g[4] = shift
+        return g^
+
+    def name(self) -> String:
+        """Return the name.
+
+        Returns:
+            "Modified Time" or "Modified Time Comoving".
+        """
+        if self.bubble.comoving:
+            return "Modified Time Comoving"
+        return "Modified Time"
+
+
+struct VanDenBroeckMetric(AnalyticMetric):
+    """The Van Den Broeck metric: a small bubble with a large inside."""
+
+    var beta: Float64
+    """The speed v in the shift, over c."""
+    var inner: SIMD[DType.float64, 2]
+    """R₁ in meters and σ₁ per meter: the expanded region."""
+    var outer: SIMD[DType.float64, 2]
+    """R₂ in meters and σ₂ per meter: the shift bubble."""
+    var expansion: Float64
+    """A, the expansion of space inside."""
+    var comoving: Bool
+    """Whether the frame moves with the bubble."""
+
+    def __init__(
+        out self,
+        speed: Velocity64,
+        inner_radius: Length64,
+        inner_thickness: InverseLength64,
+        outer_radius: Length64,
+        outer_thickness: InverseLength64,
+        expansion: Float64,
+        comoving: Bool,
+    ) raises:
+        """Create the metric.
+
+        Args:
+            speed: The speed v in the shift.
+            inner_radius: R₁, the radius of the expanded region.
+            inner_thickness: σ₁, the steepness of the expanded region.
+            outer_radius: R₂, the radius of the shift bubble.
+            outer_thickness: σ₂, the steepness of the shift bubble.
+            expansion: A, the expansion of space inside.
+            comoving: Whether to use the frame that moves with the bubble.
+
+        Raises:
+            Error: If the speed or A is not finite, or a radius or a
+                steepness is not positive and finite.
+        """
+        _require_speed(speed)
+        _require_bubble(inner_radius, inner_thickness)
+        _require_bubble(outer_radius, outer_thickness)
+        if not isfinite(expansion):
+            raise Error("The expansion factor must be finite")
+        self.beta = light_fraction(speed)
+        self.inner = SIMD[DType.float64, 2](
+            inner_radius.value, inner_thickness.value
+        )
+        self.outer = SIMD[DType.float64, 2](
+            outer_radius.value, outer_thickness.value
+        )
+        self.expansion = expansion
+        self.comoving = comoving
+
+    def components(self, place: List[Jet]) -> List[Jet]:
+        """Return g_ab at a place.
+
+        B = 1 + A f(r; R₁, σ₁) and f₂ = (v/c) f(r; R₂, σ₂). Then
+        g_00 = -(1 - B² f₂²), g_ii = B² and g_01 = -B² f₂, or
+        B² (v/c - f₂) in the comoving frame. The bubble's center moves at
+        v (1 + A)².
+
+        Args:
+            place: The jets of c t, x, y and z.
+
+        Returns:
+            The sixteen components.
+        """
+        var dx = place[1]
+        if not self.comoving:
+            var grow = (1.0 + self.expansion) * (1.0 + self.expansion)
+            dx = dx - place[0].scaled(self.beta * grow)
+        var square = _distance_squared(dx, place[2], place[3])
+        var b = (
+            _shape_jet(square, self.inner[0], self.inner[1])
+            .scaled(self.expansion)
+            .shifted(1.0)
+        )
+        var f = _shape_jet(square, self.outer[0], self.outer[1]).scaled(
+            self.beta
+        )
+        var b2 = b.squared()
+        var g = flat_components()
+        for axis in range(1, 4):
+            g[5 * axis] = b2
+        var shift = -f
+        if self.comoving:
+            shift = shift.shifted(self.beta)
+        g[1] = b2 * shift
+        g[4] = g[1]
+        g[0] = (b2 * f.squared()).shifted(-1.0)
+        return g^
+
+    def name(self) -> String:
+        """Return WarpFactory's name.
+
+        Returns:
+            "Van Den Broeck" or "Van Den Broeck Comoving".
+        """
+        if self.comoving:
+            return "Van Den Broeck Comoving"
+        return "Van Den Broeck"
+
+
+struct SchwarzschildMetric(AnalyticMetric):
+    """A black hole at the origin, in Cartesian coordinates."""
+
+    var radius: Float64
+    """The Schwarzschild radius rₛ, in meters."""
+
+    def __init__(out self, radius: Length64) raises:
+        """Create the metric.
+
+        Args:
+            radius: The Schwarzschild radius rₛ = 2 G M / c².
+
+        Raises:
+            Error: If the radius is not positive and finite.
+        """
+        _require_size(radius.value, "Schwarzschild radius")
+        self.radius = radius.value
+
+    def components(self, place: List[Jet]) -> List[Jet]:
+        """Return g_ab at a place.
+
+        With r the distance from the origin plus `SCHWARZSCHILD_OFFSET`,
+        g_00 = -(1 - rₛ/r) and g_ij = δ_ij + (rₛ/(r - rₛ)) xᵢ xⱼ / r². The
+        derivatives do not exist at the origin.
+
+        Args:
+            place: The jets of c t, x, y and z.
+
+        Returns:
+            The sixteen components.
+        """
+        var r = (
+            _distance_squared(place[1], place[2], place[3])
+            .sqrt()
+            .shifted(SCHWARZSCHILD_OFFSET)
+        )
+        var rs = Jet.constant(self.radius)
+        var bend = (rs / r).scaled(-1.0).shifted(1.0)
+        var r2 = r.squared()
+        var cross = rs / (r2 * r - r2 * rs)
+        var g = flat_components()
+        g[0] = -bend
+        for i in range(3):
+            var others = Jet.constant(0.0)
+            for j in range(3):
+                if j != i:
+                    others = others + place[j + 1].squared()
+            g[5 * (i + 1)] = (place[i + 1].squared() / bend + others) / r2
+            for j in range(i + 1, 3):
+                var value = cross * place[i + 1] * place[j + 1]
+                g[4 * (i + 1) + j + 1] = value
+                g[4 * (j + 1) + i + 1] = value
+        return g^
+
+    def name(self) -> String:
+        """Return the name.
+
+        Returns:
+            "Schwarzschild".
+        """
+        return "Schwarzschild"
 
 
 def minkowski(grid: SpacetimeGrid) raises -> Metric:
@@ -186,8 +588,10 @@ def minkowski(grid: SpacetimeGrid) raises -> Metric:
         The metric, named "Minkowski".
 
     Raises:
-        Error: Never, for a valid grid.
+        Error: If the grid is not Cartesian. Use
+            `minkowski_curvilinear` there.
     """
+    require_cartesian(grid, "minkowski")
     return ThreePlusOne(grid).metric("Minkowski")
 
 
@@ -218,18 +622,9 @@ def alcubierre(
         Error: If the center or the speed is not finite, or the radius or
             the steepness is not positive and finite.
     """
-    _require_center(center)
-    _require_speed(speed)
-    _require_bubble(radius, thickness)
-    var beta = light_fraction(speed)
-    var parts = ThreePlusOne(grid)
-    for point in range(grid.points()):  # pragma: no branch
-        var p = _place(grid, center, point)
-        var xs = p[0] * speed.value
-        var r = _distance(p[1] - xs, p[2], p[3])
-        var f = alcubierre_shape(r, radius.value, thickness.value)
-        parts.set_shift(0, point, -beta * f)
-    return parts.metric("Alcubierre")
+    return sample_metric(
+        AlcubierreMetric(speed, radius, thickness, False), grid, center
+    )
 
 
 def alcubierre_comoving(
@@ -261,17 +656,9 @@ def alcubierre_comoving(
             positive and finite.
     """
     require_single_slice(grid, "Alcubierre Comoving")
-    _require_center(center)
-    _require_speed(speed)
-    _require_bubble(radius, thickness)
-    var beta = light_fraction(speed)
-    var parts = ThreePlusOne(grid)
-    for point in range(grid.points()):  # pragma: no branch
-        var p = _place(grid, center, point)
-        var r = _distance(p[1], p[2], p[3])
-        var f = alcubierre_shape(r, radius.value, thickness.value)
-        parts.set_shift(0, point, beta * (1.0 - f))
-    return parts.metric("Alcubierre Comoving")
+    return sample_metric(
+        AlcubierreMetric(speed, radius, thickness, True), grid, center
+    )
 
 
 def lentz(
@@ -297,9 +684,10 @@ def lentz(
         The metric, named "Lentz".
 
     Raises:
-        Error: If the center or the speed is not finite, or the scale is
-            not positive and finite.
+        Error: If the grid is not Cartesian, the center or the speed is
+            not finite, or the scale is not positive and finite.
     """
+    require_cartesian(grid, "lentz")
     _require_center(center)
     _require_speed(speed)
     _require_size(scale.value, "Lentz scale")
@@ -334,10 +722,12 @@ def lentz_comoving(
         The metric, named "Lentz Comoving".
 
     Raises:
-        Error: If the grid has more than one slice, the center or the
-            speed is not finite, or the scale is not positive and finite.
+        Error: If the grid has more than one slice or is not Cartesian,
+            the center or the speed is not finite, or the scale is not
+            positive and finite.
     """
     require_single_slice(grid, "Lentz Comoving")
+    require_cartesian(grid, "lentz_comoving")
     _require_center(center)
     _require_speed(speed)
     _require_size(scale.value, "Lentz scale")
@@ -349,11 +739,6 @@ def lentz_comoving(
         parts.set_shift(0, point, beta * (1.0 - w[0]))
         parts.set_shift(1, point, beta * w[1])
     return parts.metric("Lentz Comoving")
-
-
-def _modified_time_lapse(f: Float64, lapse_factor: Float64) -> Float64:
-    """Return the lapse of the modified-time metric, (1 - f) + f / A."""
-    return (1.0 - f) + f / lapse_factor
 
 
 def _require_lapse_factor(lapse_factor: Float64) raises:
@@ -392,20 +777,11 @@ def modified_time(
         Error: If the center, the speed or A is not finite, A is zero, or
             the radius or the steepness is not positive and finite.
     """
-    _require_center(center)
-    _require_speed(speed)
-    _require_bubble(radius, thickness)
-    _require_lapse_factor(lapse_factor)
-    var beta = light_fraction(speed)
-    var parts = ThreePlusOne(grid)
-    for point in range(grid.points()):  # pragma: no branch
-        var p = _place(grid, center, point)
-        var xs = p[0] * speed.value
-        var r = _distance(p[1] - xs, p[2], p[3])
-        var f = alcubierre_shape(r, radius.value, thickness.value)
-        parts.lapse[point] = _modified_time_lapse(f, lapse_factor)
-        parts.set_shift(0, point, -beta * f)
-    return parts.metric("Modified Time")
+    return sample_metric(
+        ModifiedTimeMetric(speed, radius, thickness, lapse_factor, False),
+        grid,
+        center,
+    )
 
 
 def modified_time_comoving(
@@ -440,20 +816,11 @@ def modified_time_comoving(
             is not positive and finite.
     """
     require_single_slice(grid, "Modified Time Comoving")
-    _require_center(center)
-    _require_speed(speed)
-    _require_bubble(radius, thickness)
-    _require_lapse_factor(lapse_factor)
-    var beta = light_fraction(speed)
-    var out = minkowski(grid).tensor.copy()
-    for point in range(grid.points()):  # pragma: no branch
-        var p = _place(grid, center, point)
-        var r = _distance(p[1], p[2], p[3])
-        var f = alcubierre_shape(r, radius.value, thickness.value)
-        var lapse = _modified_time_lapse(f, lapse_factor)
-        out.set_symmetric(0, 1, point, beta * (1.0 - f))
-        out.set(0, 0, point, -lapse * lapse + (f * beta) * (f * beta))
-    return Metric(out^, "Modified Time Comoving")
+    return sample_metric(
+        ModifiedTimeMetric(speed, radius, thickness, lapse_factor, True),
+        grid,
+        center,
+    )
 
 
 def schwarzschild(
@@ -483,52 +850,7 @@ def schwarzschild(
             sits on the horizon.
     """
     require_single_slice(grid, "Schwarzschild")
-    _require_center(center)
-    _require_size(radius.value, "Schwarzschild radius")
-    var rs = radius.value
-    var out = minkowski(grid).tensor.copy()
-    for point in range(grid.points()):  # pragma: no branch
-        var p = _place(grid, center, point)
-        var x = p[1]
-        var y = p[2]
-        var z = p[3]
-        var r = _distance(x, y, z) + SCHWARZSCHILD_OFFSET
-        var bend = 1.0 - rs / r
-        var r2 = r * r
-        var cross = rs / (r2 * r - r2 * rs)
-        out.set(0, 0, point, -bend)
-        out.set(1, 1, point, (x * x / bend + y * y + z * z) / r2)
-        out.set(2, 2, point, (x * x + y * y / bend + z * z) / r2)
-        out.set(3, 3, point, (x * x + y * y + z * z / bend) / r2)
-        out.set_symmetric(1, 2, point, cross * x * y)
-        out.set_symmetric(1, 3, point, cross * x * z)
-        out.set_symmetric(2, 3, point, cross * y * z)
-    return Metric(out^, "Schwarzschild")
-
-
-def _require_van_den_broeck(
-    inner_radius: Length64,
-    inner_thickness: InverseLength64,
-    outer_radius: Length64,
-    outer_thickness: InverseLength64,
-    expansion: Float64,
-) raises:
-    """Raise unless the two bubbles and the expansion are usable."""
-    _require_bubble(inner_radius, inner_thickness)
-    _require_bubble(outer_radius, outer_thickness)
-    if not isfinite(expansion):
-        raise Error("The expansion factor must be finite")
-
-
-def _set_van_den_broeck(
-    mut out: TensorField, point: Int, b: Float64, shift: Float64, f: Float64
-):
-    """Set the components that a Van Den Broeck metric changes."""
-    var b2 = b * b
-    for axis in range(1, 4):
-        out.set(axis, axis, point, b2)
-    out.set_symmetric(0, 1, point, b2 * shift)
-    out.set(0, 0, point, -(1.0 - b2 * f * f))
+    return sample_metric(SchwarzschildMetric(radius), grid, center)
 
 
 def van_den_broeck(
@@ -568,26 +890,19 @@ def van_den_broeck(
         Error: If the center, the speed or A is not finite, or a radius or
             a steepness is not positive and finite.
     """
-    _require_center(center)
-    _require_speed(speed)
-    _require_van_den_broeck(
-        inner_radius, inner_thickness, outer_radius, outer_thickness, expansion
+    return sample_metric(
+        VanDenBroeckMetric(
+            speed,
+            inner_radius,
+            inner_thickness,
+            outer_radius,
+            outer_thickness,
+            expansion,
+            False,
+        ),
+        grid,
+        center,
     )
-    var beta = light_fraction(speed)
-    var grow = (1.0 + expansion) * (1.0 + expansion)
-    var out = minkowski(grid).tensor.copy()
-    for point in range(grid.points()):  # pragma: no branch
-        var p = _place(grid, center, point)
-        var xs = p[0] * speed.value * grow
-        var r = _distance(p[1] - xs, p[2], p[3])
-        var b = (
-            1.0
-            + alcubierre_shape(r, inner_radius.value, inner_thickness.value)
-            * expansion
-        )
-        var f = alcubierre_shape(r, outer_radius.value, outer_thickness.value)
-        _set_van_den_broeck(out, point, b, -f * beta, f * beta)
-    return Metric(out^, "Van Den Broeck")
 
 
 def van_den_broeck_comoving(
@@ -625,21 +940,16 @@ def van_den_broeck_comoving(
             and finite.
     """
     require_single_slice(grid, "Van Den Broeck Comoving")
-    _require_center(center)
-    _require_speed(speed)
-    _require_van_den_broeck(
-        inner_radius, inner_thickness, outer_radius, outer_thickness, expansion
+    return sample_metric(
+        VanDenBroeckMetric(
+            speed,
+            inner_radius,
+            inner_thickness,
+            outer_radius,
+            outer_thickness,
+            expansion,
+            True,
+        ),
+        grid,
+        center,
     )
-    var beta = light_fraction(speed)
-    var out = minkowski(grid).tensor.copy()
-    for point in range(grid.points()):  # pragma: no branch
-        var p = _place(grid, center, point)
-        var r = _distance(p[1], p[2], p[3])
-        var b = (
-            1.0
-            + alcubierre_shape(r, inner_radius.value, inner_thickness.value)
-            * expansion
-        )
-        var f = alcubierre_shape(r, outer_radius.value, outer_thickness.value)
-        _set_van_den_broeck(out, point, b, beta - f * beta, f * beta)
-    return Metric(out^, "Van Den Broeck Comoving")

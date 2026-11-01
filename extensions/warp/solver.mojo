@@ -27,6 +27,9 @@ computed alone, so the derivatives of the metric are not stored.
   Parallel Computing Toolbox.
 """
 
+from std.sys import num_logical_cores
+
+from render.tasks import TaskGroup
 from extensions.warp.derivatives import Stencil
 from extensions.warp.kinds import (
     CONTRAVARIANT,
@@ -168,10 +171,18 @@ def _metric_derivatives(
                     d2[((4 * j + i) * 4 + m) * 4 + k] = second
 
 
-def _ricci(gu: Matrix4, d1: List[Float64], d2: List[Float64]) -> Matrix4:
+def ricci_tensor(gu: Matrix4, d1: List[Float64], d2: List[Float64]) -> Matrix4:
     """Return R_ij at one point from g^ab and the derivatives of g_ab.
 
-    This is WarpFactory's `ricciT`, term for term.
+    This is WarpFactory's `ricciT`, term for term, at one point.
+
+    Args:
+        gu: The contravariant metric g^ab.
+        d1: ∂_k g_ij at (4 i + j) 4 + k.
+        d2: ∂_k ∂_n g_ij at ((4 i + j) 4 + k) 4 + n.
+
+    Returns:
+        The covariant Ricci tensor, per square meter.
     """
     var out = Matrix4(0)
     for i in range(4):
@@ -216,75 +227,168 @@ def _sum_products(a: Matrix4, b: Matrix4) -> Float64:
     return (a * b).reduce_add()
 
 
+def task_count(threads: Int, points: Int) raises -> Int:
+    """Return how many tasks to split a grid's points among.
+
+    Args:
+        threads: The tasks asked for. 0 means one for each logical core.
+        points: The number of points.
+
+    Returns:
+        A count from 1 to the number of points.
+
+    Raises:
+        Error: If `threads` is negative.
+    """
+    if threads < 0:
+        raise Error("A thread count must not be negative")
+    var asked = threads
+    if asked == 0:
+        asked = num_logical_cores()
+    return max(1, min(asked, points))
+
+
+__async def _solve_chunk(
+    metric: Pointer[Metric, ImmutAnyOrigin],
+    stencil: Stencil,
+    first_out: MutPointer[Float64, MutAnyOrigin],
+    second_out: MutPointer[Float64, MutAnyOrigin],
+    scalar_out: MutPointer[Float64, MutAnyOrigin],
+    failed: MutPointer[Int, MutAnyOrigin],
+    task: Int,
+    kappa: Float64,
+    first: Int,
+    past: Int,
+):
+    """Solve the points from `first` to `past`.
+
+    With `kappa` zero, write R_ab, G_ab and R. Otherwise write T^ab to
+    `first_out`. A singular point sets `failed[task]`.
+    """
+    var n = metric[].tensor.grid.points()
+    var d1 = List[Float64](length=64, fill=0.0)
+    var d2 = List[Float64](length=256, fill=0.0)
+    for point in range(first, past):
+        var g = metric[].at(point)
+        var gu: Matrix4
+        try:
+            gu = inverse4(g)
+        except:
+            failed[unsafe_offset=task] = 1
+            continue
+        _metric_derivatives(metric[], stencil, point, d1, d2)
+        var r = ricci_tensor(gu, d1, d2)
+        var s = _sum_products(gu, r)
+        var e = r - 0.5 * s * g
+        if kappa == 0.0:
+            scalar_out[unsafe_offset=point] = s
+            for k in range(16):
+                first_out[unsafe_offset=k * n + point] = r[k]
+                second_out[unsafe_offset=k * n + point] = e[k]
+        else:
+            var t = kappa * multiply4(multiply4(gu, e), gu)
+            for k in range(16):
+                first_out[unsafe_offset=k * n + point] = t[k]
+
+
+def _solve(
+    metric: Metric,
+    stencil: Stencil,
+    mut first_out: List[Float64],
+    mut second_out: List[Float64],
+    mut scalar_out: List[Float64],
+    kappa: Float64,
+    threads: Int,
+) raises:
+    """Solve every point on `threads` tasks."""
+    var n = metric.grid().points()
+    var tasks = task_count(threads, n)
+    var failed = List[Int](length=tasks, fill=0)
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _solve_chunk(
+                Pointer(to=metric).unsafe_origin_cast[ImmutAnyOrigin](),
+                stencil,
+                first_out.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                second_out.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                scalar_out.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                failed.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                task,
+                kappa,
+                task * n // tasks,
+                (task + 1) * n // tasks,
+            )
+        )
+    group.wait()
+    _ = len(first_out)
+    _ = len(second_out)
+    _ = len(scalar_out)
+    for task in range(tasks):  # pragma: no branch
+        if failed[task] != 0:
+            raise Error("A metric is singular at a grid point")
+
+
 def curvature(
-    metric: Metric, order: DifferenceOrder = FOURTH_ORDER
+    metric: Metric, order: DifferenceOrder = FOURTH_ORDER, threads: Int = 0
 ) raises -> Curvature:
     """Return the Ricci tensor, the Ricci scalar and the Einstein tensor.
 
-    These are WarpFactory's `ricciT`, `ricciS` and `einT`.
+    These are WarpFactory's `ricciT`, `ricciS` and `einT`. The points are
+    split among `threads` tasks. Each point is computed alone, so the
+    result does not depend on the count.
 
     Args:
         metric: The metric.
         order: The order of the finite differences.
+        threads: The tasks to use. 0 means one for each logical core.
 
     Returns:
         The three curvatures at each point.
 
     Raises:
-        Error: If the order is not valid or the metric is singular at a
-            point.
+        Error: If the order is not valid, `threads` is negative, or the
+            metric is singular at a point.
     """
     var grid = metric.grid()
     var stencil = Stencil(grid, order)
     var ricci = TensorField(grid, COVARIANT, COORDINATE_FRAME)
     var einstein = TensorField(grid, COVARIANT, COORDINATE_FRAME)
-    var scalar = List[Float64](capacity=grid.points())
-    var d1 = List[Float64](length=64, fill=0.0)
-    var d2 = List[Float64](length=256, fill=0.0)
-    for point in range(grid.points()):  # pragma: no branch
-        var g = metric.at(point)
-        var gu = inverse4(g)
-        _metric_derivatives(metric, stencil, point, d1, d2)
-        var r = _ricci(gu, d1, d2)
-        var s = _sum_products(gu, r)
-        ricci.set_matrix(point, r)
-        scalar.append(s)
-        einstein.set_matrix(point, r - 0.5 * s * g)
+    var scalar = List[Float64](length=grid.points(), fill=0.0)
+    _solve(metric, stencil, ricci.data, einstein.data, scalar, 0.0, threads)
     return Curvature(ricci^, scalar^, einstein^)
 
 
 def stress_energy(
-    metric: Metric, order: DifferenceOrder = FOURTH_ORDER
+    metric: Metric, order: DifferenceOrder = FOURTH_ORDER, threads: Int = 0
 ) raises -> StressEnergy:
     """Return the stress-energy tensor T^ab that a metric needs.
 
     This is WarpFactory's `getEnergyTensor` on the CPU. The tensor is
-    contravariant and in the coordinate frame.
+    contravariant and in the coordinate frame. The points are split among
+    `threads` tasks. Each point is computed alone, so the result does not
+    depend on the count.
 
     Args:
         metric: The metric.
         order: The order of the finite differences. The fourth order
             needs 5 points along an axis, the second order 3, for that
             axis to have derivatives.
+        threads: The tasks to use. 0 means one for each logical core.
 
     Returns:
         The tensor, in joules per cubic meter.
 
     Raises:
-        Error: If the order is not valid or the metric is singular at a
-            point.
+        Error: If the order is not valid, `threads` is negative, or the
+            metric is singular at a point.
     """
     var grid = metric.grid()
     var stencil = Stencil(grid, order)
     var out = TensorField(grid, CONTRAVARIANT, COORDINATE_FRAME)
-    var kappa = einstein_coupling()
-    var d1 = List[Float64](length=64, fill=0.0)
-    var d2 = List[Float64](length=256, fill=0.0)
-    for point in range(grid.points()):  # pragma: no branch
-        var g = metric.at(point)
-        var gu = inverse4(g)
-        _metric_derivatives(metric, stencil, point, d1, d2)
-        var r = _ricci(gu, d1, d2)
-        var e = r - 0.5 * _sum_products(gu, r) * g
-        out.set_matrix(point, kappa * multiply4(multiply4(gu, e), gu))
+    var unused = List[Float64](length=16 * grid.points(), fill=0.0)
+    var scalars = List[Float64](length=grid.points(), fill=0.0)
+    _solve(
+        metric, stencil, out.data, unused, scalars, einstein_coupling(), threads
+    )
     return StressEnergy(out^, metric.name, order)

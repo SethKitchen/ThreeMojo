@@ -22,13 +22,37 @@ places, so point i sits at (i + 1) times the step, minus the center.
 
 from std.math import isfinite
 
-from extensions.warp.kinds import Axis, T_AXIS, X_AXIS, Y_AXIS
+from extensions.warp.kinds import (
+    Axis,
+    CARTESIAN,
+    CYLINDRICAL,
+    CoordinateSystem,
+    SPHERICAL,
+    T_AXIS,
+    X_AXIS,
+    Y_AXIS,
+)
 from extensions.warp.quantities import SPEED_OF_LIGHT
-from units.si import Duration64, Length64
+from units.si import Angle64, Duration64, Length64
 
 comptime MAX_GRID_POINTS = 1048576
 """The most points a grid can hold. Each tensor stores 16 values a point, so
 a tensor at this size takes 128 MiB."""
+
+
+comptime _PI = 3.141592653589793
+
+
+def _require_start(first: Float64, second: Float64) raises:
+    """Raise unless two starts of a curvilinear grid are finite."""
+    if not (isfinite(first) and isfinite(second)):
+        raise Error("A grid's starts must be finite")
+
+
+def _require_turn(count: Int, step: Float64) raises:
+    """Raise if the azimuths cover more than one turn."""
+    if Float64(count) * step > 2.0 * _PI * (1.0 + 1e-12):
+        raise Error("A grid's azimuths must cover at most one turn")
 
 
 def _require_step(value: Float64, name: String) raises:
@@ -43,7 +67,13 @@ struct SpacetimeGrid(Equatable, ImplicitlyCopyable, Writable):
     var counts: SIMD[DType.int64, 4]
     """The number of points along t, x, y and z."""
     var steps: SIMD[DType.float64, 4]
-    """The time step in seconds, then the x, y and z steps in meters."""
+    """The time step in seconds, then the steps of the three space axes,
+    in meters or, for an angle, in radians."""
+    var system: CoordinateSystem
+    """What the space axes measure."""
+    var starts: SIMD[DType.float64, 4]
+    """The first coordinate along each space axis of a curvilinear grid.
+    Zero for a Cartesian grid, which places its points by a center."""
 
     def __init__(
         out self,
@@ -94,6 +124,8 @@ struct SpacetimeGrid(Equatable, ImplicitlyCopyable, Writable):
         self.steps = SIMD[DType.float64, 4](
             time_step.value, x_step.value, y_step.value, z_step.value
         )
+        self.system = CARTESIAN
+        self.starts = SIMD[DType.float64, 4](0.0)
 
     @staticmethod
     def uniform(
@@ -124,6 +156,176 @@ struct SpacetimeGrid(Equatable, ImplicitlyCopyable, Writable):
             t_count, x_count, y_count, z_count, time_step, step, step, step
         )
 
+    @staticmethod
+    def spherical(
+        t_count: Int,
+        r_count: Int,
+        theta_count: Int,
+        phi_count: Int,
+        time_step: Duration64,
+        r_start: Length64,
+        r_step: Length64,
+        theta_start: Angle64,
+        theta_step: Angle64,
+        phi_start: Angle64,
+        phi_step: Angle64,
+    ) raises -> SpacetimeGrid:
+        """Return a grid in spherical coordinates t, r, θ and φ.
+
+        Point i along an axis sits at the start plus i steps. The axes
+        that `Axis` calls x, y and z are r, θ and φ. If the φ points cover
+        the whole circle, the φ derivatives wrap around it.
+
+        Args:
+            t_count: The number of time slices.
+            r_count: The number of radii.
+            theta_count: The number of polar angles.
+            phi_count: The number of azimuths.
+            time_step: The time between two slices.
+            r_start: The first radius. It must be positive: r = 0 is a
+                coordinate singularity.
+            r_step: The step in r.
+            theta_start: The first polar angle, above 0.
+            theta_step: The step in θ. The last angle must be below π.
+            phi_start: The first azimuth.
+            phi_step: The step in φ. The points can cover at most one
+                turn.
+
+        Returns:
+            The grid.
+
+        Raises:
+            Error: For the input that the constructor refuses, or if a
+                start is not finite, r or θ reaches a pole, or φ covers
+                more than one turn.
+        """
+        var grid = SpacetimeGrid(
+            t_count,
+            r_count,
+            theta_count,
+            phi_count,
+            time_step,
+            r_step,
+            Length64(theta_step.value),
+            Length64(phi_step.value),
+        )
+        _require_start(r_start.value, phi_start.value)
+        if not (r_start.value > 0.0):
+            raise Error("A spherical grid must start at r > 0")
+        var last = (
+            theta_start.value + Float64(theta_count - 1) * theta_step.value
+        )
+        if not (theta_start.value > 0.0 and last < _PI):
+            raise Error("A spherical grid's angles must be inside (0, pi)")
+        _require_turn(phi_count, phi_step.value)
+        grid.system = SPHERICAL
+        grid.starts = SIMD[DType.float64, 4](
+            0.0, r_start.value, theta_start.value, phi_start.value
+        )
+        return grid
+
+    @staticmethod
+    def cylindrical(
+        t_count: Int,
+        rho_count: Int,
+        phi_count: Int,
+        z_count: Int,
+        time_step: Duration64,
+        rho_start: Length64,
+        rho_step: Length64,
+        phi_start: Angle64,
+        phi_step: Angle64,
+        z_start: Length64,
+        z_step: Length64,
+    ) raises -> SpacetimeGrid:
+        """Return a grid in cylindrical coordinates t, ρ, φ and z.
+
+        Point i along an axis sits at the start plus i steps. The axes
+        that `Axis` calls x, y and z are ρ, φ and z. If the φ points cover
+        the whole circle, the φ derivatives wrap around it.
+
+        Args:
+            t_count: The number of time slices.
+            rho_count: The number of distances from the axis.
+            phi_count: The number of azimuths.
+            z_count: The number of points along z.
+            time_step: The time between two slices.
+            rho_start: The first distance. It must be positive: ρ = 0 is
+                a coordinate singularity.
+            rho_step: The step in ρ.
+            phi_start: The first azimuth.
+            phi_step: The step in φ. The points can cover at most one
+                turn.
+            z_start: The first z.
+            z_step: The step in z.
+
+        Returns:
+            The grid.
+
+        Raises:
+            Error: For the input that the constructor refuses, or if a
+                start is not finite, ρ starts at the axis, or φ covers more
+                than one turn.
+        """
+        var grid = SpacetimeGrid(
+            t_count,
+            rho_count,
+            phi_count,
+            z_count,
+            time_step,
+            rho_step,
+            Length64(phi_step.value),
+            z_step,
+        )
+        _require_start(rho_start.value, phi_start.value)
+        _require_start(z_start.value, 0.0)
+        if not (rho_start.value > 0.0):
+            raise Error("A cylindrical grid must start at rho > 0")
+        _require_turn(phi_count, phi_step.value)
+        grid.system = CYLINDRICAL
+        grid.starts = SIMD[DType.float64, 4](
+            0.0, rho_start.value, phi_start.value, z_start.value
+        )
+        return grid
+
+    def phi_axis(self) -> Int:
+        """Return the axis that holds the azimuth φ.
+
+        Returns:
+            3 for spherical, 2 for cylindrical, or -1 for Cartesian.
+        """
+        if self.system == SPHERICAL:
+            return 3
+        if self.system == CYLINDRICAL:
+            return 2
+        return -1
+
+    def periodic(self, axis: Int) -> Bool:
+        """Return True if the derivatives along an axis wrap around.
+
+        Args:
+            axis: The axis, 0 to 3.
+
+        Returns:
+            Whether the axis is φ and its points cover one whole turn.
+        """
+        if axis != self.phi_axis():
+            return False
+        var span = Float64(self.counts[axis]) * self.steps[axis]
+        return abs(span - 2.0 * _PI) <= 1e-12 * 2.0 * _PI
+
+    def coordinate(self, axis: Axis, index: Int) -> Float64:
+        """Return the coordinate of a point of a curvilinear grid.
+
+        Args:
+            axis: A space axis.
+            index: The index along that axis, from 0.
+
+        Returns:
+            The start plus `index` steps, in meters or radians.
+        """
+        return self.starts[axis.value] + Float64(index) * self.steps[axis.value]
+
     def __eq__(self, other: Self) -> Bool:
         """Return True if both grids have the same counts and steps.
 
@@ -133,7 +335,12 @@ struct SpacetimeGrid(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the grids are the same.
         """
-        return self.counts == other.counts and self.steps == other.steps
+        return (
+            self.counts == other.counts
+            and self.steps == other.steps
+            and self.system == other.system
+            and self.starts == other.starts
+        )
 
     def write_to(self, mut writer: Some[Writer]):
         """Write the counts, as WarpFactory's `gridSize` reads.
@@ -349,3 +556,17 @@ def require_single_slice(grid: SpacetimeGrid, name: String) raises:
     """
     if grid.counts[0] != 1:
         raise Error(String("The ", name, " metric needs one time slice"))
+
+
+def require_cartesian(grid: SpacetimeGrid, name: String) raises:
+    """Raise unless a grid uses Cartesian coordinates.
+
+    Args:
+        grid: The grid.
+        name: What needs the coordinates, for the message.
+
+    Raises:
+        Error: If the grid is spherical or cylindrical.
+    """
+    if grid.system != CARTESIAN:
+        raise Error(String(name, " needs a Cartesian grid"))

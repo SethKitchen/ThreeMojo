@@ -10,7 +10,8 @@ An `Axis` names one coordinate of the grid: time, x, y or z. A
 `EnergyCondition` names one of the four pointwise energy conditions. A
 `DifferenceOrder` picks the finite-difference stencil. A `Frame` says
 whether tensor components are in the coordinate frame or in the frame of
-the Eulerian observer.
+the Eulerian observer. A `CoordinateSystem` says what the three space
+axes of a grid measure.
 
 WarpFactory passes these as strings, such as "covariant" and "Null". Here
 each one is a type, so a bare integer or a misspelled name does not
@@ -148,12 +149,25 @@ comptime STRONG_ENERGY = EnergyCondition(3)
 
 @fieldwise_init
 struct DifferenceOrder(Equatable, ImplicitlyCopyable, Writable):
-    """The order of accuracy of the finite-difference stencils."""
+    """How the derivatives of a metric are found.
+
+    The second and fourth orders are finite-difference stencils on the
+    grid. `EXACT_DERIVATIVES` marks a result whose derivatives came from a
+    closed-form metric by automatic differentiation.
+    """
 
     var value: Int
     """The number that names the kind."""
 
     def is_valid(self) -> Bool:
+        """Return True if this is a stencil order or the exact derivatives.
+
+        Returns:
+            Whether the value is 0 to 2.
+        """
+        return self.value >= 0 and self.value < 3
+
+    def is_stencil(self) -> Bool:
         """Return True if this is the second or the fourth order.
 
         Returns:
@@ -174,6 +188,8 @@ comptime SECOND_ORDER = DifferenceOrder(0)
 """Central differences over three points. An axis needs 3 points or more."""
 comptime FOURTH_ORDER = DifferenceOrder(1)
 """Central differences over five points. An axis needs 5 points or more."""
+comptime EXACT_DERIVATIVES = DifferenceOrder(2)
+"""Exact derivatives of a closed-form metric. No stencil, no grid edge."""
 
 
 @fieldwise_init
@@ -197,3 +213,41 @@ comptime COORDINATE_FRAME = Frame(0)
 comptime EULERIAN_FRAME = Frame(1)
 """The components in the orthonormal frame of the observer at rest in the
 slices of constant time. Its metric is the Minkowski metric."""
+
+
+@fieldwise_init
+struct CoordinateSystem(Equatable, ImplicitlyCopyable, Writable):
+    """What the three space axes of a grid measure."""
+
+    var value: Int
+    """The number that names the kind."""
+
+    def is_valid(self) -> Bool:
+        """Return True if this is Cartesian, spherical or cylindrical.
+
+        Returns:
+            Whether the value is 0 to 2.
+        """
+        return self.value >= 0 and self.value < 3
+
+    def name(self) -> String:
+        """Return the name of the coordinates.
+
+        Returns:
+            "cartesian", "spherical" or "cylindrical", or "?" if not
+            valid.
+        """
+        var names: List[String] = ["cartesian", "spherical", "cylindrical"]
+        if not self.is_valid():
+            return "?"
+        return names[self.value]
+
+
+comptime CARTESIAN = CoordinateSystem(0)
+"""The coordinates x, y and z, in meters."""
+comptime SPHERICAL = CoordinateSystem(1)
+"""The radius r in meters, then the polar angle θ and the azimuth φ, in
+radians."""
+comptime CYLINDRICAL = CoordinateSystem(2)
+"""The distance ρ from the z axis in meters, the azimuth φ in radians,
+then z in meters."""

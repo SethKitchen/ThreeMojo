@@ -27,6 +27,7 @@ x indexes 2 and 3.
 
 from std.math import ceil, floor, isfinite
 
+from extensions.warp.grid import require_cartesian
 from extensions.warp.kinds import CONTRAVARIANT
 from extensions.warp.quantities import Compliance64
 from extensions.warp.solver import StressEnergy
@@ -114,13 +115,14 @@ def momentum_flow_lines(
         empty.
 
     Raises:
-        Error: If the tensor is not contravariant, the grid has more than
-            one time slice, the step is not finite, or `max_steps` is less
+        Error: If the tensor is not contravariant, the grid is not
+            Cartesian or has more than one time slice, the step is not finite, or `max_steps` is less
             than 1.
     """
     if energy.tensor.index != CONTRAVARIANT:
         raise Error("Momentum flow lines need a contravariant tensor")
     var grid = energy.tensor.grid
+    require_cartesian(grid, "Momentum flow lines")
     if grid.counts[0] != 1:
         raise Error("Momentum flow lines need one time slice")
     if not isfinite(step.value):

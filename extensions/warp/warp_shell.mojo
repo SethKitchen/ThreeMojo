@@ -48,15 +48,19 @@ from extensions.warp.grid import (
     SpacetimeCenter,
     SpacetimeGrid,
     grid_place,
+    grid_time,
+    require_cartesian,
     require_single_slice,
 )
 from extensions.warp.kinds import (
     COORDINATE_FRAME,
     COVARIANT,
+    T_AXIS,
     X_AXIS,
     Y_AXIS,
     Z_AXIS,
 )
+from extensions.warp.krasnikov import smooth_step
 from extensions.warp.quantities import (
     GRAVITATIONAL_CONSTANT,
     SPEED_OF_LIGHT,
@@ -64,7 +68,7 @@ from extensions.warp.quantities import (
     schwarzschild_radius,
 )
 from extensions.warp.tensor import Metric, TensorField
-from units.si import Length64, Mass64, Velocity64
+from units.si import Duration64, Length64, Mass64, Velocity64
 
 comptime _PI = 3.141592653589793
 comptime _HALF_PI = 1.5707963267948966
@@ -513,6 +517,194 @@ def shell_profile(
     )
 
 
+def require_profile(profile: ShellProfile) raises:
+    """Raise unless a radial profile can be read at any radius it spans.
+
+    Args:
+        profile: The profile.
+
+    Raises:
+        Error: If its lists differ in length, it has fewer than 4
+            samples, its radii do not start at 0 and rise in equal steps,
+            or a value is not finite.
+    """
+    var n = len(profile.radius)
+    if n < 4:
+        raise Error("A shell profile needs at least 4 samples")
+    if (
+        len(profile.g_tt) != n
+        or len(profile.g_rr) != n
+        or len(profile.shift) != n
+    ):
+        raise Error("A shell profile's lists must have one length")
+    var step = profile.radius[1]
+    if profile.radius[0] != 0.0 or not (isfinite(step) and step > 0.0):
+        raise Error("A shell profile's radii must start at 0 and rise")
+    for i in range(n):  # pragma: no branch
+        if abs(profile.radius[i] - Float64(i) * step) > 1e-9 * step * Float64(
+            n
+        ):
+            raise Error("A shell profile's radii must have equal steps")
+        if not (
+            isfinite(profile.g_tt[i])
+            and isfinite(profile.g_rr[i])
+            and isfinite(profile.shift[i])
+        ):
+            raise Error("A shell profile value is not finite")
+
+
+def _world_extent(grid: SpacetimeGrid, center: SpacetimeCenter) -> Float64:
+    """Return WarpFactory's sampled extent: 1.2 times the distance of the
+    last grid point."""
+    var far_x = grid_place(grid, center, X_AXIS, grid.count(X_AXIS) - 1)
+    var far_y = grid_place(grid, center, Y_AXIS, grid.count(Y_AXIS) - 1)
+    var far_z = grid_place(grid, center, Z_AXIS, grid.count(Z_AXIS) - 1)
+    return sqrt(far_x * far_x + far_y * far_y + far_z * far_z) * RADIAL_MARGIN
+
+
+def _shell_metric(
+    grid: SpacetimeGrid,
+    center: SpacetimeCenter,
+    profile: ShellProfile,
+    betas: List[Float64],
+    name: String,
+) raises -> Metric:
+    """Return a shell from its profile, with speed betas[t] over c in slice
+    t."""
+    require_cartesian(grid, name)
+    var samples = len(profile.radius)
+    var dr = profile.radius[1]
+    var out = TensorField(grid, COVARIANT, COORDINATE_FRAME)
+    var stride = grid.stride(T_AXIS)
+    for point in range(stride):  # pragma: no branch
+        var at = grid.position(point)
+        var x = grid_place(grid, center, X_AXIS, Int(at[1]))
+        var y = grid_place(grid, center, Y_AXIS, Int(at[2]))
+        var z = grid_place(grid, center, Z_AXIS, Int(at[3]))
+        var r = sqrt(x * x + y * y + z * z)
+        var below = floor(r / dr)
+        # The cubic reads up to 3 samples past the one below r.
+        if below + 3.0 > Float64(samples):
+            raise Error("A grid point is past the radial samples")
+        var index = below + 1.0 + (r - profile.radius[Int(below)]) / dr
+        var g = spherical_to_cartesian(
+            atan2(sqrt(x * x + y * y), z),
+            atan2(y, x),
+            legendre_radial(profile.g_tt, index),
+            legendre_radial(profile.g_rr, index),
+        )
+        var shift = legendre_radial(profile.shift, index)
+        for t in range(grid.count(T_AXIS)):  # pragma: no branch
+            var p = point + t * stride
+            out.set(0, 0, p, g[0])
+            out.set(1, 1, p, g[1])
+            out.set_symmetric(1, 2, p, g[2])
+            out.set_symmetric(1, 3, p, g[3])
+            out.set(2, 2, p, g[4])
+            out.set_symmetric(2, 3, p, g[5])
+            out.set(3, 3, p, g[6])
+            out.set_symmetric(0, 1, p, -shift * betas[t])
+    return Metric(out^, name)
+
+
+def shell_from_profile(
+    grid: SpacetimeGrid,
+    center: SpacetimeCenter,
+    profile: ShellProfile,
+    speed: Velocity64,
+) raises -> Metric:
+    """Return a static spherical shell built from radial profiles.
+
+    The metric is diag(g_tt(r), g_rr(r), r², r² sin²θ) in Cartesian form,
+    and g_tx = -(v/c) times the shift profile. Any profiles can be given,
+    such as those of `shell_profile` or of another matter distribution.
+    Bobrick and Martire describe warp drives as shells of this kind
+    ("Introducing physical warp drives", Classical and Quantum Gravity 38
+    (2021) 105009). This builder is the general form of WarpFactory's warp
+    shell, not a port of their paper.
+
+    Args:
+        grid: The grid. The metric is the same in every time slice.
+        center: The origin, at the center of the shell.
+        profile: The radial profiles, sampled from r = 0 in equal steps.
+        speed: The speed of the inside along x.
+
+    Returns:
+        The metric, named "Shell".
+
+    Raises:
+        Error: If the center or the speed is not finite,
+            `require_profile` refuses the profile, or a grid point is
+            past the last sample.
+    """
+    center.require_finite()
+    if not isfinite(speed.value):
+        raise Error("A warp speed must be finite")
+    require_profile(profile)
+    var betas = List[Float64](
+        length=grid.count(T_AXIS), fill=light_fraction(speed)
+    )
+    return _shell_metric(grid, center, profile, betas, "Shell")
+
+
+def accelerating_shell(
+    grid: SpacetimeGrid,
+    center: SpacetimeCenter,
+    profile: ShellProfile,
+    start_speed: Velocity64,
+    end_speed: Velocity64,
+    start: Duration64,
+    duration: Duration64,
+) raises -> Metric:
+    """Return a shell whose inside changes speed over time.
+
+    The shell itself is static. The speed in the shift goes from
+    `start_speed` to `end_speed` along the smooth step of
+    `extensions.warp.krasnikov.smooth_step`, from `start` for `duration`.
+    How to accelerate a physical warp shell is an open question: Fuchs et
+    al. leave it for future work. This metric is a test case to analyze,
+    not a solution. Its stress-energy tensor shows what this naive change
+    of speed needs.
+
+    Args:
+        grid: The grid. The time derivatives need 5 slices or more.
+        center: The origin, at the center of the shell. Its time is the
+            time 0 of the ramp.
+        profile: The radial profiles, as for `shell_from_profile`.
+        start_speed: The speed before the ramp.
+        end_speed: The speed after the ramp.
+        start: When the ramp starts, from the center's time.
+        duration: How long the ramp lasts. It must be positive.
+
+    Returns:
+        The metric, named "Accelerating Shell".
+
+    Raises:
+        Error: If the center, a speed or a time is not finite, the
+            duration is not positive, `require_profile` refuses the
+            profile, the grid is not Cartesian, or a grid point is past the last
+            sample.
+    """
+    center.require_finite()
+    if not (
+        isfinite(start_speed.value)
+        and isfinite(end_speed.value)
+        and isfinite(start.value)
+    ):
+        raise Error("A shell's speeds and start time must be finite")
+    if not (isfinite(duration.value) and duration.value > 0.0):
+        raise Error("A shell's ramp must last a positive, finite time")
+    require_profile(profile)
+    var low = light_fraction(start_speed)
+    var high = light_fraction(end_speed)
+    var betas = List[Float64](capacity=grid.count(T_AXIS))
+    for t in range(grid.count(T_AXIS)):  # pragma: no branch
+        var since = grid_time(grid, center, t) - start.value
+        var step = smooth_step(since, duration.value)
+        betas.append(low + (high - low) * step[0])
+    return _shell_metric(grid, center, profile, betas, "Accelerating Shell")
+
+
 def warp_shell_comoving(
     grid: SpacetimeGrid,
     center: SpacetimeCenter,
@@ -552,18 +744,15 @@ def warp_shell_comoving(
     Raises:
         Error: If the grid has more than one slice, the center or the
             speed is not finite, `shell_profile` refuses the parameters,
-            or the grid reaches past the radial samples.
+            the grid is not Cartesian, or the grid reaches past the radial
+            samples.
     """
     require_single_slice(grid, "Comoving Warp Shell")
     center.require_finite()
     if not isfinite(speed.value):
         raise Error("A warp speed must be finite")
-    var far_x = grid_place(grid, center, X_AXIS, grid.count(X_AXIS) - 1)
-    var far_y = grid_place(grid, center, Y_AXIS, grid.count(Y_AXIS) - 1)
-    var far_z = grid_place(grid, center, Z_AXIS, grid.count(Z_AXIS) - 1)
-    var world = sqrt(far_x * far_x + far_y * far_y + far_z * far_z)
     var profile = shell_profile(
-        Length64(world * RADIAL_MARGIN),
+        Length64(_world_extent(grid, center)),
         mass,
         inner_radius,
         outer_radius,
@@ -572,35 +761,8 @@ def warp_shell_comoving(
         smoothing,
         samples,
     )
-    var dr = profile.radius[1]
-    var beta = light_fraction(speed)
-    var out = TensorField(grid, COVARIANT, COORDINATE_FRAME)
-    for point in range(grid.points()):  # pragma: no branch
-        var at = grid.position(point)
-        var x = grid_place(grid, center, X_AXIS, Int(at[1]))
-        var y = grid_place(grid, center, Y_AXIS, Int(at[2]))
-        var z = grid_place(grid, center, Z_AXIS, Int(at[3]))
-        var r = sqrt(x * x + y * y + z * z)
-        var below = floor(r / dr)
-        # The cubic reads up to 3 samples past the one below r.
-        if below + 3.0 > Float64(samples):
-            raise Error("A grid point is past the radial samples")
-        var index = below + 1.0 + (r - profile.radius[Int(below)]) / dr
-        var g = spherical_to_cartesian(
-            atan2(sqrt(x * x + y * y), z),
-            atan2(y, x),
-            legendre_radial(profile.g_tt, index),
-            legendre_radial(profile.g_rr, index),
-        )
-        out.set(0, 0, point, g[0])
-        out.set(1, 1, point, g[1])
-        out.set_symmetric(1, 2, point, g[2])
-        out.set_symmetric(1, 3, point, g[3])
-        out.set(2, 2, point, g[4])
-        out.set_symmetric(2, 3, point, g[5])
-        out.set(3, 3, point, g[6])
-        if warp:
-            out.set_symmetric(
-                0, 1, point, -legendre_radial(profile.shift, index) * beta
-            )
-    return Metric(out^, "Comoving Warp Shell")
+    var beta = 0.0
+    if warp:
+        beta = light_fraction(speed)
+    var betas: List[Float64] = [beta]
+    return _shell_metric(grid, center, profile, betas, "Comoving Warp Shell")
