@@ -88,6 +88,7 @@ Look something up.
 - [Image decode queue](Image-decode-queue)
 - [Norm consumers](Norm-consumers)
 - [Water](Water)
+- [Warp drives](Warp-drives)
 - [Animals](Animals)
   - [Animal anatomy](Animal-anatomy)
   - [Anatomy validity](Anatomy-validity)

@@ -135,6 +135,8 @@ $(call gallery,shell-analysis,plate)
 $(call gallery,building-energy,heat)
 # The lowest modes of a chain of springs.
 $(call gallery,numerics,spring_modes)
+# An Alcubierre warp bubble: energy density, null energy condition, expansion.
+$(call gallery,warp-drive,warp_drive)
 $(call gallery,femur,femur)
 $(call gallery,tibia,tibia)
 $(call gallery,fibula,fibula)

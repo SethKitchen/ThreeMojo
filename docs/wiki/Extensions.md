@@ -24,6 +24,8 @@ The CARLA subject ports the CARLA driving simulator without its game engine and 
 
 The gamepad subject ports the gamepad subsystem of SDL. It reads Xbox, PlayStation, Nintendo and other controllers on Linux and through a host's own gamepad API, and names their controls by position. It runs their rumble, lights, motion sensors and touchpads. See [Gamepads](Gamepads).
 
+The warp subject ports WarpFactory. It finds the stress-energy tensor that a warp drive metric needs, and checks the energy conditions. See [Warp drives](Warp-drives).
+
 The Streamline subject types NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction: modes, presets, options, per-frame constants and buffer checks. It has a CPU fallback upscaler. It does not run DLSS yet. See [Streamline](Streamline).
 
 See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula), [Patella](Patella), [Knee](Knee) and [Muscles](Muscles). See [Vessels](Vessels), [Lymph](Lymph), [Nerves](Nerves), [Integument](Integument), [Leg](Leg) and [Foot](Foot).
@@ -166,6 +168,13 @@ extensions/
     constants.mojo  the per-frame constants from two cameras
     tags.mojo       the check of a frame's tagged buffers
     upscaler.mojo   the upscaler trait and a CPU fallback
+  warp/
+    kinds.mojo, quantities.mojo, grid.mojo     kinds, units and the grid
+    tensor.mojo, three_plus_one.mojo           tensor fields and the 3+1 split
+    metrics.mojo, warp_shell.mojo              the metrics
+    derivatives.mojo, solver.mojo              the Einstein equations
+    frame.mojo, conditions.mojo, scalars.mojo  the analysis
+    flow.mojo, evaluation.mojo, plot.mojo      flow lines, one call, planes
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.

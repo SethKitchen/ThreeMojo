@@ -767,6 +767,12 @@ Earth-retaining structures and the pictures that explain them. A checked box rec
 - [x] [Design checks](https://github.com/SethKitchen/ThreeMojo/wiki/Design-checks): US member and foundation checks. AISC steel members and connections, NDS joists and bolts. ACI walls, footings, plain concrete and chapter 17 anchors. ASCE 7 wind. Patterned continuous beams, LaTeX/TikZ calculation writers and staged utilization views
 - [x] [Engineering views](https://github.com/SethKitchen/ThreeMojo/wiki/Engineering-views): a mesh builder for walls, pipes and ground, a text and label overlay, and civil-works textures [#754](https://github.com/SethKitchen/ThreeMojo/issues/754)
 
+### General relativity
+
+Warp drive spacetimes, analyzed as WarpFactory analyzes them. A checked box records implemented scope. It does not establish that a warp drive is physical.
+
+- [x] [Warp drives](https://github.com/SethKitchen/ThreeMojo/wiki/Warp-drives): a port of WarpFactory. Alcubierre, Lentz, Van Den Broeck and warp shell metrics, stress-energy by the Einstein equations, energy conditions, expansion, shear and vorticity
+
 ### Out of scope
 
 This port provides native CPU and MAX GPU rendering. It excludes the WebGL and WebGPU renderers, CSS renderers, WebXR, audio, and video and canvas textures.
