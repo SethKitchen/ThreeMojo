@@ -166,7 +166,7 @@ mesh. That costs too much for each frame of a game. Check the face once with
 `validate`, and then call `GameFace.animate` each frame. It checks only the
 weights.
 
-A beard on a face with facial animation takes one relative target for each of the face's. `ride_face` gives each beard vertex the offsets of the nearest face vertex. It also moves the vertex out along that face vertex's normal, to stand 3 mm off the skin on the template, so the preserved face does not show through. `GameHumanoid.move_face` sets the face's weights and the beard's together.
+A beard on a face with facial animation takes one relative target for each of the face's. `ride_face` gives each beard vertex the offsets of the nearest face vertex. It also moves the vertex out along that face vertex's normal, to stand 3 mm off the skin on the template. So the preserved face does not show through. `GameHumanoid.move_face` sets the face's weights and the beard's together.
 
 A decimated hair shell lies flat between its vertices, but the preserved
 scalp under it is not decimated. With facial animation, the shell therefore

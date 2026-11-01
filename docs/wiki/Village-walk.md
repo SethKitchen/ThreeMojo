@@ -233,7 +233,9 @@ A villager with a home visits it. `Villager.home` is a `HouseId`, the house's pl
 
 Each resident bumps into the trees, the player and every other resident. A resident that moved this frame is an obstacle where it stands now.
 
-**A person** is a `Body`: a game humanoid of 3,000 triangles, meshed on every core, dressed in its `Outfit`, with its idle, walk, run and jump clips. The body fades to the clip of its stance in 0.2 seconds. The walk and the run play from 0.6 to 1.6 times their own rate, by the speed. So the feet keep pace with the ground. A jump plays from the moment the feet leave the ground. The player is a `Body` too.
+**A person** is a `Body`: a game humanoid of 3,000 triangles, dressed in its `Outfit`, with its idle, walk, run and jump clips. The body fades to the clip of its stance in 0.2 seconds. The walk and the run play from 0.6 to 1.6 times their own rate, by the speed. So the feet keep pace with the ground. A jump plays from the moment the feet leave the ground. The player is a `Body` too.
+
+A person's skin, hair and beard are meshed on every core.
 
 **An animal** is a flipbook: its mesh in six poses of its walk, and one mesh standing. The mesh shows the pose of how far the animal has walked, so one stride covers one stride of ground. An animal walks at its stride times its stride frequency at a Froude number of 0.25. An animal that does not walk on four legs keeps its standing mesh.
 
@@ -273,13 +275,14 @@ The villagers, the bandits, the companion and the raiders are dressed by calling
 
 The player wears a madder-red tunic trimmed in weld yellow, over walnut hose. `PlayParameters.outfit` holds the player's clothes. An empty `Outfit` leaves a person bare.
 
-The clothes follow the skin, and the skin follows the bones, so they move together as a person runs, jumps and fights. Five things keep them apart where they must part:
+The clothes follow the skin, and the skin follows the bones, so they move together as a person runs, jumps and fights. Six things keep them apart where they must part:
 
 - The skin's arms are parted from the trunk before it is weighed. So an arm swung out does not stretch the skin or the tunic to the hip. See [Game humanoid](Game-humanoid#the-skin-and-its-weights).
 - A boot's last takes its weights from its own leg only. So a kick does not stretch the boot to the other foot.
 - The scabbard swings clear of the thigh beside it: see [Village combat](Village-combat#the-sword-clips).
 - Round the armpits, a garment under a closed one is cut deeper. So it does not show through when an arm rises. See [Garments](Garments).
 - A platebody keeps off the arms. So its side does not tear open under a raised arm. See [Outfits and armor](Outfits-and-armor#plate).
+- A long robe or gown hides the legs inside it. So a running leg does not push out through its front. See [Garments](Garments).
 
 ## The lighter village
 

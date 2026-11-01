@@ -51,13 +51,14 @@ from extensions.humanoid.rig.joints import (
     HEAD,
     HIPS,
     LEFT_THIGH,
+    RIGHT_SHIN,
     RIGHT_THIGH,
     SPINE,
 )
 from render.framebuffer import Color
 from extensions.attire.skirt import skirt_top
 from math.vector3 import Vector3
-from extensions.attire.apparel import crown, straw_hat
+from extensions.attire.apparel import cassock, crown, straw_hat
 from extensions.attire.armory import (
     great_helm,
     great_pauldrons,
@@ -470,6 +471,50 @@ def test_a_hat_sits_on_a_speaking_head() raises:
         ).triangle_count()
         > 0
     )
+
+
+def _legs_drawn(
+    scene: Scene, assets: Assets, person: GameHumanoid
+) raises -> Int:
+    """Count the skin's triangles wholly on a leg, from the knee to the
+    hips."""
+    ref skin = assets.geometries.get(
+        scene.skinned_meshes[person.skins[0]].geometry
+    )
+    ref points = skin.attribute_view(String(POSITION))
+    var knee = person.rig.at(RIGHT_SHIN).y
+    var hips = person.rig.at(HIPS).y - 0.1
+    var count = 0
+    for t in range(len(skin.index) // 3):
+        var inside = True
+        for c in range(3):
+            var p = points.vector3(skin.index[3 * t + c])
+            if not (p.y > knee and p.y < hips and abs(p.x) > 0.03):
+                inside = False
+        if inside:
+            count += 1
+    return count
+
+
+def test_a_long_skirt_hides_the_legs_inside_it() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var bare = coarse_person(scene, assets)
+    var before = _legs_drawn(scene, assets, bare)
+    assert_true(before > 0)
+    # A robe to the ankles hides the thighs and the knees inside it, but
+    # for a few triangles by the crotch, where its own cover decides.
+    var robed = Outfit()
+    robed.add(cassock())
+    _ = dress(scene, assets, bare, robed)
+    assert_true(_legs_drawn(scene, assets, bare) * 8 < before)
+    # A tunic's short skirt hides them only where its own cover reaches,
+    # at the top of the thighs: a kick lifts them out.
+    var other = coarse_person(scene, assets)
+    var short = Outfit()
+    short.add(tunic())
+    _ = dress(scene, assets, other, short)
+    assert_true(_legs_drawn(scene, assets, other) * 10 > before * 9)
 
 
 def test_an_outfit_that_does_not_check_is_refused() raises:

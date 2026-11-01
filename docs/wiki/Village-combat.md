@@ -12,7 +12,7 @@ This page gives the rules that every style shares, with the sword's moves. The o
 - [Village walk](Village-walk#the-players-movement): the sprint, the brakes, strafing and the jump's grace.
 - [Village netcode](Village-netcode): the hooks that a networking layer builds on, and a sample layer in the tests.
 
-![A man in red fights barbarians in fur and their warlock captain beside a ranger: he cuts, spins and sends a wave, and she casts bolts of light](out/village_combat.png)
+![A man in red fights barbarians in fur beside a ranger: he cuts, spins and sends a wave, and she casts bolts of light](out/village_combat.png)
 
 `examples/village_combat.mojo` draws this picture. A gamepad of the web backend plays a fixed script against the bandits, and the companion fights beside the player. To fight with your own gamepad or keyboard, run `examples/village_walk.mojo --play`: see [Village walk](Village-walk#play-the-game).
 

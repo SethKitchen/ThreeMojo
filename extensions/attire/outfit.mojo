@@ -128,6 +128,7 @@ from extensions.humanoid.rig.joints import (
     HEAD,
     LEFT_THIGH,
     LEFT_UPPER_ARM,
+    RIGHT_SHIN,
     RIGHT_THIGH,
     RIGHT_UPPER_ARM,
 )
@@ -140,6 +141,10 @@ from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
 from render.framebuffer import Color
 
 
+comptime SKIRT_SHOW = Float32(0.15)
+"""How far over a long skirt's hem the legs inside it still show, in
+meters on the template: as a leg swings, this much of it can pass the
+hem."""
 comptime ARMPIT_GAIN = Float32(5)
 """How many times the upper arms' weight on a vertex its armpit share is:
 see `arm_shares`."""
@@ -490,6 +495,24 @@ def dress_pieces(
         skirts.append(envelope^)
         lasts.append(feet^)
         cowls.append(head^)
+    # A long skirt, which falls past the knees, hides the legs inside it
+    # from `SKIRT_SHOW` over its hem: a leg that swings faster than the
+    # skirt's front would push out through it. A skirt parted open shows
+    # the legs, so it hides none.
+    var knee = person.rig.at(RIGHT_SHIN).y
+    var show = SKIRT_SHOW * skirt_scale(person.rig)
+    for i in range(len(order)):
+        ref garment = outfit.garments[order[i]]
+        if (
+            garment.form != SKIRTED
+            or skirts[i].hem() >= knee
+            or is_cut(garment.neckline, garment.opening)
+        ):
+            continue
+        for v in range(count):  # pragma: no branch
+            var y = frame.points[v].y
+            if legs[v] and y > skirts[i].hem() + show and y < clear:
+                hides[i][v] = 1
     for i in range(len(order)):
         var over = List[Float32](length=count, fill=0)
         # A skirt over this one that falls as far hides its skirt, and a

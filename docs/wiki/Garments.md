@@ -139,6 +139,10 @@ About ten folds run down each skirt. They bunch together and spread apart round 
 
 A drawn skirt is lined: it has an inner face one fabric thickness inside, and a strip across its hem. So the hem shows its thickness, and the inside of the skirt draws when it is seen from below.
 
+A long skirt, whose hem falls below the knees, hides the legs inside it from 15 cm over its hem (`SKIRT_SHOW`). Both thighs share the middle of its front. So a thigh that lifts would push out through it as the person runs or jumps. With the legs hidden, nothing is left to push out. The skin and every garment under the skirt are hidden there.
+
+A short skirt, as a tunic's, hides no leg: a kick lifts the thigh out under its hem. A skirt parted open, as a frock coat's, shows the legs, so it hides none.
+
 Each vertex at the top takes the weights of the nearest vertex of the shell. Down the skirt the weights pass to the thighs: at the hem the thighs hold 0.9 of each vertex. The right thigh turns the right side and the left thigh the left side. The two share a band 10 cm wide at the middle of the front and the back. So the skirt opens as a leg lifts.
 
 A skirt close over the body moves with the cloth under it. Where the gap is 2 cm or less, the skirt's vertex takes the weights of the shell's nearest vertex. From 2 cm to 6 cm, it passes smoothly back to its own blend. So a short tunic over trousers turns with each thigh. A thigh that swings 35 degrees forward or back does not pass out through it. Between the legs and at a flared hem, the skirt hangs free and keeps its blend.
