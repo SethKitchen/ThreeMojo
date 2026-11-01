@@ -234,6 +234,8 @@ def test_a_blow_on_the_player_marks_its_way_at_the_edge() raises:
     assert_equal(_changed(bare), 0)
     arena.battle.hurts.append(Hurt(Vector3(5, 0, 1), 0))
     arena.battle.hurts.append(Hurt(feet, 0))
+    # A blow from straight ahead has no sideways way, and marks the top.
+    arena.battle.hurts.append(Hurt(Vector3(1, 0, -4), 0.6))
     var fresh = _frame()
     draw_hurts(fresh, arena.battle, look)
     assert_true(_changed(fresh) > 0)

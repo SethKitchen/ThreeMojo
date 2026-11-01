@@ -386,6 +386,13 @@ def test_the_raids_blows_and_heals_pass_by_the_fallen_and_the_far() raises:
     arena.battle.wardens[0].boss.zone = Zone(
         CIRCLE, Vector3(0, 0, 0), Vector3(0, 0, 1), 30, 0
     )
+    # A standing player in the zone is struck, and the display marks the
+    # way to the warden.
+    arena.battle._zone_strikes(arena.scene, 0, arena.player)
+    assert_true(len(arena.battle.hurts) > 0)
+    var from_warden = arena.battle.hurts[len(arena.battle.hurts) - 1].source
+    var warden_at = arena.battle.wardens[0].character.position
+    assert_true((from_warden - warden_at).length() < 1.0e-4)
     # A zone passes by a fallen player, a fallen raider and one who left.
     arena.battle.fighter.health = 0
     arena.battle.fighter.move = FALL
