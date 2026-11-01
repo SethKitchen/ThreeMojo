@@ -10,9 +10,9 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
 from extensions.attire.mesh_ops import COVER, merge
 from extensions.attire.skirt import (
-    SKIRT_FOLDS,
     SKIRT_LEG_SHARE,
     SKIRT_SIDES,
+    fold_profile,
     SkirtEnvelope,
     hang_skirt,
     hull_radii,
@@ -219,11 +219,71 @@ def test_a_skirt_folds_deeper_toward_its_hem() raises:
     for side in range(SKIRT_SIDES):
         assert_almost_equal(folded.radii[side], plain.radii[side])
         assert_true(folded.radii[hem + side] >= plain.radii[hem + side])
-    assert_almost_equal(folded.radii[hem], plain.radii[hem] + 0.01, atol=1e-5)
-    var trough = SKIRT_SIDES // (2 * SKIRT_FOLDS)
-    assert_almost_equal(
-        folded.radii[hem + trough], plain.radii[hem + trough], atol=1e-5
-    )
+    var deepest = Float32(0)
+    var shallowest = Float32(1)
+    for side in range(SKIRT_SIDES):
+        var stood = folded.radii[hem + side] - plain.radii[hem + side]
+        assert_almost_equal(stood, 0.01 * fold_profile(side), atol=1e-5)
+        deepest = max(deepest, stood)
+        shallowest = min(shallowest, stood)
+    assert_almost_equal(deepest, 0.01, atol=1e-5)
+    assert_true(shallowest < 0.001)
+
+
+def test_a_skirt_s_folds_bunch_and_vary() raises:
+    var crests = List[Float32]()
+    var gaps = List[Int]()
+    var last = -1
+    for side in range(SKIRT_SIDES):
+        var here = fold_profile(side)
+        var before = fold_profile((side + SKIRT_SIDES - 1) % SKIRT_SIDES)
+        var after = fold_profile((side + 1) % SKIRT_SIDES)
+        assert_true(here >= 0 and here <= 1)
+        if here > before and here >= after:
+            crests.append(here)
+            if last >= 0:
+                gaps.append(side - last)
+            last = side
+    # About ten folds, some deeper than others, some closer together.
+    assert_true(len(crests) >= 8 and len(crests) <= 12)
+    var low = Float32(1)
+    for crest in crests:
+        low = min(low, crest)
+    assert_true(low < 0.85)
+    var narrow = SKIRT_SIDES
+    var wide = 0
+    for gap in gaps:
+        narrow = min(narrow, gap)
+        wide = max(wide, gap)
+    assert_true(wide > narrow)
+
+
+def test_a_skirt_close_over_its_cloth_takes_its_weights() raises:
+    var rig = standing_rig()
+    # A long tube round the hips and down past the knees, all held by the
+    # hips.
+    var piece = _covered(tube(0, 0, 0.16, 0.1, -0.5, HIPS, 12, 16))
+    var hugging = skirt_envelope(piece, rig, 0, List[SkirtEnvelope](), 0, 0)
+    var straight = skirt_mesh(hugging, piece, rig, False)
+    ref bones = straight.attribute_view(String(SKIN_INDEX))
+    ref weights = straight.attribute_view(String(SKIN_WEIGHT))
+    var hem = (hugging.rings() - 1) * SKIRT_SIDES
+    # A straight skirt lies on the tube: its hem moves with the hips.
+    for side in range(SKIRT_SIDES):
+        assert_equal(Int(bones.component(hem + side, 0)), HIPS.value)
+        assert_true(weights.component(hem + side, 0) > 0.99)
+    # An envelope must say where its shell crosses each side.
+    var bare = hugging.copy()
+    bare.cloth.clear()
+    with assert_raises(contains="crosses each side"):
+        _ = skirt_mesh(bare, piece, rig, False)
+    # A wide one hangs free of it at the hem, and passes to the thighs.
+    var flared = skirt_envelope(piece, rig, 0.6, List[SkirtEnvelope](), 0, 0)
+    var wide = skirt_mesh(flared, piece, rig, False)
+    ref free = wide.attribute_view(String(SKIN_INDEX))
+    var bottom = (flared.rings() - 1) * SKIRT_SIDES
+    var thigh = Int(free.component(bottom + 3 * SKIRT_SIDES // 4, 0))
+    assert_true(thigh == RIGHT_THIGH.value or thigh == LEFT_THIGH.value)
 
 
 def test_a_short_skirt_does_not_lift_a_long_one() raises:
@@ -302,9 +362,8 @@ def test_a_skirt_is_lofted_lined_and_weighted() raises:
     assert_equal(Int(bones.component(SKIRT_SIDES, 0)), HIPS.value)
     var right_side = rings * SKIRT_SIDES + 3 * SKIRT_SIDES // 4
     assert_equal(Int(bones.component(right_side, 0)), RIGHT_THIGH.value)
-    assert_almost_equal(
-        weights.component(right_side, 0), SKIRT_LEG_SHARE, atol=1e-5
-    )
+    # At least its share; more where the hem lies close over the thigh.
+    assert_true(weights.component(right_side, 0) >= SKIRT_LEG_SHARE - 1e-5)
     # A mirrored rig puts the right thigh on the other side.
     var mirrored = standing_rig(0.1)
     var flipped = skirt_mesh(envelope, piece, mirrored, False)
@@ -358,6 +417,24 @@ def test_a_garment_hangs_its_skirt_below_the_top() raises:
     assert_equal(
         hang_skirt(empty, envelope, rig, True, False).vertex_count(), 0
     )
+
+
+def test_a_skirt_of_less_detail_has_fewer_rings() raises:
+    var rig = standing_rig()
+    var mesh = _hips_and_legs()
+    var full = skirt_envelope(mesh, rig, 0.2, List[SkirtEnvelope](), 0, 0)
+    var half = skirt_envelope(
+        mesh, rig, 0.2, List[SkirtEnvelope](), 0, 0, detail=0.5
+    )
+    # Rings twice as far apart, to the same hem.
+    assert_true(half.rings() < full.rings())
+    assert_true(half.rings() * 2 >= full.rings() - 2)
+    assert_almost_equal(half.hem(), full.hem())
+    for detail in [Float32(0), Float32(1.5)]:
+        with assert_raises(contains="detail"):
+            _ = skirt_envelope(
+                mesh, rig, 0.2, List[SkirtEnvelope](), 0, 0, detail=detail
+            )
 
 
 def main() raises:

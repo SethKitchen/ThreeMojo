@@ -38,7 +38,7 @@ comptime FIRELIGHT = Vector3(1.0, 0.62, 0.3)
 comptime FLAME = Vector3(1.0, 0.78, 0.4)
 """The color of a flame, drawn unlit."""
 comptime FILL = Vector3(1.45, 1.28, 1.05)
-"""How much the light that bounces round a lit room raises the colors
+"""How much the light that bounces around a lit room raises the colors
 of its surfaces: warm, as the light off wood floors and limewash is."""
 comptime WAX = Vector3(0.92, 0.86, 0.7)
 """The color of a tallow candle."""
@@ -72,17 +72,17 @@ struct Glow(ImplicitlyCopyable):
     var strength: Float32
     # How far its light reaches, in meters. Nothing further is warmed.
     var reach: Float32
-    # The floor and the ceiling of its storey: it warms nothing outside
+    # The floor and the ceiling of its story: it warms nothing outside
     # these heights, so a fire downstairs does not warm the room above.
     var low: Float32
     var high: Float32
 
     def placed(self, at: Vector3, low: Float32, high: Float32) -> Glow:
-        """Return this glow at a place, in a storey.
+        """Return this glow at a place, in a story.
 
         Args:
             at: Where the flame is.
-            low: The height of the storey's floor.
+            low: The height of the story's floor.
             high: The height of its ceiling.
 
         Returns:
@@ -168,7 +168,7 @@ def warm(
     fill: Vector3,
 ):
     """Bake the light inside a house into the colors of a sheet's vertices:
-    the fill of the light that bounces round its rooms, and each glow's
+    the fill of the light that bounces around its rooms, and each glow's
     light.
 
     Only a vertex within the house's walls is lit so, so a flame does not

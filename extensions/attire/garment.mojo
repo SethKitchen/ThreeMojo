@@ -53,6 +53,25 @@ This is not a three.js port. See Extensions.
 
 from extensions.attire.cover import Cover
 from extensions.attire.kinds import (
+    CLOSED,
+    FITTED_SLEEVE,
+    HATTED,
+    NO_HEADWEAR,
+    PLAIN,
+    ROUND_NECK,
+    Design,
+    Headwear,
+    Neckline,
+    Opening,
+    Sleeve,
+    require_headwear,
+    require_neckline,
+    require_opening,
+    require_sleeve,
+    require_design,
+    require_ruffles,
+    NO_RUFFLES,
+    Ruffles,
     ARMOR_LAYER,
     ARMS_SLOT,
     BANDED,
@@ -70,6 +89,8 @@ from extensions.attire.kinds import (
     MAIL,
     MID_LAYER,
     NECK_SLOT,
+    PRIMARY_DYE,
+    SECONDARY_DYE,
     TRIM_DYE,
     OUTER_LAYER,
     OVER_LAYER,
@@ -98,6 +119,7 @@ from extensions.attire.kinds import (
     require_layer,
     require_slot,
 )
+from extensions.attire.metal import STEEL, Metal, metal_color, require_metal
 from extensions.humanoid.rig.joints import (
     CHEST,
     HEAD,
@@ -163,6 +185,21 @@ struct Garment(Copyable, Movable):
     var flare: Float32
     """How far a skirted garment widens for each meter it falls, zero
     through one."""
+    var metal: Metal
+    """What mail or plate is made of. Steel by default; cloth ignores it."""
+    var headwear: Headwear
+    """Which hat or helmet a `HATTED` garment is drawn as, or
+    `NO_HEADWEAR`."""
+    var neckline: Neckline
+    """How it is cut at the front of the neck."""
+    var opening: Opening
+    """Where it is open, so the garment under it shows."""
+    var sleeve: Sleeve
+    """How full its sleeves are."""
+    var design: Design
+    """The design woven or embroidered over its dyes."""
+    var ruffles: Ruffles
+    """Where it wears frills: at its cuffs, its collar or its hem."""
 
     def __init__(
         out self,
@@ -180,6 +217,13 @@ struct Garment(Copyable, Movable):
         ease: Length = Length(0, METER),
         form: Form = FITTED,
         flare: Float32 = 0,
+        metal: Metal = STEEL,
+        headwear: Headwear = NO_HEADWEAR,
+        neckline: Neckline = ROUND_NECK,
+        opening: Opening = CLOSED,
+        sleeve: Sleeve = FITTED_SLEEVE,
+        design: Design = PLAIN,
+        ruffles: Ruffles = NO_RUFFLES,
     ):
         """Describe a garment, dyed one color.
 
@@ -199,6 +243,13 @@ struct Garment(Copyable, Movable):
             form: How its shell is shaped. Fitted by default.
             flare: How far a skirted garment widens for each meter it
                 falls.
+            metal: What mail or plate is made of. Steel by default.
+            headwear: Which hat or helmet a `HATTED` garment is.
+            neckline: How it is cut at the neck. Round by default.
+            opening: Where it is open. Closed by default.
+            sleeve: How full its sleeves are. Fitted by default.
+            design: The design over its dyes. Plain by default.
+            ruffles: Where it wears frills. None by default.
         """
         self.name = name
         self.slot = slot
@@ -214,6 +265,13 @@ struct Garment(Copyable, Movable):
         self.ease = ease
         self.form = form
         self.flare = flare
+        self.metal = metal
+        self.headwear = headwear
+        self.neckline = neckline
+        self.opening = opening
+        self.sleeve = sleeve
+        self.design = design
+        self.ruffles = ruffles
 
     def check(self) raises:
         """Refuse a garment that cannot be made.
@@ -222,8 +280,12 @@ struct Garment(Copyable, Movable):
             Error: If a kind or the form is not named, a lamed garment
                 has no anchor or not two through `MAX_LAMES` lames, an
                 anchor is not a named joint, there are not four dyes, the
-                drape is below -1, the ease is negative or not finite, or
-                the flare is not zero through one.
+                drape is below -1, the ease is negative or not finite, the
+                flare is not zero through one, the metal, the headwear,
+                the neckline, the opening, the sleeve, the design or the
+                ruffles are not named, or
+                a `HATTED` garment names no headwear or another names
+                one.
         """
         require_slot(self.slot)
         require_layer(self.layer)
@@ -246,6 +308,49 @@ struct Garment(Copyable, Movable):
             raise Error("An ease must be at least zero and below a meter")
         if not (self.flare >= 0 and self.flare <= 1):
             raise Error("A flare must be zero through one")
+        require_metal(self.metal)
+        require_headwear(self.headwear)
+        require_neckline(self.neckline)
+        require_opening(self.opening)
+        require_sleeve(self.sleeve)
+        require_design(self.design)
+        require_ruffles(self.ruffles)
+        if (self.form == HATTED) != (self.headwear != NO_HEADWEAR):
+            raise Error("A hatted garment, and it alone, names its headwear")
+
+
+def forged(
+    var garment: Garment, metal: Metal, trim: Optional[Metal] = None
+) raises -> Garment:
+    """Return a mail or plate garment made of a metal.
+
+    Its primary and secondary dyes take the metal's color, and its trim
+    the color of the trim's metal: gilt edges on blued steel, or brass
+    rings at the hem of iron mail. Its accent dye is left as it is, for
+    the stones of a crown or the horns of a helmet.
+
+    Args:
+        garment: A garment of mail or plate.
+        metal: What it is made of.
+        trim: The metal of its trim, or none for the garment's own.
+
+    Returns:
+        The garment, forged.
+
+    Raises:
+        Error: If the garment is not mail or plate, or a metal is not
+            named.
+    """
+    if not garment.fabric.is_metal():
+        raise Error("Only mail and plate are forged")
+    var color = metal_color(metal)
+    garment.metal = metal
+    garment.dyes[PRIMARY_DYE.value] = color
+    garment.dyes[SECONDARY_DYE.value] = color
+    garment.dyes[TRIM_DYE.value] = color
+    if trim:
+        garment.dyes[TRIM_DYE.value] = metal_color(trim.value())
+    return garment^
 
 
 def _both(

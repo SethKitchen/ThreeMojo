@@ -8,7 +8,7 @@
 A `DayCycle` keeps the hour of the day, from 0 to 24, and moves it on at
 `hours_a_second`. Zero keeps the hour still. Its `daylight` is the share
 of the day's light: one from `SUNRISE` to `SUNSET`, none at night, and a
-smooth change over `TWILIGHT` hours round each. Its `dusk` is how much
+smooth change over `TWILIGHT` hours around each. Its `dusk` is how much
 the low sun reddens the sky and the light, most at sunrise and sunset.
 
 The sun's direction and its shadows stay as the meadow baked them. The
@@ -123,7 +123,7 @@ struct DayCycle(ImplicitlyCopyable):
         return max(Float32(0), max(rise, fall))
 
     def advance(mut self, delta: Duration) raises:
-        """Move the hour on by a frame's time, round past midnight.
+        """Move the hour on by a frame's time, and wrap past midnight.
 
         Args:
             delta: The frame's time.

@@ -10,7 +10,15 @@ wolves and straw dummies.
 step and pose:
 
 1. **Presses.** A new press of a button asks the player's `Fighter` for a
-   move: a light attack, the heavy attack, a special, or a dodge. A ground
+   move in its fighting style: a light attack, the heavy attack, a special,
+   or a dodge. See `style_move`. An attack pressed on the beat does
+   `BEAT_BONUS` times its damage: see `extensions.village.combos`. Each
+   press of the light or the heavy attack, the dodge, the jump or the guard
+   adds a key to the combo string; when the string ends in a combo the
+   player knows, its finisher starts at the combo's power, free of its
+   special points. A jump cuts an attack's recovery short. The swap button
+   takes up the next style the player carries, and the book button shows
+   the combo book. A ground
    wave's cut sends a wave that runs along the ground at `WAVE_SPEED`
    for `WAVE_RANGE`, and strikes each target it passes over once. In a
    surge, the ultimate's buttons spend it on the ultimate. A dodge
@@ -21,9 +29,12 @@ step and pose:
    it locks, a flick of the look stick moves the lock to the next target
    that way. The heal button eats one of the satchel's herbs, and heals
    `HEAL_SHARE` of the player's health.
-2. **The player moves.** A free player walks, runs and jumps as before,
-   at `GUARD_PACE` of the stick while guarding, and faces what they lock
-   on. An attack carries the player along their heading, and turns them
+2. **The player moves.** A free player walks, runs, sprints and jumps as
+   before, at `GUARD_PACE` of the stick while guarding. A player locked on
+   a target faces it, and strafes around it. A sprint spends
+   `SPRINT_COST` stamina a second; a player with none left runs until
+   they have `SPRINT_REST` again. A hard landing shakes the camera. An
+   attack carries the player along their heading, and turns them
    toward what they aim at through its start-up: the locked target, else
    the nearest within `AIM_RANGE` before them, else the stick. In the
    air, the heavy attack's button makes the plunge, which dives at
@@ -37,13 +48,21 @@ step and pose:
    foe, else at the nearest foe that fights
    within `ALLY_SEEK` of the player. Her bolts fly at `BOLT_SPEED`, and
    follow their foe. The assist button calls for her assist attack when its
-   gauge is full. One foe
-   at a time holds the attack token. A bandit plays its sword's clips; a
+   gauge is full. Each foe goes for the nearest of the player and the
+   raiders who stand with them: see `quarries`. One foe at a time holds
+   the attack token, which is for the player alone. A bandit plays its sword's clips; a
    wolf shows the pose of its walk, and lies on its side when it falls.
    A perfect dodge slows the foes to `SLOW_SHARE` of the time for
-   `SLOW_SECONDS`, and an ultimate for `ULTIMATE_SLOW`.
+   `SLOW_SECONDS`, and an ultimate for `ULTIMATE_SLOW`. In magic or
+   archery, an ultimate also drops a star of light or a rain of arrows on
+   each target within `STORM_RANGE`.
 4. **The blows.** In steps of at most `COMBAT_STEP`, each fighter's clock
-   runs, and each swing gives its blow to the fighters that it reaches. A
+   runs, and each swing gives its blow to the fighters that it reaches.
+   The player's spells and arrows fly as `Missile`s from the hand, at the
+   locked target, else the nearest within `SHOT_RANGE` and `SHOT_ARC`
+   before them; each strikes the targets it passes: see
+   `extensions.village.missiles`. A mend heals the player and each ally
+   within `MEND_RADIUS` by `MEND_HEAL` of their health. A
    blow that lands pushes its fighter away, and the rising edge throws it
    up; a blow on a fighter in the air keeps it up. A guarded blow pushes
    it back `BLOCK_PUSH` as far.
@@ -60,8 +79,19 @@ step and pose:
    the camera by `SHAKE`: see `strong_blow`. A finisher or a pierce
    break stops it for `FINISH_STOP`, and shakes it twice as far. The shake dies away at
    `SHAKE_FADE`.
-7. **The fallen.** A fallen bandit gives `LOOT` coins, and one time in
-   two a herb. It lies for the
+7. **The raid.** The Stone Warden keeps a ring of stones, and its raiders
+   join the player's party as the player comes near: see
+   `extensions.village.raid`. The warden thinks by its `Boss`, walks to its
+   target, lays each attack's zone on the ground, and strikes every member
+   in the zone as the wind-up ends; its rockfall's damage is shared by the
+   members near it; its summon calls the den's wolves. Each raider thinks
+   by its `PartyMind`, and fights by its style. The taunt button holds the
+   warden on the player, once every `TAUNT_EVERY`. A member who stands by a
+   fallen raider for `REVIVE_SECONDS`, holding the use button, revives it.
+   Near a staggered warden, the heavy button calls a linked strike: each
+   standing raider near it strikes with the player, once in each stagger.
+8. **The fallen.** A fallen bandit gives `LOOT` coins, and one time in
+   two an herb. It lies for the
    `linger`, then is gone, and comes back to its post after the
    `respawn`. A fallen player comes to at the start after the `revive`.
 """
@@ -86,6 +116,25 @@ from extensions.village.character import (
     Obstacle,
 )
 from extensions.village.combat import (
+    STAMINA_BREAK,
+    AIMED_SHOT,
+    ARROW_RAIN,
+    HEAVY_BUTTON,
+    LEAP_SHOT,
+    LIGHT_BUTTON,
+    MEND,
+    QUICK_SHOT,
+    RISING_BUTTON,
+    SPELL_BLAST,
+    SPELL_BOLT,
+    ULTIMATE_BUTTON,
+    VOLLEY,
+    WAVE_BUTTON,
+    WHIRLWIND_BUTTON,
+    FightButton,
+    is_shot,
+    is_special,
+    style_move,
     PIERCE_BREAK,
     CAST,
     DEFEATED,
@@ -125,6 +174,100 @@ from extensions.village.combat import (
 )
 from extensions.animals.options import CROWD
 from extensions.animals.registry import WOLF
+from extensions.village.combos import (
+    BEAT_BONUS,
+    DODGE_KEY,
+    GUARD_KEY,
+    HEAVY_KEY,
+    JUMP_KEY,
+    LAND_MASTERY,
+    LIGHT_KEY,
+    MAKE_MASTERY,
+    MASTERED_SPECIAL,
+    MAX_RANK,
+    PRACTICED_RANK,
+    BLEED,
+    CHAIN,
+    DRAIN,
+    LAUNCH,
+    MARK,
+    NO_EFFECT,
+    SHOCKWAVE,
+    SUNDER,
+    ComboBook,
+    ComboEffect,
+    ComboKey,
+    ComboTracker,
+    effect_name,
+    on_beat,
+)
+from extensions.village.missiles import (
+    AIMED_PIERCE,
+    ARROW,
+    ARROW_SPEED,
+    ORB,
+    ORB_SPEED,
+    RAIN_ARROWS,
+    RAIN_SPEED,
+    SPARK,
+    SPARK_SPEED,
+    VOLLEY_ARROWS,
+    VOLLEY_SPREAD,
+    Missile,
+    fan,
+    fly,
+    lob,
+    rain_spots,
+    touches,
+)
+from extensions.village.styles import (
+    ARCHERY,
+    AXE,
+    HAND_TO_HAND,
+    MACE,
+    MAGIC,
+    STYLES,
+    SWORD,
+    FightingStyle,
+    is_melee,
+    style_name,
+)
+from extensions.village.boss import (
+    BOSS_POISE,
+    CHARGE_SPEED,
+    LINK_RANGE,
+    LINK_REACH,
+    BossSight,
+    inside,
+    rock_blow,
+)
+from extensions.village.party import (
+    HEALER,
+    MEND_BELOW,
+    TANK,
+    TAUNT_EVERY,
+    MemberSight,
+    PartyMind,
+    role_style,
+)
+from extensions.village.raid import (
+    JOIN_RANGE,
+    PART_RANGE,
+    REVIVE_SECONDS,
+    REVIVE_SHARE,
+    RISE_SECONDS,
+    STONES,
+    WARDEN_RADIUS,
+    WARDEN_SIZE,
+    Member,
+    RaidParameters,
+    Warden,
+    add_stones,
+    member_fighter,
+    puppet_move,
+    stone_places,
+)
+from extensions.village.boss import Boss, BOSS_WALK
 from extensions.village.companion import (
     ASSIST_PER_HIT,
     AllySight,
@@ -176,7 +319,7 @@ from extensions.village.terrain import Terrain
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from std.math import ceil, exp, sqrt
+from std.math import ceil, cos, exp, sin, sqrt
 from units.si import (
     DEGREE,
     METER,
@@ -199,6 +342,46 @@ comptime SLOW_SHARE = Float32(0.3)
 """The share of the time the foes move at while they are slowed."""
 comptime ULTIMATE_SLOW = Float32(2.1)
 """How long an ultimate slows the foes, in seconds: all through it."""
+comptime LAUNCH_SPEED = Float32(7)
+"""How fast a launching finisher throws its foe up, in meters a second."""
+comptime SUNDER_POISE = Float32(300)
+"""How much poise a sundering finisher takes from a boss."""
+comptime BLEED_SECONDS = Float32(4)
+"""How long a finisher's wound bleeds, in seconds."""
+comptime BLEED_SHARE = Float32(0.6)
+"""The share of its finisher's damage that a wound bleeds, all told."""
+comptime BLEED_TICK = Float32(0.5)
+"""How often a wound's bleeding shows as a number, in seconds."""
+comptime DRAIN_SHARE = Float32(0.35)
+"""The share of its damage that a draining finisher heals the player by."""
+comptime SHOCK_RADIUS = Float32(3.5)
+"""How near its foe a shockwave strikes the other targets, in meters."""
+comptime SHOCK_SHARE = Float32(0.5)
+"""The share of its finisher's blow that a shockwave strikes with."""
+comptime CHAIN_RANGE = Float32(8)
+"""How far a chaining finisher's sparks leap, in meters."""
+comptime CHAIN_TARGETS = 3
+"""How many other targets a chaining finisher's sparks leap to at most."""
+comptime CHAIN_SHARE = Float32(0.6)
+"""The share of its finisher's blow that each chained spark strikes with."""
+comptime CHAIN_SPEED = Float32(40)
+"""How fast a chained spark flies, in meters a second."""
+comptime MARK_SECONDS = Float32(6)
+"""How long a marking finisher's mark lasts, in seconds."""
+comptime MARK_BONUS = Float32(1.25)
+"""How many times its damage each blow on a marked target does."""
+comptime FLASH_SECONDS = Float32(0.6)
+"""How long an effect's flash of light shows, in seconds."""
+comptime EFFECT_TEXT = Rgb(200, 160, 255)
+"""The color of an effect's word over its foe."""
+comptime BLEED_TEXT = Rgb(220, 40, 50)
+"""The color of a wound's bleeding numbers."""
+comptime STORM_RANGE = Float32(18)
+"""How near the player a target must stand for a ranged style's ultimate
+to fall on it, in meters."""
+comptime STORM_HEIGHT = Float32(9)
+"""How high over each target a magic ultimate's star of light starts, in
+meters."""
 comptime LOCK_RANGE = Float32(16)
 """How near a target must be to lock on to, in meters."""
 comptime LOCK_BREAK = Float32(22)
@@ -244,7 +427,7 @@ it, in seconds."""
 comptime LOOT = 8
 """How many coins a fallen bandit gives."""
 comptime HERB_CHANCE = Float32(0.5)
-"""The share of fallen bandits that drop a herb as well."""
+"""The share of fallen bandits that drop an herb as well."""
 comptime WAVE_SPEED = Float32(14)
 """How fast a ground wave's wave runs, in meters a second."""
 comptime WAVE_RANGE = Float32(12)
@@ -268,9 +451,9 @@ is strong."""
 comptime FLICK = Float32(0.7)
 """How far the look stick must lean, newly, to move the lock."""
 comptime HEAL_SHARE = Float32(0.3)
-"""The share of the player's health that a herb heals."""
+"""The share of the player's health that an herb heals."""
 comptime HEAL_TEXT = Rgb(120, 230, 120)
-"""The color of what a herb or the companion heals."""
+"""The color of what an herb or the companion heals."""
 comptime PLUNGE_SPEED = Float32(14)
 """How fast a plunge dives, in meters a second."""
 comptime KNIFE_SPEED = Float32(18)
@@ -290,6 +473,48 @@ comptime BOLT_START = Float32(0.6)
 comptime ALLY_SEEK = Float32(15)
 """How far from the player a foe that fights draws the companion's
 casts, in meters."""
+comptime SHOT_RANGE = Float32(26)
+"""How near a target must be for a spell or an arrow to aim at it, in
+meters."""
+comptime SHOT_ARC = Float32(70)
+"""The arc before the player in which a spell or an arrow finds a target,
+in degrees."""
+comptime SHOT_HEIGHT = Float32(1.45)
+"""How high over the player's feet a spell or an arrow leaves the hand, in
+meters."""
+comptime SHOT_AHEAD = Float32(0.5)
+"""How far before the player a spell or an arrow leaves the hand, in
+meters."""
+comptime RAIN_REACH = Float32(10)
+"""How far before the player a rain of arrows falls with no target, in
+meters."""
+comptime MEND_RADIUS = Float32(8)
+"""How near the player a mend heals an ally, in meters."""
+comptime MEND_HEAL = Float32(0.18)
+"""The share of each one's health that a mend heals."""
+comptime SPRINT_COST = Float32(11)
+"""The stamina a sprint spends, a second."""
+comptime SPRINT_REST = Float32(25)
+"""The stamina a player who ran out needs before they sprint again."""
+comptime LANDING_SHAKE = Float32(0.008)
+"""How far a hard landing shakes the camera, in meters, for each meter a
+second it lands faster than a hard landing must."""
+comptime FAR_POSE = 3
+"""How many frames apart a fighter past the fight's reach is posed."""
+comptime RAID_LOOT = 60
+"""How many coins the fallen warden gives."""
+comptime RAID_HERBS = 3
+"""How many herbs the fallen warden gives."""
+comptime RAID_EXPERIENCE = 400
+"""The fighting experience of the warden felled."""
+comptime TAUNT_RANGE = Float32(25)
+"""How near the warden the player must be to taunt it, in meters."""
+comptime ROLL_TAP = Float32(0.3)
+"""How long a press of the dodge can last, out of a fight, to roll, in
+seconds. A longer hold of the east button runs."""
+comptime REVIVE_REACH = Float32(1.6)
+"""How near a fallen raider a member must stand to revive it, in
+meters."""
 comptime HURT_TEXT = Rgb(255, 90, 70)
 """The color of the player's own damage."""
 comptime CALM_TEXT = Rgb(150, 200, 255)
@@ -328,6 +553,9 @@ def pressed(now: MoveInput, before: MoveInput) -> MoveInput:
         middle=now.middle and not before.middle,
         low=now.low and not before.low,
         heal=now.heal and not before.heal,
+        swap=now.swap and not before.swap,
+        taunt=now.taunt and not before.taunt,
+        book=now.book and not before.book,
     )
 
 
@@ -425,6 +653,34 @@ struct Wave(Copyable, Movable):
 
 
 @fieldwise_init
+struct Wound(Copyable, Movable):
+    """A finisher's wound, which bleeds its target's health away."""
+
+    # The target; how long it still bleeds, in seconds; and how much
+    # health it takes a second.
+    var index: Int
+    var left: Float32
+    var rate: Float32
+    # The health it has taken and not yet shown, and how long since it
+    # last showed, in seconds.
+    var owed: Float32
+    var since: Float32
+
+
+@fieldwise_init
+struct Flash(Copyable, Movable):
+    """A combo effect's flash of light, which the display draws."""
+
+    var effect: ComboEffect
+    # Where it starts and where it ends: the same place, but for a chain's
+    # spark and a drain's light, which run to the next target and to the
+    # player. Each is at chest height.
+    var at: Vector3
+    var to: Vector3
+    var age: Float32
+
+
+@fieldwise_init
 struct Popup(Copyable, Movable):
     """A number or a word over a fighter: what a blow did."""
 
@@ -455,6 +711,15 @@ struct BattleParameters(Copyable, Movable):
     # times its quality's cell its mesh's cell is.
     var phases: Int
     var coarseness: Float64
+    # The fighting styles the player carries, the first taken up at the
+    # start, and the style they specialize in.
+    var styles: List[FightingStyle]
+    var specialty: FightingStyle
+    # The raid, if any.
+    var raids: List[RaidParameters]
+    # How far from the player a fighter is posed every frame and leaves a
+    # trail, in meters; past it, it is posed every `FAR_POSE`th frame.
+    var fight_reach: Float32
 
     def __init__(out self) raises:
         """Hold the default village's fight: the player's strength, the
@@ -462,6 +727,9 @@ struct BattleParameters(Copyable, Movable):
         the dummies,
         a revive of 4 seconds, foes that lie for 10 seconds and come back
         after a minute, and wolves of six poses at their quality's cell.
+        The player carries every style, takes up the sword, and
+        specializes in it. The Stone Warden keeps its ring of stones, and
+        its four raiders wait there.
 
         Raises:
             Error: Never: the outfits check.
@@ -477,6 +745,10 @@ struct BattleParameters(Copyable, Movable):
         self.respawn = Duration(60.0, SECOND)
         self.phases = 6
         self.coarseness = 1
+        self.styles = [SWORD, AXE, MACE, HAND_TO_HAND, MAGIC, ARCHERY]
+        self.specialty = SWORD
+        self.raids = [RaidParameters()]
+        self.fight_reach = 1.0e4
 
     def check(self) raises:
         """Refuse a fight that cannot be held.
@@ -486,8 +758,12 @@ struct BattleParameters(Copyable, Movable):
                 the dummies' parameters do not check; a den holds not from
                 1 to 8 wolves; there are more than 16 bandits, 16 dummies,
                 4 dens or 1 companion; a time is negative or not below 10,000 seconds; a
-                wolf's walk has not from 1 to 32 poses; or its coarseness
-                is not from 1 to 8.
+                wolf's walk has not from 1 to 32 poses; its coarseness
+                is not from 1 to 8; the player carries no style, more than
+                six, one twice or one that is not a style; the specialty
+                is not a style; there is more than one raid, or its
+                parameters do not check; or the fight's reach is not from
+                5 to 10,000 meters.
         """
         self.player.check()
         self.dummy.check()
@@ -509,6 +785,23 @@ struct BattleParameters(Copyable, Movable):
             raise Error("A wolf's walk must have from 1 to 32 poses")
         if not (self.coarseness >= 1 and self.coarseness <= 8):
             raise Error("A wolf's coarseness must be from 1 to 8")
+        if not (len(self.styles) >= 1 and len(self.styles) <= STYLES):
+            raise Error("A player carries from one to six fighting styles")
+        var seen = List[Bool](length=STYLES, fill=False)
+        for style in self.styles:  # pragma: no branch
+            if not style.is_valid() or seen[style.value]:
+                raise Error(
+                    "A player's styles must be six styles at most, apart"
+                )
+            seen[style.value] = True
+        if not self.specialty.is_valid():
+            raise Error("A player's specialty must be one of the six styles")
+        if len(self.raids) > 1:
+            raise Error("A fight holds at most one raid")
+        if not (self.fight_reach >= 5 and self.fight_reach <= 1.0e4):
+            raise Error("A fight's reach must be from 5 to 10,000 meters")
+        for raid in self.raids:
+            raid.check()
         for time in [  # pragma: no branch
             self.revive,
             self.linger,
@@ -547,11 +840,58 @@ struct Foe(Movable):
 
 @fieldwise_init
 struct Person(Movable):
-    """A bandit's looks: its body, its sword and its trail."""
+    """A fighter's looks: its body, its weapons and its trail."""
 
     var body: Body
     var arms: Arms
     var trail: Trail
+    # The time its clips have not yet played, in seconds: a body past the
+    # fight's reach plays them every `FAR_POSE`th frame.
+    var unposed: Float32
+
+
+def pose_person(
+    mut scene: Scene,
+    mut person: Person,
+    character: Character,
+    fighter: Fighter,
+    drawn: Bool,
+    delta: Duration,
+    near: Bool,
+    turn: Bool,
+) raises:
+    """Pose a fighter's body, and show its trail.
+
+    A body near the player plays its clips each frame, and shows its trail.
+    A body past the fight's reach plays them only on its turn, for all the
+    time it waited, and shows no trail; between, it only stands where its
+    character stands.
+
+    Args:
+        scene: The scene the body is in.
+        person: The body, its weapons and its trail.
+        character: The character the body shows.
+        fighter: What the body does in a fight.
+        drawn: Whether its weapon is drawn.
+        delta: The frame's time.
+        near: Whether the body is within the fight's reach of the player.
+        turn: Whether it is the body's turn to pose, past the reach.
+
+    Raises:
+        Error: If a clip cannot be played.
+    """
+    person.unposed += delta.to(SECOND)
+    if not near and not turn:
+        person.arms.place(scene, person.body, character)
+        person.trail.shown = -1
+        return
+    var waited = Duration(person.unposed, SECOND)
+    person.unposed = 0
+    person.arms.pose(scene, person.body, character, fighter, drawn, waited)
+    if near:
+        person.trail.show(scene, fighter)
+    else:
+        person.trail.shown = -1
 
 
 @fieldwise_init
@@ -652,6 +992,14 @@ struct Battle(Movable):
     # another can take it, in seconds.
     var token: Int
     var token_rest: Float32
+    # The member each foe goes for: -1 for the player, and `k` for the
+    # raider `k`.
+    var quarries: List[Int]
+    # The wounds that bleed; how long each target is still marked, in
+    # seconds; and the effects' flashes of light.
+    var wounds: List[Wound]
+    var marks: List[Float32]
+    var flashes: List[Flash]
     # The last frame's input, for new presses.
     var last: MoveInput
     # The way the player's dodge goes, and how fast a blow pushes them.
@@ -689,9 +1037,41 @@ struct Battle(Movable):
     var herbs: Int
     var eaten: Int
     var found: Int
-    # The swordplay experience won and not yet taken: see
+    # The experience won and not yet taken, for each fighting style: see
     # `extensions.village.skills`.
-    var trained: Int
+    var trained: List[Int]
+    # The player's combos, and the string they make now; the combo whose
+    # finisher the player makes, or -1, the finisher's move, and whether it
+    # landed.
+    var book: ComboBook
+    var tracker: ComboTracker
+    var finisher: Int
+    var finishing: CombatMove
+    var finisher_landed: Bool
+    # The level of each style's skill, as the game says before each frame;
+    # the place in the parameters' styles of the style the player fights
+    # in; and whether the combo book shows.
+    var levels: List[Int]
+    var style_at: Int
+    var reading: Bool
+    # The player's spells and arrows that fly.
+    var shots: List[Missile]
+    # How long ago the player last pressed on the beat, and last mended,
+    # in seconds, or -1.
+    var beat: Float32
+    var mended: Float32
+    # The raid's warden, if it was built, and its raiders; and how long
+    # until the player can taunt again, in seconds.
+    var wardens: List[Warden]
+    var members: List[Member]
+    var taunt_wait: Float32
+    # How long the dodge has been held, in seconds.
+    var dodge_hold: Float32
+    # Where the player's feet were at the end of the last frame, for the
+    # display.
+    var feet: Vector3
+    # How many frames the fight has run.
+    var frame: Int
 
     def __init__(
         out self,
@@ -731,9 +1111,12 @@ struct Battle(Movable):
         parameters.check()
         self.parameters = parameters.copy()
         self.fighter = Fighter(parameters.player)
+        _ = self.fighter.set_style(parameters.styles[0])
         var swords = SwordLooks(assets)
         var glow = slash_material(assets)
-        self.arms = Arms(scene, assets, body, swords, BRIGHT_STEEL)
+        self.arms = Arms(
+            scene, assets, body, swords, BRIGHT_STEEL, parameters.styles
+        )
         var scale = body.person.rig.stature / Float32(1.8288)
         self.trail = Trail(scene, body.carrier, scale, PLAYER_TRAIL)
         self.foes = List[Foe]()
@@ -760,7 +1143,7 @@ struct Battle(Movable):
                 terrain,
             )
             var home = character.position
-            self.people.append(Person(person^, arms^, trail^))
+            self.people.append(Person(person^, arms^, trail^, 0))
             self.foes.append(
                 Foe(
                     character^,
@@ -792,7 +1175,7 @@ struct Battle(Movable):
                 ally.heading,
                 terrain,
             )
-            self.people.append(Person(person^, arms^, trail^))
+            self.people.append(Person(person^, arms^, trail^, 0))
             self.allies.append(
                 Ally(
                     character^,
@@ -873,6 +1256,12 @@ struct Battle(Movable):
                     Fighter(parameters.dummy),
                 )
             )
+        self.wardens = List[Warden]()
+        self.members = List[Member]()
+        self.taunt_wait = 0
+        self.dodge_hold = 0
+        self.feet = start
+        self.frame = 0
         self.sparks = Sparks(scene, assets, glow)
         self.popups = List[Popup]()
         self.waves = List[Wave]()
@@ -882,6 +1271,10 @@ struct Battle(Movable):
         self.lock = -1
         self.token = -1
         self.token_rest = 0
+        self.quarries = List[Int](length=len(self.foes), fill=-1)
+        self.wounds = List[Wound]()
+        self.marks = List[Float32]()
+        self.flashes = List[Flash]()
         self.last = MoveInput(0, 0, 0, 0, False, False)
         self.dodge_way = Vector3(0, 0, 1)
         self.shove = Vector3(0, 0, 0)
@@ -902,7 +1295,120 @@ struct Battle(Movable):
         self.herbs = 0
         self.eaten = 0
         self.found = 0
-        self.trained = 0
+        self.trained = List[Int](length=STYLES, fill=0)
+        self.book = ComboBook(parameters.specialty)
+        for style in parameters.styles:  # pragma: no branch
+            _ = self.book.teach(style, 1)
+        self.tracker = ComboTracker()
+        self.finisher = -1
+        self.finishing = FREE
+        self.finisher_landed = False
+        self.levels = List[Int](length=STYLES, fill=1)
+        self.style_at = 0
+        self.reading = False
+        self.shots = List[Missile]()
+        self.beat = -1
+        self.mended = -1
+        for raid in parameters.raids:
+            if lot_openness(lots, raid.x, raid.z) < 1:
+                continue
+            if ground.wet(raid.x, raid.z):
+                continue
+            self._raise_raid(
+                scene, assets, raid, looks, terrain, swords, triangles, detail
+            )
+        self.marks = List[Float32](length=self.targets(), fill=0)
+
+    def _raise_raid(
+        mut self,
+        mut scene: Scene,
+        mut assets: Assets,
+        raid: RaidParameters,
+        looks: HouseLooks,
+        terrain: Terrain,
+        swords: SwordLooks,
+        triangles: Int,
+        detail: Int,
+    ) raises:
+        """Build the raid's stones, its warden and its raiders."""
+        ref ground = terrain.ground
+        var person = Body(
+            scene, assets, raid.spec, raid.outfit, triangles, detail
+        )
+        scene.node(person.carrier).set_scale(
+            WARDEN_SIZE, WARDEN_SIZE, WARDEN_SIZE
+        )
+        person.lift *= WARDEN_SIZE
+        var arms = Arms(
+            scene, assets, person, swords, DULL_IRON, [MACE], giant=True
+        )
+        var size = person.person.rig.stature / Float32(1.8288)
+        var trail = Trail(scene, person.carrier, size, FOE_TRAIL)
+        var giant = CharacterParameters()
+        giant.radius = Length(WARDEN_RADIUS, METER)
+        giant.walk_speed = Velocity(BOSS_WALK, METER_PER_SECOND)
+        giant.run_speed = Velocity(BOSS_WALK, METER_PER_SECOND)
+        var character = Character(giant, raid.x, raid.z, raid.heading, terrain)
+        var home = character.position
+        self.people.append(Person(person^, arms^, trail^, 0))
+        var puppet = Fighter(FighterParameters())
+        _ = puppet.set_style(MACE)
+        self.wardens.append(
+            Warden(
+                character^,
+                Boss(1 + len(raid.raiders), raid.seed),
+                puppet^,
+                home,
+                raid.heading,
+                len(self.people) - 1,
+                -1,
+            )
+        )
+        var heights = List[Float32]()
+        for at in stone_places(home):  # pragma: no branch
+            heights.append(ground.height_at(at.x, at.z))
+        _ = add_stones(scene, assets, looks, home, heights)
+        for raider in raid.raiders:
+            var body = Body(
+                scene, assets, raider.spec, raider.outfit, triangles, detail
+            )
+            var style = role_style(raider.role)
+            var kit = Arms(scene, assets, body, swords, BRIGHT_STEEL, [style])
+            var scale = body.person.rig.stature / Float32(1.8288)
+            var streak = Trail(scene, body.carrier, scale, PLAYER_TRAIL)
+            var walker = Character(
+                CharacterParameters(),
+                raid.x + raider.x,
+                raid.z + raider.z,
+                raid.heading,
+                terrain,
+            )
+            var post = walker.position
+            var fighter = Fighter(member_fighter(raider.role))
+            _ = fighter.set_style(style)
+            self.people.append(Person(body^, kit^, streak^, 0))
+            self.members.append(
+                Member(
+                    walker^,
+                    fighter^,
+                    PartyMind(raider.role),
+                    post,
+                    len(self.people) - 1,
+                    False,
+                    -1,
+                    0,
+                    Vector3(0, 0, 0),
+                    Vector3(0, 0, 1),
+                )
+            )
+
+    def first_warden(self) -> Int:
+        """Return the target index of the first warden.
+
+        Returns:
+            The index after the foes and the dummies.
+        """
+        return len(self.foes) + len(self.dummies)
 
     def node_of(self, index: Int) -> NodeId:
         """Return the node a foe's looks hang from.
@@ -933,42 +1439,66 @@ struct Battle(Movable):
             out.append(self.dummies[index].dummy.pivot)
         for index in range(len(self.allies)):
             out.append(self.people[self.allies[index].look].body.carrier)
+        for index in range(len(self.wardens)):
+            out.append(self.people[self.wardens[index].look].body.carrier)
+        for index in range(len(self.members)):
+            out.append(self.people[self.members[index].look].body.carrier)
         return out^
 
     def targets(self) -> Int:
         """Return how many targets there are: the bandits, then the
-        dummies.
+        dummies, then the wardens.
 
         Returns:
             The count.
         """
-        return len(self.foes) + len(self.dummies)
+        return len(self.foes) + len(self.dummies) + len(self.wardens)
 
     def target_at(self, index: Int) -> Vector3:
         """Return where a target's feet are.
 
         Args:
-            index: A bandit's index, or a dummy's after the bandits.
+            index: A bandit's index, a dummy's after the bandits, or a
+                warden's after the dummies.
 
         Returns:
             The feet.
         """
         if index < len(self.foes):
             return self.foes[index].character.position
-        return self.dummies[index - len(self.foes)].dummy.where()
+        var post = index - len(self.foes)
+        if post < len(self.dummies):
+            return self.dummies[post].dummy.where()
+        return self.wardens[post - len(self.dummies)].character.position
+
+    def target_radius(self, index: Int) -> Float32:
+        """Return how wide a target is, for a swing to reach it.
+
+        Args:
+            index: A target's index.
+
+        Returns:
+            `WARDEN_RADIUS` for a warden, and 0.3 meters for any other.
+        """
+        if index >= self.first_warden():
+            return WARDEN_RADIUS
+        return 0.3
 
     def standing(self, index: Int) -> Bool:
         """Return whether a target stands, so it can be struck or locked.
 
         Args:
-            index: A bandit's index, or a dummy's after the bandits.
+            index: A bandit's index, a dummy's after the bandits, or a
+                warden's after the dummies.
 
         Returns:
-            False for a fallen bandit, and True for a dummy.
+            False for a fallen bandit or warden, and True for a dummy.
         """
         if index < len(self.foes):
             return self.foes[index].down < 0
-        return True
+        if index < self.first_warden():
+            return True
+        return not self.wardens[index - self.first_warden()].boss.defeated()
 
     def obstacles(self) -> List[Obstacle]:
         """Return the circle each standing bandit, each dummy and the
@@ -991,6 +1521,15 @@ struct Battle(Movable):
             ref ally = self.allies[index].character
             ref at = ally.position
             out.append(Obstacle(at.x, at.z, ally.parameters.radius.to(METER)))
+        for index in range(len(self.wardens)):
+            ref warden = self.wardens[index]
+            ref at = warden.character.position
+            var r = WARDEN_RADIUS if not warden.boss.defeated() else Float32(0)
+            out.append(Obstacle(at.x, at.z, r))
+        for index in range(len(self.members)):
+            ref member = self.members[index].character
+            ref at = member.position
+            out.append(Obstacle(at.x, at.z, member.parameters.radius.to(METER)))
         return out^
 
     def pick_lock(self, at: Vector3, yaw: Angle) -> Int:
@@ -1056,7 +1595,11 @@ struct Battle(Movable):
         return best
 
     def aim(
-        self, at: Vector3, heading: Angle, stick: Vector3
+        self,
+        at: Vector3,
+        heading: Angle,
+        stick: Vector3,
+        within: Float32 = AIM_RANGE,
     ) -> Optional[Angle]:
         """Return the way an attack turns its player toward.
 
@@ -1065,19 +1608,20 @@ struct Battle(Movable):
             heading: The way they face.
             stick: The way the stick leans on the ground; of no length
                 when it rests.
+            within: How near a target must be: `AIM_RANGE` for a melee
+                attack, `SHOT_RANGE` for a spell or a shot.
 
         Returns:
             The way to the locked target; else to the nearest standing
-            target within `AIM_RANGE` and `AIM_ARC` of the stick, or of
-            the heading when the stick rests; else the stick's way; else
-            None.
+            target within `within` and `AIM_ARC` of the stick, or of the
+            heading when the stick rests; else the stick's way; else None.
         """
         if self.lock >= 0:
             return yaw_of(self.target_at(self.lock) - at)
         var leaning = stick.length() > 0.1
         var look = yaw_of(stick) if leaning else heading
         var best = -1
-        var nearest = AIM_RANGE
+        var nearest = within
         for index in range(self.targets()):
             if not self.standing(index):
                 continue
@@ -1120,6 +1664,12 @@ struct Battle(Movable):
         for k in range(3):  # pragma: no branch
             if asked[k] and self.fighter.set_stance(stances[k]):
                 self.notes.append(names[k] + " STANCE")
+        if presses.swap:
+            self._swap()
+        if presses.taunt:
+            self._taunt(player)
+        if presses.book:
+            self.reading = not self.reading
         if presses.lock:
             if self.lock >= 0:
                 self.lock = -1
@@ -1128,6 +1678,7 @@ struct Battle(Movable):
         if self.lock >= 0 and flick != 0:
             self.lock = self.switch_lock(player.position, flick)
         if presses.guard:
+            _ = self._key(GUARD_KEY, on_beat(self.fighter), player)
             var back = self.fighter.pulse()
             if back > 0:
                 self._popup(player.position, "RECOVERED", CALM_TEXT)
@@ -1135,32 +1686,305 @@ struct Battle(Movable):
         self.fighter.hold_guard(input.guard)
         self.called = presses.assist
         var fought = input.guard or presses.lock
+        var button = FightButton(-1)
         if presses.ultimate and self.fighter.over > 0:
-            if self.fighter.request(ULTIMATE):
-                self.notes.append("ULTIMATE!")
-                self.slow = ULTIMATE_SLOW
-            fought = True
-        elif presses.rising or presses.whirlwind or presses.ground_wave:
-            var special = GROUND_WAVE
-            if presses.rising:
-                special = RISING_EDGE
-            elif presses.whirlwind:
-                special = WHIRLWIND
-            if self.fighter.request(special):
-                self.notes.append(move_name(special) + "!")
-            fought = True
+            button = ULTIMATE_BUTTON
+        elif presses.rising:
+            button = RISING_BUTTON
+        elif presses.whirlwind:
+            button = WHIRLWIND_BUTTON
+        elif presses.ground_wave:
+            button = WAVE_BUTTON
         elif presses.light:
-            _ = self.fighter.press_light()
-            fought = True
+            button = LIGHT_BUTTON
         elif presses.heavy:
-            var heavy = HEAVY if player.grounded else PLUNGE
-            _ = self.fighter.request(heavy)
+            button = HEAVY_BUTTON
+        if button.is_valid():
             fought = True
+            self._attack(button, player)
         if presses.dodge and self.drawn:
+            _ = self._key(DODGE_KEY, on_beat(self.fighter), player)
             _ = self.fighter.request(DODGE)
+        if presses.jump and player.grounded and not self.fighter.free():
+            # A jump cuts an attack's recovery short.
+            if self.fighter.cancel():
+                _ = self._key(JUMP_KEY, True, player)
+        elif presses.jump and player.grounded:
+            _ = self._key(JUMP_KEY, False, player)
         if fought:
             self.drawn = True
             self.calm = 0
+
+    def _taunt(mut self, player: Character) raises:
+        """Taunt the nearest warden in the fight, once every
+        `TAUNT_EVERY`."""
+        if self.taunt_wait > 0:
+            return
+        for w in range(len(self.wardens)):
+            ref warden = self.wardens[w]
+            if warden.boss.defeated():
+                continue
+            var gap = _flat(warden.character.position, player.position)
+            if gap > TAUNT_RANGE:
+                continue
+            warden.boss.taunt(0)
+            self.taunt_wait = TAUNT_EVERY
+            self._popup(player.position, "TAUNT", GOLD_TEXT)
+            self.drawn = True
+            self.calm = 0
+            return
+
+    def _swap(mut self) raises:
+        """Take up the next style the player carries, while free."""
+        var count = len(self.parameters.styles)
+        var next = (self.style_at + 1) % count
+        if self.fighter.set_style(self.parameters.styles[next]):
+            self.style_at = next
+            self.tracker.clear()
+            self.notes.append(style_name(self.fighter.style))
+
+    def _key(
+        mut self, key: ComboKey, beat: Bool, player: Character
+    ) raises -> Bool:
+        """Add a key to the combo string; if the string ends in a combo the
+        player knows, start its finisher. Return whether one started."""
+        self.tracker.press(key, beat)
+        if beat:
+            self.beat = 0
+        var found = self.book.match(self.tracker, self.fighter.style)
+        if found < 0:
+            return False
+        var finisher = self.book.combos[found].finisher
+        if finisher == HEAVY and not player.grounded:
+            finisher = PLUNGE
+        var power = self.book.power(found)
+        if beat:
+            power *= BEAT_BONUS
+        if not self.fighter.request(finisher, power, True):
+            return False
+        self.tracker.clear()
+        self.finisher = found
+        self.finishing = finisher
+        self.finisher_landed = False
+        self.notes.append(self.book.combos[found].name + "!")
+        self._master(found, MAKE_MASTERY)
+        return True
+
+    def _afflict(
+        mut self, mut scene: Scene, index: Int, struck: Struck, hit: Blow
+    ) raises:
+        """Give the combo's effect to the target that its finisher first
+        lands on: see `extensions.village.combos`. Its word shows over the
+        target, and its flash of light."""
+        var effect = self.book.combos[self.finisher].effect
+        if effect == NO_EFFECT:
+            return
+        var there = self.target_at(index)
+        var chest = there + Vector3(0, CHEST, 0)
+        self._popup(
+            there + Vector3(0, 0.7, 0), effect_name(effect), EFFECT_TEXT
+        )
+        self.flashes.append(Flash(effect, chest, chest, 0))
+        if effect == LAUNCH:
+            if index < len(self.foes):
+                ref body = self.foes[index].character
+                body.velocity.y = max(body.velocity.y, LAUNCH_SPEED)
+                body.grounded = False
+        elif effect == SUNDER:
+            if index < len(self.foes):
+                ref guard = self.foes[index].fighter
+                guard.stamina = 0
+                guard.hold_guard(False)
+            elif index >= self.first_warden():
+                ref boss = self.wardens[index - self.first_warden()].boss
+                boss.poise = max(Float32(0), boss.poise - SUNDER_POISE)
+        elif effect == BLEED:
+            var rate = struck.damage * BLEED_SHARE / BLEED_SECONDS
+            self.wounds.append(Wound(index, BLEED_SECONDS, rate, 0, 0))
+        elif effect == DRAIN:
+            ref f = self.fighter
+            var gain = min(
+                f.parameters.health - f.health, struck.damage * DRAIN_SHARE
+            )
+            f.health += gain
+            var feet = self.feet
+            self._popup(feet, "+" + String(Int(gain + 0.5)), HEAL_TEXT)
+            self.flashes[len(self.flashes) - 1].to = feet + Vector3(0, CHEST, 0)
+        elif effect == SHOCKWAVE:
+            var blow = hit
+            blow.damage *= SHOCK_SHARE
+            blow.stamina_damage *= SHOCK_SHARE
+            var tank = self.fighter.style == MACE
+            # The target the finisher landed on is one.
+            for other in range(self.targets()):  # pragma: no branch
+                if other == index or not self.standing(other):
+                    continue
+                if _flat(self.target_at(other), there) > SHOCK_RADIUS:
+                    continue
+                _ = self._strike(scene, other, blow, there, 0, tank)
+        elif effect == CHAIN:
+            var blow = hit
+            blow.damage *= CHAIN_SHARE
+            blow.stamina_damage *= CHAIN_SHARE
+            var sent = 0
+            # The target the finisher landed on is one.
+            for other in range(self.targets()):  # pragma: no branch
+                if sent == CHAIN_TARGETS:
+                    break
+                if other == index or not self.standing(other):
+                    continue
+                var to = self.target_at(other) + Vector3(0, CHEST, 0)
+                if _flat(to, chest) > CHAIN_RANGE:
+                    continue
+                var way = (to - chest) / max((to - chest).length(), 1.0e-3)
+                var spark = Missile(
+                    SPARK, chest, way * CHAIN_SPEED, other, -1, blow
+                )
+                spark.struck.append(index)
+                self.shots.append(spark^)
+                self.flashes.append(Flash(CHAIN, chest, to, 0))
+                sent += 1
+        else:
+            self.marks[index] = MARK_SECONDS
+
+    def _bleed(mut self, index: Int, amount: Float32):
+        """Take a wound's bleeding from its target, and show it: a wound
+        does not fell a target."""
+        if index < len(self.foes):
+            ref f = self.foes[index].fighter
+            f.health = max(Float32(1), f.health - amount)
+        elif index >= self.first_warden():
+            ref boss = self.wardens[index - self.first_warden()].boss
+            boss.health = max(Float32(1), boss.health - amount)
+        if amount >= 0.5:
+            var there = self.target_at(index)
+            self._popup(there, String(Int(amount + 0.5)), BLEED_TEXT)
+
+    def _effects_step(mut self, seconds: Float32):
+        """Age the effects' flashes and marks, and bleed each wound."""
+        var flashes = List[Flash]()
+        for flash in self.flashes:
+            if flash.age + seconds < FLASH_SECONDS:
+                var aged = flash.copy()
+                aged.age += seconds
+                flashes.append(aged^)
+        self.flashes = flashes^
+        for k in range(len(self.marks)):
+            self.marks[k] = max(Float32(0), self.marks[k] - seconds)
+        var wounds = List[Wound]()
+        for wound in self.wounds:
+            if not self.standing(wound.index):
+                continue
+            var w = wound.copy()
+            var step = min(seconds, w.left)
+            w.left -= step
+            w.owed += w.rate * step
+            w.since += step
+            if w.since >= BLEED_TICK or w.left <= 0:
+                self._bleed(w.index, w.owed)
+                w.owed = 0
+                w.since = 0
+            if w.left > 0:
+                wounds.append(w^)
+        self.wounds = wounds^
+
+    def _master(mut self, index: Int, amount: Int) raises:
+        """Give a combo mastery, and say so when its rank rises."""
+        if self.book.practice(index, amount):
+            var name = self.book.combos[index].name
+            var rank = self.book.rank(index)
+            if rank == MAX_RANK:
+                self.notes.append(name + " MASTERED!")
+            else:
+                self.notes.append(String(name, " RANK ", rank, "!"))
+
+    def _perks(mut self, index: Int) raises:
+        """Give a landed finisher's perks, by its combo's rank: its stamina
+        back from `PRACTICED_RANK`, and `MASTERED_SPECIAL` special points
+        at `MAX_RANK`."""
+        var rank = self.book.rank(index)
+        ref f = self.fighter
+        if rank >= PRACTICED_RANK:
+            var back = f.stamina_price(self.finishing)
+            f.stamina = min(f.parameters.stamina, f.stamina + back)
+        if rank == MAX_RANK:
+            f.special = min(
+                f.parameters.special_points, f.special + MASTERED_SPECIAL
+            )
+
+    def _link(mut self, player: Character) raises -> Bool:
+        """Call a linked strike on a staggered warden within `LINK_RANGE`:
+        the player and each standing raider within `LINK_REACH` of it make
+        their heavy attacks together. Return whether one struck."""
+        for w in range(len(self.wardens)):
+            if not self.wardens[w].boss.link_ready():
+                continue
+            var at = self.wardens[w].character.position
+            if _flat(at, player.position) > LINK_RANGE:
+                continue
+            var heavy = style_move(
+                self.fighter.style, HEAVY_BUTTON, player.grounded, FREE
+            )
+            if not self.fighter.request(heavy, 1, True):
+                return False
+            var members: List[Int] = [0]
+            for k in range(len(self.members)):
+                ref member = self.members[k]
+                if not member.joined or member.down >= 0:
+                    continue
+                if _flat(member.character.position, at) > LINK_REACH:
+                    continue
+                members.append(k + 1)
+                var move = style_move(
+                    member.fighter.style, HEAVY_BUTTON, True, FREE
+                )
+                _ = member.fighter.request(move, 1, True)
+            var struck = self.wardens[w].boss.link(members)
+            self.tracker.clear()
+            self.notes.append(String("LINKED STRIKE x", len(members), "!"))
+            self._popup(at + Vector3(0, 1.2, 0), "LINKED", GOLD_TEXT)
+            self._popup(at, String(Int(struck.damage + 0.5)), GOLD_TEXT)
+            self.freeze = FINISH_STOP
+            self.shake = 3 * SHAKE
+            self.drawn = True
+            self.calm = 0
+            if struck.outcome == DEFEATED:
+                self._warden_falls()
+            return True
+        return False
+
+    def _warden_falls(mut self):
+        """Give the fallen warden's loot, and say so."""
+        self.loot += RAID_LOOT
+        self.found += RAID_HERBS
+        self.trained[self.fighter.style.value] += RAID_EXPERIENCE
+        self.notes.append(
+            String("THE STONE WARDEN FALLS! +", RAID_LOOT, " COINS")
+        )
+
+    def _attack(mut self, button: FightButton, player: Character) raises:
+        """Make the move of an attack's button: a linked strike, a combo's
+        finisher, or the button's own move in the player's style."""
+        if button == HEAVY_BUTTON and self._link(player):
+            return
+        var beat = on_beat(self.fighter)
+        if button == LIGHT_BUTTON or button == HEAVY_BUTTON:
+            var key = LIGHT_KEY if button == LIGHT_BUTTON else HEAVY_KEY
+            if self._key(key, beat, player):
+                return
+        else:
+            self.tracker.clear()
+        var move = style_move(
+            self.fighter.style, button, player.grounded, self.fighter.move
+        )
+        var boost = BEAT_BONUS if beat else Float32(1)
+        if move == ULTIMATE:
+            if self.fighter.request(ULTIMATE):
+                self.notes.append("ULTIMATE!")
+                self.slow = ULTIMATE_SLOW
+            return
+        if self.fighter.request(move, boost) and is_special(move):
+            self.notes.append(move_name(move) + "!")
 
     def _move_player(
         mut self,
@@ -1180,6 +2004,10 @@ struct Battle(Movable):
         )
         self.seen = move
         self.seen_clock = self.fighter.clock
+        if began and self.finisher >= 0 and move != self.finishing:
+            # Another move began: the finisher is over.
+            if self.fighter.queued != self.finishing:
+                self.finisher = -1
         var stick = ground_direction(yaw, input.forward, input.right)
         if began and move == DODGE:
             if stick.length() > 0.1:
@@ -1199,19 +2027,27 @@ struct Battle(Movable):
                 input.run and not self.fighter.guarding,
                 input.jump and not self.fighter.guarding,
             )
-            player.step(walk, yaw, delta, terrain, blocking)
+            var face: Optional[Angle] = None
             if self.lock >= 0:
-                var toward = yaw_of(self.target_at(self.lock) - player.position)
-                player.heading = turn_toward(
-                    player.heading, toward, Angle(FACE_TURN * seconds, RADIAN)
-                )
+                face = yaw_of(self.target_at(self.lock) - player.position)
+            player.step(walk, yaw, delta, terrain, blocking, face=face)
+            if player.sprinting:
+                self.fighter.drain(SPRINT_COST * seconds)
+            if self.fighter.stamina <= 0:
+                player.tired = True
+            elif self.fighter.stamina >= SPRINT_REST:
+                player.tired = False
+            self._land_hard(player)
             return
         var way = _ahead(player.heading)
         if move == DODGE:
             way = self.dodge_way
         elif is_attack(move):
             var start = move_data(move).startup.to(SECOND) * self.fighter.pace
-            var aim = self.aim(player.position, player.heading, stick)
+            var reach = AIM_RANGE if is_melee(
+                self.fighter.style
+            ) else SHOT_RANGE
+            var aim = self.aim(player.position, player.heading, stick, reach)
             if self.fighter.clock < start and aim:
                 player.heading = turn_toward(
                     player.heading,
@@ -1227,6 +2063,17 @@ struct Battle(Movable):
                 player.velocity.y = -PLUNGE_SPEED
         var speed = self.fighter.drive().to(METER_PER_SECOND)
         player.drive(way * speed + self.shove, delta, terrain, blocking)
+        self._land_hard(player)
+
+    def _land_hard(mut self, mut player: Character):
+        """Shake the camera for a hard landing, and forget it."""
+        if player.landed <= 0:
+            return
+        var over = player.landed - player.parameters.hard_landing.to(
+            METER_PER_SECOND
+        )
+        self.shake = max(self.shake, LANDING_SHAKE * max(Float32(1), over))
+        player.landed = 0
 
     def _move_foes(
         mut self,
@@ -1254,20 +2101,39 @@ struct Battle(Movable):
                 and fighter.clock >= fighter.active_end()
                 and fighter.queued == FREE
             )
+            # It goes for the nearest of the player and the raiders who
+            # stand with them. The attack token is for the player alone.
+            var quarry = -1
+            var goal = feet
+            var near = Float32(1.0e9)
+            if not self.fighter.defeated():
+                near = _flat(foe.character.position, feet)
+            for k in range(len(self.members)):
+                ref member = self.members[k]
+                if not member.joined or member.down >= 0:
+                    continue
+                var there = member.character.position
+                var gap = _flat(foe.character.position, there)
+                if gap < near:
+                    near = gap
+                    quarry = k
+                    goal = there
+            self.quarries[index] = quarry
+            var player_quarry = quarry < 0
             var sight = Sight(
                 foe.character.position,
                 foe.home,
-                feet,
-                self.fighter.defeated(),
-                self.threat,
+                goal,
+                player_quarry and self.fighter.defeated(),
+                player_quarry and self.threat,
                 fighter.free(),
                 ready,
-                self.token == index,
+                self.token == index or not player_quarry,
                 self.token < 0 and self.token_rest <= 0,
                 fighter.raging(),
             )
             var intent = foe.brain.think(sight, delta)
-            var toward = yaw_of(feet - foe.character.position)
+            var toward = yaw_of(goal - foe.character.position)
             foe.fighter.hold_guard(intent.guard)
             if intent.dodge.length() > 0:
                 _ = foe.fighter.request(DODGE)
@@ -1315,7 +2181,7 @@ struct Battle(Movable):
             around[first + index] = Obstacle(
                 at.x, at.z, foe.character.parameters.radius.to(METER)
             )
-            if intent.claim:
+            if intent.claim and player_quarry:
                 self.token = index
             if intent.release and self.token == index:
                 self.token = -1
@@ -1365,11 +2231,11 @@ struct Battle(Movable):
         var reach = swing.value().reach
         var arc = swing.value().arc
         ref feet = player.position
-        var radius = Length(0.3, METER)
         for index in range(self.targets()):
             if not self.standing(index):
                 continue
             var there = self.target_at(index)
+            var radius = Length(self.target_radius(index), METER)
             if not reaches(feet, player.heading, reach, arc, there, radius):
                 continue
             var blow = self.fighter.connect(index)
@@ -1383,18 +2249,38 @@ struct Battle(Movable):
         """Give one of the player's blows to a target: from a swing, or
         from a ground wave's wave at `source`. The player learns what it
         did, and trains."""
-        var struck = self._strike(scene, index, hit, source)
+        var tank = self.fighter.style == MACE
+        var struck = self._strike(scene, index, hit, source, 0, tank)
+        var style = self.fighter.style.value
         if index >= len(self.foes):
-            self.trained += PRACTICE_EXPERIENCE
+            self.trained[style] += PRACTICE_EXPERIENCE
         elif landed_blow(struck.outcome):
-            self.trained += BLOW_EXPERIENCE
+            self.trained[style] += BLOW_EXPERIENCE
+        var finished = self.finisher >= 0 and not self.finisher_landed
+        if finished and landed_blow(struck.outcome):
+            self.finisher_landed = True
+            self._afflict(scene, index, struck, hit)
+            self._perks(self.finisher)
+            self._master(self.finisher, LAND_MASTERY)
         self.fighter.landed(struck)
 
     def _strike(
-        mut self, mut scene: Scene, index: Int, hit: Blow, source: Vector3
+        mut self,
+        mut scene: Scene,
+        index: Int,
+        given: Blow,
+        source: Vector3,
+        member: Int = 0,
+        tank: Bool = False,
     ) raises -> Struck:
         """Give a blow from `source` to a target, show it, and weigh it; a
-        felled foe gives its loot. Return what the blow did."""
+        felled foe gives its loot. `member` is who struck it, for a
+        warden's threat: 0 for the player, and 1 and on for the raiders.
+        A marked target takes `MARK_BONUS` times the blow's damage. Return
+        what the blow did."""
+        var hit = given
+        if self.marks[index] > 0:
+            hit.damage *= MARK_BONUS
         var there = self.target_at(index)
         var way = _way(source, there)
         var struck: Struck
@@ -1419,7 +2305,7 @@ struct Battle(Movable):
                 self.token_rest = TOKEN_REST
             var fell = struck.outcome == DEFEATED
             if fell or struck.outcome == FINISHED:
-                self.trained += DEFEAT_EXPERIENCE
+                self.trained[self.fighter.style.value] += DEFEAT_EXPERIENCE
             if (fell or struck.outcome == FINISHED) and not foe.beast:
                 self.loot += LOOT
                 var note = String("+", LOOT, " COINS")
@@ -1427,11 +2313,18 @@ struct Battle(Movable):
                     self.found += 1
                     note += " +1 HERB"
                 self.notes.append(note)
-        else:
+        elif index < self.first_warden():
             ref practice = self.dummies[index - len(self.foes)]
             struck = practice.fighter.receive(hit, False)
             practice.dummy.knock(way, hit.knockback.to(METER_PER_SECOND))
             practice.fighter.health = practice.fighter.parameters.health
+        else:
+            ref warden = self.wardens[index - self.first_warden()]
+            struck = warden.boss.receive(hit, member, tank)
+            if struck.outcome == STAMINA_BREAK:
+                self.notes.append("THE WARDEN STAGGERS!")
+            if struck.outcome == DEFEATED:
+                self._warden_falls()
         if raged:
             self._popup(there + Vector3(0, 0.7, 0), "RAGE", HURT_TEXT)
         self._show(scene, struck, there, False)
@@ -1479,6 +2372,236 @@ struct Battle(Movable):
             if wave.gone < WAVE_RANGE:
                 kept.append(wave^)
         self.waves = kept^
+
+    def shot_target(self, at: Vector3, heading: Angle) -> Int:
+        """Return the target a spell or an arrow of the player's flies at.
+
+        Args:
+            at: Where the player stands.
+            heading: The way they face.
+
+        Returns:
+            The locked target; else the nearest standing target within
+            `SHOT_RANGE` and `SHOT_ARC` before them; else -1.
+        """
+        if self.lock >= 0:
+            return self.lock
+        var best = -1
+        var nearest = SHOT_RANGE
+        for index in range(self.targets()):
+            if not self.standing(index):
+                continue
+            var there = self.target_at(index)
+            var gap = _flat(at, there)
+            if gap < nearest and faces(
+                at, heading, Angle(SHOT_ARC, DEGREE), there
+            ):
+                nearest = gap
+                best = index
+        return best
+
+    def _shoot(mut self, player: Character) raises:
+        """Send the missiles of the player's spell or shot, as it looses."""
+        var target = self.shot_target(player.position, player.heading)
+        var move = self.fighter.move
+        var blow = self.fighter.blow()
+        self._launch(player.position, player.heading, move, blow, target, -1)
+
+    def _launch(
+        mut self,
+        at: Vector3,
+        heading: Angle,
+        move: CombatMove,
+        blow: Blow,
+        target: Int,
+        owner: Int,
+    ) raises:
+        """Send the missiles of a spell or a shot from a fighter's hand, at
+        a target or straight ahead; `owner` is -1 for the player, else the
+        raider's index."""
+        var ahead = _ahead(heading)
+        var hand = at + ahead * SHOT_AHEAD + Vector3(0, SHOT_HEIGHT, 0)
+        var aim = hand + ahead * 20
+        if target >= 0:
+            aim = self.target_at(target) + Vector3(0, CHEST, 0)
+        var way = aim - hand
+        way = way / max(way.length(), Float32(1.0e-4))
+        if move == SPELL_BOLT:
+            self.shots.append(
+                Missile(SPARK, hand, way * SPARK_SPEED, target, owner, blow)
+            )
+        elif move == SPELL_BLAST:
+            self.shots.append(
+                Missile(ORB, hand, way * ORB_SPEED, target, owner, blow)
+            )
+        elif move == VOLLEY:
+            var flight = lob(hand, aim, ARROW_SPEED)
+            var level = Vector3(flight.x, 0, flight.z) / ARROW_SPEED
+            for side in fan(  # pragma: no branch
+                level, VOLLEY_ARROWS, VOLLEY_SPREAD
+            ):
+                var v = side * ARROW_SPEED + Vector3(0, flight.y, 0)
+                self.shots.append(Missile(ARROW, hand, v, -1, owner, blow))
+        elif move == ARROW_RAIN:
+            var center = at + ahead * RAIN_REACH
+            if target >= 0:
+                center = self.target_at(target)
+            for spot in rain_spots(center, RAIN_ARROWS):  # pragma: no branch
+                self.shots.append(
+                    Missile(
+                        ARROW, spot, Vector3(0, -RAIN_SPEED, 0), -1, owner, blow
+                    )
+                )
+        else:
+            var pierce = AIMED_PIERCE if move == AIMED_SHOT else 0
+            self.shots.append(
+                Missile(
+                    ARROW,
+                    hand,
+                    lob(hand, aim, ARROW_SPEED),
+                    target,
+                    owner,
+                    blow,
+                    pierce,
+                )
+            )
+
+    def _storm(mut self, player: Character) raises:
+        """Send a ranged style's ultimate as it rises: on each standing
+        target within `STORM_RANGE`, a star of light falls for magic, and a
+        rain of arrows for archery."""
+        var blow = self.fighter.blow()
+        var magic = self.fighter.style == MAGIC
+        for index in range(self.targets()):
+            if not self.standing(index):
+                continue
+            var there = self.target_at(index)
+            if _flat(there, player.position) > STORM_RANGE:
+                continue
+            if magic:
+                var high = there + Vector3(0, STORM_HEIGHT, 0)
+                var fall = Vector3(0, -2 * ORB_SPEED, 0)
+                self.shots.append(Missile(ORB, high, fall, index, -1, blow))
+            else:
+                var fall = Vector3(0, -RAIN_SPEED, 0)
+                for spot in rain_spots(there, RAIN_ARROWS):  # pragma: no branch
+                    self.shots.append(Missile(ARROW, spot, fall, -1, -1, blow))
+        self.notes.append("STARFALL!" if magic else "ARROW STORM!")
+
+    def _mend(mut self, player: Character) raises:
+        """Heal the player, the companion and each raider near them, as a
+        mend's light rises. Each warden learns of the heal."""
+        var share = MEND_HEAL * self.fighter.boost
+        ref f = self.fighter
+        var gain = min(
+            f.parameters.health - f.health, share * f.parameters.health
+        )
+        f.health += gain
+        self.mended = 0
+        var amount = String(Int(gain + 0.5))
+        self._popup(player.position, "+" + amount, HEAL_TEXT)
+        self.notes.append("MEND +" + amount)
+        for k in range(len(self.allies)):
+            ref ally = self.allies[k]
+            if _flat(ally.character.position, player.position) > MEND_RADIUS:
+                continue
+            ref a = ally.fighter
+            var more = min(
+                a.parameters.health - a.health, share * a.parameters.health
+            )
+            a.health += more
+            var place = ally.character.position
+            self._popup(place, "+" + String(Int(more + 0.5)), HEAL_TEXT)
+        var healed = gain
+        for k in range(len(self.members)):
+            ref member = self.members[k]
+            if not member.joined or member.down >= 0:
+                continue
+            var place = member.character.position
+            if _flat(place, player.position) > MEND_RADIUS:
+                continue
+            ref m = member.fighter
+            var more = min(
+                m.parameters.health - m.health, share * m.parameters.health
+            )
+            m.health += more
+            healed += more
+            self._popup(place, "+" + String(Int(more + 0.5)), HEAL_TEXT)
+        for w in range(len(self.wardens)):
+            self.wardens[w].boss.healed(0, healed)
+
+    def _send_shots(
+        mut self,
+        mut scene: Scene,
+        player: Character,
+        terrain: Terrain,
+        h: Float32,
+    ) raises:
+        """Send the player's spell or shot as it looses, and fly each of the
+        player's missiles on by `h` seconds: it strikes each target it
+        passes, an orb bursts on every target near, and a missile ends at
+        the ground, at the end of its life, or when it can pass through no
+        more."""
+        if self.fighter.launched():
+            if is_shot(self.fighter.move):
+                self._shoot(player)
+            elif self.fighter.move == MEND:
+                self._mend(player)
+            elif self.fighter.move == ULTIMATE and not is_melee(
+                self.fighter.style
+            ):
+                self._storm(player)
+        var kept = List[Missile]()
+        for k in range(len(self.shots)):
+            var shot = self.shots[k].copy()
+            var aim: Optional[Vector3] = None
+            if shot.target >= 0 and self.standing(shot.target):
+                aim = self.target_at(shot.target) + Vector3(0, CHEST, 0)
+            fly(shot, h, aim)
+            if shot.spent():
+                continue
+            var floor = terrain.ground.height_at(shot.at.x, shot.at.z)
+            var done = shot.at.y < floor
+            for index in range(self.targets()):
+                if done:
+                    break
+                if not self.standing(index) or shot.has_struck(index):
+                    continue
+                var chest = self.target_at(index) + Vector3(0, CHEST, 0)
+                if not touches(shot, chest):
+                    continue
+                if shot.splash() > 0:
+                    for other in range(self.targets()):  # pragma: no branch
+                        if not self.standing(other):
+                            continue
+                        var there = self.target_at(other)
+                        var chest_at = there + Vector3(0, CHEST, 0)
+                        if (chest_at - shot.at).length() <= shot.splash():
+                            self._hit_by(scene, shot, other)
+                    self.sparks.burst(scene, shot.at)
+                    done = True
+                    continue
+                self._hit_by(scene, shot, index)
+                shot.struck.append(index)
+                if shot.pierce > 0:
+                    shot.pierce -= 1
+                else:
+                    done = True
+            if not done:
+                kept.append(shot^)
+        self.shots = kept^
+
+    def _hit_by(mut self, mut scene: Scene, shot: Missile, index: Int) raises:
+        """Give a missile's blow to a target: the player's as a blow of
+        theirs, a raider's as the raider's."""
+        if shot.owner < 0:
+            self._land(scene, index, shot.blow, shot.origin)
+            return
+        var role = self.members[shot.owner].mind.role
+        var struck = self._strike(
+            scene, index, shot.blow, shot.origin, shot.owner + 1, role == TANK
+        )
+        self.members[shot.owner].fighter.landed(struck)
 
     def _send_bolts(mut self, mut scene: Scene, h: Float32) raises:
         """Send the companion's bolt as her cast points, and fly each bolt
@@ -1539,6 +2662,10 @@ struct Battle(Movable):
         """
         if self.lock >= 0 and self.standing(self.lock):
             return self.lock
+        for w in range(len(self.wardens)):
+            ref boss = self.wardens[w].boss
+            if boss.engaged and not boss.defeated():
+                return self.first_warden() + w
         var best = -1
         var nearest = ALLY_SEEK
         for index in range(len(self.foes)):
@@ -1629,9 +2756,14 @@ struct Battle(Movable):
     def _foe_strikes(
         mut self, mut scene: Scene, index: Int, mut player: Character
     ) raises:
-        """Give a bandit's swing to the player, if it reaches them."""
+        """Give a foe's swing to the member it goes for, if it reaches
+        them."""
         var swing = self.foes[index].fighter.swing()
         if not swing:
+            return
+        var quarry = self.quarries[index]
+        if quarry >= 0:
+            self._strike_raider(scene, index, quarry)
             return
         ref feet = player.position
         var at = self.foes[index].character.position
@@ -1648,6 +2780,31 @@ struct Battle(Movable):
         if not blow:
             return
         self._hurt(scene, index, blow.value(), at, player)
+
+    def _strike_raider(mut self, mut scene: Scene, index: Int, k: Int) raises:
+        """Give a foe's swing to the raider `k`, if it reaches them."""
+        ref foe = self.foes[index]
+        var swing = foe.fighter.swing().value()
+        ref member = self.members[k]
+        var at = foe.character.position
+        var there = member.character.position
+        var radius = member.character.parameters.radius
+        if not reaches(
+            at, foe.character.heading, swing.reach, swing.arc, there, radius
+        ):
+            return
+        var blow = foe.fighter.connect(k + 1)
+        if not blow:
+            return
+        var front = faces(
+            there,
+            member.character.heading,
+            member.fighter.parameters.guard_arc,
+            at,
+        )
+        var struck = member.fighter.receive(blow.value(), front)
+        member.shove = push_of(struck, blow.value(), _way(at, there))
+        self._show(scene, struck, there, False)
 
     def _hurt(
         mut self,
@@ -1711,7 +2868,11 @@ struct Battle(Movable):
         self.knives = kept^
 
     def _exchange(
-        mut self, mut scene: Scene, mut player: Character, delta: Duration
+        mut self,
+        mut scene: Scene,
+        mut player: Character,
+        terrain: Terrain,
+        delta: Duration,
     ) raises:
         """Run the fighters' clocks in steps, and give each swing's blows."""
         var seconds = delta.to(SECOND)
@@ -1726,8 +2887,12 @@ struct Battle(Movable):
                 self.dummies[index].fighter.update(Duration(h, SECOND))
             for index in range(len(self.allies)):
                 self.allies[index].fighter.update(Duration(h, SECOND))
+            for index in range(len(self.members)):
+                self.members[index].fighter.update(Duration(h, SECOND))
+                self._member_strikes(scene, index, player)
             self._player_strikes(scene, player)
             self._send_waves(scene, player, h)
+            self._send_shots(scene, player, terrain, h)
             self._send_bolts(scene, h)
             self._send_knives(scene, player, h)
             for index in range(len(self.foes)):
@@ -1756,6 +2921,7 @@ struct Battle(Movable):
                 )
         self.popups = kept^
         self.sparks.update(scene, delta)
+        self._effects_step(seconds)
         for index in range(len(self.dummies)):
             self.dummies[index].dummy.rock(scene, delta)
         var fade = exp(-SHOVE_FADE * seconds)
@@ -1763,9 +2929,47 @@ struct Battle(Movable):
         self.slow = max(Float32(0), self.slow - seconds)
         if self.pulsed >= 0:
             self.pulsed += seconds
+        if self.beat >= 0:
+            self.beat += seconds
+        if self.mended >= 0:
+            self.mended += seconds
+        self.tracker.update(seconds)
+        self.taunt_wait = max(Float32(0), self.taunt_wait - seconds)
+        var fighting = False
+        for w in range(len(self.wardens)):
+            ref warden = self.wardens[w]
+            if warden.boss.engaged and not warden.boss.defeated():
+                fighting = True
+                if _flat(warden.character.position, player.position) < ENGAGE:
+                    self.drawn = True
+                    self.calm = 0
+            if not warden.boss.defeated():
+                continue
+            if warden.down < 0:
+                warden.down = 0
+            warden.down += seconds
+            if warden.down > self.parameters.respawn.to(SECOND):
+                warden.character.position = warden.home
+                warden.character.heading = warden.heading
+                warden.boss = Boss(len(warden.boss.threat), warden.boss.seed)
+                warden.down = -1
+        for k in range(len(self.members)):
+            ref member = self.members[k]
+            member.shove = member.shove * exp(-SHOVE_FADE * seconds)
+            if member.fighter.defeated() and member.down < 0:
+                member.down = 0
+                member.revive = 0
+            if member.down < 0:
+                continue
+            member.down += seconds
+            if not fighting and member.down > RISE_SECONDS:
+                member.fighter.revive()
+                member.down = -1
         self.token_rest -= seconds
         ref p = self.parameters
-        var engaged = not self.fighter.free() or self.fighter.guarding
+        # A move or a guard draws the weapon; a roll does not.
+        var moving = not self.fighter.free() and self.fighter.move != DODGE
+        var engaged = moving or self.fighter.guarding
         for index in range(len(self.foes)):
             var node = self.node_of(index)
             ref foe = self.foes[index]
@@ -1822,6 +3026,402 @@ struct Battle(Movable):
             if self.calm > CALM_SECONDS:
                 self.drawn = False
 
+    def _move_wardens(
+        mut self,
+        mut scene: Scene,
+        mut player: Character,
+        terrain: Terrain,
+        blocking: List[Obstacle],
+        delta: Duration,
+    ) raises:
+        """Let each warden think, move it, and strike with its zones, its
+        rockfalls and its summons."""
+        var seconds = delta.to(SECOND)
+        var places = List[Vector3]()
+        var up = List[Bool]()
+        places.append(player.position)
+        up.append(not self.fighter.defeated())
+        for k in range(len(self.members)):
+            ref member = self.members[k]
+            places.append(member.character.position)
+            up.append(member.joined and member.down < 0)
+        var around = blocking.copy()
+        ref feet = player.position
+        around.append(
+            Obstacle(feet.x, feet.z, player.parameters.radius.to(METER))
+        )
+        for w in range(len(self.wardens)):
+            if self.wardens[w].boss.defeated():
+                continue
+            ref warden = self.wardens[w]
+            var sight = BossSight(
+                warden.character.position,
+                _ahead(warden.character.heading),
+                warden.home,
+                places.copy(),
+                up.copy(),
+            )
+            var intent = warden.boss.think(sight, seconds)
+            if intent.charging:
+                var run = intent.zone.way * CHARGE_SPEED
+                warden.character.drive(run, delta, terrain, around)
+            elif warden.boss.busy() or warden.boss.staggered > 0:
+                warden.character.drive(Vector3(0, 0, 0), delta, terrain, around)
+            else:
+                var walk = MoveInput(
+                    -intent.way.z, intent.way.x, 0, 0, False, False
+                )
+                warden.character.step(
+                    walk, Angle(0.0, RADIAN), delta, terrain, around
+                )
+            var busy = warden.boss.busy() and warden.boss.warning() > 0
+            if intent.face and not intent.charging and not busy:
+                warden.character.heading = turn_toward(
+                    warden.character.heading,
+                    yaw_of(intent.face.value() - warden.character.position),
+                    Angle(FACE_TURN * 0.35 * seconds, RADIAN),
+                )
+            if intent.strikes:
+                self._zone_strikes(scene, w, player)
+            if len(intent.rock) > 0:
+                self._rockfall(scene, intent.rock, player)
+            if intent.summon:
+                self._summon(w)
+
+    def _zone_strikes(
+        mut self, mut scene: Scene, w: Int, mut player: Character
+    ) raises:
+        """Give a warden's attack to each member in its zone."""
+        ref warden = self.wardens[w]
+        var blow = warden.boss.attack_blow()
+        var zone = warden.boss.zone
+        var source = warden.character.position
+        self.shake = max(self.shake, 2 * SHAKE)
+        ref feet = player.position
+        var r = player.parameters.radius.to(METER)
+        if not self.fighter.defeated() and inside(zone, feet, r):
+            var front = faces(
+                feet, player.heading, self.fighter.parameters.guard_arc, source
+            )
+            var struck = self.fighter.receive(blow, front)
+            self.shove = push_of(struck, blow, _way(source, feet))
+            throw_up(player, struck, blow)
+            self._show(scene, struck, feet, True)
+            self._weigh(struck, blow)
+        for k in range(len(self.members)):
+            ref member = self.members[k]
+            if not member.joined or member.down >= 0:
+                continue
+            ref at = member.character.position
+            var radius = member.character.parameters.radius.to(METER)
+            if not inside(zone, at, radius):
+                continue
+            var front = faces(
+                at,
+                member.character.heading,
+                member.fighter.parameters.guard_arc,
+                source,
+            )
+            var struck = member.fighter.receive(blow, front)
+            member.shove = push_of(struck, blow, _way(source, at))
+            var place = at
+            self._show(scene, struck, place, False)
+
+    def _rockfall(
+        mut self, mut scene: Scene, rock: List[Float32], mut player: Character
+    ) raises:
+        """Let a rockfall's boulder fall: each member near shares its
+        damage."""
+        self.shake = max(self.shake, 3 * SHAKE)
+        self.notes.append("ROCKFALL!")
+        if rock[0] > 0 and not self.fighter.defeated():
+            var blow = rock_blow(rock[0])
+            var struck = self.fighter.receive(blow, False)
+            self._show(scene, struck, player.position, True)
+            self.sparks.burst(scene, player.position + Vector3(0, CHEST, 0))
+        for k in range(len(self.members)):
+            if k + 1 >= len(rock) or rock[k + 1] <= 0:
+                continue
+            var blow = rock_blow(rock[k + 1])
+            var struck = self.members[k].fighter.receive(blow, False)
+            var place = self.members[k].character.position
+            self._show(scene, struck, place, False)
+
+    def _summon(mut self, w: Int) raises:
+        """Call the den's wolves to a warden: each fallen wolf stands up
+        beside it, and every wolf comes."""
+        var at = self.wardens[w].character.position
+        var k = 0
+        for index in range(len(self.foes)):
+            ref foe = self.foes[index]
+            if not foe.beast:
+                continue
+            var turn = Float32(k) * 2.1
+            var place = at + Vector3(cos(turn) * 4, 0, sin(turn) * 4)
+            k += 1
+            if foe.down >= 0:
+                foe.fighter.revive()
+                foe.down = -1
+                foe.character.position = place
+            foe.brain = Brain.wolf(foe.brain.seed)
+            foe.character.position = place
+        self.notes.append("THE WARDEN CALLS ITS WOLVES!")
+
+    def _member_target(self) -> Int:
+        """Return the target the raiders fight: a warden in its fight, or
+        -1."""
+        for w in range(len(self.wardens)):
+            ref boss = self.wardens[w].boss
+            if boss.engaged and not boss.defeated():
+                return self.first_warden() + w
+        return -1
+
+    def _move_members(
+        mut self,
+        mut scene: Scene,
+        player: Character,
+        terrain: Terrain,
+        blocking: List[Obstacle],
+        delta: Duration,
+    ) raises:
+        """Let each raider join or leave, think, and move: by its stick
+        while free, by its move or a blow's push while not."""
+        var seconds = delta.to(SECOND)
+        var around = blocking.copy()
+        ref feet = player.position
+        around.append(
+            Obstacle(feet.x, feet.z, player.parameters.radius.to(METER))
+        )
+        var first = len(around)
+        around.extend(self.obstacles())
+        var skip_from = first + self.first_warden() + len(self.allies)
+        skip_from += len(self.wardens)
+        var target = self._member_target()
+        var joined_now = False
+        # The places that each raider sees: the hurt, the fallen, the mark.
+        var hurt: Optional[Vector3] = None
+        var lowest = MEND_BELOW
+        ref f = self.fighter
+        var share = f.health / f.parameters.health
+        if not f.defeated() and share < lowest:
+            lowest = share
+            hurt = feet
+        var fallen: Optional[Vector3] = None
+        for k in range(len(self.members)):
+            ref other = self.members[k]
+            if not other.joined:
+                continue
+            if other.down >= 0:
+                fallen = other.character.position
+                continue
+            var part = other.fighter.health / other.fighter.parameters.health
+            if part < lowest:
+                lowest = part
+                hurt = other.character.position
+        for k in range(len(self.members)):
+            var near = _flat(feet, self.members[k].post)
+            var gone = self.fighter.defeated()
+            if not self.members[k].joined and near < JOIN_RANGE and not gone:
+                self.members[k].joined = True
+                joined_now = True
+            elif self.members[k].joined and near > PART_RANGE:
+                self.members[k].joined = False
+            if self.members[k].down >= 0:
+                continue
+            ref mine = self.members[k]
+            var sight = MemberSight(
+                mine.character.position,
+                feet,
+                None,
+                Vector3(0, 0, 1),
+                None,
+                0,
+                False,
+                None,
+                mine.fighter.health / mine.fighter.parameters.health,
+                hurt,
+                fallen,
+                mine.fighter.free(),
+                False,
+                False,
+            )
+            var joined = mine.joined
+            if not joined:
+                sight.leader = mine.post
+            if target >= 0 and joined:
+                ref warden = self.wardens[target - self.first_warden()]
+                sight.target = warden.character.position
+                sight.facing = _ahead(warden.character.heading)
+                sight.fighting = True
+                sight.targeted = warden.boss.target == k + 1
+                if warden.boss.busy() and warden.boss.warning() > 0:
+                    sight.danger = warden.boss.zone
+                    sight.warning = warden.boss.warning()
+                    sight.blockable = not warden.boss.attack_blow().unblockable
+                var marked = warden.boss.marked
+                if marked >= 0:
+                    sight.stack = feet
+                    if marked > 0:
+                        sight.stack = self.members[
+                            marked - 1
+                        ].character.position
+            var intent = self.members[k].mind.think(sight, seconds)
+            var place = self.members[k].character.position
+            # A raider taunts and attacks only in a warden's fight.
+            var aim = place
+            if target >= 0:
+                aim = self.target_at(target)
+                if intent.taunt:
+                    var w = target - self.first_warden()
+                    self.wardens[w].boss.taunt(k + 1)
+                    self._popup(place, "TAUNT", GOLD_TEXT)
+            if intent.revive:
+                self._revive_near(place, seconds)
+            ref member = self.members[k]
+            member.fighter.hold_guard(intent.guard)
+            if intent.dodge.length() > 0:
+                if member.fighter.request(DODGE):
+                    member.dodge_way = intent.dodge
+            if intent.attack != FREE:
+                member.character.heading = yaw_of(aim - place)
+                _ = member.fighter.request(intent.attack)
+            var pushed = member.shove.length() > STILL_SHOVE
+            if member.fighter.free() and not pushed:
+                var share_pace = (
+                    GUARD_PACE if member.fighter.guarding else Float32(1)
+                )
+                var walk = MoveInput(
+                    -intent.way.z * share_pace,
+                    intent.way.x * share_pace,
+                    0,
+                    0,
+                    intent.run,
+                    False,
+                )
+                var face: Optional[Angle] = None
+                if intent.face:
+                    face = yaw_of(
+                        intent.face.value() - member.character.position
+                    )
+                member.character.step(
+                    walk,
+                    Angle(0.0, RADIAN),
+                    delta,
+                    terrain,
+                    around,
+                    skip_from + k,
+                    face=face,
+                )
+            else:
+                var speed = member.fighter.drive().to(METER_PER_SECOND)
+                var way = _ahead(member.character.heading)
+                if member.fighter.move == DODGE:
+                    way = member.dodge_way
+                member.character.drive(
+                    way * speed + member.shove,
+                    delta,
+                    terrain,
+                    around,
+                    skip_from + k,
+                )
+        if joined_now:
+            self.notes.append("THE RAIDERS JOIN YOUR PARTY")
+
+    def _revive_near(mut self, at: Vector3, seconds: Float32):
+        """Revive the fallen raider within `REVIVE_REACH` of a point, once a
+        member has stood by it for `REVIVE_SECONDS`."""
+        for k in range(len(self.members)):
+            ref member = self.members[k]
+            if member.down < 0:
+                continue
+            if _flat(member.character.position, at) > REVIVE_REACH:
+                continue
+            member.revive += seconds
+            if member.revive >= REVIVE_SECONDS:
+                member.fighter.revive()
+                member.fighter.health *= REVIVE_SHARE
+                member.down = -1
+                member.revive = 0
+                self.notes.append("A RAIDER IS REVIVED")
+            return
+
+    def _member_strikes(
+        mut self, mut scene: Scene, k: Int, player: Character
+    ) raises:
+        """Give a raider's swing to each foe and warden it reaches; send its
+        spell or shot; and heal with its mend."""
+        if self.members[k].down >= 0:
+            return
+        var role = self.members[k].mind.role
+        var tank = role == TANK
+        if self.members[k].fighter.launched():
+            var move = self.members[k].fighter.move
+            ref member = self.members[k]
+            if is_shot(move):
+                var target = self._member_target()
+                var at = member.character.position
+                var heading = member.character.heading
+                var blow = member.fighter.blow()
+                self._launch(at, heading, move, blow, target, k)
+            elif move == MEND:
+                self._party_mend(k, player)
+        var swing = self.members[k].fighter.swing()
+        if not swing:
+            return
+        var feet = self.members[k].character.position
+        var heading = self.members[k].character.heading
+        # A raid has its warden, so there is a target.
+        for index in range(self.targets()):  # pragma: no branch
+            if not self.standing(index):
+                continue
+            if index >= len(self.foes) and index < self.first_warden():
+                continue
+            var there = self.target_at(index)
+            var radius = Length(self.target_radius(index), METER)
+            var reach = swing.value().reach
+            var arc = swing.value().arc
+            if not reaches(feet, heading, reach, arc, there, radius):
+                continue
+            var blow = self.members[k].fighter.connect(index)
+            if not blow:
+                continue
+            var struck = self._strike(
+                scene, index, blow.value(), feet, k + 1, tank
+            )
+            self.members[k].fighter.landed(struck)
+
+    def _party_mend(mut self, k: Int, player: Character) raises:
+        """Heal the player and each raider near a healer's mend."""
+        var at = self.members[k].character.position
+        var healed = Float32(0)
+        if (
+            _flat(at, player.position) <= MEND_RADIUS
+            and not self.fighter.defeated()
+        ):
+            ref f = self.fighter
+            var gain = min(
+                f.parameters.health - f.health, MEND_HEAL * f.parameters.health
+            )
+            f.health += gain
+            healed += gain
+            self._popup(
+                player.position, "+" + String(Int(gain + 0.5)), HEAL_TEXT
+            )
+        for j in range(len(self.members)):  # pragma: no branch
+            ref other = self.members[j]
+            if other.down >= 0:
+                continue
+            if _flat(at, other.character.position) > MEND_RADIUS:
+                continue
+            ref o = other.fighter
+            var gain = min(
+                o.parameters.health - o.health, MEND_HEAL * o.parameters.health
+            )
+            o.health += gain
+            healed += gain
+        for w in range(len(self.wardens)):  # pragma: no branch
+            self.wardens[w].boss.healed(k + 1, healed)
+
     def _pose_beast(self, mut scene: Scene, index: Int) raises:
         """Stand a wolf where its character stands, in the pose of its
         walk; on its side, once it falls."""
@@ -1844,6 +3444,13 @@ struct Battle(Movable):
         scene.meshes[pelt.mesh].geometry = self.books[pelt.book].frame(
             foe.character
         )
+
+    def _teach(mut self) raises:
+        """Learn each combo that a style's level teaches, and say so."""
+        for style in self.parameters.styles:  # pragma: no branch
+            var level = self.levels[style.value]
+            for index in self.book.teach(style, level):
+                self.notes.append("NEW COMBO: " + self.book.combos[index].name)
 
     def tick(
         mut self,
@@ -1877,6 +3484,7 @@ struct Battle(Movable):
         var real = delta.to(SECOND)
         if not (real >= 0 and real < 1.0e9):
             raise Error("A frame's time must not be negative or endless")
+        self._teach()
         # A strong blow stops the fight; the camera shakes on.
         var seconds = real if self.freeze <= 0 else Float32(0)
         self.freeze = max(Float32(0), self.freeze - real)
@@ -1887,8 +3495,16 @@ struct Battle(Movable):
         var flick = Float32(0)
         if abs(input.look_right) > FLICK and abs(self.last.look_right) <= FLICK:
             flick = Float32(1) if input.look_right > 0 else Float32(-1)
+        var let_go = self.last.dodge and not input.dodge
         self.last = input
         self._command(input, presses, flick, view.yaw, player)
+        # Out of a fight, a tap of the dodge rolls, to cross the ground.
+        var tap = let_go and self.dodge_hold <= ROLL_TAP
+        if tap and not self.drawn and player.grounded:
+            _ = self.fighter.request(DODGE)
+        self.dodge_hold = self.dodge_hold + real if input.dodge else 0
+        if input.use and not self.fighter.defeated():
+            self._revive_near(player.position, real)
         var around = blocking.copy()
         around.extend(self.obstacles())
         self._move_player(input, view.yaw, player, terrain, around, still)
@@ -1902,25 +3518,43 @@ struct Battle(Movable):
         var slowed = Duration(seconds * pace, SECOND)
         self._move_foes(player, terrain, blocking, slowed)
         self._move_ally(player, terrain, blocking, still)
-        self._exchange(scene, player, still)
+        self._move_wardens(scene, player, terrain, blocking, slowed)
+        self._move_members(scene, player, terrain, blocking, still)
+        self._exchange(scene, player, terrain, still)
         var over = self.fighter.over > 0
         if over and not self.limited:
             self.notes.append("SURGE!")
         self.limited = over
         self.trail.color = OVER_TRAIL if over else PLAYER_TRAIL
         self._settle(scene, player, terrain, still)
+        self.feet = player.position
         self.arms.pose(scene, body, player, self.fighter, self.drawn, still)
         self.trail.show(scene, self.fighter)
+        # Fists and shots leave no blade's trail; a spinning kick does.
+        var bare = self.fighter.style == HAND_TO_HAND
+        var cut = is_melee(self.fighter.style) and not bare
+        if not cut and self.fighter.move != WHIRLWIND:
+            self.trail.shown = -1
+        var reach = self.parameters.fight_reach
+        ref feet = player.position
+        self.frame += 1
         for index in range(len(self.foes)):
             if self.foes[index].beast:
                 self._pose_beast(scene, index)
                 continue
             ref foe = self.foes[index]
-            ref person = self.people[foe.look]
-            person.arms.pose(
-                scene, person.body, foe.character, foe.fighter, True, slowed
+            var near = _flat(foe.character.position, feet) <= reach
+            var turn = (self.frame + index) % FAR_POSE == 0
+            pose_person(
+                scene,
+                self.people[foe.look],
+                foe.character,
+                foe.fighter,
+                True,
+                slowed,
+                near,
+                turn,
             )
-            person.trail.show(scene, foe.fighter)
         for index in range(len(self.allies)):
             ref ally = self.allies[index]
             ref person = self.people[ally.look]
@@ -1931,4 +3565,36 @@ struct Battle(Movable):
                 ally.fighter,
                 self.drawn,
                 still,
+            )
+        for index in range(len(self.wardens)):
+            ref warden = self.wardens[index]
+            var shown = puppet_move(warden.boss)
+            warden.puppet.move = shown[0]
+            warden.puppet.clock = shown[1]
+            warden.puppet.pace = shown[2]
+            var near = _flat(warden.character.position, feet) <= reach
+            var turn = (self.frame + index) % FAR_POSE == 0
+            pose_person(
+                scene,
+                self.people[warden.look],
+                warden.character,
+                warden.puppet,
+                True,
+                slowed,
+                near,
+                turn,
+            )
+        for index in range(len(self.members)):
+            ref member = self.members[index]
+            var near = _flat(member.character.position, feet) <= reach
+            var turn = (self.frame + index + 1) % FAR_POSE == 0
+            pose_person(
+                scene,
+                self.people[member.look],
+                member.character,
+                member.fighter,
+                member.joined,
+                still,
+                near,
+                turn,
             )

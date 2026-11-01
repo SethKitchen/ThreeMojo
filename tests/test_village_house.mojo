@@ -82,13 +82,13 @@ from units.si import (
 )
 
 
-def _house(width: Float32, storeys: Int) -> HouseParameters:
+def _house(width: Float32, stories: Int) -> HouseParameters:
     """Return a brick house `width` wide and 4 meters deep."""
     return HouseParameters(
         "test house",
         Length(width, METER),
         Length(4.0, METER),
-        storeys,
+        stories,
         brick(),
     )
 
@@ -123,11 +123,11 @@ def test_house_parameters_are_checked() raises:
     house.depth = Length(70.0, METER)
     with assert_raises(contains="deep"):
         house.check()
-    with assert_raises(contains="storeys"):
+    with assert_raises(contains="stories"):
         _house(5, 0).check()
     house = _house(5, 2)
-    house.storey_height = Length(7.0, METER)
-    with assert_raises(contains="storey must"):
+    house.story_height = Length(7.0, METER)
+    with assert_raises(contains="story must"):
         house.check()
     house = _house(5, 2)
     house.facade = Facade(9)
@@ -193,7 +193,7 @@ def test_a_wide_house_has_a_hall_and_a_chamber() raises:
     assert_equal(inside, 1)
     assert_true(windows > 4)
     assert_true(len(model.furnishings) > 4)
-    with assert_raises(contains="storeys"):
+    with assert_raises(contains="stories"):
         _ = house_model(_house(7, 0))
 
 
@@ -240,19 +240,19 @@ def test_a_house_stands_on_its_lot_at_its_footing() raises:
     assert_true(feet[1] >= feet[0])
 
 
-def _two_storeys(width: Float32 = 9, storeys: Int = 2) -> HouseParameters:
+def _two_stories(width: Float32 = 9, stories: Int = 2) -> HouseParameters:
     """Return a brick house `width` wide and 7 meters deep."""
     return HouseParameters(
         "stair house",
         Length(width, METER),
         Length(7.0, METER),
-        storeys,
+        stories,
         brick(),
     )
 
 
-def test_a_house_of_two_storeys_has_a_stair() raises:
-    var model = house_model(_two_storeys())
+def test_a_house_of_two_stories_has_a_stair() raises:
+    var model = house_model(_two_stories())
     var stair = house_stair(model).value()
     # Fifteen risers of 2.8 / 15 meters, so each is at most 19 cm.
     assert_equal(stair.risers, 15)
@@ -266,7 +266,7 @@ def test_a_house_of_two_storeys_has_a_stair() raises:
     assert_almost_equal(stair.x1 - stair.x0, 14 * STAIR_GOING, atol=1e-9)
     assert_almost_equal(stair.y1, 3.5 - half, atol=1e-9)
     assert_almost_equal(stair.y1 - stair.y0, STAIR_WIDTH, atol=1e-9)
-    # The hall's ground storey and the room above keep their furniture
+    # The hall's ground story and the room above keep their furniture
     # off the stair, its landing and its well.
     for piece in model.furnishings:
         var storey = model.spaces[piece.space.value].storey.value
@@ -281,16 +281,16 @@ def test_a_house_of_two_storeys_has_a_stair() raises:
 
 
 def test_some_houses_have_no_stair() raises:
-    # One storey, and a hall too short for six-meter storeys.
-    assert_false(Bool(house_stair(house_model(_two_storeys(9, 1)))))
-    var tall = _two_storeys()
-    tall.storey_height = Length(6.0, METER)
+    # One story, and a hall too short for six-meter stories.
+    assert_false(Bool(house_stair(house_model(_two_stories(9, 1)))))
+    var tall = _two_stories()
+    tall.story_height = Length(6.0, METER)
     assert_false(Bool(house_stair(house_model(tall))))
-    # A model with no room, and one whose upper storey is one riser up.
-    var bare = house_model(_two_storeys())
+    # A model with no room, and one whose upper story is one riser up.
+    var bare = house_model(_two_stories())
     bare.spaces = List[Space]()
     assert_false(Bool(house_stair(bare)))
-    var low = house_model(_two_storeys())
+    var low = house_model(_two_stories())
     low.storeys[1].elevation = Length64(STAIR_RISE, METER)
     assert_false(Bool(house_stair(low)))
 
@@ -310,7 +310,7 @@ def _table(space: Int, at: Point2) -> Furnishing:
 
 
 def test_a_stair_clears_the_furniture_in_its_way() raises:
-    var model = house_model(_two_storeys(9, 3))
+    var model = house_model(_two_stories(9, 3))
     var stair = house_stair(model).value()
     var top = -1
     for k in range(len(model.spaces)):
@@ -323,7 +323,7 @@ def test_a_stair_clears_the_furniture_in_its_way() raises:
         # Clear of it along x, and along y: kept.
         _table(0, Point2(stair.x1 + 2, middle.y)),
         _table(0, Point2(middle.x, stair.y0 - 2)),
-        # Two storeys up, over the well: kept.
+        # Two stories up, over the well: kept.
         _table(top, middle),
     ]
     clear_stair(model, stair)
@@ -336,13 +336,13 @@ def test_a_stair_clears_the_furniture_in_its_way() raises:
 
 
 def test_a_brick_or_stone_house_has_a_chimney_breast() raises:
-    var model = house_model(_two_storeys())
+    var model = house_model(_two_stories())
     var breast = house_breast(model).value()
     # The outside wall is as thick as `OUTSIDE_WALL` says.
     assert_almost_equal(
         model.constructions[0].thickness().value, OUTSIDE_WALL, atol=1e-12
     )
-    # Against the west gable wall's inside face, on each storey.
+    # Against the west gable wall's inside face, on each story.
     var half = OUTSIDE_WALL / 2
     assert_almost_equal(breast.x0, -4.5 + half, atol=1e-9)
     assert_almost_equal(breast.x1 - breast.x0, BREAST_DEPTH, atol=1e-9)
@@ -380,25 +380,25 @@ def test_a_brick_or_stone_house_has_a_chimney_breast() raises:
     assert_equal(len(model.openings), 0)
     assert_equal(len(model.furnishings), 0)
     # A framed or a boarded house has no hearth.
-    var framed = _two_storeys()
+    var framed = _two_stories()
     framed.facade = TIMBER_FRAMED
     assert_false(Bool(house_breast(house_model(framed))))
-    var boarded = _two_storeys(9, 1)
+    var boarded = _two_stories(9, 1)
     boarded.facade = BOARDED
     assert_false(Bool(house_breast(house_model(boarded))))
-    var stone = _two_storeys(9, 1)
+    var stone = _two_stories(9, 1)
     stone.facade = STONE_FACADE
     assert_true(Bool(house_breast(house_model(stone))))
 
 
-def _barn(storeys: Int = 1) -> HouseParameters:
+def _barn(stories: Int = 1) -> HouseParameters:
     """Return a boarded barn 13 meters wide and 8 meters deep, with
-    storeys 4.2 meters tall."""
+    stories 4.2 meters tall."""
     return HouseParameters(
         "barn",
         Length(13.0, METER),
         Length(8.0, METER),
-        storeys,
+        stories,
         brick(),
         BOARDED,
         Length(4.2, METER),
@@ -447,7 +447,7 @@ def test_a_barn_has_an_open_floor_a_wide_door_and_stock() raises:
             assert_true(piece.center.x - Float64(MANGER.x) / 2 > 0)
     assert_equal(hay, 2)
     assert_equal(mangers, 2)
-    # A barn of brick has no hearth either, and its storeys above are
+    # A barn of brick has no hearth either, and its stories above are
     # lofts.
     var lofted = _barn(2)
     lofted.facade = BRICK_FACADE
@@ -467,8 +467,8 @@ def test_a_barn_is_checked() raises:
     with assert_raises(contains="barn must be"):
         barn.check()
     barn = _barn()
-    barn.storey_height = Length(3.0, METER)
-    with assert_raises(contains="barn's storey"):
+    barn.story_height = Length(3.0, METER)
+    with assert_raises(contains="barn's story"):
         barn.check()
 
 

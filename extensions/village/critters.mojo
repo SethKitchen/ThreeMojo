@@ -8,7 +8,7 @@ day.
 
 A `Haunt` is a round patch of the meadow, and how many fireflies and
 butterflies keep to it. `Critters` draws each one, and flies it on a
-loop of its own round a point of its haunt:
+loop of its own around a point of its haunt:
 
 | Critter | What it is | When it shows | How it moves |
 |---|---|---|---|
@@ -280,7 +280,7 @@ struct Critters(Movable):
                 var r = haunt.radius.to(METER)
                 for _ in range(count):
                     seed += 1
-                    # A point of the haunt, and a loop round it.
+                    # A point of the haunt, and a loop around it.
                     var a = 2 * pi * hash01(seed, 1, 91)
                     var d = r * 0.5 * hash01(seed, 2, 91)
                     var x = haunt.x.to(METER) + cos(a) * d

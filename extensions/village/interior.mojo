@@ -23,14 +23,14 @@ render view is: it reads the model and never writes it.
   `STEP_RISE` below the floor, stone steps lead up to the door. Each step
   is a `Floor` of its own.
 - **Furniture.** Each piece is a `WallSpan` along its longer side, as
-  thick as its shorter side and as high as the piece, on its storey's
+  thick as its shorter side and as high as the piece, on its story's
   floor. So a piece upstairs passes over a character on the floor below.
 - **The stair.** Where `house_stair` finds a stair, each tread is a
-  `Floor`, and so is the upper floor round the stairwell. A railing
+  `Floor`, and so is the upper floor around the stairwell. A railing
   guards the well's open side, from the ground floor up, so it closes the
   stair's side too. A railing crosses the well's foot upstairs, and a
   wall closes the space under the stair's top.
-- **Doorways.** Each door of the ground storey is a `Doorway`: the jamb
+- **Doorways.** Each door of the ground story is a `Doorway`: the jamb
   it hangs on, its width and the way it swings.
 
 The model is z up and the scene is y up. A model point (x, y, z) stands
@@ -70,7 +70,7 @@ comptime RAIL_HALF = Float32(0.05)
 
 @fieldwise_init
 struct Doorway(ImplicitlyCopyable):
-    """A door of a house's ground storey, in the scene."""
+    """A door of a house's ground story, in the scene."""
 
     # The foot of the jamb the leaf hangs on, on the wall's middle line,
     # in meters.
@@ -110,7 +110,7 @@ struct HouseInterior(Copyable, Movable):
 
     var walls: List[WallSpan]
     # The ground floor first, then the steps before the outside doors,
-    # then the stair's treads and the upper floor round its well.
+    # then the stair's treads and the upper floor around its well.
     var floors: List[Floor]
     # How many steps before the doors follow the ground floor.
     var steps: Int
@@ -273,7 +273,7 @@ def _turn_of(along: Vector3) -> Float32:
 def _doorways(
     mut interior: HouseInterior, placer: _Placer, building: Building
 ) raises:
-    """Add each door of the ground storey."""
+    """Add each door of the ground story."""
     for index in range(len(building.openings)):
         ref o = building.openings[index]
         if o.kind != DOOR:
@@ -287,7 +287,7 @@ def _doorways(
         var normal = placer.way(frame.normal)
         var outside = building.is_exterior(o.host)
         # An outside door swings into the house: toward the lot's middle,
-        # which a box of storeys holds. An inside door swings along the
+        # which a box of stories holds. An inside door swings along the
         # normal.
         var swing = normal
         if outside:
@@ -394,8 +394,8 @@ def _stair(
     stair: Stair,
     ceiling: Float32,
 ):
-    """Add a stair's treads, the upper floor round its well, and the
-    railings. `ceiling` is the upper storey's."""
+    """Add a stair's treads, the upper floor around its well, and the
+    railings. `ceiling` is the upper story's."""
     var floor = placer.floor
     var top = floor + Float32(stair.height())
     # `house_stair` gives a stair two risers or more: a tread or more.
@@ -494,7 +494,7 @@ def _box_span(
 def _furniture(
     mut interior: HouseInterior, placer: _Placer, building: Building
 ) raises:
-    """Add a span for each piece of furniture, on its storey's floor."""
+    """Add a span for each piece of furniture, on its story's floor."""
     for index in range(len(building.furnishings)):
         ref piece = building.furnishings[index]
         building.check_space(piece.space)
@@ -520,7 +520,7 @@ def _columns(
     mut interior: HouseInterior, placer: _Placer, building: Building
 ) raises:
     """Add a span for each column, such as a chimney breast, from its
-    storey's floor to the floor above."""
+    story's floor to the floor above."""
     for index in range(len(building.elements)):
         ref element = building.elements[index]
         if element.kind != COLUMN:
@@ -549,7 +549,7 @@ def house_interior(
         building: The house's model.
         lot: Where it stands: its middle, its half sizes and its turn.
         floor: The height of its ground floor, in meters.
-        ground: The ground round it, which the steps lead down to.
+        ground: The ground around it, which the steps lead down to.
 
     Returns:
         Its walls, its floor and steps, its stair, its furniture and

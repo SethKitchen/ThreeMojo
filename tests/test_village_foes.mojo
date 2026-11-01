@@ -210,7 +210,7 @@ def test_a_circling_bandit_steps_round_and_takes_its_turn() raises:
     var brain = _brain(CIRCLING, 5)
     var intent = brain.think(_sight(Vector3(0, 0, CIRCLE)), _frame())
     assert_true(brain.state == CIRCLING)
-    # Round the player: across the way to them.
+    # Around the player: across the way to them.
     assert_almost_equal(abs(intent.way.x), 0.5, atol=1e-4)
     assert_true(intent.face)
     # Too far, it closes again.
@@ -235,7 +235,7 @@ def test_a_circling_bandit_steps_round_and_takes_its_turn() raises:
     )
     assert_true(waits.state == CIRCLING)
     assert_false(intent.claim)
-    # Over a long frame it turns the other way round; over none it keeps
+    # Over a long frame it turns the other way around; over none it keeps
     # its way.
     var taken = _sight(Vector3(0, 0, CIRCLE), unclaimed=False)
     var turning = _brain(CIRCLING, 5)

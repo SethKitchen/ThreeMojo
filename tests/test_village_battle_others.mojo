@@ -32,6 +32,7 @@ from extensions.village.combat import (
 )
 from extensions.village.foes import CLOSING, CIRCLING, RETURNING
 from extensions.village.skills import DEFEAT_EXPERIENCE
+from extensions.village.styles import SWORD
 from math.vector3 import Vector3
 from std.testing import (
     TestSuite,
@@ -60,11 +61,11 @@ def test_wolves_close_in_bite_and_lie_down_when_felled() raises:
     arena.battle.foes[0].fighter.health = 1
     arena.battle.fighter.revive()
     arena.battle.loot = 0
-    arena.battle.trained = 0
+    arena.battle.trained[SWORD.value] = 0
     light_cut(arena)
     assert_true(arena.battle.foes[0].fighter.defeated())
     assert_equal(arena.battle.loot, 0)
-    assert_true(arena.battle.trained >= DEFEAT_EXPERIENCE)
+    assert_true(arena.battle.trained[SWORD.value] >= DEFEAT_EXPERIENCE)
     var lying = arena.scene.node(arena.battle.pelts[0].node).quaternion
     assert_true(abs(lying.x) + abs(lying.z) > 0.5)
     arena.run(2.5)

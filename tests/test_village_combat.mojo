@@ -132,9 +132,9 @@ def _blow(damage: Float32, stamina: Float32) -> Blow:
 
 
 def test_each_kind_knows_its_values() raises:
-    for value in [-1, 18]:
+    for value in [-1, 27]:
         assert_false(CombatMove(value).is_valid())
-    for value in [0, 17]:
+    for value in [0, 26]:
         assert_true(CombatMove(value).is_valid())
     for value in [-1, 3]:
         assert_false(CombatStance(value).is_valid())
@@ -158,8 +158,8 @@ def test_moves_and_outcomes_have_names_for_the_display() raises:
     assert_equal(move_name(CAST), "CAST")
     assert_equal(move_name(PLUNGE), "PLUNGE")
     assert_equal(move_name(THROW), "THROW")
-    with assert_raises(contains="eighteen"):
-        _ = move_name(CombatMove(18))
+    with assert_raises(contains="twenty-seven"):
+        _ = move_name(CombatMove(27))
     assert_equal(outcome_word(PERFECT_DODGE), "PERFECT DODGE")
     assert_equal(outcome_word(PARRIED), "PARRY")
     assert_equal(outcome_word(GUARD_BREAK), "GUARD BREAK")
@@ -251,8 +251,8 @@ def test_each_move_has_its_times_and_its_strength() raises:
     var throw = move_data(THROW)
     assert_equal(throw.hits, 0)
     assert_almost_equal(throw.damage, 40, atol=1e-6)
-    with assert_raises(contains="eighteen"):
-        _ = move_data(CombatMove(18))
+    with assert_raises(contains="twenty-seven"):
+        _ = move_data(CombatMove(27))
 
 
 def test_each_stance_changes_strength_pace_cost_guard_and_step() raises:
@@ -944,7 +944,7 @@ def test_a_ultimate_spends_over_limit_and_strikes_all_round() raises:
     assert_true(f.receive(_blow(30, 8), True).outcome == EVADED)
     assert_almost_equal(f.counter, 0, atol=1e-6)
     assert_almost_equal(f.health, 500, atol=1e-6)
-    # Its six hits each strike a target once, all round, far out.
+    # Its six hits each strike a target once, all around, far out.
     var hits = 0
     for _ in range(260):
         f.update(Duration(Float32(1) / 120, SECOND))

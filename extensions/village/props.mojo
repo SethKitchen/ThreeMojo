@@ -209,7 +209,7 @@ def _ring(
     sides: Int,
     color: Vector3,
 ):
-    """Add a ring of upright quads round the frame's middle, facing out,
+    """Add a ring of upright quads around the frame's middle, facing out,
     from `low` to `high`, with a lid on top facing up."""
     var top = sheet.vertex(frame.at(0, high, 0), Vector3(0, 1, 0), color, 0, 0)
     for k in range(sides):  # pragma: no branch
@@ -236,7 +236,7 @@ def _ring(
 
 
 def _well(mut sheets: _PropSheets, frame: _Frame, radius: Float32):
-    """Add a well: a stone wall round its shaft, two posts, a beam, a
+    """Add a well: a stone wall around its shaft, two posts, a beam, a
     roof and a bucket."""
     var stones = 14
     for k in range(stones):  # pragma: no branch

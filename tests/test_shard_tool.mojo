@@ -229,39 +229,41 @@ def test_the_repository_profile_starts_the_known_expensive_suites_first() raises
                 >= costs[groups[index][position]]
             )
     assert_equal(dealt, len(suites))
-    assert_equal(groups[0][0], "tests/test_carla_recorder_world.mojo")
-    assert_equal(groups[1][0], "tests/test_carla_map.mojo")
-    assert_equal(groups[2][0], "tests/test_carla_world.mojo")
+    assert_equal(groups[0][0], "tests/test_village_battle_raid.mojo")
+    assert_equal(groups[1][0], "tests/test_carla_recorder_world.mojo")
+    assert_equal(groups[2][0], "tests/test_village_play.mojo")
     assert_equal(strip_dot("./a"), "a")
     assert_equal(strip_dot("a/./b"), "a/./b")
 
 
 def test_the_coverage_profile_keeps_the_censored_measurement() raises:
-    """The profile records every suite and labels the unfinished capture."""
+    """The profile records every suite and labels the unfinished captures."""
     var costs = load_costs("tools/coverage_costs.json")
-    assert_equal(len(costs), 718)
-    assert_equal(costs["tests/test_hair_styles.mojo"], 1471.6)
-    assert_equal(costs["tests/test_carla_map.mojo"], 5354.3)
+    assert_equal(len(costs), 1173)
+    assert_equal(costs["tests/test_hair_styles.mojo"], 1112.7)
+    assert_equal(costs["tests/test_carla_map.mojo"], 3345.7)
     var document = parse_json(Path("tools/coverage_costs.json").read_text())
     var root = document.root()
     assert_equal(document.number(document.get(root, "source_run_attempt")), 1.0)
     assert_equal(document.number(document.get(root, "workers_per_shard")), 4.0)
     assert_equal(
-        document.number(document.get(root, "completed_measurements")), 717.0
+        document.number(document.get(root, "completed_measurements")), 1171.0
     )
     var estimates = document.get(root, "scheduling_estimates")
-    assert_equal(document.length(estimates), 1)
-    var suite = "tests/test_carla_recorder_world.mojo"
-    assert_equal(document.key(estimates, 0), suite)
+    assert_equal(document.length(estimates), 2)
+    assert_equal(document.key(estimates, 0), "tests/test_capi_water.mojo")
+    var suite = "tests/test_village_battle_raid.mojo"
+    assert_equal(document.key(estimates, 1), suite)
     var estimate = document.get(estimates, suite)
     assert_equal(
         document.string(document.get(estimate, "kind")),
         "right_censored_timeout_lower_bound",
     )
     assert_equal(document.number(document.get(estimate, "exit_code")), 124.0)
-    assert_equal(document.number(document.get(estimate, "seconds")), 8281.5)
-    var last = document.get(estimate, "last_completed_capture")
-    assert_equal(document.number(document.get(last, "seconds")), 6622.2)
+    assert_equal(document.number(document.get(estimate, "seconds")), 6784.0)
+    assert_equal(
+        document.number(document.get(estimate, "job_id")), 124628072045.0
+    )
     assert_equal(
         costs[suite], document.number(document.get(estimate, "seconds"))
     )

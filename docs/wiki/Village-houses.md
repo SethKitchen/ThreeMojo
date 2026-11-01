@@ -42,10 +42,10 @@ var standing = stand_house(
 
 `house_model` writes the canonical model with `assemble`. It never writes a mesh. The table gives its rooms.
 
-| Storey | Rooms |
+| Story | Rooms |
 |---|---|
 | Ground | A hall, with a counter and a table with chairs. A house 6 meters wide or more also has a chamber with a bed, on the plan's +x side. The hall takes 60 percent of the width. |
-| Each storey above | One living room, with a settle, a low table and a shelf. |
+| Each story above | One living room, with a settle, a low table and a shelf. |
 
 The front door is 1 meter wide and 2.1 meters tall. A barn is different: see [The barn](#the-barn). It stands in the middle of the hall's front wall, the outside wall on the plan's -y side. `front_wall` finds that wall. `add_doors` then gives the chamber a door into the hall, 0.9 meters wide.
 
@@ -71,7 +71,7 @@ The front door is 1 meter wide and 2.1 meters tall. A barn is different: see [Th
 1. **Walls.** Each face of a wall is cut into cells at the edges of its openings. No cell is more than 1 meter across. The outside face wears the facade's texture. Its vertex colors darken it at its foot and under the eaves. The inside face wears lime plaster, and is darker in the corners of the room.
 2. **Windows.** A window has a painted frame, a mullion and a transom, panes of glass and a stone sill. From outside, a pane shows the sky at its top and darkens toward its foot. The panes show the day from inside. A pair of shutters stands open against the wall, in the trim's paint.
 3. **Doors.** A door has an oak frame and a stone threshold. Its leaf is boards on ledges, with iron straps. The leaf hangs from a hinge node of its own. A door 2 meters wide or more hangs two leaves, one at each jamb. A leaf 1.2 meters wide or more has diagonal braces. An outside door of a dwelling has a hood of the roof's tiles over it, on two oak brackets, with boarded cheeks at its ends. The hood reaches 75 centimeters out, and stays under the eaves. An iron lantern hangs from an arm beside the door. A barn's doors have no hood.
-4. **Rooms.** Each room has a floor of planks and a plastered ceiling. The ground storey's ceiling has oak joists.
+4. **Rooms.** Each room has a floor of planks and a plastered ceiling. The ground story's ceiling has oak joists.
 5. **The roof.** Two slopes of tiles or slates, 16 centimeters thick, reach 35 centimeters past the long walls. Each slope is cut into cells no more than `ROOF_CELL`, 0.8 meters, across, and `roof_shade` weathers each corner. The roof is darker and damper at the eave and paler at the ridge. Each batch of tiles is a little lighter or darker. Moss greens it in patches, most near the eave. Boards line the underside of the eaves. A fascia, barge boards and a ridge close the edges. A chimney stack rises over the chimney breast. Each gable is cut into cells no more than 1 meter across, as a wall is. A zinc gutter runs along each eave. A downpipe runs from each end of each gutter down the wall to the ground.
 6. **The plinth and the steps.** A stone plinth reaches 40 centimeters below the lowest ground under the house. Stone steps lead up to the front door.
 
@@ -105,26 +105,26 @@ A `Sheet` holds the triangles of one material, with a normal, a color and textur
 | Part | What it is |
 |---|---|
 | `walls` | One `WallSpan` for each piece of each wall. A door cuts a gap to its head, and the wall over the door is a span of its own. A span along the face of each column follows, then the stair's railings. |
-| `floors` | The ground floor over the plan and its plinth, then each step, then each tread of the stair and the upper floor round its well. A floor's ceiling is the underside of the slab over it. |
-| `furniture` | A `WallSpan` for each piece, along its longer side and as high as the piece, on its storey's floor. |
-| `doorways` | Each door of the ground storey: the jamb it hangs on, its width and the way it swings. |
+| `floors` | The ground floor over the plan and its plinth, then each step, then each tread of the stair and the upper floor around its well. A floor's ceiling is the underside of the slab over it. |
+| `furniture` | A `WallSpan` for each piece, along its longer side and as high as the piece, on its story's floor. |
+| `doorways` | Each door of the ground story: the jamb it hangs on, its width and the way it swings. |
 
 A step is 32 centimeters deep and at most 18 centimeters high. A door whose sill is less than 12 centimeters above the ground has no step. A door has at most six steps.
 
 ## The stair
 
-A house of two storeys or more has a stair from the ground floor up to the first storey above. `house_stair` finds it in the model. It runs along the back wall of the hall, the first room of the ground storey, and climbs along the plan's +x.
+A house of two stories or more has a stair from the ground floor up to the first story above. `house_stair` finds it in the model. It runs along the back wall of the hall, the first room of the ground story, and climbs along the plan's +x.
 
 | Part | Size |
 |---|---|
 | Width | 1 meter. |
-| Riser | As few risers as keep each one at most 19 centimeters. A storey of 2.8 meters has 15 risers of 18.7 centimeters. |
+| Riser | As few risers as keep each one at most 19 centimeters. A story of 2.8 meters has 15 risers of 18.7 centimeters. |
 | Tread | 25 centimeters deep, one fewer than the risers. |
 | Landing | 0.9 meters of floor clear before the foot. |
 
 A hall too short for the landing and the treads has no stair. `house_model` takes away the furniture that would stand on the stair, on its landing or over its well.
 
-A railing 1 meter high guards the well's open side upstairs. It reaches down to the ground floor, so it closes the stair's side as well. A railing crosses the well's foot upstairs, and a wall closes the space under the stair's top. `stand_house` draws oak treads and risers, a stringer, a handrail on balusters, a newel post and a balustrade. It cuts the well out of the hall's ceiling and the floor above, with oak trimmers round it.
+A railing 1 meter high guards the well's open side upstairs. It reaches down to the ground floor, so it closes the stair's side as well. A railing crosses the well's foot upstairs, and a wall closes the space under the stair's top. `stand_house` draws oak treads and risers, a stringer, a handrail on balusters, a newel post and a balustrade. It cuts the well out of the hall's ceiling and the floor above, with oak trimmers around it.
 
 `Doors` opens each door while someone stands within 1.8 meters of its middle, on its floor. The leaf turns at 2.5 radians a second, to a little over a right angle. It closes when nobody is near. A leaf is not solid: the gap in the wall is where a character walks through.
 
@@ -134,13 +134,13 @@ A railing 1 meter high guards the well's open side upstairs. It reaches down to 
 
 | Part | A barn |
 |---|---|
-| Rooms | One open storage floor on each storey: the threshing floor, and a loft over it. |
+| Rooms | One open storage floor on each story: the threshing floor, and a loft over it. |
 | Front door | 3.2 meters wide and 3 meters tall, in the middle of the front wall. Two leaves hang in it, and they swing out. |
 | Windows | 0.8 meters wide and 0.7 meters tall, with their sills 2.3 meters up, 3.6 meters apart. |
 | Stock | Stacks of hay along the west half of the back wall, and mangers along its east half. |
 | Hearth | None. |
 
-A barn must be 5 meters wide or more. Its storey must be 3.4 meters tall or more.
+A barn must be 5 meters wide or more. Its story must be 3.4 meters tall or more.
 
 The model holds the hay as shelves and the mangers as cabinets, with the sizes of `HAY` and `MANGER`. `stand_house` draws each shelf of a barn as a stack of straw bales tied with cords. It draws each other piece as a trough of boards on posts, with hay in it and a rack of slats over it.
 
@@ -148,19 +148,19 @@ A barn's inside walls are bare boards, and its ceilings are planks. A loft door 
 
 ## The hearth
 
-A brick or stone house has a chimney breast against its west gable wall. `house_breast` finds it in the model. It is a `COLUMN` element on each storey, from the floor to the floor above.
+A brick or stone house has a chimney breast against its west gable wall. `house_breast` finds it in the model. It is a `COLUMN` element on each story, from the floor to the floor above.
 
 | Part | Size |
 |---|---|
 | Breast | 1.5 meters wide along the wall. It stands 55 centimeters out from the wall. Its middle is 45 centimeters to the plan's -y of the wall's middle. |
-| Fireplace | An opening 90 centimeters wide and 85 centimeters high, in the breast's face on the ground storey. |
-| Clear floor | 60 centimeters round the breast, on every storey. |
+| Fireplace | An opening 90 centimeters wide and 85 centimeters high, in the breast's face on the ground story. |
+| Clear floor | 60 centimeters around the breast, on every story. |
 
 `house_model` takes away the furniture on the clear floor. It also takes away each window of the gable wall behind the breast.
 
-`stand_house` plasters the breast on each storey. On the ground storey it draws stone jambs and a stone lintel round the fireplace, with an oak mantel shelf over them. A sooty back, a stone hearth slab, two logs and glowing embers fill the fireplace. The embers and their glow on the back are unlit, so they glow in a dark room. The chimney stack on the roof stands over the breast.
+`stand_house` plasters the breast on each story. On the ground story it draws stone jambs and a stone lintel around the fireplace, with an oak mantel shelf over them. A sooty back, a stone hearth slab, two logs and glowing embers fill the fireplace. The embers and their glow on the back are unlit, so they glow in a dark room. The chimney stack on the roof stands over the breast.
 
-`house_interior` gives a `WallSpan` along the breast's face, as high as the storey. So a character walks round the breast and does not walk into the fire.
+`house_interior` gives a `WallSpan` along the breast's face, as high as the story. So a character walks around the breast and does not walk into the fire.
 
 ## Furnishings and light
 
@@ -186,7 +186,7 @@ The rugs, the quilts and the cushions wear `cloth_texture`. Each dye is one of `
 
 The game renderer has no lamps. So `warm` bakes the light inside a dwelling into the vertex colors of its plaster, wood, stone, planks and cloth:
 
-1. **The fill.** Each color inside the walls is multiplied by `FILL`. This is the warm light that bounces round a room off its floor and its walls.
+1. **The fill.** Each color inside the walls is multiplied by `FILL`. This is the warm light that bounces around a room off its floor and its walls.
 2. **The flames.** Each `Glow` adds `FIRELIGHT` times `warmth`. `warmth` starts at the glow's strength. It is multiplied by the cosine between the surface's normal and the way to the flame. It is also multiplied by the square of the share of its reach that is left.
 
 | Glow | Strength | Reach |
@@ -195,12 +195,12 @@ The game renderer has no lamps. So `warm` bakes the light inside a dwelling into
 | `LANTERN`, at its flame | 0.9 | 4 meters |
 | `CANDLE`, at its flame | 0.6 | 2.5 meters |
 
-A glow warms only its own storey. A vertex outside the middle of the walls is not warmed, so a flame does not light the outside face of a wall.
+A glow warms only its own story. A vertex outside the middle of the walls is not warmed, so a flame does not light the outside face of a wall.
 
 ## Limits
 
-- Only the first storey above the ground has a stair. A character does not reach a higher storey.
+- Only the first story above the ground has a stair. A character does not reach a higher story.
 - A door leaf does not stop a character or a camera.
 - A flame does not light the room as a lamp does. Its light is baked into the vertex colors when the house is built, so a character does not catch it, and it casts no shadow.
 - A house of timber framing or boards has no hearth.
-- A house is a box of storeys under one gable roof. It has no porch and no wing.
+- A house is a box of stories under one gable roof. It has no porch and no wing.

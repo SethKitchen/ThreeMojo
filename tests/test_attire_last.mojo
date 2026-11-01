@@ -128,6 +128,21 @@ def test_a_last_is_cast_onto_its_hull() raises:
     assert_almost_equal(last.cast(shallow), 0.25 * sqrt(Float32(17)), atol=1e-4)
     # A last with no faces holds nothing.
     assert_equal(FootLast(Vector3(0, 0, 0), Vector3(1, 1, 1), 1).cast(steep), 0)
+    assert_equal(
+        FootLast(Vector3(0, 0, 0), Vector3(1, 1, 1), 1).cast_from(
+            Vector3(0, 0, 0), steep
+        ),
+        0,
+    )
+    # From another point inside, a ray leaves by the face it meets first;
+    # from a point outside, it has already left.
+    assert_almost_equal(
+        last.cast_from(Vector3(0.5, 1, 0), Vector3(1, 0, 0)), 0.5, atol=1e-5
+    )
+    assert_almost_equal(
+        last.cast_from(Vector3(0, 0, 1), Vector3(0, 0, -1)), 4, atol=1e-5
+    )
+    assert_equal(last.cast_from(Vector3(5, 0, 0), Vector3(1, 0, 0)), 0)
     # Points in one plane close nothing.
     var flat = List[Vector3]()
     for i in range(4):

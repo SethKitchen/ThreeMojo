@@ -48,11 +48,11 @@ def _flat() raises -> Ground:
     return Ground(hill_height=Length(0.0, METER))
 
 
-def _house(storeys: Int) -> HouseParameters:
+def _house(stories: Int) -> HouseParameters:
     """Return a brick house 7 meters wide and 5.5 deep: a hall and a
-    chamber on its ground storey."""
+    chamber on its ground story."""
     return HouseParameters(
-        "test house", Length(7.0, METER), Length(5.5, METER), storeys, brick()
+        "test house", Length(7.0, METER), Length(5.5, METER), stories, brick()
     )
 
 
@@ -110,7 +110,7 @@ def test_a_floor_carries_and_its_slab_covers() raises:
     assert_almost_equal(floor.ceiling, 1.5 + 2.8 - 0.2, atol=1e-5)
     assert_almost_equal(floor.area.half_width, 3.5 + PLINTH_OVERHANG, atol=1e-6)
     assert_almost_equal(floor.area.turn, 0.4, atol=1e-6)
-    # Each piece stands in the way on its own storey's floor, as high as
+    # Each piece stands in the way on its own story's floor, as high as
     # it is: a piece upstairs passes over the floor below.
     assert_equal(len(inside.furniture), len(model.furnishings))
     var upstairs = 0
@@ -183,7 +183,7 @@ def test_doors_in_one_wall_cut_it_in_order() raises:
         Length64(2.0, METER),
         None,
     )
-    # And a door upstairs, which the ground storey does not walk through.
+    # And a door upstairs, which the ground story does not walk through.
     var upper = -1
     for e in range(len(model.elements)):
         ref element = model.elements[e]
@@ -211,7 +211,7 @@ def test_doors_in_one_wall_cut_it_in_order() raises:
     _ = frame
     var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
     var inside = house_interior(model, lot, 0, _flat())
-    # Three doors on the ground storey's front wall, and the inside door.
+    # Three doors on the ground story's front wall, and the inside door.
     assert_equal(len(inside.doorways), 4)
     var front_spans = 0
     for span in inside.walls:
@@ -286,7 +286,7 @@ def test_a_model_with_no_elements_is_only_its_floor() raises:
     assert_equal(len(inside.walls), 0)
     assert_equal(len(inside.doorways), 0)
     assert_equal(len(inside.floors), 1)
-    # No slab covers the floor, so its ceiling is the storey's top.
+    # No slab covers the floor, so its ceiling is the story's top.
     assert_almost_equal(inside.floors[0].ceiling, 2.8, atol=1.0e-4)
 
 
@@ -362,7 +362,7 @@ def test_a_chimney_breast_stands_in_the_way_on_every_storey() raises:
     var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
     var inside = house_interior(model, lot, 0.5, _flat())
     # A span along the breast's width, as thick as it stands out, from
-    # each storey's floor to the next.
+    # each story's floor to the next.
     var found = 0
     for span in inside.walls:
         if abs(span.half_thickness - Float32(BREAST_DEPTH / 2)) < 1.0e-5:

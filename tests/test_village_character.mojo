@@ -123,7 +123,7 @@ def test_a_character_walks_and_runs_where_the_stick_points() raises:
     assert_true(walker.stance == WALKING)
     assert_almost_equal(walker.speed().to(METER_PER_SECOND), 1.4, atol=1e-3)
     assert_true(walker.position.z < -1)
-    assert_true(walker.travelled > 1)
+    assert_true(walker.traveled > 1)
     _run(walker, _ahead(run=True), 1, ground)
     assert_true(walker.stance == RUNNING)
     assert_almost_equal(walker.speed().to(METER_PER_SECOND), 4.5, atol=1e-3)

@@ -77,10 +77,16 @@ from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.head.hair.dimensions import SCALP_HAIR
 from extensions.humanoid.skeleton.head.hair.beard import (
     CLEAN_SHAVEN,
+    STUBBLE,
     Beard,
     beard_label,
     beard_mesh,
     require_beard,
+)
+from extensions.humanoid.skeleton.head.hair.cards import (
+    HairCards,
+    add_beard_cards,
+    add_hair_cards,
 )
 from extensions.humanoid.skeleton.head.hair.geometry import (
     head_hair_from_dimensions,
@@ -113,6 +119,7 @@ from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SkinnedMesh
 from core.ordinal import require_valid, require_non_negative
 from render.tasks import TaskGroup
+from std.math import ceil, sqrt
 
 # The share of a triangle budget the body's skin takes, and the hair's
 # shell; each hand takes half of the rest.
@@ -122,8 +129,32 @@ comptime HAIR_TEXELS = 64
 comptime HAIR_SHARE = Float32(0.12)
 # The share a beard takes, from the body's.
 comptime BEARD_SHARE = Float32(0.03)
-# Cells along a beard's box.
+# Cells along a beard's box, with no triangle budget.
 comptime BEARD_DETAIL = 28
+# Cells along a beard's box with a budget. The budget decimates it to a
+# few hundred triangles, so a finer mesh is thrown away. The decimation
+# must not pinch a thin part, so on some beards meshed coarse it stops
+# short of the budget. Such a beard is meshed again at the finer detail.
+# Stubble lies in patches, and each patch keeps its rim: it decimates
+# best when meshed coarse, and it is never meshed again.
+comptime COARSE_BEARD_DETAIL = 12
+comptime FINE_BEARD_DETAIL = 20
+# How many times its budget a decimated beard can keep before it is
+# meshed again at `FINE_BEARD_DETAIL`.
+comptime BEARD_STALL = 2
+# With a triangle budget, the hair's shell and the hands are meshed at
+# about this many times their shares of it. Finer, decimation throws the
+# rest away, and the meshing and the decimation cost more for nothing.
+comptime SPARE_TRIANGLES = Float32(10)
+# Triangles per square of the detail: the hair's shell, its outer face
+# alone, and a hand's skin.
+comptime SHELL_DENSITY = Float32(95)
+comptime HAND_DENSITY = Float32(38)
+# The coarsest detail a budget meshes a part at.
+comptime LEAST_BUDGET_DETAIL = 12
+# A beard's cards: a quarter of the scalp's, and 40 at least.
+comptime BEARD_CARDS_SHARE = 4
+comptime BEARD_CARDS_LEAST = 40
 # Half the slot that parts the legs, so they can swing apart, in meters
 # on the template.
 comptime LEG_GAP = Float32(0.014)
@@ -156,6 +187,8 @@ struct GameHumanoid(Movable):
     """The node of the scalp hair's shell, which a hood or a helmet hides."""
     var beard: Optional[NodeId]
     """The node of the facial hair's shell, if the face grows any."""
+    var cards: List[HairCards]
+    """The scalp's hair as cards, if any were grown."""
 
     def __init__(
         out self,
@@ -167,6 +200,7 @@ struct GameHumanoid(Movable):
         var face: Optional[GameFace] = None,
         hair: Optional[NodeId] = None,
         beard: Optional[NodeId] = None,
+        var cards: List[HairCards] = List[HairCards](),
     ):
         """Hold a humanoid's parts.
 
@@ -179,6 +213,7 @@ struct GameHumanoid(Movable):
             face: Preserved face and mouth binding, or no facial animation.
             hair: The node of the scalp hair's shell, if it has one.
             beard: The node of the facial hair's shell, if it has one.
+            cards: Its hair's cards, or none.
         """
         self.rig = rig^
         self.root = root
@@ -188,6 +223,7 @@ struct GameHumanoid(Movable):
         self.face = face^
         self.hair = hair
         self.beard = beard
+        self.cards = cards^
 
 
 def _key(p: Vector3) -> Int:
@@ -379,6 +415,58 @@ def budget_all(
 comptime _FACIAL_PART_MINIMUM = 4 * 32
 
 
+def budget_detail(budget: Int, density: Float32, most: Int) -> Int:
+    """Return the detail at which a part's mesh has about
+    `SPARE_TRIANGLES` times its budget.
+
+    A mesh's triangles grow as the square of its detail.
+
+    Args:
+        budget: The part's share of a triangle budget, or zero for none.
+        density: The part's triangles per square of the detail.
+        most: The detail asked for.
+
+    Returns:
+        `most` with no budget. Else the detail, from `LEAST_BUDGET_DETAIL`
+        up to `most`, and never above it.
+    """
+    if budget <= 0:
+        return most
+    var detail = Int(ceil(sqrt(SPARE_TRIANGLES * Float32(budget) / density)))
+    return min(most, max(LEAST_BUDGET_DETAIL, detail))
+
+
+def beard_detail(triangles: Int) -> Int:
+    """Return the cells along a beard's box for a person's budget.
+
+    Args:
+        triangles: The person's triangle budget, or zero for none.
+
+    Returns:
+        `BEARD_DETAIL` with no budget, else `COARSE_BEARD_DETAIL`.
+    """
+    if triangles <= 0:
+        return BEARD_DETAIL
+    return COARSE_BEARD_DETAIL
+
+
+def beard_stalls(beard: Beard, budget: Int, drawn: Int) -> Bool:
+    """Return whether a coarse beard's decimation stopped short of its
+    budget, so the beard must be meshed again at `FINE_BEARD_DETAIL`.
+
+    Args:
+        beard: The facial hair.
+        budget: The beard's share of the triangle budget, or zero for
+            none.
+        drawn: How many triangles the decimation kept.
+
+    Returns:
+        True if there is a budget, the beard is not stubble, and the
+        decimation kept more than `BEARD_STALL` times the budget.
+    """
+    return budget > 0 and beard != STUBBLE and drawn > BEARD_STALL * budget
+
+
 def add_game_humanoid(
     mut scene: Scene,
     mut assets: Assets,
@@ -398,6 +486,7 @@ def add_game_humanoid(
     use: HumanoidUse = VISUAL_USE,
     facial_animation: Bool = False,
     beard: Beard = CLEAN_SHAVEN,
+    cards: Int = 0,
 ) raises -> GameHumanoid:
     """Build one person's skin on a skeleton under `parent`.
 
@@ -428,6 +517,10 @@ def add_game_humanoid(
         beard: The facial hair the face grows. Clean-shaven by default.
             A beard takes `BEARD_SHARE` of the budget, and 32 triangles
             at least, from the body's.
+        cards: Cards of hair to grow over the shell, or none. Each is a
+            guide strand drawn as a ribbon of fibers; see
+            `extensions.humanoid.skeleton.head.hair.cards`. Cards cost far
+            less to draw than strands, so a crowd can wear them.
 
     Returns:
         The humanoid: its rig, its bones and its meshes.
@@ -435,9 +528,9 @@ def add_game_humanoid(
     Raises:
         Error: If the spec, a detail, style or visual use is refused; if
             the budget is negative or cannot preserve the facial and body
-            requirements; if facial animation requests strand guides or a
-            beard; if the beard is not named; or if a scene node, mesh or
-            geometry operation fails.
+            requirements; if facial animation requests strand guides,
+            cards or a beard; if the beard is not named; if the cards are
+            negative; or if a scene node, mesh or geometry operation fails.
     """
     require_humanoid_use(use)
     var settings = game_build_settings(
@@ -453,6 +546,7 @@ def add_game_humanoid(
         eye_paint,
         facial_animation,
         beard,
+        cards,
     )
     var node = Object3D()
     node.user_data.set_json(
@@ -492,29 +586,32 @@ def add_game_humanoid(
         body = body_skin_mesh(spec, detail, workers, gap)
     # The shell's inner face lies under the scalp: a game never sees it.
     # With no strands over it, the shell takes its style's shape.
+    var share = Float32(triangles) if triangles > 0 else Float32(0)
     var shell = head_hair_from_dimensions(
         dims,
         SCALP_HAIR,
         RIGHT,
-        hair_detail,
+        budget_detail(Int(share * HAIR_SHARE), SHELL_DENSITY, hair_detail),
         workers,
         hair_style,
         outer_only=True,
-        alone=guides == 0,
+        alone=guides == 0 and cards == 0,
     )
     # Decimation bends the strands laid round the shell; they are laid
     # again where its vertices end up.
     var meshed = shell.clone()
     var whiskers = Optional[BufferGeometry](None)
     if beard != CLEAN_SHAVEN:
-        whiskers = beard_mesh(dims, beard, BEARD_DETAIL, workers)
+        whiskers = beard_mesh(dims, beard, beard_detail(triangles), workers)
     var eyes = List[BufferGeometry]()
     # Both named sides receive an eye.
     for side in [RIGHT, LEFT]:  # pragma: no branch
         eyes.append(eyeball_mesh(dims, side, 12))
     var arms = arm_muscle_dimensions(spec)
-    var right = hand_skin_from_dimensions(arms, RIGHT, hand_detail)
-    var left = hand_skin_from_dimensions(arms, LEFT, hand_detail)
+    var each_hand = Int(share * (1 - BODY_SHARE - HAIR_SHARE) / 2)
+    var fingers = budget_detail(each_hand, HAND_DENSITY, hand_detail)
+    var right = hand_skin_from_dimensions(arms, RIGHT, fingers)
+    var left = hand_skin_from_dimensions(arms, LEFT, fingers)
     untinted(right)
     untinted(left)
     # The rig reads the crown, the fingertips and the toes off the skin.
@@ -690,15 +787,16 @@ def add_game_humanoid(
             hair_phong(spec.genome, assets.textures.add(strands^))
         )
     var hair_node = place_mesh_node(scene, assets, holder_id, shell^, hair)
+    # The shells are drawn before the cards over them.
+    var full_beard = Optional[BufferGeometry](None)
     var beard_node = Optional[NodeId](None)
     if whiskers:
-        beard_node = place_mesh_node(
-            scene,
-            assets,
-            holder_id,
-            _budgeted(whiskers.take(), beard_budget),
-            hair,
-        )
+        var drawn = _budgeted(whiskers.value().clone(), beard_budget)
+        if beard_stalls(beard, beard_budget, drawn.triangle_count()):
+            whiskers = beard_mesh(dims, beard, FINE_BEARD_DETAIL, workers)
+            drawn = _budgeted(whiskers.value().clone(), beard_budget)
+        full_beard = whiskers.take()
+        beard_node = place_mesh_node(scene, assets, holder_id, drawn^, hair)
     var face = Optional[GameFace](None)
     if facial_animation:
         var paints = List[MaterialId]()
@@ -727,6 +825,26 @@ def add_game_humanoid(
                 style=hair_style,
             )
         )
+    var card_grooms = List[HairCards]()
+    if cards > 0:
+        card_grooms.append(
+            add_hair_cards(
+                scene, assets, holder_id, spec, cards, style=hair_style
+            )
+        )
+        # A beard grows cards over its shell, but stubble is too short.
+        if full_beard and beard != STUBBLE:
+            card_grooms.append(
+                add_beard_cards(
+                    scene,
+                    assets,
+                    holder_id,
+                    spec,
+                    full_beard.value(),
+                    beard,
+                    max(BEARD_CARDS_LEAST, cards // BEARD_CARDS_SHARE),
+                )
+            )
     return GameHumanoid(
         rig^,
         root,
@@ -736,6 +854,7 @@ def add_game_humanoid(
         face^,
         Optional(hair_node),
         beard_node,
+        card_grooms^,
     )
 
 
@@ -752,6 +871,7 @@ def game_build_settings(
     eye_paint: MaterialId = UNSET_PAINT,
     facial_animation: Bool = False,
     beard: Beard = CLEAN_SHAVEN,
+    cards: Int = 0,
 ) raises -> UserData:
     """Record every game-builder option that changes a visual recipe.
 
@@ -772,17 +892,20 @@ def game_build_settings(
         facial_animation: Preserve original face correspondence for audio playback.
         beard: The facial hair. Recorded only when the face grows some, so
             a clean-shaven recipe is as it was before beards.
+        cards: Cards of hair. Recorded only when there are some, so a
+            recipe with none is as it was before cards.
 
     Returns:
         A value snapshot independent of the canonical spec.
 
     Raises:
         Error: If the hair style or the beard is unnamed, the triangle
-            budget is negative, or facial animation requests guide strands
-            or a beard.
+            budget or the cards are negative, or facial animation requests
+            guide strands, cards or a beard.
     """
     require_non_negative(triangles, "Game triangle budget must be nonnegative")
-    if facial_animation and guides > 0:
+    require_non_negative(cards, "A game humanoid's cards must be nonnegative")
+    if facial_animation and (guides > 0 or cards > 0):
         raise Error(
             "Facial triangle budgets do not support strand hair; use the shell"
         )
@@ -804,6 +927,8 @@ def game_build_settings(
         settings.set_string("beard", beard_label(beard))
     settings.set_string("guides", String(guides))
     settings.set_string("followers", String(followers))
+    if cards > 0:
+        settings.set_string("cards", String(cards))
     settings.set_string("skin_material_id", String(skin_paint.value))
     settings.set_string("hair_material_id", String(hair_paint.value))
     settings.set_string("eye_material_id", String(eye_paint.value))

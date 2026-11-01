@@ -7,16 +7,16 @@
 its lot.
 
 `house_model` writes the canonical building model with
-`extensions.building.model.assemble`. The ground storey of a house 6
+`extensions.building.model.assemble`. The ground story of a house 6
 meters wide or more has two rooms: a hall with a hearth, a counter and a
 table, and a chamber with a bed. A narrower house has the hall only.
-Each storey above has one living room. The outside walls are `cladding`
+Each story above has one living room. The outside walls are `cladding`
 over mineral wool and gypsum board. The hall has a front door in the
 middle of its front wall, the wall at the plan's -y. The chamber has a
 door into the hall. Each outside wall has a row of windows, and
 `furnish` gives each room its furniture. A brick or a stone house has a
-chimney breast against its west gable wall, a column on each storey, with
-the hearth's fireplace in its face on the ground storey; `house_breast`
+chimney breast against its west gable wall, a column on each story, with
+the hearth's fireplace in its face on the ground story; `house_breast`
 finds it, and the wall behind it has no window.
 
 `extensions.village.house_view.stand_house` stands the model on its lot.
@@ -128,8 +128,8 @@ comptime BARN_DOOR = Vector3(3.2, 3.0, 0)
 """A barn door's width and height, in meters."""
 comptime BARN_WIDTH = Float32(5)
 """The narrowest barn, in meters: its door fits its front wall."""
-comptime BARN_STOREY = Float32(3.4)
-"""The lowest storey of a barn, in meters: its door fits under it."""
+comptime BARN_STORY = Float32(3.4)
+"""The lowest story of a barn, in meters: its door fits under it."""
 comptime HAY = Vector3(2.2, 1.1, 1.6)
 """A stack of hay's width along its wall, its depth and its height, in
 meters."""
@@ -141,7 +141,7 @@ comptime STALL_GAP = Float64(0.4)
 middle of the back wall keeps clear, in meters."""
 # The share of the width the hall takes, when the house has a chamber.
 comptime HALL_SHARE = Float64(0.6)
-# The narrowest house, in meters, whose ground storey has a chamber.
+# The narrowest house, in meters, whose ground story has a chamber.
 comptime CHAMBERED = Float32(6)
 """How wide a house must be for a chamber beside its hall, in meters."""
 comptime STAIR_WIDTH = Float64(1.0)
@@ -160,7 +160,7 @@ comptime BREAST_Y = Float64(-0.45)
 """Where the middle of a chimney breast stands along the plan's y, in
 meters."""
 comptime BREAST_CLEAR = Float64(0.6)
-"""How much floor a chimney breast keeps clear round it, in meters."""
+"""How much floor a chimney breast keeps clear around it, in meters."""
 
 
 @fieldwise_init
@@ -208,8 +208,8 @@ struct HouseUse(Equatable, ImplicitlyCopyable, Writable):
 # A home: a hall, a chamber when it is wide, a front door, windows to see
 # by, and furniture.
 comptime DWELLING = HouseUse(0)
-# A barn: an open floor on each storey, a wide double door, small high
-# windows, and hay and mangers on its ground storey.
+# A barn: an open floor on each story, a wide double door, small high
+# windows, and hay and mangers on its ground story.
 comptime BARN = HouseUse(1)
 
 
@@ -258,11 +258,11 @@ struct HouseParameters(Copyable, Movable):
     """What a house is made of, how large it is and how it looks."""
 
     var name: String
-    # The width and the depth of the plan, and the height of a storey.
+    # The width and the depth of the plan, and the height of a story.
     var width: Length
     var depth: Length
-    var storey_height: Length
-    var storeys: Int
+    var story_height: Length
+    var stories: Int
     # The outer layer of the outside walls, and how they look.
     var cladding: BuildingMaterial
     var facade: Facade
@@ -282,10 +282,10 @@ struct HouseParameters(Copyable, Movable):
         var name: String,
         width: Length,
         depth: Length,
-        storeys: Int,
+        stories: Int,
         var cladding: BuildingMaterial,
         facade: Facade = BRICK_FACADE,
-        storey_height: Length = Length(2.8, METER),
+        story_height: Length = Length(2.8, METER),
         pitch: Angle = Angle(40.0, DEGREE),
         roof: Vector3 = NATURAL,
         trim: Vector3 = PAINT,
@@ -298,10 +298,10 @@ struct HouseParameters(Copyable, Movable):
             name: A name for people and for exchange files.
             width: The plan's width, along its x.
             depth: The plan's depth, along its y.
-            storeys: How many storeys.
+            stories: How many stories.
             cladding: The outer layer of the outside walls.
             facade: How the outside walls look.
-            storey_height: The height of a storey.
+            story_height: The height of a story.
             pitch: How steep the gable roof is. Zero keeps the flat roof.
             roof: The tint over the roof covering's texture. White shows
                 the texture as it is.
@@ -312,8 +312,8 @@ struct HouseParameters(Copyable, Movable):
         self.name = name^
         self.width = width
         self.depth = depth
-        self.storey_height = storey_height
-        self.storeys = storeys
+        self.story_height = story_height
+        self.stories = stories
         self.cladding = cladding^
         self.facade = facade
         self.pitch = pitch
@@ -327,11 +327,11 @@ struct HouseParameters(Copyable, Movable):
 
         Raises:
             Error: If the width or the depth is not from 3 to 60 meters,
-                there are not from 1 to 6 storeys, a storey is not from
+                there are not from 1 to 6 stories, a story is not from
                 2.4 to 6 meters tall, the facade is not one, the pitch is
                 not from 0 to 60 degrees, or a color channel is not from
                 0 to 1. Also if the use is not one, or a barn is narrower
-                than `BARN_WIDTH` or its storey lower than `BARN_STOREY`.
+                than `BARN_WIDTH` or its story lower than `BARN_STORY`.
         """
         require_between(
             self.width.to(METER),
@@ -346,13 +346,13 @@ struct HouseParameters(Copyable, Movable):
             "A house must be from 3 to 60 meters deep",
         )
         require_count_between(
-            self.storeys, 1, 6, "A house must have from 1 to 6 storeys"
+            self.stories, 1, 6, "A house must have from 1 to 6 stories"
         )
         require_between(
-            self.storey_height.to(METER),
+            self.story_height.to(METER),
             2.4,
             6,
-            "A storey must be from 2.4 to 6 meters tall",
+            "A story must be from 2.4 to 6 meters tall",
         )
         if not self.facade.is_valid():
             raise Error("A facade must be one of the four")
@@ -366,10 +366,10 @@ struct HouseParameters(Copyable, Movable):
                 "A barn must be from 5 to 60 meters wide",
             )
             require_between(
-                self.storey_height.to(METER),
-                BARN_STOREY,
+                self.story_height.to(METER),
+                BARN_STORY,
                 6,
-                "A barn's storey must be from 3.4 to 6 meters tall",
+                "A barn's story must be from 3.4 to 6 meters tall",
             )
         require_between(
             self.pitch.to(DEGREE),
@@ -383,7 +383,7 @@ struct HouseParameters(Copyable, Movable):
             require_between(color.z, 0, 1, "A color must be 0 to 1")
 
     def chambered(self) -> Bool:
-        """Return whether the ground storey has a chamber beside the hall.
+        """Return whether the ground story has a chamber beside the hall.
 
         Returns:
             Whether the house is a dwelling `CHAMBERED` meters wide or
@@ -401,7 +401,7 @@ def _m(meters: Float64) -> Length64:
 
 def front_wall(building: Building) raises -> ElementId:
     """Return the hall's front wall: the longest outside wall of the
-    ground storey along the plan's -y side.
+    ground story along the plan's -y side.
 
     Args:
         building: A house's model.
@@ -410,7 +410,7 @@ def front_wall(building: Building) raises -> ElementId:
         The wall.
 
     Raises:
-        Error: If the ground storey has no outside wall along its -y side.
+        Error: If the ground story has no outside wall along its -y side.
     """
     var lowest = Float64(1.0e30)
     for e in range(len(building.elements)):
@@ -441,7 +441,7 @@ def front_wall(building: Building) raises -> ElementId:
 @fieldwise_init
 struct Stair(ImplicitlyCopyable):
     """A straight stair along a hall's back wall, from the ground floor up
-    to the floor of the storey above, in the model's plan.
+    to the floor of the story above, in the model's plan.
 
     It climbs along the plan's +x. Tread `k`, from zero, runs from
     `x0 + k * STAIR_GOING` to one going further, and its top stands
@@ -470,9 +470,9 @@ struct Stair(ImplicitlyCopyable):
 
 def house_stair(building: Building) -> Optional[Stair]:
     """Return a house's stair: along the back wall of its hall, from the
-    ground floor up to the storey above.
+    ground floor up to the story above.
 
-    The hall is the first space of the ground storey, as `house_model`
+    The hall is the first space of the ground story, as `house_model`
     writes it. The stair keeps `STAIR_LANDING` of floor clear before its
     foot, at the hall's -x end. It has as few risers as keep each one at
     most `STAIR_RISE`.
@@ -481,8 +481,8 @@ def house_stair(building: Building) -> Optional[Stair]:
         building: A house's model.
 
     Returns:
-        The stair, or None for a model of one storey or of no room, for
-        an upper storey no more than one riser over the ground floor, and
+        The stair, or None for a model of one story or of no room, for
+        an upper story no more than one riser over the ground floor, and
         for a hall too short for the stair.
     """
     if len(building.storeys) < 2:
@@ -501,7 +501,7 @@ def house_stair(building: Building) -> Optional[Stair]:
         building.storeys[1].elevation.value
         - building.storeys[0].elevation.value
     )
-    # A stair has two risers or more: a lower storey needs no stair.
+    # A stair has two risers or more: a lower story needs no stair.
     if climb <= STAIR_RISE:
         return None
     var risers = Int(ceil(climb / STAIR_RISE))
@@ -523,7 +523,7 @@ def _clear_furniture(
     y1: Float64,
     top: Int,
 ) raises:
-    """Take away the furniture of storeys `top` and below that stands on a
+    """Take away the furniture of stories `top` and below that stands on a
     rectangle of the plan, from `x0` to `x1` and from `y0` to `y1`."""
     var middle_x = (x0 + x1) / 2
     var middle_y = (y0 + y1) / 2
@@ -549,7 +549,7 @@ def _clear_furniture(
 
 
 def clear_stair(mut building: Building, stair: Stair) raises:
-    """Take away the furniture of the ground storey and of the storey above
+    """Take away the furniture of the ground story and of the story above
     that stands on a stair, before its foot, or over its well.
 
     Args:
@@ -568,7 +568,7 @@ def clear_stair(mut building: Building, stair: Stair) raises:
 struct Breast(ImplicitlyCopyable):
     """A chimney breast against a house's west gable wall, in the model's
     plan: a column of masonry from the ground floor up through every
-    storey, with the hearth's fireplace in its face on the ground storey.
+    story, with the hearth's fireplace in its face on the ground story.
     The chimney's stack rises over it through the roof."""
 
     # Its back, against the wall, and its face, along the plan's x, and its
@@ -607,7 +607,7 @@ def house_breast(building: Building) -> Optional[Breast]:
 
 def clear_breast(mut building: Building, breast: Breast) raises:
     """Take away the furniture that stands on or near a chimney breast, on
-    every storey, and the openings in the wall behind it.
+    every story, and the openings in the wall behind it.
 
     A piece within `BREAST_CLEAR` of the breast is taken away. An opening
     whose wall's middle stands at the breast's back, and that reaches into
@@ -647,7 +647,7 @@ def clear_breast(mut building: Building, breast: Breast) raises:
 
 def _add_breast(mut building: Building, west: Float64) raises:
     """Add a chimney breast against the west gable wall, whose middle line
-    stands at `west`: a column on each storey."""
+    stands at `west`: a column on each story."""
     var half = building.constructions[0].thickness().value / 2
     var at = Point2(west + half + BREAST_DEPTH / 2, BREAST_Y)
     for storey in range(len(building.storeys)):  # pragma: no branch
@@ -667,7 +667,7 @@ def _row(
     last: Float64,
     back: Float64,
 ) raises:
-    """Stand pieces of one size along the back wall of the ground storey's
+    """Stand pieces of one size along the back wall of the ground story's
     first room, facing into it, from `first` toward `last` along the
     plan's x while they fit, `back` being the wall's inside face."""
     var width = Float64(size.x)
@@ -705,7 +705,7 @@ def house_model(parameters: HouseParameters) raises -> Building:
     Args:
         parameters: The house.
 
-    A barn's ground storey is one open floor, with hay along the west
+    A barn's ground story is one open floor, with hay along the west
     half of its back wall and mangers along the east half. Its front door
     is `BARN_DOOR`, and its windows are small and high. It has no hearth.
 
@@ -727,7 +727,7 @@ def house_model(parameters: HouseParameters) raises -> Building:
         Point2(-half_x, half_y),
     ]
     var plans = List[StoreyPlan]()
-    var height = _m(Float64(parameters.storey_height.to(METER)))
+    var height = _m(Float64(parameters.story_height.to(METER)))
     var ground_rooms = List[SpacePlan]()
     if parameters.chambered():
         var split = -half_x + 2 * half_x * HALL_SHARE
@@ -762,7 +762,7 @@ def house_model(parameters: HouseParameters) raises -> Building:
     else:
         ground_rooms.append(SpacePlan("hall", KITCHEN, outline.copy()))
     plans.append(StoreyPlan("ground storey", height, ground_rooms^))
-    for storey in range(1, parameters.storeys):
+    for storey in range(1, parameters.stories):
         var room = SpacePlan("room " + String(storey), LIVING, outline.copy())
         if barn:
             room = SpacePlan("loft " + String(storey), STORAGE, outline.copy())

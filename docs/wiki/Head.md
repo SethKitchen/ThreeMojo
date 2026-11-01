@@ -239,7 +239,24 @@ Pass a `HairBody` as the collider. The skins' own fields are too slow to read fo
 - The head's skin, into a fine grid. Above the chin only the head counts, so the hair on the scalp lies smooth.
 - The body's skin, from the middle of the back up, into a coarser grid. Below the neck the body counts, so long hair falls on the shoulders and the back.
 
-`HairCollider` bakes any other field. `HairWind` blows one way, in gusts. Each strand's strength flutters, out of phase with its neighbors'. The simulation is ported from Frostbitten Hair WebGPU, with its defaults. Its grids of density and velocity are left out.
+`HairCollider` bakes any other field. It samples the grid's planes on every thread, as each sample stands alone. `HairWind` blows one way, in gusts. Each strand's strength flutters, out of phase with its neighbors'. The simulation is ported from Frostbitten Hair WebGPU, with its defaults. Its grids of density and velocity are left out.
+
+The strands lie in the frame of the node they hang from. A game humanoid's head moves that frame. `carry(move)` moves each point but the root back by the frame's move, so the point keeps its place and its speed in the world. Give it the frame's new world matrix, inverted, times its old one. The next step then swings the hair as the head speeds up, slows or turns. A move that takes a root more than half a meter is a jump, and the hair is not carried through it.
+
+`down` is the way gravity pulls in the frame, so the hair falls toward the ground when the head bows. `GameHairMotion` sets both for a game humanoid; see [Game humanoid](Game-humanoid).
+
+### Hair cards
+
+A strand drawn as a wide line costs a quad and two round caps for each segment, about 54 raster corners. A head of a few thousand strands then costs gigabytes of raster corners a frame. Games draw hair as cards: ribbons laid on the hair, each textured with many fibers. `add_hair_cards(scene, assets, parent, spec, cards, style=style)` grows a groom of `cards` guide strands and no followers, and draws each guide as a card:
+
+1. `card_groom` keeps each guide strand, with at most 16 of its points, evenly spaced along it. The fibers of each card stand for the followers.
+2. Each card is a ribbon along its strand. It lies flat on the hair, across the strand. `card_width` makes it wide enough that the cards cover the scalp and overlap: 2.2 cm at the root for 600 cards on the template. It narrows to a fifth of that at the tip.
+3. `fiber_texture` gives twelve fibers across each card. Each fiber is a ridge of alpha in a shade of its own, darker at its edges. About one in four ends and starts again. The material cuts away alpha below one half. About two thirds of each tile is above the cutoff, so a card seen from far off stays whole when its mipmaps average its texels.
+4. Each point is shaded as a strand's point is, with its depth in the hair toward each light. The density counts each card as 60 fibers. A card is darker at its root, and lifts to its full shading over the first third of its length.
+
+The cards move under `HairSimulation`, as strands do, with fewer points to move. `HairCards.shade` writes the moved points into the ribbons and lights them.
+
+`examples/game_hairstyles.mojo` draws one woman in every style as a game humanoid with 700 cards. It writes `out/game_hairstyles.png`. The 13 heads take about half a gigabyte of memory to draw. The same heads in strands of 100 guides and four followers each took 3.5 GB.
 
 ### Hairstyles
 
@@ -260,15 +277,20 @@ A `HairStyle` says how the hair is cut and laid. Pass the same style to `add_gro
 | `HALF_UP` | The hair above the temples is tied in a short tail at the back. The rest falls long. |
 | `BOB` | Parted down the middle and cut level at the jaw. |
 | `PIXIE` | Cropped short, 3 to 6.5 cm, and combed forward and down. |
+| `TOPKNOT` | Combed up to a tie on the top of the crown, and coiled round a small ball on it. |
+| `TWIN_BRAIDS` | Parted down the middle, tied behind each ear, and woven into a braid on each side. Each braid is 24 to 30 cm. |
+| `CROPPED` | Cropped closer than a pixie, 1.2 to 2.6 cm, and combed back and down. |
+| `SLICKED` | Combed straight back over the crown, and cut level at the nape. |
 
 An artist groomed `LAYERED` and `MOHAWK`. `tools/hair_style.mojo` converts their TressFX files into `assets/hair/`.
 
-The groom designs the other ten on its own guides. Each guide grows from a root on the scalp's hair:
+The groom designs the other fourteen on its own guides. Each guide grows from a root on the scalp's hair:
 
 - Loose hair walks over the hair away from the part and down, to the ears. Then it hangs to its length and sways a little. A bob's hangs only to its cut.
-- A pixie's walks forward and down, as far as it is long.
+- A pixie's walks forward and down, as far as it is long. A crop's walks back and down, as far as it is long.
+- Slicked hair walks back over the crown and down, then hangs to its cut at the nape.
 - Tied hair follows the arc from its root to its tie, round the cranium's middle. A style with a tie on each side takes the nearer one. Hair from the brow goes up over the crown, and hair from the temple goes back over the ear. The arc arches up a little in its middle, so the hair clears the ear.
-- Past the tie, a tail springs back and falls. A bun climbs over its ball and coils round it. A braid falls in three lanes, each a third of a turn behind the next, which cross over one another.
+- Past the tie, a tail springs back and falls. A bun or a topknot climbs over its ball and coils round it. A braid falls in three lanes, each a third of a turn behind the next, which cross over one another. Twin braids are woven so from each tie behind the ears.
 
 Each strand is then lifted out of the head's skin and the body's grid. A lifted point carries the rest of its strand with it, so long hair drapes over the shoulders and does not break. Tied hair is pulled taut over the scalp: it curls only past the tie, and its shell does not stand fuller for the curl. Every designed style keeps a thin shell, so the strands are what shows. A tied style's roots reach down to the nape, which shows when the hair is pulled up.
 
@@ -286,9 +308,12 @@ A game humanoid with no strands draws only the hair's shell. A designed style's 
 | `BRAID` | A narrower tail from the nape, down the back. |
 | `PIGTAILS` | A tail from each tie, behind each ear, down beside the neck. |
 | `BUN`, `SPACE_BUNS` | A ball on each tie, half as far out as the groom coils it, so it sits on the head. |
-| `PIXIE` | Cropped close, as it is under strands. |
+| `PIXIE`, `CROPPED` | Cropped close, as it is under strands. |
+| `TOPKNOT` | A ball on its tie, on the top of the crown. |
+| `TWIN_BRAIDS` | A narrow tail from each tie behind the ears, down beside the neck. |
+| `SLICKED` | A short fall to the nape. |
 
-A tail and a bun take their ties from the groom, and join the shell in a smooth fillet. The tails pass behind the neck, but they do not know the body, so the lowest part of a braid can sink into the back. `GROWN`, `LAYERED` and `MOHAWK` are drawn as they are. `examples/game_hairstyles.mojo` draws the woman of `examples/hairstyles.mojo` in every style as a game humanoid, and writes `out/game_hairstyles.png`. A long tail stretches the shell's box. So the mesh takes more cells, up to 64, and each cell stays the size it is on the head alone.
+A tail and a bun take their ties from the groom, and join the shell in a smooth fillet. The tails pass behind the neck, but they do not know the body, so the lowest part of a braid can sink into the back. `GROWN`, `LAYERED` and `MOHAWK` are drawn as they are. Run `examples/game_hairstyles.mojo` with zero cards to draw each style's shell alone: `mojo run -I . examples/game_hairstyles.mojo out/shells.png 140 0`. A long tail stretches the shell's box. So the mesh takes more cells, up to 64, and each cell stays the size it is on the head alone.
 
 A style keeps no head of its own. Each root is a point of a unit cranium, and each strand is kept as offsets from its root in the cranium's frame there. So a style fits every head a genome makes. `HairStyleFile.strand` puts a strand on a person's cranium. The groom then walks its root onto the skin and lifts any point of it that would pass under the skin. The follow strands, the clumping and the shading are the grown hair's.
 
@@ -315,12 +340,28 @@ A `Beard` says which facial hair a face grows. `BeardShape` draws it as its volu
 | `FULL_BEARD` | the same, and a mass that hangs below the chin | 7 mm on the cheeks, 14 mm at the chin |
 | `CHIN_STRAP` | a band 3 cm deep along the jaw, from sideburn to sideburn | 4 mm |
 | `MUTTON_CHOPS` | the sideburns and the cheeks, the chin and the lip bare | 6 mm |
+| `STUBBLE` | the zone of a short beard | 1.5 mm |
+| `LONG_BEARD` | a full beard's zone, and a mass that falls from the chin to the chest | 7 mm on the cheeks, 14 mm at the chin |
+| `FORKED_BEARD` | a full beard's zone, and two locks that fall from the chin and part | 7 mm on the cheeks, 14 mm at the chin |
 
 The zones are authored in template centimeters round the mouth. The lips part 65 cm above the hip joint centers, the chin's point stands at 62 cm, and the nose's base at 67 cm. A beard's upper line runs from under the nose to each corner of the mouth, then up across the cheek to the sideburn. Its lower line runs under the jaw, above the larynx, and up behind the jaw to the ear's lobe.
+
+A long beard falls in a tapered lock 17 cm below the chin, forward over the chest. A forked beard falls in two locks 12 cm long that part 5 cm at their tips. Each lock is a run of tapered capsules, joined to the beard's mass in a smooth fillet.
 
 The head's frame maps the zones onto each face. So a genome that widens the jaw or the mouth moves the beard with it. The hair thins toward each zone's edge, as a trimmed beard does.
 
 `beard_mesh` meshes the outer face of the shell. The inner face lies under the skin and never shows. Facial hair takes the scalp hair's material. Pass `beard` to `add_game_humanoid`; see [Game humanoid](Game-humanoid).
+
+#### Beard cards
+
+A beard can wear cards over its shell, as the scalp does. `add_beard_cards(scene, assets, parent, spec, shell, beard, cards)` grows them. Stubble and a clean-shaven face grow no cards.
+
+1. `beard_groom` roots each strand at a vertex of the beard's shell, 1.2 mm out of it.
+2. Each strand walks down the beard's surface in steps of 4 mm. At each step it turns along the surface, toward the ground.
+3. A strand stops where the surface faces down, under the jaw or at a lock's tip. It stops at its style's reach too. A mustache reaches 1.6 cm, a full beard 5 cm and a long beard 20 cm.
+4. Each card is 9 mm wide on the template, so the shell shows between the cards as the beard's mass.
+
+The cards lie on the beard and follow its locks, so a forked beard parts in its cards too. `add_game_humanoid` grows a quarter of its `cards` on a beard, and 40 at the least.
 
 ## Examples
 

@@ -40,7 +40,7 @@ def test_the_natural_dyes_go_round() raises:
     assert_equal(len(dyes), NATURAL_DYES)
     for k in range(NATURAL_DYES):
         assert_true(_same(natural_dye(k), dyes[k]))
-        # Any integer names a dye: the list goes round both ways.
+        # Any integer names a dye: the list goes around both ways.
         assert_true(_same(natural_dye(k + NATURAL_DYES * 3), dyes[k]))
         assert_true(_same(natural_dye(k - NATURAL_DYES * 2), dyes[k]))
 

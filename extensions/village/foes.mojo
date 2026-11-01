@@ -18,7 +18,7 @@ frame, as a state machine of `FoeState`:
 | `POSTED` | Stands at its post | The player comes within `NOTICE`: `ALERTED` |
 | `ALERTED` | Faces the player for `ALERT` seconds | The time is over: `CLOSING` |
 | `CLOSING` | Runs or walks at the player | It is within `CIRCLE`: `CIRCLING` |
-| `CIRCLING` | Steps round the player at `CIRCLE`, facing them | Its wait is over and it holds the attack token: `ATTACKING`. An attack of the player's starts near it: one time in `GUARD_CHANCE`, it answers. `SIDESTEP_SHARE` of its answers are a sidestep, and it keeps circling; the others are `GUARDING` |
+| `CIRCLING` | Steps around the player at `CIRCLE`, facing them | Its wait is over and it holds the attack token: `ATTACKING`. An attack of the player's starts near it: one time in `GUARD_CHANCE`, it answers. `SIDESTEP_SHARE` of its answers are a sidestep, and it keeps circling; the others are `GUARDING` |
 | `ATTACKING` | Comes within `STRIKE` and makes the attacks of its plan | The plan is done: `RETREATING`, and it gives the token back |
 | `RETREATING` | Backs away for `RETREAT` seconds | The time is over: `CIRCLING` |
 | `GUARDING` | Guards for `GUARD_TIME` seconds | The time is over: `CIRCLING` |
@@ -26,7 +26,7 @@ frame, as a state machine of `FoeState`:
 
 A bandit returns to its post when the player falls, or leads it further
 than `LOSE` from its post. Only the bandit that holds the attack token
-attacks, so the others wait their turn round the player, as foes do in
+attacks, so the others wait their turn around the player, as foes do in
 most action games. A plan is two or three light attacks, a heavy attack,
 a light and a heavy attack, or a piercing attack that glows red and that no
 guard stops. A raging bandit's dice roll high: it makes no plan of two
@@ -142,7 +142,7 @@ comptime WOLF_RUN = Float32(7)
 comptime HOME_NEAR = Float32(0.8)
 """How near its post a returning bandit stops, in meters."""
 comptime FLIP_RATE = Float32(0.3)
-"""How often a circling bandit turns the other way round, a second."""
+"""How often a circling bandit turns the other way around, a second."""
 comptime DUMMY_RADIUS = Float32(0.35)
 """How wide a dummy is, in meters from its post."""
 comptime ROCK_STIFFNESS = Float32(60)
@@ -317,7 +317,7 @@ struct Brain(Copyable, Movable):
     var state: FoeState
     # Seconds left in the state, for the states that wait.
     var timer: Float32
-    # Which way round the player it steps: 1 or -1.
+    # Which way around the player it steps: 1 or -1.
     var side: Float32
     var plan: List[CombatMove]
     # The next attack of the plan.
@@ -510,7 +510,7 @@ struct Brain(Copyable, Movable):
         seconds: Float32,
         mut out: Intent,
     ):
-        """Wait a turn round the player: step round them at its circle,
+        """Wait a turn around the player: step around them at its circle,
         guard an attack, sidestep it or leap back from it, or take the
         token and attack; or, for a thrower, throw a knife."""
         if gap > self.circle + 2:
@@ -656,7 +656,7 @@ def den_places(den: Den) -> List[Vector3]:
 
     Returns:
         One point a wolf, on the ground's plane: the first at the den's
-        middle, the rest on a ring 1.8 meters round it.
+        middle, the rest on a ring 1.8 meters around it.
     """
     var out = List[Vector3]()
     for k in range(den.count):
@@ -702,7 +702,7 @@ def default_bandits() raises -> List[Bandit]:
     """Return the bandits of the default village.
 
     Returns:
-        Three hooded bandits round a camp past the meadow's north-west
+        Three hooded bandits around a camp past the meadow's north-west
         edge, 25 meters from where the player starts: one in walnut
         brown, one in gray and one in nettle green. Behind them stands
         their captain, taller, in madder red: see `captain_fighter`. A
@@ -809,7 +809,7 @@ def dummy_sheets(mut wood: Sheet, mut straw: Sheet, mut sack: Sheet):
     # Two cords bind the straw.
     for at in [Float32(0.9), Float32(1.2)]:  # pragma: no branch
         prism(straw, Vector3(0, at, 0), 0.225, 0.225, 0.03, 8, hay * 0.45)
-    # The arms: straw round the crossbar's ends.
+    # The arms: straw around the crossbar's ends.
     for side in [Float32(-1), Float32(1)]:  # pragma: no branch
         straw.box(
             Vector3(side * 0.42, 1.3, 0),

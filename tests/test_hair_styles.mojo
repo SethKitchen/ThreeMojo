@@ -31,6 +31,11 @@ from extensions.humanoid.skeleton.head.hair.groom import (
     HairGroom,
     TAIL_TIE_Y,
     TAIL_TIE_Z,
+    PIGTAIL_X,
+    PIGTAIL_Y,
+    PIGTAIL_Z,
+    TOPKNOT_TIE_Y,
+    TOPKNOT_TIE_Z,
     groom_hair,
 )
 from extensions.humanoid.skeleton.head.hair.silhouette import (
@@ -51,6 +56,10 @@ from extensions.humanoid.skeleton.head.hair.styles import (
     SPACE_BUNS,
     LAYERED,
     MOHAWK,
+    CROPPED,
+    SLICKED,
+    TOPKNOT,
+    TWIN_BRAIDS,
     HairStyle,
     HairStyleFile,
     cranium_frame,
@@ -104,8 +113,18 @@ def _file(
 def test_a_hair_style_is_named() raises:
     assert_true(MOHAWK.is_valid())
     assert_false(HairStyle(-1).is_valid())
-    assert_false(HairStyle(13).is_valid())
-    assert_equal(len(named_hair_styles()), 13)
+    assert_false(HairStyle(17).is_valid())
+    assert_equal(len(named_hair_styles()), 17)
+    assert_equal(hair_style_label(TOPKNOT), "topknot")
+    assert_equal(hair_style_label(TWIN_BRAIDS), "twin braids")
+    assert_equal(hair_style_label(CROPPED), "cropped")
+    assert_equal(hair_style_label(SLICKED), "slicked back")
+    assert_equal(TWIN_BRAIDS.ties(), 2)
+    assert_equal(TOPKNOT.ties(), 1)
+    assert_equal(CROPPED.ties(), 0)
+    assert_equal(SLICKED.ties(), 0)
+    assert_true(TOPKNOT.is_tied() and TWIN_BRAIDS.is_tied())
+    assert_true(CROPPED.is_designed() and not CROPPED.is_tied())
     assert_equal(hair_style_label(HIGH_PONYTAIL), "high ponytail")
     assert_equal(hair_style_label(PIXIE), "pixie")
     assert_true(BOB.is_designed() and not GROWN.is_designed())
@@ -365,6 +384,49 @@ def test_cut_styles_end_where_they_are_cut() raises:
     assert_true(long > 0 and short > 0)
 
 
+def test_the_new_styles_are_laid_as_they_are_cut() raises:
+    var dims = _dims()
+    var h = dims.head.copy()
+    var spec = GroomSpec(dims, 16, 0)
+    # A topknot coils high on the crown.
+    for tip in _tips(groom_hair(dims, spec, 1, TOPKNOT)):  # pragma: no branch
+        assert_true(tip.y > h.at(0, 82.0, 0).y)
+    # Twin braids fall on both sides, below the jaw.
+    var left = 0
+    var right = 0
+    for tip in _tips(
+        groom_hair(dims, spec, 1, TWIN_BRAIDS)
+    ):  # pragma: no branch
+        assert_true(tip.y < h.at(0, 58.0, 0).y)
+        if tip.x > 0:
+            right += 1
+        else:
+            left += 1
+    assert_true(left > 0 and right > 0)
+    # A crop's strands are shorter than a pixie's.
+    var crop = groom_hair(dims, spec, 1, CROPPED)
+    for strand in range(len(crop)):  # pragma: no branch
+        var root = crop.points[crop.starts[strand]]
+        var tip = crop.points[crop.starts[strand + 1] - 1]
+        assert_true((tip - root).length() < h.cm(4.0))
+    # Slicked hair is combed back and cut level at the nape.
+    var slick = groom_hair(dims, spec, 1, SLICKED)
+    for p in slick.points:  # pragma: no branch
+        assert_true(p.y > h.at(0, 67.5, 0).y)
+    var behind = 0
+    for tip in _tips(slick):  # pragma: no branch
+        if tip.z < h.at(0, 0, -2.0).z:
+            behind += 1
+    assert_true(behind * 2 > len(slick))
+    # Drawn alone, a topknot is a ball on the crown and twin braids hang
+    # beside the neck.
+    var skin = HeadSkinField(dims)
+    var knot = h.at(0, TOPKNOT_TIE_Y + 2.0, TOPKNOT_TIE_Z)
+    assert_true(HairSilhouette(dims, skin, TOPKNOT).distance(knot) < 0)
+    var braid = h.at(PIGTAIL_X + 2.2, PIGTAIL_Y - 12.0, PIGTAIL_Z)
+    assert_true(HairSilhouette(dims, skin, TWIN_BRAIDS).distance(braid) < 0)
+
+
 def test_hair_falls_against_the_head_and_the_body() raises:
     var dims = _dims()
     var h = dims.head.copy()
@@ -450,8 +512,12 @@ def test_a_shell_drawn_alone_takes_its_style_s_shape() raises:
         var alone = HairSilhouette(dims, skin, style)
         var under = HairShape(dims, SCALP_HAIR, RIGHT, skin, style)
         var reaches = alone.low.y < under.low.y or alone.high.y > under.high.y
-        assert_equal(reaches, style.is_designed() and style != PIXIE)
+        assert_equal(
+            reaches,
+            style.is_designed() and style != PIXIE and style != CROPPED,
+        )
     assert_equal(style_length(BOB).value(), 1)
+    assert_true(style_length(SLICKED).value() < style_length(HALF_UP).value())
     assert_equal(style_length(LONG).value(), 1)
     assert_true(style_length(HALF_UP).value() < 1)
     assert_false(style_length(PONYTAIL))

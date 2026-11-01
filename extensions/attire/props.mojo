@@ -13,6 +13,8 @@ it is not skinned: it rides its socket's bone as a whole.
   height and then curve in to a point. It is curved across, as a shield
   of boards bent round the arm is. Its face is painted per pale with two
   colors, in the `color` attribute, and it is seen from both sides.
+- `heraldic_shield` is the same shield bearing arms: any dye pattern, cut
+  crisply on its face, with a rim of metal round its edge.
 - `sword_in_scabbard` gives the leather of a scabbard and its grip, and
   the steel of its cross-guard, pommel and chape, as two meshes. The
   sword hangs point down along minus y, its mouth at the origin. Both
@@ -28,8 +30,16 @@ This is not a three.js port. See Extensions.
 from std.math import sqrt
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, BufferGeometry
-from extensions.attire.mesh_ops import merge
+from core.buffer_geometry import COLOR, POSITION, BufferGeometry
+from extensions.attire.dye import charge_value, paint, split_dyes, with_channel
+from extensions.attire.kinds import (
+    PRIMARY_DYE,
+    SECONDARY_DYE,
+    TRIM_DYE,
+    DyePattern,
+    require_dye_pattern,
+)
+from extensions.attire.mesh_ops import cut, merge
 from geometries.box import box
 from geometries.lathe import lathe
 from geometries.parametric import ParametricSurface, parametric
@@ -49,6 +59,17 @@ comptime SHIELD_BOW = Float32(0.12)
 of its width."""
 comptime SHIELD_CELLS = 24
 """Cells across and down a shield."""
+comptime SHIELD_FESS = Float32(0.4)
+"""How far down a shield its charges cross, as a share of its height."""
+comptime SHIELD_CHARGE = Float32(0.2)
+"""How wide a charge's band is, as a share of a shield's width."""
+comptime SHIELD_RISE = Float32(0.18)
+"""How far above the fess point a chevron's point lies, as a share of a
+shield's width."""
+comptime SHIELD_PALES = Float32(6)
+"""How many pales, stripes or checks run across a shield's width."""
+comptime SHIELD_RIM = Float32(0.035)
+"""How wide a heraldic shield's rim is, as a share of its width."""
 
 
 def shield_half_width(down: Float32) -> Float32:
@@ -135,6 +156,84 @@ def heater_shield(
         colors.append(srgb_to_linear(Float32(pick.b) / 255))
     mesh.set_attribute(String(COLOR), BufferAttribute(colors^, 3))
     return mesh^
+
+
+def heraldic_shield(
+    height: Length,
+    pattern: DyePattern,
+    field: Color,
+    charge: Color,
+    rim: Color,
+) raises -> BufferGeometry:
+    """Return a heater shield that bears arms, with a rim of metal.
+
+    The arms are the dye patterns, laid on the shield's face in its own
+    lengths. The charges cross at the fess point, `SHIELD_FESS` of the
+    height down from the top. Each band of a cross, a saltire, a chevron
+    or a bend is `SHIELD_CHARGE` of the width wide. Quarters, stripes and
+    checks cross at the fess point too. The shield is cut along each
+    boundary, so each edge is crisp. A band `SHIELD_RIM` of the width
+    wide runs round the edge, in the rim's color.
+
+    The shield faces plus z, its top edge at y = 0, its point at minus
+    the height. The bearer's right, dexter, is at minus x, seen from the
+    front.
+
+    Args:
+        height: From the top edge to the point.
+        pattern: A named pattern.
+        field: The primary dye, sRGB.
+        charge: The secondary dye, sRGB.
+        rim: The rim's color, sRGB.
+
+    Returns:
+        An indexed mesh with positions, normals, texture coordinates, a
+        `dye` attribute and linear vertex colors.
+
+    Raises:
+        Error: If the height is not positive or the pattern is not named.
+    """
+    require_dye_pattern(pattern)
+    var tall = height.to(METER)
+    if not (tall > 0):
+        raise Error("A shield needs a positive height")
+    var half = tall * SHIELD_ASPECT / 2
+    var face = HeaterShield(half, tall, 2 * half * SHIELD_BOW)
+    var mesh = parametric(face, SHIELD_CELLS, SHIELD_CELLS)
+    # The rim: how far in from the shield's edge each point lies.
+    var band = 2 * half * SHIELD_RIM
+    ref placed = mesh.attribute_view(String(POSITION))
+    var inside = List[Float32](capacity=placed.count())
+    for v in range(placed.count()):  # pragma: no branch
+        var p = placed.vector3(v)
+        var down = min(Float32(1), max(Float32(0), -p.y / tall))
+        var edge = half * shield_half_width(down) - abs(p.x)
+        inside.append(min(edge, -p.y) - band)
+    var body = cut(mesh, inside, 0)
+    var outside = List[Float32](capacity=len(inside))
+    for value in inside:  # pragma: no branch
+        outside.append(-value)
+    var edge = with_channel(cut(mesh, outside, 0), TRIM_DYE)
+    ref inner = body.attribute_view(String(POSITION))
+    var values = List[Float32](capacity=inner.count())
+    var fess = -tall * SHIELD_FESS
+    var width = 2 * half
+    for v in range(inner.count()):  # pragma: no branch
+        var p = inner.vector3(v)
+        values.append(
+            charge_value(
+                pattern,
+                -p.x,
+                p.y - fess,
+                p.y - fess,
+                width * SHIELD_RISE,
+                width * SHIELD_CHARGE / 2,
+                width / SHIELD_PALES,
+            )
+        )
+    var arms = merge(split_dyes(body, values, PRIMARY_DYE, SECONDARY_DYE), edge)
+    paint(arms, [field, charge, rim, field])
+    return arms^
 
 
 def sword_in_scabbard(blade: Length) raises -> List[BufferGeometry]:

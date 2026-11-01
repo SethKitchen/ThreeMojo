@@ -29,6 +29,9 @@ from extensions.village.pad_input import (
     KEY_H,
     KEY_M,
     KEY_Q,
+    KEY_U,
+    KEY_Y,
+    KEY_K,
     KEY_SIX,
     KEY_SPACE,
     KEY_T,
@@ -224,7 +227,32 @@ def _all(input: MoveInput) -> List[Bool]:
         input.low,
         input.assist,
         input.heal,
+        input.swap,
+        input.taunt,
+        input.book,
     ]
+
+
+def test_the_trigger_swaps_taunts_and_shows_the_book() raises:
+    # The south button with the trigger changes the style, and does not
+    # jump; with the guard too, it takes no style.
+    var swap = _fight(south=True, left_trigger=True)
+    assert_true(swap.swap)
+    assert_false(swap.jump)
+    assert_false(_fight(south=True).swap)
+    assert_false(_fight(south=True, left_trigger=True, left_shoulder=True).swap)
+    # The east button with the trigger taunts, and does not dodge.
+    var taunt = _fight(east=True, left_trigger=True)
+    assert_true(taunt.taunt)
+    assert_false(taunt.dodge)
+    assert_false(_fight(east=True).taunt)
+    assert_false(_fight(left_trigger=True).taunt)
+    # The back button with the trigger shows the book, and does not heal.
+    var book = _fight(back=True, left_trigger=True)
+    assert_true(book.book)
+    assert_false(book.heal)
+    assert_false(_fight(back=True).book)
+    assert_false(_fight(left_trigger=True).book)
 
 
 def test_the_shoulders_and_the_trigger_fight() raises:
@@ -333,6 +361,9 @@ def test_the_keyboard_fights() raises:
         KEY_H,
         KEY_M,
         KEY_Q,
+        KEY_Y,
+        KEY_U,
+        KEY_K,
     ]:
         keys.press(key)
     var input = keyboard_input(keys, False)
@@ -365,6 +396,9 @@ def test_the_fight_buttons_add() raises:
         low=True,
         assist=True,
         heal=True,
+        swap=True,
+        taunt=True,
+        book=True,
     )
     for pair in [
         combined(held, no_input()),

@@ -87,14 +87,14 @@ def _flat() raises -> Ground:
 
 
 def _house(
-    width: Float32, storeys: Int, facade: Facade = BRICK_FACADE
+    width: Float32, stories: Int, facade: Facade = BRICK_FACADE
 ) -> HouseParameters:
     """Return a house `width` wide and 5 meters deep."""
     return HouseParameters(
         "test house",
         Length(width, METER),
         Length(5.0, METER),
-        storeys,
+        stories,
         brick(),
         facade,
     )
@@ -338,7 +338,7 @@ def test_a_wide_window_on_a_framed_wall_and_doors_upstairs() raises:
         Length64(2.1, METER),
         double_glazing(),
     )
-    # A door upstairs: the ground storey's doors alone turn on hinges.
+    # A door upstairs: the ground story's doors alone turn on hinges.
     var upper = -1
     for e in range(len(model.elements)):
         ref element = model.elements[e]
@@ -415,7 +415,7 @@ def test_a_stair_rises_through_its_well() raises:
     var lot = house_lot(house, 0, 0, Angle(0.0, RADIAN))
     var scene = Scene()
     var stair = stand_house(scene, assets, looks, house, model, lot, _flat())
-    # The same house with its upper storey one riser up has no stair: no
+    # The same house with its upper story one riser up has no stair: no
     # treads, no well, no balustrade.
     var low = house_model(house)
     low.storeys[1].elevation = Length64(STAIR_RISE, METER)
@@ -462,7 +462,7 @@ def test_a_brick_house_has_a_fireplace_and_a_chimney_over_it() raises:
 
 def _barn(pitch: Float32) -> HouseParameters:
     """Return a boarded barn 13 meters wide and 8 meters deep, with a
-    storey 4.2 meters tall, under a roof of a pitch in degrees."""
+    story 4.2 meters tall, under a roof of a pitch in degrees."""
     return HouseParameters(
         "barn",
         Length(13.0, METER),
@@ -593,7 +593,7 @@ def _cloth_meshes(scene: Scene, looks: HouseLooks) -> Int:
 def test_a_dwelling_is_dressed_and_lit_by_lanterns() raises:
     var assets = Assets()
     var looks = house_looks(assets, 8, 1)
-    # A house of two storeys with a stair and a chamber: a rug and a
+    # A house of two stories with a stair and a chamber: a rug and a
     # lantern in each room, clear of the stair.
     var house = Scene()
     var two = _house(7, 2)
@@ -606,7 +606,7 @@ def test_a_dwelling_is_dressed_and_lit_by_lanterns() raises:
         _has_color(house, assets, looks.daylight, FLAME * 0.8, standing.inside)
     )
     # A house 3 meters deep, with a stair: the stair's band leaves too
-    # little floor for a rug or a lantern in either storey.
+    # little floor for a rug or a lantern in either story.
     var shallow = Scene()
     var low = HouseParameters(
         "shallow", Length(5.0, METER), Length(3.0, METER), 2, brick()
@@ -643,7 +643,7 @@ def test_a_dwelling_is_dressed_and_lit_by_lanterns() raises:
 def test_a_house_is_dressed_by_its_facade() raises:
     var assets = Assets()
     var looks = house_looks(assets, 8, 1)
-    # A brick house of two storeys has a band of stone round it at its
+    # A brick house of two stories has a band of stone around it at its
     # upper floor, a block along each face, where a stone house has none.
     var brick = Scene()
     var stone = Scene()

@@ -601,7 +601,7 @@ struct Village(Movable):
         """Return whether a camera can see any of the pond.
 
         The water is an endless plane, but it shows only in the pond's
-        basin. A sphere round the basin, at the water's height, stands in
+        basin. A sphere around the basin, at the water's height, stands in
         for it: a camera whose view misses the sphere sees no water, and
         the water need not be composed.
 

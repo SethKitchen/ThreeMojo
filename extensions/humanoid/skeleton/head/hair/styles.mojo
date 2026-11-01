@@ -6,7 +6,7 @@
 """Hairstyles: how a head of hair is cut and laid.
 
 `GROWN` is the groom's own hair, grown from the scalp and combed down
-to the length `HAIR_LENGTH` asks for. Ten more are designed on the
+to the length `HAIR_LENGTH` asks for. Fourteen more are designed on the
 groom's own guides:
 
 - `LONG`: parted down the middle and falling past the shoulders.
@@ -23,6 +23,13 @@ groom's own guides:
   falling long.
 - `BOB`: parted down the middle and cut level at the jaw.
 - `PIXIE`: cropped short and combed forward and down.
+- `TOPKNOT`: gathered up to a tie on the top of the crown, and coiled
+  round a small ball on it.
+- `TWIN_BRAIDS`: parted down the middle, gathered to a tie behind each
+  ear, and woven into a braid on each side.
+- `CROPPED`: cropped closer than a pixie, and combed back and down.
+- `SLICKED`: combed straight back over the crown, and cut level at the
+  nape.
 
 Two are strands an artist groomed, kept in `assets/hair/`:
 
@@ -87,7 +94,7 @@ struct HairStyle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named style."""
-        return ordinal_valid(self.value, PIXIE.value)
+        return ordinal_valid(self.value, SLICKED.value)
 
     def is_scanned(self) -> Bool:
         """Return True for a style an artist groomed, kept in a file."""
@@ -107,12 +114,14 @@ struct HairStyle(Equatable, ImplicitlyCopyable, Writable):
             or self == PIGTAILS
             or self == SPACE_BUNS
             or self == BRAID
+            or self == TOPKNOT
+            or self == TWIN_BRAIDS
         )
 
     def ties(self) -> Int:
         """Return how many ties the style gathers its hair to: none, one,
         or one on each side."""
-        if self == PIGTAILS or self == SPACE_BUNS:
+        if self == PIGTAILS or self == SPACE_BUNS or self == TWIN_BRAIDS:
             return 2
         if self.is_tied() or self == HALF_UP:
             return 1
@@ -132,6 +141,10 @@ comptime BRAID = HairStyle(9)
 comptime HALF_UP = HairStyle(10)
 comptime BOB = HairStyle(11)
 comptime PIXIE = HairStyle(12)
+comptime TOPKNOT = HairStyle(13)
+comptime TWIN_BRAIDS = HairStyle(14)
+comptime CROPPED = HairStyle(15)
+comptime SLICKED = HairStyle(16)
 
 
 def require_hair_style(style: HairStyle) raises:
@@ -172,6 +185,10 @@ def hair_style_label(style: HairStyle) -> String:
         "half up",
         "bob",
         "pixie",
+        "topknot",
+        "twin braids",
+        "cropped",
+        "slicked back",
     ]
     return ordinal_label(style.is_valid(), style.value, names, "hair style")
 
@@ -180,10 +197,10 @@ def named_hair_styles() -> List[HairStyle]:
     """Return every named style in a stable order.
 
     Returns:
-        `GROWN` through `PIXIE`.
+        `GROWN` through `SLICKED`.
     """
     var all = List[HairStyle]()
-    for value in range(PIXIE.value + 1):  # pragma: no branch
+    for value in range(SLICKED.value + 1):  # pragma: no branch
         all.append(HairStyle(value))
     return all^
 

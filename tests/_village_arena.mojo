@@ -28,6 +28,8 @@ from extensions.village.character import (
     Obstacle,
     no_input,
 )
+from extensions.village.raid import RaidParameters
+from extensions.village.styles import SWORD, FightingStyle
 from extensions.village.foes import (
     Bandit,
     Den,
@@ -70,6 +72,9 @@ def arena_parameters(
     wolves: Int = 0,
     ally: Bool = False,
     thrower: Bool = False,
+    raid: Bool = False,
+    styles: List[FightingStyle] = [SWORD],
+    raiders: Int = 4,
 ) raises -> BattleParameters:
     """Return a fight of bandits and dummies before the player.
 
@@ -83,6 +88,11 @@ def arena_parameters(
             and three meters to its left, meshed in two poses.
         ally: Whether the companion fights beside the player.
         thrower: Whether the bandits throw knives.
+        raid: Whether the Stone Warden stands `far` meters behind the
+            player, its raiders three meters behind the player.
+        styles: The styles the player carries.
+        raiders: How many of the raid's four raiders wait there: the
+            tank, the healer, the striker and the archer, in that order.
 
     Returns:
         The fight. A fallen foe lingers a second and comes back after
@@ -120,6 +130,22 @@ def arena_parameters(
     p.linger = Duration(1.0, SECOND)
     p.respawn = Duration(2.0, SECOND)
     p.revive = Duration(0.5, SECOND)
+    p.styles = styles.copy()
+    p.raids = List[RaidParameters]()
+    if raid:
+        var party = RaidParameters()
+        party.x = 0
+        party.z = far
+        for k in range(len(party.raiders)):
+            party.raiders[k].spec = HumanoidSpec(Length(66.0, INCH), MALE)
+            party.raiders[k].outfit = Outfit()
+            party.raiders[k].x = Float32(k) - 1.5
+            party.raiders[k].z = 3 - far
+        party.spec = HumanoidSpec(Length(70.0, INCH), MALE)
+        party.outfit = Outfit()
+        while len(party.raiders) > raiders:
+            _ = party.raiders.pop()
+        p.raids.append(party^)
     return p^
 
 
@@ -304,11 +330,11 @@ def stand_piercing(mut arena: Arena, clock: Float32) raises:
 
 
 def herb_seed(drops: Bool) -> Int:
-    """Return a seed whose first roll of the dice drops a herb, or does
+    """Return a seed whose first roll of the dice drops an herb, or does
     not.
 
     Args:
-        drops: Whether the first roll drops a herb.
+        drops: Whether the first roll drops an herb.
 
     Returns:
         The first such seed from 0, or -1 if none is below 1000.

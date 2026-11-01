@@ -9,10 +9,11 @@ A designed style lies close on the scalp, and its guide strands are what
 falls, ties and coils. A game humanoid with no strands draws only the
 shell, so every designed style looked the same there: cropped close.
 `HairSilhouette` gives such a shell its style's shape. A bob, long hair
-and a half-up fall to the jaw, as long grown hair does. Long hair also
-hangs down the back. A bun or a pair of space buns is a ball out from
-each tie. A ponytail, a high ponytail, a braid and pigtails hang from
-their ties as tapered tails. A style that is not designed keeps the
+and a half-up fall to the jaw, as long grown hair does, and slicked hair
+to the nape. Long hair also hangs down the back. A bun, a topknot or a
+pair of space buns is a ball out from each tie. A ponytail, a high
+ponytail, a braid, twin braids and pigtails hang from their ties as
+tapered tails. A style that is not designed keeps the
 shell it has.
 
     var hair = HairSilhouette(dimensions, skin, BUN)
@@ -47,6 +48,9 @@ from extensions.humanoid.skeleton.head.hair.groom import (
     PIGTAIL_Z,
     SPACE_BUN_RADIUS,
     SPACE_BUN_X,
+    TOPKNOT_RADIUS,
+    TOPKNOT_TIE_Y,
+    TOPKNOT_TIE_Z,
     SPACE_BUN_Y,
     SPACE_BUN_Z,
     TAIL_TIE_Y,
@@ -61,7 +65,10 @@ from extensions.humanoid.skeleton.head.hair.styles import (
     LONG,
     PIGTAILS,
     PONYTAIL,
+    SLICKED,
     SPACE_BUNS,
+    TOPKNOT,
+    TWIN_BRAIDS,
     HairStyle,
 )
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
@@ -72,6 +79,7 @@ from math.vector3 import Vector3, component_max, component_min
 # jaw, as `HairShape`'s length does.
 comptime BOB_LENGTH = Float32(1.0)
 comptime HALF_UP_LENGTH = Float32(0.7)
+comptime SLICK_LENGTH = Float32(0.3)
 # How far a bun's ball sits out from its tie, in its radius: nearer than
 # the groom coils it, as the shell is the hair's mass and the tie lies
 # under the hair's surface.
@@ -150,6 +158,22 @@ def _pigtail_radii() -> List[Float32]:
     return [1.9, 2.2, 1.7, 0.8]
 
 
+def _twin_braid() -> List[Vector3]:
+    """Return the right braid's run from its tie behind the ear: out a
+    little, then down beside the neck and over the collarbone."""
+    return [
+        Vector3(0, 0, 0),
+        Vector3(1.5, -1.5, -0.8),
+        Vector3(2.2, -12.0, 0),
+        Vector3(2.0, -24.0, 1.0),
+    ]
+
+
+def _twin_braid_radii() -> List[Float32]:
+    """Return a twin braid's radii: woven, so narrower than a tail."""
+    return [1.4, 1.2, 1.0, 0.5]
+
+
 def _half_tail() -> List[Vector3]:
     """Return a half-up's short tail from its tie at the back of the
     head."""
@@ -215,12 +239,15 @@ def style_length(style: HairStyle) -> Optional[Float32]:
 
     Returns:
         A length for `HairShape`: one for a bob or long hair, which fall
-        to the jaw, and less for a half-up.
+        to the jaw, less for a half-up, and less still for slicked hair,
+        which reaches the nape.
     """
     if style == BOB or style == LONG:
         return BOB_LENGTH
     if style == HALF_UP:
         return HALF_UP_LENGTH
+    if style == SLICKED:
+        return SLICK_LENGTH
     return None
 
 
@@ -306,6 +333,23 @@ struct HairSilhouette(Copyable, DistanceField, Movable):
                     _pigtail_radii(),
                     mirror,
                 )
+        elif style == TWIN_BRAIDS:
+            for mirror in [Float32(1), Float32(-1)]:  # pragma: no branch
+                _tail(
+                    self.ties,
+                    h,
+                    Vector3(PIGTAIL_X, PIGTAIL_Y, PIGTAIL_Z),
+                    _twin_braid(),
+                    _twin_braid_radii(),
+                    mirror,
+                )
+        elif style == TOPKNOT:
+            _bun(
+                self.ties,
+                h,
+                Vector3(0, TOPKNOT_TIE_Y, TOPKNOT_TIE_Z),
+                TOPKNOT_RADIUS,
+            )
         elif style == BUN:
             _bun(self.ties, h, Vector3(0, BUN_TIE_Y, BUN_TIE_Z), BUN_RADIUS)
         elif style == SPACE_BUNS:

@@ -156,7 +156,7 @@ def default_speakers() -> List[Speaker]:
         Speaker(
             2,
             "Wren",
-            ["I can run round the pond twice!", "Did you see the rabbits?"],
+            ["I can run around the pond twice!", "Did you see the rabbits?"],
             Errand(
                 BERRIES,
                 6,
